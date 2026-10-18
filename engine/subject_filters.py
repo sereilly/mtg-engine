@@ -64,6 +64,11 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # narrowed line on, and without the word the cost was refused outright and
     # the card was unsupported.
     "any_classes",
+    # "a **multicolored** creature" (Dragon Arch's adjective). CR 105.2b: two
+    # or more colours, which no colour *list* can say — ``any_colors`` is
+    # satisfied by one. Tested by ``permanent_matches_filter`` off the computed
+    # colours, in the delegated half, for ``any_classes``' reason.
+    "multicolored",
     "exclude_colors", "exclude_types", "exclude_subtypes",
     "tapped_only", "untapped_only",
     "mana_value", "power", "toughness", "with_plus1_counter",
@@ -293,6 +298,10 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # naming something untestable refuses the whole line, because a dropped
     # host narrowing is an Aura sweep taking every Aura on the board.
     "attached_to_filter",
+    # "target Aura **that's attached to a permanent**" (Aura Graft). The host
+    # phrase that describes nothing about the host: readable off the
+    # attachment alone, like the two state words above.
+    "attached_to_permanent",
     # "target creature **it's blocking**" (Goblin Snowman, Tinder Wall) and
     # "target creature **that's attacking you**" (Ice Floe, Snow Fortress,
     # Giant Trap Door Spider). Both are relations rather than characteristics,
@@ -308,6 +317,13 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # same combat record, and the same thing needed beyond the object: the
     # ability's own source, which this function takes.
     "blocking_source",
+    # "target creature **blocking or blocked by** Cromat". The *union* of the
+    # two keys above — one printed relation, CR 509.1a/509.1g read from both
+    # ends — and its own key for ``any_states``' reason: every matcher ANDs its
+    # payload keys, so the pair together would name a creature on both sides of
+    # one block, which is nobody. Needs the ability's source and is answered no
+    # without one; the pure matcher refuses it rather than ignoring it.
+    "in_combat_with_source",
     # "all non-Wall creatures **blocking enchanted creature**" (Coils of the
     # Medusa). ``blocking_source`` with the blocked object one hop away: the
     # ability's source is an Aura, which is never in combat, so the relation is
@@ -430,6 +446,9 @@ OBJECT_ONLY_FILTER_KEYS = TESTABLE_SUBJECT_FILTER_KEYS - {
     # source's, and a caller with no source would compare against nothing and
     # exclude nobody.
     "not_named_source",
+    # Out for ``exclude_self``'s reason: the relation is to the ability's
+    # *source*, and a caller with none has no combat to read it off.
+    "in_combat_with_source",
 }
 
 
@@ -591,7 +610,21 @@ CARD_ONLY_FILTER_KEYS = frozenset(
      # card: a subtype and a card type are printed on the type line and a
      # colour on the mana cost, so every alternative is testable off the face
      # for the reason its single-axis key above is.
-     "any_classes"}
+     "any_classes",
+     # "You may put a **multicolored** creature card from your hand onto the
+     # battlefield." (Dragon Arch.) CR 105.2b's two-or-more, counted off the
+     # same printed colours ``color_filter`` reads (CR 202.2) — so it is
+     # testable here for exactly the reason the single colour is.
+     "multicolored",
+     # "Exile all cards from target player's graveyard **other than basic land
+     # cards**." (Haunting Echoes.) CR 205.4a's Basic supertype on a land,
+     # which ``_card_matches_filter`` has read off the printed type line since
+     # Eye of Singularity — the pair, not the supertype alone — so a card in a
+     # zone answers it for the reason it answers ``supertypes`` above. It was
+     # tested there and not listed here, so every card phrase printing the
+     # exemption refused at this gate for a question the matcher behind it
+     # answers.
+     "exclude_basic_lands"}
 )
 
 
@@ -624,6 +657,48 @@ def object_only_filter(
     if untestable_filter_keys(remaining, allowed=OBJECT_ONLY_FILTER_KEYS):
         return None
     return remaining
+
+
+#: The values of ``controller`` (and of the hand-size bound's seat)
+#: :func:`subject_matches` answers for a caller holding **an observer and
+#: nothing else**: "you" and "opponent" are comparisons against that seat
+#: (CR 109.5), and the other two need no caller at all. Every other seat word —
+#: "defending player", "that player", "target opponent" — is an argument of its
+#: own, and the matcher refuses the word when it is not supplied.
+OBSERVER_SEAT_WORDS = frozenset({"you", "opponent", "active_player", "any_player"})
+
+
+def observer_source_filter(payload: dict) -> dict | None:
+    """*payload* as a filter :func:`subject_matches` answers for a caller that
+    supplies the ability's **controller and source** and no other seat, or
+    ``None`` when it names something outside that.
+
+    The middle rung between :func:`object_only_filter` (no observer, no source)
+    and the full key set (which also promises "defending player controls" to a
+    caller holding CR 506.2's seat). A handler re-checking the object a trigger
+    froze — ``pump_event_subject`` reads "whenever **a creature you control**
+    attacks, it gets +2/+2" (Fervent Charge) — holds exactly these two, so it
+    may be handed a seat-relative word and must not be handed one it would
+    answer *no* to for want of an argument: that is a pump that compiles and
+    never lands.
+
+    Nested phrases are asked the same question, because the matcher recurses
+    into them with the same arguments.
+    """
+    if untestable_filter_keys(payload):
+        return None
+    seats = [payload.get("controller")]
+    hand_bound = payload.get("power_greater_than_cards_in_hand")
+    if hand_bound is not None:
+        seats.append("you" if hand_bound == "you" else "that_player")
+    if any(seat is not None and seat not in OBSERVER_SEAT_WORDS for seat in seats):
+        return None
+    nested = [payload.get("attached_to_filter"), payload.get("controller_controls")]
+    nested.append((payload.get("superlative_among") or {}).get("among"))
+    for phrase in nested:
+        if isinstance(phrase, dict) and observer_source_filter(phrase) is None:
+            return None
+    return dict(payload)
 
 
 #: The card-phrase keys a **resolver holding the ability's source** turns into
@@ -939,6 +1014,32 @@ def subject_matches(
         }
         if source is None or not _source_relative_bound_holds(obj, relative, source):
             return False
+    # "target creature **blocking or blocked by** Cromat" — in combat with the
+    # ability's own source, from either end (CR 509.1a, 509.1g). Through
+    # ``creatures_in_combat_with``, the reader the four older users of the
+    # relation already share (Abu Ja'far's sweep, Sentinel's rewrite, Lesser
+    # Werewolf's counter, Spitting Slug's grant), so a band-propagated block
+    # (CR 702.22h) means here what it means there. Identity, never value.
+    #
+    # With no source there is no combat to read and the answer is no. Stripped
+    # before the pure matcher runs, which **refuses** the key rather than
+    # ignoring it — so a handler that asked only the pure half matches nothing
+    # instead of matching the board.
+    if described.get("in_combat_with_source"):
+        described = {
+            k: v for k, v in described.items() if k != "in_combat_with_source"
+        }
+        if source is None:
+            return False
+        if not any(obj is other for other in game.creatures_in_combat_with(source)):
+            # Unless the source has left (CR 608.2h): the last-known-information
+            # reading ``blocked_by_source`` and ``blocking_source`` take below,
+            # asked in both directions because this key is both of them.
+            if not (
+                _blocked_while_it_lasted(game, source, obj)
+                or _blocked_while_it_lasted(game, obj, source)
+            ):
+                return False
     # "Exile target creature **with the greatest power among creatures on the
     # battlefield**." (Topple.) The candidate must be one of the set's members
     # tied at the extreme, read off the board as the question is asked — so the
@@ -1382,6 +1483,7 @@ __all__ = [
     "card_only_filter",
     "filter_head_noun",
     "object_only_filter",
+    "observer_source_filter",
     "quantified_board_phrase",
     "subject_matches",
     "unimplemented_filter_keywords",

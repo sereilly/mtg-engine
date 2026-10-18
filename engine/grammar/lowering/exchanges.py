@@ -244,3 +244,107 @@ def _lower_exchange_greatest_mana_value(
             )
         )
     return (OracleInstruction("sequence", "", {"steps": tuple(steps)}),)
+
+
+#: The two records Cultural Exchange's picks are written under, one per side.
+#: Two keys rather than ``choose_permanents``' shared ``chosen_this_way``,
+#: because that record *accumulates* across every pick of a resolution and the
+#: sentence behind these needs to know which side each permanent came from.
+EXCHANGE_FIRST_SET = "exchange_first_set"
+EXCHANGE_SECOND_SET = "exchange_second_set"
+
+
+def _lower_exchange_chosen_sets(
+    node: ast.ExchangeChosenSets,
+) -> tuple[OracleInstruction, ...]:
+    """Cultural Exchange's paragraph → a ``sequence`` of ordinary instructions.
+
+    Two ``choose_permanents`` steps and the exchange that reads what they
+    recorded, which is Juxtapose's arrangement above with sets where that has
+    single picks: written as one fused kind, "any number" and "the same
+    number" would be a handler's private arithmetic; written this way each
+    sentence is a prompt.
+
+    **The two players are one announcement of two roles** (CR 601.2c), spent a
+    step at a time exactly as Lunge's two damages are: both steps carry the
+    shared ordered ``roles`` list and name their own slot, so the picker walks
+    two players, ``handlers/control_flow._role_scoped`` hands each step the
+    context a one-target effect would have had — its own player in
+    ``context.target`` — and ``controlled_by: "target"`` means the right board
+    without either step knowing there are two. The second role carries the
+    printed "another" (``distinct``); the roles walk is what enforces it.
+
+    Three keys do the counting, each the printed words:
+
+    * ``unbounded`` — "any number of", as Oracle en-Vec's pick has it;
+    * ``matched_by`` — the pick the *next* sentence makes. The first set may
+      not be larger than the second sentence can match: an exchange that
+      cannot be completed does nothing at all (CR 701.12a), so a larger first
+      pick buys nothing a pick of none does not, and CR 608.2d does not let a
+      player choose what cannot be done;
+    * ``same_number_as`` — "the same number", an exact count read off the
+      first record.
+
+    ``default_none`` is the non-interactive answer to "any number": zero. The
+    prompt's standing default takes a seat's own permanents up to the ceiling,
+    which is right where being chosen keeps a permanent and wrong here, where
+    it gives one away.
+    """
+    seats = (node.first_opponent, node.second_opponent)
+    roles = tuple(
+        {
+            "role": name,
+            "kind": "player",
+            **({"opponents_only": True} if opponent else {}),
+            **({"distinct": True} if position else {}),
+        }
+        for position, (name, opponent) in enumerate(
+            zip(("player", "another player"), seats)
+        )
+    )
+    filters = (_filter_payload(node.first), _filter_payload(node.second))
+    for described in filters:
+        if object_only_filter(described) is None:
+            raise LoweringError(
+                "the exchanged set cannot test this restriction", node=node
+            )
+
+    def announced(role: str) -> dict[str, object]:
+        return {
+            "quantifier": "target", "kind": "roles", "roles": roles, "role": role,
+        }
+
+    matching = {
+        "filter": filters[1],
+        "controlled_by": "target",
+        "targets": announced("another player"),
+    }
+    steps = (
+        OracleInstruction(
+            "choose_permanents", "",
+            {
+                "filter": filters[0],
+                "result_key": EXCHANGE_FIRST_SET,
+                "prompt": "Choose any number to exchange",
+                "unbounded": True,
+                "controlled_by": "target",
+                "matched_by": matching,
+                "default_none": True,
+                "targets": announced("player"),
+            },
+        ),
+        OracleInstruction(
+            "choose_permanents", "",
+            {
+                **matching,
+                "result_key": EXCHANGE_SECOND_SET,
+                "prompt": "Choose the same number to exchange for them",
+                "same_number_as": EXCHANGE_FIRST_SET,
+            },
+        ),
+        OracleInstruction(
+            "exchange_control_of_chosen_sets", "",
+            {"first_from": EXCHANGE_FIRST_SET, "second_from": EXCHANGE_SECOND_SET},
+        ),
+    )
+    return (OracleInstruction("sequence", "", {"steps": steps}),)

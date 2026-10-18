@@ -96,6 +96,9 @@ COMBAT_INSTRUCTION_CATEGORIES: dict[str, str] = {
     "target_cant_attack_until_eot": "combat_restrictions",
     "target_cant_block_source_until_eot": "combat_restrictions",
     "target_cant_block_until_eot": "combat_restrictions",
+    # "{R}: Enchanted creature can't block this turn." (Manacles of Decay.)
+    # The row above on the Aura's own host rather than on a chosen creature.
+    "attached_cant_block_until_eot": "combat_restrictions",
     # The permission twin of the two above (Yare): CR 509.1b's block-count
     # ceiling raised for a turn rather than a restriction imposed for one.
     "grant_additional_blocks_until_eot": "combat_restrictions",

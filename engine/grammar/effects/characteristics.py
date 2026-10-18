@@ -18,6 +18,7 @@ from ..cost_records import accept_counters_removed_for_cost
 from ..records import (_parse_for_each_this_way,
                        scaled_by_recorded_count,
                       accept_plus_per_cost_paid,
+                      parse_for_each_discarded_this_way,
                       parse_for_each_milled_this_way,
                       parse_for_each_sacrificed_this_way)
 
@@ -99,9 +100,19 @@ def _parse_gets(
         parse_for_each_milled_this_way(stream, parse_object_filter)
         if not per_each_tapped else None
     )
+    # "…for each card **discarded this way**" (Sacred Rites). The record
+    # reading, before the board count for the milled form's reason: they share
+    # two opening words, and the board reader would claim "card" and strand
+    # the participle. Declines without consuming on a pair its table does not
+    # hold, so every board count below reads exactly what it did.
+    per_each_recorded = (
+        _parse_for_each_this_way(stream)
+        if not per_each_tapped and per_each_milled is None else None
+    )
     per_each, per_each_beyond_first = (
         _parse_per_each_objects(stream)
-        if not per_each_tapped and per_each_milled is None else (None, False)
+        if not per_each_tapped and per_each_milled is None
+        and per_each_recorded is None else (None, False)
     )
 
     # The same clause the statement level reads, through the same parser
@@ -115,7 +126,7 @@ def _parse_gets(
         subject, power, toughness, duration, power_negative, toughness_negative,
         x_definition=x_definition, per_each_tapped_this_way=per_each_tapped,
         per_each=per_each, per_each_beyond_first=per_each_beyond_first,
-        per_each_milled=per_each_milled,
+        per_each_milled=per_each_milled, per_each_recorded=per_each_recorded,
     )
 
     # "gets +3/+3 and gains flying until end of turn" / "get +1/+1 and have
@@ -331,6 +342,15 @@ def _parse_gains(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
                     # than the card prints, and the failure that took this line
                     # down.
                     per_each = parse_for_each_sacrificed_this_way(
+                        stream, parse_object_filter
+                    )
+                if per_each is None:
+                    # "You gain 3 life **for each land card discarded this
+                    # way**." (Gerrard's Verdict.) The same shape one record
+                    # over, read here for the reason the reader above is: the
+                    # noun fallback below would take "land card" for a count of
+                    # the battlefield and strand the participle.
+                    per_each = parse_for_each_discarded_this_way(
                         stream, parse_object_filter
                     )
                 if per_each is None:

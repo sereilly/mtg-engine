@@ -313,6 +313,27 @@ class FlipCoin:
 
 
 @dataclass(frozen=True)
+class FlipCoinsUntilLoss:
+    """``Flip a coin that many times or until you lose a flip, whichever comes
+    first. If you win all the flips, draw two cards for each flip.`` (Squee's
+    Revenge.)
+
+    A **run** of flips rather than one, and both sentences of it: "the flips"
+    and "each flip" name the run the first sentence made, so parsed apart the
+    second has nothing to count. Each flip is still CR 705.1's flip, won or
+    lost by the player who flipped (CR 705.2); what the node adds is the two
+    bounds — a number and the first loss — and that the number of flips *made*
+    is a quantity the reward reads.
+    """
+    #: How many flips at most. "That many" is a back-reference to the number
+    #: the sentence in front chose, which the lowering resolves or refuses.
+    times: "Amount"
+    #: "…draw **two** cards for each flip" — what winning every flip pays, per
+    #: flip made.
+    draw_per_flip: "Amount"
+
+
+@dataclass(frozen=True)
 class ChooseNumber:
     """``Choose a number between 0 and 7.`` (Shapeshifter.)
 
@@ -432,9 +453,15 @@ class ChooseCreatureType:
     already writes from the middle of its own sentence. The sentence after it
     ("All creatures **of that type** get -1/-1") reads it back.
 
-    Carries no fields: the catalog is CR 205.3m's creature types, which no card
-    narrows, and the chooser is the effect's controller (CR 608.2d).
+    The catalog is CR 205.3m's creature types and the chooser is the effect's
+    controller (CR 608.2d). ``excluded`` is the one narrowing a card prints of
+    it — "Choose a creature type **other than Wall**." (Unnatural Selection) —
+    as lowercase creature types the answer may not be. A restriction on a
+    *choice*, so it is enforced where the choice is made: the prompt does not
+    offer the word and the resolver refuses it.
     """
+
+    excluded: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

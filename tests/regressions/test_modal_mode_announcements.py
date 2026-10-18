@@ -49,7 +49,7 @@ from engine.faces import compilation_units
 from engine.legality import targeting_instruction
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
-from engine.targeting import _first_described_slot, derive_cast_spec, spec_roles
+from engine.targeting import GRAVEYARD_TARGET_KIND, _first_described_slot, derive_cast_spec, spec_roles
 from tests.helpers import _mk_card, resolve_stack
 from engine.color_changes import change_color
 
@@ -469,6 +469,19 @@ def _object_mode(spec) -> bool:
     )
 
 
+def _graveyard_mode(spec) -> bool:
+    """A mode whose targets are cards in a graveyard ("Exile up to three target
+    cards from a single graveyard", Ebony Charm). It announced nothing until
+    Odyssey made that sentence an announcement, and stood in the untargeted
+    count below; the cards it may name are held by name in
+    ``test_ody_w2g3_single_graveyard_targets.py``, on a board that stocks a
+    graveyard, which this census's does not."""
+    return (
+        spec is not None and not spec_roles(spec)
+        and spec.get("kind") == GRAVEYARD_TARGET_KIND
+    )
+
+
 def test_w2g2_the_census_examines_what_it_claims_to():
     """The floor. A census over a pool is worth what it looked at, and every
     exclusion above shrinks that — an ingest that renamed a kind, or a helper
@@ -478,16 +491,21 @@ def test_w2g2_the_census_examines_what_it_claims_to():
     object_modes = [1 for _card, (_i, _m, spec, _ins) in modes if _object_mode(spec)]
     roles_modes = [1 for _card, (_i, _m, spec, _ins) in modes if spec is not None and spec_roles(spec)]
     untargeted = [1 for _card, (_i, _m, spec, _ins) in modes if spec is None]
+    graveyard_modes = [1 for _card, (_i, _m, spec, _ins) in modes if _graveyard_mode(spec)]
 
     assert len(cards) >= 34, len(cards)
     assert len(modes) >= 88, len(modes)
     assert len(object_modes) >= 47, len(object_modes)
     assert len(roles_modes) >= 3, len(roles_modes)
-    # 12, not 13 (R3 J8): the thirteenth was Sapphire Charm's "**Target player**
-    # draws a card at the beginning of the next turn's upkeep", counted here as
-    # a mode that targets nothing — which was the defect. The player is
-    # announced as the Charm is cast now (CR 115.1a/601.2c).
-    assert len(untargeted) >= 12, len(untargeted)
+    # 11, not 13: two modes left this bucket. Sapphire Charm's "**Target
+    # player** draws a card at the beginning of the next turn's upkeep" was
+    # counted here as a mode that targets nothing — which was the defect; the
+    # player is announced as the Charm is cast now (CR 115.1a/601.2c). And
+    # Ebony Charm's graveyard mode became an announcement: it left this bucket
+    # for the one beside it, and the two floors move together so that it
+    # cannot leave both.
+    assert len(untargeted) >= 11, len(untargeted)
+    assert len(graveyard_modes) >= 1, len(graveyard_modes)
     for sighting in ("Rith's Charm", "Crosis's Charm", "Treva's Charm", "Hull Breach"):
         assert sighting in _MODAL
 
@@ -535,6 +553,20 @@ def test_w2g2_every_mode_is_held_to_its_own_targets(name):
             result = _census_cast(game, card, index, target_permanent_ids=[p.permanent_id for p in chosen])
             if not result.supported:
                 problems.append(f"{tag}: a complete legal announcement was refused: {result.details}")
+            continue
+        if _graveyard_mode(spec):
+            # What the census asked of this mode while it announced nothing,
+            # and still the right question of an "up to": naming nobody is a
+            # legal cast (CR 601.2c). A mandatory one would be refused here for
+            # the board's empty graveyards, which is the object arm's last
+            # check in another zone.
+            game = _census_board(card, combat=False)
+            result = _census_cast(game, card, index)
+            if result.supported is _census_mandatory(instruction):
+                problems.append(
+                    f"{tag}: a graveyard mode with nothing to name was "
+                    f"{'cast' if result.supported else 'refused: ' + str(result.details)}"
+                )
             continue
         if not _object_mode(spec):
             continue

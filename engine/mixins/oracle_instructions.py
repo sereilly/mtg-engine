@@ -5,6 +5,7 @@ import dataclasses
 from ..bare_announcements import resolving_slots
 from ..card_hooks import ON_SELF_RESOLVED
 from ..control import BASE_CONTROLLER, CONTROL_EFFECTS
+from ..destruction_events import instruction_finished
 from ..event_durations import end_event_durations
 from ..cast_costs import kicked
 from ..events import emit
@@ -21,6 +22,8 @@ from ..mixins.stack import aura_enchant_noun, permanent_matches_enchant_noun
 from ..oracle import OracleInstruction, compile_card_oracle
 from ..keywords import remove_keyword
 from ..land_animation import LAND_ANIMATION_KIND
+from ..land_mana_swaps import (apply_source_wide_swap, production_snapshot,
+                               source_wide_swap)
 from ..land_types import change_land_type
 from ..lord_buffs import LORD_BUFF_KIND
 from ..pt import add_pt_modifier
@@ -108,11 +111,46 @@ class OracleInstructionsMixin:
                 if identity is not None
             )
         )
+        # "Until end of turn, **spells and abilities you control** that would
+        # add colored mana instead add that much white mana." (False Dawn.) A
+        # CR 614.1a replacement over what this instruction *produces*, asked at
+        # the one dispatch point for the reason the seat above is recorded
+        # here: every spell's and every ability's effect comes through it, so a
+        # creature's mana ability, a ritual and a triggered mana ability are
+        # one seam instead of a list of the handlers that add mana. None on
+        # every seat no such effect has armed, which is every seat in every
+        # game but that turn's — and then nothing is copied.
+        #
+        # The controller's own pool: that is where a spell or ability its
+        # controller controls adds mana in every printing the pool has, and a
+        # snapshot of every seat's would also catch mana *another* player's
+        # lands made while paying inside this resolution, which is theirs.
+        swap = source_wide_swap(context.caster)
+        mana_before = production_snapshot(context.caster) if swap is not None else None
         try:
             return handler(self, instruction, context)
         finally:
+            if mana_before is not None and apply_source_wide_swap(
+                context.caster, swap, mana_before
+            ):
+                # Said out loud, because the handler has just logged what the
+                # card *prints* ("Dark Ritual produced {B}{B}{B}") and the pool
+                # holds something else.
+                self.log.append(
+                    f"{getattr(context.card, 'name', 'An effect')} added "
+                    f"{{{swap.symbol()}}} instead"
+                    + (f" ({swap.source_name})" if swap.source_name else "")
+                )
             self.resolving_seats.pop()
             self.resolving_targets.pop()
+            # A destruction this instruction performed has triggered abilities
+            # that are waiting for the resolution to finish (CR 603.3b), and
+            # the simultaneous event a watcher was destroyed in ends with the
+            # instruction that began it. Asked only when the destroy seam left
+            # something behind, so every other instruction pays one attribute
+            # read. See engine/destruction_events.py.
+            if self.destruction.held or self.destruction.departed:
+                instruction_finished(self)
 
     def _apply_spell_text(
         self,
@@ -201,12 +239,19 @@ class OracleInstructionsMixin:
         )
         state_machine.run(instruction)
 
-    def _apply_cast_triggers(self, caster_index: int, card: CardDefinition) -> None:
+    def _apply_cast_triggers(
+        self, caster_index: int, card: CardDefinition, item=None,
+    ) -> None:
         """Fire triggers that respond to this spell's *controller* casting it.
 
         Announced on the event bus rather than looked up by card name: the
         oracle compiler already recognizes these conditions, so a card written
         "whenever you cast an enchantment spell" needs no registry entry.
+
+        *item* is the spell's own stack object, and it rides every event whose
+        trigger may act on **that spell** as ``cast_item`` — see
+        ``handlers._common.triggering_spell`` for why the card beside it cannot
+        say which spell that is.
         """
         # "When **you cast this spell**, counter it unless you sacrifice a land."
         # (Mana Vortex.) CR 603.6d: the ability is on the object being cast and
@@ -217,9 +262,18 @@ class OracleInstructionsMixin:
         # directly above its own spell.
         emit(
             self, "self_cast", subject=card,
-            caster_index=caster_index, cast_card=card,
+            caster_index=caster_index, cast_card=card, cast_item=item,
         )
-        emit(self, "you_cast_spell", subject=card, caster_index=caster_index)
+        # "Whenever you cast an instant or sorcery spell, you may pay {3}. If
+        # you do, **copy that spell**." (Mirari.) The spell's own stack object
+        # rides this event as it rides the any-player and opponent-scoped ones
+        # below: it was the one cast event of the three that froze nothing, so
+        # a trigger on it that acts on its spell resolved for "that spell is no
+        # longer on the stack" - Mirari took its {3} and copied nothing.
+        emit(
+            self, "you_cast_spell", subject=card, caster_index=caster_index,
+            cast_card=card, cast_item=item,
+        )
         # "When **you play a card**" (Juju Bubble). CR 701.18b: casting a card
         # as a spell is one of the two ways to play it, so this is announced
         # here — the other way, playing it as a land, is announced from the
@@ -246,9 +300,12 @@ class OracleInstructionsMixin:
             self, "you_cast_first_spell_each_turn",
             subject=card, caster_index=caster_index,
             # "Copy **that spell**": the effect needs the object, not just the
-            # fact of the cast, so the card rides the trigger's captured context
-            # and the handler finds it on the stack by identity.
-            cast_card=card,
+            # fact of the cast, so the spell's stack object rides the trigger's
+            # captured context and the handler finds it by identity. The card
+            # rides beside it for the readers that ask what the spell *is*
+            # (its name, its colours, its mana value) — it cannot say *which*
+            # spell, because every copy of a card is one ``CardDefinition``.
+            cast_card=card, cast_item=item,
         )
         # "Whenever an opponent casts their **second** spell each turn"
         # (Mangara). Round 123's ordinal asked by the other seat: the same
@@ -308,7 +365,7 @@ class OracleInstructionsMixin:
         # the flag and only a trigger printed with the verb reads it.
         emit(
             self, "spell_cast", subject=card, caster_index=caster_index,
-            cast_card=card, event_subject_player=caster_index,
+            cast_card=card, cast_item=item, event_subject_player=caster_index,
             kicked=bool(item is not None and kicked(card, item.choices)),
         )
         # …and the other thing a cast can do to the board: end a continuous
@@ -353,7 +410,7 @@ class OracleInstructionsMixin:
             targeted_seats, targeted_ids = spell_targets(self, item)
         emit(
             self, "opponent_casts_spell", subject=card, caster_index=caster_index,
-            cast_from_zone=cast_from_zone, cast_card=card,
+            cast_from_zone=cast_from_zone, cast_card=card, cast_item=item,
             event_subject_player=caster_index,
             targeted_seats=targeted_seats, targeted_permanent_ids=targeted_ids,
         )

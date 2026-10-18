@@ -1,5 +1,12 @@
 [
  {
+  "card": "Aboshan, Cephalid Emperor",
+  "clause": "tap all creatures without flying",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Abu Ja'far",
   "clause": "destroy all creatures blocking or blocked by it. they can't be regenerated",
   "ignored": [
@@ -93,6 +100,13 @@
   ]
  },
  {
+  "card": "Ana Sanctuary",
+  "clause": "if you control a blue or black permanent, target creature gets +1/+1 until end of turn. if you control a blue permanent and a black permanent, that creature gets +5/+5 until end of turn instead",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
   "card": "Anaba Ancestor",
   "clause": "another target minotaur creature gets +1/+1 until end of turn",
   "ignored": [
@@ -181,6 +195,20 @@
   "clause": "destroy all lands",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Ashen Firebeast",
+  "clause": "this creature deals 1 damage to each creature without flying",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
+  "card": "Aura Graft",
+  "clause": "gain control of target aura that's attached to a permanent. attach it to another permanent it can enchant",
+  "ignored": [
+   "that's"
   ]
  },
  {
@@ -305,6 +333,27 @@
   ]
  },
  {
+  "card": "Bloodfire Dwarf",
+  "clause": "it deals 1 damage to each creature without flying",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
+  "card": "Bloodfire Infusion",
+  "clause": "this aura deals damage equal to the sacrificed creature's power to each creature",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
+  "card": "Bloodfire Kavu",
+  "clause": "it deals 2 damage to each creature",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "Blossoming Wreath",
   "clause": "you gain life equal to the number of creature cards in your graveyard",
   "ignored": [
@@ -330,6 +379,13 @@
   "clause": "destroy all islands",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Bomb Squad",
+  "clause": "put a fuse counter on each creature with a fuse counter on it",
+  "ignored": [
+   "each"
   ]
  },
  {
@@ -359,6 +415,13 @@
   "ignored": [
    "or",
    "target"
+  ]
+ },
+ {
+  "card": "Braids, Cabal Minion",
+  "clause": "that player sacrifices an artifact, creature, or land of their choice",
+  "ignored": [
+   "or"
   ]
  },
  {
@@ -472,6 +535,20 @@
   "clause": "remove an omen counter from this enchantment. if there are no omen counters on this enchantment, the player with the highest life total wins the game. if two or more players are tied for highest life total, the game is a draw",
   "ignored": [
    "enchantment,"
+  ]
+ },
+ {
+  "card": "Ceta Sanctuary",
+  "clause": "if you control a red or green permanent, draw a card, then discard a card. if you control a red permanent and a green permanent, instead draw two cards, then discard a card",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
+  "card": "Chance Encounter",
+  "clause": "if this enchantment has ten or more luck counters on it, you win the game",
+  "ignored": [
+   "enchantment"
   ]
  },
  {
@@ -645,6 +722,13 @@
   ]
  },
  {
+  "card": "Decompose",
+  "clause": "exile up to three target cards from a single graveyard",
+  "ignored": [
+   "target"
+  ]
+ },
+ {
   "card": "Defiant Falcon",
   "clause": "search your library for a rebel permanent card with mana value 3 or less, put it onto the battlefield, then shuffle",
   "ignored": [
@@ -666,6 +750,27 @@
   ]
  },
  {
+  "card": "Dega Sanctuary",
+  "clause": "if you control a black or red permanent, you gain 2 life. if you control a black permanent and a red permanent, you gain 4 life instead",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
+  "card": "Deluge",
+  "clause": "tap all creatures without flying",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Demoralize",
+  "clause": "all creatures gain menace until end of turn",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Deranged Hermit",
   "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {3}{g}{g}",
   "ignored": [
@@ -677,6 +782,22 @@
   "clause": "counter target spell. if an artifact or creature spell is countered this way, put that card onto the battlefield under your control instead of into its owner's graveyard",
   "ignored": [
    "spell"
+  ]
+ },
+ {
+  "card": "Desolation Angel",
+  "clause": "destroy all lands you control. if it was kicked, destroy all lands instead",
+  "ignored": [
+   "all",
+   "all"
+  ]
+ },
+ {
+  "card": "Desolation Giant",
+  "clause": "destroy all other creatures you control. if it was kicked, destroy all other creatures instead",
+  "ignored": [
+   "all",
+   "all"
   ]
  },
  {
@@ -808,6 +929,13 @@
   ]
  },
  {
+  "card": "Dwarven Landslide",
+  "clause": "destroy target land. if this spell was kicked, destroy another target land",
+  "ignored": [
+   "spell"
+  ]
+ },
+ {
   "card": "Dwarven Lieutenant",
   "clause": "target dwarf creature gets +1/+0 until end of turn",
   "ignored": [
@@ -903,6 +1031,20 @@
   "clause": "tap all creatures",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Epicenter",
+  "clause": "target player sacrifices a land of their choice. each player sacrifices all lands they control instead if there are seven or more cards in your graveyard",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Erg Raiders",
+  "clause": "if this creature didn't attack this turn, it deals 2 damage to you unless it came under your control this turn",
+  "ignored": [
+   "creature"
   ]
  },
  {
@@ -1010,6 +1152,13 @@
   "clause": "exile all creatures",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Famished Ghoul",
+  "clause": "exile up to two target cards from a single graveyard",
+  "ignored": [
+   "target"
   ]
  },
  {
@@ -1276,6 +1425,13 @@
   ]
  },
  {
+  "card": "Graceful Antelope",
+  "clause": "you may have target land become a plains until this creature leaves the battlefield",
+  "ignored": [
+   "have"
+  ]
+ },
+ {
   "card": "Grafted Skullcap",
   "clause": "draw an additional card",
   "ignored": [
@@ -1351,6 +1507,13 @@
   "clause": "target blue or red creature gets +1/+0 until end of turn",
   "ignored": [
    "or"
+  ]
+ },
+ {
+  "card": "Haunting Echoes",
+  "clause": "exile all cards from target player's graveyard other than basic land cards. for each card exiled this way, search that player's library for all cards with the same name as that card and exile them. then that player shuffles",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -1599,6 +1762,14 @@
   ]
  },
  {
+  "card": "Illuminate",
+  "clause": "illuminate deals x damage to target creature. if this spell was kicked with its {2}{r} kicker, it deals x damage to that creature's controller. if this spell was kicked with its {3}{u} kicker, you draw x cards",
+  "ignored": [
+   "spell",
+   "spell"
+  ]
+ },
+ {
   "card": "Impending Disaster",
   "clause": "if there are seven or more lands on the battlefield, sacrifice this enchantment and destroy all lands",
   "ignored": [
@@ -1673,6 +1844,13 @@
   "clause": "untap all creatures defending player controls",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Jilt",
+  "clause": "return target creature to its owner's hand. if this spell was kicked, it deals 2 damage to another target creature",
+  "ignored": [
+   "spell"
   ]
  },
  {
@@ -1759,6 +1937,14 @@
   "card": "Kill Switch",
   "clause": "tap all other artifacts. they don't untap during their controllers' untap steps for as long as this artifact remains tapped",
   "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Kirtar's Wrath",
+  "clause": "destroy all creatures. they can't be regenerated. if there are seven or more cards in your graveyard, instead destroy all creatures, then create two 1/1 white spirit creature tokens with flying. creatures destroyed this way can't be regenerated",
+  "ignored": [
+   "all",
    "all"
   ]
  },
@@ -1884,6 +2070,13 @@
   ]
  },
  {
+  "card": "Life // Death",
+  "clause": "all lands you control become 1/1 creatures until end of turn. they're still lands",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Lightning Dragon",
   "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {2}{r}{r}",
   "ignored": [
@@ -1956,6 +2149,13 @@
   ]
  },
  {
+  "card": "Mad Dog",
+  "clause": "if this creature didn't attack or come under your control this turn, sacrifice it",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
   "card": "Mageta the Lion",
   "clause": "destroy all creatures except for mageta the lion. those creatures can't be regenerated",
   "ignored": [
@@ -1967,6 +2167,13 @@
   "clause": "magma burst deals 3 damage to any target. if this spell was kicked, it deals 3 damage to another target",
   "ignored": [
    "spell"
+  ]
+ },
+ {
+  "card": "Magma Vein",
+  "clause": "this enchantment deals 1 damage to each creature without flying",
+  "ignored": [
+   "each"
   ]
  },
  {
@@ -2126,6 +2333,13 @@
   ]
  },
  {
+  "card": "Mine Layer",
+  "clause": "remove all mine counters from all lands",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Minion of Leshrac",
   "clause": "this creature deals 5 damage to you unless you sacrifice a creature other than this creature. if this creature deals damage to you this way, tap it",
   "ignored": [
@@ -2184,6 +2398,13 @@
   ]
  },
  {
+  "card": "Mudhole",
+  "clause": "target player exiles all land cards from their graveyard",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Multani's Acolyte",
   "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {g}{g}",
   "ignored": [
@@ -2230,6 +2451,13 @@
   "clause": "all creatures get -1/-1 until end of turn",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Necra Sanctuary",
+  "clause": "if you control a green or white permanent, target player loses 1 life. if you control a green permanent and a white permanent, that player loses 3 life instead",
+  "ignored": [
+   "or"
   ]
  },
  {
@@ -2404,6 +2632,13 @@
   ]
  },
  {
+  "card": "Orim's Thunder",
+  "clause": "destroy target artifact or enchantment. if this spell was kicked, it deals damage equal to that permanent's mana value to target creature",
+  "ignored": [
+   "spell"
+  ]
+ },
+ {
   "card": "Orim's Touch",
   "clause": "prevent the next 2 damage that would be dealt to any target this turn. if this spell was kicked, prevent the next 4 damage that would be dealt to that permanent or player this turn instead",
   "ignored": [
@@ -2457,6 +2692,13 @@
   "clause": "destroy all green creatures. they can't be regenerated",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Pernicious Deed",
+  "clause": "destroy each artifact, creature, and enchantment with mana value x or less",
+  "ignored": [
+   "each"
   ]
  },
  {
@@ -2518,6 +2760,13 @@
  {
   "card": "Planar Collapse",
   "clause": "if there are four or more creatures on the battlefield, sacrifice this enchantment and destroy all creatures. they can't be regenerated",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Planar Despair",
+  "clause": "all creatures get -1/-1 until end of turn for each basic land type among lands you control",
   "ignored": [
    "all"
   ]
@@ -2662,6 +2911,13 @@
   "clause": "each player may tap any number of untapped white creatures they control. for each creature tapped this way, that player chooses up to two plains. then destroy all plains that weren't chosen this way by any player",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Raka Sanctuary",
+  "clause": "if you control a white or blue permanent, this enchantment deals 1 damage to target creature. if you control a white permanent and a blue permanent, this enchantment deals 3 damage instead",
+  "ignored": [
+   "or"
   ]
  },
  {
@@ -3354,6 +3610,14 @@
   ]
  },
  {
+  "card": "Spark Mage",
+  "clause": "you may have this creature deal 1 damage to target creature that player controls",
+  "ignored": [
+   "have",
+   "creature"
+  ]
+ },
+ {
   "card": "Sparkcaster",
   "clause": "return a red or green creature you control to its owner's hand",
   "ignored": [
@@ -3476,6 +3740,14 @@
   ]
  },
  {
+  "card": "Strength of Night",
+  "clause": "creatures you control get +1/+1 until end of turn. if this spell was kicked, zombie creatures you control get an additional +2/+2 until end of turn",
+  "ignored": [
+   "spell",
+   "creatures"
+  ]
+ },
+ {
   "card": "Stromgald Spy",
   "clause": "you may have defending player play with their hand revealed for as long as this creature remains on the battlefield. if you do, this creature assigns no combat damage this turn",
   "ignored": [
@@ -3506,6 +3778,13 @@
  {
   "card": "Sunder",
   "clause": "return all lands to their owners' hands",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Suppress",
+  "clause": "target player exiles all cards from their hand face down. at the beginning of the end step of that player's next turn, that player returns those cards to their hand",
   "ignored": [
    "all"
   ]
@@ -3677,6 +3956,13 @@
   ]
  },
  {
+  "card": "Tombfire",
+  "clause": "target player exiles all cards with flashback from their graveyard",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Tombstone Stairwell",
   "clause": "destroy all tokens created with this enchantment. they can't be regenerated",
   "ignored": [
@@ -3741,10 +4027,24 @@
   ]
  },
  {
+  "card": "Tranquil Path",
+  "clause": "destroy all enchantments",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Tranquility",
   "clause": "destroy all enchantments",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Traumatize",
+  "clause": "target player mills half their library, rounded down",
+  "ignored": [
+   "down"
   ]
  },
  {
@@ -3827,6 +4127,13 @@
   ]
  },
  {
+  "card": "Twigwalker",
+  "clause": "two target creatures each get +2/+2 until end of turn",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "Twilight's Call",
   "clause": "each player returns all creature cards from their graveyard to the battlefield",
   "ignored": [
@@ -3859,6 +4166,13 @@
   "clause": "add one mana of any color. during your next untap step, as you untap your permanents, return this land to its owner's hand",
   "ignored": [
    "land"
+  ]
+ },
+ {
+  "card": "Upheaval",
+  "clause": "return all permanents to their owners' hands",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -4210,10 +4524,24 @@
   ]
  },
  {
+  "card": "Zombie Boa",
+  "clause": "choose a color. whenever this creature becomes blocked by a creature of that color this turn, destroy that creature",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
   "card": "Zombie Mob",
   "clause": "exile all creature cards from your graveyard",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Zoologist",
+  "clause": "reveal the top card of your library. if it's a creature card, put it onto the battlefield. otherwise, put it into your graveyard",
+  "ignored": [
+   "card,"
   ]
  }
 ]

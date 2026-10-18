@@ -47,8 +47,9 @@ from ..auras import (AMONG_CONTROLLED_PROTECTION_COLORS,
 from .. import copies
 from ..named_counters import add_counters as add_named_counters
 from ..named_counters import counters_on
-from ..cast_costs import KICKED
+from ..cast_costs import KICKED, KICKED_WITH
 from ..color_changes import add_derived_color_change, clear_derived_color_changes
+from ..granted_abilities import bind_granter
 from ..keywords import grant_ability_line, grant_keyword
 from ..tokens import make_token_card
 from ..keywords import (abilities_lost_at, add_derived_ability_line,
@@ -1122,14 +1123,35 @@ class PermanentStateMixin:
         # What follows "and with" is something the permanent **has** from here
         # on, with no duration (CR 611.2a), so it goes through the two layer-6
         # grant channels with ``duration=None`` -- the value that has always
-        # meant "no sweep takes this away". A granted keyword is therefore
-        # removable (Humility takes Kavu Titan's trample and leaves the
-        # counters), which is what makes it an ability and not a rewrite of the
-        # card.
+        # meant "no sweep takes this away". A granted keyword is therefore an
+        # ability on the grant channel and not a rewrite of the card: a later
+        # effect that takes that word away takes it and leaves the counters.
+        #
+        # (This said "Humility takes Kavu Titan's trample" until it was driven:
+        # it does not. The *blanket* removal is struck before every grant
+        # whatever their timestamps -- ``Permanent.effective_card`` says why
+        # that is right for a grant made after it -- so a Humility that
+        # arrives *later* leaves a kicked creature its keyword and its quoted
+        # triggered ability, where CR 613.7 would take both. The activation
+        # gate does refuse the quoted activated one. Measured at Apocalypse
+        # and left: it is every grant channel against four cards, not this
+        # loop.)
+        #
+        # "If this creature was kicked **with its {1}{U} kicker**, …" (the five
+        # Volvers, CR 702.33f). The same loop asked of one kicker cost rather
+        # than of any: the entry applies only when the key the sentence names
+        # is among those the cast recorded paying (``KICKED_WITH``, stamped
+        # beside the flag). A card prints one such line per kicker, so a Volver
+        # kicked with both passes this loop twice and enters with three
+        # counters and both abilities -- two entry replacements, not one with
+        # a choice in it.
         if permanent.metadata.get(KICKED):
+            paid_kickers = tuple(permanent.metadata.get(KICKED_WITH) or ())
             for raw_line in entry_lines:
                 entry = kicked_entry(raw_line, permanent.effective_card.name)
                 if entry is None:
+                    continue
+                if entry["kicker"] is not None and entry["kicker"] not in paid_kickers:
                     continue
                 count, kind = entry["counters"]
                 # "…with X +1/+1 counters on it, where X is the discarded
@@ -2141,14 +2163,6 @@ class PermanentStateMixin:
             for bonus in prog.instructions:
                 if bonus.kind != "dynamic_pt_bonus":
                     continue
-                # The permanent being refreshed *is* the source of its own
-                # static ability, which is what lets a spec name a relation to
-                # it ("Auras attached to it") rather than only a set of
-                # characteristics.
-                value = evaluate_count(
-                    self, player, bonus.payload.get("x_from_count") or {},
-                    source=permanent,
-                )
                 # "**Enchanted** creature gets +1/+1 for each other creature
                 # you control." (Vampirism.) The Aura's sentence about its
                 # host, on the same instruction and the same count as the one a
@@ -2157,16 +2171,31 @@ class PermanentStateMixin:
                 # split `conditional_static` makes a few lines down, spelled
                 # the same way so one key means one thing across both.
                 #
-                # The count keeps `source=permanent` — the Aura — because
-                # CR 109.5 makes "you" the ability's controller and CR 109's
-                # "other" is relative to the object the ability is on. The
-                # recipient is the **live** record (CR 611.3b: a continuous
+                # The recipient is the **live** record (CR 611.3b: a continuous
                 # effect applies only while the Aura is attached).
                 recipient = permanent
                 if bonus.payload.get("subject") == "attached":
                     recipient = attached_host(self, permanent, last_known=False)
                     if recipient is None:
                         continue
+                # The permanent being refreshed *is* the source of its own
+                # static ability, which is what lets a spec name a relation to
+                # it ("Auras attached to it") rather than only a set of
+                # characteristics - and CR 109.5 makes "you" its controller.
+                #
+                # "…for each **other** <noun>" leaves out the permanent the
+                # count is taken for. Nothing was handed over to leave out, so
+                # the word was read and dropped: Squirrel Mob was 3/3 alone
+                # and Mogg Squad 2/2. Both the source and the recipient,
+                # because an Aura prints the word about either - "each other
+                # creature" (Vampirism, Bravado) can only mean other than the
+                # enchanted creature, "each other enchantment" (Ancestral
+                # Mask) other than the Aura - and for a creature's own line
+                # the two are one permanent.
+                value = evaluate_count(
+                    self, player, bonus.payload.get("x_from_count") or {},
+                    source=permanent, exclude=(permanent, recipient),
+                )
                 _add_static_pt(
                     recipient,
                     resolve_amount(bonus.payload.get("power", 0), value),
@@ -2515,6 +2544,33 @@ class PermanentStateMixin:
                     applied is found for applied in reach.get(id(found.payload), ())
                 ))
         self._refresh_land_animation(all_permanents, reach)
+        # "As long as there are seven or more cards in your graveyard, this
+        # creature **is white** …" (Repentant Vampire; Wayward Angel's "is
+        # black"). CR 613 layer 5 of a static, so a *derived* contribution on
+        # the channel the animator's colour just above uses — and written
+        # here, straight after that refresh, because it is what clears the
+        # channel. Stamped with the permanent the ability is on (CR 613.7a):
+        # the moment it entered, not the moment its condition last became
+        # true, so a Lace cast at the creature afterwards still wins and a
+        # Darkest Hour that was already there still loses.
+        for cs_seat, cs_perm in self.permanents_with_controller():
+            for cs in compile_card_oracle(cs_perm.effective_card).instructions:
+                if cs.kind != "conditional_static" or not cs.payload.get("colors"):
+                    continue
+                if not conditional_static_holds(
+                    self, cs_seat, cs_perm, cs.payload.get("condition") or {}
+                ):
+                    continue
+                recipient = cs_perm
+                if cs.payload.get("subject") == "attached":
+                    recipient = attached_host(self, cs_perm, last_known=False)
+                    if recipient is None:
+                        continue
+                add_derived_color_change(
+                    recipient, list(cs.payload["colors"]),
+                    timestamp=cs_perm.timestamp,
+                    label=f"conditional colour ({cs_perm.card.name})",
+                )
         # **Layer 5 before a scope that asks about colour.** "**Green**
         # creatures have …" (Breath of Dreams) reads what colour a permanent
         # is, and part of that answer is the list this loop writes: "All
@@ -3415,7 +3471,14 @@ class PermanentStateMixin:
         # type is out.
         if any(target_perm.has_type(word) for word in filt.excluded_types):
             return False
-        if filt.other_than_source and target_perm is source_perm:
+        if filt.other_than_source and (
+            target_perm is source_perm
+            # "**Other** creatures you control get -1/-1." (Vampirism.) On an
+            # Aura the word is measured from the creature it enchants - the
+            # Aura is no creature, so there is nothing else for it to mean -
+            # and the host was taking its own Aura's penalty.
+            or target_perm is attached_host(self, source_perm, last_known=False)
+        ):
             return False
         # "Creatures **you control**" / "creatures your opponents control".
         # CR 109.5: "you" is the seat controlling the permanent whose static
@@ -3547,7 +3610,9 @@ class PermanentStateMixin:
                 return False
         return True
 
-    def _protection_qualities(self, permanent: Permanent) -> set[tuple[str, str]]:
+    def _protection_qualities(
+        self, permanent: Permanent, *, ignoring_aura: Permanent | None = None,
+    ) -> set[tuple[str, str]]:
         """The qualities this permanent has protection from (CR 702.16).
 
         Sourced from a printed "protection from [quality]" line (static or
@@ -3555,18 +3620,40 @@ class PermanentStateMixin:
         from a ``protection_from_<color>`` metadata flag. A word naming no
         modelled quality contributes nothing — but such a line never compiles
         in the first place: the keyword gate refuses it with the clause named.
+
+        *ignoring_aura* leaves one attached Aura's own grant out of the
+        answer. It exists for CR 702.16n and has one caller, the state-based
+        sweep: "this effect doesn't remove this Aura" exempts the Aura from
+        the protection **it** grants and from no other instance, so the sweep
+        asks what the creature is protected from without it.
         """
         qualities: set[tuple[str, str]] = set()
         program = compile_card_oracle(permanent.effective_card)
+        from ..keywords import EACH_OF_ITS_COLORS, protection_qualities_named
+
+        def _named(word: str) -> None:
+            # One member of a clause, which may itself be shorthand for
+            # several abilities: "each color" (CR 702.16h, Iridescent Angel)
+            # is five, and "each of its colors" (CR 702.16i, Earnest
+            # Fellowship) is one per colour **this** permanent has — read
+            # through layer 5 now, so a creature a Lace turned red has
+            # protection from red and no longer from what it was.
+            #
+            # The colours are computed only for the member that asks: every
+            # other word is answered without touching the layers.
+            held = None
+            if " ".join(str(word).lower().split()) == EACH_OF_ITS_COLORS:
+                held = self._effective_colors(permanent)
+            qualities.update(
+                protection_qualities_named(word, holder_colors=held) or ()
+            )
 
         def _absorb(clause: str) -> None:
             # CR 702.16g/h/i: "protection from [A] and from [B]" (and comma
             # separated variants) is shorthand for several separate protection
             # abilities.
             for word in re.split(r",|\band from\b|\band\b", clause):
-                quality = self._protection_quality_of(word)
-                if quality is not None:
-                    qualities.add(quality)
+                _named(word)
 
         for instr in program.instructions:
             if instr.kind == "static_line" and instr.value.startswith("protection from "):
@@ -3609,6 +3696,12 @@ class PermanentStateMixin:
         # nothing having to remove it. That grant used to be stamped into the
         # metadata channel below and cleaned up by name on removal.
         for aura in auras_attached_to(permanent):
+            if aura is ignoring_aura:
+                # CR 702.16n's question — "does this creature have **other**
+                # instances of protection from the same quality?" — asked by
+                # the state-based sweep of the one Aura whose own grant says
+                # it doesn't remove that Aura.
+                continue
             # CR 613.7e: stamped when it became attached.
             if not _kept(int(aura.metadata.get("aura_timestamp", aura.timestamp))):
                 continue
@@ -3647,6 +3740,11 @@ class PermanentStateMixin:
                     symbol = aura.metadata.get("chosen_color")
                 else:
                     symbol = _COLOR_WORD_TO_SYMBOL.get(word)
+                    if symbol is None:
+                        # "…protection from **enchantments**" (Tattoo Ward):
+                        # a quality that is not a colour, through the reader
+                        # every printed clause goes through.
+                        _named(word)
                 if symbol:
                     qualities.add(("color", symbol))
         # A lord's grant ("Other Cats you control … have protection from Dogs",
@@ -3676,9 +3774,11 @@ class PermanentStateMixin:
                 if not _kept(lord.timestamp):
                     continue
                 for word in buff.protection_from:
-                    quality = self._protection_quality_of(word)
-                    if quality is not None:
-                        qualities.add(quality)
+                    # Through the shorthand reader, so "Each creature has
+                    # protection from each of its colors." (Earnest
+                    # Fellowship) is computed per creature reached — *its*
+                    # colours, not the lord's.
+                    _named(word)
         # A **conditional** self-grant: "As long as an opponent controls a
         # creature with protection from white …, this creature has protection
         # from white." (Escaped Shapeshifter.) Derived, exactly as the Aura and
@@ -3746,9 +3846,7 @@ class PermanentStateMixin:
                     permanent, word, lost_at
                 ):
                     continue
-                quality = self._protection_quality_of(word)
-                if quality is not None:
-                    qualities.add(quality)
+                _named(word)
         # No Sleight of Mind step here: the clause above was read off
         # ``effective_card``, whose text layer 3 has already rewritten, so
         # "protection from blue" already reads "protection from red". Remapping
@@ -3794,6 +3892,12 @@ class PermanentStateMixin:
             # widening the rewrite to a quality nothing exercises would be a
             # claim with nothing behind it.
             return len(self._effective_colors(source)) >= 2
+        if kind == "spell_type":
+            # "protection from **instant spells**" (Devoted Caretaker). A
+            # permanent is not a spell (CR 111.1 / CR 110.1: a spell is a card
+            # on the stack), so nothing on the battlefield has this quality —
+            # no blocker, no Aura, no Equipment, and no ability's source.
+            return False
         if kind in ("card_type", "subtype"):
             # has_type resolves through the layer system, so a granted or
             # layer-4 type counts exactly as a printed one.
@@ -3857,6 +3961,15 @@ class PermanentStateMixin:
             from ..object_colors import card_colors
 
             return len(set(card_colors(self, card, seat))) >= 2
+        if kind == "spell_type":
+            # "protection from **instant spells**" (Devoted Caretaker): the
+            # card type of a **spell**. Every caller hands this method a card
+            # for one of two reasons — a spell choosing a target
+            # (``_can_be_targeted``, which asks only when no ability is
+            # choosing) or a spell as a damage source (CR 109.5) — so the type
+            # is the whole question here. The printed line, as for the
+            # card-type arm below: a spell has no layer-4 effect in this pool.
+            return value in (card.type_line or "").lower().split()
         if kind in ("card_type", "subtype"):
             return value in (card.type_line or "").lower().split()
         if kind == "typed":
@@ -3904,7 +4017,7 @@ class PermanentStateMixin:
 
     def _is_protected_from(
         self, victim: Permanent, source, *, as_damage_source: bool = False,
-        seat: int | None = None,
+        seat: int | None = None, ignoring_aura: Permanent | None = None,
     ) -> bool:
         """True if *victim* has protection from a quality *source* has
         (CR 702.16e/f).
@@ -3931,7 +4044,9 @@ class PermanentStateMixin:
             self._source_has_quality(
                 source, quality, as_damage_source=as_damage_source, seat=seat,
             )
-            for quality in self._protection_qualities(victim)
+            for quality in self._protection_qualities(
+                victim, ignoring_aura=ignoring_aura
+            )
         )
 
     def _can_be_targeted(
@@ -4031,13 +4146,22 @@ class PermanentStateMixin:
                 return False
         if ability_source is not None:
             from ..target_immunity import (
+                ABILITY_SOURCE,
                 ability_source_immunity_classes,
+                board_target_immunity_classes,
                 source_is_in_class,
             )
 
+            # The board-wide subject beside the relational ones, exactly as the
+            # spell branch above unions them: "Creatures you control can't be
+            # the targets of blue spells **or abilities from blue sources**."
+            # (Spellbane Centaur) is printed on some other permanent entirely.
             if any(
                 source_is_in_class(self, ability_source, source_class)
-                for source_class in ability_source_immunity_classes(target)
+                for source_class in (
+                    ability_source_immunity_classes(target)
+                    | board_target_immunity_classes(self, target, ABILITY_SOURCE)
+                )
             ):
                 return False
         # "…can't be the target of spells that can target only Walls or of
@@ -4097,6 +4221,11 @@ class PermanentStateMixin:
         if source_card is not None and any(
             self._card_has_quality(source_card, quality, seat=caster_index)
             for quality in qualities
+            # "…from instant **spells**" is asked of a spell alone: when an
+            # ability is choosing, *source_card* is the card of the object
+            # whose ability it is, and an ability is not a spell (CR 113.1)
+            # whatever its source's type line says.
+            if not (quality[0] == "spell_type" and ability_source is not None)
         ):
             return False
         if caster_index is not None and caster_index != self.controller_index_of(target):
@@ -4324,7 +4453,18 @@ class PermanentStateMixin:
                 if cs.kind != "conditional_static":
                     continue
                 cs_keywords = cs.payload.get("keywords") or ()
-                if not cs_keywords:
+                # …and the *sentence* half of the same layer: an ability the
+                # static hands over as a printed line — "…this creature has
+                # "At the beginning of your upkeep, sacrifice a creature.""
+                # (Wayward Angel), "…and can't block" (Childhood Horror, read
+                # as the sentence it abbreviates). On the derived-ability
+                # channel the quoted lord grant in pass 2a and the Aura's
+                # criterion grant in step 4 already use, and here for this
+                # step's own reason: the pass owns that channel's clear and
+                # rebuild, so the line is gone with the condition (CR 611.3a)
+                # and there is nothing to undo.
+                cs_lines = cs.payload.get("ability_lines") or ()
+                if not (cs_keywords or cs_lines):
                     continue
                 if not conditional_static_holds(
                     self, cs_seat, cs_perm, cs.payload.get("condition") or {}
@@ -4361,6 +4501,18 @@ class PermanentStateMixin:
                     # itself, or the Aura that says "enchanted creature has …".
                     add_derived_grant(
                         recipient, keyword, timestamp=cs_perm.timestamp
+                    )
+                for line in cs_lines:
+                    if recipient is not cs_perm:
+                        # An Aura's quote on its host names the Aura as the
+                        # one object granting it (CR 201.5a) — the binding
+                        # ``aura_granted_ability_lines`` makes for the
+                        # unconditional quote.
+                        line = bind_granter(
+                            line, _eff_card(cs_perm).name, cs_perm.permanent_id
+                        )
+                    add_derived_ability_line(
+                        recipient, line, timestamp=cs_perm.timestamp
                     )
 
         # Step 3b: the keywords a land animator gives the lands it animates —

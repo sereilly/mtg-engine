@@ -28,7 +28,9 @@ from ...oracle_types import OracleInstruction
 #: is armed (``handlers/board_misc.create_delayed_trigger`` routes on them).
 #: The player the creating resolution holds — the one its spell or ability
 #: announced (CR 601.2c/602.2b), or the seat its announced object sits with.
-RESOLUTION_PLAYER = "resolution_player"
+#: The record ``lowering/delayed._SEAT_RECORDS`` names for Suppress, so one
+#: key and one branch serve both.
+RESOLUTION_PLAYER = "target_player"
 #: The seat the creating *trigger's* event froze (CR 603.10) — the trigger
 #: context key of the same name, which every ``_EVENT_SUBJECT_PLAYERS`` fire
 #: site stamps.

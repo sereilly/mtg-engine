@@ -36,6 +36,7 @@ from itertools import combinations
 
 from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_paths
+from engine.handlers.board_misc import keep_slots_sized
 from engine.models import Permanent
 from engine.oracle import compiled_units
 from engine.oracle_types import RETURN_CHOSEN_TO_HAND
@@ -82,6 +83,15 @@ def _arming_instructions():
     return found
 
 
+#: What "the player who controls the fewest" controls, for a keep whose size
+#: is the table's minimum rather than a printed number (Balancing Act). The
+#: prompt is armed for one seat here, with no table to measure, so the census
+#: states the number and the engine's own ``keep_slots_sized`` writes it in —
+#: the substitution the handler makes with the minimum it finds. Smaller than
+#: the board, so the keep is a real choice.
+TABLE_MINIMUM = 3
+
+
 def _armed(lea, payload):
     """A fresh game with seat 0's board down and the prompt armed for it."""
     game = Game(players=[PlayerState(name="A"), PlayerState(name="B")])
@@ -89,7 +99,8 @@ def _armed(lea, payload):
     for name in BOARD:
         game._put_permanent_onto_battlefield(0, Permanent(card=lea[name]), None)
     game.arm_keep_permanents(
-        0, pool=dict(payload.get("pool") or {}), slots=list(payload["slots"]),
+        0, pool=dict(payload.get("pool") or {}),
+        slots=keep_slots_sized(payload["slots"], TABLE_MINIMUM),
         reason="census", fate=payload.get("fate"),
     )
     assert [c.kind for c in game.pending_choices] == ["keep_permanents"]

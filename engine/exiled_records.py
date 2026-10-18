@@ -109,6 +109,18 @@ class StackAnnouncement:
     #: spell was announced like every other field here, and one the card in
     #: exile cannot answer: off the stack it is the whole card again (CR 709.4).
     face_name: str | None = None
+    #: CR 707.10's "additional or alternative costs", for the one alternative
+    #: cost that outlives its own payment: **the flashback cost was paid**
+    #: (CR 702.34a), so the card is exiled "instead of putting it anywhere
+    #: else any time it would leave the stack". A field on the stack object
+    #: rather than a key of ``choices``, so it is copied by name here or not
+    #: at all — and it was not, which sent a flashed-back spell that came back
+    #: from Ertai's Meddling to its owner's graveyard, to be flashed back
+    #: again. The card's ruling (Scryfall, 2011-01-22): "When the card is
+    #: returned to the stack, it still 'remembers' the flashback cost was
+    #: originally paid. It'll be exiled when it resolves or otherwise leaves
+    #: the stack."
+    flashback: bool = False
 
 
 @dataclass

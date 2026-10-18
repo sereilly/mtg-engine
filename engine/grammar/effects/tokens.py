@@ -3,10 +3,11 @@
 Split out of ``effects/game.py`` when that module crossed 1,000 lines, and the
 boundary is the one ``lowering/tokens.py`` already draws one package over: a
 token is an **object the game creates** (CR 111.1), where everything left in
-``game`` changes the state a *player* is in — life, extra turns, winning,
-losing, ante, the coin flips and choices a sentence makes. Reusing that name is
-what re-forms the mirror instead of forking a fourth vocabulary for the same
-family.
+``game`` changes the state a *player* is in — life totals, extra turns,
+winning, ante and the coin flips. (The choices a sentence makes were on that
+list until Odyssey's Phase 0 took them to ``grammar/naming.py``.) Reusing that
+name is what re-forms the mirror instead of forking a fourth vocabulary for the
+same family.
 
 It is a leaf of the ``effects`` family like every other module here: it reads
 ``nouns``, ``references``, ``amounts`` and ``phrases`` — floors, not families —
@@ -235,6 +236,14 @@ def _parse_token_name_words(stream: TokenStream) -> str | None:
 _TOKEN_RECIPIENT_PREFIXES: tuple[tuple[tuple[str, ...], str], ...] = (
     (("each", "player"), "each_player"),
     (("each", "opponent"), "each_opponent"),
+    # "…exile it and **each other player** creates a 3/3 black Angel creature
+    # token with flying." (Haunted Angel.) The third spelling of the seat
+    # `seats.parse_player_ref` already reads this way, and for its reason:
+    # CR 102.2/102.3 make a player's opponents every player who is not them,
+    # and this engine has no teams — so "each other player" and "each opponent"
+    # name the same seats in a duel and in a free-for-all alike. A row rather
+    # than a second referent, so the two positions read one phrase one way.
+    (("each", "other", "player"), "each_opponent"),
     (("target", "opponent"), "target_opponent"),
     # "For each creature that died this way, **that player** creates two 1/1 red
     # Goblin creature tokens." (Mogg Infestation.) Anaphoric rather than

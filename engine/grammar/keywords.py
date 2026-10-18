@@ -173,10 +173,26 @@ def _protection_quality_name(stream: TokenStream) -> str | None:
         return PROTECTION_FROM_THE_CHOSEN_COLOR
     if stream.accept_phrase("each", "of", "that", "permanent", "'s", "colors"):
         return PROTECTION_FROM_EACH_OF_THAT_PERMANENTS_COLORS
+    # The two shorthands for several abilities that name no choice and no
+    # earlier sentence: "each of its colors" (CR 702.16i, Earnest Fellowship —
+    # the holder's own colours) and "each color" (CR 702.16h, Iridescent
+    # Angel). Read whole, before the bare word below would take "each" as a
+    # quality. The strings are ``engine/keywords.py``'s, whose
+    # ``protection_qualities_named`` is what answers them.
+    if stream.accept_phrase("each", "of", "its", "colors"):
+        return "protection from each of its colors"
+    if stream.accept_phrase("each", "color"):
+        return "protection from each color"
     colour = stream.peek_word()
     if colour is None:
         return None
     stream.advance()
+    # "…from **instant spells**" (Devoted Caretaker): a two-word quality, the
+    # card type narrowed to the spells of it. Without the second word the
+    # clause stops at "instant" and "spells" is unconsumed text.
+    if stream.peek_word() == "spells":
+        stream.advance()
+        return f"protection from {colour} spells"
     return f"protection from {colour}"
 
 

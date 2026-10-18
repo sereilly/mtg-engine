@@ -480,15 +480,21 @@ def test_702_16m_redundant_instance_still_protects_when_one_removed(all_cards):
 def test_702_16n_self_granting_aura_is_not_removed(all_cards):
     """702.16n: White Ward grants protection from white and says the effect
     doesn't remove this Aura, so it stays attached despite being white."""
+    from engine.auras import attach_aura
+
     creature = Permanent(card=_mk_creature("Goblin", 2, 2, colors=("R",)))
     ward = Permanent(card=_get(all_cards, "White Ward"))  # white Aura, prot from white
-    ward.metadata["attached_to"] = creature
-    creature.metadata["attached_aura"] = ward
-    creature.metadata["protection_from_white"] = True  # granted by the Ward
+    # Attached through the engine's own API, so the protection is the Ward's
+    # **derived** grant (read off the Aura while it is attached). This test
+    # used to stamp ``protection_from_white`` on the creature "as granted by
+    # the Ward" — a channel the engine stopped writing for an Aura long ago,
+    # and which is by construction a *second* instance of the protection.
+    attach_aura(ward, creature)
 
     p1 = PlayerState(name="P1", battlefield=[creature, ward])
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
+    assert game._protection_colors(creature) == {"W"}
 
     game.check_state_based_actions()
 
@@ -507,9 +513,12 @@ def test_702_16n_other_instance_affects_other_auras(all_cards):
             "Holy Strength", "Enchant creature\nEnchanted creature gets +1/+2.", colors=("W",)
         )
     )
-    ward.metadata["attached_to"] = creature
-    other_white_aura.metadata["attached_to"] = creature
-    creature.metadata["protection_from_white"] = True
+    from engine.auras import attach_aura
+
+    # The Ward's own derived grant is the only protection here — see the test
+    # above for why nothing is stamped on the creature.
+    attach_aura(other_white_aura, creature)
+    attach_aura(ward, creature)
 
     p1 = PlayerState(name="P1", battlefield=[creature, ward, other_white_aura])
     p2 = PlayerState(name="P2")
@@ -520,6 +529,34 @@ def test_702_16n_other_instance_affects_other_auras(all_cards):
     assert ward in p1.battlefield  # protected by 702.16n
     assert other_white_aura not in p1.battlefield  # removed by 702.16c
     assert any(c.name == "Holy Strength" for c in p1.graveyard)
+
+
+@pytest.mark.cr("702.16n")
+def test_702_16n_another_instance_of_the_protection_removes_the_exempt_aura(all_cards):
+    """702.16n's last sentence: "If the creature has other instances of
+    protection from the same quality, those instances affect Auras as normal."
+    The Ward is exempt from the protection **it** grants and from no other —
+    a creature that also has protection from white some other way (a printed
+    line, a one-shot grant) sheds the white Ward like any white Aura.
+
+    The sweep used to exempt on the printed phrase alone, whatever the source
+    of the protection. The two tests above passed against that reading only
+    because their harness stamped the Ward's grant as a second instance."""
+    from engine.auras import attach_aura
+
+    creature = Permanent(card=_mk_creature("Goblin", 2, 2, colors=("R",)))
+    ward = Permanent(card=_get(all_cards, "White Ward"))
+    attach_aura(ward, creature)
+    creature.metadata["protection_from_white"] = True  # another instance
+
+    p1 = PlayerState(name="P1", battlefield=[creature, ward])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    game.check_state_based_actions()
+
+    assert ward not in p1.battlefield
+    assert any(c.name == "White Ward" for c in p1.graveyard)
 
 
 # ---------------------------------------------------------------------------

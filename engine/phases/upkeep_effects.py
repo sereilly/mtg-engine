@@ -949,7 +949,12 @@ class UpkeepEffectsMixin:
         if index is None:
             return
         destroyed = self._destroy_target_permanent(
-            controller, target_permanent_index=index
+            controller, target_permanent_index=index,
+            # The permanent's own triggered ability destroys it, and its
+            # controller controls that ability (CR 109.5). Said here: an
+            # upkeep effect runs outside the instruction dispatch that would
+            # otherwise know.
+            cause=self.players.index(controller),
         )
         if destroyed is None:
             # Regenerated, indestructible or replaced: not destroyed, so the

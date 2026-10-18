@@ -39,7 +39,13 @@ import dataclasses
 from . import ast
 from .errors import GrammarError
 from .nouns import parse_object_filter
-from .naming import _parse_name_then_reveal_top, parse_reveal_chosen_hand_cards
+from .naming import (
+    _parse_name_then_reveal_top,
+    parse_choose_card_type,
+    parse_hides_items,
+    parse_reveal_chosen_hand_cards,
+)
+from .paragraphs import _parse_repeated_graveyard_pick
 from .phrases import (
     _accept_life_alternative,
     _accept_mana_alternatives,
@@ -50,6 +56,7 @@ from .stream import TokenStream
 from .effects import (
     _parse_activates_each_lands_mana_ability,
     _parse_ante,
+    _parse_attach,
     _parse_bid_life_for_control,
     _parse_discard,
     _parse_discard_revealed_unless_pay_life,
@@ -58,7 +65,6 @@ from .effects import (
     _parse_extra_turn,
     _parse_mill,
     parse_choose_each_then_return,
-    parse_hides_items,
     parse_keep_then_sacrifice_rest,
     _parse_play_with_hand_revealed,
     _parse_player_adds_mana,
@@ -71,24 +77,36 @@ from .effects import (
     _parse_put_exiled_card_on_stack_as_copy,
     _parse_put_counter,
     _parse_put_exiled_this_way,
-    _parse_repeated_graveyard_pick,
     _parse_return,
     _parse_reveal_hand,
     _parse_sacrifice,
     accept_subject_reveals_counted_top_sorted,
+    accept_subject_reveals_top_caster_picks,
     accept_subject_reveals_top_of_library,
     _parse_simultaneous_untap_and_tap,
     _parse_skip_step,
     _parse_tap_untap,
-    parse_choose_card_type,
     parse_claims_one_exiled_card,
     parse_exile_random_card_from_hand,
     parse_player_exiles_cards_from_hand,
     parse_graveyard_top_opponent_chooses,
     parse_player_chooses_permanent,
     parse_player_looks_at_own_library_top,
+    parse_player_reorders_your_library_top,
     parse_player_separates_your_library_top,
 )
+
+
+def _host_is_their_choice(attached: "ast.Attach") -> bool:
+    """Whether *attached* names its host as "a <noun> **of their choice**" —
+    an untargeted pick by the seat the sentence is about."""
+    host = attached.host
+    return (
+        isinstance(host, ast.TargetSpec)
+        and not host.targeted
+        and host.quantifier in ("a", "an")
+        and host.filter.their_choice
+    )
 
 
 def parse_player_subject_verb(
@@ -125,6 +143,22 @@ def parse_player_subject_verb(
             return tapped_out
     if token.text in ("draws", "draw") and isinstance(source_spec, ast.PlayerRef):
         return _parse_draw(stream, source_spec)
+    # "**That player attaches** this Aura to a land of their choice." (Steam
+    # Vines.) CR 701.3's keyword action performed by a seat the sentence
+    # names, which is the whole of what the subject adds: who picks the host.
+    # Only where the host really is that seat's pick — "of their choice" —
+    # because every other attach chooses its host by targeting (CR 601.2c),
+    # and that is the ability's controller's to do whoever the sentence
+    # mentions. Rewound on anything else, so the line keeps its own refusal.
+    if token.text == "attaches" and isinstance(source_spec, ast.PlayerRef):
+        mark_attach = stream.mark()
+        try:
+            attached = _parse_attach(stream)
+        except GrammarError:
+            attached = None
+        if isinstance(attached, ast.Attach) and _host_is_their_choice(attached):
+            return dataclasses.replace(attached, chooser=source_spec)
+        stream.reset(mark_attach)
     # "**Each player hides at least one item, then all players reveal them
     # simultaneously.**" (Goblin Game.) A number per seat, named in secret.
     # Dispatched on the verb like every other player action; the production
@@ -180,6 +214,16 @@ def parse_player_subject_verb(
         )
         if separated is not None:
             return separated
+        # "**That player** looks at the top three cards of your library, then
+        # puts them back in any order." (Tahngarth's Glare.) The third card on
+        # these four opening words, and the plainest: the same library as the
+        # Portal's and nothing done with it but a rearrangement. Last, and
+        # declining without consuming like the two above it.
+        reordered = parse_player_reorders_your_library_top(
+            stream, source_spec
+        )
+        if reordered is not None:
+            return reordered
     if token.text in ("skips", "skip") and isinstance(source_spec, ast.PlayerRef):
         return _parse_skip_step(stream, source_spec)
     # "**That player** exiles all cards from their library." (Thought
@@ -276,6 +320,14 @@ def parse_player_subject_verb(
         sorted_top = accept_subject_reveals_counted_top_sorted(stream, source_spec)
         if sorted_top is not None:
             return sorted_top
+        # "**That player** reveals the top two cards of their library. You
+        # choose one of those cards and put it into their graveyard." (Balshan
+        # Beguiler; Bamboozle.) The third counted reading, parted from the one
+        # above by what follows the pile: a full stop and "you choose" against
+        # a comma and "puts all". Declines without consuming.
+        picked_top = accept_subject_reveals_top_caster_picks(stream, source_spec)
+        if picked_top is not None:
+            return picked_top
         top = accept_subject_reveals_top_of_library(stream, source_spec)
         if top is not None:
             return top
@@ -549,6 +601,14 @@ def parse_player_subject_verb(
         if stream.at_word("pay"):
             mark_pay = stream.mark()
             stream.advance()
+            # "…may pay **that spell's mana cost**." (Ice Cave.) A price no
+            # symbol run can print: the mana cost of the spell the trigger's
+            # condition named. Read before the symbol reader, which raises on
+            # "that" — and every other "pay that …" is rewound to it.
+            if stream.accept_phrase("that", "spell", "'s", "mana", "cost"):
+                return ast.May(source_spec, cost=ast.EventSpellManaCost())
+            stream.reset(mark_pay)
+            stream.advance()
             try:
                 cost = _parse_mana_payment(stream, allow_variable=True)
                 # "…may pay {1} **or {2}**" (Winter's Chill): CR 118.8's
@@ -656,6 +716,14 @@ def parse_player_subject_verb(
             ):
                 return dataclasses.replace(
                     action, gained_by=source_spec, offered=True
+                )
+            # "That land's controller **may** attach this Aura to a land **of
+            # their choice**." (Kudzu.) The same fold for the same reason: the
+            # offer and the pick are one decision by one seat — choose one of
+            # those lands, or none.
+            if isinstance(action, ast.Attach) and _host_is_their_choice(action):
+                return dataclasses.replace(
+                    action, chooser=source_spec, optional=True
                 )
             # "**That player** may draw a card." (Soldevi Sentry.) The
             # action's subject is elided and it is the *offer's* subject,

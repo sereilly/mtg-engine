@@ -554,6 +554,17 @@ def test_every_offer_with_a_rider_names_a_reviewed_action_kind(catalog):
         "return_creature_from_graveyard_to_hand", "sacrifice_attached_permanent",
         "sacrifice_matching_permanent", "sacrifice_permanents_totalling",
         "sacrifice_self",
+        # Tainted Pact (ODY), read at its promotion: "Exile the top card of
+        # your library. **You may put that card into your hand** unless it has
+        # the same name as another card exiled this way. Repeat this process
+        # until…". The rider is the end of the process (`end_process_round`),
+        # so an offer taken over nothing would stop the loop on a card nobody
+        # received. `_action_is_takeable` answers it out of the same record the
+        # handler moves - with no card exiled this round, or with that card
+        # gone from exile since, there is nothing to take and the offer is
+        # withdrawn - and `tests/sets/test_ody_instants_w2g3.py` is where an
+        # empty library is a game.
+        "put_exiled_cards_into_zone",
     }
     found: set[str] = set()
     for card in compilation_units(catalog):

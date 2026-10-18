@@ -1,8 +1,8 @@
 # Scaling Roadmap
 
-Target: grow the card pool from **4,781** unique cards — thirty-one sets,
+Target: grow the card pool from **5,246** unique cards — thirty-three sets,
 LEA/LEB/2ED/ARN/ATQ/3ED/LEG/DRK/FEM/4ED/ICE/HML/ALL/MIR/VIS/5ED/WTH/TMP/STH/EXO/
-USG/ULG/6ED/UDS/MMQ/NEM/PCY/INV/PLS/7ED/M21, all shipped and all supported — to the
+USG/ULG/6ED/UDS/MMQ/NEM/PCY/INV/PLS/7ED/APC/ODY/M21, all shipped and all supported — to the
 full release line:
 **140 sets, 33,594 printings, 26,113 unique cards** per `set_progress.json`.
 
@@ -53,13 +53,17 @@ Anything that weakens these is a regression regardless of what it enables:
 
 1. **No silent wrongness.** A card may fail loudly as unsupported with a
    reason; it may never resolve as something other than what it says.
-2. **The suite stays fast.** **21,127 tests**, CI budget **940s**, CI-measured
+2. **The suite stays fast.** **27,624 tests** (Apocalypse's Phase 6 reading,
+   2026-10-12; 26,310 at its Phase 0), CI budget **940s**, CI-measured
    baseline **677s** (`ci.yml`), read from run 34296564407: `suite wall time:
-   677s`, **72% of budget**. The test count is MMQ's Phase 6 reading
-   (2026-09-13) and is up 995 on UDS's — the largest single-set rise the
-   project has recorded. The baseline is unchanged and now predates **three**
-   sets and a thousand tests, so it is the stalest number in this file: the
-   next Phase 0 owes CI a fresh one rather than trusting it.
+   677s`, **72% of budget** - *at 21,127 tests*. The baseline is unchanged
+   and now predates **nine** sets and six thousand tests, so it is the
+   stalest number in this file and no longer a statement about this suite:
+   locally, alone on a 12-core, 16 GB machine, the suite takes 34 minutes at
+   `-n 8` and 41 at `-n 6`. `main` is 79 commits ahead of anything
+   pushed (the rule below about an unpushed branch), so no runner number
+   exists for it. The next Phase 0 owes CI a fresh one, and should expect
+   the reading to be over budget rather than near it.
 
    **The creep warning no longer fires first**, and that is the live cost of the
    refresh rather than a thing to fix by raising the budget. At BASELINE 677 the
@@ -341,16 +345,33 @@ one card prints this") reads as a work item long after it stopped being true.
   cannot be distinguished from a check that passes, which is why the derivation
   and not the gate is where this had to be fixed.
 
-- **CR 608.2b is enforced for instants and sorceries only.** "If all its
-  targets are now illegal, the spell or ability doesn't resolve" is one gate,
-  `legality.illegal_targets_refusal`, asked once above the instructions;
-  CR 601.2c's announcement half is its twin, `legality.cast_target_refusal`.
-  One clause is also asked of abilities, as a separately named gate (EXO):
-  `legality.stale_comparison_refusal` re-asks a printed comparison between two
-  seats ("target opponent who has more life than you do" — the Keepers, the
-  Oaths) at resolution, bounded to specs carrying `compared` and to objects
-  whose compared seat is their **only** printed target. It is not a down
-  payment on the three declines below, each of which is its own round.
+- **CR 608.2b is asked of every object whose targets somebody chose** (APC
+  wave 2; of instants and sorceries since NEM). "If all its targets are now
+  illegal, the spell or ability doesn't resolve" is one gate,
+  `legality.illegal_targets_refusal`, asked once above the instructions - and
+  CR 608.2a's intervening-if is asked before it. CR 601.2c's announcement half
+  is its twin, `legality.cast_target_refusal`. Besides a spell it answers for
+  **an activated ability** (`StackItem.activated`) and for **a triggered
+  ability whose target was chosen** (`StackItem.targets_chosen`: the
+  `trigger_target` answer or default, an entry trigger's accepted cast
+  announcement, an accepted upkeep pick), through `ability_targets_refusal` /
+  `ability_target_verdicts` - the picker's own list, asked again. Census over
+  every activated ability that announces one target: **479 of 622 wrong in at
+  least one way before** (45 of 499 with the target gone - 25 of them running
+  an untargeted tail, which is Savage Gorilla's draw; 409 of 499 acting on a
+  target that gained shroud; 391 of 484 on one with protection from the
+  source; 313 of 477 after a type change, 185 of those hitting a bystander;
+  47 of 80 on a player who gained shroud) and none after among those judged.
+  **Each target is judged separately in an object that still resolves**:
+  `blank_illegal_resolution_targets` rewrites every illegal slot before any
+  instruction runs - 42 of 48 multi-target spells acted on a target given
+  shroud in response, and none does - and an object printing "still resolves
+  if its target becomes illegal" is blanked all the same (Gilded Drake, which
+  traded itself for a bystander). Held by
+  `tests/engine/test_ability_target_resolution_census.py`. One clause is a
+  separately named gate (EXO): `legality.stale_comparison_refusal` re-asks a
+  printed comparison between two seats ("target opponent who has more life
+  than you do" - the Keepers, the Oaths) at resolution.
 
   **The gate re-asks the target's *description* (NEM wave 2).** It used to ask
   only whether a target was still on the battlefield and targetable, so a
@@ -367,18 +388,38 @@ one card prints this") reads as a work item long after it stopped being true.
   Edict ("you own or control") needs an observer in the enumerator's
   `subject_matches` call. The declines:
 
-  * **A triggered ability's targets.** The death sweep enqueues a dies-trigger
-    while the dying permanent is still listed, so Blazing Effigy's "it deals 3
-    damage to target creature" records the dying Effigy itself and reaches the
-    right creature only by falling back to the index. Asking 608.2b of that id
-    counters an ability the engine mis-targeted and reports it as a
-    rules-correct fizzle. The fire sites have to choose targets after the
-    permanent has left first. The same resolver leaves a *triggered* ability
-    whose stamped graveyard choice vanishes falling to its untargeted
-    deterministic pick, which can pick a card nobody named; an **activated**
-    ability's is gated since 2026-10-06
-    (`legality.vanished_graveyard_target_refusal`, bounded by
-    `StackItem.activated`: 19 of 26 driven acted on another card before).
+  * **A trigger target not chosen through its own picker** is unmarked and
+    unjudged. (a) *A default taken while a permanent is on its way to a
+    graveyard* (`Game.departing`): the death sweep announces a dies-trigger
+    while the dying permanent is still listed, so a non-interactive default
+    can be the dying permanent itself ("Blazing Effigy: targets Blazing
+    Effigy") - a person's answer is judged; 20 triggers print a target and
+    fire on a death or a departure. The fix is to enqueue after the removal
+    (wrap `_destroy_swept_permanents`' loop, and the single-permanent paths,
+    in `deferring_triggers()`) and then drop `Game.departing`; four Blazing
+    Effigy tests pin the index fallback and will move. (b) A modal trigger's
+    mode target (one in the pool). (c) A spell target a trigger chose for
+    itself. (d) A cast announcement the picker has no list for (12 of 65
+    targeted entry triggers on the cast road; the 15 graveyard-card ones
+    among them still return a different card when the named one is exiled
+    in response). (e) Any fire-site stamp. The same resolver leaves a
+    *triggered* ability whose stamped graveyard choice vanishes falling to
+    its untargeted deterministic pick; an **activated** ability's is gated
+    (`legality.vanished_graveyard_target_refusal`).
+  * **An ability printing "target" more than once with one derived slot**:
+    Cuombajj Witches (still deals 1 to a first target that gained shroud),
+    Mogg Assassin, Keeper of the Dead. Needs the second slot announced - the
+    CR 602.3 entry above is the same missing prompt.
+  * **A roles announcement with a non-permanent slot**: Planeswalker's Scorn
+    and Favor (a shrouded "target opponent" still reveals), Goblin Welder's
+    graveyard slot - one branch in `ability_target_verdicts` with a per-role
+    verdict for a seat or a stamp. On the spell side, still: a roles spell's
+    player role (Donate), and a mode an opponent chose (CR 700.2e), at both
+    ends, because the chooser's seat is held only by the prompt.
+  * **Per-slot enumeration at announcement**: Primal Might's cast gate accepts
+    two of the caster's own creatures where the second slot says "you don't
+    control", and with the first gone the second is pumped
+    (`.scratch`-era repro: cast it at two of your own).
   * **A spell whose target may be a player — closed 2026-10-06, and the
     reason it stood is the lesson.** This bullet said a seat and a chosen
     player reach a stack item through the same `target_player_index`, so
@@ -404,13 +445,13 @@ one card prints this") reads as a work item long after it stopped being true.
     CR 601.2c's "can the announcement be made at all?" is asked per primary
     kind only.
 
-- **Four handler paths still resolve by index alone**, reached today only by
-  instants and so caught by the CR 608.2b gate first; the next *activated*
-  ability printed with the same text walks in. Four since NEM wave 1, which
-  made `prevention.apply_prevention_shield` read the id first (35 shipped
-  "any target" shields reached it): `board_misc.mark_text_modified`,
-  `combat.remove_creature_from_combat`, `zones.exile_target_creature_until_eot`
-  and `zones.exile_creature_gain_life_equal_to_power`. All four also carry a
+- **Four handler paths still resolve by index alone** - true of the code, and
+  since APC wave 2 unreachable with a stale index from a spell, an activated
+  ability or a chosen trigger target, because an illegal slot is blanked
+  above them; only a *stamped* trigger target can still walk in.
+  `board_misc.mark_text_modified`, `combat.remove_creature_from_combat`,
+  `zones.exile_target_creature_until_eot` and
+  `zones.exile_creature_gain_life_equal_to_power`. All four also carry a
   "fall back to the first matching permanent" default, the look-alike class.
 
 - **A still-legal target that changed controller is missed, and a bystander is
@@ -423,6 +464,9 @@ one card prints this") reads as a work item long after it stopped being true.
   272 bystander hits across 148 cards. The likely fix is the one the push side
   already has — settle the seat *from the id* at resolution, as
   `_settle_announced_target_seat` does when the object goes on the stack.
+  Odyssey's Liquid Fire is a new instance and behaves exactly as shipped
+  Illuminate does: the creature is missed and its *old* controller takes the
+  "5 minus X".
 
 - **No CR 603.3b choice orders a controller's simultaneous triggers** (NEM
   W1G1). They keep printed order, so on its own upkeep Tangle Wire's tap
@@ -486,15 +530,14 @@ one card prints this") reads as a work item long after it stopped being true.
 
 - **Smaller ones NEM measured and left, each with its parts named in the wave's
   merge commits:** Glyph of Delusion grants its untap lock to the *Wall*
-  (`grant_target_ability_text` has no `subject_role`, so it reads slot 0); six
-  lands whose mana ability costs more than {T} (Gemstone Mine, the five MMQ
-  depletion lands) announce no tap-for-mana event — the post-tap block of
-  `tap_land_for_mana` wants to be a helper the activation path's mana branch
-  calls; the client's dual-land colour fan offers a land's whole colour summary
+  (`grant_target_ability_text` has no `subject_role`, so it reads slot 0);
+  the client's dual-land colour fan offers a land's whole colour summary
   rather than the chosen ability's symbols; a mana ability whose effect fails
   while resolving inline is reported as a refused activation after its costs
   are paid, skipping the state-based check; Dominate's X prompt has no minimum,
-  so a too-small X is refused by the engine rather than prevented in the UI;
+  so a too-small X is refused by the engine rather than prevented in the UI
+  (a spec can carry `min_x` since Odyssey, for a chosen-number cost only, and
+  `app.js` does not read it);
   and the AI still reads Conspiracy's and Disharmony's sides wrong (a
   `derived_static_rule` reading, and a pronoun walk across steps).
 
@@ -551,14 +594,18 @@ one card prints this") reads as a work item long after it stopped being true.
   fire site records only the `CardDefinition`, not the stack item. Fixing it
   means giving that fire site the object. (Re-verified 2026-09-07.)
 
-- **The browser names one object for a counted cost.** `web/schemas.py` and
-  `web/actions.py` accept `cost_permanent_ids`, but `web/static/app.js` still
-  sends a single `cost_permanent_index`, so Goblin Warrens' second Goblin and
-  Night Soil's second card take the deterministic default. The cost is fully
-  charged; only the *choice* is partly the engine's. The same path has no
-  graveyard picker at all: Haunting Misery's payer does not choose which X
-  creature cards leave (CR 601.2b lets them), and the top-down default is the
-  floor until there is one. (FEM, WTH; re-verified 2026-09-07.)
+- **A cast cost that exiles X cards from a graveyard has no picker** (what is
+  left of "the browser names one object for a counted cost", FEM and WTH).
+  Odyssey's client group drained the rest: an activation's counted or
+  any-number cost is a multi-select, over permanents (Goblin Warrens) and
+  over graveyard cards (Night Soil, Necropolis), and the engine pays the
+  named set or refuses. For a **cast** the engine takes
+  `cost_graveyard_indices` (Skeletal Scrying, Haunting Misery) and no client
+  sends it, so the top-down default is still what a person gets. Parts: a
+  cost spec out of `engine/targeting.py` carrying the candidates
+  (`_graveyard_exile_candidates`), and a cast arm in the client -
+  `startCastCostPrompt` asks costs before X, and this cost's count *is* X
+  (Infernal Harvest's pinned reason in `_PICKERLESS_CAST_COSTS`).
 
 - **What stands after the round between Planeshift and Seventh Edition**
   (2026-10-06). Planeshift left an entry here; eight agents in two rounds
@@ -578,9 +625,9 @@ one card prints this") reads as a work item long after it stopped being true.
     handler's pick.* Refusing it turns 43 tests red in 23 files (71 activate
     bare; the list is `.worktrees/scratch/oi/g1/measure_suite.txt` while that
     directory lasts). Parts: one line at the end of
-    `legality.activation_target_refusal`; a graveyard branch in
-    `ai_policy.choose_activation_action` (the AI names no graveyard target — 4
-    of 391 activations in sixty games, all Scavenging Ooze); then
+    `legality.activation_target_refusal`; (the AI's graveyard branch landed
+    at Odyssey - it names one targeted graveyard card, or a list out of a
+    single graveyard); then
     `sole_legal_activation_target`, `default_announced_permanent` and
     `pick_target_permanent`'s fall-through scans go dead for activations. Its
     residue is real: of 442 bare activations with two or more legal targets,
@@ -591,9 +638,9 @@ one card prints this") reads as a work item long after it stopped being true.
     as exact in `legality.exact_target_count` for object kinds,
     `ai_policy._choose_single_object_target` returning None for "any target"
     and optional specs, and the corpus that casts seat-only.
-  * *Activation leftovers.* No exact-count check on the activation side ("X
-    target lands", "two target creatures" naming fewer is accepted; the cast
-    side has `cast_target_count_refusal`). Circle of Protection: Artifacts /
+  * *Activation leftovers.* (A printed count is held on the activation side
+    since Odyssey: "two target lands" naming one was accepted for Argothian
+    Elder and Wintermoon Mesa.) Circle of Protection: Artifacts /
     Shadow and Rune of Protection: Artifacts / Lands derive an "any target"
     picker for "a … source of your choice" (`targeting._prevention_shield_spec`
     falls through for `source_type` / `source_subject`). The land route turns
@@ -642,14 +689,11 @@ one card prints this") reads as a work item long after it stopped being true.
     Gnomes' first ability, Blind Seer): the stack item's
     `choices["color_override"]` needs a stamp and a duration, and resolution
     has to carry it through `change_color(timestamp=)`.
-  * *The AI, what was not reached* (unchanged from Planeshift). Cards lent or
-    permitted outside the hand never reach it — 18 cards (15
-    `grant_cast_permission`, Aluren, Yawgmoth's Agenda, Demonic Embrace):
-    `choose_cast_action` enumerating `cast_permissions.playable_from_zones`,
-    `CastAction` carrying the pile's owner seat, a free permission skipping
-    the mana plan, the executors picking the zone, lands through the land-drop
-    pass. Costed and sacrifice mana sources (25 sacrifice, 13 mana-priced, 29
-    other) stay untapped: a sacrifice during payment renumbers the battlefield
+  * *The AI, what was not reached.* (Cards cast from outside the hand reach
+    it since Odyssey - `ai_valuation.permitted_casts`, counted by
+    `SimulationReport.casts_from_zones` - and so do eight mana sources priced
+    in generic mana.) The other costed and sacrifice mana sources, 117 of
+    them, stay untapped: a sacrifice during payment renumbers the battlefield
     under an announcement made by index, so the executors must re-bind target
     indices from ids after payment first. `_choose_activation_role_targets`
     takes one side, not one per role (Phyrexian Splicer). The tap planner is
@@ -663,11 +707,16 @@ one card prints this") reads as a work item long after it stopped being true.
   * *The castable highlight's residue* (unchanged). `board_can_pay` counts
     lands only; Mana Flare-style `land_tapped_for_mana` adders, lands
     producing more than five "N of any one colour", and multi-step producers
-    still read wrong. City of Solitude's *activation* half is unasked, and
+    still read wrong. (The *payer* of an effect's cost does use an adder's
+    mana since Odyssey - it re-plans after every tap - so the two disagree in
+    the safe direction: the highlight says no where the engine would pay.)
+    City of Solitude's *activation* half is unasked, and
     headless `cast_from_hand` enforces no sorcery or land timing.
-  * *Smaller, each one sentence.* Sapphire Charm's mode 0 ignores the player
-    named at cast (the lowering wants `targets` on the outer
-    `create_delayed_trigger` with a bound seat). Forsaken City's "if you do,
+  * *Smaller, each one sentence.* Sapphire Charm's mode 0 gives its draw to
+    the player named at cast (Odyssey's closer) and still derives no picker
+    for one - `derive_cast_spec(mode_index=0)` is None for a
+    `create_delayed_trigger` mode - so a browser cannot name its caster.
+    Forsaken City's "if you do,
     untap" untaps when the exile pick defaulted to no card. Cataclysm's "all
     the sacrifices are done simultaneously" is not honoured: the keep prompt
     sacrifices per seat as each answers. Barrin's `permanents_to_hand_this_turn`
@@ -738,13 +787,6 @@ one card prints this") reads as a work item long after it stopped being true.
 - **What Prophecy's third wave measured and left** (2026-10-04; each part is
   named in the commit that declined it, which is what makes it a brief):
 
-  * *The optional-pay planner counts six lands the AI's plan now declines.*
-    `mana_payment.untapped_mana_lands` still reads Mishra's Workshop
-    (restricted mana, CR 106.6) and Gaea's Cradle, Serra's Sanctum, Tolarian
-    Academy, City of Shadows and Reflecting Pool (output the board decides)
-    as one mana each; a "you may pay {1}" on a creatureless board would tap
-    the Cradle for nothing. `ai_policy._land_mana_is_unplannable` is the
-    predicate the AI side already asks (W3G4 merge).
   * *A copy with no recorded choice copies the first creature in seat
     order* — CR 707.5's "may" made for the player on a non-cast entry
     (W3G3).
@@ -756,7 +798,322 @@ one card prints this") reads as a work item long after it stopped being true.
     printing that shape (W3G5).
   * *Two cast-side costs have no picker*, pinned with their parts in
     `_PICKERLESS_CAST_COSTS`: Infernal Harvest's X is asked after any cost
-    stage, and Haunting Misery has no graveyard wire field (W3G5).
+    stage, and Haunting Misery's wire field (`cost_graveyard_indices`, since
+    Odyssey) has no client behind it - the entry above (W3G5).
+
+- **What Apocalypse measured and left** (2026-10-11; thirteen groups, each
+  part named in the report and the commit that declined it. CR 608.2b's
+  residue is in its own entry above.)
+
+  * *A blanket "lose all abilities" never takes a grant made earlier* (CR
+    613.7). 4 of 4 driven: a kicked Faerie Squadron and then Humility, or
+    Humble; Grizzly Bears with Jump or Flight and then Humility - the granted
+    keyword survives, and a kicked Rakavolver's granted trigger still gains
+    life where El-Hajjaj's printed one does not. The granted *activated*
+    ability is refused. Scope: every grant channel against Humility,
+    Titania's Song, Humble and Soul Sculptor; twelve cards print a kicked
+    "and with" grant. Parts: the removal carries a timestamp (the source's,
+    or stamped in `ALL_ABILITIES_REMOVED`); `GRANTED_ABILITY_LINES` entries
+    carry one; `Permanent.effective_card` appends only grants later than the
+    newest removal; `layer_bridge.collect_ability_effects` emits the removal
+    over all abilities at its timestamp rather than over
+    `_printed_abilities` at 0; `legality.lost_abilities_refusal`'s first arm
+    stops refusing later grants.
+  * *Text changes aimed at a spell.* Sleight of Mind, Magical Hack and Crystal
+    Spray print "target spell or permanent" and offer permanents; a named
+    spell is refused at announcement now, where it was accepted and ignored.
+    Illusion and Blind Seer were the same sentence for a colour and are done.
+    Parts: a text channel on a stack object (an effective card beside the
+    printed `StackItem.card`); every stack reader, and the compile at
+    resolution, reading it; the graveyard still receiving the printed card;
+    the CR 400.7a carry through `text_changes`; a `spell_or_permanent` spec
+    and a stack branch in `mark_text_modified`; the vocabulary prompt for a
+    spell target. Beside it: Double Vision and `copy_this_spell` copy
+    `choices` whole, so a copy inherits the original's recolour (by reading;
+    `forget_spell_color_change` at both sites, and a copy's own colour kept
+    apart from an effect's - CR 707.9b); and the Laces are still an
+    undescribed kind row for the picker Illusion now describes.
+  * *What a seatless viewer is sent.* `GET /state` with no seat returns the
+    `look_top_pick` prompt, cards included; the kind is `spectator_visible`,
+    as are 54 others (`scry`, `search_library`, `reorder_library`, `discard`,
+    `hand_to_library`). Parts: decide whether the seatless payload is a
+    hotseat view or a spectator's; split `spectator_visible` to match; check
+    the client's single-payload mode still renders its own prompts. Two log
+    leads beside it, not driven: a hand-to-library *cost* names its card
+    (`activation.py`), and the search-and-exile line names cards exiled face
+    down.
+  * *Two prompts that meet refuse each other* - for any reason but a draw.
+    Odyssey's closer made a draw wait for the one in front of it (a draw is
+    parked while its seat owes a prompt a draw armed), which ended the
+    Abundance and Pursuit of Knowledge lock - 69 of 198 pairs of draw
+    replacements locked a multi-card draw - and let Abundance ask for its
+    bottom order. What is left is the gate: `web.prompts.blocking_prompt`
+    still refuses each of two prompts of different kinds in favour of the
+    other when they meet some other way. Parts: admitting an answer to any
+    prompt the seat owes, or a queue order. Beside it, read and not
+    measured: a queued `ReplacementChoice` does not suspend the enclosing
+    resolution ("draw, then discard" would run on) or hold its stack object,
+    and Breathstealer's Crypt loses its reveal-and-tax when its inner draw
+    suspends.
+    Smaller, in the client: `hasBlockingPromptForAutoPass` omits four prompt
+    kinds, so auto-pass sends a pass the server refuses; a several-target
+    `trigger_target` names one target per click; a one-slot picker narrowed
+    by a Flagbearer does not say why; a click on the middle of a lower stack
+    card hits the card above.
+  * *Replacements that are never offered as a choice* (CR 616.1e). The
+    graveyard seam passes no `restart`, so Legacy Weapon under Forbidden
+    Crypt or Yawgmoth's Will takes the default order (exile first) even for
+    an asked seat; Library of Leng and Dodecapod on a taken discard likewise.
+    And Library of Leng is *offered* on a discard that pays a cost, against
+    its ruling ("costs aren't effects"): eight cost sites call
+    `_discard_card`, and one `as_cost` flag on the seam closes that and a
+    cost paid inside another player's resolution reading as opponent-caused.
+  * *Costs named and not held, the rest of it.* A named permanent pays a
+    spell's additional cost or the cast is refused (43 of 43 substituted a
+    default); an **alternative** cost's short list is still topped up
+    (`_resolve_alternative_cost_permanents`: Gush, Fireblast) - refuse
+    `len(named) < count` and check the client's picker always sends the full
+    count. `queue_from_hand`'s cost-waiver branch skips `_pay_cast_cost`,
+    where every optional offer is charged, so a kicker reads as free under a
+    waiver (read, not driven). The roles walk refuses one object for two
+    instances of "target", which CR 115.3 allows: a kicked Orim's Thunder
+    cannot name one artifact creature for both.
+  * *The Flagbearer requirement's edges* (`engine/target_requirements.py`).
+    An opponent-chosen mode's targets (CR 700.2e, three `mode_chooser` cards)
+    are named after the cast and are not held; `activate_from_hand` is not
+    gated and not censused; two different required nouns at once are read as
+    "either". One reading is pinned rather than ruled: "up to one target" may
+    not dodge by naming none.
+  * *Combat phrases that still refuse or re-check.* `lowering/keyword_removal`
+    and `lowering/_counted_pumps` gate an event subject on `object_only_filter`
+    where their handlers pass observer and source (Fervent Charge's mismatch;
+    swap each to `observer_source_filter`). "Whenever a creature blocks, ... it"
+    refuses (`matching_creature_blocks` is not an event-subject object; the
+    narrowed pair form needs a decision). "This creature can't block this
+    turn" and "enchanted creature can't attack this turn" refuse in the
+    lowering. The combat relation is refused by gain-control and
+    can't-be-regenerated's own narrower gates. And a rebound subject's "you
+    control" is re-checked at resolution, where the rules would still pump an
+    attacker that changed sides.
+  * *Small, each with a repro in its group's report.* A provisional
+    entry-choice default drives static effects while the prompt is open
+    (Engineered Plague shows -1/-1 before the answer; 31 cards; display only).
+    `destroy_all_matching` logs what it aimed at, not what died (55 cards
+    compile to the kind). "<Creature type> card" lowers with a creature
+    `type_filter`, so a Kindred card would be missed (none in the manifest).
+    `put_self_into_zone` passes `source.card` alone, so a *copy* of Legacy
+    Weapon leaving that way is read off its printed face; `MILLED_THIS_WAY`
+    records a card a replacement sent to a hidden zone. Dodecapod's counters
+    arrive after its entry is announced (Sand Golem's arrangement). A mana
+    source asked for a colour it does not print makes its first printed one.
+    Drain Life's and Soul Burn's X-colour restriction works by pips, which
+    under CR 609.4b lets five Plains count as five colours under Celestial
+    Dawn (Emblazoned Golem sets aside real units). The AI casts Dead Ringers
+    at mismatched colours and Captain's Maneuver at sorcery speed.
+  * *What the in-app pass left* (Phase 5 and its closer, 2026-10-12). A cast
+    with optional-cost offers (every kicker), or one that goes through the
+    several-target picker, gets no Auto-Tap offer when the pool is short -
+    only "insufficient mana" - because the fallback would have to price the
+    chosen offers and the offers path runs on through every target cascade.
+    A human's answer that arms an AI-owned prompt is answered in the same
+    request now (Tahngarth's Glare, Rhystic Cave); `pile_split` handing to
+    `pile_choice` has the same shape by the registry's design and no pile
+    card was driven. End Turn no longer stalls at the player's own attack
+    declaration and still asks about a block, on purpose. And layout, not
+    rules: at 1920x1080 the prompt panel covers the right end of a
+    seven-permanent battlefield row and the left of a four-card stack
+    cascade; a keyword badge sits partly under a counter badge; the
+    "Cast X targeting seat 1" hint appears for lands and untargeted spells.
+
+- **What Odyssey measured and left** (2026-10-13; seventeen groups, each
+  with a census against its base first; `git log --grep "ody/"` has every part
+  in the merge that declined it):
+
+  * *A trigger's graveyard target is nobody's to name.* A triggered ability
+    that targets a card in a graveyard takes its default (Zombie Cannibal,
+    Rysorian Badger, and the standing fifteen or so). Parts:
+    `resolution._CHOOSABLE_TRIGGER_TARGET_KINDS` has no graveyard kind;
+    `_choose_trigger_targets` no arm over `_enumerate_graveyard_creatures`;
+    `_arm_trigger_target_choice` and `choices._resolve_trigger_target` no
+    graveyard answer shape; `web/prompts._trigger_target` and the client no
+    click surface. Then `legality.sealed_graveyard_target_refusal` is
+    redundant and `_UNANNOUNCED_TRIGGER_TARGETS` drains. Beside it: an
+    *untargeted* graveyard choice derives the target kind, so Experimental
+    Overload, Harvest Wurm and Animate Dead's entry trigger are offered
+    nothing under Ground Seal while the handler acts (`lowering/returns.py`
+    keeps no record of targeted-ness for `_graveyard_return_spec` to carry),
+    and the player is not asked *which* card Experimental Overload returns.
+    And the single-graveyard production reads its cards as targets whether or
+    not the word "target" is printed (two deletion-probe rows; no pool card).
+  * *A characteristic-defining ability off the battlefield* (CR 604.3).
+    `handlers/_common._printed_power` reads "*" as 0, so Carrion Grub with a
+    -vore in the graveyard is 2 where it should be 10: 43 variable-P/T cards.
+    No function evaluates `dynamic_pt_count` without a `Permanent`; 15 of the
+    43 carry a `count_spec` that `evaluate_count` could answer given an
+    owner, and 28 use the older count/scope payload. Its neighbour in the
+    layers: Humility over a conditional static that spans layers (Wayward
+    Angel, Repentant Vampire) strips the whole static, where CR 613.6 lets
+    the layer-5 colour change continue.
+  * *"Tapped for mana", what is still not the event.* The seven tap triggers
+    that are not mana abilities (Manabarbs, Scald, Storm Cauldron, Mana Web,
+    Sanctimony, Price of Glory, Savage Firecat) resolve at the tap, not on
+    the stack (CR 603.3; Manabarbs' ruling of 2009-10-01). Overabundance and
+    Winter's Night are *not* in that list - they are triggered mana abilities
+    whole (CR 605.1b). Parts: split the loop in `_land_tapped_for_mana`
+    (adders inline, the rest enqueued with the event's subject frozen -
+    Sanctimony and Price of Glory read the controller at resolution today);
+    `@effect_handler`s for `return_tapped_land_to_hand` and
+    `tap_lands_sharing_produced_mana`; `deferring_triggers()` around tap and
+    cast at the ten AI executor sites (six in `web/game_flow.py`, four in
+    `ai_simulator.py`), and a settle after a refused cast; the browser flow
+    (a human under Manabarbs passes priority between tapping and casting);
+    eighteen tests that tap and never drain. The census pins the decline as
+    an inventory *and* as behaviour, so the round that moves them changes two
+    assertions on purpose. Beside it, after the closer made effect payments
+    plan over lands whose tap would pay (`Game.payment_lands`) and refuse a
+    person's unpayable "pay": the planner taps no non-land source for anyone,
+    so a person taps a mana rock by hand and the AI declines; about fourteen
+    callers of the upkeep and toll payers do not act on a payment that
+    failed part-way (a watcher changing the board mid-payment is what it
+    takes); `mana_beyond_the_plan` counts a summoning-sick mana creature, so
+    a person can be asked a toll they cannot pay; the upkeep's cumulative
+    gate sums mana only; and under Manabarbs, Scald and Overabundance 53 of
+    128 casts the AI proposed killed their caster.
+  * *CR 605.1a's library criterion, what is presumed.* The rules file is
+    the September 2026 edition since the set's close and the predicate asks
+    all four criteria (Chromatic Sphere and the five Eggs use the stack; the
+    parenthesised "Activate only as an instant" on nine cards is true by
+    construction now, each being an ordinary ability). Two readings stand
+    without a ruling. Barbed Sextant and Astrolabe are held to be mana
+    abilities, because their draw is a delayed ability's (CR 603.7) - the
+    2026-08-05 rulings name Chromatic Sphere, Millikin and Selvala, each a
+    card moved as the ability is activated or resolves. And the effect half
+    is fail-closed, so "{T}: Add {G}. Scry 1." (no pool card) reads as not a
+    mana ability although a scry moves no card to or from a library; an
+    entry on `LIBRARY_SAFE_ZONE_KINDS` is added by reading a card. Unprobed:
+    a permanent tapped for one of these abilities is no longer "tapped for
+    mana" (CR 106.12) for a watcher that asks.
+  * *State triggers.* Twenty-four are carried out inside the state-based
+    sweep and never become stack objects (17 `controls_no_matching`, 3
+    `no_permanents_anywhere`, Goblins of the Flarg, Endangered Armodon,
+    Phyrexian Devourer, Floodgate - the inline sacrifice blocks of
+    `check_state_based_actions`). A state trigger refused at the push for a
+    false intervening "if" still sets its latch. A state trigger that
+    *resolved* while its state is still true does not announce again: every
+    one in the pool ends its own state, and `test_state_trigger_latch.py`
+    holds that. The step window checks state before it closes (the closer:
+    all ten stacked state triggers were announced a step late) and still not
+    *between* two objects of one step - an ability the first of two upkeep
+    triggers set off resolves after the second, not above it. Parts: a
+    settle loop in `_resolve_priority_window`, then the seeded simulations.
+  * *Costs.* A flashback cost with {X} is refused (Torment's Flaming Gambit
+    prints "Flashback {X}{R}{R}"; Judgment's Flash of Insight exiles X
+    cards): an alternative cost has no X channel. A waiver is priced at the
+    full cost by the castable highlight and the AI
+    (`web/state_view._card_castable_now` and
+    `ai_policy._cast_candidate_announcing` should ask
+    `permission_for(..., "hand")` and price with `alternative_cost_mana`), so
+    both under-offer. Cards exiled from an *opponent's* graveyard as a cost
+    land in the payer's exile (Night Soil; `cost_graveyard_indices` carries
+    no seat). A card printing {X} in its mana cost and a chosen number would
+    compile supported and be refused at every cast (no card).
+  * *Roles and several targets.* CR 608.2b is not asked of a roles object
+    with **one** player role: of seven such spells three change state after
+    their player became illegal (Shower of Sparks, Lunge, Donate). Parts:
+    `legality._role_seat_target_legality` returns None with no per-role
+    list; `stack_targets.names_several_targets` cannot see a seat-plus-id
+    pair; `blank_illegal_targets` needs a list; `ability_target_verdicts`
+    returns None for a role that is not a permanent. Roles are not
+    retargetable (`_CHANGEABLE_CHANNELS` excludes "role"), and a copy is
+    offered new targets only when it chose exactly one permanent or player
+    (`_copy_reaim_is_one_slot`): a copy with several targets, a stack or
+    graveyard target, or a mode keeps the original's. "Another target
+    player" is held only by the blanket CR 115.3 refusal (`distinct: True` is
+    not lifted by `targeting.roles_spec`). The AI never announces two
+    players.
+  * *Simultaneity.* Balance's hook mis-plays: it counts creatures by printed
+    type and plans all three parts up front. It is a retirement, and the
+    parts are named: the first sentence parses through the new keep
+    production; the tail "Players discard cards and sacrifice creatures the
+    same way" is one more rider beside `discard_same_way`; the bespoke
+    `balance` prompt, its client modal and `tests/ui/test_balance_ui_api.py`
+    go dead. Keeps and discards happen as each seat answers rather than at
+    once (the Rites, Last Rites). A "next time" rider is spent per damage
+    *event*, so a trampling or multi-blocked attacker under Impulsive
+    Maneuvers or Desperate Gambit has only its first event doubled or
+    prevented (CR 510.2: `next_damage.spend` per event; a per-pass settle in
+    `combat_damage_step.finish()`).
+  * *Replacements and what they are called.* With a draw-replacement offer
+    pending, a draw from an empty library does not lose until a later check
+    (`phases/draw_step.py` runs its state-based check while the offer is
+    suspended, and `resolve_replacement_choice` runs none after the answer;
+    measured before the closer taught the step window to check state as it
+    closes - re-probe before taking it).
+    The `effect_order` prompt labels an option with the *exemplar* card's
+    name pool-wide - "Urza's Armor" for any static shield - because
+    `prevention.py` and `replacements.py` take the label from the
+    registration's docstring; it wants a per-event label hook reading the
+    source permanent.
+  * *Destruction.* Three sacrifices go round `Game.sacrifice_permanent`
+    (Animate Dead's `_remove_aura_effects`, Golgothian Sylex and Apocalypse
+    Chime, the end step's sacrifice sweep). `destroy_each_unless_life_paid`
+    logs "destroyed" for an indestructible permanent. A non-interactive seat
+    aims two Karmic Justice triggers at one permanent. And the fix this file
+    names for `Game.departing` (a `deferring_triggers()` block) is
+    seat-order dependent and is not sufficient as written.
+  * *Searches.* Seven strips never offer to fail to find (CR 701.23b:
+    Haunting Echoes, Lobotomy, Eradicate, Quash, Scour, Splinter, Sowing
+    Salt) - it needs a prompt that suspends over two hidden zones. "Each of
+    that player's opponents" has a reader for draws only.
+  * *The browser.* Auto-tap prices the **printed** cost: under Sphere of
+    Resistance the prompt for Grizzly Bears says {1}{G}, taps two, the cast
+    is refused and the mana floats (`web/serialization._serialize_card` folds
+    in one tax by name; `_card_castable_now` reads the engine's readers), and
+    Capsize with buyback taps three of six (`pendingAutoTapCost` ignores the
+    offers taken). The phase button reports a refused pass with a native
+    `alert()`. `web/action_helpers._default_target` keys on three card names,
+    in a layer the name-read guard does not scan.
+  * *Smaller, each one sentence.* "Target player discards up to two cards"
+    lowers as exactly two (no pool card). `riders._with_no_regeneration`
+    marks both arms of an "otherwise" pair. An Aura's quoted grant reaches
+    its host lowercased. `deal_damage` logs "dealt 0 damage".
+    `came_under_your_control_this_turn` reads the summoning-sickness stamp.
+    A triggered line the grammar reads and `oracle.py`'s table does not name
+    becomes a bare instruction (0 of 1,504 printed lines; invented text
+    only). `legality.announced_cast_x` counts a spell cast out of a
+    graveyard. The AI's default on every Rite is its whole hand, and it
+    proposes Quirion Ranger's ability with no Forest to return. The seeded
+    Antiquities run declines two Ashnod's Transmogrant activations the AI
+    priced at the printed cost under an activation tax, and the log words
+    that increase as "costs {-1} less to activate" (seen, not probed; it
+    predates the set's last merge).
+  * *What the in-app pass left* (Phase 5, two closers and one last fix,
+    2026-10-13). Six rows were recorded failing and each was re-recorded
+    passing only after its fix was watched in the app. Found and not
+    fixed: a POST's response can be mid-transition at a turn boundary ("end
+    step, priority: you" over a log that already held the opponent's untap
+    and draw - `web/game_flow.py`; the client re-asks by fetching, which
+    hides it and does not explain it). A draw doubler chosen first is not
+    asked again for the draws behind it (`_doubled_draw_count` doubles the
+    whole event; CR 121.2 arguably owes the second draw its own order).
+    Shower of Coals announced through the one-target channel (`target_seat`
+    with `target_permanent_ids`) is accepted and deals 1 to each of two. A
+    copy of an instant or sorcery resolves through an arm with no
+    several-modes loop, so a copied "choose one or more" resolves its first
+    mode (read, not driven). The Debug Menu cannot seed a graveyard, a hand,
+    a life total or a library, and its "cast for free" has no roles picker;
+    the Raw State endpoint bakes current P/T into a permanent and a rebuilt
+    Aura loses its behaviour. The castable highlight says no to a flashback
+    whose price needs a filter land (the residue above). Wording: "created
+    a Elephant Token token"; "Resolved supported pattern for X without
+    state mutation" after a spell that dealt damage; "Returned creature
+    from graveyard" naming no card; a replacement prompt's log lines after
+    "<spell> resolved"; the Auto-Tap prompt for an ability shows the raw
+    cost string with its ability word; Force of Will's mana option reads
+    the printed cost under a tax; a colour badge covers the card's name on
+    the canvas. Not driven: Kirtar's Wrath, Rites of Initiation, an "unless
+    you pay" upkeep, a true "up to" `graveyard_exile_pick`, Horn of Plenty
+    through a real cast.
 
 - **Ten flat spellings of the testable-keys check remain in `lowering/`**
   (down from 39 at VIS), each a set difference over the outer payload's keys
@@ -845,7 +1202,11 @@ before citing it.**
    the dies-triggers.
 6. **Last-known information (CR 603.10) is frozen at the fire site**, not read
    at resolution — a dead creature's counters (30), its power (31), its
-   controller (32), the damage an event dealt (39). The measured exception is
+   controller (32), the damage an event dealt (39). Its *last* controller is
+   the second exception, and it is on the object: the removal transition
+   stamps `control.LAST_CONTROLLER`, so "that creature deals 4 damage to its
+   controller" asks as the damage is dealt and a theft in response burns the
+   thief (Bomb Squad). The measured exception is
    round 42: a *sacrificed source*'s P/T lives in `Permanent` metadata, which
    nothing off the battlefield touches, so it can be read at resolution. The
    longest gap between freezing and reading is Tawnos's Coffin's noted counters
@@ -1191,20 +1552,39 @@ expire:
 > what is already there); `test_the_shipped_sets_are_in_printing_order` is the
 > assertion that can.
 
-Run against `set_progress.json` on 2026-10-06, with Seventh Edition shipped, it
-answers **Apocalypse** (APC, 2001-06-04, 143 cards, all new) — the third of
-Invasion's block — and then Odyssey (ODY, 2001-10-01, 335 cards, 321 new).
+Run against `set_progress.json` on 2026-10-13, with Odyssey shipped, it
+answers **Torment** (TOR, 2002-02-04, 142 new by the release line's count -
+re-measure against this pool) and then Judgment (JUD, 2002-05-27, 141 new)
+and Onslaught (ONS, 2002-10-07, 320 new).
 (FBB, SUM and 4BB are earlier and unshipped; they are alternate printings of
 the Revised and Fourth Edition card lists, which this pool already carries,
-and every answer this section has recorded passed over them.) **Expect
+and every answer this section has recorded passed over them.) **Torment is
+Odyssey's block-mate, so read it the way Planeshift and Apocalypse taught**:
+it inherits flashback and threshold, which exist now, and not the templates
+around them - and it brings one keyword the engine lacks, **madness**
+(CR 702.35, ten cards: a discard replaced by an exile and a cast from exile
+for an alternative cost, so probe it against the discard seam,
+`cast_permissions` and `alternative_costs` before sizing it), plus the
+flashback cost with {X} this set measured and left (Flaming Gambit).
+Odyssey arrived at 65.4%, the fourth work set running within a point of
+66% (Invasion, Planeshift, Apocalypse), with its headline
+keyword *dropped* on 27 cards that read supported: run
+`parse_coverage --set` beside the support count on the day of the ingest,
+before believing the percentage. Odyssey was the answer on 2026-10-11 and
+shipped on 2026-10-13. **Expect
 Apocalypse to arrive the way Planeshift did, not the way a block-mate is
 supposed to**: Planeshift came in at 65.7% where this paragraph had guessed
 Urza's Legacy's 80.4%, because a block-mate inherits mechanics and not
-templates. Apocalypse's are enemy-colour split cards (the layout is built),
-the two-colour kicker creatures (two kickers on one card is built) and the
-"sanctuary" and "volver" cycles — measure at Phase 1. Odyssey is the next
-*machinery* set: flashback (an alternative cost paid from a graveyard) and
-threshold (a condition on a graveyard count) do not exist here.
+templates. **Apocalypse came in at 65.7% too** - the same number to the
+decimal - and the paragraph's guesses about *where* were half right: the
+split cards and the two-kicker spells compiled, the Volvers and two of five
+Sanctuaries did not, and the largest family was one nobody named (seven
+"reveal the top four cards" recruiters). Odyssey was the *machinery* set
+that paragraph promised, and "probe each keyword's rewrite target before
+sizing it" paid twice: flashback was three things the engine already had
+(a cast permission, an alternative cost, a destination off the stack) and
+threshold was a condition that already existed in two places. Apocalypse
+was the answer on 2026-10-06 and shipped on 2026-10-11.
 Seventh Edition was the answer on 2026-10-05 and shipped the next day with
 **seventeen** new cards where `set_progress.json` said 0 — the caution this
 paragraph carried, priced. Earlier that day the rule answered Planeshift.
@@ -1275,8 +1655,9 @@ a transform card does not have, so a double-faced card raises `ValueError` on
 `commander.py`'s colour-identity derivation — the compiler has never seen a
 second face. That is CR 709/710/712/714/715/720, 45 rules, none implemented;
 it already costs Origins 5 cards and M19 one. Second, keyword abilities stand at
-**31** of CR 702's 192 in the registry, with buyback, cumulative upkeep, equip
-and now **cycling (CR 702.29) and echo (CR 702.30)** implemented below it.
+**31** of CR 702's 192 in the registry, with buyback, cumulative upkeep, equip,
+cycling (CR 702.29), echo (CR 702.30), kicker (CR 702.33) and now
+**flashback (CR 702.34)** implemented below it.
 **Read that number with the registry's actual question in mind**, which two USG
 groups had to work out independently because this line does not say it:
 `IMPLEMENTED_KEYWORDS` admits a keyword being *granted* or *named* ("gains
@@ -1286,7 +1667,7 @@ gone and the ability it means is in its place. `test_keyword_registry`'s
 bare-keyword-card guard is what forces the choice: listing cycling would mean
 either failing that guard or admitting a costless cycling that charges nothing.
 So "31 in the registry" undercounts what the engine implements and always has;
-the honest reading is 31 granted-or-named plus five rewrites. Alternative costs (CR 118.9) were the third gap and
+the honest reading is 31 granted-or-named plus seven rewrites. Alternative costs (CR 118.9) were the third gap and
 are closed: `engine/alternative_costs.py` reads the "rather than pay this
 spell's mana cost" template, the client offers optional and repeated costs
 through `legality.cast_cost_offers`, and the buyback/flashback/evoke/madness
@@ -1325,6 +1706,8 @@ a wave is five parallel worktree groups integrated serially.
 | INV | 335 | 66.0% | 2 waves + 1 closer (four of wave 2's seven groups on the pile) |
 | PLS | 143 | 65.7% | 2 waves (five of wave 2's six groups on the pile) |
 | 7ED | 335 | 99.4% | 1 group (17 new cards, two productions) |
+| APC | 143 | 65.7% | 2 waves (nine groups, then four: one on the last card and three on the pile) |
+| ODY | 335 | 65.4% | 2 waves (nine groups, then eight: four on the last five cards and four on the pile) + 2 closers |
 
 Three data points shape an estimate. **Legends** is the warning: the lowest
 starting coverage and the flattest ranking — after eight rounds, 113 of its 135
@@ -1340,18 +1723,20 @@ mis-playing along the way, which every set since Ice Age has repeated and which
 is the argument for the Rock Hydra step.
 
 **Where the pool stands** (regenerate rather than trust these; read
-2026-10-06, at Seventh Edition's close): 4,781 unique cards over 31 sets,
-7,263 printings, 100% supported. Grammar parses 90.6% of lines, lowers 90.0%
-and executes 61.5% (`GRAMMAR_COVERAGE.md`; no shipped set's row fell). **1.1%**
-of supported cards carry a name-keyed hook — 52 cards, 58 entries in 6
+2026-10-13, at Odyssey's close): 5,246 unique cards over 33 sets,
+7,741 printings, 100% supported. Grammar parses 90.7% of lines, lowers 90.1%
+and executes 62.2% (`GRAMMAR_COVERAGE.md`; no shipped set's row fell). **0.9%**
+of supported cards carry a name-keyed hook — 49 cards, 54 entries in 6
 registries (`HOOK_RELIANCE.md`) — and the projection that implies for the
-release line has fallen from 1,195 hand-written entries to **317**, across
-eighteen consecutive sets that added no hook and retired several. That is the
-measure moving the way the architecture needs it to. Parse coverage: 4,779 of
-4,781 supported cards fully claimed, 2 acknowledged, **0 unclaimed**
-(`PARSE_COVERAGE.md`). `RULES_PROGRESS.md` is the CR coverage tracker.
-`CARD_VERIFICATION.md` is a log, not a target: 654 passed (409 in-game, 245
-auto), 53 equivalent, 0 failed, 4,074 untested.
+release line has fallen from 1,195 hand-written entries to **269**, across
+twenty consecutive sets that added no hook and retired several (Odyssey
+three: Gaea's Liege, Erg Raiders, Kudzu). That is the
+measure moving the way the architecture needs it to. Parse coverage: 5,244 of
+5,246 supported cards fully claimed, 2 acknowledged, **0 unclaimed**
+(`PARSE_COVERAGE.md`). `RULES_PROGRESS.md` is the CR coverage tracker
+(419 of 625 tracked rules, 2,956 tests).
+`CARD_VERIFICATION.md` is a log, not a target: 754 passed (497 in-game, 257
+auto), 59 equivalent, 0 failed, 4,433 untested.
 
 **A whole wave can fix a hundred cards and move no compiled program**, and 6ED's
 is the run to cite. Five groups, five Known-gaps entries, zero cards implemented,

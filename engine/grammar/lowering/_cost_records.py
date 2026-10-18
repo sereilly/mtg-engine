@@ -60,9 +60,24 @@ SACRIFICED_FOR_COST = "sacrificed_for_cost"
 #: discard cost write?" a question with more than one asker, and two answers is
 #: how one of them comes to gate on nothing.
 DISCARDED_FOR_COST = "discarded_for_cost"
+#: The scratchpad key a chosen **exile** cost writes: the cards it ate, as a
+#: list, because a counted or an "any number of" exile eats several. (The
+#: single-object ``exiled_for_cost`` beside it on the payment path is the same
+#: payment's first card, for a genitive that names one.)
+EXILED_SET_FOR_COST = "exiled_set_for_cost"
+#: The scratchpad key a **mill** cost writes: the cards the payment put into
+#: the graveyard, as a list (Charmed Pendant's "the milled card's mana cost").
+MILLED_FOR_COST = "milled_for_cost"
 
 _COST_PRODUCES: dict[type, str] = {
     ast.DiscardCost: DISCARDED_FOR_COST,
+    # "{T}, Exile any number of cards from your graveyard: Target creature gets
+    # -X/-X until end of turn, where X is **the number of cards exiled this
+    # way**." (Painbringer.) A gate, like the untap row below: the phrase
+    # counts what this ability's own cost ate, and :func:`cost_count_spec`
+    # refuses it on an ability whose cost exiles nothing.
+    ast.ExileCost: EXILED_SET_FOR_COST,
+    ast.MillCost: MILLED_FOR_COST,
     # "Sacrifice a creature: … **If the sacrificed creature was a Thrull**, …"
     # (Ebon Praetor.) The activation path records the permanent the cost ate
     # under ``sacrificed_for_cost``, and the cast path records the same key
@@ -126,7 +141,24 @@ def cost_record_spec(definition, node) -> dict[str, object] | None:
     same evaluator every other channel reader goes through — so a pump's X and
     a damage's amount cannot read one record two ways. A characteristic the
     evaluator cannot answer refuses, naming the channel.
+
+    "…where X is **1 plus** the exiled creature's mana value" (Food Chain,
+    Metamorphosis) is unwrapped here, so every reader of a cost record takes
+    the constant or none does: the sentence form (``_record_definitions``) had
+    its own unwrapping over two of the four channels, and the form riding a
+    ``Pump`` read all four and no constant. ``plus`` is the key ``_scaled``
+    applies at the one evaluation point. Only a printed constant on the
+    **left** and only addition, the one shape the pool prints — a subtraction
+    or a constant on the right stays wrapped and the caller's refusal answers,
+    rather than a sentence being read with its arithmetic silently changed.
     """
+    plus = 0
+    if (
+        isinstance(definition, ast.Plus)
+        and isinstance(definition.left, ast.Fixed)
+        and not isinstance(definition.right, ast.Fixed)
+    ):
+        plus, definition = definition.left.value, definition.right
     row = COST_RECORD_CHANNELS.get(type(definition))
     if row is None:
         return None
@@ -137,7 +169,33 @@ def cost_record_spec(definition, node) -> dict[str, object] | None:
             f"{type(definition).__name__} record",
             node=node,
         )
-    return {key: definition.characteristic}
+    spec: dict[str, object] = {key: definition.characteristic}
+    if plus:
+        spec["plus"] = plus
+    return spec
+
+
+def cost_count_spec(record: str, produced: frozenset[str]) -> dict[str, object] | None:
+    """The ``x_from_count`` spec for **how many** objects this ability's own
+    cost ate, or None when the cost ate none of that kind.
+
+    "…where X is the number of cards **exiled this way**." The words name a
+    set by the participle alone, and two different things write one: a step of
+    the effect (``exiled_this_way``, the resolution scratchpad) and the cost in
+    front of the colon (CR 601.2h; the payment path's own record). The parse
+    cannot tell them apart and does not try — it hands over the effect's key —
+    so a reader that finds no *step* producing it asks here whether the *cost*
+    did, through ``produced``, which ``lower_ability`` seeds from the cost
+    clause. One evaluator key, read at resolution off what the payment kept.
+
+    None for a participle no cost row counts, so the caller's own "no producer
+    in this effect" refusal stands for everything else.
+    """
+    from ...oracle_types import EXILED_THIS_WAY
+
+    if record == EXILED_THIS_WAY and EXILED_SET_FOR_COST in produced:
+        return {"cost_exiled_count": True}
+    return None
 
 
 def optional_cost_key(symbols: str) -> str:

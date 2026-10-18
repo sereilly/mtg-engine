@@ -75,6 +75,14 @@ def _menu_abilities(card):
         if ability_functions_from(ability) != HAND
     ]
 
+
+#: CR 113.6j has a second cost that can only be paid from a hand: "**Exile
+#: this card from your hand**: Add {G}." (Elvish Spirit Guide). The client's
+#: ``abilityFunctionsOnBattlefield`` reads both spellings, so the Guide's line
+#: is on neither side's battlefield list. It was a dead entry there for one
+#: round (a pin here excused it, one card wide, and failed the day the client
+#: learned the second spelling - which is how it came to be deleted).
+
 REPO = Path(__file__).resolve().parents[2]
 APP_JS = REPO / "web" / "static" / "app.js"
 
@@ -190,8 +198,30 @@ def test_the_client_lists_the_same_abilities_the_compiler_does(js_readings):
     assert not dropped, (
         "the client's ability list is a different length from the compiler's, "
         "so every index after the difference names a different ability "
-        f"(card, compiled lines, client costs):\n" + "\n".join(f"  {d}" for d in dropped)
+        "(card, compiled lines, client costs):\n"
+        + "\n".join(f"  {d}" for d in dropped)
     )
+
+
+def test_a_hand_only_exile_cost_is_not_on_the_battlefield_menu(js_readings):
+    """Elvish Spirit Guide's "Exile this card from your hand: Add {G}." is
+    listed by neither side for a permanent: the compiler keeps it in the
+    hand's list, and the client's menu now reads the second spelling of
+    CR 113.6j's cost. Named, with a floor, so the sweep above cannot pass
+    by the card having left the pool."""
+    cards, js = js_readings
+    hand_exile = re.compile(r"\bexile this card from your hand\b", re.IGNORECASE)
+    printing = [
+        card for card in cards
+        if any(
+            ability_functions_from(ability) == HAND
+            and hand_exile.search((ability.source_line or "").split(":")[0])
+            for ability in compile_card_oracle(card).activated_abilities
+        )
+    ]
+    assert [card.name for card in printing] == ["Elvish Spirit Guide"]
+    for card in printing:
+        assert js[card.name]["options"] == [], js[card.name]["options"]
 
 
 def test_every_ability_both_sides_list_has_the_same_cost(js_readings):

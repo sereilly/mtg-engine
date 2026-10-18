@@ -83,7 +83,6 @@ _BASIC_MANA = {
 #: contribution and is not listed here fails that test, so a setter the next
 #: set prints cannot be left out of the cross by this list going stale.
 _SETTING_KINDS = frozenset({
-    "change_target_land_type",
     "add_mire_counter_to_target_land",
     "change_land_type_until",
     "swap_land_types_until_eot",
@@ -120,13 +119,14 @@ class _Setter:
 
     card: object
     #: "static" (Blood Moon), "aura" (Evil Presence), "ability" (Kavu
-    #: Recluse) or "spell" (Jinx).
+    #: Recluse), "spell" (Jinx) or "trigger" (Graceful Antelope).
     shape: str
     #: "…in addition to its other land types" (Blanket of Night): CR 305.7's
     #: last sentence, the control arm.
     additive: bool = False
     ability_index: int | None = None
     mode_index: int | None = None
+    trigger_index: int | None = None
     #: How the effect ends, when this file can end it: "leaves" (the source
     #: leaves the battlefield), "cleanup" (until end of turn), "untap" (until
     #: the land's controller's next untap step), or None (it lasts
@@ -146,13 +146,15 @@ class _Setter:
 
 def _ability_ending(instruction) -> str | None:
     for step in _walk(instruction):
-        if step.kind == "change_target_land_type":
-            # "…until this creature leaves the battlefield." (Gaea's Liege.)
-            return "leaves"
         if step.kind == "swap_land_types_until_eot":
             return "cleanup"
         if step.kind == "change_land_type_until":
             duration = str(step.payload.get("duration") or "")
+            if duration == "until_source_leaves":
+                # "…until this creature leaves the battlefield." (Gaea's
+                # Liege - the window, where it was a kind of its own while a
+                # name-keyed hook carried the card.)
+                return "leaves"
             if duration == "until_end_of_turn":
                 return "cleanup"
             if duration == "until_controllers_next_untap_step":
@@ -203,6 +205,17 @@ def _derive_setters(catalog) -> list[_Setter]:
                 found.append(_Setter(
                     card, "ability", ability_index=index,
                     ends=_ability_ending(ability.instruction),
+                ))
+        # "Whenever this creature deals combat damage to a player, you may
+        # have target land become a Plains until this creature leaves the
+        # battlefield." (Graceful Antelope, ODY - the first setter in the pool
+        # that is nobody's to activate, and the shape the guard below was
+        # written to notice.)
+        for index, trigger in enumerate(program.triggered_abilities):
+            if _sets_a_land_type(trigger.instruction):
+                found.append(_Setter(
+                    card, "trigger", trigger_index=index,
+                    ends=_ability_ending(trigger.instruction),
                 ))
     return sorted(found, key=lambda setter: setter.label)
 
@@ -318,8 +331,16 @@ class _Board:
             moved = False
             for choice in list(game.pending_choices):
                 if choice.kind == "land_type_choice" and "land_type" in answers:
+                    # A setter may print which types it can make ("becomes a
+                    # Plains or an Island", Tundra Kavu - the first in the pool
+                    # to, and the census answered every prompt "swamp" until it
+                    # shipped). The answer is one the prompt offers, asked of
+                    # the engine's own reader; what the land then is, the
+                    # census reads off the land.
+                    offered = game.land_type_choice_options(choice)
+                    wanted = answers["land_type"]
                     assert game.confirm_land_type(
-                        choice.player_index, answers["land_type"]
+                        choice.player_index, wanted if wanted in offered else offered[0]
                     )
                 elif choice.kind == "land_type_swap" and "swap" in answers:
                     assert game.confirm_land_type_swap(
@@ -406,6 +427,35 @@ class _Board:
                     raise _Refused(result.details)
                 self.settle(land_type=self.new_type_for(land), swap=swap)
                 return None
+            if setter.shape == "trigger":
+                # A triggered ability, on the opponent's side for the reason
+                # the activated one below is. It is put on the stack through
+                # the engine's one way of doing that (CR 603.3) rather than by
+                # staging its event: what this file asks is what the *setting*
+                # does to a land, whichever event the next card hangs it on.
+                # Its controller then names the land out of the ability's own
+                # list (CR 603.3d) and takes its "you may".
+                trigger = compile_card_oracle(
+                    setter.card
+                ).triggered_abilities[setter.trigger_index]
+                source = self.enter(setter.card, 1)
+                self.settle()
+                game._enqueue_triggered_ability(
+                    controller_index=1, source_permanent=source,
+                    instruction=trigger.instruction,
+                    effect_kind=trigger.effect_kind,
+                    ability_text=trigger.source_line,
+                )
+                prompt = game.pending_choice_of("trigger_target", 1)
+                if prompt is None or not game.confirm_trigger_target(
+                    1, permanent_id=land.permanent_id
+                ):
+                    raise _Refused(f"{setter.name}: the trigger was not offered the land")
+                game.resolve_top_of_stack(pause_for_choices=True)
+                if game.pending_choice_of("optional_pay", 1) is not None:
+                    assert game.confirm_optional_pay(1, accept=True)
+                self.settle(land_type=self.new_type_for(land))
+                return source
             # An activated ability, on the opponent's side: "target land an
             # opponent controls" (Kukemssa Serpent) is then the land under
             # test, and every other one targets any land.

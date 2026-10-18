@@ -56,6 +56,8 @@ from ..cast_permissions import (BOARD_FREE_CAST_CLAIM,
                                 board_free_cast_line,
                                 board_graveyard_play_line)
 from ..cost_modifiers import cost_modifier_claims_line
+from ..counted_names import CLAIM as COUNTED_NAMES_CLAIM
+from ..counted_names import counts_as_claims_line
 from ..counter_conditions import (CLASS_UNCOUNTERABLE_CLAIM,
                                   UNCOUNTERABLE_CLAIM,
                                   uncounterable_class_line,
@@ -67,6 +69,7 @@ from ..draw_step_modifiers import draw_step_bonus_for, skips_own_draw_step
 from ..enter_effects import enter_effect_line
 from ..named_counters import CAP_CLAIM, counter_cap_line
 from ..extra_triggers import extra_trigger_line
+from ..flashback import FLASHBACK_CLAIM, flashback_claims_line
 from ..land_play_allowance import land_play_line
 from ..landwalk import landwalk_per_type_spec
 from ..life_prohibitions import life_gain_ban_line
@@ -74,6 +77,8 @@ from ..prevention import prevention_claims_line
 from ..regeneration import denies_regeneration_line, self_regeneration_line
 from ..replacements import replacement_claims_line
 from ..revealed_hands import revealed_hands_line
+from ..target_requirements import CLAIM as TARGET_REQUIREMENTS_CLAIM
+from ..target_requirements import must_choose_claims_line
 from ..targeting import enchant_line_subject
 from ..untap_restrictions import self_untap_line, untap_restriction_for
 
@@ -385,6 +390,16 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     if cost_modifier_claims_line(line):
         return "cost_modifiers"
 
+    # engine/flashback.py — CR 702.34a's first static ability, which is what a
+    # flashback keyword line has been rewritten into by the time a line reaches
+    # here: "You may cast this card from your graveyard by paying {4}{R} rather
+    # than paying its mana cost." A permission and a price, derived off the
+    # card's text by `cast_permissions.permission_for` at every cast — no
+    # instruction to lower. Claimed through the reader that charges the cost,
+    # so a cost it cannot read stays unclaimed.
+    if flashback_claims_line(line):
+        return FLASHBACK_CLAIM
+
     # engine/land_play_allowance.py — CR 305.2/505.6b extra land plays
     # (Fastbond), derived from the permanent's own text by the land-drop path in
     # mixins/turn_management and by the support gate. Both halves of the
@@ -475,6 +490,26 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # never frozen. The claim asks the reader that pass grants through.
     if landwalk_per_type_spec(line) is not None:
         return "landwalk"
+
+    # engine/target_requirements.py — "While an opponent is choosing targets as
+    # part of casting a spell they control or activating an ability they
+    # control, that player must choose at least one Flagbearer on the
+    # battlefield if able." (Standard Bearer.) A rule about somebody else's
+    # announcement (CR 601.2c), asked off the board at the two announcement
+    # paths and by the pickers in front of them, so there is nothing to lower.
+    # The claim asks the reader those paths enforce through: a noun it cannot
+    # test leaves the line unclaimed rather than admitted and demanding nothing.
+    if must_choose_claims_line(line):
+        return TARGET_REQUIREMENTS_CLAIM
+
+    # engine/counted_names.py — "If this card is in a graveyard, effects from
+    # spells named Flame Burst count it as a card named Flame Burst." (Pardic
+    # Firecat, Diligent Farmhand.) A static that functions in the graveyard
+    # (CR 113.6b): the count's own name test reads it off the card it is
+    # testing, so there is nothing to lower. Both names are payload of the one
+    # matcher asked here.
+    if counts_as_claims_line(line):
+        return COUNTED_NAMES_CLAIM
 
     return None
 

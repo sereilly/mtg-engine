@@ -307,6 +307,32 @@ _REFUSES_NOTHING_HERE = {
 }
 
 
+def _standing_lines(card) -> list[str]:
+    """The printed lines of *card* that hold **while it sits on the
+    battlefield** — every line the compiler did not classify as an activated
+    or a triggered ability.
+
+    A prohibition printed as an ability's *effect* is not standing: "Sacrifice
+    this creature: Target player can't play lands this turn" (Pardic Miner)
+    forbids nothing until somebody activates it, so a board that merely holds
+    the Miner can never refuse a play and the matrix below would report it
+    silent for ever. The engine's own classification is what tells the two
+    apart, so it is what is asked — not a list of names, and not a second
+    reading of the words. Measured over both manifest roles the day it was
+    written: of 18 candidates the sentence shape names, this drops exactly
+    one line of one card.
+    """
+    program = compile_card_oracle(card)
+    abilities = {
+        ability.source_line.strip().lower()
+        for ability in (*program.activated_abilities, *program.triggered_abilities)
+    }
+    return [
+        line for line in (card.oracle_text or "").splitlines()
+        if line.strip().lower() not in abilities
+    ]
+
+
 def _prohibiting_permanents() -> list[str]:
     found = []
     # Through `compilation_units` (a split card read whole has no text). A
@@ -317,9 +343,60 @@ def _prohibiting_permanents() -> list[str]:
             continue
         if not compile_card_oracle(card).supported:
             continue
-        if any(_PROHIBITION.search(line) for line in (card.oracle_text or "").splitlines()):
+        if any(_PROHIBITION.search(line) for line in _standing_lines(card)):
             found.append(card.name)
     return sorted(found)
+
+
+def test_w1g8_a_prohibition_an_ability_arms_is_read_by_all_three_readers(session):
+    """Pardic Miner: "Sacrifice this creature: Target player can't play lands
+    this turn." The sentence the pool sweep below leaves out of its *standing*
+    population, held here instead — armed by activating the card rather than
+    by its presence, and asked of the same three readers.
+
+    The ban is on the targeted seat alone, for the turn alone, and on land
+    plays alone (CR 305.1 — a land is played, not cast): a spell in the same
+    hand is still castable and still proposed.
+    """
+    def miner_for(game, seat):
+        miner = Permanent(card=_POOL["Pardic Miner"])
+        game._put_permanent_onto_battlefield(seat, miner, None)
+        miner.metadata["summoning_sickness_turn"] = -99
+        return miner
+
+    # A board that only *holds* the Miner refuses nothing.
+    game, _ = _w2g3_board(session, OWN_MAIN, "Forest")
+    miner_for(game, 1)
+    assert _w2g3_ai_proposes(game, "Forest")
+    assert _w2g3_glows_on_the_wire(session, "Forest")
+
+    used = game.activate_permanent_ability(1, "Pardic Miner", target_player_index=0)
+    resolve_stack(game)
+    assert used.supported, used.details
+    assert [card.name for card in game.players[1].graveyard][-1] == "Pardic Miner"
+
+    assert not _w2g3_ai_proposes(game, "Forest")
+    assert not _w2g3_glows(session, "Forest")
+    assert not _w2g3_glows_on_the_wire(session, "Forest")
+    refused = game.cast_from_hand(0, "Forest")
+    assert not refused.supported and refused.details == "can't play lands this turn"
+    assert [held.name for held in game.players[0].hand] == ["Forest"]
+    assert game.land_plays_forbidden_this_turn == {0}, "the targeted seat alone"
+
+    # Next turn the seat plays its land again.
+    game.turn += 1
+    game.start_turn(1)
+    game.turn += 1
+    game.start_turn(0)
+    assert game.cast_from_hand(0, "Forest").supported
+
+    # A spell is not a land play: with the ban up it is still cast.
+    game, _ = _w2g3_board(session, OWN_MAIN, "Grizzly Bears")
+    miner_for(game, 1)
+    assert game.activate_permanent_ability(1, "Pardic Miner", target_player_index=0).supported
+    resolve_stack(game)
+    assert _w2g3_ai_proposes(game, "Grizzly Bears")
+    assert game.cast_from_hand(0, "Grizzly Bears").supported
 
 
 def test_w2g3_no_reader_says_yes_to_a_cast_a_permanent_forbids(session):

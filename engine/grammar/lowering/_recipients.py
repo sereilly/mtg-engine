@@ -35,7 +35,8 @@ from ._events import (DAMAGED_PERMANENT_CONTROLLER, EVENT_SUBJECT_CONTROLLER,
                       EVENT_SUBJECT_PLAYER, LOOP_BOUND_PLAYER,
                       _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_OBJECTS,
                       _EVENT_SUBJECT_PLAYERS, _RECORDED_PERMANENTS,
-                      damage_trigger_names_damaged_end)
+                      damage_trigger_names_damaged_end,
+                      dealer_is_event_subject)
 from ._seats import _stamp_recipient_control, _stamp_recipient_deed
 from ._sweeps import lower_described_set_damage, lower_each_matching_damage
 
@@ -185,7 +186,24 @@ def lower_damage_recipient(
         # "…to target player **or planeswalker**" (Chandra's Magmutt) is exactly
         # the clause that may name either, so it keeps the inference: there the
         # permanent index is the choice rather than a leftover.
-        if recipient.kind == "that_player" and LOOP_BOUND_PLAYER in produced:
+        if recipient.kind == "controller" and dealer_is_event_subject(
+            node.source, event
+        ):
+            # "**That creature** deals 4 damage to **its controller**." (Bomb
+            # Squad.) The possessive names the dealer, and the dealer is the
+            # object the firing event was about — so the seat is that object's
+            # controller as the damage is dealt, or as the object last existed
+            # (CR 608.2h), which is the handler's read off the dealer itself.
+            # Not a frozen seat: the creature is still on the battlefield while
+            # the trigger waits, and whoever steals it in response is who its
+            # controller *is* when this resolves.
+            #
+            # First among these branches, because every one below reads the
+            # phrase off the event or off the resolution's target slot, and for
+            # a trigger that targets nothing the slot is whatever the context
+            # was carrying.
+            payload["recipient"] = "biter_controller"
+        elif recipient.kind == "that_player" and LOOP_BOUND_PLAYER in produced:
             # "For each player, this enchantment deals 1 damage to **that
             # player** unless they pay {B} or {3}." (Lim-Dûl's Hex.) The loop
             # rebinds the resolution's target to the seat each iteration is on

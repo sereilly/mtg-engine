@@ -496,4 +496,8 @@ def test_the_sweep_finds_the_defect_on_the_tree_as_it_was(
     differs = {label.split("[")[0] for label, _kind in found["differs"]}
     assert differs >= {"Burning Palm Efreet", "Vendetta", "Amber Prison"}, found["differs"]
     residue = {label.split("[")[0] for label, *_rest in found["residue"]}
-    assert residue >= {"Soul Sculptor", "Prodigal Sorcerer"}, found["residue"]
+    # Prodigal Sorcerer's stray seat no longer reaches its handler even here:
+    # an activation's targets are asked again as it resolves (CR 608.2b,
+    # ``legality.ability_target_verdicts``), and a seat behind an Ivory Mask
+    # is removed there. The announcement half above still names it.
+    assert residue >= {"Soul Sculptor"}, found["residue"]

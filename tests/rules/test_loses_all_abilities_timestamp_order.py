@@ -319,11 +319,13 @@ def _census(by_name, names=None):
 def test_every_grant_is_ordered_against_every_loss_of_all_abilities(_by_name):
     counts, kept, taken, door, printed = _census(_by_name)
 
-    # Floors: a sweep that reaches nothing passes. Measured 129 / 121 / 79 / 9.
-    assert counts["pairs"] >= 110, counts
-    assert counts["grant_first"] >= 100, counts
-    assert counts["loss_first"] >= 65, counts
-    assert counts["door"] >= 6, counts
+    # Floors: a sweep that reaches nothing passes. Measured 129 / 121 / 79 / 9
+    # on the pool this was written against, and 107 / 99 / 65 / 6 once
+    # Apocalypse and Odyssey moved which granters the stride samples.
+    assert counts["pairs"] >= 95, counts
+    assert counts["grant_first"] >= 88, counts
+    assert counts["loss_first"] >= 58, counts
+    assert counts["door"] >= 5, counts
     assert kept == [], f"an older grant outlived the loss: {kept[:20]}"
     assert taken == [], f"a newer grant was taken by the loss: {taken[:20]}"
     assert door == [], f"the door and the lists disagree: {door[:20]}"

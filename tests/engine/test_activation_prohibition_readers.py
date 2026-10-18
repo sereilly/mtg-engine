@@ -146,7 +146,7 @@ def _wire_prohibits(session, situation, subject_name, **board) -> "str | None":
     state = client.get(f"/api/sessions/{session.id}/state", params={"seat": 0}).json()
     for entry in state["players"][0]["battlefield"]:
         if entry["id"] == subject.permanent_id:
-            return (entry.get("ability_prohibitions") or [None])[0]
+            return (entry.get("ability_denials") or [None])[0]
     raise AssertionError("the subject is not on the wire")
 
 

@@ -348,6 +348,19 @@ PARSE_LAYERS = [
     # chooses it — and not `choices`, which probes the sentence after a "Choose …"
     # through `parse_statement`. Everything here reads its own words to the
     # end, so it sits beside `paragraphs` and for its reason.
+    #
+    # The bare sentences joined the paragraphs at Odyssey's Phase 0, pre-split
+    # out of `effects/game.py` ten lines under the guard below: "Choose a
+    # number / a color / a creature type / a card type / a card name / one of
+    # your opponents / a player who cast …" and Goblin Game's hidden items —
+    # the same choice with its check printed as a separate sentence. `game`'s
+    # docstring listed them and the mirror never had: six of their eight nodes
+    # lower in `statement_dispatch_naming`, not `lowering/game.py`, and they
+    # were 131 of the 173 lines `game` had gained since its previous split.
+    # No list in this file changed for it — both ends were already declared,
+    # this entry and `game` in `EFFECT_FAMILIES` — and no edge was added:
+    # `naming` already read every module the arrivals import, and its two
+    # callers (`imperative_verbs`, `player_verbs`) already imported it.
     "naming",
     # Reading a keyword-ability list off a printed line. Split out of `phrases`
     # at the guard below, reusing the name `lowering/keywords.py` has carried
@@ -899,8 +912,18 @@ PARSE_LAYERS = [
 # groups about to land arms is the "shared module" case SET_PLAYBOOK.md says to
 # pre-split. Below `statement_dispatch`, which calls it and continues its chain
 # on a None — the contract `by_node` already has one layer further down.
+# `static_conditions` is `statics`' own split, taken in round by Odyssey's
+# threshold group when a quoted ability, a colour and a static sentence went
+# behind an "as long as" and took that module to the guard. The seam is the
+# one `statics`' docstring drew when it called its other half a *round trip*
+# through `engine/lord_buffs.py`: nothing that left makes one. What left is
+# the condition — which kinds may gate a continuous effect, and the
+# `conditional_static` one permanent carries while its condition holds — and
+# what stayed is the anthem and the dispatch. Below `statics`, which imports
+# three names from it, and above `lowering`, which is all it reads. No mirror
+# to re-form: `static_lines` is the parse side of both halves.
 LOWER_LAYERS = [
-    "lowering", "statics", "by_node",
+    "lowering", "static_conditions", "statics", "by_node",
     "statement_dispatch_naming", "statement_dispatch", "lower",
 ]
 
@@ -993,7 +1016,8 @@ LOWER_LAYERS = [
 # than forking, the same move `exile`, `prevention` and `counters` each made.
 # The boundary is CR's: a token is an **object the game creates** (CR 111.1),
 # where everything left in `game` changes the state a *player* is in — life,
-# extra turns, winning, losing, ante, the choices a sentence makes.
+# extra turns, winning, losing, ante, the choices a sentence makes. (The
+# choices left in turn at Odyssey's Phase 0, for `naming` above.)
 
 # `destruction` joined the parse side the fifth time `effects/board.py` reached
 # the size guard, reusing the name `lowering/destruction.py` has carried since
@@ -1125,7 +1149,27 @@ EFFECT_FAMILIES = ["damage", "characteristics", "base_pt", "types", "board", "ca
                    # them. Phyrexian Portal's face-down split stays in
                    # `library`, which is where a pile somebody *looks through*
                    # belongs.
-                   "separations"]
+                   "separations",
+                   # `linked_exile` arrived on the parse side at Odyssey's
+                   # Phase 0; the lowering side had split it off
+                   # `lowering/exile.py` at Tempest's — the mirror re-forming
+                   # under a name that already existed, as `permissions` did.
+                   # `effects/exile.py` stood 38 lines under the guard below
+                   # with a graveyard set's nine groups about to open on it,
+                   # and its first line named two subjects: "Cards moving
+                   # **into and out of exile** (CR 406), and back again." What
+                   # left is the pile that is **already there** — "exiled with
+                   # this artifact", "exiled this way", "the exiled cards" —
+                   # and where it goes next, which is the lowering module's own
+                   # stated line and holds node for node: all six nodes these
+                   # ten productions build lower in
+                   # `lowering/linked_exile.py`, and none of the five built by
+                   # the six that stayed does. `exile` keeps an object *going*
+                   # to the zone. The module's five internal call edges were
+                   # all inside the half that left, so there is no import
+                   # between the two in either direction, and the block moved
+                   # byte-identically, so no compiled program moves.
+                   "linked_exile"]
 # `redirection` arrived on the parse side at Visions' first wave, a set after
 # the lowering side split it off `lowering/damage.py` — the mirror re-forming
 # rather than a new vocabulary, which is what this file asks a split to do.
@@ -1158,12 +1202,19 @@ EFFECT_FAMILIES = ["damage", "characteristics", "base_pt", "types", "board", "ca
 # and both sentences lower to one instruction apiece beside the shields they
 # forbid. A near-empty `lowering/damage_locks.py` would buy back the symmetry
 # and cost the thing symmetry is for.
-# `hand` arrived on the parse side at the same wave, when `effects/cards.py`
+# `hand` arrived on the parse side at Visions' first wave, when `effects/cards.py`
 # crossed 1,002 lines and `lowering/cards.py` was nine from the guard. The
 # line is CR 402's own word: what a sentence does to a *hand* — reveal it,
 # discard from it, take a card at random out of it — against what
 # `cards` does to a card wherever it is. Both halves split in the same round,
 # so the mirror formed rather than re-formed.
+# (That list was the line and never the cut. What left `cards` was the
+# hand-to-library puts alone; the pick out of a hand and the two exiles from
+# one followed at Odyssey's Phase 0, with `cards` 45 under the guard, and the
+# reveal and the discard are still `cards`' — the reveal reads "and discards
+# …" through the discard's production, so neither can leave without the
+# other. And "the same wave", as this opened until then, had come to point at
+# `damage_locks`' Tempest paragraph above, which was written in between.)
 # `zones` used to be one of the asymmetries below — the note read "a near-empty
 # `effects/zones.py` would buy back the symmetry and cost the thing symmetry is
 # for", because zone movement is one `return`/`exile`/`put` production each on
@@ -1481,10 +1532,14 @@ LOWERING_FAMILIES = [
      # The name is `engine/linked_exile.py`'s, the record every shape here
      # pivots on, so the mirror re-forms rather than forking a third word for
      # one subject, the reuse `untap_restrictions` and `base_pt` make of their
-     # engine modules. `effects/` and `ast/` have no `linked_exile`, for
-     # `permissions`' reason: the guard fired on the lowerings, and the nodes
-     # are cards in a zone that sit beside the other card ones.
-     "linked_exile",
+     # engine modules. `ast/` has no `linked_exile`, for `permissions`' reason:
+     # the nodes are cards in a zone that sit beside the other card ones.
+     # `effects/` had none either, on the grounds that the guard had fired on
+     # the lowerings — until Odyssey's Phase 0, when it fired on the
+     # productions. So the family is no longer appended here: it arrives from
+     # `EFFECT_FAMILIES` above, as `base_pt`, `permissions` and `requirements`
+     # came to, and naming it twice would be a list disagreeing with itself.
+     #
      # The mirror of `grammar/repeats.py`, and it left `lowering/game.py` the
      # moment the family had a second member: `_lower_repeat_process` had been
      # a section of one there, with its parse half in `parser.py` and no mirror
@@ -1515,7 +1570,31 @@ LOWERING_FAMILIES = [
      #
      # Lowering-only, like `zones`, `library`, `mana` and `redirection`: the
      # parse half is 329 lines and crossed nothing.
-     "exchanges"]
+     "exchanges",
+     # `colors` split off `lowering/types.py` at 1,010 lines, Apocalypse's
+     # second wave — the round "target **spell or permanent**" stopped being
+     # read as "target permanent" (Illusion, Blind Seer) and the colour
+     # lowering took a third subject zone. The seam is `types`' own first
+     # paragraph, which listed four CR 205 lowerings and then the colour
+     # change "which is CR 105 and layer 5 and is **here anyway**", and its
+     # third, which draws the CR's line in as many words: "CR 105 what colour
+     # it is (layer 5) … and CR 205 is what it **is**". The waiver had a
+     # reason — one `becomes` production parses all five, and the lowering was
+     # moved in to share the parse module's name — and that reason is about a
+     # mirror, which a size may break: it is `text_changes`' prediction a
+     # paragraph up read the other way.
+     #
+     # The name is `engine/color_changes.py`'s, the write API every handler
+     # behind these instructions goes through, so the mirror re-forms on the
+     # engine side rather than forking a third word for one subject (the
+     # reuse `untap_restrictions` and `linked_exile` make). The two halves
+     # share no name in either direction, checked at the split: everything
+     # either reads is in `_common`, `_events` and `_filters`.
+     #
+     # Lowering-only, like `zones` and `exchanges`: the parse half stays in
+     # `effects/types.py`, where the colour is one branch of the `becomes`
+     # production reading the duration clause the other four read.
+     "colors"]
 # `delayed` is the lowering-only family Visions' second wave split off
 # `lowering/stack.py`, when the counter's "unless its controller pays {1} **and
 # 1 life**" (Mundungu) took that module past the guard below. The line is the
@@ -1688,6 +1767,14 @@ AST_FAMILIES = [
         # this a parse family fired on the productions; the node inventory
         # never crossed anything.
         "permissions",
+        # `linked_exile` is that reason beside it. Four of the six nodes its
+        # productions build are in `ast/exile.py`, which is cut by **subject**
+        # rather than by reader on purpose (see under the list), and the other
+        # two sit with theirs — `PutExiledPileOnLibrary` in `ast/library.py`,
+        # `EachPlayerClaimsExiledCard` in `ast/cards.py`. The guard that made
+        # this a parse family fired on the productions (`effects/exile.py` at
+        # 962); `ast/exile.py` is 431 lines and crossed nothing.
+        "linked_exile",
         # `requirements` is `permissions`' reason one family over:
         # `AttacksThisTurnIfAble`, `BlocksThisTurnIfAble` and
         # `DestroyChosenThatDidntAttack` are facts about a **combat** and live
@@ -1776,7 +1863,10 @@ AST_FAMILIES = [
         # nothing else, and it lives in `ast/cards.py` beside every other card
         # node because that is what it *is*. The guard fired on the readers
         # (`effects/cards.py` at 1,002 with Teferi's Puzzle Box in it), not on
-        # the inventory.
+        # the inventory. The three productions that joined it at Odyssey's
+        # Phase 0 change nothing here: `ChooseCardsInHand` is `ast/cards.py`'s
+        # too, and the two exiles from a hand build nodes of `ast/exile.py`,
+        # which files a node by the zone it names.
         "hand",
         # `destruction` is the third of that shape, and it arrived on the parse
         # side after the lowering side had carried it for a set. `Destroy`,
@@ -1786,16 +1876,18 @@ AST_FAMILIES = [
         # fired on the readers (`effects/board.py` at 1,007), not on the
         # inventory.
         "destruction",
-        # `zones` is the fourth of that shape. The ten nodes its productions
+        # `zones` is the fourth of that shape. The eleven nodes its productions
         # build are cards in a pile, and each lives with its *subject* rather
         # than with this reader: the five shuffles in `ast/shuffles.py` (in
         # `ast/board.py` until Planeshift's Phase 0, whatever this note used to
         # say — see under the list), `ExileTopOfLibrary`, `ExileEntireLibrary`
         # and `ExileGraveyardPosition` in `ast/exile.py` since Tempest's third
-        # wave, `PutIteratedCardOnLibrary` in `ast/cards.py` and
-        # `PutLibraryTopIntoHand` in `ast/library.py`. The guard fired on the
+        # wave, `PutIteratedCardOnLibrary` in `ast/cards.py`, and
+        # `PutLibraryTopIntoHand` and `GraveyardTopToLibrary` in
+        # `ast/library.py` (the latter only since Odyssey's Phase 0, when its
+        # production left `effects/library.py`). The guard fired on the
         # readers (`effects/library.py` at 1,030), not on the inventory, and an
-        # `ast/zones.py` gathered to match would put nine of the ten in one
+        # `ast/zones.py` gathered to match would put ten of the eleven in one
         # family with their lowering in another (only the last exile lowers in
         # `lowering/zones.py`) — exactly what `types` records.
         "zones",
@@ -1866,7 +1958,7 @@ AST_FAMILIES = [
 # would have meant the opposite of the module it was named for. The `zones`
 # exclusion therefore still holds, with its module names now the ones the code
 # has, and the parse side stays the one package without the word:
-# `effects/zones.py` is 553 lines and crossed nothing.
+# `effects/zones.py` was 553 lines then and has crossed nothing since.
 #
 # `ast/cards.py` was the other home on offer — its first line has claimed
 # "shuffle" since the package was cut — and was ruled out by arithmetic: 794
@@ -1954,6 +2046,14 @@ def test_layers_only_import_downward(layers):
         # `_other_libraries` imports `_strips`. A floor reading a floor, as
         # `_roles` reads `_targets` on the lowering side; nothing reads back.
         #
+        # It took a second importer at the Phase 0 before Odyssey, along the
+        # same fork: the tail of "Look at the top N cards of <player>'s
+        # library" left `library`, 21 lines under the guard, whose entry point
+        # branches on the possessive behind the verb exactly as the tutor's
+        # does. Two families read it now, each for its own production; the two
+        # productions share the subject — a library opened by somebody who is
+        # not its owner — and no reader.
+        #
         # `_reveal_until` is the third, pre-split out of `reveal` between
         # Invasion's two waves with that module ten lines under the guard: the
         # run, "reveal cards from the top of your library until you reveal a
@@ -1980,7 +2080,15 @@ def test_layers_only_import_downward(layers):
         # `_chosen_members` joins at Planeshift's Phase 0, for that reason:
         # `board` imports the sacrifice half of the "one of those" pick it
         # used to define.
-        ("lowering", ("_common", "_filters", "_targets", "_events", "_frozen_seats", "_deaths", "_delays", "_amounts", "_counted_damage", "_counted_pumps", "_bites", "_seats", "_sacrifices", "_chosen_members", "_records", "_sweeps", "_destroy_sweeps", "_conjuncts", "_bound_returns", "_bound_exiles", "_described_returns", "_piles", "_counter_stores", "_plus_one_counters", "_named_counters", "_blankets", "_counted_redirects", "_instance_redirects", "_prevented_riders", "_pump_categories", "_zone_categories", "_combat_categories", "_record_keys", "_record_conditions", "_cost_records", "_superlatives", "_recipients", "_collapses", "_declaration_costs", "_counted_life", "categories", "conditions"), ()),
+        #
+        # `_record_definitions` joins at the Phase 0 before Odyssey: the
+        # where-clause definitions that read a record, which `where_x` now
+        # imports as one call.
+        #
+        # `_discards` joins at Odyssey's wave 1: the four whole readings of a
+        # discard (every matching card, the whole hand, each player, the
+        # effect's own controller), which `hand` now imports as four calls.
+        ("lowering", ("_common", "_filters", "_targets", "_events", "_frozen_seats", "_deaths", "_delays", "_amounts", "_counted_damage", "_counted_pumps", "_bites", "_seats", "_sacrifices", "_chosen_members", "_records", "_sweeps", "_destroy_sweeps", "_conjuncts", "_bound_returns", "_bound_exiles", "_described_returns", "_piles", "_counter_stores", "_plus_one_counters", "_named_counters", "_blankets", "_counted_redirects", "_instance_redirects", "_prevented_riders", "_pump_categories", "_zone_categories", "_combat_categories", "_record_keys", "_record_conditions", "_record_definitions", "_cost_records", "_superlatives", "_recipients", "_collapses", "_declaration_costs", "_counted_life", "categories", "conditions", "_discards"), ()),
         # `costs` is shared beside `_core` rather than a family: a cost is
         # charged on the way to the stack and never lowered, so it has no
         # `effects/` or `lowering/` twin to be a family of — and both
@@ -2334,9 +2442,11 @@ FAMILY_SHARED = {
     # `effects/_other_libraries`, pre-split out of `effects/search.py` at the
     # Phase 0 before Invasion — "Search <player>'s library", the search whose
     # library is not the searcher's own (Jester's Cap, Bribery, Denying Wind).
-    # A single-importer floor like `_strips`, and the importer `_strips` has
-    # had in fact since it was written: the strip is tried from inside this
-    # production and from nowhere else.
+    # A single-importer floor like `_strips` until the Phase 0 before Odyssey,
+    # when the look at such a library (Visions, Coral Fighters, Sealed Fate)
+    # joined it out of `effects/library.py`: two families read it now. It is
+    # still the one importer `_strips` has had since it was written — the
+    # strip is tried from inside the search production and from nowhere else.
     "_other_libraries",
     # `effects/_reveal_until`, pre-split out of `effects/reveal.py` between
     # Invasion's two waves — the reveal that has no printed size and stops on a
@@ -2346,7 +2456,7 @@ FAMILY_SHARED = {
     # where everything below reads a fixed number of them". One node
     # (`ast.RevealUntil`), one lowering, one instruction kind, and a call graph
     # with one edge in and none out.
-    # A single-importer floor like the two above it. No mirror to fork:
+    # A single-importer floor like `_strips` above. No mirror to fork:
     # `lowering/reveal.py` lowers the node in one function and has not split.
     "_reveal_until",
     # `_recipients` split out of `lowering/damage.py` at ULG wave 1, when that
@@ -2442,7 +2552,7 @@ FAMILY_SHARED = {
     # older module's name has said since the first cut. It is also the half that
     # grows: a set adds a printed shape of counted damage far oftener than it
     # teaches `count_spec` a new zone. A floor for `_amounts`' reason exactly —
-    # `damage` reads it, `upkeep` its one predicate, `where_x` its one
+    # `damage` reads it, `upkeep` its one predicate, `_record_definitions` its one
     # characteristic set, and it reads none of the three back. It reads
     # `_amounts` for `count_spec`, which is a floor reading a floor, the
     # arrangement `_amounts` already has with `_common`.
@@ -2462,6 +2572,22 @@ FAMILY_SHARED = {
     # and it reads `_amounts`, `_common` and `_events`, which is a floor
     # reading floors.
     "_counted_pumps",
+    # `lowering/_discards`, split out of `lowering/hand.py` at Odyssey's wave 1,
+    # 25 lines under the guard with the set's four Rites to land. The seam is
+    # the one `hand`'s own docstring drew for the day it came — "cut *inside*
+    # `_lower_discard`, along its per-seat branches, rather than moving the
+    # family out of the zone CR 701.9a names" — so the family did not move:
+    # `_lower_discard` still decides which reading a sentence is and still
+    # holds every seat that has to be *told* (a target, a seat an event froze,
+    # the defending player). What left are the four readings that need no such
+    # telling, each one function where it was one `if`: every matching card,
+    # the whole hand, each player, and the effect's own controller.
+    # A single-importer floor, precedented by `_recipients` and
+    # `_declaration_costs`: `hand` is the only family that asks, and the
+    # module exists because that family crossed the guard. It reads `_common`,
+    # `_amounts`, `_events`, `_cost_records` and `_filters` — a floor reading
+    # floors — and nothing reads back.
+    "_discards",
     # `_counted_life` pre-split out of `lowering/life.py` at the Phase 0 between
     # Invasion's two waves, 21 lines under the guard below and within 35 of it
     # since Prophecy's second wave with no group owning it. The third floor on
@@ -2485,7 +2611,7 @@ FAMILY_SHARED = {
     # A single-importer floor for `_counted_pumps`' reason exactly — `life`
     # reads it and it reads nothing back — and it reads `_amounts`, `_common`,
     # `_events`, `_deaths`, `_cost_records` and `_counted_damage` (for the one
-    # characteristic set `where_x` and `cards` also read), which is a floor
+    # characteristic set `_record_definitions` and `cards` also read), which is a floor
     # reading floors.
     "_counted_life",
     # `_bites` split out of `lowering/damage.py` at Mirage's third wave, the
@@ -2563,7 +2689,8 @@ FAMILY_SHARED = {
     # reason: four lowering families read it (`control_flow` threads what an
     # offer's action records into its `then`, `sequences` threads each step's
     # records forward and asks the primary for "if you do", `repeats` hands a
-    # round's records to the condition printed after it, and `where_x` asks
+    # round's records to the condition printed after it, and `where_x` asks —
+    # through `_record_definitions` since the Phase 0 before Odyssey —
     # whether "this way" has a producer), so it cannot live in any of them.
     "_records",
     # `_sweeps` split out of `lowering/damage.py` the next time *that* module
@@ -2911,6 +3038,29 @@ FAMILY_SHARED = {
     # arrangement `_bound_returns` has with `_described_returns`, and nothing
     # reads back.
     "_record_conditions",
+    # `_record_definitions` pre-split out of `lowering/where_x.py` at the Phase 0
+    # before Odyssey, 35 lines under the guard with at least four of the wave's
+    # nine groups due to add a "where X is …" definition. It is the entry
+    # above's cut one printed position over: an X answered by looking at the
+    # game as the clause resolves — a count of a zone and its arithmetic, the
+    # counters on the source, a characteristic of the object the sentence named
+    # — stayed, and an X answered by a record of something already done (a
+    # step's "this way", what a cost ate, the turn's tally, a payment made as
+    # the source entered) left. `_amounts._x_definition_spec` had already drawn
+    # that line as a parameter: it reads a board on any call and a record only
+    # when its caller passes `recorded`.
+    # Measured, as the seam rule asks: of `where_x`'s imports, `_counted_damage`,
+    # `_records`, `_common` and `tapped_this_way_record` were read by the moved
+    # functions alone and `count_spec`, the two seat rewrites and `dataclasses`
+    # by the rest alone; the halves share `_mentions_x` / `_stamp_x_from_count`
+    # and nothing else. `lower_where_x` hands every clause down once, where the
+    # first record branch was read. The branches on both sides answer disjoint
+    # node classes, so the order between the halves decides nothing, and 0 of
+    # 5,266 compiled programs moved.
+    # The name is the entry above's move again — the mirror's word and what the
+    # module holds. A single-importer floor for `_recipients`' reason: `where_x`
+    # reads it, a family may not import a sibling, and nothing reads back.
+    "_record_definitions",
     # `_collapses` split out of `lowering/control_flow.py` at Urza's Legacy's
     # Phase 0, eleven lines under the guard with three of the wave's five
     # groups due to compose a `may` or a `sequence` and none of them able to

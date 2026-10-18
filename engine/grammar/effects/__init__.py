@@ -13,13 +13,13 @@ precisely so this stays true. Independence is the point: it is what makes
     text_changes     rewriting a printed word (CR 612)
     returns          an object put back into a zone it came from
     tapping          tapping, and not untapping
-    cards            drawing, discarding, milling, searching, revealing
+    cards            drawing, discarding, milling, scrying, revealing a hand
     mana             producing it
     production_changes  a standing swap of what a land makes when tapped
     stack            countering, choosing modes, and declining a cost
     retargeting      re-aiming what a stack object already chose (CR 115.7)
     combat           can't-attack / can't-be-blocked restrictions
-    game             tokens, winning, extra turns, enchant
+    game             winning, extra turns and phases, coin flips, enchant
 
 Every production here owes the same invariant: match and account for **every
 token** of what it consumes, or raise `GrammarError`. A production that reads
@@ -118,6 +118,7 @@ from .destruction import (
 )
 from .attachments import (
     _parse_attach,
+    _parse_pronoun_attach_rider,
     parse_excess_choice_paragraph,
     parse_player_chooses_permanent,
 )
@@ -139,40 +140,44 @@ from .production_changes import (
     _parse_produces_instead,
     _parse_tapped_lands_produce_chosen,
     _parse_tapper_produces_instead,
+    parse_turn_mana_change,
 )
 from .exile import (
+    _parse_counted_graveyard_cards,
     _parse_exile_bound_card,
-    parse_claims_one_exiled_card,
     parse_exile_graveyard_arrivals_this_turn,
+    _parse_exile_cost_sacrifices,
+    _parse_exile_graveyard,
+    _parse_player_exiles_pile,
+    _parse_player_exiles_target_spell,
+)
+# The pile that is already in exile, split off `exile` at Odyssey's Phase 0
+# under `lowering/linked_exile.py`'s name. The ten names it took keep their
+# addresses: this package re-exports flat, so no caller learns where the split
+# fell.
+from .linked_exile import (
+    parse_claims_one_exiled_card,
     _parse_bin_unplayed_exiled_card,
     _parse_bin_unplayed_exiled_cards,
     _parse_put_exiled_card_into_hand,
     _parse_put_exiled_pile_top_into_hand,
-    _parse_exile_cost_sacrifices,
-    _parse_exile_graveyard,
     _parse_put_exiled_with_source,
     _parse_random_exiled_with_source,
-    _parse_player_exiles_pile,
-    _parse_player_exiles_target_spell,
     _parse_player_returns_exiled_with_source,
     _parse_put_exiled_this_way,
     parse_put_exiled_pile_on_library,
 )
 from .cards import (
     _parse_draw,
-    _parse_choose_cards_in_hand,
     _parse_discard,
     _parse_discard_revealed_unless_pay_life,
     _parse_for_each_revealed_discard,
     _parse_mill,
     _parse_scry,
     _parse_play_with_hand_revealed,
-    parse_exile_random_card_from_hand,
-    parse_player_exiles_cards_from_hand,
     _parse_reveal_hand,
     _parse_reveal_hand_and_choose,
     parse_put_milled_card_onto_battlefield,
-    _parse_repeated_graveyard_pick,
 )
 # CR 601.3's permission sentences, split off `cards` at the size guard under
 # the name `lowering/permissions.py` has carried since Alliances. The two names
@@ -183,15 +188,24 @@ from .permissions import (_parse_cast_permission,
 # A hand emptying onto a library, split off `cards` at the size guard. The three
 # names it took keep their addresses: this package re-exports flat, so no caller
 # learns where the split fell.
+#
+# Three more followed at the Phase 0 before Odyssey, with `cards` 45 lines under
+# that guard: the pick out of a hand and the random exile from one, which
+# `lowering/hand.py`'s first paragraph names as this family's, and the counted
+# exile whose node defines itself by those two. Same addresses.
 from .hand import (
     _parse_put_hand_cards_on_library,
     _parse_player_puts_whole_hand_on_library,
     _parse_player_puts_hand_cards_on_library,
+    _parse_choose_cards_in_hand,
+    parse_exile_random_card_from_hand,
+    parse_player_exiles_cards_from_hand,
 )
 from .library import (
+    accept_subject_reveals_top_caster_picks,
     _parse_look_at_hand,
     parse_player_looks_at_own_library_top,
-    parse_graveyard_top_to_library,
+    parse_player_reorders_your_library_top,
     parse_player_separates_your_library_top,
 )
 # CR 700.3's two piles — the split and the choice, whatever is separated.
@@ -219,6 +233,7 @@ from .zones import (
     _parse_exile_entire_library,
     _parse_put_iterated_card_on_library,
     parse_put_library_top_into_hand,
+    parse_graveyard_top_to_library,
 )
 from .search import _parse_search_library
 from .retargeting import _parse_change_event_targets, _parse_change_target
@@ -266,14 +281,7 @@ from .game import (
     _parse_exchange_life_totals,
     _parse_life_total_becomes,
     _parse_wins,
-    _parse_choose_color,
-    _parse_choose_creature_type,
-    _parse_choose_opponent,
-    parse_choose_card_name,
-    _parse_choose_number,
-    parse_hides_items,
     _parse_count_objects,
-    _parse_choose_player_who_cast,
     _parse_coin_flip_stakes_loop,
     _parse_flip_coin,
     _parse_game_is_a_draw,
@@ -282,13 +290,19 @@ from .game import (
     _parse_extra_turn,
     parse_extra_phases,
     _parse_skip_step,
-    parse_choose_card_type,
-    parse_extra_land_plays,
 )
+# The eight choice sentences — seven "choose a <value>" and Goblin Game's
+# hidden items — left `game` at Odyssey's Phase 0 for `grammar/naming.py`, one
+# layer down and outside this package, so they are no longer re-exported here:
+# their two dispatchers import them from `naming`, beside the naming
+# paragraphs they already took from it.
+#
 # The five withheld-permission productions left `game` at Mercadian Masques'
 # third Phase 0 — a subject its docstring had never listed — and joined the
 # granting half in `permissions`. Re-exported under the names they had, so
-# no caller moved.
+# no caller moved. (`parse_extra_land_plays` followed at Odyssey's Phase 0 and
+# is not re-exported: `statements`, its one caller, imports it from
+# `permissions` by name, as it does `_parse_cast_from_exiled_with`.)
 from .permissions import (
     _parse_bound_permanent_activation_ban,
     _parse_targeting_ban,
@@ -353,6 +367,7 @@ __all__ = [
     "_parse_tap_untap",
     "_parse_untap_chosen_by_paying",
     "_parse_attach",
+    "_parse_pronoun_attach_rider",
     "_parse_exchange_control",
     "_parse_draw",
     "_parse_choose_cards_in_hand",
@@ -380,6 +395,7 @@ __all__ = [
     "_parse_cast_permission",
     "_parse_play_with_top_revealed",
     "_parse_exile_bound_card",
+    "_parse_counted_graveyard_cards",
     "parse_claims_one_exiled_card",
     "parse_exile_graveyard_arrivals_this_turn",
     "_parse_bin_unplayed_exiled_card",
@@ -393,6 +409,7 @@ __all__ = [
     "parse_player_exiles_cards_from_hand",
     "_parse_reveal_hand",
     "accept_subject_reveals_counted_top_sorted",
+    "accept_subject_reveals_top_caster_picks",
     "accept_subject_reveals_top_of_library",
     "_parse_reveal_hand_and_choose",
     "_parse_exile_graveyard_position",
@@ -409,7 +426,6 @@ __all__ = [
     "parse_put_milled_card_onto_battlefield",
     "_parse_put_hand_cards_on_library",
     "_parse_player_puts_whole_hand_on_library",
-    "_parse_repeated_graveyard_pick",
     "_parse_player_puts_hand_cards_on_library",
     "_parse_activates_each_lands_mana_ability",
     "_parse_loses_unspent_mana",
@@ -417,6 +433,7 @@ __all__ = [
     "_parse_produces_instead",
     "_parse_tapped_lands_produce_chosen",
     "_parse_tapper_produces_instead",
+    "parse_turn_mana_change",
     "_parse_spend_mana_as_though",
     "_parse_double",
     "_parse_switch_pt",
@@ -426,6 +443,7 @@ __all__ = [
     "parse_reveal_any_number_from_hand",
     "_parse_search_library",
     "parse_player_looks_at_own_library_top",
+    "parse_player_reorders_your_library_top",
     "parse_player_separates_your_library_top",
     "parse_each_player_separates",
     "parse_reveal_top_and_separate",
@@ -450,9 +468,7 @@ __all__ = [
     "parse_cant_activate_nonmana_abilities",
     "parse_cant_cast_spell_types",
     "parse_cant_play_lands",
-    "parse_choose_card_type",
     "parse_land_type_swap",
-    "parse_extra_land_plays",
     "_parse_assigns_combat_damage_as_unblocked",
     "_parse_assigns_no_combat_damage",
     "_parse_attacks_this_turn_if_able",
@@ -469,14 +485,7 @@ __all__ = [
     "_parse_exchange_life_totals",
     "_parse_life_total_becomes",
     "_parse_wins",
-    "_parse_choose_color",
-    "_parse_choose_creature_type",
-    "_parse_choose_opponent",
-    "parse_choose_card_name",
-    "_parse_choose_number",
-    "parse_hides_items",
     "_parse_count_objects",
-    "_parse_choose_player_who_cast",
     "_parse_coin_flip_stakes_loop",
     "_parse_flip_coin",
     "_parse_game_is_a_draw",

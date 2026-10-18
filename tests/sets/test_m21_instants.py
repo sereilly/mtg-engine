@@ -843,11 +843,19 @@ def test_rookie_mistake_never_boosts_and_shrinks_the_same_creature(set_pool):
     ``handlers/pump.py`` still folds a repeat at resolution. That is no longer
     reachable through a legal announcement, and it is kept as the second line of
     defence behind a gate rather than as the answer.
+
+    A second creature stands across the table so that the repeat is the only
+    thing wrong with the announcement: with one creature in play the spell has
+    no legal announcement at all (two printed targets are two targets,
+    CR 601.2c), and that refusal arrives first and says something else.
     """
     pool = set_pool("M21")
     only = Permanent(card=pool["Concordia Pegasus"])
     p1 = PlayerState(name="P1", hand=[pool["Rookie Mistake"]], battlefield=[only])
-    game = Game(players=[p1, PlayerState(name="P2")])
+    game = Game(players=[
+        p1,
+        PlayerState(name="P2", battlefield=[Permanent(card=pool["Concordia Pegasus"])]),
+    ])
     game.enforce_mana_costs = False
     before = (only.effective_power, only.effective_toughness)
 

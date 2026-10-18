@@ -534,6 +534,9 @@ def test_w2g2_deadshot_taps_one_target_and_bites_with_it(set_pool):
         # The printed "another" (CR 115.3/601.2c), which this fusion checks
         # for and used to drop before the payload reached the gate.
         "kind": "creature", "max_targets": 2, "distinct_targets": True,
+        # …and both instances of the word are owed (CR 601.2c): the count was
+        # reported as a ceiling until a one-target Deadshot was found castable.
+        "exact_targets": True,
     }
 
     game, p0, p1 = _w2g2_spell_board(

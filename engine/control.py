@@ -101,6 +101,32 @@ def base_controller(permanent: "Permanent") -> int | None:
     return value if isinstance(value, int) else None
 
 
+# The seat that controlled a permanent **as it left the battlefield** — CR
+# 608.2h's last known information for the one characteristic the object does
+# not carry. A ``Permanent`` keeps its types, colours, counters and P/T once it
+# is gone, which is why an effect may go on reading it; its *controller* is the
+# projection of the battlefield lists and is gone the moment the object leaves
+# one. Stamped by the one transition off the battlefield
+# (``Game.remove_all_from_battlefield``), read through
+# ``Game.controller_or_last_known``.
+#
+# Not ``base_controller_index``, which is where the permanent *entered*: a
+# creature stolen and then destroyed was last controlled by the thief.
+LAST_CONTROLLER = "last_controller_index"
+
+
+def set_last_controller(permanent: "Permanent", seat: int) -> None:
+    """Record the seat that controls *permanent* as it leaves the battlefield."""
+    permanent.metadata[LAST_CONTROLLER] = int(seat)
+
+
+def last_controller(permanent: "Permanent") -> int | None:
+    """The seat :func:`set_last_controller` recorded, or None for a permanent
+    that has never left a battlefield."""
+    value = permanent.metadata.get(LAST_CONTROLLER)
+    return value if isinstance(value, int) else None
+
+
 def change_control(
     permanent: "Permanent", seat: int, *, source, until_eot: bool = False
 ) -> None:
@@ -176,9 +202,10 @@ def has_control_change(permanent: "Permanent") -> bool:
 
 
 __all__ = [
-    "BASE_CONTROLLER", "CONTROL_EFFECTS", "LINKED_CONTROL_CONDITIONS",
+    "BASE_CONTROLLER", "CONTROL_EFFECTS", "LAST_CONTROLLER",
+    "LINKED_CONTROL_CONDITIONS",
     "base_controller", "change_control",
     "control_changes", "end_control_change", "end_until_eot_control_changes",
-    "has_control_change",
-    "set_base_controller",
+    "has_control_change", "last_controller",
+    "set_base_controller", "set_last_controller",
 ]

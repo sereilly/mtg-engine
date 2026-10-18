@@ -15,9 +15,10 @@ Alliances (144), Mirage (335), Visions (167), Fifth Edition (434),
 Weatherlight (167), Tempest (335), Stronghold (143), Exodus (143),
 Urza's Saga (335), Urza's Legacy (143), Classic Sixth Edition (335),
 Urza's Destiny (143), Mercadian Masques (335), Nemesis (143), Prophecy (143),
-Invasion (335), Planeshift (143), Seventh Edition (335) and Core Set 2021
-(285), 4,781 unique cards, all classified as supported.
-**Thirty-one sets, and their sizes are the whole spread**: 4ED and 5ED are pure
+Invasion (335), Planeshift (143), Seventh Edition (335), Apocalypse (143),
+Odyssey (335) and Core Set 2021 (285), 5,246 unique cards, all classified as
+supported.
+**Thirty-three sets, and their sizes are the whole spread**: 4ED and 5ED are pure
 reprint sets, every one of their cards already in the pool, so they are the two
 sets that ship without implementing a card, and **6ED is the third of that shape
 and the first where it is only *almost* true** — 333 of its 335 were already
@@ -43,7 +44,8 @@ fourth — 167 of 167 new, sharing not one oracle_id with *any* set in the pool.
 seventh, Nemesis the eighth and Prophecy the ninth**, and all five are clean the same way: 167 of
 167, 143 of 143, 143 of 143, 143 of 143 and 143 of 143 new, each sharing with every set before it not one oracle_id **and
 not one card name**. **Planeshift is one card short of a tenth**: 142 of its 143 are new, and the one that is not is
-the whole of its promotion story (below). `set_progress.json` records UDS with 142 new cards and it
+the whole of its promotion story (below). **Apocalypse is the tenth**: 143 of 143 new, sharing
+not one oracle_id and not one card name with the thirty-one sets before it. `set_progress.json` records UDS with 142 new cards and it
 brought 143, for 6ED's reason one column over — that number counts against the
 whole release line and this manifest is a subset of it. **Mirage breaks that run** — 313 of its 335 are new and 22 were
 already here, which makes it the
@@ -112,10 +114,45 @@ the prefix guard green, the printing-order guard failing at index 29 and
 nothing else. Rehearsed at the ingest and again at the promotion with the
 promotion's own script; `test_7ed_cards.py` asserts the eighteen cards that
 originate in the set, seventeen new ones and that one.
+
+**Apocalypse is Exodus's shape again - clean, and measured rather than
+inferred.** It is the third set of Invasion's block and shares nothing with
+the pool at all, so its index (30) can move no card's origin; that was
+computed at the ingest and rehearsed at both ends at the promotion, where
+the wrong-end insert turned red the printing-order guard and nothing else.
+It arrived at 65.7% supported, Planeshift's number to the decimal, for
+Planeshift's reason: a block-mate inherits mechanics and not templates. It
+brought no machinery. What it brought is three questions about an
+*announcement* that the engine could not ask: a target an opponent **must**
+choose (the Flagbearers, `engine/target_requirements.py`), a spell named
+*beside* a permanent in one cast (Suffocating Blast, a roles announcement
+with a stack slot) or *instead of* one (Illusion's "target spell or
+permanent"), and which of two kickers a permanent was kicked **with** as it
+enters (the five Volvers).
 What Planeshift brought is the *second half* of what Invasion built: a kicker
 whose cost is not mana, two kickers on one card (CR 702.33b) and the question
 "which one was paid" (CR 702.33f), domain sizing a *cost*, and no machinery
 the engine lacked.
+
+**Odyssey is Mercadian Masques' shape, and the first set since Invasion to
+bring machinery.** 322 of its 335 are new and every one of its 13 reprints -
+five basic lands, four cards from Tempest, three from Exodus and Buried Alive
+from Weatherlight - already had an earlier printing here, so its index (31)
+moves no card's origin: computed at the ingest and rehearsed at both ends at
+the promotion, where the wrong-end insert turned red the printing-order guard
+and nothing else. It arrived at 65.4% supported with its headline keyword
+**dropped** on 27 of those cards: a flashback line beside a line that
+compiled left the card "supported" and uncastable from a graveyard, which
+`parse_coverage --set` saw and the support count could not. What it brought
+is **flashback** (CR 702.34 - a rewrite onto a cast permission that requires
+an alternative cost, so no keyword flag exists; `engine/flashback.py`) and
+**threshold** (CR 207.2c: an ability word, so nothing to implement but one
+condition, asked of a static, an activation and a spell) - and around them
+the graveyard as a place things are *chosen from*: targets out of a single
+graveyard, a cost that exiles named cards from one, and an AI that had never
+cast a card from any zone but a hand. `set_progress.json` records it with 321
+new cards and it brought 322, for 6ED's reason: Angelic Wall has an earlier
+printing in a set this manifest does not carry.
 
 **Urza's Saga is Stronghold's lesson with three cards instead of one, and it is
 the set to point at when somebody asks whether the rehearsal is worth a
@@ -128,7 +165,7 @@ Rehearsed at the wrong end before the real promotion, the prefix guard passed
 and `test_the_shipped_sets_are_in_printing_order` failed at index 20 — which is
 exactly the division of labour those two guards are documented to have, observed
 rather than assumed. Which is why
-the per-set totals sum to far more than 4,781 — they are printings (7,263 of
+the per-set totals sum to far more than 5,246 — they are printings (7,741 of
 them). Alliances was the
 first set to reach 100% with **zero name-keyed hooks**, across all 144, Visions
 is the second across all 167, **Weatherlight is the third** across all 167
@@ -169,8 +206,32 @@ object modes), 268 of 278 entry triggers resolved inline where CR 603.3 puts
 them on the stack, colour effects ordered by what kind they were rather than by
 timestamp (CR 613.7), a castable highlight that glowed over 3,543 unpayable
 land-and-cost pairs, and 28 shipped "as this enters, choose…" cards whose
-prompt a human player could not answer in the browser at all.
-Reliance is **1.1% of supported cards**, 52 of 4,781, down from 53 of 3,715 —
+prompt a human player could not answer in the browser at all — and
+**Apocalypse is the thirteenth**, 143 of 143 across nine parallel groups in
+one wave and four in a second, adding none. Wave 1 landed 48 of its 49
+cards and drove every one of the 94 that arrived compiling, nine of which
+mis-played; wave 2 took the one card left with its neighbour and spent
+three groups on what wave 1 had measured: CR 608.2b never asked of an
+ability (479 of 622 single-target activations acted wrongly once their
+target was illegal, 185 of them on a bystander), five prompts the set's own
+cards armed and a person could not answer in the browser, and seven
+shipped defects each with a card of the set standing on it (a named cost
+permanent silently replaced on 43 of 43 spells; a cast trigger finding its
+spell by card rather than by stack object) — and
+**Odyssey is the fourteenth**, 335 of 335 across nine parallel groups in one
+wave and eight in a second, never more than five at once, adding none and
+**retiring three** (Gaea's Liege, Erg Raiders, Kudzu - each onto a sentence a
+card of the set also prints). Wave 1 landed 330 and declined five cards with
+parts; wave 2 took those five in four groups and spent the other four on
+what wave 1 had measured: CR 118.9d never applied to an alternative cost or
+a waiver (43 of 43 such casts were free under Sphere of Resistance), an AI
+that had never cast from a graveyard, a land tapped for mana by two of its
+three roads without telling anyone (a cost an effect collected ran no mana
+ability at all - 1,261 of 3,380 cases), and the set in a browser, where a
+person could not see a flashback price, stop an "up to" discard early, or
+answer the draw-skip prompt at all.
+Reliance is **0.9% of supported cards**, 49 of 5,246, down from 52 of 4,924 and
+from 53 of 3,715 before that —
 and Mercadian Masques is the first set in four to move the numerator, *down*:
 Food Chain is the second card to print Metamorphosis' cost-record-plus-spend-
 restriction pair, which that hook's own comment said no second card printed.
@@ -202,7 +263,7 @@ Dark at 47.9%, Fourth Edition at 100%, Ice Age at 49.3%, Fallen Empires at
 67.6%, Homelands at 66.1%, Fifth Edition at 100%, Alliances at 43.1%, Mirage
 at 54.9%, Visions at 59.3%, Weatherlight at 59.9%, Tempest at 67.8%,
 Stronghold at 67.8% again, Exodus at 63.6%, Classic Sixth Edition at 100%,
-Urza's Destiny at 69.9%, Nemesis at 66.4%, Prophecy at 58.0%, Invasion at 66.0%, Planeshift at 65.7% and Seventh Edition at 99.4%, and all twenty-three were promoted to `sets` once every card was, which is the role working as designed rather than a role nobody uses. 4ED is the degenerate case that shows what the role is
+Urza's Destiny at 69.9%, Nemesis at 66.4%, Prophecy at 58.0%, Invasion at 66.0%, Planeshift at 65.7%, Seventh Edition at 99.4%, Apocalypse at 65.7% and Odyssey at 65.4%, and all twenty-five were promoted to `sets` once every card was, which is the role working as designed rather than a role nobody uses. 4ED is the degenerate case that shows what the role is
 *for* rather than an exception to it: it entered `measured` fully supported and
 left the same day, and the ingest still paid — a guard proved itself unable to
 tell the roles apart for an all-reprint set, which is a finding only the
@@ -340,7 +401,7 @@ checked. Advisory only; nothing fails on its output.
 that is the one that rotted: `CR 701.15c` is a real subrule of a real rule and it
 is **Goad**, not the no-regeneration rider. VIS wave 4 read every CR citation in
 `engine/` and `web/` against `MagicCompRules.txt` and rewrote **185** of them —
-almost none a typo. The shipped CR is the April 2026 edition, which inserted
+almost none a typo. The April 2026 edition had inserted
 `701.4 Behold` and `701.11 Triple` and shifted the whole keyword-action block, so
 a citation written against the older numbering now names a different action:
 `701.7` (Create) for destroying, `701.13a` (Exile) for milling, `701.5a` (Cast)
@@ -348,8 +409,21 @@ for countering. **A CR bump is a silent, repo-wide correctness event.**
 `tests/engine/test_cr_citation_subjects.py` makes it loud for the 701 block,
 where each rule is headed by one keyword word: it reads the heading map out of
 `MagicCompRules.txt` at test time, so a later edition fails every citation whose
-keyword moved. Outside 701 the headings are prose and nothing checks them —
-bumping the CR file means re-reading those by hand.
+keyword moved. Outside 701 the headings are prose and no test can read them —
+`scripts/cr_edition_diff.py` does, by **text**: it compares two editions rule by
+rule and lists every citation here of a rule that moved, changed or went.
+
+**The shipped CR is the September 25, 2026 edition**, bumped at Odyssey's close
+with that script, and the bump is the run to copy. It left the 701 and 702
+headings where they were (three appended to each) and renumbered by insertion
+elsewhere: five cited rules moved - 506.6 to 506.7 ("had to attack"), 506.7
+to 506.8 (the combat cast windows), 601.5 to 601.6, 601.7 to 601.8, and 704.5y
+to 704.5z (the Role rule) - 53 citations in ten files, each of which would
+have gone on naming a real rule about something else. Install a download with
+`--install`: Wizards' text marks blank lines with a NO-BREAK SPACE in some
+editions, and left alone the diff is four thousand whitespace lines around the
+hundred that changed. What the edition brought the engine is CR 605.1a's
+fourth criterion (below, under `engine/mana_payment.py`).
 
 ```powershell
 
@@ -372,6 +446,7 @@ python scripts/set_progress.py        # regenerate SET_PROGRESS.md (per-set impl
 python scripts/check_all.py           # every CI guard check, in ci.yml's order, one summary table (--freshness adds the tracker regenerations + a clean-tree check)
 python scripts/rules_progress.py      # regenerate RULES_PROGRESS.md (CR test-coverage tracker); --check fails on unannotated tests
 python scripts/rules_gaps.py          # rank untested CR rules by engine citations + section momentum; also flags stale CR citations in engine/web (advisory, stdout only)
+python scripts/cr_edition_diff.py old.txt   # a CR bump: every citation here of a rule that moved, changed or went between two editions (old.txt = `git show HEAD:MagicCompRules.txt`); --install <download> writes the new file in the repo's convention
 python scripts/unasked_narrowings.py  # printed narrowings whose handler never supplies the seat `subject_matches` needs — the fail-closed half of the asymmetric-gate class (advisory; --check to fail)
 python scripts/behaviour_classes.py   # regenerate BEHAVIOUR_CLASSES.md (behavioural-equivalence tracker); --check fails on drift, --accept re-snapshots; --set <CODE> prints which existing classes that set's cards land in (stdout only)
 python scripts/parse_coverage.py      # regenerate PARSE_COVERAGE.md (oracle-text parse-coverage tracker); --check fails on unclaimed text; --set <CODE> prints that set's per-card claims/unclaimed (stdout only)
@@ -448,6 +523,14 @@ settles what it queues. A cycling ability sat on the stack as the step ended,
 so all three Urza's sets exited 1 on `steps_left_owing` from the day that
 count existed, and no other set prints the keyword on enough cards for ten
 games to show it. The pass settles it with the engine's own loop.
+
+**And a tenth: a zone the loop never read.** Every cast an AI seat proposed
+came out of its hand, so no card was ever flashed back, cast from exile under
+a permission, or played off the top of a library in a simulated game.
+`ai_valuation.permitted_casts` is the one reader of what
+`cast_permissions` opens, `CastAction.from_zone` carries it through the same
+announcement function every cast uses, and
+`SimulationReport.casts_from_zones` is the honesty count.
 
 The honesty checks in the report exist because "no illegal interactions" over a
 game where nothing happened is a true statement about nothing.
@@ -663,16 +746,64 @@ adding entries, not editing dispatch**:
   five handlers did until round 61 — so it is banned outside the seam by
   `tests/engine/test_draw_seam.py`, whose allow-list holds only the pregame
   draws (CR 103.4: no battlefield, so no replacement can exist) and names them
-  with that reason.
+  with that reason. **And draws are made one at a time.** A prompt armed
+  while a seat's draw is being made is stamped with that seat
+  (`replacement_choices.DRAW_OF`), and a later draw for it is parked
+  (`Game.parked_draws`) until the answer — CR 616.1f finishes one event
+  before the next begins. Without it a declined replacement remade its
+  draw, a second replacement asked about that one, and the draw *behind*
+  armed its own offer beside it: 69 of 198 pairs of draw replacements left a
+  multi-card draw with two prompts each refusing the other (Abundance with
+  Pursuit of Knowledge, found by a person playing them). A doubler has one
+  opportunity per event too (CR 614.5), passed down every tail as
+  `exclude_sources`.
+- **Discarding is one seam, and the event says who caused it.**
+  `Game._discard_card` raises the CR 614 `discard` event and announces the
+  discard; the event carries `cause_seat` (`discard_cause_seat`: the seat
+  resolving, or the one a prompt recorded when it was armed), because "a
+  spell or ability an opponent controls causes you to discard this card"
+  (Dodecapod's replacement, Psychic Purge's trigger) is a question about the
+  cause and a seat answering a prompt is no longer resolving anything. Seven
+  shipped ways of discarding went round it until Apocalypse — Megrim never
+  fired for Wand of Ith, Sirocco or Balance's hand half, and Psychic Purge
+  never triggered off Coercion.
 - `engine/mana_payment.py` — **whether a cost can be paid from the board, and
   how**. Two different questions: casting and activating spend the *pool*
   (`_pay_mana_cost`), because producing mana is the player's own prior action;
   an effect that says "you may pay {1}{B}" gives its player no priority window,
-  so it must also tap lands. `plan_payment` answers the second, exactly (an
+  so it must also tap lands - **for mana**, one at a time, through
+  `Game._pay_planned_cost`, which re-asks the planner after each tap (so an
+  adder's extra mana counts) and then spends the pool. The plan used to tap
+  with `become_tapped` and deem the cost paid: no mana ability ran, so a
+  painland dealt no damage and no watcher of "taps a land for mana" saw it.
+  `plan_payment` answers the second, exactly (an
   augmenting-path matching of coloured pips to lands, because a greedy pick
   under-reports a board that could pay and CR 601.2h asks what a player is
-  *able* to do). A cost is a symbol dict everywhere — `generic_cost(n)` is the
-  one line that turns a legacy number into one.
+  *able* to do), over the lands whose tap would in fact pay
+  (`Game.payment_lands` — five lands answered "can pay" and then failed).
+  **What a mana ability *is* is one predicate here, `is_mana_ability`** (CR
+  605.1a), and it asks all four criteria: no target, could add mana, not a
+  loyalty ability, and - in the rules since September 2026 - neither its cost
+  nor its effect moves a card to or from a library. So Chromatic Sphere and
+  Odyssey's five Eggs ("Add …. Draw a card.") and Millikin and Charmed
+  Pendant ("{T}, Mill a card: …") use the stack, can be responded to, and are
+  refused in the middle of a payment; Barbed Sextant's draw "at the beginning
+  of the next turn's upkeep" is a delayed ability's (CR 603.7) and leaves its
+  mana ability one. The effect half is asked **fail-closed**: a zone-moving
+  step beside an add-mana step is presumed to reach a library unless it has
+  been read and does not (`LIBRARY_SAFE_ZONE_KINDS`), and
+  `tests/engine/test_mana_ability_library_criterion.py` fails on one nobody
+  has read. Activation, the tap seam, the payment prompt, the AI and Faith's
+  Fetters all ask this one function, which is why the rule change was one
+  edit.
+  A cost is a symbol dict everywhere — `generic_cost(n)` is the
+  one line that turns a legacy number into one. **The planner is told who is
+  paying** (`plan_payment(..., payer=)`): a seat holding a CR 106.6 spending
+  permission (Celestial Dawn, Sunglasses of Urza, False Dawn's turn-long
+  one) is planned by one matching over floating units and lands, and an AST
+  guard fails a planner call that names no payer — under Celestial Dawn
+  1,559 of 2,054 payable effect costs were refused while the castable
+  highlight said yes.
 - `engine/pending_choices.py` — every *other* decision a seat owes part-way
   through a spell, an ability or a turn step (a discard, a library search,
   Balance's removals, Power Sink's payment). One `PendingChoice` queue on
@@ -701,6 +832,18 @@ adding entries, not editing dispatch**:
   to the resolution scratchpad and nowhere else — no log line, no payload
   field for any other viewer — and a test serialises the state for the other
   seat, a spectator and the answering seat between answers.
+  **A private look stays private in the log, and its owner orders what it
+  puts back.** Every viewer is sent the whole log, so a line names a card a
+  look kept or a search found only where the table may know it
+  (`Game.find_is_public`: a printed reveal, a public destination) — ten
+  looks and seven tutors had told the opponent which card went to hand.
+  And "the rest on the bottom of your library in any order" is the looker's
+  order to choose (CR 401.4): `Game.offer_library_bottom_order` arms the
+  `reorder_library` prompt with `position: "bottom"` for an interactive
+  seat, for the look-and-pick family and the Apocalypse recruiters alike.
+  Abundance's is asked too, since a draw now waits for the one in front of
+  it, and what is put on **top** "in any order" is the library owner's as
+  well (`Game.offer_library_top_order` — Lodestone Bauble, Reinforcements).
 - `engine/commander.py` — CR 903, the Commander variant and its Brawl option
   (CR 903.12). Opt-in like `engine/ante.py`: every seam is inert unless
   `Game.commander_variant` is `"commander"` or `"brawl"`, so an ordinary duel is
@@ -762,7 +905,11 @@ adding entries, not editing dispatch**:
   `deal_damage` so no call site has to remember it. `source` alone cannot
   answer: for a spell it is a `CardDefinition`, the card as printed, shared by
   every copy and controlled by nobody. So the seat is the control seam's for a
-  permanent, `base_controller_index` for one that has left, and otherwise
+  permanent, its last controller for one that has left
+  (`control.LAST_CONTROLLER`, stamped by the removal transition and read by
+  `Game.controller_or_last_known`; the seat it entered under where nothing
+  stamped one - a stolen creature paid its lifelink to its owner until Bomb
+  Squad), and otherwise
   `Game.resolving_seats[-1]` — CR 109.5's answer, pushed around
   `_execute_oracle_instruction`. "A source you control" (Fiery Emancipation,
   Chandra's Pyreling) reads it.
@@ -807,7 +954,27 @@ adding entries, not editing dispatch**:
   rather than a bool. `target_was_kicked` asks the question of the **targeted**
   spell: Ertai's Trickery ("Counter target spell if it was kicked") compiled
   supported and asked whether *it* had been kicked, so it never countered
-  anything.
+  anything. **"Kicked with its {1}{U} kicker" is also an entry state**
+  (`enter_effects.kicked_entry`, the five Volvers): a keyed line applies only
+  when its key is in `KICKED_WITH`, two such lines may both apply, and a
+  copy of a kicked Volver was not kicked (CR 707.2). A kicker's `{X}` may
+  carry a spend restriction (`OptionalManaCost.x_one_of_each_color`,
+  Emblazoned Golem), enforced by setting aside one real unit of each colour
+  — and a card printing that sentence over an X nothing charges that way is
+  refused by the support gate. **A permanent named to pay an additional
+  cost pays it, or the spell is not cast** (CR 601.2h;
+  `casting._named_cast_cost_refusal`, the cast-side twin of the activation
+  gate's `_named_cost_refusal`): 43 of 43 spells had substituted a default
+  for an illegal named payer. A bare cast still chooses one. **Which cards
+  a counted graveyard cost exiles is the caster's to name too**
+  (`cost_graveyard_indices`; Skeletal Scrying, Haunting Misery). **A cost
+  may be the choice of a number** ("choose a number between 0 and 5", Liquid
+  Fire): `AdditionalCost.choose_number` charges nothing, and the number is
+  the cast's announced X (CR 601.2b), so it rides `x_value` - the wire, the
+  stack object, a copy. **And an alternative cost or a waiver still owes
+  what a tax adds** (CR 118.9d; `Game.alternative_cost_mana`): the two
+  branches that pay no mana cost never asked, so Force of Will was free
+  under Sphere of Resistance - 43 of 43.
 - `engine/cast_prohibitions.py` — **may this card be cast at all** (CR 601.3):
   the run of refusals the cast path makes before any cost, as one table in the
   order it logs them, behind `cast_prohibition(game, seat, card)`. Three
@@ -833,6 +1000,67 @@ adding entries, not editing dispatch**:
   cards, permanents): one seat separates (`pile_split`), another chooses
   (`pile_choice`), and what happens to each pile is payload
   (`piles.PILE_FATES`). Nothing moves until the last answer.
+- `engine/flashback.py` — flashback (CR 702.34), which the rules define as
+  two static abilities and which this engine already had as three things it
+  had never joined: a **permission** to cast from a graveyard (the card's
+  own, derived from its text while it sits there), an **alternative cost
+  that permission requires** (CR 118.9b; `CastPermission.cost`, an
+  `AlternativeCost` whose `mana` field is the one thing that class lacked),
+  and a **destination** as the card leaves the stack
+  (`leaves_stack_to_exile`: "any time it would leave the stack", so
+  countered and fizzled as well as resolved, and it wins over a buyback
+  that was also paid). The keyword line is a **rewrite** in
+  `oracle.expand_ability_lines`, beside buyback and kicker, so the word is
+  not in `IMPLEMENTED_KEYWORDS`; whether a cast was a flashback is a fact
+  about one cast and rides `StackItem.flashback`. "Has flashback"
+  (Tombfire) is the printed keyword *or a grant* (Recoup), so
+  `has_flashback` takes the game. A spell cast from a graveyard names its
+  targets through the picker a hand cast uses: 54 shipped cards castable by
+  an older permission had read the *hand* slot for theirs.
+- **Threshold is an ability word and one condition.** CR 207.2c gives the
+  word no rules meaning, so `strip_ability_word` drops it and what is left
+  is "seven or more cards are in your graveyard" - `cards_in_zones`, asked
+  where each of its three printings already had a seam: a conditional
+  static (`static_bonuses.conditional_static_holds`), an activation
+  restriction row (CR 602.5, `activation_restrictions.py`), and a spell's
+  "instead" (`oracle.expand_instead_paragraph_lines` rewrites the paragraph
+  into the conditional the grammar already read). A count over "each
+  graveyard" refuses rather than being summed.
+- `engine/destruction_events.py` — **a permanent is destroyed** (CR 701.8)
+  is one event, and it says who caused it. Announced where a destruction
+  is *decided* - the two destroy paths, once indestructibility, a
+  regeneration shield and a land's shield have each declined to replace it
+  - and nowhere else, because CR 701.8b makes a sacrifice and a
+  state-based move to the graveyard not a destruction and the board cannot
+  tell them apart afterwards (Karmic Justice asks). The cause is CR 109.5's
+  resolving seat by default; a delayed destruction records the seat when
+  its mark is set (`mark_delayed_destruction`), a state-based one passes
+  `NO_SPELL_OR_ABILITY`, and a move that is not a destruction says so. It
+  is the discard seam's arrangement one zone over, and driving every
+  destroy site through it found Chaos Orb and eleven end-of-combat
+  destroyers ignoring indestructible.
+- `engine/state_triggers.py` — a state trigger about **another** permanent
+  ("Whenever a creature has four or more fuse counters on it", Bomb Squad),
+  fired once per ability and watched permanent, and CR 603.8's latch with
+  both its halves: a state trigger does not trigger again while it is on
+  the stack, and **does** once it has left without resolving. The second
+  half was missing - a countered state trigger never triggered again, for
+  all ten in the pool that reach the stack - so the latch key rides the
+  stack object and both removals give it back. Twenty-four more are still
+  carried out inside the state-based sweep; ROADMAP has them.
+- `engine/counted_names.py` — whether a card in a zone answers to a
+  **name** (CR 201.2a over a *set* of names, so a split card is named by
+  both halves) and the one printed static that widens it: "If this card is
+  in a graveyard, effects from spells named Flame Burst count it as a card
+  named Flame Burst" (Pardic Firecat). Text-keyed; both names are payload.
+- **"Tapped for mana" is one event** (CR 106.12):
+  `Game._land_tapped_for_mana` holds the per-turn record, the CR 106.12b
+  replacement, the production, the Aura adders and the triggers, and three
+  roads call it - the explicit tap, a cost an effect collects (above), and
+  a land whose mana ability costs more than {T} activated through the
+  activation path. Two of the three told nobody until Odyssey printed
+  Price of Glory. The seven such triggers that are not mana abilities
+  still resolve at the tap rather than on the stack; ROADMAP has the parts.
 - `engine/object_colors.py`, `engine/color_census.py` — colour as a relation
   and as a count. `share_a_color`, `is_multicolored`, `colors_among`,
   `of_each_color` are CR 105.2 over colour *sets*, so a sweep filter, a
@@ -923,10 +1151,62 @@ adding entries, not editing dispatch**:
   accepted a seat the picker does not offer, a Lightning Bolt reached a
   player behind an Ivory Mask — on a decline ROADMAP carried for a reason
   (`target_player_index` is ambiguous) that `stack_targets` had answered two
-  sets earlier. Both are instants and sorceries only, and the shapes they
-  still decline — a triggered ability's targets, an Aura or an ambiguous
-  graveyard target, a roles spell's player at resolution — are in
-  `ROADMAP.md` with the reason each is a separate round.
+  sets earlier. The announcement gates are a spell's; **the resolution gate
+  is asked of every object whose targets somebody chose** — a spell, an
+  activated ability (`StackItem.activated`) and a triggered ability whose
+  target was chosen through its own picker (`StackItem.targets_chosen`),
+  the last two through `ability_target_verdicts`, the activation picker's
+  list asked again. It was spells only until Apocalypse: 479 of 622
+  single-target activations did something wrong with an illegal target
+  (Savage Gorilla drew its card; 185 hit a bystander). **And each target is
+  judged separately in an object that still resolves** —
+  `legality.blank_illegal_resolution_targets` rewrites every illegal slot
+  before any instruction runs, so a handler meets a departed target rather
+  than a stale index (42 of 48 multi-target spells had acted on a target
+  given shroud in response). A trigger target *stamped* by a fire site, or
+  defaulted while a permanent is on its way to a graveyard
+  (`Game.departing`), is not marked and not judged; that and the other
+  declines — an ability printing "target" twice with one derived slot, a
+  roles slot that is not a permanent, an Aura or an ambiguous graveyard
+  target — are in `ROADMAP.md` with the reason each is a separate round.
+  **A spell may be one slot of several.** "Counter target spell and … deals
+  3 damage to target creature" (Suffocating Blast) is a roles announcement
+  with a stack role (`targeting.role_is_stack`): both targets are owed at
+  the cast, each half survives the other's target becoming illegal, and
+  the wire carries `target_role_refs` with a `stack_index`. "Target spell
+  or permanent" is one slot in either zone (`spell_or_permanent`, the
+  Laces' picker — the noun phrase used to keep only the permanent). A
+  stack target named for an object that targets nothing on the stack is
+  refused (`legality.stray_stack_target_refusal`; it was accepted and
+  ignored by 888 of 888 casts). And **a slot list of two printed targets
+  is a count, not a ceiling** (`targeting.slot_list_is_exact`).
+  **"Up to N target cards from a single graveyard"** (Decompose, Ebony
+  Charm) is a slot list out of one pile (`targeting.SINGLE_GRAVEYARD`),
+  announced at the cast or the activation and held by both gates; it was a
+  choice made at resolution, so nothing could respond knowing which cards.
+  **Two players may be two roles of one cast** (Cultural Exchange:
+  `choices["role_seats"]`, and `target_role_refs` entries that carry a
+  `seat`) - a player named for one role of several had never become a
+  target at all, 30 times in 30. **And a stack target names its
+  controller**: `Game.stack_target_seat` is `announced_target_seat`'s twin
+  for an object whose every chosen target is a spell (CR 112.2), which is
+  what "its controller" after "counter target spell" reads - Undermine had
+  never made anyone lose life.
+- `engine/target_requirements.py` — **a target an opponent must choose**
+  (the Flagbearers: "…that player must choose at least one Flagbearer on
+  the battlefield if able"). A text-keyed table whose noun is payload, and
+  two gates over a *whole announcement*
+  (`Game.cast_target_requirement_refusal`,
+  `activation_target_requirement_refusal`), asked before anything is paid.
+  Deliberately **not** a narrowing inside `_enumerate_targets`: that list
+  also serves resolution, retargets, copies and every trigger, all of which
+  the card's ruling exempts. "If able" is the un-narrowed list, so
+  protection, shroud, a wrong type and a player-only spell bind nothing. A
+  one-slot picker is narrowed to the Flagbearers; a several-slot, divided
+  or roles picker keeps its list and carries `required_targets`, which the
+  client shows and holds its confirm on. The AI asks the same gate, so it
+  re-aims burn at the Flagbearer and does not propose a pump it would have
+  to gift. Held by `tests/engine/test_target_requirement_census.py`.
 - `engine/stack_targets.py` — **which targets a stack object chose**, and how
   they may be changed (CR 115.7). `chosen_targets(item)` reads every
   announcement channel a `StackItem` carries against the object's derived
@@ -966,6 +1246,18 @@ adding entries, not editing dispatch**:
   defender and a Magical Hack rewrote a word nothing then read; that guard
   ratchets both fields too, and a keyword additionally wants `_has_keyword`,
   which asks layer 6 as well.
+  **Its folds are memoised by what the card *is*, never by `id()`.** A card
+  with lines granted, struck or stripped is built once and kept, keyed by
+  `copies.card_identity` — the card's printed fields. Four of those memos
+  were keyed by `id(card)` until Apocalypse, and CPython hands a freed
+  object's address to the next allocation: a creature given an ability by
+  an Aura read as *another creature* — its name, its power, its toughness —
+  whenever a card object freed earlier in the process had been granted the
+  same words. The catalog's definitions never die; a token, a token copy
+  and a test's invented card do. It surfaced as one "flaky" test in a full
+  run and was named by replaying that test's scenario after every other
+  test. `tests/regressions/test_derived_card_memo_identity.py` fails any
+  module-level dict under `engine/` keyed by an `id()`.
   **Layer 5 is ordered by timestamp (CR 613.7), and a colour is written through
   one API.** `engine/color_changes.change_color` puts the stamp inside the
   write, and `Permanent.timestamp` (CR 613.7d; re-stamped on attach, 613.7e)
@@ -1231,6 +1523,14 @@ adding entries, not editing dispatch**:
   sites. Where a draw, a life gain or a sacrifice has no single call site, the
   announcement goes on the **state-based sweep** over the record every path
   already feeds (`mixins/game_ending.py`), not on the call sites.
+- **A cast trigger's "it" is a stack object, not a card.** A deck repeats one
+  immutable `CardDefinition` per copy, so with two copies of one spell on
+  the stack a trigger that looked its spell up by card found the first: the
+  cast events carry `cast_item` beside `cast_card`, and
+  `handlers/_common.triggering_spell` is the one reader ("counter it", the
+  copy handler, Ice Cave's price). Eight of nine such cards acted on the
+  earlier spell. The class is the hand's and the graveyard's identity
+  problem, found on the stack.
 - **A permanent's entry trigger is a stack object** (CR 603.3), on every road
   onto the battlefield: `resolution._entry_trigger_triggers` goes through
   `_enqueue_triggered_ability` like every other trigger. It was resolved
@@ -1268,7 +1568,14 @@ adding entries, not editing dispatch**:
 - `engine/mixins/` — cross-cutting game flow *not* tied to a single phase:
   turn-structure navigation and priority (`phase_steps`), per-turn/pregame
   management (`turn_management`), state-based actions, effects, helpers.
-  Consumes compiled programs; must never parse oracle text.
+  Consumes compiled programs; must never parse oracle text. **A step does
+  not end on an empty stack alone**: `_resolve_priority_window`, which every
+  step uses, makes the state check the players' passes would make before it
+  closes and goes round again if that put something on the stack (CR 500.2,
+  117.5). It used to drain and return, so whatever the last resolution set
+  off was announced a step late — all ten state triggers that reach the
+  stack, on the headless, the web's and the simulator's paths (Bomb Squad's
+  fourth counter detonated after the draw).
 - `engine/mixins/stack/` — the stack (CR 405), one mixin per stage of an
   object's life on it: `casting` (CR 601), `activation` (CR 602), `resolution`
   (CR 603/608), and `choices` — the `pending_choices` queue every
@@ -1383,19 +1690,48 @@ kind plus the three loops that render the prompts a viewer may see, refuse the
 actions a pending prompt blocks, and answer AI-owned prompts with their
 defaults. All three read the registry (see `engine/pending_choices.py`), so a
 new prompt is covered by construction rather than by remembering three edits in
-the routes.
+the routes. **The client does not keep its own copy of that registry either**:
+the state payload carries `waiting_on_prompt` — whether a `pass_priority` from
+this viewer would be refused — and the auto-pass reads it. The client's own
+list of blocking kinds had covered 49 of the registry's 86, so an auto-pass
+fired into 37 kinds of open prompt and was refused, silently, until a human's
+answer armed an AI-owned prompt and the stray pass ended a phase (Tahngarth's
+Glare). AI-owned prompts are answered both before and **after** an action's
+handler, so a prompt a human's answer arms is answered in the same request.
+And **an AI step never advances a human's turn**: `_advance_ai_turn` returns
+unless the active seat is an AI — a human's precombat main phase was being
+walked into combat whenever the AI had acted in its second main phase.
+
+**What a card can do right now is sent, not re-derived by the client**
+(Odyssey). A card in a zone a permission opens carries `ways` — each way it
+may be cast, its price, and whether that is payable now — so a flashback cost
+is on screen before the click, and the client asks "cast how?" when two
+permissions cover one card. A permanent carries `ability_denials`, the
+activation gate's own refusal per ability (a threshold land at six cards),
+and `ability_mana`, each mana ability's symbols and whether a colour is
+chosen: the client asked a filter land which colour it adds until it read
+that instead of the land's colour summary. A payment prompt carries
+`payable`, and **a person's "pay" that cannot be collected is refused with the
+prompt kept, never read as a decline** — a land's tap and a mana ability are
+admitted while a payment is owed (CR 605.3a) and nothing else is. A search
+carries `min_picks` for every search, so "fail to find" is withheld from one
+that must find (CR 701.23d). And **every automatic sender in the client
+re-asks by fetching the state when its in-flight flag clears**: a POST's
+response can be mid-transition at a turn boundary, and a render skipped for a
+flag was never retried, which is how End Turn stalled its own turn in declare
+blockers.
 
 The board UI is **canvas-rendered** (`web/static/battlefield-canvas.js`).
 
 ## Card verification tracker
 
 `CARD_VERIFICATION.md` / `card_verification.json` track which cards have been
-manually validated in-game (654 of the 4,781 catalog cards passing — 409
-checked in-game and 245 auto-passed — with 53 more reported `equivalent`; the
+manually validated in-game (754 of the 5,246 catalog cards passing — 497
+checked in-game and 257 auto-passed — with 59 more reported `equivalent`; the
 rest — almost all of M21, Antiquities, Legends, The Dark, Ice Age, Fallen
 Empires, Homelands, Alliances, Mirage, Visions, Weatherlight, Tempest,
-Stronghold, Exodus, Urza's Saga and every set since, Invasion and Planeshift
-included, all promoted before their in-game pass —
+Stronghold, Exodus, Urza's Saga and every set since, Invasion, Planeshift,
+Apocalypse and Odyssey included, all promoted before their in-game pass —
 have no
 recorded result yet, which SET_PLAYBOOK.md Phase 5 owns and deliberately does
 not gate promotion on; the summary at the top of the markdown is the current
@@ -1439,6 +1775,34 @@ driven as a human seat — and the same session's one click on a land under a
 Blood Moon found that the round's activation-gate merge had made every such
 land unclickable for mana: a client change held by a text-level test, first
 clicked at Phase 5.
+**Apocalypse moved it 409 to 433 — more than the twelve promotions before it
+added between them — and recorded a failure on the day a set shipped.** Phase 5 was one
+agent with a brief: twenty-two of the set's cards were watched working in the
+app and recorded, and two were recorded **failing** — Fire could not be aimed
+at a player (every divided spell with a ceiling of targets was handed the
+several-permanents picker), and Tahngarth's Glare ended its caster's phase
+(an AI-owned prompt armed by a human's answer was not answered in the same
+request). The smoke game beside them found a human's precombat main phase
+being skipped whenever the AI acted in its second main phase. A closing round
+fixed all three, and each failing row was re-recorded only after the card was
+watched working — which is the rule in the next paragraph, kept on the first
+occasion it could have been skipped.
+**Odyssey moved it 433 to 497 — more than twice Apocalypse's move — and its
+Phase 5 is the first to need two closers.** One agent played a whole game
+and four lists and recorded 71 cards, six of them **failing**: Abundance and
+Pursuit of Knowledge (two draw replacements locking a multi-card draw),
+Lodestone Bauble (the wrong player drew), Fork (no new target for a copied
+"any target" spell), and two filter lands asked which colour they add. By
+playing rather than by card it found End Turn stalling its own turn in
+declare blockers and "Pay" on a toll being read as a decline. The defects
+were split by where they live: the agent with the browser took the client,
+a second took the engine with a census per item, and the first then drove
+the second's fixes in the app. Fork was recorded failing a **second** time
+on the way — its one-target copies worked and a copy of a several-target
+spell lost its targets, through an arm of the resolution neither closer
+had read — and passing only after a third fix was watched. Every row was
+re-recorded by the agent that had watched it fail, which is the rule in the
+next paragraph kept six times in a day.
 A card can also be recorded **failing**: that
 is an in-game bug report with a card name on it, and it stays in the tracker
 until the card is fixed **and re-checked in the app** — fixing the code does not

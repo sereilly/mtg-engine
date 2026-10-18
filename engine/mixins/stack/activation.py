@@ -36,7 +36,7 @@ from ...cost_x_definitions import cost_x_is_defined, cost_x_value
 from ...oracle_types import x_spend_colors_from_text
 from ...activation_restrictions import x_zero_restriction_line
 from ...activation_zones import GRAVEYARD, HAND, ability_functions_from
-from ...targeting import (GRAVEYARD_TARGET_KIND, derive_activation_spec, spec_is_a_cost,
+from ...targeting import (GRAVEYARD_TARGET_KIND, ROLE_SEATS, derive_activation_spec, spec_is_a_cost,
                           usable_activated_abilities)
 from ...mana_payment import (answer_color_choices, is_mana_ability,
                              mana_cost_from_symbols)
@@ -386,6 +386,15 @@ class AbilityActivationMixin:
         # cast side's "and another card" announces on. None is the
         # deterministic pick, as for every cost choice here.
         cost_other_hand_indices: list[int] | None = None,
+        # "Exile **two** cards from your graveyard" (Psychatog), "Exile **any
+        # number of** cards from your graveyard" (Painbringer): which cards,
+        # by graveyard slot. A card in a graveyard has no id — two copies of
+        # one card in one pile are one ``CardDefinition`` — so the set is named
+        # by position, all of it at once and before anything leaves the pile.
+        # ``cost_permanent_index`` stays the one-card spelling every earlier
+        # caller sends; where this is given it is the whole answer. For "any
+        # number of", None and ``[]`` both name no cards, which pays the cost.
+        cost_graveyard_indices: list[int] | None = None,
         # "**Choose flying, first strike, trample, or shadow**:" (Phyrexian
         # Splicer). A choice printed in the *cost* clause, so CR 602.2b sends it
         # through CR 601.2b and it is announced with the activation — before
@@ -419,6 +428,7 @@ class AbilityActivationMixin:
             cost_permanent_ids=cost_permanent_ids,
             cost_hand_index=cost_hand_index,
             cost_other_hand_indices=cost_other_hand_indices,
+            cost_graveyard_indices=cost_graveyard_indices,
             chosen_keyword=chosen_keyword,
             source_seat=source_seat,
             source_permanent_index=source_permanent_index,
@@ -656,6 +666,7 @@ class AbilityActivationMixin:
         cost_permanent_ids: list[int] | None = None,
         cost_hand_index: int | None = None,
         cost_other_hand_indices: list[int] | None = None,
+        cost_graveyard_indices: list[int] | None = None,
         # "**Choose flying, first strike, trample, or shadow**:" (Phyrexian
         # Splicer). A choice printed in the *cost* clause, so CR 602.2b sends it
         # through CR 601.2b and it is announced with the activation — before
@@ -1053,6 +1064,29 @@ class AbilityActivationMixin:
         # slid into it — which is nothing at all when it was the last — and the
         # shield went to the player alone with the card reporting success.
         divided_targets = _stamped_divided_targets(self, divided_targets)
+
+        # CR 602.2b under a requirement an *opponent's permanent* prints about
+        # this announcement: "While an opponent is choosing targets as part of
+        # … activating an ability they control, that player must choose at
+        # least one Flagbearer on the battlefield if able." (Standard Bearer.)
+        # The whole announcement — ids, roles and the division together — after
+        # the gate above has said each named target is legal and after the
+        # one-legal-target default has named what it can, and before any cost
+        # is paid. Free on every board with no such permanent on it.
+        required_refusal = self.activation_target_requirement_refusal(
+            controller_index, permanent, ability,
+            target_player_index=target_player_index,
+            target_permanent_index=target_permanent_index,
+            target_permanent_ids=target_permanent_ids,
+            target_role_refs=target_role_refs,
+            divided_targets=divided_targets,
+            x_value=int(x_value or 0),
+        )
+        if required_refusal is not None:
+            self.log.append(required_refusal)
+            return SimulationResult(
+                permanent.card.name, False, "unsupported", required_refusal
+            )
 
         # CR 601.2d itself, asked of an **ability** — the twin of the gate
         # ``queue_from_hand`` makes one file over, and it was missing here
@@ -1540,6 +1574,25 @@ class AbilityActivationMixin:
                 permanent.card.name, False, "unsupported", details
             )
 
+        # "{T}, **Mill a card**: Add {C}." (Millikin.) CR 701.17b: a player
+        # can't pay a cost that includes milling more cards than their library
+        # holds — an empty library does not make the ability free. Counted with
+        # the library exile above, which shares the pile: a card printing both
+        # owes both out of it.
+        if getattr(ability.cost, "mill_cards", 0) and (
+            ability.cost.mill_cards + ability.cost.exile_top_of_library
+            > len(controller.library)
+        ):
+            details = (
+                f"{permanent.card.name}: {controller.name} has "
+                f"{len(controller.library)} card(s) left and its cost mills "
+                f"{ability.cost.mill_cards}"
+            )
+            self.log.append(details)
+            return SimulationResult(
+                permanent.card.name, False, "unsupported", details
+            )
+
         # "Discard your hand" (Subira). Never unpayable — discarding nothing is
         # discarding your hand — so there is no check beside the others above,
         # only the payment below.
@@ -1667,6 +1720,12 @@ class AbilityActivationMixin:
                     self, perm, described,
                     observer=controller_index, source=permanent,
                 )
+                # "Sacrifice two lands **and this artifact**" (Sandstone
+                # Deadfall). The source is its own entry in the printed cost,
+                # so it cannot also be one of the chosen ones: a Deadfall that
+                # had become a land would otherwise pay for itself and one
+                # land, two objects for a cost that prints three.
+                and not (ability.cost.sacrifice_self and perm is permanent)
             ]
             if not candidates:
                 details = (
@@ -1763,6 +1822,19 @@ class AbilityActivationMixin:
                     permanent.card.name, False, "unsupported", details
                 )
             sacrifice_attached_permanent = host
+
+        # What "**the sacrificed creature**" names once the cost is paid
+        # (CR 608.2h). The permanent the payer chose, or — when the cost names
+        # no choice at all — the host an Aura ate: "{R}, Sacrifice enchanted
+        # creature: This Aura deals damage equal to **the sacrificed creature's
+        # power** to each creature." (Bloodfire Infusion.) The host was paid
+        # and never recorded, so the effect read an empty channel and dealt 0
+        # with the card reporting supported. One record, because one phrase
+        # reads it; a card printing both sacrifices would name the chosen one.
+        sacrificed_for_cost = (
+            sacrifice_cost_permanent if sacrifice_cost_permanent is not None
+            else sacrifice_attached_permanent
+        )
 
         # "Tap two untapped Spirits you control" (Shacklegeist). Chosen by the
         # payer through `cost_permanent_ids`, and defaulted deterministically for
@@ -2096,6 +2168,7 @@ class AbilityActivationMixin:
                 cost_hand_index
                 if ability.cost.exile_zone == "hand" and isinstance(cost_hand_index, int)
                 else cost_permanent_index,
+                named_slots=cost_graveyard_indices,
             )
             if named_slot_refusal is not None:
                 details = f"{permanent.card.name}: {named_slot_refusal}"
@@ -2123,6 +2196,7 @@ class AbilityActivationMixin:
                 if ability.cost.exile_zone == "hand" and isinstance(cost_hand_index, int)
                 else cost_permanent_index,
                 cost_permanent_ids=cost_permanent_ids,
+                cost_graveyard_indices=cost_graveyard_indices,
             )
             if exile_cost_choice is None:
                 details = (
@@ -2365,7 +2439,9 @@ class AbilityActivationMixin:
             # asks (Necropolis' "the exiled card's mana value"), kept as the
             # first of them, so a counted cost adds a record rather than moving
             # one.
-            exiled_for_cost = exiled_set_for_cost[0]
+            # Absent when "any number of" named none: the cost was paid and ate
+            # nothing, and "the exiled card" then names nothing.
+            exiled_for_cost = exiled_set_for_cost[0] if exiled_set_for_cost else None
 
         # The counter-removal cost, charged here rather than where it was
         # counted: every gate between the two can still refuse the activation,
@@ -2789,6 +2865,26 @@ class AbilityActivationMixin:
                 f"{controller.name} sacrificed {permanent.card.name} to activate its ability"
             )
 
+        # "{T}, **Mill a card**: …" (Millikin, Charmed Pendant). Last of every
+        # cost, which is CR 601.2h's order: a cost that moves a card from the
+        # library to a public zone is paid after the ones that do not. Through
+        # the graveyard seam with its source zone named, so a replacement that
+        # diverts the card (CR 614) and a trigger watching a card arrive from a
+        # library both see a mill — and only a card that *arrived* is recorded
+        # as milled (CR 701.17c finds a milled card in the public zone it
+        # moved to).
+        milled_for_cost: list = []
+        for _ in range(getattr(ability.cost, "mill_cards", 0)):
+            milled = controller.library.pop(0)
+            self.put_card_into_graveyard(controller, milled, from_zone="library")
+            milled_for_cost.append(milled)
+        if milled_for_cost:
+            self.log.append(
+                f"{controller.name} milled "
+                + ", ".join(card.name for card in milled_for_cost)
+                + f" to activate {permanent.card.name}"
+            )
+
         instruction = ability.instruction
         if (
             instruction.kind in {"sacrifice_self_for_mana", "add_mana_from_text"}
@@ -2806,7 +2902,13 @@ class AbilityActivationMixin:
                 or instruction.payload.get("combination")
             )
         ):
-            selected_color = self._normalize_mana_color(mana_color)
+            # Through ``_chosen_mana_color``, not the raising normaliser: the
+            # wire's ``mana_color`` is a *symbol* and may be {C} — what every
+            # land pays under Ritual of Subdual, and so what the AI's plan and
+            # the client's colour fan send. "{C}" is no answer to "{B} or {R}"
+            # (CR 105.1), so it names nothing and the handler's own default
+            # stands; it used to raise ``ValueError`` out of the activation.
+            selected_color = self._chosen_mana_color(mana_color)
             if selected_color is not None:
                 instruction = OracleInstruction(
                     instruction.kind,
@@ -2886,10 +2988,11 @@ class AbilityActivationMixin:
                     choices={
                         "exiled_for_cost": exiled_for_cost,
                         "exiled_set_for_cost": list(exiled_set_for_cost),
+                        "milled_for_cost": list(milled_for_cost),
                         "counters_removed_for_cost": counters_removed_for_cost,
                         "mana_spent_for_cost": mana_spent_for_cost,
                         "sacrificed_set_for_cost": list(sacrifice_cost_set),
-                        "sacrificed_for_cost": sacrifice_cost_permanent,
+                        "sacrificed_for_cost": sacrificed_for_cost,
                         "untapped_for_cost": untap_cost_permanent,
                         "tapped_for_cost": (
                             tap_cost_permanents[0] if tap_cost_permanents else None
@@ -2919,7 +3022,32 @@ class AbilityActivationMixin:
                     },
                 ),
             )
-            supported, details = state_machine.run(instruction)
+            # **CR 106.12: a land's mana ability with {T} in its cost is the
+            # land being tapped for mana**, whatever else the cost asks for.
+            # "{1}, {T}: Add {U}{B}" (Darkwater Catacombs), "{T}, Sacrifice
+            # this land: Add {B}{B}" (Ebon Stronghold), "{T}, Remove a
+            # depletion counter" (Peat Bog) are refused by the tap seam, which
+            # runs only an ability whose whole cost is the tap — so they came
+            # down here, and here nothing was announced: no Manabarbs damage,
+            # no Mana Flare mana, no Wild Growth, no Contamination, and
+            # Desolation never learned the seat had tapped a land for mana.
+            # The same event the seam announces, around the same production
+            # (``Game._land_tapped_for_mana``). A creature's mana ability is
+            # not a land's, and a land's mana ability without {T} (a
+            # sacrifice-only one) is not a tap.
+            if ability.cost.requires_tap and permanent.has_type("land"):
+                outcome: list = []
+
+                def produce():
+                    outcome.append(state_machine.run(instruction))
+                    return self._chosen_mana_color(mana_color)
+
+                self._land_tapped_for_mana(
+                    controller_index, permanent, mana_color, produce,
+                )
+                supported, details = outcome[0]
+            else:
+                supported, details = state_machine.run(instruction)
             return SimulationResult(permanent.card.name, supported, ability.effect_kind, details)
 
         # A mixed-zone roles announcement becomes the three positional lists a
@@ -2930,10 +3058,14 @@ class AbilityActivationMixin:
         # line may have put a card into the very pile the second slot counts
         # into.
         graveyard_stamps = None
+        # Every seat the announcement named, where it named more than one
+        # (``targeting.ROLE_SEATS``); None for every roles ability the pool
+        # holds today, each of which names at most one.
+        role_seats = None
         if target_role_refs:
             (
                 target_permanent_ids, target_permanent_index, graveyard_stamps,
-                role_seat,
+                role_seat, role_seats,
             ) = self._role_announcement_stamps(target_role_refs)
             # A roles announcement's ids are settled *here* (the cost above may
             # have moved the graveyard slot the second role counts into), so its
@@ -2989,6 +3121,9 @@ class AbilityActivationMixin:
                     # it (CR 608.2h).
                     "exiled_for_cost": exiled_for_cost,
                     "exiled_set_for_cost": list(exiled_set_for_cost),
+                    # …and what a **mill** cost put into the graveyard
+                    # (Charmed Pendant's "the milled card's mana cost").
+                    "milled_for_cost": list(milled_for_cost),
                     # How many counters the cost's "remove any number of …"
                     # actually took (the Mana Batteries), on the same
                     # last-known-information channel as the sacrifice beside
@@ -3005,7 +3140,7 @@ class AbilityActivationMixin:
                     # (Sword of the Ages), whose total power the effect reads
                     # back once they are cards in a graveyard.
                     "sacrificed_set_for_cost": list(sacrifice_cost_set),
-                    "sacrificed_for_cost": sacrifice_cost_permanent,
+                    "sacrificed_for_cost": sacrificed_for_cost,
                     # …and the land an **untap** cost paid with (Benthic
                     # Explorers), whose mana types the effect reads back. It is
                     # still on the battlefield, unlike every other record on
@@ -3057,6 +3192,10 @@ class AbilityActivationMixin:
                     # The word a text change replaces, beside the one it
                     # replaces it with. See the parameter's note above.
                     "old_color": self._normalize_mana_color(old_color),
+                    # A seat per player role, where the announcement named two
+                    # or more — beside the scalar above, which then holds the
+                    # first. See ``targeting.ROLE_SEATS``.
+                    ROLE_SEATS: role_seats,
                 },
             )
         )
@@ -3116,6 +3255,7 @@ class AbilityActivationMixin:
     def _choose_exile_cost(
         self, cost, controller, controller_index: int, permanent,
         cost_permanent_index, cost_permanent_ids=None,
+        cost_graveyard_indices=None,
     ) -> "tuple | None":
         """What an "Exile <noun phrase>" activation cost will eat, chosen and
         **not yet paid** — or None when nothing in the named zone could pay,
@@ -3145,7 +3285,15 @@ class AbilityActivationMixin:
         file does for a non-interactive seat.
         """
         described = cost.exile_filter or {}
-        wanted = max(1, int(getattr(cost, "exile_count", 1) or 1))
+        # "Exile **any number of** cards from your graveyard" (Painbringer):
+        # the payer's own count, so nothing is owed beyond what was named and
+        # nothing is defaulted — choosing cards for a seat that named none
+        # would exile a graveyard to pay a cost of zero (the reading the
+        # sacrifice's "any number of" gets, for the same reason).
+        any_number = getattr(cost, "exile_count", 1) == "any"
+        wanted = 0 if any_number else max(
+            1, int(getattr(cost, "exile_count", 1) or 1)
+        )
         if cost.exile_zone == "hand":
             # "Exile a card from your hand" (Cadaverous Bloom). The payer's own
             # hand, always: a hand is hidden (CR 400.2), so a cost naming
@@ -3208,15 +3356,19 @@ class AbilityActivationMixin:
                 ]
                 if len(slots) < wanted:
                     continue
-                named = (
-                    [cost_permanent_index]
-                    if isinstance(cost_permanent_index, int)
-                    and cost_permanent_index in slots
-                    else []
-                )
+                # The whole set by slot where the payer named one
+                # (``cost_graveyard_indices``), else the one-card spelling.
+                named = [
+                    slot for slot in (
+                        cost_graveyard_indices
+                        if cost_graveyard_indices is not None
+                        else [cost_permanent_index]
+                    )
+                    if isinstance(slot, int) and slot in slots
+                ]
                 chosen_slots: list[int] = []
-                for slot in [*named, *slots]:
-                    if len(chosen_slots) >= wanted:
+                for slot in named if any_number else [*named, *slots]:
+                    if not any_number and len(chosen_slots) >= wanted:
                         break
                     if slot not in chosen_slots:
                         chosen_slots.append(slot)
@@ -3278,7 +3430,9 @@ class AbilityActivationMixin:
             )
         ]
 
-    def _named_exile_slot_refusal(self, cost, controller, named_slot) -> str | None:
+    def _named_exile_slot_refusal(
+        self, cost, controller, named_slot, *, named_slots=None
+    ) -> str | None:
         """Why the hand or graveyard slot the payer **named** for an exile cost
         cannot pay it, or None (CR 601.2h through CR 602.2b).
 
@@ -3290,7 +3444,13 @@ class AbilityActivationMixin:
         counts into, so there the chooser's standing order of piles answers,
         as it did.
         """
-        if not isinstance(named_slot, int) or isinstance(named_slot, bool):
+        # The graveyard's whole-set channel where the payer used it, else the
+        # one slot every earlier caller names.
+        if named_slots is not None and cost.exile_zone == "graveyard":
+            slots = list(named_slots)
+        elif isinstance(named_slot, int) and not isinstance(named_slot, bool):
+            slots = [named_slot]
+        else:
             return None
         if cost.exile_zone == "hand":
             pile, where = controller.hand, "hand position"
@@ -3302,11 +3462,23 @@ class AbilityActivationMixin:
         else:
             return None
         described = cost.exile_filter or {}
-        if 0 <= named_slot < len(pile) and _card_matches_filter(
-            pile[named_slot], described
-        ):
-            return None
-        return f"no card at {where} {named_slot} that can be exiled for its cost"
+        for slot in slots:
+            if not (
+                isinstance(slot, int) and not isinstance(slot, bool)
+                and 0 <= slot < len(pile)
+                and _card_matches_filter(pile[slot], described)
+            ):
+                return f"no card at {where} {slot} that can be exiled for its cost"
+        if len(set(slots)) != len(slots):
+            # One slot named twice is one card: it does not pay for two.
+            return f"{where} {slots} names one card more than once for its cost"
+        wanted = getattr(cost, "exile_count", 1)
+        if isinstance(wanted, int) and len(slots) > max(1, wanted):
+            return (
+                f"{len(slots)} cards named for a cost that exiles "
+                f"{max(1, wanted)}"
+            )
+        return None
 
     def _named_cost_refusal(
         self, permanent, controller, candidates, cost_permanent_ids,
@@ -3538,8 +3710,36 @@ class AbilityActivationMixin:
         # ability is on the stack — so an effect that looks at the hand during
         # resolution does not see the card that paid for it.
         del controller.hand[index]
-        self._discard_card(controller, card)
-        self.log.append(f"{controller.name} discarded {card.name} to activate its ability")
+        if ability.cost.exile_self and not ability.cost.discard_self:
+            # "**Exile this card from your hand**: Add {G}." (Elvish Spirit
+            # Guide.) The other cost that names a hand, and not a discard: the
+            # card goes to exile, so nothing watching a discard sees one and
+            # nothing can bring it back from a graveyard.
+            controller.exile.append(card)
+            self.log.append(
+                f"{controller.name} exiled {card.name} from their hand to "
+                "activate its ability"
+            )
+        else:
+            self._discard_card(controller, card)
+            self.log.append(f"{controller.name} discarded {card.name} to activate its ability")
+
+        if is_mana_ability(ability):
+            # CR 605.3b: an activated mana ability does not use the stack,
+            # wherever its source is — the battlefield path's own rule, asked
+            # through the same predicate. The Guide's {G} arrives now, which
+            # is what lets it pay for the spell being cast.
+            supported, details = OracleStateMachine(
+                self,
+                OracleExecutionContext(
+                    # A mana ability targets nothing (CR 605.1a), so the
+                    # context's player slot names nobody; it is the activator
+                    # rather than None so a handler reading it meets a seat.
+                    caster=controller, target=controller, card=card,
+                    source_permanent=None,
+                ),
+            ).run(ability.instruction)
+            return SimulationResult(card.name, supported, ability.effect_kind, details)
 
         self._stack_push(
             # CR 602.2b: an activated ability's targets were chosen when it
@@ -3565,7 +3765,8 @@ class AbilityActivationMixin:
         return SimulationResult(card.name, True, ability.effect_kind, "queued")
 
     def _role_announcement_stamps(self, target_role_refs):
-        """One mixed-zone roles announcement as ``(ids, indices, stamps, seat)``.
+        """One mixed-zone roles announcement as ``(ids, indices, stamps, seat,
+        seats)``.
 
         Three lists, all positional in role order, because that is what a
         ``StackItem`` already carries: an id per battlefield slot
@@ -3584,14 +3785,26 @@ class AbilityActivationMixin:
         announcement names under ``target_player_index`` since the first
         announcement to name one, and the resolution reads it back as
         ``context.target``. Returned as a fourth value rather than squeezed into
-        a list, because it is not positional — an announcement with two player
-        roles would read one seat twice, which ``resolve_role_player`` refuses
-        on the other side of the same fact.
+        a list, because it is the field every reader of "the player this
+        targets" already reads.
+
+        **Two player slots answer with a fifth value as well**: every seat
+        named, positional in role order with ``None`` in the other slots
+        (``targeting.ROLE_SEATS``) — the list the item's ``choices`` carries so
+        that slot 1's player is not read off slot 0's scalar. None where the
+        announcement names at most one seat, which is every roles ability and
+        spell the pool held before "target player … another target player"
+        (Cultural Exchange) and leaves each of them exactly as it was. The
+        scalar is then the **first** seat named. Both announcement paths call
+        this — an activation always has, and a cast handed ``target_role_refs``
+        does (``casting._cast_onto_stack``) — so a seat per role has one
+        spelling going in and one coming out.
         """
         ids: list = []
         indices: list = []
         stamps: list = []
         seat: int | None = None
+        seats: list = []
         for ref in target_role_refs:
             ref = ref if isinstance(ref, dict) else {}
             permanent_id = ref.get("permanent_id")
@@ -3602,10 +3815,23 @@ class AbilityActivationMixin:
                     self.battlefield_index_of(found[1]) if found else None
                 )
                 stamps.append(None)
+                seats.append(None)
                 continue
             named_seat = ref.get("seat")
-            if isinstance(named_seat, int):
-                seat = named_seat
+            if isinstance(named_seat, int) and not isinstance(named_seat, bool):
+                if seat is None:
+                    seat = named_seat
+                ids.append(None)
+                indices.append(None)
+                stamps.append(None)
+                seats.append(named_seat)
+                continue
+            seats.append(None)
+            if ref.get("stack"):
+                # A **stack** slot answers with none of the three either: the
+                # spell it names rides ``target_stack_item``, the scalar an
+                # activation has carried since Deathgrip, and every reader
+                # fills the slot from there (``legality.named_role_objects``).
                 ids.append(None)
                 indices.append(None)
                 stamps.append(None)
@@ -3616,7 +3842,8 @@ class AbilityActivationMixin:
             stamps.append(
                 self.graveyard_target_at(ref.get("graveyard_seat"), index)
             )
-        return ids, indices, stamps, seat
+        several = len([named for named in seats if named is not None]) > 1
+        return ids, indices, stamps, seat, (seats if several else None)
 
     def activate_from_graveyard(
         self,
@@ -3880,6 +4107,7 @@ def _graveyard_cost_refusal(cost) -> str | None:
         ("sacrifice_attached", "a sacrifice-the-attached-permanent cost"),
         ("mana_from_attached", "a cost read off an attached permanent"),
         ("exile_top_of_library", "a library-exile cost"),
+        ("mill_cards", "a mill cost"),
         ("hand_to_library_top", "a put-a-card-on-your-library cost"),
         ("pay_life", "a life cost"),
         ("loyalty", "a loyalty cost"),

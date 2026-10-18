@@ -9,11 +9,14 @@ a seat fits neither: a hole in the id list cannot say whether the slot is a
 player or a permanent that has left.
 
 So ``TargetRoleRef`` grew a third alternative and ``_queue_spell_from_request``
-translates it, at the boundary, into the two channels a cast already has — the
-id list with ``None`` where the slot is not a permanent, and ``target_seat``,
-which is where a stack item has carried "the player this spell targets" all
-along. This asserts the whole path: the picker the browser is handed, the
-announcement it sends back, and the board afterwards.
+forwards it. It used to *translate* it, at the boundary, into the two channels
+a cast had — the id list with ``None`` where the slot is not a permanent, and
+``target_seat`` — and the engine makes that translation now
+(``_role_announcement_stamps``, the one an activation goes through), because
+one seat field could not say two players (``test_two_player_role_cast_ui_api``).
+For this card the channels come out exactly as they did. This asserts the whole
+path: the picker the browser is handed, the announcement it sends back, and the
+board afterwards.
 """
 from __future__ import annotations
 

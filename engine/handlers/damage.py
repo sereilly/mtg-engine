@@ -6,8 +6,9 @@ from ..damage_events import (DAMAGE_DENIES_REGENERATION,
                              DAMAGE_EXILES_INSTEAD)
 from ..damage_redirects import DamageRedirect, add_redirect
 from ..divided_damage import (
-    DIVIDED_TARGETS, EVENLY, divide, divided_entry,
+    DIVIDED_TARGETS, EVENLY, announced_no_targets, divide, divided_entry,
 )
+from ..destruction_events import mark_delayed_destruction
 from ..dexterity import flip_lands_on
 from ..models import Permanent
 from ..named_counters import counters_on
@@ -24,6 +25,7 @@ from ._common import (divided_target_permanent, recorded_permanent_ids,
 )
 from ..oracle_types import single_chosen_id
 from ..oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
+                           EVENT_SUBJECT_LAST_KNOWN,
                            LAST_DAMAGER_CONTROLLER,
                            X_FROM_COUNT_PER_RECIPIENT)
 from .prevention import chosen_shield_source
@@ -123,6 +125,33 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         # nothing else once ``source_permanent`` is known non-None, which the
         # early return above guarantees.
         card = host.card
+    elif instruction.payload.get("biter") == "event_subject":
+        # ``biter: "event_subject"`` — "Whenever a creature has four or more
+        # fuse counters on it, … destroy it. **That creature** deals 4 damage
+        # to its controller." (Bomb Squad.) The dealer is the object the
+        # trigger's own event was about. CR 608.2h: "If an ability states that
+        # an object does something, it's the object as it exists—or as it most
+        # recently existed—that does it, not the ability" — so the permanent
+        # itself while the id still resolves, and otherwise the object the fire
+        # site froze beside the id, which is that creature as it last existed.
+        # That second read is the card's ruling: with two Bomb Squads the
+        # second trigger still deals 4 after the first has destroyed the
+        # creature.
+        #
+        # The damage is the creature's own (CR 120.7): its colours for a
+        # protection or a Circle, its lifelink for its controller, and never
+        # Bomb Squad's. With neither read there is nothing to deal it, for the
+        # reason an Aura with no host deals none.
+        tctx = context.trigger_context or {}
+        dealer = game.permanent_by_id(tctx.get("event_subject_permanent_id"))
+        if dealer is None:
+            last_known = tctx.get(EVENT_SUBJECT_LAST_KNOWN)
+            dealer = last_known if isinstance(last_known, Permanent) else None
+        if dealer is None:
+            game.log.append(f"{card.name}: nothing to deal the damage")
+            return True, "resolved"
+        source_permanent = dealer
+        card = dealer.effective_card
     elif (dealer_record := instruction.payload.get("biter")) is not None:
         # ``biter: "destroyed_target"`` — "Destroy target artifact. **That
         # artifact** deals damage equal to its mana value to this creature."
@@ -149,7 +178,7 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
     # than sequenced — the end step's existing delayed-destruction sweep does
     # the rest (phases/end_step.py:_delayed_eot_removal).
     if instruction.payload.get("destroys_source_at_end_step") and own_permanent is not None:
-        own_permanent.metadata["destroy_at_next_end_step"] = True
+        mark_delayed_destruction(game, own_permanent, "destroy_at_next_end_step")
 
     # "…it deals **that much** damage" (Brash Taunter): the number is the firing
     # event's, frozen into the trigger's context by the fire site. An absent
@@ -532,6 +561,41 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             then=_report_subject, asks=True,
         )
         return True, "resolved"
+    if instruction.payload.get("recipient") == "biter_controller":
+        # "That creature deals 4 damage to **its controller**." (Bomb Squad.)
+        # The controller of the object dealing the damage — the dealer the
+        # ``biter`` key moved this handler onto, above — read as the damage is
+        # dealt: whoever controls it now, or whoever controlled it as it last
+        # existed on the battlefield (CR 608.2h). Not a seat frozen when the
+        # ability triggered: a creature stolen in response burns the thief,
+        # and one destroyed a sentence earlier burns whoever lost it.
+        #
+        # ``bound_bites_player`` has read the same key off a recorded biter
+        # since Delirium; this is that reading for a dealer an *event* named.
+        # No dealer was named, or no seat can be found for it, and nobody is
+        # damaged — never the ability's own controller by default. (The dealer
+        # may *be* the ability's source: Bomb Squad is a creature and can
+        # light its own fuse.)
+        seat = (
+            game.controller_or_last_known(source_permanent)
+            if source_permanent is not None
+            and instruction.payload.get("biter") is not None else None
+        )
+        if seat is None:
+            game.log.append(f"{card.name}: no controller to deal the damage to")
+            return True, "resolved"
+        burned = game.players[seat]
+
+        def _report_burned(dealt: int) -> None:
+            context.results["damage_dealt"] = dealt
+            if dealt:
+                game.log.append(f"{card.name} dealt {dealt} damage to {burned.name}")
+
+        game._deal_damage_to_player(
+            burned, damage, source=source_permanent,
+            then=_report_burned, asks=True,
+        )
+        return True, "resolved"
     if instruction.payload.get("recipient") == "chosen_player":
         # "Choose a player who cast one or more sorcery spells this turn.
         # Backdraft deals damage to **that player** …" The seat an earlier step
@@ -721,6 +785,15 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
     # and "divided evenly, rounded down" otherwise. It was `damage // n` for
     # both, so four cards printing the second sentence were played as the first.
     divided = context.choices.get(DIVIDED_TARGETS)
+    if announced_no_targets(divided, instruction.payload.get("targets")):
+        # "…to each of **up to** three targets", cast naming nobody (CR 115.6:
+        # such a spell "is targeted only if one or more targets have been
+        # chosen for it"). The cast path wrote the empty list onto the
+        # announcement; with nothing on it nothing is dealt — and in
+        # particular nothing falls through to the single-target path below,
+        # whose default is the opposing player's face.
+        game.log.append(f"{card.name} was cast with no targets")
+        return True, "resolved"
     if divided:
         # Each entry is turned into the permanent it *named* once, through the
         # one resolver, and carried as the object from there. It was resolved by
@@ -2752,6 +2825,100 @@ def redirect_next_damage_from_source_until_eot(
     return True, "resolved"
 
 
+@effect_handler("redirect_next_damage_between_targets_until_eot")
+def redirect_next_damage_between_targets_until_eot(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """Captain's Maneuver: "The next X damage that would be dealt to target
+    creature, planeswalker, or player this turn is dealt to another target
+    creature, planeswalker, or player instead."
+
+    The point pool of the two handlers above with **both** ends announced. The
+    record hangs off the first target, where one always hangs
+    (``engine/damage_redirects.py``), and points at the second; the spell is
+    neither end, and has left the stack long before any damage is dealt.
+
+    The two targets arrive on ``divided_targets`` — the one channel that
+    carries a list of targets spanning both battlefields and the players' faces
+    — in the order the sentence names them, each resolved by the id the cast
+    path stamped (``divided_target_permanent``), never by slot. Read
+    **positionally and never compacted**: entry 1 sliding into entry 0's place
+    would arm the redirect on the creature that was meant to take the damage.
+
+    CR 608.2b at resolution, one end at a time. With the protected end gone
+    there is nothing to watch, and with the taker gone there is nowhere to send
+    it — CR 614.9's "the effect does nothing" arrived early, which the card's
+    own rulings state for both ends. A taker that leaves *after* this resolves
+    is CR 614.9 proper, and ``applicable_redirect`` answers it when the damage
+    would be dealt.
+
+    X is the number announced as the spell was cast (CR 601.2b); an X of 0
+    arms nothing rather than a record that can move nothing and would sit on
+    its recipient until the cleanup step.
+    """
+    card_name = getattr(context.card, "name", "")
+    entries = list((context.choices or {}).get(DIVIDED_TARGETS) or ())
+    if len(entries) == 1:
+        # CR 608.2b: an end that became illegal while the spell waited is
+        # blanked out of the announcement before this runs
+        # (``legality.blank_illegal_resolution_targets`` drops a divided
+        # entry), so one entry here is two that were announced and one that
+        # is gone - the case the check below was written for, said the way it
+        # says it.
+        game.log.append(f"{card_name}: one of its targets is gone, nothing is redirected")
+        return True, "resolved"
+    if len(entries) != 2:
+        game.log.append(f"{card_name}: its two targets were not announced")
+        return True, "resolved"
+    ends: list = []
+    for entry in entries:
+        seat, index, _share = divided_entry(entry)
+        if not (isinstance(seat, int) and 0 <= seat < len(game.players)):
+            ends.append(None)
+        elif index is None:
+            player = game.players[seat]
+            ends.append(None if getattr(player, "lost", False) else player)
+        else:
+            permanent = divided_target_permanent(game, entry)
+            ends.append(
+                permanent
+                if permanent is not None and game.is_on_battlefield(permanent)
+                # CR 115.4: "any target" is a creature, a planeswalker or a
+                # battle. One that stopped being any of them while the spell
+                # waited is an illegal target (CR 608.2b).
+                and (
+                    permanent.is_creature
+                    or permanent.has_type("planeswalker")
+                    or permanent.has_type("battle")
+                )
+                else None
+            )
+    protected, taker = ends
+    if protected is None or taker is None or protected is taker:
+        game.log.append(f"{card_name}: one of its targets is gone, nothing is redirected")
+        return True, "resolved"
+    amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+    if amount <= 0:
+        game.log.append(f"{card_name}: no damage to move")
+        return True, "resolved"
+    add_redirect(
+        protected,
+        DamageRedirect(
+            new_recipient=taker,
+            amount=amount,
+            uses=None,
+            source_name=card_name or None,
+        ),
+    )
+    protected_name = getattr(protected, "name", None) or protected.card.name
+    taker_name = getattr(taker, "name", None) or taker.card.name
+    game.log.append(
+        f"{card_name}: the next {amount} damage that would be dealt to "
+        f"{protected_name} this turn is dealt to {taker_name} instead"
+    )
+    return True, "resolved"
+
+
 @effect_handler("redirect_matching_damage_to_you_until_eot")
 def redirect_matching_damage_to_you_until_eot(
     game: Game, instruction: OracleInstruction, context: OracleExecutionContext
@@ -2808,6 +2975,34 @@ def redirect_source_class_damage_until_eot(
     caster = context.caster
     guard = context.source_permanent
     card_name = getattr(context.card, "name", None)
+    spell_types = tuple(instruction.payload.get("spell_types") or ())
+    if spell_types:
+        # "The next time an **instant or sorcery spell** would deal damage to
+        # you this turn, that spell deals that damage to its controller
+        # instead." (Aegis of Honor.) The same record with the class named as
+        # a kind of spell: ``spell_sources`` is what Harsh Judgment's static
+        # derives, with no colour here, and the taker is read off the spell
+        # when the damage would be dealt (``to_source_controller``) — which is
+        # why this arm needs no permanent to take anything, and why an Aegis
+        # that has left the battlefield by then changes nothing (CR 113.7a:
+        # once activated, the ability exists independently of its source).
+        add_redirect(
+            caster,
+            DamageRedirect(
+                new_recipient=None,
+                spell_sources=(spell_types, None),
+                to_source_controller=True,
+                uses=instruction.payload.get("uses"),
+                source_name=card_name,
+            ),
+        )
+        game.log.append(
+            f"{card_name}: the next time an "
+            + " or ".join(spell_types)
+            + f" spell would deal damage to {caster.name} this turn, it deals "
+            "that damage to its controller instead"
+        )
+        return True, "resolved"
     if guard is None:
         game.log.append(f"{card_name}: nothing is there to take the damage")
         return True, "resolved"

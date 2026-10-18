@@ -146,9 +146,17 @@ _PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
     "named", "their_choice", "mana_value", "power", "toughness",
     "colored", "with_plus1_counter", "with_named_counter",
     "with_nonmana_activated_ability",
+    # "a **multicolored** creature card" (Dragon Arch). ``to_payload`` emits it
+    # whenever it is set and both matchers test it — ``permanent_matches_filter``
+    # off the computed colours, ``_card_matches_filter`` off the printed ones —
+    # so it is honoured in exactly the sense ``colors`` above is.
+    "multicolored",
     "supertypes", "excluded_supertypes",
     "not_enchanted",
     "enchanted_only",
+    # "…that's attached to a permanent" (Aura Graft): emitted whenever set
+    # and tested by ``permanent_matches_filter``.
+    "attached_to_permanent",
     # "…tapped this turn to pay for its abilities" (Vodalian War Machine).
     # ``to_payload`` emits it unconditionally and ``subject_matches`` tests it,
     # so it is honoured in the same sense every state word here is — what it
@@ -185,6 +193,10 @@ _PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
     # emits it unconditionally and ``subject_matches`` tests it, exactly as it
     # does ``blocked_by_source`` — so it is honoured rather than relative.
     "banded_with_source",
+    # "target creature **blocking or blocked by** Cromat". ``to_payload`` emits
+    # it and ``subject_matches`` tests it off the combat maps, on
+    # ``banded_with_source``'s footing exactly.
+    "in_combat_with_source",
     # "target permanent you both **own** and control" (Obelisk of Undoing) /
     # "all Auras **you own** attached to permanents you control" (Remove
     # Enchantments). ``to_payload`` reads it unconditionally. It used to emit
@@ -270,12 +282,16 @@ CONDITIONALLY_EMITTED_FIELDS: dict[str, str] = {
     "power": "power",
     "toughness": "toughness",
     "supertypes": "supertypes",
-    # The two source-relative narrowings ``to_payload`` *never* emits
-    # ("blocking or blocked by this creature", "that dealt damage to it this
-    # turn"). Listing them here is what makes ``_filter_payload`` refuse the
-    # phrase by name everywhere except the one lowering written for it, which
-    # strips the field and carries the relation as its own payload key.
-    "in_combat_with_source": "in_combat_with_source",
+    # The source-relative narrowing ``to_payload`` *never* emits ("that dealt
+    # damage to it this turn"). Listing it here is what makes
+    # ``_filter_payload`` refuse the phrase by name everywhere except the one
+    # lowering written for it, which strips the field and carries the relation
+    # as its own payload key.
+    #
+    # "Blocking or blocked by this creature" sat beside it until Cromat
+    # printed the relation on a *destroy target*: it is emitted now, on
+    # ``blocking_source``'s footing two paragraphs down and for that
+    # paragraph's reason — ``subject_matches`` takes the source.
     "dealt_damage_to_source_this_turn": "dealt_damage_to_source_this_turn",
     # "blocking this creature" is **not** here any more. It was, on the
     # reading that no read of the blocker alone can answer the relation — which
@@ -313,6 +329,16 @@ CONDITIONALLY_EMITTED_FIELDS: dict[str, str] = {
     # payload from a filter refuses it by name, and the one written for it
     # carries the count as its own key.
     "target_count": "target_count",
+    # "target **spell or permanent**" (the Lace cycle, Illusion, Blind Seer).
+    # A second *zone*, which no filter payload can say — every key here is a
+    # question asked of one permanent — so it has no ``to_payload`` form and
+    # every lowering that builds a payload from the filter refuses the phrase
+    # by name. The ones written for it name the field in
+    # ``carried_separately`` and say what they do with the spell half: the
+    # chosen-colour recolour describes the union to the picker
+    # (``lowering/types``), and the text change carries the permanent half
+    # alone and says so (``lowering/characteristics``).
+    "also_spell": "also_spell",
     # "another permanent **of that type**" (Enchantment Alteration). Which type
     # "that" is depends on the object the sentence's *other* clause named, so
     # no read of the candidate alone can answer it and there is no payload form.
@@ -504,6 +530,58 @@ def _restrictions_beyond(
     )
 
 
+#: What one printed description of a per-find pick may say — the
+#: ``ObjectFilter`` fields ``search_filters.search_matches`` can test off a
+#: card's face (CR 613.1 leaves a card in a library nothing else).
+_SEARCH_SLOT_FILTER_FIELDS = frozenset({
+    "card_types", "is_card", "supertypes", "subtypes", "excluded_types", "colors",
+})
+
+
+def search_slot(filt: ast.ObjectFilter, node=None) -> dict[str, object]:
+    """One printed description of a search that finds **one card per
+    description**, in ``search_matches``' own vocabulary.
+
+    "a land card **of each basic land type**" (Gaea's Balance) is five of
+    these and "a creature card, a land card, and a noncreature, nonland card"
+    (Guided Passage) three. Each becomes a dict that predicate reads exactly as
+    it reads a whole search's data — ``card_type`` / ``exclude_types`` /
+    ``restrictions`` — so the picker's union, the resolver's assignment and the
+    AI's pick are one reading of the phrase.
+
+    A floor rather than a line of either lowering, because the two cards sit in
+    different families (a search and a reveal) and a family may not import
+    another. A field outside the set above refuses by name: a description that
+    dropped a narrowing is a slot any card can fill.
+    """
+    if not filt.is_card:
+        raise LoweringError("a library holds cards, not permanents", node=node)
+    leftover = _restrictions_beyond(filt, _SEARCH_SLOT_FILTER_FIELDS)
+    if leftover:
+        raise LoweringError(
+            "the search picker cannot test this restriction: " + ", ".join(leftover),
+            node=node,
+        )
+    slot: dict[str, object] = {}
+    if filt.card_types:
+        slot["card_type"] = (
+            tuple(filt.card_types) if len(filt.card_types) > 1
+            else filt.card_types[0]
+        )
+    if filt.excluded_types:
+        slot["exclude_types"] = list(filt.excluded_types)
+    restrictions: dict[str, object] = {}
+    if filt.supertypes:
+        restrictions["supertypes"] = list(filt.supertypes)
+    if filt.subtypes:
+        restrictions["subtypes"] = list(filt.subtypes)
+    if filt.colors:
+        restrictions["any_colors"] = list(filt.colors)
+    if restrictions:
+        slot["restrictions"] = restrictions
+    return slot
+
+
 def chargeable_card_filter(filt: ast.ObjectFilter) -> dict | None:
     """The payload a printed **card** noun phrase means, or None to refuse it.
 
@@ -540,6 +618,54 @@ def chargeable_card_filter(filt: ast.ObjectFilter) -> dict | None:
     if dropped_narrowings(filt, payload):
         return None
     return card_only_filter(payload)
+
+
+#: The payload key for "…with the same name as another card **in their hand**"
+#: — CR 201.2a asked of a pile rather than of one card, so it is carried beside
+#: the filter and answered by the handler that holds the pile.
+SHARES_NAME_IN_HAND = "shares_name_in_hand"
+
+
+def hand_name_relation(
+    filt: ast.ObjectFilter, node=None
+) -> tuple[ast.ObjectFilter, dict[str, object]]:
+    """*filt* with "the same name as another card in their hand" split off, and
+    the key that carries it; ``(filt, {})`` when the phrase prints none.
+
+    "That player discards all nonland cards **with the same name as another
+    card in their hand**." (Hint of Insanity.) A relation between the cards of
+    one pile, which no card matcher can answer: ``_card_matches_filter`` is
+    shown one card, and two copies of a card in a hand are one object, so even
+    a matcher shown the pile could not ask by identity. The handler that walks
+    the hand counts names instead.
+
+    Lifted off the filter **before** the testability gate and put back as its
+    own key after it, the shape the colour and the creature type an earlier
+    step chose already take — a gate asking "can every key be answered of one
+    card?" must not be shown one that only the pile can.
+
+    The scope is required and must be the hand: "another card" with no zone
+    behind it compares against nobody knows what, and a pile other than the one
+    being discarded from is a different sentence.
+    """
+    if not filt.shares_name_with_another:
+        return filt, {}
+    if not (
+        filt.is_card and filt.zone == "hand"
+        and filt.zone_owner is not None and filt.zone_owner.kind == "owner"
+    ):
+        raise LoweringError(
+            "'the same name as another card' is compared within the hand the "
+            "cards are in", node=node,
+        )
+    default = ast.ObjectFilter()
+    return (
+        dataclasses.replace(
+            filt, shares_name_with_another=False, zone=default.zone,
+            zone_owner=None,
+        ),
+        {SHARES_NAME_IN_HAND: True},
+    )
 
 
 #: Whose graveyard a printed position may name, by the seat kind the possessive

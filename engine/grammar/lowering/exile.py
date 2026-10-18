@@ -23,6 +23,13 @@ step or by the firing event before the sentence ran. Everything below chooses
 its object out of the game and carries a filter payload to a handler; nothing
 below reads a record. (Thieves' Auction's claim out of the exiled pile did, and
 left for `linked_exile` at Nemesis's second wave for exactly that sentence.)
+
+The second paragraph has been wrong since Alliances' third wave, when
+`effects/exile.py` took this module's name, and the ordinary production it
+mentions is the tail of the `exile` arm in `imperative_verbs`. Since the Phase 0
+before Odyssey the twin is cut where this side is: `effects/exile.py` reads an
+object going *into* the zone and `effects/linked_exile.py` the pile already
+there.
 """
 
 from __future__ import annotations
@@ -34,6 +41,7 @@ from ..errors import LoweringError
 from ._bound_exiles import (_entering_counter_payload, lower_pronoun_exile,
                             lower_restated_noun_exile)
 from ._events import EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS
+from ._piles import OWN_PILE_SEATS, frozen_pile_record, one_card_pile_pick
 from ._sweeps import lower_exile_sweep
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS, _amount_payload,
@@ -57,12 +65,21 @@ _EXILED_CREATURE = ast.ObjectFilter(card_types=("creature",))
 _GRAVEYARD_PILE_SEATS = frozenset({"defending_player", "you"})
 
 #: The pile "from **a single** graveyard" names (Ebony Charm): not a seat the
-#: sentence prints but one the chooser picks as the spell resolves. It is a
-#: *value* of the same payload key rather than a second key, because everything
-#: downstream — the candidate rule, the count ceiling, the answer's re-check —
-#: is identical once the seat is known; only how the seat is arrived at differs.
-#: It is not in the set above for exactly that reason: nothing the parse can
-#: read names it, so it cannot arrive by the same route.
+#: sentence prints but one the chooser picks. It is a *value* of the same
+#: payload key rather than a second key, because everything downstream — the
+#: candidate rule, the count ceiling, the answer's re-check — is identical once
+#: the seat is known; only how the seat is arrived at differs. It is not in the
+#: set above for exactly that reason: nothing the parse can read names it, so
+#: it cannot arrive by the same route.
+#:
+#: **When** the chooser picks is the event's answer. On a spell or an activated
+#: ability the cards are *targets* (CR 115.1) and every graveyard exists as the
+#: object is announced, so they are named then (CR 601.2c, CR 602.2b) and the
+#: pile is simply the one they are all in — the payload carries a ``targets``
+#: description, as the caster's own pile does. This said "as the spell
+#: resolves" until Odyssey's second wave, which let the caster choose after
+#: the opponent had passed. Under a trigger it is still chosen at resolution,
+#: for the reason the branch below gives about every trigger's targets.
 _CHOSEN_GRAVEYARD_PILE = "chosen"
 
 
@@ -144,6 +161,12 @@ def _lower_exile_hand_pile(
         who = "you"
     elif actor == "each_player" and owner in ("owner", "each_player"):
         who = "each_player"
+    elif actor in ("target_player", "target_opponent") and owner == "owner":
+        # "**Target player** exiles all cards from **their** hand face down."
+        # (Suppress.) One chosen seat's hand, the same pairing checked the same
+        # way; which seats the picker offers is the ``targets`` description
+        # stamped below.
+        who = "target_player"
     else:
         raise LoweringError("the hand exile reads your own hand", node=node)
     if node.duration.kind is not None or node.counters:
@@ -182,6 +205,8 @@ def _lower_exile_hand_pile(
         # Scroll Rack's payloads stay byte-identical and no behaviour signature
         # moves.
         payload["who"] = who
+        if who == "target_player":
+            _describe_targets(payload, node.actor)
     if described:
         payload["card_filter"] = described
     if node.face_down:
@@ -520,12 +545,16 @@ def _lower_exile(
             # spells reported "no graveyard holds a card it can exile" and
             # exiled nothing at all.
             pile["any_card"] = True
-        if pile_owner == "you":
-            # The target description, for the one pile whose seat is known at
-            # announcement. ``targeting._graveyard_exile_pile_spec`` derives the
-            # picker from it and the handler resolves the announced slots. The
-            # other two piles carry no description and keep their resolution
-            # prompt, so every payload written before this is byte-identical.
+        if pile_owner == "you" or (
+            pile_owner == _CHOSEN_GRAVEYARD_PILE and event is None
+        ):
+            # The target description, for a pile that exists when the object
+            # is announced: the caster's own, and — on a spell or an activated
+            # ability — "a single graveyard", which is whichever pile the named
+            # cards are in. ``targeting._graveyard_exile_pile_spec`` derives the
+            # picker from it and the handler resolves the announced slots. A
+            # pile a firing *event* froze a seat for, and the chosen pile under
+            # a trigger, carry no description and keep their resolution prompt.
             pile["targets"] = {
                 "quantifier": subject.quantifier,
                 "kind": "card",
@@ -536,31 +565,36 @@ def _lower_exile(
     # (Forgotten Harvest.) The same pile with no "target": the card is picked
     # as the effect resolves, so the payload carries no ``targets`` description
     # and the handler prompts rather than reading announced slots.
+    #
+    # "…exile **two** cards from your graveyard" (Bloodcurdler's threshold
+    # grant) is the same sentence with a number where the article was, and the
+    # prompt has always taken one: ``arm_graveyard_exile_pick`` reads
+    # ``count``, which this wrote as a literal 1.
     if (
         isinstance(subject, ast.TargetSpec)
         and subject.quantifier in ("a", "an")
         and not subject.targeted
-        and subject.count == 1
+        and subject.count >= 1
+        and not subject.count_from_x
+        and subject.count_amount is None
         and subject.filter.zone == "graveyard"
         and subject.filter.is_card
         and subject.filter.zone_owner is not None
-        and subject.filter.zone_owner.kind == "you"
+        and subject.filter.zone_owner.kind in OWN_PILE_SEATS
     ):
-        filt = subject.filter
-        leftover = _restrictions_beyond(
-            filt, frozenset({"card_types", "zone", "zone_owner", "is_card"})
-        )
-        if leftover or len(filt.card_types) > 1 or node.counters:
+        if node.counters:
             raise LoweringError(
                 "the chosen graveyard exile reads one card type", node=node
             )
-        chosen: dict[str, object] = {
-            "count": 1, "graveyard_owner": "you", "up_to": False,
-        }
-        if filt.card_types:
-            chosen["card_type"] = filt.card_types[0]
-        else:
-            chosen["any_card"] = True
+        # "…target opponent may exile a card from **their** graveyard"
+        # (Gravestorm) arrives here too, its pile rewritten to the offered
+        # seat — see ``_piles.OWN_PILE_SEATS``. The builder writes the one
+        # card its other callers print; the count is this sentence's own
+        # (Bloodcurdler's "exile **two** cards"), which the prompt reads.
+        chosen = one_card_pile_pick(
+            subject.filter, OWN_PILE_SEATS[subject.filter.zone_owner.kind], node,
+        )
+        chosen["count"] = int(subject.count)
         return (OracleInstruction("exile_cards_from_graveyard", "", chosen),)
     # "…**with two delay counters on it**." (Ertai's Meddling.) CR 121.1's
     # counters put on the card as it arrives in exile, which only ``exile_self``
@@ -627,6 +661,21 @@ def _lower_exile(
 
     filt = subject.filter
     if filt.zone == "graveyard" and filt.is_card:
+        # "…you may exile **target card from that player's graveyard**."
+        # (Zombie Cannibal.) One card out of the pile the firing event froze a
+        # seat for, asked of the controller as it resolves — Rysorian Badger's
+        # stated deviation with a count of one. See ``_piles.frozen_pile_record``.
+        frozen = frozen_pile_record(filt.zone_owner, event)
+        if frozen is not None:
+            if node.counters:
+                raise LoweringError(
+                    "a pick out of a recorded player's pile carries no counters",
+                    node=node,
+                )
+            return (OracleInstruction(
+                "exile_cards_from_graveyard", "",
+                one_card_pile_pick(filt, frozen, node),
+            ),)
         if filt.zone_owner is not None or filt.subtypes or filt.colors:
             # The picker this lowers onto enumerates every graveyard. Whose pile
             # it may read, and a subtype or colour narrowing, are still shapes

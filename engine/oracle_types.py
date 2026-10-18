@@ -469,7 +469,14 @@ class ActivatedAbilityCost:
     #: ``sacrifice_count`` is: only a count can make the cost unpayable, and
     #: one card is no more a payment of a two-card cost than none is
     #: (CR 601.2h).
-    exile_count: int = 1
+    #:
+    #: ``"any"`` is "Exile **any number of** cards from your graveyard"
+    #: (Painbringer): the payer names the set as the ability is activated
+    #: (CR 601.2b) and naming none is a legal payment, the reading
+    #: ``sacrifice_count`` gives Sword of the Ages' identical words one field
+    #: up. Charged only out of the payer's own graveyard — the one zone with a
+    #: channel that names several cards (``cost_graveyard_indices``).
+    exile_count: "int | str" = 1
     #: "…from **a single** graveyard" (Night Soil). Every card must come out of
     #: the *same* pile. Its own flag rather than a narrowing of the filter,
     #: because the filter is asked of one card at a time and cannot say it —
@@ -798,6 +805,20 @@ class ActivatedAbilityCost:
     #: arguments ``parse_activated_ability_cost`` passes are at the front, so a
     #: field inserted among them silently rebinds one of them.
     remove_counter_filter: dict | None = None
+    #: Millikin: "{T}, **Mill a card**: Add {C}." How many cards the payer puts
+    #: from the top of their library into their graveyard (CR 701.17a) to pay.
+    #: An ``int`` for ``exile_top_of_library``'s reason: CR 701.17b makes the
+    #: cost unpayable from a library holding fewer cards, and that has to be
+    #: counted before the ability is activated. Zero is "no such cost".
+    #:
+    #: Paid **last** (CR 601.2h pays a cost that moves objects from the library
+    #: to a public zone after every other cost), and what it put in the
+    #: graveyard is recorded as ``milled_for_cost`` for a sentence that names
+    #: "the milled card" (Charmed Pendant).
+    #:
+    #: Last for ``remove_counter_filter``'s stated reason — the positional
+    #: arguments ``parse_activated_ability_cost`` passes are at the front.
+    mill_cards: int = 0
 
     @property
     def is_loyalty(self) -> bool:
@@ -1018,6 +1039,22 @@ _MANA_TOKEN_RE = re.compile(r"\{([^}]+)\}")
 SEARCHED_PERMANENTS = "searched_permanents"
 
 EXILED_THIS_WAY = "exiled_this_way"
+
+#: "…until **you put a card into your hand**" (Tainted Pact). The cards a step
+#: of this effect put into a hand out of exile — a record because a hand does
+#: not say which of its cards an effect added. Here for ``EXILED_THIS_WAY``'s
+#: reason: ``handlers/zones.put_exiled_cards_into_zone`` writes it and a
+#: lowering gates on it.
+PUT_INTO_HAND_THIS_WAY = "put_into_hand_this_way"
+
+#: What the **earlier rounds** of a repeated process recorded, as
+#: ``{record key: [values…]}`` (Tainted Pact). A round's own records are
+#: cleared as the next begins — "that card" is this round's — and "another
+#: card exiled **this way**" is the whole process's, so the loop files each
+#: round's lists here before clearing them and the name relation reads both.
+#: Written by ``handlers/control_flow.repeat_process_until`` alone; absent
+#: outside a loop, where "this way" is simply the one record.
+PROCESS_ROUNDS_SO_FAR = "process_rounds_so_far"
 #: What the exile step took, as objects. Written by every exile that a later
 #: sentence asks a question *about* rather than a number of.
 #:
@@ -1271,6 +1308,28 @@ REMOVED_FROM_COMBAT_PERMANENTS = "removed_from_combat_permanents"
 #: card that prints it is a sorcery.
 CHOSEN_CREATURE_TYPE_THIS_WAY = "chosen_creature_type_this_way"
 
+#: The ``cost_from`` word for "**that spell's** mana cost" (Ice Cave): the price
+#: is the mana cost of the spell the trigger fired on, read off the stack as
+#: the offer is made. Named here because the lowering writes it and the offer
+#: handler reads it, and a cost keyed by a word only one of them knew would be
+#: a cost of nothing — which every board can pay.
+EVENT_SPELL_MANA_COST = "event_spell_mana_cost"
+
+#: The ``payer`` word of an offer chain made to "**any other player**" under an
+#: event that froze a seat (Ice Cave: every player but the one who cast the
+#: spell). Beside the cost word above for the same reason.
+OTHER_THAN_EVENT_SUBJECT_PLAYER = "other_than_event_subject_player"
+
+#: The ``actor`` word of an offer made to the controller of the **spell this
+#: object targeted** ("Counter target instant or sorcery spell unless *its
+#: controller* has Molten Influence deal 4 damage to them"). A stack object
+#: has a controller and no battlefield, so neither of the two seats an offer
+#: otherwise reads - the control seam for a permanent, the resolution's own
+#: target seat for a player - names it. Beside the two words above for their
+#: reason: the lowering writes it, the offer handler reads it, and an actor
+#: only one of them knew would be an offer made to nobody.
+STACK_TARGET_CONTROLLER = "stack_target_controller"
+
 #: What "**that color**" names (Persecute). One colour symbol, chosen by the
 #: controller of the resolving spell (CR 608.2d) in the sentence in front, and
 #: read back by the sentence that spends it through a ``color_filter_from`` key.
@@ -1295,6 +1354,15 @@ CHOSEN_COLOR_THIS_WAY = "chosen_color_this_way"
 #: step, because a permanent that prints both readings would otherwise hold two
 #: numbers and each reader would take whichever its author remembered.
 CHOSEN_NUMBER_THIS_WAY = "chosen_number_this_way"
+
+#: How many coins a **run** of flips actually flipped: "Flip a coin that many
+#: times or until you lose a flip, whichever comes first. If you win all the
+#: flips, draw two cards **for each flip**." (Squee's Revenge.) Written by
+#: ``flip_coins_until_loss`` beside the ``coin_flip`` record every flip writes,
+#: and separate from it because they answer different questions: that one says
+#: whether the run was clean, this one how long it was — and a run the first
+#: loss cut short is shorter than the number that was chosen.
+COIN_FLIPS_MADE = "coin_flips_made"
 
 #: ``{seat: number}`` for a number **every player names at once, in secret**:
 #: "Each player hides at least one item, then all players reveal them
@@ -1412,6 +1480,15 @@ COUNTERS_REMOVED = "counters_removed"
 #: "those creatures" on the marker and the handler writes the objects, and the
 #: two sit at opposite ends of the pipeline.
 CHOSEN_TARGET_PERMANENTS = "chosen_target_permanents"
+
+#: The ``targets`` description kind of "target **spell or permanent**" (Illusion,
+#: Blind Seer): one chosen object in one of two zones. Beside ``"spell"`` (the
+#: stack) and ``"object"`` (the battlefield), which are the description's words
+#: for the two halves. Here because three ends of the pipeline spell it — the
+#: lowering that writes it, ``targeting._from_targets_payload`` that turns it
+#: into the ``spell_or_permanent`` picker, and the handler that asks which half
+#: the announcement named.
+SPELL_OR_OBJECT_TARGET = "spell_or_object"
 
 
 #: "**Choose two target creature cards in your graveyard.** … return **the

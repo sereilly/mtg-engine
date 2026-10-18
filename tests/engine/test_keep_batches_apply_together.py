@@ -115,6 +115,16 @@ def test_no_keep_prompt_moves_anything_before_the_last_seat_answers(catalog):
         game.enforce_mana_costs = False
         game.interactive_seats = {0, 1, 2}
         _a_board_each(game)
+        if any(
+            slot.get("count") == "fewest"
+            for slot in instruction.payload.get("slots") or ()
+        ):
+            # "…equal to the number of permanents controlled by the player who
+            # controls the fewest" (Balancing Act): at three equal boards
+            # every seat keeps everything and nobody is asked, so the third
+            # seat is given less and the other two have something to choose.
+            for permanent in list(game.controlled_by(2))[:3]:
+                game.remove_from_battlefield(permanent)
         context = OracleExecutionContext(
             caster=game.players[0], target=game.players[1], card=card,
         )

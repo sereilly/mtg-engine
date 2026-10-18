@@ -19,6 +19,8 @@ from ..layer_bridge import printed_shape, printed_supertypes
 from ..oracle_types import (BLOCK_PAIR_SUBJECT, SACRIFICED_CARDS_BY_SEAT,
                            SUBJECT_FROM_TRIGGER, named_no_target)
 from ..models import Permanent, PlayerState
+from ..object_colors import is_multicolored
+from ..counted_names import card_answers_to_name
 from ..search_filters import card_has_type, name_key
 
 
@@ -116,6 +118,15 @@ def resolve_amount(raw: object, x_value: int | None) -> int:
         base = raw.get("plus_x")
         if base is not None:
             return max(0, int(base) + max(0, x_value or 0))
+        # ``{"minus_x": n}`` — "…and **5 minus X** damage to that creature's
+        # controller" (Liquid Fire). The printed number with the X taken off
+        # it, the third arithmetic beside the two above and read here for
+        # their reason. Floored at zero: CR 107.1b uses zero where a
+        # calculation that determines the result of an effect would be
+        # negative, so an X larger than the printed number spends nothing.
+        minuend = raw.get("minus_x")
+        if minuend is not None:
+            return max(0, int(minuend) - max(0, x_value or 0))
         raise ValueError(f"unreadable amount payload {raw!r}")
     return max(0, x_value or 0) if raw == "x" else int(raw)
 
@@ -354,6 +365,15 @@ def count_from_payload(
         return max(0, _scaled(
             sum(int(getattr(card, "cmc", 0) or 0) for card in discarded), spec
         ))
+    # "…where X is **the number of cards exiled this way**" (Painbringer). How
+    # many cards the ability's own cost exiled — the counter channel below one
+    # object kind over, and off the same record for its reason: the cards left
+    # the graveyard before the ability was on the stack (CR 601.2h), so no
+    # zone holds "the cards exiled this way" apart from everything else in
+    # exile. An "any number of" that named none is zero.
+    if spec.get("cost_exiled_count"):
+        exiled_set = (context.choices or {}).get("exiled_set_for_cost") or ()
+        return max(0, _scaled(len(exiled_set), spec))
     # "…equal to **the number of pain counters removed this way**" (Torture
     # Chamber); "You gain 2 life **for each elixir counter removed this way**"
     # (Essence Bottle). How many counters the ability's own cost took off,
@@ -446,6 +466,7 @@ def count_from_payload(
         game, owner, spec,
         exclude=context.source_permanent,
         source=context.source_permanent if source is None else source,
+        effect_spell=resolving_spell_name(context),
     )
     # "…**in excess of** the number of …" (Superior Numbers). The subtrahend is
     # an ordinary count spec of its own, evaluated by re-entering here rather
@@ -540,6 +561,19 @@ def _damage_dealt_this_turn(game, context, query: dict) -> int:
             if context.caster in game.players else None
         )
         return max(0, base + damage_dealt_to_seat(game, seat))
+    if query.get("recipient") == "target":
+        # "…equal to the damage already dealt **to it** this turn"
+        # (Whipkeeper). The permanent the sentence targeted, by the id the
+        # announcement stamped — never a fallback pick: a history read off a
+        # creature the player did not choose is a number about somebody else.
+        # A target that has left answers with the base, which is nothing.
+        aimed = resolve_target_permanent(
+            game, context, predicate=lambda p: True,
+            fallback_on_invalid_choice=False,
+        )
+        if aimed is None:
+            return base
+        return max(0, base + damage_dealt_to_permanent(game, aimed.permanent_id))
     if query.get("recipient") != "source" or source is None:
         return base
     permanent_id = getattr(source, "permanent_id", None)
@@ -626,7 +660,18 @@ def _characteristic_of_object(
             game, context, predicate=lambda p: True, fallback_on_invalid_choice=False
         )
         if perm is None:
-            return 0
+            # CR 608.2h: an object the effect itself has moved answers with its
+            # last known information. "Destroy target artifact. … where X is
+            # that artifact's mana value" (Artifact Mutation) asked the
+            # battlefield for an artifact its own first sentence had just
+            # destroyed, read zero and made no tokens. The record is the one
+            # the lowering found a step of this same effect writing
+            # (``where_x._last_known_record``); a target that was gone before
+            # the effect began wrote nothing, and still answers zero.
+            recorded = (context.results or {}).get(str(spec.get("last_known") or ""))
+            if recorded is None or isinstance(recorded, bool):
+                return 0
+            return max(0, int(recorded) + offset)
     if name == "power":
         value = int(perm.effective_power)
     elif name == "toughness":
@@ -905,9 +950,66 @@ def count_spec_in_resolution(spec: dict, context) -> dict:
     sentence means one thing whichever channel carried it.
     """
     described = spec.get("filter")
-    if not isinstance(described, dict) or not described.get(COLOR_CHOSEN_THIS_WAY_KEY):
+    if not isinstance(described, dict):
+        return spec
+    if described.get(NAMED_FROM_KEY):
+        spec = {**spec, "filter": _resolve_named_from(described, context)}
+        described = spec["filter"]
+    if not described.get(COLOR_CHOSEN_THIS_WAY_KEY):
         return spec
     return {**spec, "filter": resolve_color_chosen_in_resolution(described, context)}
+
+
+#: The count-filter key for a name only a resolution knows — "…cards in all
+#: graveyards **with the same name as that spell**" (the five Shrines) — and
+#: the one referent the lowering writes under it
+#: (``grammar/lowering/_amounts.NAMED_FROM_TRIGGERING_SPELL``).
+NAMED_FROM_KEY = "named_from"
+
+
+def _resolve_named_from(described: dict, context) -> dict:
+    """*described* with "the same name as that spell" turned into ``named``.
+
+    CR 201.2a against the spell a cast trigger fired on. The fire site froze
+    its **stack object** (``cast_item``), which is what says *which* spell — a
+    deck repeats one ``CardDefinition`` per copy — and whose card is the half
+    that was cast for a split card (CR 709.3b). Read off the frozen object
+    rather than off the stack, because CR 608.2h gives a spell that has left
+    the stack by now (countered in response) its last known name: it is then a
+    card in a graveyard with that very name, and counts.
+
+    Nothing frozen leaves the key where it is, and ``_card_matches_filter``
+    answers no to it — a count of no card rather than of every card.
+    """
+    frozen = context.trigger_context or {}
+    item = frozen.get("cast_item")
+    card = getattr(item, "card", None) or frozen.get("cast_card")
+    name = getattr(card, "name", None)
+    if not name or described.get(NAMED_FROM_KEY) != "triggering_spell":
+        return described
+    resolved = dict(described)
+    resolved.pop(NAMED_FROM_KEY, None)
+    resolved["named"] = name
+    return resolved
+
+
+def resolving_spell_name(context) -> str | None:
+    """The name of the **spell** whose effect *context* is carrying out, or
+    None when an ability is resolving.
+
+    "…effects from spells named Flame Burst count it as a card named Flame
+    Burst." (Pardic Firecat.) An activated ability carries its printed line, a
+    triggered one its event and an ability of a permanent its source; a spell's
+    resolution — and its announcement, which is asked the same count for an X
+    fixed as it is cast (CR 601.2b) — carries none of the three.
+    """
+    if (
+        context.source_permanent is not None
+        or context.ability_text
+        or context.trigger_context is not None
+    ):
+        return None
+    return getattr(context.card, "name", None) or None
 
 
 def _resolve_chosen_card_type(filt: dict, source) -> dict:
@@ -973,7 +1075,15 @@ def _battlefield_matches(
     # compare against counts nothing extra rather than silently dropping it:
     # the caller that has a source passes one, and the continuous recompute
     # that does not never produces the key.
-    skip = exclude if filt.pop("exclude_self", False) else None
+    #
+    # *exclude* is one permanent or several. An Aura's sentence about its
+    # host has two objects "other" may be measured from - "enchanted creature
+    # gets +1/+1 for each other **creature**" (Vampirism) leaves out the
+    # host, "+2/+2 for each other **enchantment**" (Ancestral Mask) leaves
+    # out the Aura - and the caller that knows both passes both.
+    skipped: tuple = ()
+    if filt.pop("exclude_self", False) and exclude is not None:
+        skipped = tuple(exclude) if isinstance(exclude, (tuple, list)) else (exclude,)
     # "permanents **of the chosen color**" (Psychic Allergy). The colour was
     # picked as *source* entered (CR 614.1c) and lives on that permanent, so
     # it is resolved here — where the source is in hand — into the ordinary
@@ -1004,7 +1114,7 @@ def _battlefield_matches(
 
     matched = [
         perm for perm in scanned
-        if perm is not skip
+        if not any(perm is left_out for left_out in skipped)
         and subject_matches(game, perm, filt, observer=seat, source=source)
     ]
     return matched
@@ -1046,7 +1156,8 @@ def basic_land_types_among(
 
 
 def evaluate_count(
-    game: "Game", owner: "PlayerState", spec: dict, *, exclude=None, source=None
+    game: "Game", owner: "PlayerState", spec: dict, *, exclude=None, source=None,
+    effect_spell: str | None = None,
 ) -> int:
     """How much the amount a card *computes* currently is, for a named owner.
 
@@ -1069,6 +1180,28 @@ def evaluate_count(
     # exactly the ones no longer on the battlefield, so there is nothing to
     # scan. Per seat, because the game-wide tally cannot answer "under your
     # control" (round 14).
+    # "Each player discards cards **the same way**" (Balancing Act): how many
+    # more of the counted things *owner* has than the player with the fewest —
+    # the same count taken for every living seat, and this seat's distance
+    # from the smallest. Unwrapped first because it is not a count of its own:
+    # it is an arithmetic over whichever one follows, asked once per seat.
+    if spec.get("excess_over_fewest"):
+        plain = {key: value for key, value in spec.items() if key != "excess_over_fewest"}
+        fewest = min(
+            (
+                evaluate_count(
+                    game, seat, plain, exclude=exclude, source=source,
+                    effect_spell=effect_spell,
+                )
+                for seat in game.players if not seat.lost
+            ),
+            default=0,
+        )
+        mine = evaluate_count(
+            game, owner, plain, exclude=exclude, source=source,
+            effect_spell=effect_spell,
+        )
+        return max(0, mine - fewest)
     history = spec.get("history")
     if history == "creatures_died_under_your_control":
         return int(getattr(owner, "creatures_died_under_your_control_this_turn", 0))
@@ -1274,9 +1407,17 @@ def evaluate_count(
         cards = getattr(owner, zone, None)
     if cards is None:
         return 0
+    # *effect_spell* is the name of the spell whose effect is counting, when
+    # one is: "effects from spells named Flame Burst count it as a card named
+    # Flame Burst" (Pardic Firecat) is asked of the name test below, with the
+    # zone the card is in, and by nobody else — a CR 604.3 recompute passes
+    # none and gets CR 201.2a's plain answer.
     matched_cards = [
         card for card in cards
-        if _card_matches_filter(card, filt, game=game, owner=owner)
+        if _card_matches_filter(
+            card, filt, game=game, owner=owner, zone=zone,
+            effect_spell=effect_spell,
+        )
     ]
     if aggregate == "greatest_power":
         # The *printed* power, because a card outside the battlefield has no
@@ -1328,7 +1469,10 @@ def _zone_card_creature_types(
     return frozenset({override}) if override is not None else frozenset(printed)
 
 
-def _card_matches_filter(card, filt: dict, *, game=None, owner=None) -> bool:
+def _card_matches_filter(
+    card, filt: dict, *, game=None, owner=None, zone: str | None = None,
+    effect_spell: str | None = None,
+) -> bool:
     """Whether a *card* — not a permanent — answers a filter payload.
 
     A card in a zone has no computed characteristics, so the shared matcher
@@ -1475,6 +1619,13 @@ def _card_matches_filter(card, filt: dict, *, game=None, owner=None) -> bool:
     excluded_colors = filt.get("exclude_colors") or ()
     if excluded_colors and any(color in colors for color in excluded_colors):
         return False
+    # "a **multicolored** creature card" (Dragon Arch). CR 105.2b: two or more
+    # colours, off the same colours every test above reads — the printed ones
+    # (CR 202.2) unless a seat-wide static says otherwise — and through the one
+    # definition of the word, so a card in a hand and a permanent on the
+    # battlefield cannot be multicoloured by two different counts.
+    if filt.get("multicolored") and not is_multicolored(colors):
+        return False
     # "…for each **Mountain and red** card in it" (Baleful Stare). A union
     # across two *axes* — CR 205.3 subtype against CR 105 colour — which the
     # keys above cannot say because they are AND'd: ``subtype_filter`` plus
@@ -1508,17 +1659,65 @@ def _card_matches_filter(card, filt: dict, *, game=None, owner=None) -> bool:
 
         if not any(_class_holds(entry) for entry in any_classes):
             return False
+    # "…with the same name as **that spell**" with no resolution behind it: the
+    # name is in a trigger's context, and a reader holding one turns the key
+    # into ``named`` first (``count_spec_in_resolution``). Refused for the
+    # chosen-subtype keys' reason at the top — ignoring it counts every card.
+    if filt.get(NAMED_FROM_KEY):
+        return False
     named = filt.get("named")
     # Through `name_key`, so the parser's rendering of a legendary name
     # ("chandra , flame 's catalyst") and Oracle's spelling of it compare equal —
-    # the same reduction a search's named restriction already uses.
-    return not named or name_key(card.name) == name_key(str(named))
+    # the same reduction a search's named restriction already uses. And through
+    # the one reader of "is this card named N?": CR 709.4a gives a split card
+    # both halves' names, and a card in a graveyard may *count as* a card of a
+    # name it does not have to the spell that is asking (``counted_names``).
+    return not named or card_answers_to_name(
+        card, str(named), zone=zone, effect_spell=effect_spell,
+    )
 
 
 def flip_coin(win_probability: float = 0.5) -> bool:
     """Flip a coin, returning True on a win (CR 705). Draws from the module-level
     RNG that ``run_ai_simulation`` seeds, so a given seed replays identically."""
     return random.random() < win_probability
+
+
+def flip_coin_for(game: Game, flipper, *, flip=None) -> bool:
+    """A coin flip *flipper* **wins or loses** (CR 705.2), announced.
+
+    The seam for every flip a player can win. CR 705.2 draws the line this
+    function is named for: an effect that "cares only about whether the coin
+    comes up heads or tails" (Mana Clash) has no winner — it goes on calling
+    :func:`flip_coin` — and for every other flip "only the player who flips the
+    coin wins or loses". So the announcement carries one seat, the flipper's,
+    and "Whenever **you** win a coin flip" (Chance Encounter) hears exactly the
+    flips its controller made and won, which is the card's own ruling ("Your
+    opponent losing a flip does not count as you winning one").
+
+    One draw from the same RNG, in the same place the bare call made it, so a
+    seeded game replays the flips it always did. The trigger goes on the stack
+    behind the object that is resolving, as every event announced part-way
+    through a resolution does.
+
+    *flip* is the **caller's own coin** — each handler module passes the
+    ``flip_coin`` it imported. That is not decoration: a module's ``flip_coin``
+    is the name a dozen tests rig ("engine.handlers.control_flow.flip_coin"),
+    and a seam that drew from its own module's coin instead would have made
+    every one of those rigs a patch on a name nothing calls. A name a test
+    patches is an interface, exactly as a log line is.
+    """
+    won = (flip or flip_coin)()
+    if won and flipper is not None:
+        seat = next(
+            (index for index, player in enumerate(game.players) if player is flipper),
+            None,
+        )
+        if seat is not None:
+            from ..events import emit
+
+            emit(game, "you_win_coin_flip", seat=seat)
+    return won
 
 
 def resolve_own_combatant(
@@ -2056,6 +2255,13 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     # the biggest. ``subject_matches`` holds the game and answers it.
     if payload.get("superlative_among"):
         return False
+    # "target creature **blocking or blocked by** Cromat". A relation to the
+    # ability's own source, which this pure half does not have; ignored, it
+    # would offer every creature on the table for a destroy that names the
+    # ones in one fight. ``subject_matches`` holds the source, answers it off
+    # the combat maps and strips the key before asking here.
+    if payload.get("in_combat_with_source"):
+        return False
     # "creatures that didn't attack this turn" / "…except for creatures that
     # couldn't attack" (Season of the Witch). Both are per-turn records stamped
     # on the permanent itself — the first by the declaration, the second by the
@@ -2169,6 +2375,10 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
         attached = perm.metadata.get("attached_to")
         if attached is None or not permanent_matches_filter(attached, attached_host):
             return False
+    # "target Aura **that's attached to a permanent**" (Aura Graft). The host
+    # phrase with nothing to test the host against: it has to be there.
+    if payload.get("attached_to_permanent") and perm.metadata.get("attached_to") is None:
+        return False
 
     # "target permanent **that isn't enchanted**" (Time Elemental) — CR 303.4a.
     # The attachment record this engine keeps is shared with Equipment
@@ -2297,6 +2507,14 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     if any_colors and not any(color in colors for color in any_colors):
         return False
     if exclude_colors and any(c in colors for c in exclude_colors):
+        return False
+    # "a **multicolored** creature" (Dragon Arch's phrase, asked of a
+    # permanent). CR 105.2b: two or more colours, counted off the *computed*
+    # set like every colour test above — a Lace-painted creature is exactly as
+    # multicoloured as layer 5 says it is. Through the one definition
+    # (``object_colors.is_multicolored``) the cost tax, the cast trigger and
+    # protection already ask.
+    if payload.get("multicolored") and not is_multicolored(colors):
         return False
     if exclude_types and any(perm.has_type(t) for t in exclude_types):
         return False
@@ -2531,9 +2749,13 @@ def pick_target_permanent(
             # creature's slot and the islandwalk landed there too; War Barge,
             # Runesword, the two Kjeldoran guards, Phantasmal Mount, Goblin
             # Sappers, Whippoorwill and Merieke Ri Berit all read the same
-            # resolver. The spells are already refused above the instructions
-            # (``legality.illegal_targets_refusal``); an activated ability has
-            # no such gate, so the fizzle has to be here.
+            # resolver. A spell, an activated ability and a trigger whose
+            # target was chosen are refused above the instructions when
+            # *every* target is gone (``legality.illegal_targets_refusal``);
+            # this is what is left for the object that still resolves because
+            # another of its targets is legal, and for a trigger whose target
+            # a fire site stamped — and it is the reading a slot blanked by
+            # ``blank_illegal_resolution_targets`` is given on purpose.
             return None
         # Scoped to *player* on purpose: the callers pass the battlefield the
         # target was chosen from ("a creature you control", "target artifact an
@@ -2652,6 +2874,22 @@ def roles_still_legal(
                 return False
             resolved.append(game.players[seat])
             continue
+        # …and it may be a **spell** ("Counter target spell and … deals 3
+        # damage to target creature", Suffocating Blast). What CR 608.2b asks
+        # of one is whether it is still on the stack and still a spell the
+        # printed phrase admits — the stack picker's own list, asked again for
+        # this slot, by identity.
+        if role.get("kind") == "spell":
+            from ..targeting import _from_targets_payload
+
+            named = context.stack_target
+            admitted = game._offered_stack_targets(
+                observer, context.card, _from_targets_payload(role) or {}
+            )
+            if named is None or not any(obj is named for obj in admitted or ()):
+                return False
+            resolved.append(named)
+            continue
         perm = resolve_role_permanent(game, context, payload, role.get("role"))
         if perm is None or not game.is_on_battlefield(perm):
             return False
@@ -2757,6 +2995,94 @@ def frozen_that_player_seat(game: Game, context: OracleExecutionContext) -> int 
     return None
 
 
+def triggering_spell(game: Game, context: OracleExecutionContext):
+    """The spell a cast trigger fired on, if it is still on the stack; else
+    ``None``.
+
+    "Whenever a player casts a spell, counter **it** unless that player pays
+    {3}." (Nether Void.) CR 603.3 puts the trigger on the stack above the spell
+    it is about, and by the time it resolves anything may sit between the two —
+    so the fire site freezes *which* spell (``cast_item``, the spell's own
+    stack object) and this finds it by identity.
+
+    **The card cannot answer.** ``cast_card`` rides the same event and three
+    handlers used to look for "the stack item whose card is this one". A deck
+    repeats one immutable ``CardDefinition`` per copy and both seats' decks are
+    built from one catalog, so two Lightning Bolts on the stack are two objects
+    with one card: Nether Void's trigger for the second Bolt armed its payment
+    against the first, and a trigger whose own spell had been countered in
+    response went on to counter a bystander that merely shared its card. Eight
+    of the pool's nine readers did the first and all nine the second. The same
+    reason ``counter_stack_ability`` finds "that ability" by
+    ``activated_ability_item`` rather than by its source.
+
+    ``None`` means the object is gone (CR 608.2b's shape), and a caller does
+    the rest of what it can — never the same thing to another spell.
+    """
+    cast_item = (context.trigger_context or {}).get("cast_item")
+    if cast_item is None:
+        return None
+    return next((item for item in game.stack if item is cast_item), None)
+
+
+def stack_target_controller_seat(
+    game: Game, context: OracleExecutionContext, *, spells_only: bool = False,
+    recorded_only: bool = False,
+) -> int | None:
+    """The seat that controls the **spell this object is about**, or ``None``.
+
+    "Counter target spell. **Its controller** loses 3 life." (Undermine.)
+    "Counter target instant or sorcery spell unless **its controller** has
+    Molten Influence deal 4 damage to them." One referent, two moments, and
+    until now two readers that each knew half of it:
+
+    * once a counter step has **chosen** its spell, the seat is the record
+      that step wrote (``COUNTERED_SPELL_CONTROLLER``) — written when the
+      spell is chosen, not when the counter succeeds, because by the next
+      sentence the spell is a card in a graveyard, and CR 109.4 gives a card
+      there no controller at all. So a rider reads last-known information
+      (CR 608.2h) whether or not the spell could be countered;
+    * before that — an offer made *instead of* the counter — nothing has been
+      recorded yet, and the seat is read off the stack object itself (CR 112.2:
+      a spell's controller is the player who put it on the stack): the spell
+      the announcement named while it is still there (by identity), nobody
+      once a named spell has left (CR 608.2b), and the top of the stack for a
+      headless caller that named none.
+
+    The offer actor (``control_flow._offered_seats``) and every recipient key
+    that names this seat ask here, so "its controller" cannot be one player
+    when it is asked and another when it is charged.
+
+    The **controller**, never the owner (CR 108.3): a spell cast out of
+    another player's pile answers with the seat that cast it.
+
+    *spells_only* is the offer's own narrowing — "counter target … **spell**"
+    has nobody to ask about an ability — and applies to the stack read alone;
+    a record is written by a step that already chose a spell.
+
+    *recorded_only* is a **rider's** reading: a sentence behind the counter
+    names the spell that step chose and no other, so with no record nothing
+    was chosen and nobody is named — never whatever happens to be on top of
+    the stack by then, which may be the very object that is resolving.
+    """
+    from ..oracle_types import COUNTERED_SPELL_CONTROLLER
+
+    recorded = (context.results or {}).get(COUNTERED_SPELL_CONTROLLER)
+    if isinstance(recorded, int):
+        return recorded if 0 <= recorded < len(game.players) else None
+    if recorded_only:
+        return None
+    named = context.stack_target
+    if named is not None:
+        item = named if any(found is named for found in game.stack) else None
+    else:
+        item = game.stack[-1] if game.stack else None
+    if item is None or (spells_only and item.is_ability):
+        return None
+    seat = item.caster_index
+    return seat if 0 <= seat < len(game.players) else None
+
+
 def resolve_role_permanent(
     game: Game,
     context: OracleExecutionContext,
@@ -2817,13 +3143,35 @@ def resolve_role_player(
     A second player role is refused here rather than resolved to the first,
     which is the same direction ``resolve_role_permanent`` takes on a slot that
     no longer resolves.
+
+    **Unless the announcement recorded its seats per role**
+    (``targeting.ROLE_SEATS``), which is what one naming two players does:
+    "…creatures **target player** controls … creatures **another target
+    player** controls" (Cultural Exchange). Then the slot is read the way its
+    siblings read theirs — positionally — and the scalar is not consulted at
+    all: a ``None`` there is a slot CR 608.2b has judged illegal, and the
+    answer is nobody rather than whoever the scalar still names. The refusal
+    above stands for a two-player payload announced *without* the list, which
+    is an announcement the cast gate does not accept.
     """
-    from ..targeting import payload_role_slot, role_is_seat, spec_roles
+    from ..targeting import (payload_role_slot, recorded_role_seats,
+                             role_is_seat, spec_roles)
 
     slot = payload_role_slot(payload, role)
     if slot is None:
         return None
     roles = spec_roles((payload or {}).get("targets"))
+    if not (0 <= slot < len(roles)) or not role_is_seat(roles[slot]):
+        return None
+    recorded = recorded_role_seats(context)
+    if recorded is not None:
+        named = recorded[slot] if slot < len(recorded) else None
+        if (
+            isinstance(named, int) and not isinstance(named, bool)
+            and 0 <= named < len(game.players)
+        ):
+            return named
+        return None
     seats = [index for index, entry in enumerate(roles) if role_is_seat(entry)]
     if seats != [slot]:
         return None

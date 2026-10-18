@@ -193,6 +193,27 @@ class CountOfSacrificesThisWay:
 
 
 @dataclass(frozen=True)
+class CountOfDiscardsThisWay:
+    """"Target player discards two cards. You gain 3 life **for each land card
+    discarded this way**." (Gerrard's Verdict.)
+
+    :class:`CountOfSacrificesThisWay` one zone over, and its own node for that
+    class's reason: the record is exactly what the sentence in front took out
+    of a hand, and the graveyard is not that set — it also holds everything
+    that arrived by any other route, and a discard need not arrive there at all
+    (CR 614: Dodecapod is discarded onto the battlefield).
+
+    Its own node rather than a row in ``records._THIS_WAY_COUNTS``, which reads
+    the *bare* noun off a slot holding a number: a narrowed phrase answered
+    there would be counted as though the adjective were not printed.
+
+    A back-reference, so lowering refuses it unless a step of the same effect
+    really records which cards went.
+    """
+    filter: "ObjectFilter"
+
+
+@dataclass(frozen=True)
 class CountOfTapsThisWay:
     """"the number of Islands **tapped this way**" (Monsoon) — how many
     permanents the *preceding step of this same effect* turned.
@@ -665,6 +686,28 @@ class LifePaidAsEntered:
 
 
 @dataclass(frozen=True)
+class ChosenNumberAsCast:
+    """"…, where X is **the chosen number**" (Liquid Fire) — the number its
+    controller chose "as an additional cost to cast this spell".
+
+    Parameterless for :class:`LifePaidAsEntered`'s reason: there is one such
+    number per cast, and the sentence names it without describing it. Its own
+    node rather than a :class:`ThatMuch` over a scratchpad key, because it is
+    not a record of anything a *resolution* did. CR 601.2b: "If the value of
+    that variable is defined in the text of the spell by a choice that player
+    would make later in the announcement or resolution of the spell, that
+    player makes that choice at this time instead" — so the number is the
+    spell's announced X, fixed before any opponent can respond.
+
+    The node says only what the words say. Whether a card printing them also
+    prints the cost that chooses the number is the support gate's question
+    (``cast_costs.unchosen_number_definition``): a line cannot see its
+    neighbours, and an X nobody announced reads as 0.
+    """
+    __slots__ = ()
+
+
+@dataclass(frozen=True)
 class DamageDealtThisTurn:
     """"the amount of damage dealt to this creature this turn by other sources
     named ~" (Blazing Effigy) — a *history*, not anything on a board.
@@ -687,7 +730,9 @@ class DamageDealtThisTurn:
     #: over the same window, joined on the ledger's recipient *seat* instead of
     #: its recipient permanent. One node for both, because which end of a damage
     #: event a clause names is payload here exactly as a printed noun phrase is
-    #: everywhere else in this grammar.
+    #: everywhere else in this grammar. ``"target"`` is Whipkeeper's "the
+    #: damage already dealt **to it** this turn", "it" being the creature the
+    #: same sentence aims at.
     recipient: str = "source"
     #: ``None`` is "from any source", which is what a clause printing no "by …"
     #: phrase means. Spelled out rather than left to the default, because the
@@ -716,7 +761,7 @@ class DamageDealtByChosenCast:
     card_type: str
 
 
-Amount = Union[Fixed, Var, CountOf, CountersOnSource, CountersOnEventSubject, CountersOnGranter, LifePaidAsEntered, ThatMuch, SacrificedForCost, ExiledForCost, TappedForCost, TotalPowerSacrificedThisWay, Half, Times, AllOf, AnyNumber, BoardCount, Plus, Minus, CharacteristicOfTarget, DamageDealtThisTurn, DamageDealtByChosenCast, AdditionalCostPaidCount]
+Amount = Union[Fixed, Var, CountOf, CountersOnSource, CountersOnEventSubject, CountersOnGranter, LifePaidAsEntered, ChosenNumberAsCast, ThatMuch, SacrificedForCost, ExiledForCost, TappedForCost, TotalPowerSacrificedThisWay, Half, Times, AllOf, AnyNumber, BoardCount, Plus, Minus, CharacteristicOfTarget, DamageDealtThisTurn, DamageDealtByChosenCast, AdditionalCostPaidCount]
 
 
 # ---------------------------------------------------------------------------

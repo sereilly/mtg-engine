@@ -296,6 +296,10 @@ _SEAT_RECORDS: dict[str, str] = {
     # Ertai's Meddling: the controller of the spell an earlier step of this same
     # resolution exiled, written to the scratchpad by that step.
     "bound_players_upkeep": "exiled_spell_controller",
+    # Suppress: the player the creating spell **targeted** — "that player's
+    # next turn" behind "target player exiles …". Read off the resolution's own
+    # target, so no step has to have written anything.
+    "bound_players_next_turns_end_step": "target_player",
 }
 
 
@@ -604,7 +608,35 @@ def _lower_create_delayed_trigger(
     subject = _delayed_filter_payload(node.subject, node)
     if subject:
         payload["subject_filter"] = subject
-    agent = _delayed_filter_payload(node.agent, node)
+    agent_phrase = node.agent
+    of_that_color = bool(agent_phrase is not None and agent_phrase.color_chosen_this_way)
+    if of_that_color:
+        # "Choose a color. Whenever this creature becomes blocked by a creature
+        # **of that color** this turn, …" (Zombie Boa.) The colour an earlier
+        # step of this same resolution chose (CR 608.2d), which the entry
+        # outlives: by the time a block is declared the scratchpad is a phase
+        # gone. So the word is lifted off before the testability gate — no
+        # matcher answers it, by design — and rides the filter as the one key
+        # the arming handler spends into an ordinary ``color_filter`` while the
+        # creating effect still knows the answer (CR 603.7c's freeze, for a
+        # value instead of an object).
+        #
+        # Gated on a producer, like every other back-reference here: with no
+        # choosing step in front the words name no colour, and the entry would
+        # arm about a phrase nothing can ever match.
+        from ...oracle_types import CHOSEN_COLOR_THIS_WAY
+
+        if CHOSEN_COLOR_THIS_WAY not in produced:
+            raise LoweringError(
+                "\"of that color\" needs an earlier step of this effect that "
+                "chose a color", node=node,
+            )
+        agent_phrase = dataclasses.replace(
+            agent_phrase, color_chosen_this_way=False
+        )
+    agent = _delayed_filter_payload(agent_phrase, node)
+    if of_that_color:
+        agent = {**agent, "color_chosen_this_way": True}
     if agent:
         payload["agent_filter"] = agent
     return (OracleInstruction("create_delayed_trigger", "", payload),)

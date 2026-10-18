@@ -62,6 +62,7 @@ from ._common import (
     _targets_only,
 )
 from ._events import (
+    _DAMAGED_PLAYER_EVENTS,
     _DEFENDING_PLAYER_EVENTS,
     _back_reference_payload,
 )
@@ -266,6 +267,37 @@ def _lower_look_at_library_top(
     # printing it: a *targeted* look is a spell's choice and this one is a fact
     # about a combat, and the handler reads them from different places.
     defending = node.player.kind == "defending_player"
+    # "**That player** looks at the top three cards of your library, then puts
+    # them back in any order." (Tahngarth's Glare.) Somebody else rearranging
+    # the controller's pile, which neither kind below can say: the own-library
+    # one makes the looker the owner by construction, and the targeted one puts
+    # the *library* on the target.
+    #
+    # Only "that player" has a seat to read — the player the sentence in front
+    # chose, which the handler takes off the resolution's own target exactly as
+    # "that player loses 2 life" does. A looker this sentence would have to
+    # *choose* is a target of its own, with a picker and both legality gates
+    # behind it, and no card prints one; it refuses by name rather than lowering
+    # to a look nobody was asked to make.
+    if node.looker is not None:
+        if (
+            node.looker.kind != "that_player"
+            or node.player.kind != "you"
+            or not node.may_reorder
+            or node.may_shuffle
+            or node.may_bottom
+        ):
+            raise LoweringError(
+                "only \"that player\" rearranging your library has a handler: "
+                f"{node.looker.kind!r} looking at {node.player.kind!r}'s",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "target_reorders_caster_library_top", "",
+                {"amount": _amount_payload(node.count)},
+            ),
+        )
     # "Look at the top four cards of **your** library, then put them back in
     # any order." (Sage Owl.) The looker's own pile, which is its own kind and
     # not this one with a seat swapped: `reorder_target_library_top` is
@@ -399,7 +431,10 @@ def _lower_look_top_pick(
         # (Ancestral Memories) and exile (Ancestral Knowledge) — are the chain's
         # whole vocabulary, and ``optional`` rides along because "exile **any
         # number of** them" is a chain the looker may stop at any link.
-        if node.pick_destination not in ("hand", "exile"):
+        # …and a **graveyard** (Bamboozle's "choose two of those cards and put
+        # them into that player's graveyard"), the third zone that takes the
+        # card out of the pile for good.
+        if node.pick_destination not in ("hand", "exile", "graveyard"):
             raise LoweringError(
                 "several picks leave the library, and this destination puts one "
                 "back in it",
@@ -459,14 +494,27 @@ def _lower_look_top_pick(
     # the look at whichever library the resolution happened to be carrying, and
     # the pile is hidden, so nobody would see it happen.
     if node.pile_owner is not None:
-        if node.pile_owner.kind not in ("target_player", "target_opponent"):
+        if (
+            node.pile_owner.kind == "that_player"
+            and event in _DAMAGED_PLAYER_EVENTS
+        ):
+            # "Whenever this creature deals combat damage to a player, **that
+            # player** reveals the top two cards of their library." (Balshan
+            # Beguiler.) A seat nobody chose: the one the damage event froze
+            # (CR 603.10), under the word every other reading of the phrase
+            # behind a damage trigger uses. No ``targets`` — nothing is
+            # announced — and under any other event the words name a seat no
+            # fire site recorded, which falls to the refusal below.
+            payload["pile_owner"] = "damaged_player"
+        elif node.pile_owner.kind not in ("target_player", "target_opponent"):
             raise LoweringError(
                 "the look-top pick reads the library of the player the spell "
                 "chose",
                 node=node,
             )
-        payload["pile_owner"] = node.pile_owner.kind
-        _describe_targets(payload, node.pile_owner)
+        else:
+            payload["pile_owner"] = node.pile_owner.kind
+            _describe_targets(payload, node.pile_owner)
     return (OracleInstruction("look_top_pick_to_hand", "", payload),)
 
 

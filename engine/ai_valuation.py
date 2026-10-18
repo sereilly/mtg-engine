@@ -576,11 +576,18 @@ def spell_target_side(card: CardDefinition) -> str | None:
     return None
 
 
-#: Kinds that are a gift to the **player** they name and whose category says
-#: otherwise: an untap of everything a player controls is filed under
-#: ``tapping``, which reads as a denial. Held to live handler kinds by
-#: ``tests/ai/test_ai_rehearsed_casts.py``.
-_SEAT_GIFT_KINDS = frozenset({"untap_all_matching", "untap_up_to_matching"})
+#: Kinds whose effect on the **player** they name is a gift and whose
+#: category says otherwise: an untap of everything a player controls is filed
+#: under ``tapping``, which reads as a denial; ``life`` holds "gains life"
+#: beside "loses life" and "exchange life totals", and ``zones`` holds a draw
+#: beside a discard. (``prevention`` answers for a shield by itself —
+#: ``_OWN_CATEGORIES``.) One set for the spell's tie-break
+#: (:func:`spell_seat_side`) and an ability's seat (:func:`ability_seat_side`).
+#: Held to live handler kinds by ``tests/ai/test_ai_rehearsed_casts.py``.
+_SEAT_GIFT_KINDS = frozenset({
+    "untap_all_matching", "untap_up_to_matching",
+    "target_gains_life", "draw_target_cards",
+})
 
 
 def spell_seat_side(card: CardDefinition) -> str:
@@ -662,6 +669,51 @@ _SEAT_DENIAL_KINDS = frozenset({"discard_target_cards"})
 #: The spec kinds whose candidates include a player's face
 #: (``resolution._CHOOSABLE_TRIGGER_PLAYER_KINDS``, the picker's own set).
 _SEAT_SPEC_KINDS = frozenset({"player", "player_or_planeswalker", "any"})
+
+
+
+def ability_seat_side(instruction: OracleInstruction | None) -> str | None:
+    """Whose **seat** an effect that names a player — or "any target" — should
+    name: "you", "opponent", or None when the compiled program does not say.
+
+    :func:`ability_target_side` is the question for an object; this is the one
+    for a face. The policy answered it with a list of three instruction kinds
+    (``_choose_target_for_instruction``), two of which no handler has —
+    ``gain_life`` and ``prevent_damage`` are what those effects were called
+    before the grammar lowered them to ``target_gains_life`` and
+    ``grant_prevention_shield``. A kind name nothing compiles is a claim about
+    the pool that expired: every "target player gains N life" ability (Mournful
+    Zombie, Tonic Peddler) and every "prevent the next N damage that would be
+    dealt to any target" one (Samite Healer and eighteen more) fell through to
+    the default and was aimed at an opponent.
+
+    Read step by step with the wrappers opened, over the steps whose target can
+    be a player's face (``_SEAT_SPEC_KINDS``), the denial winning where steps
+    differ — :func:`ability_target_side`'s rule. A printed "target
+    **opponent**" is the card's own answer and comes first: "You draw a card
+    and target opponent gains 3 life" (Armistice) names an opponent however
+    much of a gift the life is.
+    """
+    if instruction is None:
+        return None
+    sides: set[str | None] = set()
+    for step in _effect_steps(instruction):
+        targets = (step.payload or {}).get("targets")
+        if not isinstance(targets, dict) or targets.get("kind") not in _SEAT_SPEC_KINDS:
+            continue
+        if targets.get("opponents_only"):
+            sides.add("opponent")
+        elif step.kind in _SEAT_GIFT_KINDS:
+            sides.add("you")
+        elif step.kind in _SEAT_DENIAL_KINDS:
+            sides.add("opponent")
+        else:
+            sides.add(_effect_side(step))
+    if "opponent" in sides:
+        return "opponent"
+    if "you" in sides:
+        return "you"
+    return None
 
 
 def entry_trigger_seat_side(
@@ -915,6 +967,9 @@ def chosen_creature_type_side(card: CardDefinition) -> str | None:
     * something put onto the battlefield **for its controller** that the type
       describes — a card from the controller's own hand (Belbe's Portal), a
       token the card creates (Volrath's Laboratory);
+    * cards of the type taken out of the controller's **own library** into
+      their hand (Brass Herald's reveal) — a type the deck does not hold makes
+      that sentence a four-card mill to the bottom;
     * the two derivation tables that read "of the chosen type" on lines the
       compiled program does not carry: an untap lock is a denial (An-Zerrin
       Ruins), a cost reduction a gift (Urza's Incubator) and a cost increase a
@@ -943,6 +998,13 @@ def chosen_creature_type_side(card: CardDefinition) -> str | None:
             sides.add("you")
         elif instruction.kind == "put_chosen_card_from_hand_onto_battlefield" and (
             payload.get("whose") in (None, "you")
+        ):
+            sides.add("you")
+        elif instruction.kind == "reveal_top_sorting_by_filter" and (
+            # The caster's own pile only: "each player reveals …" hands every
+            # seat its cards of the type, which says nothing about whose to
+            # name.
+            payload.get("whose") is None
         ):
             sides.add("you")
     text = card.oracle_text or ""
@@ -1379,8 +1441,21 @@ class TollLoss:
         )
 
 
+def _offer_target_permanent(game, context):
+    """The one permanent the offer's resolution announced as its target, or
+    None where it named none, named several, or the permanent has left."""
+    named = getattr(context, "target_permanent_id", None)
+    # One id, or the one-slot list an announcement made by id arrives as.
+    if isinstance(named, (list, tuple)) and len(named) == 1:
+        named = named[0]
+    if not isinstance(named, int):
+        return None
+    return game.permanent_by_id(named)
+
+
 def toll_branch_loss(
-    game, player_index: int, steps, self_recipients=(), source_permanent=None
+    game, player_index: int, steps, self_recipients=(), source_permanent=None,
+    context=None,
 ) -> TollLoss | None:
     """The loss running *steps* costs seat *player_index*, or None when a step's
     loss is not derivable from the compiled program.
@@ -1400,6 +1475,15 @@ def toll_branch_loss(
     *self_recipients* is the same set ``offered_action_is_a_payment`` takes,
     resolved by the caller, for the steps whose payload names a printed player
     reference (``deal_damage``, a self-mill).
+
+    *context* is the resolution the offer sits inside, for the two penalties
+    aimed at the **permanent the spell targeted** rather than at a seat or at
+    the source: "deals 3 damage to target creature unless …" (Blazing Salvo)
+    and "destroy target nonbasic land unless …" (Lava Blister). The loss is
+    that permanent when the offered seat controls it and the step would take
+    it — a creature the damage does not kill is no loss at all, and neither is
+    somebody else's permanent. Without a context those steps stay unpriceable,
+    which is what they were.
     """
     from .handlers._common import attached_host
 
@@ -1420,9 +1504,30 @@ def toll_branch_loss(
             life += amount
         elif kind == "deal_damage":
             amount = payload.get("amount")
-            if not isinstance(amount, int) or payload.get("recipient") not in recipients:
+            if not isinstance(amount, int):
                 return None
-            life += amount
+            if payload.get("recipient") in recipients:
+                life += amount
+                continue
+            if payload.get("recipient") is not None or not payload.get("targets"):
+                return None
+            # Damage aimed at the announced permanent. Lethal to a creature
+            # the seat controls is that creature gone; anything less is
+            # nothing this valuation counts.
+            victim = _offer_target_permanent(game, context)
+            if victim is None or not victim.is_creature:
+                return None
+            if (
+                game.controller_index_of(victim) == player_index
+                and amount >= victim.effective_toughness - victim.damage_marked
+            ):
+                permanents.append(victim)
+        elif kind == "destroy_target_permanent":
+            victim = _offer_target_permanent(game, context)
+            if victim is None:
+                return None
+            if game.controller_index_of(victim) == player_index:
+                permanents.append(victim)
         elif kind in ("sacrifice_self", "destroy_self"):
             if source_permanent is None or not game.is_on_battlefield(source_permanent):
                 return None
@@ -1489,6 +1594,200 @@ def castable_commanders(game, player_index: int):
         for index, card in enumerate(player.command_zone)
         if game.may_cast_from_command_zone(player_index, card)
     )
+
+
+@dataclass(frozen=True)
+class PermittedCast:
+    """One cast a seat may make because an **effect** allows it (CR 601.3):
+    a card outside its hand it may cast or play, or a card in its hand it may
+    cast without paying its mana cost.
+
+    What the policy needs to build a candidate that the cast path will accept,
+    and none of it is derivable from the card alone:
+
+    * **where the card is** — ``zone``, ``owner_seat`` and ``index``. The pile
+      is the grantee's own on every grant but the cross-seat one (Grinning
+      Totem leaves the card in the *searched* player's exile pile);
+    * **what it is cast as** — ``spell``, the half for a split card (CR 709.3)
+      and ``held`` itself otherwise;
+    * **what the cast is charged** — ``permission``: its required alternative
+      cost (CR 118.9b; flashback, CR 702.34a), its waiver, or neither;
+    * **the announcement that selects that permission** — ``alternative_cost``,
+      CR 601.2b's choice, in the cast path's own spelling. A card may be
+      covered twice (a flashback card under Yawgmoth's Will) and those are two
+      casts at two prices.
+    """
+
+    zone: str
+    owner_seat: int
+    index: int
+    held: CardDefinition
+    spell: CardDefinition
+    permission: object
+    alternative_cost: bool = False
+
+    @property
+    def cost(self):
+        """The alternative cost the permission requires, or None."""
+        return getattr(self.permission, "cost", None)
+
+    @property
+    def waives_mana_cost(self) -> bool:
+        """Whether the cast is made "without paying its mana cost".
+
+        A grant's ``free`` flag — and **every** permission over the hand,
+        which is the cast path's own reading (``cast_permissions.permission_for``
+        answers the hand zone for cost waivers alone, and ``_cast_onto_stack``
+        takes whatever it answers as one)."""
+        return self.cost is None and (
+            bool(getattr(self.permission, "free", False)) or self.zone == "hand"
+        )
+
+    @property
+    def expires(self) -> bool:
+        """Whether the permission has a stated duration (CR 611.2a) — "until
+        end of turn", "until your next turn" — as opposed to lasting for as
+        long as the card stays where it is (flashback, a static ability of a
+        permanent)."""
+        return getattr(self.permission, "duration", None) is not None
+
+
+def permitted_casts(game, player_index: int) -> "tuple[PermittedCast, ...]":
+    """Every cast *player_index* may make from **outside its hand** right now
+    (CR 601.3), one entry per spell and per price.
+
+    The list is the engine's: ``cast_permissions.playable_from_zones``, the
+    one the browser's zone badges are built from, so an AI seat is offered
+    exactly the cards a human seat is. The command zone is left to
+    :func:`castable_commanders` — CR 903.8 is a rule rather than a permission,
+    and it carries a tax where these carry a price.
+
+    **Which permission a cast will be made under is the cast path's answer,
+    mirrored rather than re-decided.** ``_cast_onto_stack`` finds a card *by
+    name*, in the caster's own pile first and then the others', and takes the
+    first permission that covers it — the first that *requires an alternative
+    cost* when the caster announced one (CR 601.2b, ``permission_for``'s
+    ``costed``). So for each spell name in each zone:
+
+    * the **bare** cast is the first covered copy in that scan order, under the
+      first permission that answers for it — and a later copy is not offered
+      again, because the cast could not reach it;
+    * where that permission asks no alternative cost and another one does (a
+      flashback card under Yawgmoth's Will, an opened graveyard), the cast
+      **announcing an alternative cost** is offered beside it.
+
+    Lands are included (``mode="play"``): the land-drop chooser reads them.
+    """
+    from .cast_permissions import permission_for, playable_from_zones
+    from .faces import castable_faces
+
+    found: list[PermittedCast] = []
+    bare_seen: set[tuple[str, str]] = set()
+    costed_seen: set[tuple[str, str]] = set()
+    for entry in playable_from_zones(game, player_index):
+        zone = entry["zone"]
+        if zone == "command":
+            continue
+        owner = entry["owner_seat"]
+        index = entry["index"]
+        pile = getattr(game.players[owner], zone)
+        if not 0 <= index < len(pile):
+            continue
+        held = pile[index]
+        as_land = held.primary_type == "land"
+        for spell in castable_faces(held):
+            key = (zone, spell.name)
+            first = permission_for(
+                game, player_index, held, zone, as_land=as_land, spell=spell,
+            )
+            if first is None or first.zone_seat != owner:
+                continue
+            if key not in bare_seen:
+                bare_seen.add(key)
+                found.append(PermittedCast(
+                    zone=zone, owner_seat=owner, index=index, held=held,
+                    spell=spell, permission=first,
+                    alternative_cost=first.cost is not None,
+                ))
+                if first.cost is not None:
+                    costed_seen.add(key)
+            if key in costed_seen:
+                continue
+            costed = permission_for(
+                game, player_index, held, zone, as_land=as_land, spell=spell,
+                costed=True,
+            )
+            if costed is None or costed.zone_seat != owner:
+                continue
+            costed_seen.add(key)
+            found.append(PermittedCast(
+                zone=zone, owner_seat=owner, index=index, held=held,
+                spell=spell, permission=costed, alternative_cost=True,
+            ))
+    return tuple(found)
+
+
+def hand_waiver(
+    game, player_index: int, held: CardDefinition, spell: CardDefinition,
+    hand_index: int,
+) -> "PermittedCast | None":
+    """The waiver a cast of *spell* out of *player_index*'s hand will be made
+    under ("Any player may cast creature spells with mana value 3 or less
+    without paying their mana costs", Aluren; "you may cast spells from your
+    hand without paying their mana costs", Chandra, Flame's Catalyst), or None.
+
+    The cast path's own default, mirrored: a cast that announces nothing takes
+    a hand waiver whenever one covers the card, **except for an {X} spell** —
+    a waived {X} is locked to 0 (CR 107.3b), so that one defaults to paying.
+    Never a land, which is played rather than cast.
+    """
+    from .cast_permissions import permission_for
+
+    if spell.primary_type == "land" or "{X}" in (spell.mana_cost or "").upper():
+        return None
+    permission = permission_for(game, player_index, held, "hand", spell=spell)
+    if permission is None:
+        return None
+    return PermittedCast(
+        zone="hand", owner_seat=player_index, index=hand_index, held=held,
+        spell=spell, permission=permission,
+    )
+
+
+#: The permission the cast being weighed would be made under (CR 601.3), as a
+#: :class:`PermittedCast` -- or None, which is every ordinary cast from hand.
+#:
+#: The zone's twin of :data:`_MODE_CONSIDERED`, a context variable for its
+#: reason: *where a spell is cast from* and *what that cast is charged* are
+#: asked by a dozen choosers underneath the candidate builder -- the spec (a
+#: spell leaving a graveyard is not a card in it, CR 601.2a), the prohibitions
+#: (a row may bind one zone), the price, the X -- and each took a card. Held
+#: with the spell, by identity, so a question about another card asked while
+#: this one is weighed is answered for a cast from hand.
+_CAST_WEIGHED: ContextVar["PermittedCast | None"] = ContextVar(
+    "ai_cast_weighed", default=None
+)
+
+
+@contextmanager
+def casting_under(permitted: "PermittedCast | None"):
+    """Weigh a cast as made under *permitted* for the length of the block.
+    None is an ordinary cast from hand, which reads what every reader read
+    before a seat could cast from anywhere else."""
+    token = _CAST_WEIGHED.set(permitted)
+    try:
+        yield
+    finally:
+        _CAST_WEIGHED.reset(token)
+
+
+def cast_weighed(card: CardDefinition) -> "PermittedCast | None":
+    """The permission *card* is being weighed under (:func:`casting_under`),
+    or None."""
+    held = _CAST_WEIGHED.get()
+    if held is None or held.spell is not card:
+        return None
+    return held
 
 
 def entry_sacrifice_is_unavoidable(game, seat: int, card: CardDefinition) -> bool:
@@ -1764,6 +2063,20 @@ class DividedShape:
     #: is the only choice it has, and a filter bounding that list to one
     #: player's board is the card making it.
     whole_board: bool = False
+    #: One side per printed target, for the division whose targets are **not
+    #: interchangeable** — "The next X damage that would be dealt to target
+    #: creature, planeswalker, or player this turn is dealt to **another**
+    #: target … instead" (Captain's Maneuver): entry 0 is spared and entry 1
+    #: takes what it was spared. Empty for every other division in the pool,
+    #: whose targets all receive the same thing and so share :attr:`side`.
+    #:
+    #: Read off ``_SLOT_ROLE_SIDES``, the table the several-target channel
+    #: already answers "what does this kind do to each slot" from (Kor Chant is
+    #: this sentence with a chosen source), and only where the description
+    #: prints exactly that many targets. With one side for both ends the policy
+    #: announced two opposing objects: it shielded an opponent and sent the
+    #: damage to another thing of theirs.
+    slot_sides: tuple[str | None, ...] = ()
 
 
 def divided_shape(program, instructions=None) -> DividedShape | None:
@@ -1797,6 +2110,9 @@ def divided_shape(program, instructions=None) -> DividedShape | None:
         side = "you" if sum(deltas) > 0 else "opponent" if sum(deltas) < 0 else None
     else:
         side = activation_target_side(instruction)
+    slot_sides = _SLOT_ROLE_SIDES.get(instruction.kind, ())
+    if described.get("target_count") != len(slot_sides):
+        slot_sides = ()
     return DividedShape(
         side=side,
         thresholded=category == "damage",
@@ -1804,6 +2120,7 @@ def divided_shape(program, instructions=None) -> DividedShape | None:
             described.get("division") != CHOSEN
             and bool((described.get("filter") or {}).get("controller"))
         ),
+        slot_sides=slot_sides,
     )
 
 
@@ -1867,6 +2184,13 @@ _SLOT_ROLE_SIDES: dict[str, tuple[str | None, ...]] = {
     # creature **gains it**" (Phyrexian Splicer). Slot 0 is robbed, slot 1 is
     # given what it had.
     "move_chosen_keyword_between_targets": ("opponent", "you"),
+    # "The next X damage that would be dealt to target creature, planeswalker,
+    # or player this turn is dealt to **another target** creature,
+    # planeswalker, or player instead" (Captain's Maneuver). Kor Chant's two
+    # ends without the chosen source, announced on the divided channel
+    # (``target_count: 2``) rather than the several-target one — so it is
+    # :func:`divided_shape` that reads this row, as ``DividedShape.slot_sides``.
+    "redirect_next_damage_between_targets_until_eot": ("you", "opponent"),
 }
 
 #: Steps that act on a recorded group (``permanents_from``) and whose category
@@ -2017,6 +2341,16 @@ def several_target_slot_sides(program, instructions=None) -> tuple[str | None, .
         # several-target *graveyard* return names cards, and whose pile they
         # come from is the printed phrase's business.
         shared = _effect_side(instruction)
+    elif (
+        instruction.kind == "exile_cards_from_graveyard"
+        and instruction.payload.get("graveyard_owner") == "chosen"
+    ):
+        # …with one exception, the one printing that leaves the pile to the
+        # chooser: "Exile up to three target cards from **a single**
+        # graveyard" (Ebony Charm, Rapid Decay, Decompose). Taking cards out
+        # of a graveyard is a denial, and the fallback's own-pile-first would
+        # empty the caster's.
+        shared = "opponent"
     else:
         shared = None
     sides: list[str | None] = []
@@ -2465,6 +2799,54 @@ def harms_its_own_source(instruction: OracleInstruction | None) -> bool:
     )
 
 
+def named_counter_marks_for_harm(
+    card: CardDefinition, instruction: OracleInstruction | None
+) -> bool:
+    """Whether *instruction* puts a named counter on its target that **this
+    same card's** state trigger then punishes.
+
+    "{T}: Put a fuse counter on target creature." reads as a gift by its
+    category — ``counters`` is an own-side category, because a +1/+1 counter is
+    one — and the card's third line says what a fuse counter is for: "Whenever
+    a creature has four or more fuse counters on it, … destroy it. That
+    creature deals 4 damage to its controller." (Bomb Squad.) A named counter
+    means nothing by itself (CR 122.1); what it means is whatever the card's
+    other lines say about it, so this reads them: a state trigger watching
+    other permanents for the same kind of counter, whose effect has a step the
+    engine already files as hostile.
+
+    Without it an AI seat holding Bomb Squad lit its own creature, blew it up,
+    took the 4, and then started on Bomb Squad itself — every simulated game
+    that dealt the card.
+    """
+    if instruction is None:
+        return False
+    placed = {
+        str((step.payload or {}).get("counter"))
+        for step in _effect_steps(instruction)
+        if step.kind == "add_named_counter_to_target"
+        and isinstance((step.payload or {}).get("targets"), dict)
+    }
+    if not placed:
+        return False
+    from .grammar.lowering.categories import INSTRUCTION_CATEGORIES
+    from .state_triggers import WATCHED_COUNTER_THRESHOLD
+
+    for trig in compile_card_oracle(card).triggered_abilities:
+        if (
+            trig.condition.kind != WATCHED_COUNTER_THRESHOLD
+            or trig.instruction is None
+            or str(trig.condition.payload.get("counter_kind")) not in placed
+        ):
+            continue
+        if any(
+            INSTRUCTION_CATEGORIES.get(step.kind) in _OPPONENT_CATEGORIES
+            for step in _effect_steps(trig.instruction)
+        ):
+            return True
+    return False
+
+
 def source_toughness_change(instruction: OracleInstruction | None) -> int | None:
     """The toughness change an effect makes to its own source, when that is the
     whole of the effect — every step a ``pump_self`` with printed numbers — or
@@ -2617,6 +2999,55 @@ _OWN_ZONE_NAME_READERS = {
 }
 
 
+#: How many flips a seat nobody asks takes when a chosen number is the length
+#: of a run that stops at the first loss (Squee's Revenge: two cards for each
+#: flip, if every flip is won). A weight. The expected draw is ``2n / 2**n`` —
+#: one card at one flip *and* at two, less from three on — and two is the
+#: larger prize at the same expectation.
+FLIP_RUN_LENGTH = 2
+
+
+def chosen_number_bounds_flip_run(card: CardDefinition, instruction) -> bool:
+    """Whether the number *instruction* chooses is the length of a run of coin
+    flips — "Choose a number. Flip a coin **that many times** or until you lose
+    a flip…" (Squee's Revenge).
+
+    Read off the steps **behind** the choice in the sequence that holds it, for
+    ``chosen_name_own_zone``'s reason directly below: the choice is a step that
+    produces a value, and what the value is for is the next sentence. The
+    default every other chosen number takes counts mana values on the board
+    (``_most_telling_mana_value``, Void's question), which for this card names
+    zero flips on an empty board and a dozen on a full one.
+    """
+    program = compile_card_oracle(card)
+
+    def follows(step) -> bool:
+        payload = getattr(step, "payload", None) or {}
+        for key in ("steps", "then", "else", "action", "otherwise"):
+            nested = payload.get(key)
+            if not isinstance(nested, (list, tuple)):
+                continue
+            for position, inner in enumerate(nested):
+                if inner is instruction:
+                    return any(
+                        later.kind == "flip_coins_until_loss"
+                        for later in nested[position + 1:]
+                    )
+                if follows(inner):
+                    return True
+        return False
+
+    return any(
+        follows(root)
+        for root in (
+            *program.instructions,
+            *(ability.instruction for ability in program.activated_abilities),
+            *(ability.instruction for ability in program.triggered_abilities),
+        )
+        if root is not None
+    )
+
+
 def chosen_name_own_zone(card: CardDefinition, instruction) -> str | None:
     """The chooser's own zone *instruction*'s "choose a card name" is then
     looked for in — ``"library"``, ``"hand"`` — or None when it is looked for
@@ -2663,6 +3094,57 @@ def chosen_name_own_zone(card: CardDefinition, instruction) -> str | None:
         if found is not None:
             return found
     return None
+
+
+#: The steps that read a chosen name against a card off the top of **the
+#: targeted player's** library: "Choose a card name, then target player mills
+#: a card. If a card with the chosen name was milled this way…" (Predict;
+#: Foreshadow says "target opponent"). Whose library that is, is settled by
+#: the announcement, so this is half an answer and the game supplies the rest.
+_TARGET_LIBRARY_NAME_READERS = frozenset({"mill_target_player"})
+
+
+def chosen_name_is_read_off_the_targets_library(card: CardDefinition, instruction) -> bool:
+    """Whether *instruction*'s "choose a card name" is looked for among cards
+    milled from **the target player's** library — so that, when that player is
+    the chooser, the name worth choosing is one of the chooser's own cards.
+
+    :func:`chosen_name_own_zone`'s question one seat over, and read the same
+    way: the steps behind the choice in the sequence that holds it, found by
+    identity. A player built their own deck, so what their own library still
+    holds is theirs to work out (CR 401.2 hides only *which card is where*) —
+    and an **opponent's** library is a hidden zone outright (CR 400.2), which
+    is why the answer for a milled opponent stays what it was: that seat's
+    graveyard, the public evidence of what its deck holds.
+    """
+    program = compile_card_oracle(card)
+
+    def search(step) -> bool:
+        if step is None:
+            return False
+        payload = getattr(step, "payload", None) or {}
+        for key in ("steps", "then", "else", "action", "otherwise"):
+            nested = payload.get(key)
+            if not isinstance(nested, (list, tuple)):
+                continue
+            for position, inner in enumerate(nested):
+                if inner is instruction:
+                    return any(
+                        later.kind in _TARGET_LIBRARY_NAME_READERS
+                        for later in nested[position + 1:]
+                    )
+                if search(inner):
+                    return True
+        return False
+
+    return any(
+        search(root)
+        for root in (
+            *program.instructions,
+            *(ability.instruction for ability in program.activated_abilities),
+            *(ability.instruction for ability in program.triggered_abilities),
+        )
+    )
 
 
 # --- CR 601.2b: the optional additional costs a cast may take ---------------
@@ -3333,12 +3815,28 @@ def _scratch(game, carried, detach):
     shuffled and its randomness on the rehearsal's own seed."""
     import random
 
+    from .cast_permissions import playable_from_zones
+
     clone, carried = scratch_copy_with(game, carried)
     if detach:
         _detach(clone, owing_nothing=detach == "abstract")
     random.seed(_rehearsal_seed(game))
-    for player in clone.players:
-        random.shuffle(player.library)
+    for seat, player in enumerate(clone.players):
+        # …all but a **top card its owner may play** (CR 601.3 over a library:
+        # Conspicuous Snoop, Radha, Temporal Aperture, a "cast the top card"
+        # cascade). That card is one its owner knows — the permission is what
+        # names it — and shuffled away, a rehearsed cast of it was refused on
+        # every copy, so a free cast off the top was never proposed.
+        known = any(
+            entry.get("zone") == "library" and entry.get("index") == 0
+            for entry in playable_from_zones(clone, seat)
+        )
+        if known and player.library:
+            rest = player.library[1:]
+            random.shuffle(rest)
+            player.library[1:] = rest
+        else:
+            random.shuffle(player.library)
     return clone, carried
 
 
@@ -3502,6 +4000,81 @@ def _rehearse(
     finally:
         random.setstate(real_sequence)
         _REHEARSING.reset(token)
+#: Instruction kinds that take a **targeted card out of a graveyard and out of
+#: the game** — "Exile target card from a graveyard." (Coffin Purge, Cremate,
+#: Headstone; Crypt Creeper's, Steamclaw's and Scavenging Ooze's abilities.)
+#: Spelled out and held to registered handlers by
+#: ``tests/ai/test_ai_graveyard_denial.py``, for :data:`MANA_ABILITY_KINDS`'
+#: reason: a kind renamed out from under a set like this stops matching in
+#: silence.
+#:
+#: Denial, and so wanted from an **opponent's** pile: a card in a graveyard is
+#: a resource for the seat that owns it (a flashback cast, a reanimation
+#: target, a card toward threshold), and removing the caster's own is the
+#: effect spent on itself. A kind that *returns* the card it names — to a
+#: hand, to the battlefield — is not here: its printed phrase is almost always
+#: "from your graveyard", and where it is not, either pile is a gain.
+GRAVEYARD_DENIAL_KINDS = frozenset({"exile_target_graveyard_card"})
+
+
+def exiles_a_graveyard_target(instructions) -> bool:
+    """Whether a step of *instructions* (wrappers opened) is one of
+    :data:`GRAVEYARD_DENIAL_KINDS` — the question the cast and activation
+    choosers ask before naming whose graveyard a card is exiled from."""
+    def walk(steps) -> bool:
+        for step in steps or ():
+            if getattr(step, "kind", None) in GRAVEYARD_DENIAL_KINDS:
+                return True
+            payload = getattr(step, "payload", None) or {}
+            for key in ("steps", "then", "else", "action", "otherwise", "effect"):
+                nested = payload.get(key)
+                if isinstance(nested, (list, tuple)) and walk(nested):
+                    return True
+        return False
+
+    return walk(instructions)
+
+
+def denied_graveyard_pile(player_index: int, piles) -> "int | None":
+    """Which of *piles* (seats, in the order offered) a seat takes cards **out
+    of the game** from: the first that is not its own, and its own only when
+    there is no other. None for no pile at all.
+
+    "Exile up to three target cards from **a single graveyard**" (Decompose,
+    Rapid Decay, Ebony Charm; Carrion Beetles' and Famished Ghoul's abilities)
+    leaves the pile to the chooser, and the default took the first in seat
+    order — so the seat in chair 0 exiled its own graveyard and the seat in
+    chair 1 its opponent's, the same card played two ways by where a player
+    sat. See :data:`GRAVEYARD_DENIAL_KINDS` for why the opponent's.
+    """
+    piles = list(piles or ())
+    if not piles:
+        return None
+    return next((seat for seat in piles if seat != player_index), piles[0])
+
+
+def graveyard_denial_order(game, owner_seat: int, slots) -> list:
+    """*slots* — positions in *owner_seat*'s graveyard a seat may exile — with
+    the cards their owner could still **cast from there** first, each group
+    in pile order.
+
+    A card with flashback (CR 702.34a; printed, or granted by Recoup) is a
+    spell its owner still holds; any other card in a graveyard is, to a seat
+    removing "up to three", one card among equals. Asked of
+    ``flashback.has_flashback`` with the game and the pile's seat, which is
+    what sees a grant. A stable sort, so a pile holding none is exiled in the
+    order it always was — and a seed that met none replays as it did.
+    """
+    from .flashback import has_flashback
+
+    pile = game.players[owner_seat].graveyard
+    return sorted(
+        slots,
+        key=lambda slot: 0 if (
+            isinstance(slot, int) and 0 <= slot < len(pile)
+            and has_flashback(pile[slot], game=game, owner_seat=owner_seat)
+        ) else 1,
+    )
 
 
 def _walk_program(program):
@@ -3525,6 +4098,7 @@ def _walk_program(program):
 
 __all__ = [
     "CARD_WORTH",
+    "GRAVEYARD_DENIAL_KINDS",
     "MANA_ABILITY_KINDS",
     "Rehearsal",
     "SELF_PAYMENT_KINDS",
@@ -3536,16 +4110,21 @@ __all__ = [
     "DividedShape",
     "ManaYield",
     "OfferTrade",
+    "PermittedCast",
     "TollLoss",
     "ability_target_side",
     "cards_drawn_by_controller",
     "cards_drawn_by_target",
+    "cast_weighed",
     "caster_sacrifice_steps",
     "castable_commanders",
     "chosen_color_sweeps",
+    "casting_under",
     "chosen_creature_type_side",
     "color_most_worth_sweeping",
+    "chosen_name_is_read_off_the_targets_library",
     "counters_a_spell",
+    "denied_graveyard_pile",
     "denies_its_target",
     "destroyed_permanent_filter",
     "divided_shape",
@@ -3553,9 +4132,13 @@ __all__ = [
     "mana_ability_amount",
     "exiled_search_pile_comes_back",
     "exiled_search_pile_comes_back_one_at_a_time",
+    "exiles_a_graveyard_target",
     "foreign_activation_use",
+    "graveyard_denial_order",
     "hand_entry_steps",
+    "hand_waiver",
     "harms_its_own_source",
+    "named_counter_marks_for_harm",
     "hand_pick_entry_consumer",
     "instruction_target_side",
     "offer_trade",
@@ -3567,6 +4150,7 @@ __all__ = [
     "standing_swing",
     "standings",
     "swing_worth",
+    "permitted_casts",
     "pick_is_tested_for_a_shared_color",
     "planned_mana_yield",
     "returns_creature_to_hand",

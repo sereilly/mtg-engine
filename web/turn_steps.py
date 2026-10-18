@@ -10,6 +10,7 @@ up when the answer arrives.
 
 from __future__ import annotations
 
+from engine.hand_size import maximum_hand_size
 from engine.phases.upkeep_step import upkeep_prompt_key
 from engine.upkeep_costs import cost_from_payload
 
@@ -25,12 +26,22 @@ from .seats import (
 
 
 def _cleanup_discard_requirement(session: Session) -> int:
+    """How many cards the active seat still owes CR 514.1's discard.
+
+    Asked of ``engine.hand_size.maximum_hand_size`` — the reader the cleanup
+    step itself enforces with. This kept its own copy (the player flag and a
+    literal seven), so the engine deferred a human seat's discard under Cursed
+    Rack or Recycle and this then reported that nothing was owed: no prompt
+    was drawn, and advancing started the next turn with the cards still in
+    hand. The engine and the prompt must count against one number.
+    """
     if session.game.current_phase != "cleanup":
         return 0
     active = session.game.players[session.current_turn]
-    if active.has_no_max_hand_size:
+    limit = maximum_hand_size(session.game, session.current_turn)
+    if limit is None:
         return 0
-    return max(0, len(active.hand) - 7)
+    return max(0, len(active.hand) - limit)
 
 
 def _clear_cleanup_selection(session: Session) -> None:
@@ -264,6 +275,40 @@ def _advance_after_upkeep_choices(session: Session) -> None:
     _finish_beginning_phase(session, session.current_turn)
 
 
+def _can_pay_upkeep_choice(session: Session, payer, choice: dict) -> bool:
+    """Whether *payer* can pay *choice*'s upkeep cost **on top of** every
+    upkeep cost they have already said they will pay.
+
+    The upkeep's prices are answered as a batch and paid afterwards, one
+    trigger at a time, off one board. Each used to be asked on its own, so
+    two Force of Nature and four Forests read "can pay" twice, both were
+    accepted, the first was paid — and the second, found unpayable when its
+    turn came, dealt its 8 damage: a "Pay" carried out as a "don't". An
+    accept the board cannot honour beside the ones already given is refused
+    while it is still an answer (CR 118.3, CR 608.2d).
+
+    The mana halves are what share a board, so those are what is summed; the
+    life and sacrifice halves are asked of this cost alone, as before.
+    """
+    cost = cost_from_payload(choice.get("cost") or {})
+    if not session.game.can_pay_upkeep_cost(payer, cost):
+        return False
+    key = upkeep_prompt_key(choice)
+    total = dict(cost.mana)
+    committed = False
+    for other in session.upkeep_pay_choices:
+        other_key = upkeep_prompt_key(other)
+        if other_key == key or session.upkeep_resolved_choices.get(other_key) is not True:
+            continue
+        for symbol, amount in cost_from_payload(other.get("cost") or {}).mana.items():
+            if amount:
+                total[symbol] = total.get(symbol, 0) + amount
+                committed = True
+    if not committed or not cost.mana:
+        return True
+    return session.game.can_pay_upkeep_mana(payer, total)
+
+
 def _build_upkeep_pay_info(session: Session, viewer_seat: int | None) -> dict | None:
     """Serialize pending upkeep pay state for the game-state response."""
     if not session.upkeep_pay_choices:
@@ -281,10 +326,11 @@ def _build_upkeep_pay_info(session: Session, viewer_seat: int | None) -> dict | 
         # Keyed by the prompt key, which JSON renders as a string for the
         # permanent ids — ``app.js`` indexes it with the same value it sends
         # back, and JavaScript stringifies a numeric index for free.
+        # …and on top of what the seat has already agreed to pay this upkeep
+        # (`_can_pay_upkeep_choice`), which is the question the pay action
+        # asks: the button and the answer read one board.
         can_pay = {
-            upkeep_prompt_key(c): session.game.can_pay_upkeep_cost(
-                payer, cost_from_payload(c.get("cost") or {})
-            )
+            upkeep_prompt_key(c): _can_pay_upkeep_choice(session, payer, c)
             for c in session.upkeep_pay_choices
         }
     return {

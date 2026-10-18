@@ -17,7 +17,6 @@ from engine.ai_combat import declare_ai_blockers
 
 from engine.ai_policy import (
     cast_announcement,
-    cast_zone_of,
     choose_activation_action,
     choose_foreign_activation_action,
     choose_hand_activation_action,
@@ -25,6 +24,7 @@ from engine.ai_policy import (
     choose_combat_instant_cast_action,
     spell_being_cast,
     tap_planned_lands,
+    zone_being_cast_from,
 )
 
 from .prompts import auto_resolve_ai_prompts
@@ -136,10 +136,10 @@ def _ai_step(session: Session) -> bool:
     cast_action = choose_cast_action(game, seat) if sorcery_speed_ok else None
     if cast_action is not None:
         # `hand_index` indexes the zone `from_zone` names — the hand, the
-        # command zone for a commander cast (CR 903.8), or a graveyard, exile
-        # zone or library an effect opened (CR 601.3), which may be another
-        # seat's. One reader, shared with the simulator.
-        cast_zone = cast_zone_of(game, seat, cast_action)
+        # command zone for a commander cast (CR 903.8), or a graveyard, an
+        # exile or a library an effect has opened (CR 601.3: a flashback card)
+        # — through the one reader the simulator's executor shares.
+        cast_zone = zone_being_cast_from(game, seat, cast_action)
         # The spell the policy chose, which for a split card is one half of
         # the zone's card (CR 709.3) — see `ai_policy.spell_being_cast`.
         card_to_cast = spell_being_cast(cast_zone, cast_action)
@@ -237,7 +237,11 @@ def _ai_respond_to_priority(session: Session, seat: int) -> str | None:
 
     instant_action = choose_combat_instant_cast_action(game, seat)
     if instant_action is not None:
-        card_to_cast = spell_being_cast(game.players[seat].hand, instant_action)
+        # Out of the zone the action names (`zone_being_cast_from`): the hand,
+        # or a graveyard holding a flashback instant.
+        card_to_cast = spell_being_cast(
+            zone_being_cast_from(game, seat, instant_action), instant_action,
+        )
         instant_action = tap_planned_lands(game, seat, instant_action)
         # The whole announcement (`cast_announcement`, as in `_ai_step`): the
         # chosen permanent — a spell whose handler has no board scan (Sivvi's
@@ -323,6 +327,19 @@ def _advance_ai_turn(session: Session) -> None:
     for _safety in range(20):
         game = session.game
         step = game.current_step
+
+        # **An AI step never advances a human's turn**, and the place that is
+        # true by construction is here rather than at each caller. This loop
+        # read `prev_turn` below, *inside* itself, so a caller that had already
+        # crossed the turn boundary handed it the next player's precombat main
+        # phase and it walked that into combat: `ai_step` at the AI's end step
+        # (reached whenever the human passed priority in the AI's second main
+        # phase) did exactly that, and the human's turn began at Declare
+        # Attackers. The caller now checks the turn it stepped as well, which
+        # is the precise statement for two AI seats in a row; this is the
+        # backstop no later caller can forget.
+        if _seat_type(session, session.current_turn) != "ai":
+            return
 
         if _ai_should_hold(session, step):
             # Resolve the active player's turn-based action (declaring attackers)
@@ -485,7 +502,10 @@ def _advance_phase(session: Session) -> None:
                     )
                     if instant_action is not None:
                         card_to_cast = spell_being_cast(
-                            game.players[defender_index].hand, instant_action
+                            zone_being_cast_from(
+                                game, defender_index, instant_action
+                            ),
+                            instant_action,
                         )
                         instant_action = tap_planned_lands(
                             game, defender_index, instant_action

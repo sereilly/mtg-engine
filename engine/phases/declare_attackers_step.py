@@ -21,7 +21,7 @@ from ..combat_restrictions import (declaration_company_required,
                                    defender_attack_cap,
                                    participation_cap,
                                    restriction_condition_holds)
-from ..mana_payment import mana_cost_label, plan_payment, untapped_mana_lands
+from ..mana_payment import mana_cost_label, plan_payment
 from ..subject_filters import subject_matches
 from ..events import emit
 from ..handlers._common import evaluate_count
@@ -754,10 +754,12 @@ class DeclareAttackersStepMixin:
         controller = self.players[controller_index]
         available = [
             land
-            for land in untapped_mana_lands(self.controlled_by(controller))
+            for land in self.payment_lands(controller)
             if not any(land is attacker for attacker in attackers)
         ]
-        return total, plan_payment(controller.mana_pool, available, total)
+        return total, plan_payment(
+            controller.mana_pool, available, total, payer=controller,
+        )
 
     def _pay_declaration_mana(
         self, controller_index: int, total: dict[str, int], plan
@@ -771,12 +773,33 @@ class DeclareAttackersStepMixin:
         if plan is None:
             return
         controller = self.players[controller_index]
-        for symbol, amount in plan.from_pool.items():
-            controller.mana_pool[symbol] = int(controller.mana_pool.get(symbol, 0)) - amount
-        for land in plan.tapped:
-            self.become_tapped(land)
+        # The lands the plan named, tapped **for mana** (CR 605.3a) through the
+        # one payer every effect-collected cost shares. Re-planned over those
+        # same lands and no others: the plan was made before the attackers
+        # tapped (CR 508.1f), and a land it left out is one it must still
+        # leave out.
+        planned = list(plan.tapped)
+        paid = self._pay_planned_cost(
+            controller,
+            lambda: plan_payment(
+                controller.mana_pool,
+                [
+                    land for land in self.payment_lands(controller)
+                    if any(land is named for named in planned)
+                ],
+                total, payer=controller,
+            ),
+        )
+        # Said as it happened. The plan is made over ``Game.payment_lands``,
+        # so it fails here only when a tap changed the board under it; the
+        # declaration is already made by then, and a log that read "paid"
+        # either way was the one place the shortfall could have been seen.
         self.log.append(
             f"{controller.name} paid {mana_cost_label(total)} to declare attackers"
+            if paid else
+            f"{controller.name} could not pay {mana_cost_label(total)} in full "
+            "to declare attackers: a land the payment counted on made nothing "
+            "it could spend"
         )
 
     def _attack_costs_of(self, attacker: Permanent) -> list[dict]:
@@ -1168,10 +1191,10 @@ class DeclareAttackersStepMixin:
                 self.players[attacker_seat].mana_pool,
                 [
                     land
-                    for land in untapped_mana_lands(self.controlled_by(attacker_seat))
+                    for land in self.payment_lands(attacker_seat)
                     if land is not attacker
                 ],
-                cost,
+                cost, payer=self.players[attacker_seat],
             ) is None:
                 return False
 
@@ -1918,6 +1941,15 @@ class DeclareAttackersStepMixin:
                 # creature may have been removed from combat and a board search
                 # would find a look-alike.
                 event_subject_permanent_id=attacker.permanent_id,
+            )
+            # "Whenever a creature attacks **or blocks**" (Powerstone
+            # Minefield) — the attack half of the board-wide union, whose
+            # block half ``_announce_bare_board_wide_blocks`` makes. One kind
+            # at two sites, as ``creature_attacks_or_blocks`` is for a source.
+            emit(
+                self, "matching_creature_attacks_or_blocks", subject=attacker,
+                event_subject_permanent_id=attacker.permanent_id,
+                event_subject_controller=self.controller_index_of(attacker),
             )
 
     # ------------------------------------------------------------------

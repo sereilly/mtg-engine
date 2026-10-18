@@ -19,7 +19,7 @@ This module imports nothing from `phrases` any longer.
 """
 
 from . import ast
-from ..oracle_types import DREW_COUNT, REVEALED_THIS_WAY
+from ..oracle_types import DREW_COUNT, EXILED_THIS_WAY, REVEALED_THIS_WAY
 from .amounts import accept_counters_on_granter, accept_counters_on_source
 from .cost_records import (accept_cost_channel_possessive,
                            accept_cost_characteristic_of)
@@ -485,6 +485,15 @@ def parse_where_x_definition_body(stream: TokenStream) -> "ast.Amount":
         if accept_source_reference(stream) and stream.accept_word("entered"):
             return ast.LifePaidAsEntered()
     stream.reset(life_mark)
+    # "…, where X is **the chosen number**." (Liquid Fire.) Beside the life
+    # paid as the source entered and for its reason: not an aggregate over
+    # anything, but a number a player settled once — here as CR 601.2b's
+    # announcement, "as an additional cost to cast this spell, choose a number
+    # between 0 and 5". The lowering refuses it wherever no cast could have
+    # announced one, and the support gate refuses a card that prints these
+    # words without that cost (``cast_costs.unchosen_number_definition``).
+    if stream.accept_phrase("chosen", "number"):
+        return ast.ChosenNumberAsCast()
     if not stream.accept_phrase("number", "of"):
         raise stream.error("expected 'the number of' in a where-clause")
     # "…the number of **+1/+1 counters on it**" (Primordial Ooze). In front of
@@ -616,6 +625,16 @@ def accept_this_way_count(stream: TokenStream, filt) -> "ast.Amount | None":
         if filt.is_card and _names_only_cards(filt):
             return ast.ThatMuch(REVEALED_THIS_WAY)
     stream.reset(revealed)
+    # "…, where X is the number of cards **exiled this way**." (Painbringer.)
+    # The fifth participle, read exactly as the reveal above is and held to the
+    # bare noun for its reason. The key is the one a step of an *effect*
+    # writes; where the exile was the ability's own **cost** instead, the
+    # lowering finds no such step and asks ``_cost_records.cost_count_spec``.
+    exiled = stream.mark()
+    if stream.accept_phrase("exiled", "this", "way"):
+        if filt.is_card and _names_only_cards(filt):
+            return ast.ThatMuch(EXILED_THIS_WAY)
+    stream.reset(exiled)
     drew = stream.mark()
     if stream.accept_word("they", "you") and stream.accept_phrase("drew", "this", "way"):
         if filt.is_card and _names_only_cards(filt):

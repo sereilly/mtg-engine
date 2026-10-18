@@ -58,7 +58,7 @@ from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                              BIDDING_WINNER,
                              CHOSEN_COLOR_THIS_WAY,
                              CHOSEN_CREATURE_TYPE_THIS_WAY,
-                             CHOSEN_NUMBER_THIS_WAY,
+                             CHOSEN_NUMBER_THIS_WAY, COIN_FLIPS_MADE,
                              CHOSEN_TARGET_GRAVEYARD_SLOTS,
                              CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
                              COUNTERED_ABILITY_SOURCE,
@@ -71,7 +71,8 @@ from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                              MANA_LOST_COUNT, MANA_LOST_THIS_WAY,
                              MANA_PAID_BY_SEAT, MILLED_THIS_WAY,
                              DISCARDED_INTO_GRAVEYARD, DISCARDED_THIS_WAY,
-                             PER_OBJECT_SEAT_RECORDS, REVEALED_HAND_CARDS,
+                             PER_OBJECT_SEAT_RECORDS, PUT_INTO_HAND_THIS_WAY,
+                             REVEALED_HAND_CARDS,
                              REVEALED_THIS_WAY, REVEALED_TOP_CARDS_BY_SEAT,
                              SACRIFICED_CARDS_BY_SEAT, SACRIFICED_COUNT,
                              SEARCHED_PERMANENTS, SECRET_NUMBERS_BY_SEAT,
@@ -251,6 +252,9 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # it and the conditionals after it read the record, rather than each
     # sentence flipping a coin of its own.
     "flip_coin": "coin_flip",
+    # A run of them (Squee's Revenge): the same record, here meaning the run
+    # lost no flip, and how many flips the run actually made.
+    "flip_coins_until_loss": ("coin_flip", COIN_FLIPS_MADE),
     # "…**If you win the bidding**, counter that spell." (Mages' Contest.) The
     # seat the high bid stood for, written when the last offer is answered.
     "bid_life": BIDDING_WINNER,
@@ -275,7 +279,11 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # many were actually discarded when it is answered, which is the only place
     # the number exists — the hand the step was handed is not the hand the
     # player chose from.
-    "discard_controller_cards": "discarded_count",
+    #
+    # …and *which* cards, beside it ("for each **land card** discarded this
+    # way", Gerrard's Verdict): the prompt's answer writes both. The count
+    # stays the primary, so "if you do" asks what it has always asked.
+    "discard_controller_cards": ("discarded_count", DISCARDED_THIS_WAY),
     # "Discard a card **at random**. If you discard a creature card this way,
     # return it from your graveyard to the battlefield …" (Aether Rift.) The
     # sample takes its cards inline, so this step knows *which* went as well as
@@ -313,7 +321,12 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # name and the draw refuses (idiom 7), which is the honest failure; with it
     # the count is the one the player actually gave rather than the printed
     # two, and an empty hand draws none.
-    "discard_target_cards": "discarded_count",
+    #
+    # "Target player discards two cards. You gain 3 life for each **land card
+    # discarded this way**." (Gerrard's Verdict.) The same answer also records
+    # *which* cards went — see ``oracle_types.DISCARDED_THIS_WAY``. The count
+    # stays the primary, for the reason it does on the random discard above.
+    "discard_target_cards": ("discarded_count", DISCARDED_THIS_WAY),
     # "Choose two cards in your hand … **For each of those cards**, …"
     # (Sylvan Library.) The pick records what it chose, which is the only
     # place the next sentence can read that set from: nothing about a hand
@@ -870,6 +883,9 @@ _PRODUCES_FOR_PAYLOAD: dict[str, tuple[str, object, str]] = {
     "choose_permanents": ("chooser", "target", CHOSEN_PLAYER),
     # Psychic Theft: the "and exile that card" ending only.
     "reveal_hand_and_choose": ("fate", "exile", "exiled_cards"),
+    # "…until **you put a card into your hand**" (Tainted Pact): the hand
+    # destination only — see ``oracle_types.PUT_INTO_HAND_THIS_WAY``.
+    "put_exiled_cards_into_zone": ("zone", "hand", PUT_INTO_HAND_THIS_WAY),
 }
 
 

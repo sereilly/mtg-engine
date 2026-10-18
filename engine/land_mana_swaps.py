@@ -98,6 +98,16 @@ class LandManaSwap:
     #: colorless is a type of mana but not a color (CR 106.1a, 106.1b). False
     #: is "any other type".
     colors_only: bool = False
+    #: "**Spells and abilities you control** that would add colored mana
+    #: instead add that much white mana." (False Dawn.) The record covers every
+    #: mana production the seat's spells and abilities make, not only its
+    #: lands': ``lands`` is then the empty filter — every land the seat
+    #: controls is one of those abilities' sources, so :func:`swapped_production`
+    #: answers for a land exactly as it does for Hall of Gemstone's record — and
+    #: :func:`source_wide_swap` is what the instruction seam asks for everything
+    #: that is not a land. One record rather than two, so the seat's swaps keep
+    #: one creation order (CR 613.7) whichever kind each is.
+    all_sources: bool = False
 
     def symbol(self) -> str:
         """The symbol this record makes a covered land produce."""
@@ -124,6 +134,40 @@ def add_swap(player, swap: LandManaSwap) -> LandManaSwap:
     """Put *swap* on *player* and return it."""
     swaps_on(player).append(swap)
     return swap
+
+
+def source_wide_swap(player) -> "LandManaSwap | None":
+    """The swap *player* has over **every** spell and ability they control
+    (False Dawn), or None — the newest such record, which is CR 613.7's
+    answer where a seat has armed two.
+
+    Asked by ``Game._execute_oracle_instruction``, the one place every spell's
+    and ability's effect is carried out, so a creature's mana ability, a ritual
+    and a triggered mana ability are covered by one seam. A land tapped for
+    mana is covered by the tap seam through :func:`swapped_production` — the
+    same record, read as covering every land the seat controls.
+
+    Reads the attribute directly rather than through :func:`swaps_on`: this is
+    asked for every instruction a game executes, and creating an empty list on
+    every seat to answer "no" would be a write on the hot path.
+    """
+    for record in reversed(getattr(player, _SWAPS_ATTR, None) or ()):
+        if record.all_sources and record.symbol():
+            return record
+    return None
+
+
+def apply_source_wide_swap(player, record: "LandManaSwap", before: dict) -> int:
+    """Turn the coloured mana *player* gained since *before* into *record*'s
+    symbol, bucket by bucket, and return how much moved.
+
+    :func:`substitute_production` under the record's own two printed words —
+    "colored" (``colors_only``) and "that much" (no amount) — so the general
+    seam and the land seam apply one arithmetic.
+    """
+    return substitute_production(
+        player, before, record.symbol(), None, colors_only=record.colors_only,
+    )
 
 
 def clear_swaps(player, lifetime: str | None = None) -> None:
@@ -419,8 +463,20 @@ def _color_of_choice(requested, land) -> str:
     return COLORS[0]
 
 
-def swapped_production(game, land, requested=None) -> "ManaSubstitution | None":
+def swapped_production(
+    game, land, requested=None, *, tapper: "int | None" = None,
+) -> "ManaSubstitution | None":
     """What *land* produces instead of whatever it would have, or None.
+
+    *tapper* is the seat that tapped it for mana, supplied by the production
+    event and by nobody else. It answers the one land the control seam cannot:
+    "{T}, Sacrifice this land: Add {B}{B}" (Ebon Stronghold) has left the
+    battlefield by the time its ability resolves, and CR 109.4 gives a card in
+    a graveyard no controller — but CR 106.12b applies the replacement to the
+    **production event**, which that land's ability is still performing. So
+    whose land it was is the seat that tapped it. With no tapper (the payment
+    planner asking what a land *could* make) a land nobody controls answers
+    None, as it always did.
 
     *requested* is the colour the tapper asked for, supplied by the tap seam
     alone. It answers a record whose symbol is "a color of your choice"
@@ -444,6 +500,8 @@ def swapped_production(game, land, requested=None) -> "ManaSubstitution | None":
     from .subject_filters import subject_matches
 
     seat = game.controller_index_of(land)
+    if seat is None:
+        seat = tapper
     if seat is None:
         return None
     found = static_substitution_for(game, land)
@@ -588,6 +646,7 @@ __all__ = [
     "COLORS", "END_OF_TURN", "LandManaSwap", "ManaSubstitution", "add_swap",
     "clear_swaps", "payment_colors", "production_snapshot",
     "static_substituted_symbol", "static_substitution_for",
+    "source_wide_swap", "apply_source_wide_swap",
     "substitute_production", "substitution_line", "substitutions_on",
     "swapped_production", "swapped_symbol", "swaps_on",
 ]

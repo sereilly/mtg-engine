@@ -53,13 +53,14 @@ from __future__ import annotations
 
 import dataclasses
 
+from ...flashback import FLASHBACK
 from ...oracle_types import OracleInstruction
 from ...subject_filters import OBJECT_ONLY_FILTER_KEYS, card_only_filter
 from .. import ast
 from ..errors import LoweringError
 from ._amounts import count_spec
 from ._common import (
-    _PAYLOAD_HONOURED_FILTER_FIELDS, dropped_narrowings,
+    _PAYLOAD_HONOURED_FILTER_FIELDS, _describe_targets, dropped_narrowings,
     _restrictions_beyond,
     _filter_payload, refuse_untestable,
                       testable_filter_payload)
@@ -194,7 +195,8 @@ def lower_each_matching_damage(
 
 
 def lower_counted_sweep_damage(
-    node: ast.DealDamage, recipient: ast.TargetSpec, *, multiplier: int = 1
+    node: ast.DealDamage, recipient: ast.TargetSpec, *, multiplier: int = 1,
+    count: dict | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """"…it deals damage to **each nonblue creature without flying** equal to
     half the number of Islands you control, rounded down." (Floodgate.)
@@ -216,8 +218,16 @@ def lower_counted_sweep_damage(
     (CR 120.1a — damage marked on anything else is never read), and every key of
     the printed noun phrase testable by ``subject_matches``, because a narrowing
     the matcher drops burns a strictly larger board than the card prints.
+
+    *count* is the spec when the number is not a board count at all: "…deals
+    damage equal to **the sacrificed creature's power** to each creature"
+    (Bloodfire Infusion) is the same sweep sized by what the ability's own cost
+    ate, and ``_counted_damage._payment_channel_damage`` hands its channel's
+    spec down here rather than building a second sweep. One number for the
+    whole resolution either way, which is the only thing this function needs
+    of it.
     """
-    assert isinstance(node.amount, ast.CountOf)
+    assert count is not None or isinstance(node.amount, ast.CountOf)
     if node.per_each is not None or node.riders != ast.DamageRiders():
         raise LoweringError(
             "a counted sweep carries no multiplier and no riders", node=node
@@ -241,7 +251,7 @@ def lower_counted_sweep_damage(
             {
                 "amount": "x",
                 "filter": described,
-                X_FROM_COUNT: count_spec(
+                X_FROM_COUNT: count if count is not None else count_spec(
                     node.amount.filter, node, multiplier=multiplier
                 ),
             },
@@ -430,6 +440,36 @@ def lower_exile_sweep(
     # ``to_payload`` cannot carry a *variable* mana-value bound, and
     # dropping the bound would widen the sweep to every mana value.
     filt = subject.filter
+    # "…exiles all cards **with flashback** from their graveyard." (Tombfire.)
+    # The one keyword a card in a graveyard is asked about, because it is the
+    # one that *functions* there (CR 702.34a) — and it can be granted there
+    # too (Recoup), which no reading of the printed card can see. So it is
+    # lifted off the filter and carried **beside** it, the split the sweep
+    # bounce makes for ``attached_to``: inside the filter it would reach the
+    # card matcher, which answers a printed type line and a name (CR 613.1)
+    # and would have to refuse it. The sweep is then lowered as the sentence
+    # without the phrase — whichever pile it names, by whichever pairing below
+    # — and the key is added to what that produced, so this reads no pile and
+    # no seat of its own. Any other keyword stays on the filter and is refused
+    # there: "cards with flying" in a graveyard is a question no handler here
+    # answers.
+    if (
+        filt.zone == "graveyard" and filt.is_card
+        and filt.with_keywords == (FLASHBACK,)
+    ):
+        (unnarrowed,) = lower_exile_sweep(
+            node,
+            dataclasses.replace(
+                subject, filter=dataclasses.replace(filt, with_keywords=())
+            ),
+            event,
+        )
+        return (
+            OracleInstruction(
+                unnarrowed.kind, unnarrowed.value,
+                {**unnarrowed.payload, "with_keyword": FLASHBACK},
+            ),
+        )
     # "Exile **all creature cards from your graveyard**." (Zombie Mob.) A
     # sweep over a pile of *cards* rather than over the battlefield, so it
     # is its own instruction: CR 613.1 gives a card in a graveyard no
@@ -464,6 +504,19 @@ def lower_exile_sweep(
         # graveyards" refused while the identical return lowered, for no
         # reason either sentence prints.
         graveyard_owner = _sweep_graveyard_actor(node, subject)
+        # "Exile all cards from **target player's** graveyard other than basic
+        # land cards." (Haunting Echoes.) One pile, and the announcement chose
+        # whose (CR 601.2c) — no printed actor, so the spell's controller does
+        # the exiling, exactly as for "your graveyard". Read here rather than
+        # in the pairing above, which the *return* sweeps ask too: their
+        # handlers resolve the two seats that function names and no third.
+        chosen_pile = (
+            graveyard_owner is None and node.actor is None
+            and filt.zone_owner is not None
+            and filt.zone_owner.kind in ("target_player", "target_opponent")
+        )
+        if chosen_pile:
+            graveyard_owner = "target_player"
         if graveyard_owner is None:
             raise LoweringError(
                 "the graveyard exile sweep reads your own pile, "
@@ -486,12 +539,12 @@ def lower_exile_sweep(
                 "a card in a zone",
                 node=node,
             )
-        return (
-            OracleInstruction(
-                "exile_graveyard_cards", "",
-                {"graveyard_owner": graveyard_owner, "filter": described},
-            ),
-        )
+        swept: dict[str, object] = {
+            "graveyard_owner": graveyard_owner, "filter": described,
+        }
+        if chosen_pile:
+            _describe_targets(swept, filt.zone_owner)
+        return (OracleInstruction("exile_graveyard_cards", "", swept),)
     if filt.zone != "battlefield" or filt.is_card:
         raise LoweringError("the exile sweep reads battlefield permanents", node=node)
     payload: dict[str, object] = {}

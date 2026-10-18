@@ -14,6 +14,7 @@ no seat.
 """
 
 from ..delayed_triggers import fire_delayed_triggers
+from ..destruction_events import NOT_A_DESTRUCTION, delayed_destruction_cause
 from ..models import Permanent
 from ..turn_state import (DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY,
                           marked_for_this_turn)
@@ -32,7 +33,6 @@ END_STEP_DEATH_COUNTER_KINDS = frozenset({
     "add_corpse_counters_for_each_creature_died",
     "add_plus1_counters_for_each_creature_died",
 })
-END_STEP_DID_NOT_ATTACK_KINDS = frozenset({"end_step_damage_if_not_attacked"})
 
 #: The two condition kinds this step dispatches, and the only difference between
 #: them: ``end_step_self`` is "at the beginning of **your** end step" and fires
@@ -79,10 +79,13 @@ def end_step_trigger_seat_matches(game, permanent, cond: str, player_index: int)
 #: Every instruction kind an ``end_step`` trigger can be dispatched on *by kind*.
 #: The fourth scan below is keyed on a payload **shape** instead and so has no
 #: entry here — see ``END_STEP_INTERVENING_IF``.
-END_STEP_DISPATCHED_KINDS = (
-    END_STEP_DEATH_COUNTER_KINDS
-    | END_STEP_DID_NOT_ATTACK_KINDS
-)
+#:
+#: One set today. A second, ``end_step_damage_if_not_attacked``, was Erg
+#: Raiders' name-keyed line and its own scan; the card's sentence is two
+#: conditions the grammar reads now ("if this creature didn't attack this
+#: turn, … unless it came under your control this turn"), so it arrives
+#: through the gated scan like every other intervening-if.
+END_STEP_DISPATCHED_KINDS = END_STEP_DEATH_COUNTER_KINDS
 
 #: The payload key that makes a trigger fire through the CR 603.4 intervening-if
 #: scan, whatever its instruction kind. It used to be a list of kinds holding
@@ -110,6 +113,14 @@ class EndStepMixin:
         # "At the beginning of **your** next end step, …" (Necropotence). The
         # controller's own, so this one is seated where the line above is not.
         fire_delayed_triggers(self, "controllers_next_end_step", seat=player_index)
+        # "At the beginning of the end step of **that player's next turn**, …"
+        # (Suppress.) Seated by the player the creating effect named rather
+        # than by the ability's controller (`EVENTS_SEATED_BY_BOUND_PLAYER`),
+        # and an entry armed during this very turn waits for the next one
+        # (`EVENTS_AFTER_THIS_TURN`).
+        fire_delayed_triggers(
+            self, "bound_players_next_turns_end_step", seat=player_index
+        )
         # "At the beginning of **that turn's** end step, you lose the game."
         # (Final Fortune.) The end step of the extra turn the creating spell
         # queued, so it is announced only on an extra turn and only for the
@@ -150,6 +161,30 @@ class EndStepMixin:
         def _delayed_eot_sacrifice(permanent: Permanent) -> bool:
             return bool(permanent.metadata.get("sacrifice_at_next_end_step"))
 
+        def _delayed_eot_cause(permanent: Permanent):
+            # Whose delayed ability this destruction is (CR 603.7d–e): the
+            # seat recorded with whichever mark is firing, in the order
+            # `_delayed_eot_destruction` reads them. A creature can carry two
+            # — a Berserk and a Nettling Imp's — set by two players, and the
+            # one that destroys it is the one whose condition holds.
+            marks = []
+            if permanent.metadata.get("destroy_at_next_end_step"):
+                marks.append("destroy_at_next_end_step")
+            if not permanent.metadata.get("attacked_this_turn"):
+                if permanent.metadata.get("destroy_if_did_not_attack_eot"):
+                    marks.append("destroy_if_did_not_attack_eot")
+                if marked_for_this_turn(
+                    self, permanent, DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY
+                ):
+                    marks.append(DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY)
+            elif permanent.metadata.get("destroy_if_attacked_eot"):
+                marks.append("destroy_if_attacked_eot")
+            for mark in marks:
+                cause = delayed_destruction_cause(permanent, mark)
+                if isinstance(cause, int):
+                    return cause
+            return delayed_destruction_cause(permanent, marks[0] if marks else "")
+
         # **Two sweeps, because a sacrifice is not a destruction.** This was one
         # sweep with regeneration and indestructibility both switched off, and
         # its own comment named the reason and the fix: the flags conflated
@@ -167,12 +202,15 @@ class EndStepMixin:
         for controller in self.players:
             for permanent in self._destroy_swept_permanents(
                 controller, _delayed_eot_destruction,
+                cause=_delayed_eot_cause,
             ):
                 destroyed_names.append(permanent.card.name)
         for controller in self.players:
             for permanent in self._destroy_swept_permanents(
                 controller, _delayed_eot_sacrifice,
                 allow_regeneration=False, respect_indestructible=False,
+                # CR 701.21a: "Sacrificing a permanent doesn't destroy it."
+                cause=NOT_A_DESTRUCTION,
             ):
                 destroyed_names.append(permanent.card.name)
 
@@ -220,19 +258,6 @@ class EndStepMixin:
                 events.append(make_trigger_event(
                     controller_index, permanent, trig, trigger_context={"count": died}
                 ))
-
-        # Erg Raiders: "at the beginning of YOUR end step" — scoped to this
-        # end step's own player only, unlike the two blocks above (which don't
-        # yet distinguish "your" from "each"/"the"). The "didn't attack" /
-        # "came under your control this turn" guards are re-checked at
-        # resolution (matching the Pestilence intervening-if precedent).
-        for controller_index, permanent, trig in iter_triggered_abilities(
-            self,
-            condition_kinds={END_STEP_SELF_CONDITION},
-            instruction_kinds=END_STEP_DID_NOT_ATTACK_KINDS,
-            players=[self.players[player_index]],
-        ):
-            events.append(make_trigger_event(controller_index, permanent, trig))
 
         # A trigger whose whole gate is a CR 603.4 intervening-if (Barrin,
         # Tolarian Archmage; Liliana's Devotee). Scoped like Erg Raiders to this

@@ -62,7 +62,8 @@ from engine.oracle_types import (OracleInstruction,  # noqa: E402
                                  x_spend_colors_from_text)
 from engine.alternative_costs import (  # noqa: E402
     alternative_cost_claims_line, granted_alternative_cost_claims_line)
-from engine.cast_costs import cast_cost_claims_line  # noqa: E402
+from engine.cast_costs import (cast_cost_claims_line,  # noqa: E402
+                               x_one_of_each_color_sentence)
 from engine.activation_restrictions import (  # noqa: E402
     global_activation_ban_line)
 from engine.cast_permissions import (board_free_cast_line,  # noqa: E402
@@ -107,6 +108,8 @@ from engine.cast_timing import (flash_permission_sentence,  # noqa: E402
                                 static_flash_permission)
 from engine.replacements import replacement_claims_line  # noqa: E402
 from engine.life_prohibitions import life_gain_ban_line  # noqa: E402
+from engine.target_requirements import must_choose_claims_line  # noqa: E402
+from engine.counted_names import counts_as_claims_line  # noqa: E402
 from engine.cost_modifiers import (cost_modifier_claims_line,  # noqa: E402
                                   cost_modifier_reduction_sentences,
                                   cost_modifiers_for)
@@ -122,7 +125,9 @@ from engine.targeting import (  # noqa: E402
 from engine.lord_buffs import sacrifice_state_trigger  # noqa: E402
 from engine.auras import (  # noqa: E402
     aura_effect_claim,
+    aura_quoted_grants,
     aura_static_pt_grant,
+    quoted_grant_readable,
 )
 from engine.activation_restrictions import (  # noqa: E402
     activation_restriction_line,
@@ -138,6 +143,7 @@ from engine.cost_x_definitions import (  # noqa: E402
 from engine.revealed_hands import revealed_hands_line  # noqa: E402
 from engine.enter_effects import enter_effect_line  # noqa: E402
 from engine.extra_triggers import extra_trigger_line  # noqa: E402
+from engine.flashback import flashback_claims_line  # noqa: E402
 from engine.named_protection import named_protection_line  # noqa: E402
 from engine.target_restrictions import target_restriction_line  # noqa: E402
 from engine.land_play_allowance import land_play_line  # noqa: E402
@@ -492,6 +498,19 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # gain does nothing — so it is its own channel beside the row above,
     # asking the module that carries the sentence out.
     ("life_prohibitions.py", lambda s: life_gain_ban_line(s) is not None),
+    # "While an opponent is choosing targets …, that player must choose at
+    # least one Flagbearer on the battlefield if able." (Standard Bearer,
+    # Coalition Flag.) A requirement on somebody else's announcement
+    # (CR 601.2c), read off the board by the cast and activation paths and by
+    # the pickers in front of them — its own channel, asking the reader those
+    # paths enforce through.
+    ("target_requirements.py", must_choose_claims_line),
+    # "If this card is in a graveyard, effects from spells named Flame Burst
+    # count it as a card named Flame Burst." (Pardic Firecat, Diligent
+    # Farmhand.) Read off the card in the graveyard by the one name test every
+    # zone count asks (handlers/_common._card_matches_filter), so the sentence
+    # has no instruction and this channel asks that test's own matcher.
+    ("counted_names.py", counts_as_claims_line),
     # A printed additional cost (CR 601.2b). Not an instruction — a cost is not
     # an effect — so the sentence would read as unclaimed without this, which
     # is what it *should* have read while the phrase sat in the spell-pattern
@@ -507,6 +526,15 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # board rather than printed on the spell. The same table, found by a
     # different question — see ``alternative_costs.granted_alternative_cost``.
     ("alternative_costs.py (granted)", granted_alternative_cost_claims_line),
+    # CR 702.34a: "You may cast this card from your graveyard by paying {4}{R}
+    # rather than paying its mana cost." — what a flashback keyword line is by
+    # the time this census reads it (`oracle.expand_ability_lines`). A CR 601.3
+    # permission that requires a CR 118.9 alternative cost: no instruction,
+    # carried out by `cast_permissions.permission_for` and the cast path. The
+    # row this report was asking for on 27 Odyssey cards, each of which compiled
+    # on its other line with the keyword dropped. Asked of the reader that
+    # charges the cost, so a cost it cannot read stays unclaimed.
+    ("flashback.py", flashback_claims_line),
     # "This creature can't be destroyed by lethal damage unless lethal damage
     # dealt by a single source is marked on it." (Ogre Enforcer.) CR 704.5g
     # narrowed by the permanent's own text — a state-based action, so there is
@@ -692,6 +720,14 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     ("x spend color (stack/activation)",
      lambda s: s.startswith("spend only") and s.endswith("mana on x")
      and bool(x_spend_colors_from_text(s))),
+    # "Spend only colored mana on X. No more than one mana of each color may be
+    # spent this way." (Emblazoned Golem.) Two sentences, claimed one at a time
+    # because this table is asked per sentence — the cost table reads them
+    # together (`cast_costs.x_one_of_each_color_line`), folds the pair onto the
+    # card's {X} offer and the payment sets the colours aside
+    # (`casting._pay_cast_cost`); a card printing either alone, or over an X no
+    # offer carries, is refused by the support gate and never reaches here.
+    ("x spend one of each color (cast_costs.py)", x_one_of_each_color_sentence),
     ("ante boilerplate (deck construction, not gameplay)", lambda s: s.startswith("remove this card from your deck before playing")),
 )
 
@@ -1152,6 +1188,42 @@ def _delayed_trigger_rider_sentences(oracle_text: str) -> set[str]:
     return claimed
 
 
+def _quoted_grant_sentences(card) -> set[str]:
+    """The sentences of every line on which *card* grants its host a **quoted
+    ability of several sentences** the host can read.
+
+    'Enchanted creature has "{T}: This creature deals 1 damage to target player
+    or planeswalker. You draw a card."' (Quicksilver Dagger.) One printed line
+    and one granted ability, with a full stop *inside the quotes* — which is
+    where :func:`_sentences` cuts, so the grant arrived here as two fragments
+    that are each nothing: an opening quote with half an ability behind it, and
+    a bare "you draw a card" with a closing quote on the end.
+
+    The reader that carries the grant out never sees fragments.
+    ``auras.aura_quoted_grants`` matches the whole line and
+    ``quoted_grant_readable`` compiles the whole quote **on the host**, through
+    the ordinary ability parser — whose productions consume every token or
+    refuse — so "readable" already means both sentences were read. Asked of the
+    line and named for its sentences, which is the arrangement
+    ``_delayed_trigger_rider_sentences`` above has for the same reason.
+
+    Only a quote of two or more sentences is answered: a one-sentence grant
+    (Foul Presence) reaches ``aura_effect_claim`` whole through the ordinary
+    channel and needs nothing from here.
+    """
+    claimed: set[str] = set()
+    for raw_line in (card.oracle_text or "").splitlines():
+        quotes = aura_quoted_grants(raw_line)
+        if not quotes or not all(
+            quoted_grant_readable(quote, card.name) for quote in quotes
+        ):
+            continue
+        sentences = _sentences(normalize_creature_line(raw_line.strip()))
+        if len(sentences) > 1:
+            claimed.update(sentences)
+    return claimed
+
+
 CARD_CHANNELS: tuple[tuple[str, object], ...] = (
     (
         # "Players can't cast spells or play lands with a name originally
@@ -1190,6 +1262,18 @@ CARD_CHANNELS: tuple[tuple[str, object], ...] = (
         # second would apply an ability whose source this engine cannot find.
         "stack_statics.py",
         lambda card, s: stack_static_claims_line(s, card.name),
+    ),
+    (
+        # "Activate only if **Gerrard Capashen** is attacking." CR 602.5's
+        # clause with the card naming itself in it (CR 201.5). The sentence
+        # channel above asks the same table with no name in hand, so the row
+        # that reads "this <noun> is attacking" never saw the collapsed
+        # subject and the clause was reported unclaimed while the activation
+        # path — which does pass the name — refused the ability on it. A card
+        # channel for `stack_statics`' reason one entry up: only the card can
+        # say that the name in the clause is its own.
+        "activation_restrictions.py (self-named)",
+        lambda card, s: activation_restriction_line(s, card.name),
     ),
     (
         # Gaze of Pain: "you may … . **If you do**, it assigns no combat damage
@@ -1262,7 +1346,7 @@ def _kinds_of(instruction) -> set[str]:
     read here exactly as ``categories_of`` reads them, rather than by a second
     list of wrapper names free to fall behind.
     """
-    from engine.grammar.lowering.control_flow import nested_instructions
+    from engine.grammar.lower import nested_instructions
 
     kinds = {instruction.kind}
     inner = nested_instructions(instruction)
@@ -1317,6 +1401,7 @@ def analyze_card(card, hooked: HookClaims, run_probe: bool = True) -> CardCovera
     # choice to somebody else (CR 700.2e). None for every other card, which is
     # what keeps every existing claim byte-identical.
     mode_event = OPPONENT_CHOSE_MODE if program.mode_chooser is not None else None
+    quoted_grant_sentences = _quoted_grant_sentences(card)
 
     def claim_sentence(
         sentence: str,
@@ -1356,6 +1441,15 @@ def analyze_card(card, hooked: HookClaims, run_probe: bool = True) -> CardCovera
         hook_claim = hooked.claim_for(card.name, sentence)
         if hook_claim is not None:
             coverage.claims.append((sentence, hook_claim))
+            return
+        # A quoted grant of several sentences (Quicksilver Dagger), claimed as
+        # the whole line it is — see :func:`_quoted_grant_sentences`. Asked
+        # *after* the hooks rather than among the channels above them: Farmstead
+        # prints the same shape and its line is compiled by a hook, and a claim
+        # is the more use for naming the reader that actually produced the
+        # card's instruction.
+        if sentence in quoted_grant_sentences:
+            coverage.claims.append((sentence, "auras.py (attached effect)"))
             return
         # The last question, and the strongest evidence there is: **did the
         # compiler build an ability out of this line?** Every channel above

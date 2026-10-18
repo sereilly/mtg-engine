@@ -1209,7 +1209,13 @@ def test_w2g3_silver_wyverns_new_target_must_be_a_creature(set_pool):
 def test_w2g3_silver_wyvern_asks_again_at_resolution(set_pool):
     """CR 608.2b. The restriction is checked when the ability is activated and
     **again** when it resolves: an ability re-aimed off the Wyvern in between is
-    one this card never named, and the retarget leaves it alone."""
+    one this card never named, and the retarget leaves it alone.
+
+    (APC wave 2: the re-check is the rule's own gate now — the Wyvern's
+    activated ability is removed from the stack above its instructions, for a
+    target that stopped answering "targets only this creature" — so the line
+    asserted is the gate's, where it was the retarget handler's own "target is
+    no longer Silver Wyvern". What the game shows is the same.)"""
     game, mine, _ = _w2g3_board(set_pool)
     wyvern, bystander = mine
     assert game.queue_permanent_ability(
@@ -1230,9 +1236,10 @@ def test_w2g3_silver_wyvern_asks_again_at_resolution(set_pool):
     moved.target_permanent_index = game.battlefield_index_of(bystander)
     game.resolve_stack()
 
-    assert any(
-        "target is no longer Silver Wyvern" in line for line in game.log
-    ), game.log
+    assert (
+        "Silver Wyvern ability was removed from the stack: "
+        "every target is illegal (608.2b)"
+    ) in game.log, game.log
     assert bystander.damage_marked == 1, game.log
 
 

@@ -17,10 +17,15 @@ from .ai_valuation import (
     OFFER_RETURNS_SPELL,
     SPELL_TYPES,
     CastOffer,
+    PermittedCast,
     cast_offers,
+    cast_weighed,
     caster_chooses_a_mode,
+    casting_under,
     considering_mode,
+    hand_waiver,
     mode_considered,
+    permitted_casts,
     spell_text,
     activation_target_side,
     entry_sacrifice_is_unavoidable,
@@ -30,14 +35,18 @@ from .ai_valuation import (
     entry_triggers_bought,
     ability_denies_its_target,
     ability_role_target_sides,
+    ability_seat_side,
     ability_target_side,
     cards_drawn_by_controller,
     caster_sacrifice_steps,
     castable_commanders,
     divided_shape,
+    exiles_a_graveyard_target,
     foreign_activation_use,
+    graveyard_denial_order,
     hand_entry_steps,
     harms_its_own_source,
+    named_counter_marks_for_harm,
     instruction_target_side,
     is_mana_ability,
     mana_ability_amount,
@@ -61,7 +70,9 @@ from .activation_restrictions import activation_denial, global_activation_ban
 from .cast_costs import additional_costs, cast_announces_x
 from .cast_prohibitions import cast_prohibition
 from .cast_restrictions import check_cast_timing
-from .cost_modifiers import (cost_reduction_for_cast, reduce_cost,
+from .divided_damage import EACH
+from .cost_modifiers import (CostReduction, cost_reduction_for_cast,
+                             keyword_cost_modifiers, reduce_cost,
                              sacrifice_taxes, spell_cost_tax, spell_symbol_tax)
 from .classifier import classify_card
 from .faces import castable_faces, spell_named
@@ -79,7 +90,8 @@ from .oracle_types import cost_target_count, x_spend_colors_from_text
 from .search_filters import search_matches, searched_seat
 from .subject_filters import subject_matches
 from .activation_zones import HAND
-from .targeting import (announced_mode_instructions, bounce_subject_filter,
+from .targeting import (GRAVEYARD_TARGET_KIND, SINGLE_GRAVEYARD,
+                        announced_mode_instructions, bounce_subject_filter,
                         cast_target_slot, derive_activation_spec,
                         derive_cast_spec, derive_instruction_spec,
                         instructions_as_announced, role_is_seat,
@@ -108,22 +120,18 @@ class CastAction:
     # round 40 closed on the wire, arriving here through the AI.
     target_permanent_ids: list[int] | None = None
     # Which zone ``hand_index`` indexes into, in the vocabulary the cast path
-    # already speaks ("hand" / "command", `_cast_onto_stack`'s `from_zone`).
-    # "command" is a commander cast (CR 903.8); every executor forwards it
-    # unchanged, so an ordinary duel — where nothing but "hand" is ever
-    # proposed — is untouched.
+    # already speaks (`_cast_onto_stack`'s `from_zone`). "command" is a
+    # commander cast (CR 903.8); "graveyard" / "exile" / "library" a cast an
+    # effect permits (CR 601.3: flashback, Yawgmoth's Will, an Elkin Bottle's
+    # card — `ai_valuation.permitted_casts`). Every executor forwards it
+    # unchanged and finds the card through `zone_being_cast_from`.
     from_zone: str = "hand"
-    # Whose copy of ``from_zone`` the card is in, when an effect opened a zone
-    # that is not the caster's own: "you may cast that card" over a card in an
-    # **opponent's** exile (Planeswalker's Mischief, Psychic Theft, Grinning
-    # Totem — CR 400.3 puts an exiled card in its owner's exile). None is the
-    # caster's own pile, which is every hand and command-zone cast and most
-    # permitted ones. `cast_zone_of` reads it; the cast path needs no seat (it
-    # finds the covered card itself, CR 601.3).
-    zone_owner_index: int | None = None
-    # CR 118.9: pay the spell's printed alternative cost rather than its mana
-    # cost. False on every candidate this policy builds from a payable mana
-    # cost, which is all of them but one shape — see `_alternative_cost_cast`.
+    # CR 118.9: pay an alternative cost rather than the spell's mana cost.
+    # True on the one shape built from an unpayable mana cost (a printed
+    # alternative cost this board can pay — `_alternative_cost_is_payable`)
+    # and on a cast made under a permission that *requires* one (CR 118.9b,
+    # CR 702.34a: flashback), where it is also what tells the cast path which
+    # permission is meant (`PermittedCast.alternative_cost`).
     alternative_cost: bool = False
     # CR 601.2d's announcement, for a spell that divides damage or counters
     # among its targets: ``(seat, permanent index or None[, share])`` per
@@ -171,6 +179,15 @@ class CastAction:
     # engine then answers with the spell on top. Set where which spell matters
     # — "Counter target spell **if it's blue**" (`_guarded_stack_target`).
     target_stack_index: int | None = None
+    # Whose copy of ``from_zone`` ``hand_index`` indexes into, when that is not
+    # the caster's own: "Search target opponent's library for a card and exile
+    # it. … you may play that card" (Grinning Totem) leaves the card in the
+    # *searched* player's exile pile (this engine keeps one per owner). None
+    # is the caster's own, which is every other cast. **Not an announcement**
+    # — the cast path finds the pile for itself, by the permission — so
+    # `cast_announcement` does not carry it; it is for the executor, which
+    # reads the card off the zone (`zone_being_cast_from`).
+    zone_seat: int | None = None
 
 
 @dataclass(frozen=True)
@@ -296,20 +313,10 @@ def planned_tap_ability(game: Game, land: Permanent, color: str) -> int | None:
     dual, City of Brass, a land under a swap the seam applies to any ability),
     so every land that tapped correctly taps exactly as it did.
     """
-    from .mixins.turn_management import is_tap_alone_mana_ability
-
-    free, _priced = game._land_mana_abilities(land)
-    if free is None or color in mana_ability_symbols(free):
-        return None
-    usable = usable_activated_abilities(compile_card_oracle(game.playable_card_of(land)))
-    for index, ability in enumerate(usable):
-        if not is_tap_alone_mana_ability(ability):
-            continue
-        if color in mana_ability_symbols(ability.instruction) and (
-            game.land_mana_tap_refusal(land, index) is None
-        ):
-            return index
-    return None
+    # The game's own answer (``Game.land_mana_ability_for``): the engine's
+    # payer for a cost an effect collects asks the same question, and it is
+    # not a policy.
+    return game.land_mana_ability_for(land, color)
 
 
 def tap_planned_lands(game: Game, seat: int, action):
@@ -363,6 +370,30 @@ def tap_planned_lands(game: Game, seat: int, action):
                 # "Any color" is one of the five (CR 105.1): a source asked for
                 # the {C} a generic cost was planned at names no colour, and
                 # the ability's own default answers.
+                mana_color=color if color in ("W", "U", "B", "R", "G") else None,
+            )
+            continue
+        # A source whose mana ability costs mana ("{1}, {T}: Add {U}{B}.", the
+        # Odyssey filter lands; Mana Cylix). The plan put the tap that pays
+        # for it immediately in front of it (`_plan_through_a_priced_source`),
+        # so the pool holds its price now; activated like the non-land source
+        # above, and for the same reason — the tap seam runs only an ability
+        # whose whole cost is {T}.
+        priced = _priced_mana_source(game, seat, land)
+        if priced is not None:
+            slot = next(
+                (
+                    index for index, permanent in enumerate(game.controlled_by(seat))
+                    if permanent is land
+                ),
+                None,
+            )
+            if slot is None:
+                continue
+            game.activate_permanent_ability(
+                seat, land.card.name,
+                permanent_index=slot,
+                ability_index=priced.ability_index,
                 mana_color=color if color in ("W", "U", "B", "R", "G") else None,
             )
             continue
@@ -469,6 +500,132 @@ def _rebound_action(game: Game, action, bound: dict):
 
 
 @dataclass(frozen=True)
+class _PricedManaSource:
+    """A mana ability that costs mana, as the payment plan counts it — see
+    `_priced_mana_source`."""
+
+    #: Which of the permanent's usable abilities.
+    ability_index: int
+    #: The generic mana one activation costs, beside the tap.
+    price: int
+    #: Every symbol one activation may be asked for, the unasked one first.
+    symbols: tuple[str, ...]
+    #: How many mana of the asked symbol.
+    amount: int
+    #: A fixed run of different symbols ("{U}{B}"), or None.
+    run: "dict[str, int] | None" = None
+
+    def outputs(self) -> "list[tuple[str, dict[str, int]]]":
+        """``(symbol to ask for, what that activation adds)``, one per answer."""
+        if self.run is not None:
+            return [(self.symbols[0], dict(self.run))]
+        return [(symbol, {symbol: self.amount}) for symbol in self.symbols]
+
+
+def _priced_mana_source(
+    game: Game, seat: int, permanent: "Permanent | None"
+) -> "_PricedManaSource | None":
+    """The mana ability of a permanent *seat* controls whose cost is **generic
+    mana and {T}** and which is the only mana that permanent makes — or None.
+
+    "{1}, {T}: Add {U}{B}." (Darkwater Catacombs and the other four Odyssey
+    filter lands), "{1}, {T}: Add one mana of any color." (Mana Cylix,
+    Helionaut), "{2}, {T}: …" (Celestial Prism). **A land of this kind was a
+    land that made nothing for an AI seat**: the tap seam runs only an ability
+    whose whole cost is {T} (`land_mana_tap_refusal` answers
+    ``priced_mana_ability``), so the planner left it out and the seat counted
+    one land fewer than it controlled — ten filter lands were played in a
+    ten-game seeded Odyssey run and not one was ever activated (W1G2 saw the
+    same in six).
+
+    The cheap half of ROADMAP's "costed and sacrifice mana sources": a price
+    paid in mana renumbers nothing, where a sacrifice during payment moves the
+    battlefield under an announcement made by index. What it needs instead is
+    an *input* — a unit of mana from another source, in the pool before this
+    one is activated — which is `_plan_through_a_priced_source`'s to arrange.
+
+    Narrow on purpose, each clause a shape this cannot plan:
+
+    * **only generic mana in the price** — "{G}, {T}: Add {R}." (Fire Sprites)
+      needs a coloured input, a second matching problem;
+    * **only with {T}** — "{1}: Add {B}." (Bog Initiate) may be activated any
+      number of times, and how many is a search, not a tap;
+    * **no other mana ability on the permanent** — a land that also taps for
+      mana on its own (the Homelands tri-lands, Crystal Quarry) is already the
+      free planner's, and one slot in a plan cannot say which ability it means;
+    * **a yield the payload states** (`ai_valuation.planned_mana_yield`), with
+      no rider.
+
+    And only one the activation path will accept, by the gates
+    `_nonland_mana_source` asks: untapped, not a summoning-sick creature, not
+    under a ban or a permission that closes it to this seat.
+    """
+    import dataclasses
+
+    from .activation_restrictions import prints_activation_restriction
+    from .mana_payment import carries_an_offer
+    from .mana_payment import is_mana_ability as is_cr_mana_ability
+    from .mixins.turn_management import is_tap_alone_mana_ability
+    from .spell_prohibitions import permanent_activations_forbidden
+
+    if permanent is None or permanent.tapped:
+        return None
+    if game.land_mana_tap_refusal(permanent) not in (
+        "priced_mana_ability", "not_an_untapped_land",
+    ):
+        # A land the seam taps (None), or one it refuses for a reason that is
+        # not about the price: summoning sick, forbidden, stripped.
+        return None
+    if game._is_summoning_sick(permanent):
+        return None
+    usable = game.usable_abilities_of(permanent)
+    found: "_PricedManaSource | None" = None
+    for index, ability in enumerate(usable):
+        if is_tap_alone_mana_ability(ability):
+            return None
+        if not is_cr_mana_ability(ability):
+            continue
+        if found is not None:
+            # Two priced mana abilities: which one a plan's slot means is not
+            # something a slot can say.
+            return None
+        cost = ability.cost
+        mana = {symbol: int(amount or 0) for symbol, amount in cost.mana.items()}
+        generic = mana.get("generic", 0)
+        if generic < 1 or any(amount for symbol, amount in mana.items() if symbol != "generic"):
+            return None
+        if cost != dataclasses.replace(
+            type(cost)(mana={symbol: 0 for symbol in cost.mana}),
+            requires_tap=True, mana=cost.mana,
+        ):
+            return None
+        line = ability.source_line or ""
+        if prints_activation_restriction(line) or carries_an_offer(ability.instruction):
+            return None
+        produced = planned_mana_yield(ability.instruction)
+        if produced is None or produced.board_narrowed or produced.from_chosen_color:
+            return None
+        if not produced.symbols:
+            return None
+        if (
+            permanent_activations_forbidden(game, permanent)
+            or global_activation_ban(game, permanent) is not None
+            or activation_denial(game, seat, permanent, line)
+            or activation_permission_denial(game, seat, permanent, line)
+            or aura_restriction_active(permanent, "all_activated_abilities_shut_off")
+        ):
+            return None
+        found = _PricedManaSource(
+            ability_index=index,
+            price=generic,
+            symbols=produced.symbols,
+            amount=produced.amount,
+            run=dict(produced.run) if produced.run else None,
+        )
+    return found
+
+
+@dataclass(frozen=True)
 class _NonlandManaSource:
     """One non-land permanent's mana ability as the payment plan counts it."""
 
@@ -541,10 +698,12 @@ def _nonland_mana_source(
     Resources), **never a card** (Bog Witch, Skirge Familiar, Lion's Eye
     Diamond's whole hand, Cadaverous Bloom), **never a counter or life** (the
     Mana Batteries, Iceberg, Phyrexian Lens) — each is a choice of *which* or
-    *how many* that this plan has no valuation for — and never a source that
-    costs mana to make mana ("{1}, {T}: Add one mana of any color", Mana
-    Cylix; "{1}, Sacrifice this creature: Add {U}{B}{R}", the Attendants),
-    which is a payment inside a payment the tap order would have to stage.
+    *how many* that this plan has no valuation for. A source that costs mana
+    to make mana ("{1}, {T}: Add one mana of any color", Mana Cylix; the
+    Odyssey filter lands) is not this function's either: it is counted apart,
+    as a last resort and behind the tap that pays for it
+    (`_priced_mana_source`), and one that also sacrifices itself ("{1},
+    Sacrifice this creature: Add {U}{B}{R}", the Attendants) stays out.
 
     **And only one the activation path will accept**, the non-land twin of
     `land_mana_tap_refusal`: untapped; not a summoning-sick creature (CR 302.6
@@ -645,12 +804,10 @@ class _PaymentContext:
 
     #: The spell being cast. What a "spend this mana only to cast …" land's
     #: mana may pay for (CR 106.6), and what a permanent given up for mana is
-    #: weighed against (`_may_sacrifice_for`).
+    #: weighed against (`_may_sacrifice_for`). What the cast is *charged* is
+    #: not here: a waiver or a flashback cost is the permission's
+    #: (`ai_valuation.casting_under`), read by `_cost_for`.
     spell: "CardDefinition | None" = None
-    #: CR 118.9: an effect lets this spell be cast "without paying its mana
-    #: cost". There is nothing to plan, and an {X} in the cost is 0
-    #: (CR 107.3b).
-    free: bool = False
 
 
 _PAYING_FOR: ContextVar["_PaymentContext | None"] = ContextVar(
@@ -659,9 +816,9 @@ _PAYING_FOR: ContextVar["_PaymentContext | None"] = ContextVar(
 
 
 @contextmanager
-def _paying_for(spell: "CardDefinition | None", *, free: bool = False):
+def _paying_for(spell: "CardDefinition | None"):
     """Run a block in which every plan drawn up is the payment for *spell*."""
-    token = _PAYING_FOR.set(_PaymentContext(spell=spell, free=free))
+    token = _PAYING_FOR.set(_PaymentContext(spell=spell))
     try:
         yield
     finally:
@@ -709,6 +866,26 @@ def choose_attack_target(game: Game, player_index: int) -> int:
 #: is skipped by the tap planner exactly as any other unaffordable spell is.
 COMMAND_ZONE_CAST_BONUS = 4.0
 
+#: What a cast under a permission that **ends** is worth over the same cast
+#: from hand ("until end of turn, you may play that card": an Elkin Bottle's
+#: card, a graveyard under Yawgmoth's Will). The same net card, for the mirror
+#: reason: a hand card not cast this turn is still in hand next turn, and this
+#: one is not castable at all — so it goes first. **Not** given to a permission
+#: that lasts as long as the card stays put (flashback, CR 702.34a; Yawgmoth's
+#: Agenda): that cast will be there next turn, and it competes with the hand
+#: on what the spell does — a seat with five lands should not flash a Firebolt
+#: back for {4}{R} while it holds a five-drop. A tie between the two goes to
+#: the hand (`_is_better_cast`).
+EXPIRING_PERMISSION_BONUS = COMMAND_ZONE_CAST_BONUS
+
+
+def _zone_seat(player_index: int, under: "PermittedCast | None") -> "int | None":
+    """`CastAction.zone_seat` for a cast made under *under*: the pile's owner
+    when that is not the caster (Grinning Totem), None otherwise."""
+    if under is None or under.owner_seat == player_index:
+        return None
+    return under.owner_seat
+
 
 def hand_spells(player) -> "list[tuple[int, CardDefinition]]":
     """Every spell *player*'s hand could be cast as, with the hand position of
@@ -742,20 +919,57 @@ def spell_being_cast(zone, action: "CastAction") -> CardDefinition:
     return spell_named(held, action.card_name) or held
 
 
+def zone_being_cast_from(game: Game, seat: int, action: "CastAction") -> list:
+    """The pile ``action.hand_index`` indexes: *seat*'s hand for an ordinary
+    cast, and otherwise whatever ``action.from_zone`` names — the command zone
+    (CR 903.8), or a graveyard, an exile or a library an effect has opened
+    (CR 601.3), which is the caster's own unless ``action.zone_seat`` says
+    whose.
+
+    **The one place an executor finds the card a `CastAction` proposes**, for
+    `cast_announcement`'s reason. Each of the five executors picked the zone
+    for itself — "the command zone for a commander cast, the hand for
+    everything else" — so a cast proposed from a graveyard would have been
+    read off the *hand* at the graveyard's index and cast as whatever card sat
+    there.
+    """
+    player = game.players[seat if action.zone_seat is None else action.zone_seat]
+    if action.from_zone == "command":
+        return player.command_zone
+    if action.from_zone in ("graveyard", "exile", "library"):
+        return getattr(player, action.from_zone)
+    return player.hand
+
+
 def choose_cast_action(game: Game, player_index: int) -> CastAction | None:
     best: CastAction | None = None
-    player = game.players[player_index]
-    for hand_index, card in hand_spells(player):
+    for hand_index, card in hand_spells(game.players[player_index]):
         # The plan is told what it pays for (`_paying_for`): the spell, which
         # is what a permanent given up for mana is weighed against and what
-        # restricted mana may be spent on — and whether an effect has made the
-        # cast free (CR 118.9; Aluren's "without paying their mana costs"),
-        # in which case there is nothing to plan. Unaffordable-but-free was a
-        # card held all game, and affordable-and-free was lands tapped for a
-        # cast that then spent none of it.
+        # restricted mana may be spent on. Whether an effect has made the cast
+        # free (Aluren) is the waiver the candidate is weighed under
+        # (`ai_valuation.hand_waiver`).
+        candidate = _priced_candidate(game, player_index, card, hand_index)
+        if candidate is not None and _is_better_cast(candidate, best):
+            best = candidate
+
+    # CR 601.3: the casts an *effect* allows from outside the hand — a
+    # flashback card in the seat's graveyard (CR 702.34a), a graveyard opened
+    # by Yawgmoth's Will or Yawgmoth's Agenda, a card an Elkin Bottle exiled,
+    # the top of a library under a Temporal Aperture. **No AI seat had ever
+    # made one**: this loop walked the hand and the command zone, so the
+    # second half of every flashback card was text no simulated game and no AI
+    # opponent reached (W1G3: 61 hand casts of eight pinned flashback cards
+    # over eighteen games, none from a graveyard). The list is the engine's
+    # (`ai_valuation.permitted_casts`, over the seam the browser's zone badges
+    # read), each entry is built by the same candidate builder a hand card is
+    # — the same gates, the same target, mode and division choosers — and what
+    # differs is carried by the entry: where the card is and what the cast is
+    # charged.
+    for permitted in permitted_casts(game, player_index):
         candidate = _priced_candidate(
-            game, player_index, card, hand_index,
-            free=_cast_is_free(game, player_index, player.hand[hand_index], card),
+            game, player_index, permitted.spell, permitted.index,
+            from_zone=permitted.zone, under=permitted,
         )
         if candidate is not None and _is_better_cast(candidate, best):
             best = candidate
@@ -774,162 +988,24 @@ def choose_cast_action(game: Game, player_index: int) -> CastAction | None:
         if candidate is not None and _is_better_cast(candidate, best):
             best = candidate
 
-    # CR 601.3: what an **effect** lets this seat cast from outside its hand —
-    # a graveyard under Yawgmoth's Agenda, the card a Planeswalker's Mischief
-    # exiled, the top of a library under Temporal Aperture. The engine has
-    # offered these to a human seat since each card shipped
-    # (`cast_permissions.playable_from_zones`, the browser's zone badge) and
-    # this chooser walked the hand and the command zone alone, so an AI seat
-    # paid for the permission and never used it: 87 Planeswalker's Mischief
-    # activations in a seeded run bought no cast at all.
-    for play in permitted_plays(game, player_index):
-        if _life_price_is_too_dear(player, play):
-            continue
-        # The prohibitions that turn on where a spell is cast from, asked for
-        # the zone it is in (`_cast_candidate`'s own gate asks about a hand).
-        if cast_prohibition(
-            game, player_index, play.spell, from_zone=play.zone
-        ) is not None:
-            continue
-        candidate = _priced_candidate(
-            game, player_index, play.spell, play.index,
-            from_zone=play.zone, free=play.free,
-        )
-        if candidate is None:
-            continue
-        candidate = replace(
-            candidate,
-            zone_owner_index=play.owner_seat,
-            # A card played from outside the hand spends none of the hand: the
-            # net card a command-zone cast is, at the same weight.
-            score=candidate.score + COMMAND_ZONE_CAST_BONUS,
-        )
-        if _is_better_cast(candidate, best):
-            best = candidate
-
     return best
-
-
-@dataclass(frozen=True)
-class PermittedPlay:
-    """One spell or land an effect lets a seat cast or play from outside its
-    hand right now (CR 601.3) — see `permitted_plays`."""
-
-    #: "graveyard", "exile" or "library" — the cast path's ``from_zone``.
-    zone: str
-    #: Whose copy of that zone the card is in. The caster's own on every grant
-    #: but the ones that lend another player's card (Grinning Totem, Psychic
-    #: Theft, Planeswalker's Mischief: CR 400.3 leaves it in its owner's exile).
-    owner_seat: int
-    #: The card's position in that pile.
-    index: int
-    #: What is cast or played: the card, or one half of a split card.
-    spell: CardDefinition
-    #: CR 118.9: the permission waives the mana cost.
-    free: bool
-
-
-def permitted_plays(game: Game, player_index: int) -> "list[PermittedPlay]":
-    """Every spell and land an effect lets *player_index* cast or play from a
-    graveyard, an exile zone or the top of its library right now.
-
-    The engine's own list (`cast_permissions.playable_from_zones`, what the
-    browser badges for a human seat), asked again per face so a split card is
-    the spells it can be cast as (CR 709.3) and each one carries whether *its*
-    permission is free. The command zone is not here: CR 903.8 is a rule, and
-    `ai_valuation.castable_commanders` prices its tax.
-    """
-    from .cast_permissions import permission_for, playable_from_zones
-
-    found: list[PermittedPlay] = []
-    for entry in playable_from_zones(game, player_index):
-        zone = entry["zone"]
-        if zone == "command":
-            continue
-        owner_seat = entry.get("owner_seat", player_index)
-        held = getattr(game.players[owner_seat], zone)[entry["index"]]
-        for spell in castable_faces(held):
-            permission = permission_for(
-                game, player_index, held, zone,
-                as_land=held.primary_type == "land", spell=spell,
-            )
-            if permission is None or permission.zone_seat != owner_seat:
-                continue
-            found.append(PermittedPlay(
-                zone=zone, owner_seat=owner_seat, index=entry["index"],
-                spell=spell, free=bool(permission.free),
-            ))
-    return found
 
 
 def _priced_candidate(
     game: Game, seat: int, spell: CardDefinition, zone_index: int, *,
-    from_zone: str = "hand", extra_generic: int = 0, free: bool = False,
+    from_zone: str = "hand", extra_generic: int = 0,
+    under: "PermittedCast | None" = None,
 ) -> "CastAction | None":
     """`_cast_candidate` with the plan told what it pays for (`_paying_for`),
-    or None where the payment would spend a permanent the cast names.
-
-    A free cast that takes an **optional additional** cost — a kicker — is
-    priced again as an ordinary one: CR 118.9d keeps additional costs in force
-    over a waived mana cost, and a plan that tapped nothing would announce a
-    kicker with no mana behind it.
-    """
-    with _paying_for(spell, free=free):
+    or None where the payment would spend a permanent the cast names."""
+    with _paying_for(spell):
         candidate = _cast_candidate(
-            game, seat, spell, zone_index, from_zone=from_zone, extra_generic=extra_generic,
+            game, seat, spell, zone_index, from_zone=from_zone,
+            extra_generic=extra_generic, under=under,
         )
-    if free and candidate is not None and candidate.optional_cost_payments:
-        with _paying_for(spell):
-            candidate = _cast_candidate(
-                game, seat, spell, zone_index,
-                from_zone=from_zone, extra_generic=extra_generic,
-            )
     if candidate is None or _plan_spends_what_it_names(game, seat, candidate):
         return None
     return candidate
-
-
-def cast_zone_of(game: Game, seat: int, action: "CastAction") -> list:
-    """The pile ``action.hand_index`` counts into: *seat*'s hand, its command
-    zone (CR 903.8), or the graveyard, exile or library a permission opened —
-    which may be **another player's** (``zone_owner_index``).
-
-    One reader for every executor, for `cast_announcement`'s reason: each
-    spelled "the command zone, else the hand" for itself, and a third zone was
-    one more place per executor to forget.
-    """
-    if action.from_zone == "hand":
-        return game.players[seat].hand
-    if action.from_zone == "command":
-        return game.players[seat].command_zone
-    owner = seat if action.zone_owner_index is None else action.zone_owner_index
-    return getattr(game.players[owner], action.from_zone)
-
-
-def _cast_is_free(game: Game, seat: int, held: CardDefinition, spell: CardDefinition) -> bool:
-    """Whether a cast of *spell* from *seat*'s **hand** will be charged no mana
-    — the waiver the cast path itself takes (`casting._cast_onto_stack`): an
-    effect letting the seat cast it "without paying its mana cost" (Aluren;
-    Chandra, Flame's Catalyst's −8), unless the cost has an {X}, which that
-    path prefers to pay for (CR 107.3b locks a waived X to 0)."""
-    from .cast_permissions import permission_for
-
-    if spell.primary_type == "land" or "{X}" in (spell.mana_cost or "").upper():
-        return False
-    waiver = permission_for(game, seat, held, "hand", spell=spell)
-    return waiver is not None and bool(waiver.free)
-
-
-def _life_price_is_too_dear(player: PlayerState, play: PermittedPlay) -> bool:
-    """Whether the price of casting from that zone is life the seat keeps back
-    ("…from your graveyard by paying 3 life and discarding a card", Demonic
-    Embrace) — the reserve every other life price in this policy keeps."""
-    life = sum(
-        int(cost.pay_life or 0)
-        for cost in additional_costs(play.spell)
-        if cost.from_zone == play.zone
-    )
-    return bool(life) and player.life - life < BUYBACK_LIFE_RESERVE
 
 
 def _plan_spends_what_it_names(game: Game, seat: int, candidate: "CastAction") -> bool:
@@ -995,7 +1071,7 @@ def choose_land_drop(game: Game, player_index: int) -> CastAction | None:
     if not game._may_play_another_land(player_index):
         return None
     best: CastAction | None = None
-    best_value: tuple[int, int] | None = None
+    best_value: tuple[int, ...] | None = None
     for hand_index, card in enumerate(game.players[player_index].hand):
         if card.primary_type != "land":
             continue
@@ -1004,28 +1080,34 @@ def choose_land_drop(game: Game, player_index: int) -> CastAction | None:
         candidate = _cast_candidate(game, player_index, card, hand_index)
         if candidate is None:
             continue
-        value = _land_drop_value(game, player_index, card)
+        value = (*_land_drop_value(game, player_index, card), 0)
         if best_value is None or value > best_value:
             best, best_value = candidate, value
-    # CR 305.1 through CR 601.3's twin for a land: "You may **play lands** and
-    # cast spells from your graveyard" (Yawgmoth's Agenda, Yawgmoth's Will),
-    # "you may play that card" over an exiled land (Elkin Bottle, Three
-    # Wishes). The same pass, so the land drop it spends is the one this turn
-    # has; a land in hand wins a tie, having been asked first.
-    for play in permitted_plays(game, player_index):
-        if play.spell.primary_type != "land":
+    # CR 305.1 from outside the hand: "you may **play** that card" (an Elkin
+    # Bottle's land), "you may play lands … from your graveyard" (Yawgmoth's
+    # Will, Yawgmoth's Agenda). After the hand and only strictly better, so a
+    # seat with no such permission drops exactly the land it always did. The
+    # last term breaks a tie toward a land whose permission **ends**
+    # (`PermittedCast.expires`): the hand's land is still there next turn and
+    # the Bottle's is not.
+    for permitted in permitted_casts(game, player_index):
+        card = permitted.spell
+        if card.primary_type != "land":
             continue
-        if entry_sacrifice_is_unavoidable(game, player_index, play.spell):
+        if entry_sacrifice_is_unavoidable(game, player_index, card):
             continue
         candidate = _cast_candidate(
-            game, player_index, play.spell, play.index, from_zone=play.zone,
+            game, player_index, card, permitted.index,
+            from_zone=permitted.zone, under=permitted,
         )
         if candidate is None:
             continue
-        value = _land_drop_value(game, player_index, play.spell)
+        value = (
+            *_land_drop_value(game, player_index, card),
+            1 if permitted.expires else 0,
+        )
         if best_value is None or value > best_value:
-            best = replace(candidate, zone_owner_index=play.owner_seat)
-            best_value = value
+            best, best_value = candidate, value
     return best
 
 
@@ -1097,12 +1179,29 @@ def _announced_steps(card: CardDefinition, program) -> tuple:
     return announced_mode_instructions(program, _announced_mode(card))
 
 
+def _cast_zone(card: CardDefinition) -> str:
+    """The zone the candidate being built would be cast from: "hand", or the
+    zone of the permission *card* is being weighed under
+    (`ai_valuation.casting_under`).
+
+    The zone's twin of `_announced_mode`, and held to the same rule by
+    `tests/ai/test_ai_zone_casts.py`: **every engine question a cast chooser
+    asks that takes a ``from_zone`` is passed this one.** A spell cast out of a
+    graveyard is not a card in that graveyard by the time its targets are
+    chosen (CR 601.2a), so a Morgue Theft weighed from the graveyard with the
+    hand's spec would count itself as the creature card it may return; a
+    prohibition may bind one zone; an additional cost may be printed for one.
+    """
+    weighed = cast_weighed(card)
+    return "hand" if weighed is None else weighed.zone
+
+
 def _cast_spec(card: CardDefinition, program):
     """`derive_cast_spec` for the candidate being built (see
-    `_OFFERS_ANNOUNCED` and `_announced_mode`)."""
+    `_OFFERS_ANNOUNCED`, `_announced_mode` and `_cast_zone`)."""
     return derive_cast_spec(
         card, program, optional_cost_payments=_OFFERS_ANNOUNCED.get(),
-        mode_index=_announced_mode(card),
+        mode_index=_announced_mode(card), from_zone=_cast_zone(card),
     )
 
 
@@ -1154,9 +1253,13 @@ def _buyback_mana_is_spare(
     for other_index, other in hand_spells(player):
         if from_zone == "hand" and other_index == hand_index:
             continue
-        if other.primary_type == "land" or cast_announces_x(other):
+        if other.primary_type == "land" or cast_announces_x(other, from_zone="hand"):
             continue
-        beside = _cost_for(game, player, other, None)
+        # A card in *hand*, priced as one: a deck repeats one definition per
+        # copy, so the hand's copy of the spell being weighed from a graveyard
+        # is the same object and would otherwise read that cast's price.
+        with casting_under(None):
+            beside = _cost_for(game, player, other, None)
         both = dict(spell)
         every = dict(with_offer)
         for symbol, amount in beside.items():
@@ -1554,6 +1657,7 @@ def _cast_candidate(
     *,
     from_zone: str = "hand",
     extra_generic: int = 0,
+    under: "PermittedCast | None" = None,
 ) -> CastAction | None:
     """`_cast_candidate_in_each_mode` inside one deliberation: every mode,
     offer and target of *card* this decision weighs is measured against one
@@ -1561,7 +1665,7 @@ def _cast_candidate(
     with deliberating():
         return _cast_candidate_in_each_mode(
             game, player_index, card, hand_index,
-            from_zone=from_zone, extra_generic=extra_generic,
+            from_zone=from_zone, extra_generic=extra_generic, under=under,
         )
 
 
@@ -1573,9 +1677,21 @@ def _cast_candidate_in_each_mode(
     *,
     from_zone: str = "hand",
     extra_generic: int = 0,
+    under: "PermittedCast | None" = None,
 ) -> CastAction | None:
     """The `CastAction` casting *card* from *from_zone* would be, or None when
     the cast is illegal, unaffordable or has nothing legal to point at.
+
+    *under* is the permission the cast would be made under when an effect
+    allows it (CR 601.3, `ai_valuation.permitted_casts`): where the card is,
+    and what the cast is charged — a flashback cost (CR 702.34a), nothing, or
+    the card's own mana cost. None for the hand and the command zone, whose
+    permission is a rule; a **hand** cast is still asked whether a waiver
+    covers it (`ai_valuation.hand_waiver`: Aluren), because the cast path
+    applies one unasked and a seat that planned the mana cost under it held a
+    free creature until it could pay for it. Everything underneath reads the
+    permission being weighed (`_cast_zone`, `_cost_for`), as it reads the
+    mode.
 
     **CR 601.2b's optional additional costs are decided here** — kicker
     (CR 702.33), buyback (CR 702.27) and the unnamed "you may pay … any number
@@ -1598,10 +1714,14 @@ def _cast_candidate_in_each_mode(
     This loop did not exist: the cast named no mode, the engine resolved the
     first bullet, and Crosis's Charm only ever bounced.
     """
+    if under is None and from_zone == "hand":
+        hand = game.players[player_index].hand
+        if 0 <= hand_index < len(hand):
+            under = hand_waiver(game, player_index, hand[hand_index], card, hand_index)
     best: CastAction | None = None
     built: list[CastAction] = []
     for mode_index in _modes_weighed(game, player_index, card):
-        with considering_mode(card, mode_index):
+        with considering_mode(card, mode_index), casting_under(under):
             candidate = _cast_candidate_offering(
                 game, player_index, card, hand_index,
                 from_zone=from_zone, extra_generic=extra_generic,
@@ -1672,6 +1792,7 @@ def _every_mode_worth_casting(
         score=best.score + EXTRA_MODE_SCORE * (len(choices) - 1),
         hand_index=best.hand_index,
         from_zone=best.from_zone,
+        zone_seat=best.zone_seat,
         alternative_cost=best.alternative_cost,
         land_tap_colors=best.land_tap_colors,
         mode_choices=choices,
@@ -1743,9 +1864,11 @@ def _paid_for_half_names_nothing(
     mode_index = _announced_mode(card)
     taken = derive_cast_spec(
         card, program, optional_cost_payments=offers, mode_index=mode_index,
+        from_zone=_cast_zone(card),
     )
     declined = derive_cast_spec(
         card, program, optional_cost_payments={}, mode_index=mode_index,
+        from_zone=_cast_zone(card),
     )
     if taken is None or taken == declined:
         return False
@@ -1805,6 +1928,21 @@ def _paid_for_trigger_has_nothing_to_hit(
     return False
 
 
+def _with_offer_payment(
+    total: dict[str, int], payment: dict[str, int], times: int
+) -> dict[str, int]:
+    """*total* plus one way of paying an optional cost, *times* over.
+
+    A copy, in *total*'s own key order with the payment's new symbols after
+    it: the tap planner walks the dict it is handed, and a simulated game has
+    to reproduce from its seed.
+    """
+    merged = dict(total)
+    for symbol, amount in payment.items():
+        merged[symbol] = merged.get(symbol, 0) + amount * times
+    return merged  # _with_offer_payment
+
+
 def _offers_taken(card: CardDefinition, offers: "dict[str, int] | None"):
     """``(offer, times)`` for every optional **mana** offer *offers* takes.
 
@@ -1843,17 +1981,29 @@ def _cast_candidate_announcing(
 ) -> CastAction | None:
     """`_cast_candidate` for one fixed answer to CR 601.2b's optional costs.
 
-    One body for the hand and the command zone (CR 903.8), because everything
-    it checks is about the *card* and the board rather than about the zone:
-    the zone contributes only where the executor finds the card (`from_zone`,
-    `hand_index`) and what the cast additionally costs (*extra_generic*, the
-    commander tax).
+    One body for the hand, the command zone (CR 903.8) and every zone an
+    effect opens (CR 601.3), because almost everything it checks is about the
+    *card* and the board rather than about the zone. The zone contributes
+    where the executor finds the card (`from_zone`, `hand_index`), what the
+    cast additionally costs (*extra_generic*, the commander tax) and — for a
+    cast an effect permits — what it is charged *instead* and which
+    announcement says so: the permission being weighed, read where the price
+    is (`_cost_for`, `_pick_x_value`) and where a gate takes a zone
+    (`_cast_zone`).
 
     *offers* is the optional additional costs this candidate takes (None for a
     card that prints none): its mana is planned with the spell's, and an offer
     printing an {X} ("Kicker {X}") announces the largest X the lands can pay.
     """
     player = game.players[player_index]
+    # The permission this cast would be made under, or None (see
+    # `_cast_candidate`), and *hand_index* as a position **in the hand** —
+    # which it is only for a hand cast. It indexes whatever zone the card is
+    # in, and three readers below mean "the spell's own slot in hand, which
+    # cannot pay for the spell" (CR 601.2a): a graveyard's index handed to
+    # them would spare some unrelated hand card instead.
+    under = cast_weighed(card)
+    spell_hand_index = hand_index if from_zone == "hand" else None
     if (
         card.primary_type == "land"
         and game.enforce_mana_costs
@@ -1875,7 +2025,9 @@ def _cast_candidate_announcing(
     # X first: an X-draw spell's target choice depends on how many cards it
     # would draw (a spell that empties your own library is aimed elsewhere),
     # so the value has to exist before the target is picked.
-    x_value = _pick_x_value(game, player, card, extra_generic, hand_index=hand_index)
+    x_value = _pick_x_value(
+        game, player, card, extra_generic, hand_index=spell_hand_index,
+    )
     if x_value == 0:
         return None
 
@@ -1897,6 +2049,29 @@ def _cast_candidate_announcing(
     if not _printed_costs_are_payable(
         game, player_index, card, hand_index, from_zone, x_value, taken=offers
     ):
+        return None
+    # ...and what a required alternative cost asks beside its mana (CR 118.9b:
+    # "Flashback—{1}{G}, Pay 3 life"), through the gate the cast path refuses
+    # with. A cost that is only mana passes it, and its mana is the plan's
+    # (`_cost_for`).
+    if (
+        under is not None
+        and under.cost is not None
+        and game._unpayable_alternative_cost(
+            player_index, card, under.cost, spell_hand_index=spell_hand_index,
+        ) is not None
+    ):
+        return None
+    # **A cost paid in life is not paid with the seat's last point.** CR 119.4
+    # lets a player pay life equal to their total, the gates above accept it,
+    # and the cast then ends its caster's game (CR 704.5a): "You may cast this
+    # card from your graveyard by paying 3 life and discarding a card"
+    # (Demonic Embrace) at three life, the moment a seat could cast from a
+    # graveyard at all — and "As an additional cost to cast this spell, pay 3
+    # life" (Fumarole, Withering Boon) from hand before that. Not a reserve:
+    # a mandatory price is the spell's own, and a seat at four may still judge
+    # it worth one. Just never the last.
+    if _cast_life_price(card, from_zone, x_value, offers, under) >= player.life > 0:
         return None
     # Whether the mana is there at all, asked **before** any target is
     # weighed. The plan below asks it again with the offers' mana on top and
@@ -1921,6 +2096,9 @@ def _cast_candidate_announcing(
     target_permanent_index: int | list[int] | None = None
     target_permanent_ids: list[int] | None = None
     divided_targets: list[tuple] | None = None
+    # The spell a **stack role** names (see `_choose_role_targets`); None for
+    # every cast whose announcement has no such role.
+    role_stack_index: int | None = None
     if aura_enchant_noun(card) is not None:
         aura_choice = _choose_aura_target(game, player_index, card)
         if aura_choice is None:
@@ -1948,7 +2126,10 @@ def _cast_candidate_announcing(
                 # the cast gate would refuse it — an AI turn spent on an
                 # action the game then rejects.
                 return None
-            target, target_permanent_index, target_permanent_ids = roles
+            (
+                target, target_permanent_index, target_permanent_ids,
+                role_stack_index,
+            ) = roles
         else:
             several = _choose_several_targets(
                 game, player_index, card, x_value=x_value, preferred_seat=target,
@@ -1980,6 +2161,25 @@ def _cast_candidate_announcing(
                     return None
                 if single is not None:
                     target, target_permanent_index, target_permanent_ids = single
+    # "Exile target card from a graveyard" (Coffin Purge): whose graveyard,
+    # named — see `_graveyard_denial_target`. Only where nothing above named
+    # an object, which for a spell whose one target is a graveyard card is
+    # always.
+    if target_permanent_index is None and divided_targets is None:
+        buried = _cast_graveyard_denial(game, player_index, card)
+        if buried is not None:
+            target, target_permanent_index = buried
+    # "…that player must choose at least one Flagbearer on the battlefield if
+    # able" (Standard Bearer): the announcement chosen above, held to what an
+    # opponent's permanent demands of it — re-aimed where this seat can obey on
+    # the board it already chose, not proposed where it cannot.
+    aimed = _aimed_under_target_requirements(
+        game, player_index, card, from_zone,
+        target, target_permanent_index, target_permanent_ids, divided_targets,
+    )
+    if aimed is None:
+        return None
+    target, target_permanent_index, target_permanent_ids, divided_targets = aimed
     # "Destroy target artifact **with mana value X**" (Detonate): the target
     # fixes X, and the cast gate refuses an X that does not match it. X was
     # sized above as the most the lands could pay, before any target existed,
@@ -2002,7 +2202,9 @@ def _cast_candidate_announcing(
         # ends with the card back in hand and the mana spent — or with only a
         # dearer one to give back.
         return None
-    if not _caster_holds_a_hand_pick_entrant(game, player_index, card, hand_index):
+    if not _caster_holds_a_hand_pick_entrant(
+        game, player_index, card, spell_hand_index
+    ):
         # "Each player chooses a card in their hand. … The owner of each
         # creature card revealed this way with the lowest mana value puts it
         # onto the battlefield." With no creature card of its own to pick, the
@@ -2011,7 +2213,10 @@ def _cast_candidate_announcing(
     tap_indices: tuple[int, ...] = ()
     tap_colors: tuple[str, ...] = ()
 
-    alternative_cost = False
+    # CR 601.2b: a cast made under a permission that requires an alternative
+    # cost announces it (`PermittedCast.alternative_cost`) — that is what the
+    # cast path picks the permission by, and so what it charges.
+    alternative_cost = under is not None and under.alternative_cost
     taken_offers = _offers_taken(card, offers)
     announces_offer = _announces_any_offer(card, offers)
     if announces_offer and _paid_for_half_names_nothing(
@@ -2059,13 +2264,28 @@ def _cast_candidate_announcing(
             # here, largest first, exactly as `_max_affordable_x` sizes a mana
             # cost's -- and an X of zero is not proposed, for the reason
             # `x_value == 0` is refused above: it is a price paid for nothing.
+            #
+            # Each offer through ``payments_at``, every way it may be paid at
+            # that X: Emblazoned Golem's X is one mana of each of X colours,
+            # so the plan has to be for coloured pips the lands can make, and
+            # an X no choice of colours pays is passed over for a smaller one.
             sized = None
             for offer_x in (range(15, 0, -1) if sized_offer is not None else (None,)):
-                total = dict(required)
+                totals = [dict(required)]
                 for offer, times in taken_offers:
-                    for symbol, amount in offer.cost_at(offer_x).items():
-                        total[symbol] = total.get(symbol, 0) + amount * times
-                if _plan_land_taps(game, player, total) is not None:
+                    totals = [
+                        _with_offer_payment(total, payment, times)
+                        for total in totals
+                        for payment in offer.payments_at(offer_x)
+                    ]
+                total = next(
+                    (
+                        candidate for candidate in totals
+                        if _plan_land_taps(game, player, candidate) is not None
+                    ),
+                    None,
+                )
+                if total is not None:
                     sized = (offer_x, total)
                     break
             if sized is None:
@@ -2075,7 +2295,12 @@ def _cast_candidate_announcing(
             required = sized[1]
         plan = _plan_land_taps(game, player, required)
         if plan is None:
-            if announces_offer:
+            if announces_offer or under is not None:
+                # *under*: the price planned was already the permission's — a
+                # flashback cost, a waiver, a card played out of another zone
+                # — and CR 118.9a allows no second alternative cost beside
+                # one. (A printed alternative cost taken from an opened
+                # graveyard is a cast this policy does not make.)
                 return None
             # CR 118.9: the mana cost is not the only price. A spell whose
             # printed alternative cost this board *can* pay is castable right
@@ -2091,6 +2316,19 @@ def _cast_candidate_announcing(
             # none.
             if not _alternative_cost_is_payable(game, player_index, card, hand_index):
                 return None
+            # CR 118.9d: the cost increases in force are "applied to that
+            # alternative cost", so a pitch spell under Sphere of Resistance
+            # owes {1} beside its card and its life. Planned here for the
+            # reason the mana cost above is — the cast spends the pool, and a
+            # proposal with nothing tapped behind it is refused, the same card
+            # every turn — and through the one reader the offer's `payable`
+            # and the castable highlight price the same announcement with.
+            plan = _alternative_cost_tap_plan(
+                game, player_index, card, extra_generic=extra_generic,
+            )
+            if plan is None:
+                return None
+            tap_indices, tap_colors = plan
             alternative_cost = True
         else:
             tap_indices, tap_colors = plan
@@ -2105,11 +2343,13 @@ def _cast_candidate_announcing(
         target_permanent_index=target_permanent_index,
         target_permanent_ids=target_permanent_ids,
         from_zone=from_zone,
+        zone_seat=_zone_seat(player_index, under),
         alternative_cost=alternative_cost,
         divided_targets=divided_targets,
         land_tap_colors=tap_colors,
         optional_cost_payments=dict(offers) if announces_offer else None,
         mode_index=_announced_mode(card),
+        target_stack_index=role_stack_index,
     )
     # **What the cast would do, asked of the engine** — for a spell, whose
     # whole worth is its resolution. The finished announcement is carried out
@@ -2133,7 +2373,198 @@ def _cast_candidate_announcing(
     score = _score_cast(game, player_index, card, target, x_value, rehearsal)
     if from_zone == "command":
         score += COMMAND_ZONE_CAST_BONUS
+    elif under is not None and under.zone != "hand" and under.expires:
+        score += EXPIRING_PERMISSION_BONUS
     return replace(action, score=score)
+
+
+def _graveyard_denial_target(
+    game: Game, player_index: int, legal
+) -> "tuple[int, int] | None":
+    """``(pile's seat, slot)`` — the card an "exile target card from a
+    graveyard" is aimed at — or None to name nothing.
+
+    *legal* is the picker's own list for the announcement (``valid_targets``).
+    A card in **another seat's** pile, the ones its owner could still cast
+    from there first (`ai_valuation.graveyard_denial_order`), then seat and
+    pile order. None when no other seat's pile holds a legal card: the
+    announcement is then what it always was — a seat and no slot, which the
+    handler answers.
+
+    **Why the policy names it at all.** A bare announcement falls to the
+    handler's scan, "the first graveyard with a card in it, in seat order" —
+    so the seat in chair 0 exiled a card of its own with Coffin Purge, Cremate,
+    Headstone, Crypt Creeper, Steamclaw, Grave Robbers and Scavenging Ooze,
+    and the seat in chair 1 exiled its opponent's, off one board. A graveyard
+    card is announced as a seat and a slot in that seat's pile, the spelling
+    the cast and activation gates check (`targeting.GRAVEYARD_TARGET_KIND`).
+    """
+    by_seat: dict[int, list[int]] = {}
+    for entry in legal or ():
+        if entry.get("kind") != "graveyard":
+            continue
+        seat = int(entry["seat"])
+        if seat != player_index:
+            by_seat.setdefault(seat, []).append(int(entry["index"]))
+    for seat in sorted(by_seat):
+        ordered = graveyard_denial_order(game, seat, by_seat[seat])
+        if not ordered:
+            continue
+        # One card, not "up to three": among the cards its owner could no
+        # longer cast anyway, the one of greatest mana value — what a
+        # recursion would most want back, and what an exile that pays its
+        # source for the card (Scavenging Ooze's creature) is worth most
+        # against. The castable ones stay first, whatever they cost.
+        from .flashback import has_flashback
+
+        pile = game.players[seat].graveyard
+        first = ordered[0]
+        if not has_flashback(pile[first], game=game, owner_seat=seat):
+            first = max(
+                ordered,
+                key=lambda slot: (float(getattr(pile[slot], "cmc", 0) or 0), -slot),
+            )
+        return seat, first
+    return None
+
+
+def _cast_graveyard_denial(
+    game: Game, player_index: int, card: CardDefinition
+) -> "tuple[int, int] | None":
+    """`_graveyard_denial_target` for the cast candidate being built: the
+    spell's own spec and steps (its mode, its offers, the zone it leaves),
+    and the picker's list for that announcement."""
+    program = compile_card_oracle(card)
+    if not _one_graveyard_card_is_denied(
+        _cast_spec(card, program), _announced_steps(card, program)
+    ):
+        return None
+    legal = game.cast_target_spec(
+        player_index, card, optional_cost_payments=_OFFERS_ANNOUNCED.get(),
+        mode_index=_announced_mode(card), from_zone=_cast_zone(card),
+    ).get("valid_targets") or []
+    return _graveyard_denial_target(game, player_index, legal)
+
+
+def _cast_life_price(
+    card: CardDefinition, from_zone: str, x_value: "int | None",
+    offers: "dict[str, int] | None", under: "PermittedCast | None",
+) -> int:
+    """The life the announcement being built pays **as a cost** (CR 601.2h):
+    every printed additional cost that applies to a cast from *from_zone* and
+    is mandatory or taken (`optional_cost_taken`, the cast path's own reader),
+    at the announced X, plus what a required alternative cost asks
+    (`PermittedCast.cost`: a flashback cost printed with "Pay 3 life")."""
+    from .mixins.stack.casting import optional_cost_taken
+
+    total = 0
+    for cost in additional_costs(card):
+        if cost.from_zone not in (None, from_zone):
+            continue
+        if not optional_cost_taken(cost, offers):
+            continue
+        total += int(cost.life_charged(x_value) or 0)
+    if under is not None and under.cost is not None:
+        total += int(getattr(under.cost, "pay_life", 0) or 0)
+    return total
+
+
+def _one_graveyard_card_is_denied(spec, instructions) -> bool:
+    """Whether an announcement described by *spec* names exactly **one card in
+    a graveyard** and the steps behind it exile that card — the shape
+    `_graveyard_denial_target` answers."""
+    return (
+        isinstance(spec, dict)
+        and spec.get("kind") == GRAVEYARD_TARGET_KIND
+        and not spec_roles(spec)
+        and not spec_is_a_cost(spec)
+        and not spec.get("max_targets")
+        and not spec.get("x_targets")
+        and exiles_a_graveyard_target(instructions)
+    )
+
+
+def _aimed_under_target_requirements(
+    game: Game, player_index: int, card: CardDefinition, from_zone: str,
+    target, target_permanent_index, target_permanent_ids, divided_targets,
+):
+    """The announcement ``(seat, slot, ids, division)`` as the cast gate will
+    accept it under a requirement an opponent's permanent prints about it
+    ("…that player must choose at least one Flagbearer on the battlefield if
+    able", ``engine/target_requirements.py``) — unchanged where nothing binds
+    it or it already obeys, **re-aimed** where it can, None where this seat
+    should not make it at all.
+
+    Asked of the engine's own gate (`Game.cast_target_requirement_refusal`)
+    for the reason every gate in the candidate builders is: a cast the engine
+    will refuse costs nothing, and the seat re-proposes it every turn —
+    `refused_casts`, for as long as the Flagbearer lives.
+
+    The re-aim is onto a required permanent **on the board the policy already
+    chose**, which is what keeps it a decision about the rule and not about
+    the card: removal and burn pointed at the opponent land on the opponent's
+    Flagbearer, and a Giant Growth pointed at this seat's own creature is not
+    turned into a gift — with no Flagbearer of its own to put it on, the seat
+    holds the card. One slot, or the first entry of a division; an
+    announcement of several objects or of roles is not rebuilt here.
+    """
+    from .target_requirements import one_slot
+
+    mode_index = _announced_mode(card)
+    offers = _OFFERS_ANNOUNCED.get()
+    standing = (target, target_permanent_index, target_permanent_ids, divided_targets)
+    if game.cast_target_requirement_refusal(
+        player_index, card,
+        announcements=[
+            (mode_index, target, target_permanent_index, target_permanent_ids, None)
+        ],
+        divided_targets=divided_targets,
+        from_zone=from_zone,
+        optional_cost_payments=offers,
+    ) is None:
+        return standing
+    spec = game.cast_target_spec(
+        player_index, card, from_zone=from_zone,
+        optional_cost_payments=offers, mode_index=mode_index,
+    )
+    wanted = [
+        entry for entry in spec.get("required_targets") or ()
+        if entry.get("seat") == target
+    ]
+    if not wanted:
+        return None
+    pick = wanted[0]
+    if divided_targets:
+        first = tuple(divided_targets[0])
+        return (
+            target, target_permanent_index, target_permanent_ids,
+            [(pick["seat"], pick["index"], *first[2:]), *divided_targets[1:]],
+        )
+    if not one_slot(spec):
+        return None
+    return pick["seat"], pick["index"], [pick["id"]], None
+
+
+def _required_activation_target(
+    game: Game, player_index: int, permanent_index: int, target
+) -> int | None:
+    """The slot on seat *target* a one-target ability must be aimed at for
+    its activation to obey a target requirement in force, or None when there
+    is none there. `_aimed_under_target_requirements` for an activation: the
+    picker's own ``required_targets``, on the board the policy already chose.
+    """
+    from .target_requirements import one_slot
+
+    spec = game.activation_target_spec(player_index, permanent_index, ability_index=0)
+    if not one_slot(spec):
+        return None
+    return next(
+        (
+            entry["index"] for entry in spec.get("required_targets") or ()
+            if entry.get("seat") == target
+        ),
+        None,
+    )
 
 
 def _printed_costs_are_payable(
@@ -2207,6 +2638,42 @@ def _alternative_cost_is_payable(
     return game._unpayable_alternative_cost(
         player_index, card, printed[0], spell_hand_index=hand_index,
     ) is None
+
+
+def _alternative_cost_tap_plan(
+    game: Game, player_index: int, card: CardDefinition, *, extra_generic: int = 0,
+) -> "tuple[tuple[int, ...], tuple[str, ...]] | None":
+    """The taps that pay the **mana** an alternative-cost cast of *card* still
+    owes (CR 118.9d), or None when the board cannot pay it.
+
+    The amount is the engine's (`Game.alternative_cost_mana`): nothing on an
+    untaxed board, which plans no tap at all and is every such cast this policy
+    made before the cast path charged the increases.
+
+    A plan that would tap the creature the cost itself must tap ("you may tap
+    an untapped creature you control rather than pay this spell's mana cost",
+    Lashknife, with a Llanowar Elves the only creature) is no plan: the mana
+    would be made and the cast refused for want of an untapped creature.
+    """
+    printed = game.applicable_alternative_costs(player_index, card)
+    if len(printed) != 1:
+        return None
+    cost = printed[0]
+    owed = game.alternative_cost_mana(
+        player_index, card, cost, extra_generic=extra_generic,
+    )
+    plan = _plan_land_taps(game, game.players[player_index], owed)
+    if plan is None or not cost.tap_count:
+        return plan
+    planned = [game.permanent_at(player_index, index) for index in plan[0]]
+    left = [
+        permanent
+        for permanent in game._additional_cost_candidates(
+            player_index, cost, giving_up="tap"
+        )
+        if not any(permanent is tapped for tapped in planned)
+    ]
+    return plan if len(left) >= cost.tap_count else None
 
 
 def choose_activation_action(game: Game, player_index: int) -> ActivationAction | None:
@@ -2413,7 +2880,7 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
         # Skipped entirely when nothing is worth equipping, so the AI does not
         # pay {1} every main phase to move a sword onto the creature it is
         # already on.
-        target_permanent_index: int | None = None
+        target_permanent_index: int | list[int] | None = None
         if ability.instruction.kind == "attach_source_to_target":
             target_permanent_index = _choose_equip_target(game, player_index, permanent)
             if target_permanent_index is None:
@@ -2575,13 +3042,18 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
         # the Ooze's exile is one — an opposing pile is taken before the
         # seat's own, which is the order an unnamed target is looked for in
         # everywhere else. Skipped when nothing on the wanted side is legal,
-        # for the battlefield block's reason.
+        # for the battlefield block's reason — and for the two shapes a block
+        # below names: several cards out of a single pile (``SINGLE_GRAVEYARD``)
+        # and a card exiled to deny it (`_graveyard_denial_target`: an
+        # opponent's pile, the cards its owner could still cast first).
         if (
             target_permanent_index is None
             and spec is not None
             and spec.get("kind") == GRAVEYARD_TARGET_KIND
             and not spec_is_a_cost(spec)
             and not spec.get("source_of_choice")
+            and not spec.get(SINGLE_GRAVEYARD)
+            and not _one_graveyard_card_is_denied(spec, (ability.instruction,))
         ):
             cards = [
                 t for t in game.activation_target_spec(
@@ -2607,6 +3079,49 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
             chosen = max(cards, key=_mana_value)
             target = chosen["seat"]
             target_permanent_index = chosen["index"]
+
+        # "{2}{B}, {T}: Exile up to three target cards from a single
+        # graveyard." (Carrion Beetles, Famished Ghoul.) The cards are announced
+        # (CR 602.2b), so an activation that names none is the legal "up to"
+        # announcement and exiles nothing — a cost paid for no effect, which is
+        # what this seat did with every one of them once the handler stopped
+        # picking for it. Named here the way the cast side names them
+        # (`_choose_several_targets`): the maximum, out of one opponent's pile,
+        # and skipped when no opponent has a card to take.
+        if (
+            spec is not None
+            and spec.get(SINGLE_GRAVEYARD)
+            and target_permanent_index is None
+            and not target_role_refs
+        ):
+            piles: dict[int, list[int]] = {}
+            for entry in game.activation_target_spec(
+                player_index, permanent_index, ability_index=0,
+            ).get("valid_targets") or []:
+                if entry.get("kind") == "graveyard" and entry.get("seat") != player_index:
+                    piles.setdefault(int(entry["seat"]), []).append(int(entry["index"]))
+            if not piles:
+                continue
+            target = min(piles)
+            target_permanent_index = piles[target][: int(spec.get("max_targets") or 1)]
+        # "{3}, {T}: Exile target card from a graveyard." (Steamclaw; Crypt
+        # Creeper, Grave Robbers, Scavenging Ooze.) Whose graveyard, named —
+        # the cast side's answer (`_graveyard_denial_target`) over this
+        # ability's own picker. Named nothing, the handler took the first pile
+        # in seat order: the activator's own, from chair 0.
+        if (
+            target_permanent_index is None
+            and not target_role_refs
+            and _one_graveyard_card_is_denied(spec, (ability.instruction,))
+        ):
+            buried = _graveyard_denial_target(
+                game, player_index,
+                game.activation_target_spec(
+                    player_index, permanent_index, ability_index=0,
+                ).get("valid_targets") or [],
+            )
+            if buried is not None:
+                target, target_permanent_index = buried
 
         # CR 601.2d asked of an ability: a divided announcement ("…divided as
         # you choose", Serra's Hymn) is one this chooser never makes, and the
@@ -2635,6 +3150,24 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
             target_role_refs=target_role_refs,
         ) is not None:
             continue
+        # …and what an opponent's Flagbearer demands of that announcement
+        # (`Game.activation_target_requirement_refusal`): a seat named alone
+        # for an "any target" ability is re-aimed at the Flagbearer on that
+        # seat, and anything else the gate would refuse is not proposed.
+        if game.activation_target_requirement_refusal(
+            player_index, permanent, ability,
+            target_player_index=target,
+            target_permanent_index=target_permanent_index,
+            target_role_refs=target_role_refs,
+        ) is not None:
+            required_slot = (
+                _required_activation_target(game, player_index, permanent_index, target)
+                if target_permanent_index is None and not target_role_refs
+                else None
+            )
+            if required_slot is None:
+                continue
+            target_permanent_index = required_slot
 
         land_taps: tuple[int, ...] = ()
         tap_colors: tuple[str, ...] = ()
@@ -2687,6 +3220,12 @@ def _activation_target_side(permanent: Permanent, instruction) -> str | None:
     """
     if source_becomes_an_aura(instruction):
         return "opponent" if _aura_harms_its_host(permanent.effective_card) else "you"
+    # "{T}: Put a fuse counter on target creature." (Bomb Squad.) A named
+    # counter reads as a gift by category, and the card's own state trigger
+    # says this one is a death sentence — the Licids' case again: which board
+    # the target belongs on is what the card's *other* text does with it.
+    if named_counter_marks_for_harm(permanent.effective_card, instruction):
+        return "opponent"
     return ability_target_side(instruction) or instruction_target_side(instruction)
 
 
@@ -2994,6 +3533,14 @@ def _foreign_activation_candidate(
         target_player_index=target,
         target_permanent_index=target_permanent_index,
     ) is not None:
+        return None
+    if game.activation_target_requirement_refusal(
+        player_index, permanent, ability,
+        target_player_index=target,
+        target_permanent_index=target_permanent_index,
+    ) is not None:
+        # An opponent's Flagbearer demands a target this announcement does not
+        # name. Not proposed: the gate would refuse it with nothing paid.
         return None
 
     land_taps: tuple[int, ...] = ()
@@ -3769,18 +4316,36 @@ def choose_combat_instant_cast_action(game: Game, player_index: int) -> CastActi
     """
     player = game.players[player_index]
 
+    # The hand's instants, then the instants an effect lets the seat cast from
+    # somewhere else (CR 601.3; `ai_valuation.permitted_casts`) — a flashback
+    # instant in its graveyard (Moment's Peace, Sylvan Might), which is
+    # castable in this window exactly as the hand's are. A hand card is
+    # weighed under the waiver that covers it, if one does (`hand_waiver`),
+    # as the main-phase chooser weighs it.
+    offered: "list[tuple[int, CardDefinition, PermittedCast | None]]" = [
+        (
+            hand_index, card,
+            hand_waiver(game, player_index, player.hand[hand_index], card, hand_index),
+        )
+        for hand_index, card in hand_spells(player)
+        if card.primary_type == "instant"
+    ]
+    offered += [
+        (permitted.index, permitted.spell, permitted)
+        for permitted in permitted_casts(game, player_index)
+    ]
     best: CastAction | None = None
     # One deliberation for the whole hand: every instant weighed here answers
     # the same stack and the same combat, so each is measured against one
     # reading of how that goes with nothing cast.
     with deliberating():
-        for hand_index, card in hand_spells(player):
+        for hand_index, card, under in offered:
             if card.primary_type != "instant":
                 continue
             built: list[CastAction] = []
             chosen: CastAction | None = None
             for mode_index in _modes_weighed(game, player_index, card):
-                with considering_mode(card, mode_index):
+                with considering_mode(card, mode_index), casting_under(under):
                     candidate = _combat_instant_candidate(
                         game, player_index, card, hand_index
                     )
@@ -3803,9 +4368,24 @@ def _combat_instant_candidate(
     game: Game, player_index: int, card: CardDefinition, hand_index: int
 ) -> CastAction | None:
     """`choose_combat_instant_cast_action` for one instant, in the mode being
-    weighed (`_announced_mode`) — or None when it is not worth casting now."""
+    weighed (`_announced_mode`) and under the permission being weighed
+    (`ai_valuation.cast_weighed`: a flashback instant in the graveyard) — or
+    None when it is not worth casting now. *hand_index* indexes the zone that
+    permission names, the hand where there is none."""
     player = game.players[player_index]
+    under = cast_weighed(card)
     if not _can_cast_with_targets(game, player_index, card):
+        return None
+    if (
+        under is not None
+        and under.cost is not None
+        and game._unpayable_alternative_cost(
+            player_index, card, under.cost,
+            spell_hand_index=hand_index if under.zone == "hand" else None,
+        ) is not None
+    ):
+        # What a required alternative cost asks beside its mana — see
+        # `_cast_candidate_announcing`.
         return None
     # "Counter target spell **if it's red**": which spell, or no cast at all
     # when the guard holds for none of them (`_guarded_stack_target`).
@@ -3842,7 +4422,22 @@ def _combat_instant_candidate(
         if plan is None:
             return None
         tap_indices, tap_colors = plan
-    if divided is None:
+    # A spell naming several **roles** is answered role by role, as the
+    # main-phase chooser answers it (`_choose_role_targets`). This chooser asked
+    # only the one-object question, which a roles spell answers "not mine" —
+    # so an instant with two differently-restricted targets (Shower of Sparks,
+    # Fiery Justice's kin) was proposed here naming neither, refused by the
+    # cast gate for "requires 2 targets", and proposed again at the next
+    # window. With a role on the stack (Suffocating Blast) this is also the
+    # only chooser that ever sees a spell to name.
+    roles = _choose_role_targets(game, player_index, card) if divided is None else None
+    if roles is not None:
+        if roles == ():
+            return None
+        target, target_permanent_index, target_permanent_ids, role_stack = roles
+        if role_stack is not None:
+            stack_target = role_stack
+    elif divided is None:
         single = _choose_single_object_target(
             game, player_index, card, target, x_value=x_value,
         )
@@ -3850,6 +4445,23 @@ def _combat_instant_candidate(
             return None
         if single is not None:
             target, target_permanent_index, target_permanent_ids = single
+    # ...and the same graveyard a denial is aimed at (`_cast_graveyard_denial`).
+    if target_permanent_index is None and divided is None:
+        buried = _cast_graveyard_denial(game, player_index, card)
+        if buried is not None:
+            target, target_permanent_index = buried
+    # The same hold the main-phase chooser applies (`_cast_candidate`): what an
+    # opponent's Flagbearer demands of this announcement.
+    aimed = _aimed_under_target_requirements(
+        game, player_index, card, _cast_zone(card),
+        target, target_permanent_index, target_permanent_ids,
+        list(divided) if divided else None,
+    )
+    if aimed is None:
+        return None
+    target, target_permanent_index, target_permanent_ids, held_division = aimed
+    if divided:
+        divided = held_division
     if not _caster_can_make_its_sacrifices(game, player_index, card):
         return None
 
@@ -3866,6 +4478,11 @@ def _combat_instant_candidate(
         land_tap_colors=tap_colors,
         mode_index=_announced_mode(card),
         target_stack_index=stack_target,
+        # Where the card is and which permission the cast names — "hand" and
+        # no alternative cost for every candidate this chooser built before.
+        from_zone=_cast_zone(card),
+        zone_seat=_zone_seat(player_index, under),
+        alternative_cost=under is not None and under.alternative_cost,
     )
     # What casting it **now** would do, measured against what happens with
     # nothing cast: the spell on the stack resolving, the declared combat
@@ -3923,7 +4540,8 @@ def choose_search_cards(
     resolver will consume it — an AI that kept offering a used name would
     submit an answer the engine then refuses, which is the fail-to-find.
     """
-    from .search_filters import name_key
+    from .search_filters import (landing_seat, name_key, search_slots,
+                                 slot_assignment)
 
     # The zone the search looks in, which is not always the chooser's own —
     # see `searched_seat`. An AI reading its own graveyard for a card the
@@ -3933,6 +4551,51 @@ def choose_search_cards(
     working = dict(data)
     picks: list[dict] = []
     taken: set[tuple[str, int]] = set()
+    # **Whose hand the finds are for.** A seat choosing cards that go to
+    # somebody else's hand (Guided Passage: "an opponent chooses … you put the
+    # chosen cards into your hand"; Jester's Mask's refilled hand) is choosing
+    # what its opponent gets, and wants the *least* of what the phrase admits.
+    # Read off the prompt's own seats rather than off a card: the finds land
+    # where `landing_seat` says, and that is the whole of the question. A find
+    # taken out of another seat's library for any other place — exile (Jester's
+    # Cap), the chooser's own battlefield (Bribery) — is still the best card.
+    destinations = list(working.get("destinations") or ()) or [
+        working.get("destination", "hand")
+    ]
+    handing_over = (
+        landing_seat(working, player_index) != player_index
+        and all(place == "hand" for place in destinations)
+    )
+    sign = -1.0 if handing_over else 1.0
+    if search_slots(working):
+        # "a land card **of each basic land type**" (Gaea's Balance): one find
+        # per printed description. Best card first, each kept only while the
+        # cards kept so far can still all be given a description of their own
+        # — `slot_assignment`, the resolver's own question, so this is an
+        # answer it admits. Taking the best that still fits is exact here (the
+        # sets that can be assigned are a matroid), so it is also as many
+        # finds as the zones allow, which is what a floor asks for.
+        entries = [
+            (zone, index, card)
+            for zone in tuple(working.get("zones", ("library",)))
+            for index, card in enumerate(
+                player.library if zone == "library" else player.graveyard
+            )
+            if search_matches(card, working)
+        ]
+        entries.sort(
+            key=lambda entry: -sign * _score_tutor_choice(game, player_index, entry[2])
+        )
+        kept: list[tuple] = []
+        for entry in entries:
+            if len(kept) >= count:
+                break
+            trial = kept + [entry]
+            if None not in slot_assignment(
+                [card for _zone, _index, card in trial], working
+            ):
+                kept = trial
+        return [{"zone": zone, "index": index} for zone, index, _card in kept]
     for _ in range(count):
         best: tuple[str, int] | None = None
         best_score = float("-inf")
@@ -3941,7 +4604,7 @@ def choose_search_cards(
             for index, card in enumerate(cards):
                 if (zone, index) in taken or not search_matches(card, working):
                     continue
-                score = _score_tutor_choice(game, player_index, card)
+                score = sign * _score_tutor_choice(game, player_index, card)
                 if best is None or score > best_score:
                     best = (zone, index)
                     best_score = score
@@ -4213,6 +4876,13 @@ def _is_better_cast(candidate: CastAction, current: CastAction | None) -> bool:
         return True
     if candidate.score < current.score:
         return False
+    # Equal scores: the hand before any other zone, then the lower slot. A
+    # card and its own copy in the graveyard score alike — the score is what
+    # the spell does — and the hand's is the cheaper cast (Firebolt's {R}
+    # against its {4}{R} flashback), which leaves the other for the lands that
+    # are left. Two hand cards compare as they always did.
+    if (candidate.from_zone == "hand") != (current.from_zone == "hand"):
+        return candidate.from_zone == "hand"
     return candidate.hand_index < current.hand_index
 
 
@@ -4278,7 +4948,9 @@ def _can_cast_with_targets(game: Game, caster_index: int, card: CardDefinition) 
     to prevent one module over, and ``targeting.derive_cast_spec`` guards with
     the same gate for the UI's benefit.
     """
-    if cast_prohibition(game, caster_index, card) is not None:
+    if cast_prohibition(
+        game, caster_index, card, from_zone=_cast_zone(card)
+    ) is not None:
         # CR 601.3, through the predicate the cast path itself refuses with
         # (`engine/cast_prohibitions.py`): a prohibited spell is refused before
         # any cost, nothing is spent, and a seat that goes on proposing it does
@@ -4411,7 +5083,7 @@ def _no_legal_cast_target(game: Game, caster_index: int, card: CardDefinition) -
     mode_index = _announced_mode(card)
     if game.no_legal_cast_target_refusal(
         caster_index, card, optional_cost_payments=announced,
-        mode_index=mode_index,
+        mode_index=mode_index, from_zone=_cast_zone(card),
     ) is not None:
         return True
     # What follows is **preference and remainder**, and is deliberately wider
@@ -4619,6 +5291,12 @@ def choose_divided_targets(
     * **A whole-board division takes the whole board** — "…among all creatures
       target opponent controls" (Dwarven Catapult) chooses nothing, so every
       candidate on the named side is announced and the even split does the rest.
+
+    And one that is not a policy at all: **an "each of up to N targets" list
+    is filled** (Shower of Coals). Nothing there is divided — every target
+    takes the whole printed amount (``divided_damage.EACH``) — so the reason
+    damage concentrates does not apply to it, and a slot left unnamed is
+    damage the card printed and nobody received.
     """
     program = compile_card_oracle(card)
     # The candidate being built's own answer to CR 601.2b (`_OFFERS_ANNOUNCED`):
@@ -4641,6 +5319,7 @@ def choose_divided_targets(
         return None
     spec = game.cast_target_spec(
         caster_index, card, optional_cost_payments=offers, mode_index=mode_index,
+        from_zone=_cast_zone(card),
     )
     if spec.get("kind") != "divided":
         # A modal or otherwise re-derived spec that does not describe the
@@ -4669,11 +5348,34 @@ def choose_divided_targets(
     # too small to fill the count is no legal announcement at all, which is what
     # `()` means here.
     exact = _card_divided_target_count(spec, x_value)
+    if exact is not None and len(shape.slot_sides) == exact:
+        # The targets are not interchangeable (Captain's Maneuver: the first is
+        # spared, the second takes the damage), so each is taken from the board
+        # its own slot names — `ai_valuation.DividedShape.slot_sides`. Which
+        # candidate on that board is this module's weight, and it is the one
+        # every divided spell has: the first the enumeration offers, a player's
+        # face where the printed noun admits one. So the caster's own face is
+        # what is spared and an opponent's is where the damage goes.
+        picked = _divided_slot_picks(candidates, shape.slot_sides, caster_index)
+        return [] if picked is None else [
+            (entry["seat"], entry.get("index")) for entry in picked
+        ]
     if exact is not None:
         return (
             [] if len(wanted) < exact
             else [(entry["seat"], entry.get("index")) for entry in wanted[:exact]]
         )
+    ceiling = spec.get("max_targets")
+    if spec.get("division") == EACH and isinstance(ceiling, int):
+        # "…deals 2 damage to **each of up to three targets**" (Shower of
+        # Coals, the pool's first EACH list under a ceiling rather than a
+        # printed count — Firestorm and Magma Burst print how many, and are
+        # answered by `exact` above). It reached the threshold arm below and
+        # named one target of its three, which is a third of the card: a share
+        # is measured against a toughness only where there is a share.
+        return [
+            (entry["seat"], entry.get("index")) for entry in wanted[:max(1, ceiling)]
+        ]
     if shape.whole_board:
         chosen = wanted
     elif shape.thresholded:
@@ -4692,6 +5394,28 @@ def choose_divided_targets(
         else (entry["seat"], entry.get("index"), share)
         for entry, share in zip(chosen, shares)
     ]
+
+
+def _divided_slot_picks(candidates, slot_sides, caster_index: int):
+    """One enumerated target per printed slot, each from the board its slot
+    names ("you" the caster's, "opponent" anybody else's, None either), no
+    target twice — or None when some slot has nothing to name, which is no
+    legal announcement (CR 601.2c) rather than one to fill from the wrong
+    board."""
+    picked: list = []
+    for side in slot_sides:
+        offered = [
+            entry for entry in candidates
+            if not any(entry is taken for taken in picked)
+            and (
+                side is None
+                or (_divided_candidate_seat(entry) == caster_index) == (side == "you")
+            )
+        ]
+        if not offered:
+            return None
+        picked.append(offered[0])
+    return picked
 
 
 def _card_divided_target_count(spec: dict, x_value: int | None) -> int | None:
@@ -4815,7 +5539,7 @@ def _choose_role_targets(
     # Chaos — two bullets, both of them roles — was never cast by an AI seat.
     options = game.cast_target_spec(
         caster_index, card, optional_cost_payments=offers,
-        mode_index=_announced_mode(card),
+        mode_index=_announced_mode(card), from_zone=_cast_zone(card),
     ).get("valid_targets") or []
     picks = _role_chain(
         options, role_target_sides(card, offers), 0, caster_index, card, game,
@@ -4827,26 +5551,40 @@ def _choose_role_targets(
     # field every cast already carries, which is what the resolution reads back.
     # Held as ``None`` in both lists rather than dropped, because those lists
     # are positional in role order and a short one shifts every slot after it.
+    #
+    # A **stack** role's answer ("Counter target spell and … deals 3 damage to
+    # target creature", Suffocating Blast) is held the same way and for the
+    # same reason: the spell travels on ``target_stack_index``, the one field
+    # a cast names a stack object on.
+    off_board = ("player", "stack")
     ids = [
-        None if pick.get("kind") == "player"
+        None if pick.get("kind") in off_board
         else game.permanent_id_of(game.permanent_at(pick["seat"], pick["index"]))
         for pick in picks
     ]
     if not all(value is None or isinstance(value, int) for value in ids):
         return ()
     seats = [pick["seat"] for pick in picks if pick.get("kind") == "player"]
-    if len(seats) > 1:
+    spells = [
+        len(game.stack) - 1 - pick["stack_index"]
+        for pick in picks if pick.get("kind") == "stack"
+    ]
+    if len(seats) > 1 or len(spells) > 1:
         # Two player roles would be one seat sent twice, which the resolution
-        # refuses on the other side of the same fact. Skipped rather than cast.
+        # refuses on the other side of the same fact — and two stack roles one
+        # spell. Skipped rather than cast.
         return ()
     # The seat is still sent for every other roles spell too, because every cast
     # carries one; the *ids* are what address the two boards a roles spell may
     # span (CR 400.7).
-    seat = seats[0] if seats else picks[0]["seat"]
+    seat = seats[0] if seats else next(
+        (pick["seat"] for pick in picks if pick.get("kind") not in off_board),
+        caster_index,
+    )
     indices = [
-        None if pick.get("kind") == "player" else pick["index"] for pick in picks
+        None if pick.get("kind") in off_board else pick["index"] for pick in picks
     ]
-    return seat, indices, ids
+    return seat, indices, ids, (spells[0] if spells else None)
 
 
 def _names_x_targets(card: CardDefinition) -> bool:
@@ -4882,6 +5620,18 @@ def _role_chain(
     want = sides[level] if level < len(sides) else None
     if options[0].get("kind") == "player":
         candidates = [_preferred_role_option(options, caster_index, card, game)]
+    elif options[0].get("kind") == "stack":
+        # A spell role is answered with a spell somebody else controls: every
+        # step in the pool that spends one counters it, and a seat that
+        # countered its own spell to deal the damage beside it has paid for
+        # two cards to get half of one. Topmost first, the engine's own order.
+        depth = len(game.stack)
+        candidates = [
+            option for option in options
+            if 0 <= depth - 1 - option["stack_index"] < depth
+            and game.stack[depth - 1 - option["stack_index"]].caster_index
+            != caster_index
+        ]
     elif want in ("you", "opponent"):
         candidates = [
             option for option in options
@@ -4990,7 +5740,7 @@ def _choose_several_targets(
     # one-target chooser.
     legal = game.cast_target_spec(
         caster_index, card, optional_cost_payments=_OFFERS_ANNOUNCED.get(),
-        mode_index=_announced_mode(card),
+        mode_index=_announced_mode(card), from_zone=_cast_zone(card),
     ).get("valid_targets") or []
     by_seat: dict[int, list[int]] = {}
     # A graveyard card is not a permanent and has no `permanent_id`; its slots
@@ -5010,7 +5760,17 @@ def _choose_several_targets(
         # one-target chooser as it always has.
         return () if sized_by_x else None
 
-    if sized_by_x:
+    if sized_by_x or announced is not None:
+        # **…and "up to X target creatures, where X is one plus the number of
+        # cards named Aether Burst in all graveyards"** (`announced`): the same
+        # one printed instance of the word, with its X counted off the board
+        # instead of paid for. It fell through to the several-slot default at
+        # the bottom of this function — "the caster's own board, because every
+        # card carrying the template gives a benefit per target" — which for
+        # this one is a bounce: the seat returned its own creatures to its own
+        # hand. (Reap, the other card on this branch, names cards in its
+        # caster's graveyard and has no second board to land on.)
+        #
         # "X target …" is one printed instance of the word, so every slot wants
         # the same board — and which board is the reading the **one-target**
         # chooser has always made for these cards (`spell_target_side`, then
@@ -5427,6 +6187,10 @@ _TARGET_GUARDS = frozenset({
     # kind only in that spelling; "a card with the same name as that spell"
     # (Bazaar of Wonders) is about a spell some trigger fired on.
     "same_named_object",
+    # "Counter target spell if it shares a color with a creature you control."
+    # (Jaded Response.) A property of the spell the cast names, read against
+    # the caster's own board as it stands — askable before the cast exists.
+    "target_shares_color_with_matching",
 })
 
 
@@ -6087,9 +6851,10 @@ def toll_decline_is_smaller_loss(
     ):
         return False  # mana-priced: the floating-mana policy stands
     source = entry.get("_source_permanent")
+    context = entry.get("_context")
     paying = toll_branch_loss(
         game, player_index, tuple(entry.get("_on_accept") or ()),
-        self_recipients, source,
+        self_recipients, source, context,
     )
     if paying is None:
         return False
@@ -6097,10 +6862,17 @@ def toll_decline_is_smaller_loss(
     if life_cost:
         paying = paying.plus_life(life_cost)
     declining = toll_branch_loss(
-        game, player_index, penalty_steps, self_recipients, source
+        game, player_index, penalty_steps, self_recipients, source, context
     )
     if declining is None:
-        return False
+        # **A price that kills is never paid for a penalty nobody can price.**
+        # "Counter target instant or sorcery spell unless its controller has
+        # Molten Influence deal 4 damage to them": what a countered spell is
+        # worth is not derivable here, so the standing policy — pay tolls —
+        # applied, and a seat at 4 life paid with the game. Whatever the
+        # penalty is, it is not larger than the game; every survivable price
+        # still goes to the standing policy, exactly as before.
+        return _toll_loss_price(game, player_index, paying) >= _TOLL_LETHAL_PRICE
     if legacy_damage:
         declining = declining.plus_life(legacy_damage)
     return _toll_loss_price(game, player_index, declining) < _toll_loss_price(
@@ -6275,12 +7047,45 @@ def chained_toll_declined(game: Game, player_index: int, entry: dict) -> bool:
     controller = game.players.index(caster)
     unpaid = tuple(links[0].payload.get("unpaid") or ())
     if not unpaid:
+        if chain_payment_counters_the_event_spell(entry):
+            # What paying buys is the *payer's*: somebody else's spell
+            # countered (Ice Cave), whoever's permanent makes the offer. Not a
+            # drawback its controller avoids, so no seat declines it by rule —
+            # whether the mana is worth spending is
+            # ``optional_pay_may_tap_lands``' question.
+            return False
         return player_index == controller
     loss = toll_branch_loss(
         game, controller, unpaid, {"caster"}, entry.get("_source_permanent")
     )
     unpaid_is_a_loss = loss is not None and loss != TollLoss()
     return (player_index == controller) != unpaid_is_a_loss
+
+
+def chain_payment_counters_the_event_spell(entry: dict) -> bool:
+    """Whether *entry* is a link of an offer chain whose payment buys exactly
+    one thing: the spell the trigger fired on, countered.
+
+    "Whenever a player casts a spell, any other player may pay that spell's
+    mana cost. If a player does, counter the spell." (Ice Cave.) Read off the
+    armed link's own compiled branches — a ``paid`` branch that is a counter
+    bound to the trigger and no ``unpaid`` branch at all — so it is a fact
+    about the program and never about a card.
+
+    The chain is only ever offered to seats *other* than the spell's caster,
+    and this engine has no teams, so for every seat that is asked the spell is
+    an opponent's: paying is a gain for the payer, at a price.
+    """
+    links = tuple(entry.get("_on_decline") or ())
+    if len(links) != 1 or getattr(links[0], "kind", None) != "unless_player_pays":
+        return False
+    payload = links[0].payload
+    paid = tuple(payload.get("paid") or ())
+    return bool(paid) and not payload.get("unpaid") and all(
+        getattr(step, "kind", None) == "counter_top_stack_spell"
+        and step.payload.get("bound_to_trigger")
+        for step in paid
+    )
 
 
 #: The life total below which a seat nobody asked starts spending its lands on
@@ -6352,6 +7157,17 @@ def optional_pay_may_tap_lands(game: Game, player_index: int, entry: dict) -> bo
       the dearer of the two. On another seat's turn the lands are idle and the
       standing answer stands: pay.
     """
+    if chain_payment_counters_the_event_spell(entry):
+        # **A gift at a price, to whichever seat pays it** (Ice Cave): the
+        # decline branch is only the chain moving on, so refusing costs
+        # nothing and this is not a toll — and what accepting buys is fully
+        # known, an opponent's spell countered, so it is not the unvalued offer
+        # of another seat's object either. It takes the gift rule's mana half:
+        # lands that are idle (another seat's turn) always, and on the seat's
+        # own turn only lands nothing in its hand could use.
+        if game.active_player_index != player_index:
+            return True
+        return not _hand_could_use_mana(game, player_index)
     if entry.get("_on_decline") or int(entry.get("damage", 0) or 0) > 0:
         loss = _life_only_toll(entry)
         if loss is None or game.active_player_index != player_index:
@@ -6359,21 +7175,37 @@ def optional_pay_may_tap_lands(game: Game, player_index: int, entry: dict) -> bo
         payer = game.players[player_index]
         if payer.life - loss < LIFE_TOLL_FLOOR:
             return True
-        return not any(
-            card.primary_type != "land"
-            and _cast_candidate(game, player_index, card, hand_index) is not None
-            for hand_index, card in hand_spells(payer)
-        )
+        return not _hand_could_use_mana(game, player_index)
     context = entry.get("_context")
     if getattr(context, "caster", None) is not game.players[player_index]:
         return False
     if game.active_player_index != player_index:
         return True
-    return not any(
-        card.primary_type != "land"
-        and _cast_candidate(game, player_index, card, hand_index) is not None
-        for hand_index, card in hand_spells(game.players[player_index])
-    )
+    return not _hand_could_use_mana(game, player_index)
+
+
+def _hand_could_use_mana(game: Game, player_index: int) -> bool:
+    """Whether a spell in *player_index*'s hand could be cast with the mana
+    its board makes — the question a gift or a toll paid on the seat's **own**
+    turn asks ("lands nothing in its hand could use").
+
+    Not `_cast_candidate`, which this asked until the policy began to
+    rehearse a cast before proposing it: that answers "is this cast worth
+    proposing *now*", and asked while this very prompt is owed, the rehearsal's
+    copy refuses every cast — so the whole hand read as unusable and the seat
+    paid with lands it had a use for (Ice Cave, a Lightning Bolt in hand). What
+    is asked here is the older question: legal to aim, and affordable.
+    """
+    player = game.players[player_index]
+    for _hand_index, card in hand_spells(player):
+        if card.primary_type == "land":
+            continue
+        if not _can_cast_with_targets(game, player_index, card):
+            continue
+        x_value = 0 if "{X}" in (card.mana_cost or "").upper() else None
+        if _plan_land_taps(game, player, _cost_for(game, player, card, x_value)) is not None:
+            return True
+    return False
 
 
 def order_hand_pick(
@@ -6450,7 +7282,13 @@ def _choose_target_for_instruction(instruction: OracleInstruction, caster_index:
         # "Target creature you control" — the equip's creature is the
         # activator's own (CR 702.6a).
         return caster_index
-    if instruction.kind in {"draw_target_cards", "gain_life", "prevent_damage"}:
+    # A gift names its own seat: "target player gains 3 life", "target player
+    # draws a card", "prevent the next 1 damage that would be dealt to any
+    # target". *Which* effects those are is `ai_valuation.ability_seat_side`'s
+    # reading of the compiled program — this line used to name three kinds, two
+    # of which nothing compiles, so a life gain and every shield went to an
+    # opponent.
+    if ability_seat_side(instruction) == "you":
         return caster_index
     # "deal_damage"/"destroy_target"/etc., and the fallback for any other
     # proactive effect: target an opponent (MVP heuristic, see
@@ -6497,8 +7335,17 @@ def _cost_for(
     a card printed "spells **you cast** cost {1} less", and a claim about the
     pool expires without anyone editing the comment. Identity, not
     ``players.index``: PlayerState is value-compared.
+
+    **What is charged in the mana cost's place** is the permission's, when
+    the cast being weighed is made under one (`_charged_in_place_of_mana_cost`):
+    a flashback cost (CR 702.34a), or nothing for a waiver. CR 118.9d then
+    applies the same increases and reductions to *that* total — "start with
+    the mana cost or alternative cost you're paying, add any cost increases,
+    then apply any cost reductions" — which is the order below and the one
+    ``_cast_onto_stack`` pays in.
     """
     seat = next((i for i, seated in enumerate(game.players) if seated is player), 0)
+    mana_cost, keyword = _charged_in_place_of_mana_cost(card)
     tax, _names = spell_cost_tax(game, seat, card)
     tax += max(0, extra_generic)
     # The coloured half of the same taxes (Derelor). Asked here too, because the
@@ -6506,6 +7353,13 @@ def _cost_for(
     # pip it proposes a cast the rules then refuse, every turn, forever.
     pips, _pip_names = spell_symbol_tax(game, seat, card)
     reduction, _reducers = cost_reduction_for_cast(game, seat, card)
+    # "Flashback costs you pay cost {2} less." (Catalyst Stone.) CR 601.2f
+    # over the keyword's cost, through the reader the cast path charges with;
+    # nothing for a cost that is the price of no keyword.
+    more, less, _by = keyword_cost_modifiers(game, seat, keyword)
+    if more or less:
+        tax += more
+        reduction = CostReduction(reduction.generic + less, reduction.colored)
     # The best split of X among the colours the card allows, which is the one
     # the cast path will try first (`casting._x_color_allocations`). The AI is
     # sizing the cost, so it wants the payment that will actually be attempted;
@@ -6515,7 +7369,7 @@ def _cost_for(
     )[0]
     return reduce_cost(
         game._parse_mana_cost(
-            card.mana_cost,
+            mana_cost,
             x_value=x_value,
             extra_generic=tax,
             x_allocation=allocation,
@@ -6523,6 +7377,34 @@ def _cost_for(
         ),
         reduction,
     )
+
+
+def _charged_in_place_of_mana_cost(card: CardDefinition) -> "tuple[str, str | None]":
+    """``(mana symbols, keyword)`` — the run of mana a cast of *card* is
+    charged where its mana cost would be, and the keyword that run is the
+    price of.
+
+    The card's own mana cost and no keyword for every ordinary cast. Under the
+    permission being weighed (`ai_valuation.cast_weighed`), what the cast path
+    charges for it: the **required alternative cost's** mana (CR 118.9b;
+    ``CastPermission.cost`` — "Flashback {4}{R}"), which may be none where that
+    cost is paid in something else; or **nothing** under a waiver ("without
+    paying its mana cost", CR 118.9). A permission that names no price — a
+    card played out of exile, a graveyard under Yawgmoth's Will — charges the
+    mana cost like any cast.
+
+    Read off the permission, never recomputed: the price of a flashback is
+    whatever `flashback_permission` / `granted_cost` built, so a flashback
+    cost "equal to its mana cost" (Recoup) and a printed one are one reading.
+    """
+    under = cast_weighed(card)
+    if under is None:
+        return card.mana_cost, None
+    if under.cost is not None:
+        return under.cost.mana or "", under.cost.keyword
+    if under.waives_mana_cost:
+        return "", None
+    return card.mana_cost, None
 
 
 #: Life a seat keeps back when the X it announces is paid in life ("As an
@@ -6561,13 +7443,13 @@ def _pick_x_value(
     too high is a bound and not an announcement.
     """
     if "{X}" not in card.mana_cost.upper():
-        if not cast_announces_x(card):
+        if not cast_announces_x(card, from_zone=_cast_zone(card)):
             return None
         seat = next(
             (i for i, seated in enumerate(game.players) if seated is player), 0
         )
         bound = game._additional_cost_x_ceiling(
-            seat, card, from_zone="hand", spell_hand_index=hand_index,
+            seat, card, from_zone=_cast_zone(card), spell_hand_index=hand_index,
         )
         if bound is None:
             return None
@@ -6583,6 +7465,15 @@ def _pick_x_value(
             bound = min(bound, max(0, player.life - X_LIFE_RESERVE))
         return bound
 
+    if "{X}" not in _charged_in_place_of_mana_cost(card)[0].upper():
+        # CR 107.3b: "If a player is casting a spell that has an {X} in its
+        # mana cost, the value of X isn't defined by the text of that spell,
+        # and an effect lets that player cast that spell while paying neither
+        # its mana cost nor an alternative cost that includes X, then the only
+        # legal choice for X is 0." A flashback cost with no X in it, a waiver.
+        # The cast path resolves exactly that; the caller does not propose an
+        # X of nothing.
+        return 0
     max_x = _max_affordable_x(game, player, card, extra_generic)
     return max_x
 
@@ -6594,10 +7485,6 @@ def _max_affordable_x(
     # counted each land as one fixed symbol, so a dual or a swapped land could
     # only ever pay for the first colour it listed, and the X it sized was the
     # X a board of single-colour lands would afford.
-    context = _PAYING_FOR.get()
-    if context is not None and context.free:
-        # CR 107.3b: a spell cast without paying its mana cost has X = 0.
-        return 0
     # One reading of the board for all sixteen sizes: what the sources make
     # does not depend on the X being priced.
     planner = _PaymentPlanner(game, player)
@@ -6743,13 +7630,16 @@ class _PaymentPlanner:
     a caller sizing an X asks sixteen costs of one board (`_max_affordable_x`).
     """
 
-    def __init__(self, game: Game, player: PlayerState, *, paying_for: "Permanent | None" = None):
+    def __init__(
+        self, game: Game, player: PlayerState, *,
+        paying_for: "Permanent | None" = None,
+        without: "frozenset[int]" = frozenset(),
+    ):
         from .restricted_mana import ACTIVATE, CAST, PaymentPurpose, spendable_restricted_mana
 
         self.game = game
         self.player = player
         context = _PAYING_FOR.get()
-        self.free = context is not None and context.free
         self.spell = context.spell if context is not None else None
         # What the payment is for decides what restricted mana counts toward
         # it (CR 106.6) — Mishra's Workshop's {C}{C}{C} for an artifact spell
@@ -6777,7 +7667,7 @@ class _PaymentPlanner:
         #: Sources that pay by being sacrificed, in board order — counted only
         #: when everything above cannot pay (`plan`).
         self.sacrificed: list[_ManaSource] = []
-        if self.free or self.seat is None:
+        if self.seat is None:
             return
         # Only a land the tap seam will make mana from, and only what it will
         # make (`land_tap_yields` asks `land_mana_tap_refusal`, the seam's own
@@ -6803,9 +7693,11 @@ class _PaymentPlanner:
         #
         # Never the permanent whose own ability is being paid for
         # (*paying_for*): its {T} may be that ability's cost, and one tap
-        # cannot pay both.
+        # cannot pay both. *without* is the slots a caller has already spoken
+        # for — the two halves of `_plan_through_a_priced_source` plan against
+        # disjoint sources.
         for slot, permanent in enumerate(game.controlled_by(player)):
-            if permanent is paying_for:
+            if permanent is paying_for or slot in without:
                 continue
             if permanent.has_type("land"):
                 if permanent.tapped:
@@ -6853,8 +7745,6 @@ class _PaymentPlanner:
 
     def plan(self, required: dict[str, int]) -> "tuple[tuple[int, ...], tuple[str, ...]] | None":
         """``(slots, colours)`` in tap order, or None — see `_plan_land_taps`."""
-        if self.free:
-            return (), ()
         found = self._plan_with(self.sources, required)
         if found is not None or not self.sacrificed:
             return found
@@ -6974,6 +7864,8 @@ def _asked_color(
 def _plan_land_taps(
     game: Game, player: PlayerState, required: dict[str, int],
     *, paying_for: "Permanent | None" = None,
+    without: "frozenset[int]" = frozenset(),
+    through_priced: bool = True,
 ) -> tuple[tuple[int, ...], tuple[str, ...]] | None:
     """Which untapped mana sources to tap for *required*, and **which colour
     to ask each one for**: ``(slots, colours)`` in tap order, or None when the
@@ -7006,10 +7898,94 @@ def _plan_land_taps(
     Sources are reached for in a fixed order (`_PaymentPlanner`): floating
     mana, lands, non-land sources that only tap, and — only for a spell, only
     where those cannot pay and only under `_may_sacrifice_for` — a source that
-    is sacrificed. Under `_paying_for(..., free=True)` there is nothing to
-    plan.
+    is sacrificed. And when even those cannot pay, **a source whose mana costs
+    mana** (a filter land, Mana Cylix: `_plan_through_a_priced_source`), with
+    the taps that pay its price in front of it.
     """
-    return _PaymentPlanner(game, player, paying_for=paying_for).plan(required)
+    found = _PaymentPlanner(
+        game, player, paying_for=paying_for, without=without,
+    ).plan(required)
+    if found is None and through_priced and not without:
+        return _plan_through_a_priced_source(game, player, required, paying_for)
+    return found
+
+
+def _plan_through_a_priced_source(
+    game: Game, player: PlayerState, required: dict[str, int],
+    paying_for: "Permanent | None",
+) -> "tuple[tuple[int, ...], tuple[str, ...]] | None":
+    """`_plan_land_taps` for a cost the free sources cannot pay, through **one**
+    source whose mana costs mana (`_priced_mana_source`: "{1}, {T}: Add
+    {U}{B}.") — or None.
+
+    Three parts, in the order they are tapped:
+
+    1. the free sources that pay the source's **price**;
+    2. the source itself;
+    3. the free sources that pay what is left of *required* once the source's
+       output is counted — its symbols against the pips they match, any
+       surplus against the generic part.
+
+    **The order is the plan.** The executor taps a plan's slots in sequence
+    (`tap_planned_lands`), so with the price tapped immediately in front of
+    the source, the pool holds exactly that price when the source is activated
+    and there is no choice of which unit pays it. Tapped all together first,
+    the engine could pay the {1} with the one green mana the spell's {G} was
+    counting on. For the same reason this plans nothing while mana is already
+    floating: which floating unit a generic price would take is not this
+    planner's to say.
+
+    One priced source per plan. Two filter lands feeding one another is a
+    longer chain than this walks.
+    """
+    if any(int(player.mana_pool.get(symbol, 0) or 0) for symbol in _MANA_SYMBOLS):
+        return None
+    seat = next((i for i, seated in enumerate(game.players) if seated is player), None)
+    if seat is None:
+        return None
+    for index, permanent in enumerate(game.controlled_by(player)):
+        if permanent is paying_for:
+            continue
+        source = _priced_mana_source(game, seat, permanent)
+        if source is None:
+            continue
+        for asked, made in source.outputs():
+            rest = _plan_land_taps(
+                game, player, _less_mana(required, made), paying_for=paying_for,
+                without=frozenset({index}), through_priced=False,
+            )
+            if rest is None:
+                continue
+            price = _plan_land_taps(
+                game, player, {"generic": source.price}, paying_for=paying_for,
+                without=frozenset({index, *rest[0]}), through_priced=False,
+            )
+            if price is None:
+                continue
+            return (
+                (*price[0], index, *rest[0]),
+                (*price[1], asked, *rest[1]),
+            )
+    return None
+
+
+def _less_mana(required: dict[str, int], made: dict[str, int]) -> dict[str, int]:
+    """*required* with the mana *made* already in the pool: each symbol against
+    the pips it matches, and whatever is left over against the generic part.
+
+    A copy in *required*'s own key order — the planner walks the dict it is
+    handed, and a simulated game has to reproduce from its seed.
+    """
+    left = {symbol: int(amount or 0) for symbol, amount in required.items()}
+    spare = 0
+    for symbol, count in made.items():
+        used = min(int(count), left.get(symbol, 0))
+        if used:
+            left[symbol] -= used
+        spare += int(count) - used
+    if spare and left.get("generic", 0):
+        left["generic"] = max(0, left["generic"] - spare)
+    return left
 
 
 def _can_pay_cost(

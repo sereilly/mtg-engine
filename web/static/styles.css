@@ -855,6 +855,31 @@ h2.targeting-valid {
   border-color: rgba(80, 230, 140, 0.9);
   box-shadow: 0 0 10px rgba(80, 230, 140, 0.55);
 }
+/* …and one of those the board could cast right now (timing, targets and mana
+   all said yes, at the price THIS cast is charged — a flashback cost): the
+   hand's own cyan, so "I can cast this" reads the same wherever the card is. */
+.card-wrapper.castable-from-zone.castable-from-zone--now .card {
+  border-color: rgba(0, 220, 220, 0.9);
+  box-shadow: 0 0 0 2px rgba(0, 220, 220, 0.8), 0 0 14px rgba(0, 220, 220, 0.4);
+}
+/* What each way of casting it is charged ("Flashback {4}{R}"), under the
+   card. Dimmed for a way the board cannot make right now. */
+.zone-cards .card-wrapper {
+  flex: 0 0 auto;
+  vertical-align: top;
+}
+.zone-cast-price {
+  max-width: 72px;
+  margin-top: 2px;
+  font-size: 10px;
+  line-height: 1.25;
+  text-align: center;
+  color: rgba(190, 215, 240, 0.55);
+  pointer-events: none;
+}
+.zone-cast-way--now {
+  color: #b9f6f6;
+}
 
 /* Section headers and the empty note inside the two-zone search modal. */
 .modal-section-title {
@@ -2847,6 +2872,57 @@ pre {
    same specificity, and this block wins on source order. */
 .modal-checkbox-row.hidden {
   display: none;
+}
+
+/* "…must choose at least one Flagbearer on the battlefield if able": the line a
+   several-target, divided or roles picker shows while that requirement binds. */
+.target-requirement {
+  color: #ffcc80;
+}
+
+.target-requirement.met {
+  color: #a5d6a7;
+}
+
+/* A search that finds one card per printed description (Gaea's Balance, Guided
+   Passage): one chip per description, showing the card chosen for it. */
+.search-slot-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Same reason as `.modal-checkbox-row.hidden`: `display: flex` above would
+   otherwise beat the global `.hidden` rule on source order. */
+.search-slot-row.hidden {
+  display: none;
+}
+
+.search-slot-chip {
+  padding: 4px 10px;
+  border: 1px dashed var(--ink-soft);
+  border-radius: 999px;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
+.search-slot-chip.filled {
+  border-style: solid;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.search-slot-chip.unanswerable {
+  opacity: 0.55;
+  font-style: italic;
+}
+
+.search-slot-note {
+  flex-basis: 100%;
+  color: #ffb4a8;
+  font-size: 0.85rem;
+  min-height: 1.1em;
 }
 
 /* Card grid on the left, hover preview pane on the right. */

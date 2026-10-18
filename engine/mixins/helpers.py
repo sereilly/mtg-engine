@@ -11,17 +11,22 @@ from ..control import (
     change_control,
     control_changes,
     end_control_change,
+    last_controller,
+    set_last_controller,
     has_control_change,
     set_base_controller,
 )
+from ..destruction_events import (RESOLVING, announce_destroyed,
+                                  destruction_finished)
 from ..delayed_triggers import (end_source_tapped_delayed_triggers,
                                 fire_delayed_triggers)
 from ..enter_effects import CAST_THIS_TURN_STAMP, ENTERED_BATTLEFIELD_TURN
-from ..exiled_records import forget_record, newest_record_for
+from ..exiled_records import (forget_record, newest_record_for,
+                              record_exiled_card)
 from ..events import Event, collect, emit
 from ..faces import whole_card
 from ..layer_bridge import computed_controller
-from ..land_types import end_land_type_change
+from ..land_types import end_land_type_change, end_land_type_changes_tied_to
 from ..linked_exile import LEAVES, UNTAPPED
 from ..models import Permanent, PlayerState, next_permanent_id
 from ..game_types import GraveyardTarget
@@ -107,8 +112,7 @@ class GameHelpersMixin:
         """Effective color symbols of a spell on the stack.
 
         Two effects can move it, in this order. A Lace card's recolour
-        (recorded on the item by ``color_changes.change_spell_color``) is on
-        the object itself and
+        (``StackItem.choices["color_override"]``) is on the object itself and
         wins, because it was applied to this spell; a board-wide static ("The
         same is true for **spells you control**", Celestial Dawn) is read off
         the board under it, so a Lace resolved onto one spell is not undone by
@@ -128,17 +132,17 @@ class GameHelpersMixin:
         call site already passed through ``self``/``game``, so the board became
         askable without touching one of them.
         """
-        from ..color_changes import spell_color_override
-        from ..object_colors import card_colors
+        # ``is not None``: a spell made colourless has no colours (CR 105.2c)
+        # and that is an answer. The record was returned as stored, so Ersatz
+        # Gnomes' "target spell becomes colorless" made a spell the colour
+        # ``"colorless"`` — a non-empty answer to every reader asking whether
+        # it has one.
+        from ..color_changes import spell_color_change
 
-        # ``is not None``: the empty tuple is a spell an effect made
-        # **colourless** (Ersatz Gnomes, CR 105.2c), which is an answer and not
-        # the absence of one. The reader picks the later-stamped of the item's
-        # two slots (CR 613.7), the way layer 5 does for the permanent this
-        # spell will become (CR 400.7a).
-        recolored = spell_color_override(item)
+        recolored = spell_color_change(item)
         if recolored is not None:
             return recolored
+        from ..object_colors import card_colors
 
         return tuple(card_colors(
             self, item.card, getattr(item, "caster_index", None)
@@ -383,6 +387,31 @@ class GameHelpersMixin:
             return seat
         base = base_controller(permanent)
         return computed_controller(permanent, seat if base is None else base)
+
+    def controller_or_last_known(self, permanent: Permanent) -> int | None:
+        """Who controls *permanent*, or who last did if it has left (CR 608.2h).
+
+        "If the effect requires information from a specific object … the effect
+        uses the current information of that object if it's in the public zone
+        it was expected to be in; if it's no longer in that zone … the effect
+        uses the object's last known information." For a controller that is two
+        reads: the control seam while the permanent is on a battlefield, and
+        the seat the one removal transition stamped as it left. "That creature
+        deals 4 damage to **its controller**" (Bomb Squad) asks it of a
+        creature the same resolution has just destroyed — or that another
+        Bomb Squad's trigger destroyed first.
+
+        The seat it entered under is the last resort, for a permanent that left
+        by a road older than the stamp; None only for an object that was never
+        on a battlefield at all.
+        """
+        seat = self.controller_index_of(permanent)
+        if seat is not None:
+            return seat
+        seat = last_controller(permanent)
+        if seat is None:
+            seat = base_controller(permanent)
+        return seat if seat is not None and 0 <= seat < len(self.players) else None
 
     def owner_index_of(self, permanent: Permanent) -> int | None:
         """Index of the player who owns *permanent*'s card (CR 108.3), for
@@ -1039,7 +1068,9 @@ class GameHelpersMixin:
             library.append(card)
         return True
 
-    def put_card_into_graveyard(self, owner, card, *, from_zone=None) -> bool:
+    def put_card_into_graveyard(
+        self, owner, card, *, from_zone=None, from_battlefield=None
+    ) -> bool:
         """Put *card* into *owner*'s graveyard, unless something diverts it.
 
         *from_zone* is the zone it came out of, named only where a card says
@@ -1078,10 +1109,21 @@ class GameHelpersMixin:
         """
         seat = self._owner_seat(owner)
         card = whole_card(card)  # CR 709.4 — see ``put_card_into_hand``
+        # *from_battlefield* is the :class:`Permanent` this card is the card
+        # **of**, when it is arriving here by leaving the battlefield — the
+        # argument the hand and library seams already take, for the reason they
+        # give: the seam is handed a shared ``CardDefinition``, and an effect
+        # about *this object's own* move ("If Legacy Weapon would be put into a
+        # graveyard from anywhere…") has to read the object as it last existed
+        # (CR 613: a copy of it has the sentence, and one that lost its
+        # abilities does not). It rides the event; nothing here reads it.
         consumed, _ = apply_replacements(
             self,
             "put_into_graveyard",
-            {"player": self.players[seat], "card": card},
+            {
+                "player": self.players[seat], "card": card,
+                "from_zone": from_zone, "permanent": from_battlefield,
+            },
         )
         if consumed:
             return False
@@ -1172,7 +1214,22 @@ class GameHelpersMixin:
         return bool(consumed)
 
     def _permanent_to_graveyard(self, player: PlayerState, permanent: Permanent) -> None:
-        """Move a permanent to the graveyard. Tokens (704.5d) cease to exist instead."""
+        """Move a permanent to the graveyard. Tokens (704.5d) cease to exist instead.
+
+        Recorded on ``Game.departing`` for the duration: the dies-triggers this
+        announces go on the stack — and a non-interactive seat's picker takes
+        its default target — while *permanent* is still listed on its
+        battlefield, and ``StackItem.targets_chosen`` has to know that such a
+        default was not a choice off the board the trigger will resolve on.
+        """
+        self.departing.append(permanent)
+        try:
+            self._move_permanent_to_graveyard(player, permanent)
+        finally:
+            self.departing.pop()
+
+    def _move_permanent_to_graveyard(self, player: PlayerState, permanent: Permanent) -> None:
+        """:meth:`_permanent_to_graveyard`'s body."""
         if "Aura" in permanent.card.type_line:
             self._remove_aura_effects(permanent)
         # CR 614 would-die replacements (Disintegrate's "exile it instead"):
@@ -1207,7 +1264,8 @@ class GameHelpersMixin:
             # keeps a token's card out of the pile while leaving it something
             # that died.
             if not self.put_card_into_graveyard(
-                owner, permanent.card, from_zone="battlefield"
+                owner, permanent.card, from_zone="battlefield",
+                from_battlefield=permanent,
             ):
                 return
         # "Whenever a land is put into a graveyard from the battlefield…"
@@ -1487,7 +1545,7 @@ class GameHelpersMixin:
             subject=permanent, event_subject_controller=tapped_seat,
             # The tapped object itself, by id (CR 400.7 — an index is not an
             # identity). A trigger that acts *on* it rather than on its
-            # controller ("destroy it" — Kudzu) reads it here, frozen at the
+            # controller ("destroy it" — Mine Layer) reads it here, frozen at the
             # announcement, because by resolution the land may have moved and a
             # board search would find a look-alike.
             event_subject_permanent_id=permanent.permanent_id,
@@ -1909,7 +1967,34 @@ class GameHelpersMixin:
             ]
         if target is None:
             return index
+        # A stamp is a **target** somebody announced, so it is re-located only
+        # while it is still a legal one — gone from its pile, or under "Cards
+        # in graveyards can't be the targets of spells or abilities" (Ground
+        # Seal arriving in response), it answers None and CR 608.2b's last
+        # sentence leaves that slot's card unaffected.
+        if not self.graveyard_target_is_legal(target):
+            return None
         return self.graveyard_index_of(target)
+
+    def graveyard_target_is_legal(self, target) -> bool:
+        """Whether the graveyard card *target* names is still a legal target
+        (CR 608.2b).
+
+        Two ways it stops being one: no copy of the card is left in that
+        graveyard (``graveyard_index_of``'s "gone"), or the board now says no
+        card in a graveyard may be targeted at all
+        (``target_immunity.graveyard_cards_untargetable``, Ground Seal). The
+        second is CR 608.2b's "other changes to the game state", and it is why
+        this is a method rather than the bare ``graveyard_index_of(...) is not
+        None`` the three resolution gates used to spell: the card being
+        *there* and the card being *targetable* are different questions, and
+        only the first is about where it sits.
+        """
+        if self.graveyard_index_of(target) is None:
+            return False
+        from ..target_immunity import graveyard_cards_untargetable
+
+        return graveyard_cards_untargetable(self) is None
 
     def stamp_graveyard_targets(self, seat, index):
         """Every chosen graveyard slot, named. Mirrors the index's own shape."""
@@ -2082,6 +2167,12 @@ class GameHelpersMixin:
             seat = self.controller_index_of(perm)
             if seat is None:
                 continue
+            # CR 608.2h's last known information, for the one fact about a
+            # permanent that is not on the object: who controlled it. Stamped
+            # here, at the one transition off the battlefield and while the
+            # seam can still answer, so anything that reads this permanent
+            # after it is gone can ask (`controller_or_last_known`).
+            set_last_controller(perm, seat)
             # Both kinds from one scan, because a permanent leaving the
             # battlefield **is** its controller losing control of it: the
             # object ceases to exist and nobody controls the new one (CR
@@ -2272,6 +2363,20 @@ class GameHelpersMixin:
                 self._remove_aura_effects(perm)
         for perm in removed:
             self.return_linked_exile(perm, "left the battlefield", LEAVES)
+        # "Target land becomes a Forest **until this creature leaves the
+        # battlefield**." (Gaea's Liege, Graceful Antelope.) The window's
+        # sweep, here for the reason the exile return above is: this is the
+        # one transition out. It was a name-keyed hook on the graveyard path
+        # alone, so a Liege bounced, exiled or tucked left its lands Forests
+        # for good.
+        reverted = 0
+        for perm in removed:
+            reverted += end_land_type_changes_tied_to(self.all_permanents(), perm)
+        if reverted:
+            # Whatever else says those lands are something reasserts itself
+            # (CR 611.3), and every count and static scoped to a land type
+            # has a different board to read.
+            self._refresh_dynamic_creatures()
         return removed
 
     def exile_hand_slots(
@@ -2325,6 +2430,22 @@ class GameHelpersMixin:
                 entries.append(
                     link_exiled_card(source, card, seat, face_down=face_down)
                 )
+            if face_down and (source is None or not self.is_on_battlefield(source)):
+                # CR 406.3 needs a record somebody can still *find*. A spell
+                # has no permanent to hold one ("Target player exiles all
+                # cards from their hand face down", Suppress), and a permanent
+                # that paid for the ability with itself is not on a battlefield
+                # to be scanned ("{T}, Sacrifice this artifact: Each player
+                # exiles all cards from their hand face down", Memory Jar) — so
+                # for both the fact goes on the game's register, which is
+                # `exile_top_of_library`'s arrangement for Three Wishes. Without
+                # it the pile was face up to every viewer for as long as it
+                # stayed exiled, which for Memory Jar was always.
+                #
+                # Only when the link cannot be seen: `face_down_exiled_cards`
+                # counts both registers, and a card recorded on each would hide
+                # a second, face-up copy of itself.
+                record_exiled_card(self, card, seat, face_down=True)
         if context is not None:
             context.results.setdefault("exiled_cards", []).extend(taken)
             context.results.setdefault("exiled_entries", []).extend(entries)
@@ -2834,17 +2955,19 @@ class GameHelpersMixin:
             item.target_player_index = None
             item.target_permanent_index = None
             item.target_permanent_id = None
+            item.target_stack_item = None
             announced_at_cast = False
-        elif announced_at_cast:
-            # The announcement stands. Where a list held it to that — the
-            # trigger had a choice of its own and this was one it could have
-            # made — it is the trigger's chosen target (CR 603.3d), and says
-            # so for the resolution that asks whether a chosen target is still
-            # there (``StackItem.target_chosen``). Where no list did, it is
-            # what the cast handed over and nothing more is claimed for it.
-            item.target_chosen = (
-                self._trigger_target_candidates(item, announced=True) is not None
-            )
+        elif announced_at_cast and self._trigger_target_candidates(
+            item, announced=True
+        ) is not None:
+            # …and a pre-answer that **was** held to the trigger's own list
+            # and passed is a target chosen for this ability (CR 603.3d), by
+            # the same list the prompt would have offered — so it is one CR
+            # 608.2b may be asked about as the ability resolves
+            # (``StackItem.targets_chosen``). Not where the picker had no list
+            # to hold the announcement to: that one rides the object unjudged,
+            # at the push and at resolution alike.
+            item.targets_chosen = True
         self._stack_push_object(item, announce=not announced_at_cast)
         if announced_at_cast:
             # **The trigger is what targets, and now is when** (CR 115.1d,
@@ -3134,6 +3257,53 @@ class GameHelpersMixin:
         }
         return seats.pop() if len(seats) == 1 else None
 
+    def stack_target_seat(self, item) -> int | None:
+        """The seat an announcement that chose **only objects on the stack**
+        already names: their controller (CR 112.2, CR 113.8), or None where
+        the object chose anything else, nothing, or two objects two players
+        control.
+
+        :meth:`announced_target_seat`'s twin for the one kind of target that
+        has no battlefield. A permanent's id names whose board it is on; a
+        spell names the player who cast it, and that is the only player
+        "Counter target spell. **Its controller** loses 3 life" can be about.
+        Nothing said so. A stack target was recorded by identity
+        (``StackItem.target_stack_item``) and the *seat* field beside it kept
+        whatever it was sent — nothing from a headless caller, the opposing
+        seat from the web route, which rides a default on every cast — so
+        every resolution read "the player this is about" as the caster's
+        opponent. Right whenever the spell being countered was an opponent's,
+        which is nearly always, and that is how it survived: countering your
+        own spell aimed its rider at the other player, and at three seats the
+        rider landed on ``1 - caster`` whoever had cast the spell.
+
+        Read off :func:`engine.stack_targets.chosen_targets`, never off
+        ``target_player_index is None``: that field cannot tell a player the
+        caster chose from a default that rode along, and the spec is what says
+        which channel was a target. A spell that names a spell *and* a
+        permanent or a player (Suffocating Blast's roles) answers None and
+        keeps the seat its other target settled.
+
+        The controller, not the owner (CR 108.3 is the owner; CR 112.2 makes
+        the player who cast a spell its controller): a spell cast out of
+        another player's pile is controlled by the seat that cast it.
+        """
+        from ..stack_targets import chosen_targets
+
+        chosen = chosen_targets(self, item)
+        if not chosen:
+            return None
+        seats: set[int] = set()
+        for target in chosen:
+            named = target.stack_item if target.kind == "stack" else None
+            if named is None:
+                return None
+            seats.add(named.caster_index)
+        if len(seats) != 1:
+            return None
+        seat = seats.pop()
+        return seat if 0 <= seat < len(self.players) else None
+
     def _settle_announced_target_seat(self, item) -> None:
         """Write :meth:`announced_target_seat`'s answer onto *item*.
 
@@ -3288,12 +3458,42 @@ class GameHelpersMixin:
         card.
         """
         from ..events import emit
-        from ..targeting import _PLAYER_TARGET_SPEC_KINDS, stack_object_target_spec
+        from ..targeting import (ROLES_TARGET_KIND, _PLAYER_TARGET_SPEC_KINDS,
+                                 stack_object_target_spec)
 
+        spec = stack_object_target_spec(item)
+        if spec is not None and spec.get("kind") == ROLES_TARGET_KIND:
+            # **A player named for one role of several is targeted too.**
+            # "Target player gains control of target permanent you control"
+            # (Donate), "…2 damage to target player or planeswalker" (Lunge),
+            # "…creatures target player controls … creatures another target
+            # player controls" (Cultural Exchange). The kind test below reads a
+            # roles spec as "not a player kind" and returned, so no seat a
+            # roles announcement named ever became the target of anything —
+            # Rayne's controller, Donated a permanent, drew no card.
+            #
+            # Which seats are targets is ``stack_targets``' answer, the one
+            # reader of what a stack object announced: one event per player
+            # role, each its own seat where the announcement recorded several
+            # (``targeting.ROLE_SEATS``).
+            from ..stack_targets import chosen_targets
+
+            for target in chosen_targets(self, item) or ():
+                if target.kind != "player" or target.channel != "role":
+                    continue
+                emit(
+                    self, "self_becomes_target",
+                    subject=None,
+                    targeted_seat=target.seat,
+                    source_seat=item.caster_index,
+                    targeted_by="an ability" if item.is_ability else "a spell",
+                    targeted_by_card=item.card,
+                    event_subject_player=item.caster_index,
+                )
+            return
         seat = getattr(item, "target_player_index", None)
         if not isinstance(seat, int) or not (0 <= seat < len(self.players)):
             return
-        spec = stack_object_target_spec(item)
         if spec is None or spec.get("kind") not in _PLAYER_TARGET_SPEC_KINDS:
             return
         if spec.get("land_filter"):
@@ -3485,8 +3685,25 @@ class GameHelpersMixin:
         respect_indestructible: bool = True,
         on_regenerate=None,
         on_destroy=None,
+        cause=RESOLVING,
     ) -> list[Permanent]:
         """Destroy every permanent on *player*'s battlefield that ``matches``.
+
+        **The caller says whether this is a destruction, and whose** (*cause*).
+        This sweep is the road to the graveyard for more than CR 701.8's
+        action: a creature with toughness 0 (CR 704.5f), a planeswalker with no
+        loyalty (704.5i), an Aura attached to nothing (704.5m) and two
+        sacrifices all leave through it, and CR 701.8b is exact that none of
+        those "has been destroyed". So a caller making one of those moves
+        passes ``NOT_A_DESTRUCTION`` and nothing is announced; the lethal-damage
+        sweep passes ``NO_SPELL_OR_ABILITY`` (destroyed, and by no spell or
+        ability — said rather than read off whatever is resolving, because
+        state-based actions are checked inside resolutions too); a delayed
+        destruction passes the seat that set it up (CR 603.7d–e). The default
+        is CR 109.5's controller of whatever is resolving, which is every
+        effect handler's answer. *cause* may also be a callable taking the
+        permanent, for the delayed sweeps, whose victims were marked by
+        different players' effects. See ``engine/destruction_events.py``.
 
         Indestructible permanents survive (when respected); a creature's
         regeneration shield is consumed instead of destruction (when allowed).
@@ -3525,11 +3742,18 @@ class GameHelpersMixin:
                 if on_regenerate is not None:
                     on_regenerate(permanent)
                 continue
+            # Destroyed (CR 701.8a) — announced while it is still listed, as
+            # the single-permanent seam announces it and for its reasons
+            # (CR 603.10a; a replaced move is still a destruction).
+            announce_destroyed(
+                self, permanent, cause(permanent) if callable(cause) else cause
+            )
             self._permanent_to_graveyard(player, permanent)
             if on_destroy is not None:
                 on_destroy(permanent)
             destroyed.append(permanent)
         self.remove_all_from_battlefield(destroyed)
+        destruction_finished(self)
         return destroyed
 
     def _fire_permanent_dies_triggers(

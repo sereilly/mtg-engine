@@ -348,12 +348,29 @@ def _derived_entries(permanent: "Permanent") -> list[dict]:
 _COPIED_CARDS: dict[tuple, "CardDefinition"] = {}
 
 
-def _identity(card: "CardDefinition") -> tuple:
+def card_identity(card: "CardDefinition") -> tuple:
+    """What makes *card* the card it is, as a memo key: every printed field a
+    derived card is derived from.
+
+    The key every folded-card memo in the engine uses - this module's, and the
+    four in ``engine/models.py`` that hold a card with lines granted, struck
+    or stripped. **Never ``id(card)``.** CPython hands a dead object's address
+    to the next allocation, so a memo keyed by it answers for a card that no
+    longer exists with whatever was derived from that one: the four in
+    ``models.py`` were keyed that way until Apocalypse, and a creature given
+    an ability by an Aura read as *another creature* - its name, its power
+    and its toughness - whenever a card object freed earlier in the process
+    had been granted the same words. A token, a copy and a test's invented
+    card are all such objects; the catalog's are not, which is why it shipped.
+    """
     return (
         card.name, card.mana_cost, card.cmc, card.type_line, card.oracle_text,
         card.colors, card.color_identity, card.keywords, card.produced_mana,
         card.printed_power, card.printed_toughness,
     )
+
+
+_identity = card_identity
 
 
 def _with_added_types(type_line: str, added: tuple[str, ...]) -> str:

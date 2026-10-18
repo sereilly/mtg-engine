@@ -1,13 +1,13 @@
 """How much damage a clause computes, and which seat it lands on.
 
 A **floor**, not a family: `damage.py` reads it, `upkeep.py` reads its one
-predicate and `where_x.py` its one characteristic set, and it reads none of the
-three back — inside `lowering/` a module a family imports has to sit below the
-families (`_bites` is a floor for exactly that reason, one cut earlier off the
-same original file). The direction cannot be reversed either —
-`_lower_halved_damage` stays in `damage.py` because it lowers the quantity
-*underneath* by re-entering the damage lowering, which is the one amount that
-has to know about the shapes.
+predicate and `_record_definitions.py` (for `where_x`) its one characteristic
+set, and it reads none of them back — inside `lowering/` a module a family
+imports has to sit below the families (`_bites` is a floor for exactly that
+reason, one cut earlier off the same original file). The direction cannot be
+reversed either — `_lower_halved_damage` stays in `damage.py` because it lowers
+the quantity *underneath* by re-entering the damage lowering, which is the one
+amount that has to know about the shapes.
 
 Split out of `_amounts` at Tempest's Phase 0, along the second half of the
 sentence that module's own docstring had already drawn round its subject:
@@ -46,6 +46,7 @@ from ._amounts import TARGET_OPPONENT_SCOPE, count_spec, seat_scoped_count_spec
 from ._cost_records import COST_RECORD_CHANNELS
 from ._common import _describe_targets, _is_target
 from ._filters import dropped_narrowings, split_bound_card_type
+from ._sweeps import lower_counted_sweep_damage
 from ._events import (CHOSEN_CAST_DAMAGE, CHOSEN_PLAYER,
                       EVENT_SUBJECT_PLAYER, _DAMAGED_PLAYER_EVENTS,
                       _EVENT_SUBJECT_PLAYERS)
@@ -162,6 +163,18 @@ def _payment_channel_damage(
     if len(node.recipients) != 1:
         raise LoweringError("a counted damage reaches one recipient", node=node)
     recipient = node.recipients[0]
+    # "…deals damage equal to the sacrificed creature's power **to each
+    # creature**." (Bloodfire Infusion.) A described set (CR 611.2c) rather
+    # than a chosen recipient, so it is the sweep family's sentence with this
+    # channel's number — the hand-over ``damage._lower_deal_damage`` makes for
+    # a board count (Floodgate), made here for a payment's. The sweep keeps its
+    # own refusals: creatures only, and a noun phrase the matcher can test.
+    if (
+        isinstance(recipient, ast.TargetSpec)
+        and recipient.quantifier in ("each", "all")
+        and not recipient.targeted
+    ):
+        return lower_counted_sweep_damage(node, recipient, count=count)
     payload: dict[str, object] = {"amount": "x", X_FROM_COUNT: count}
     if isinstance(recipient, ast.PlayerRef):
         if recipient.kind not in ("target_player", "target_opponent", "you"):
@@ -281,6 +294,44 @@ def _lower_cost_sacrifice_damage(
 #: targeted seat; Reap prints the same narrowing on a plain count, so
 #: ``count_spec`` lifts it now — and the floor every family reads cannot import
 #: a family. The name keeps its address for the readers below.
+
+
+def lower_subtracted_damage(
+    node: ast.DealDamage, subtracted: dict, lower_as_x,
+) -> tuple[OracleInstruction, ...]:
+    """"…and **5 minus X** damage to that creature's controller." (Liquid
+    Fire.) The other reading of a printed "minus", beside the difference of
+    two counted sets below: a printed number less the sentence's own X.
+
+    Lowered as the sentence the bare X would have made, with the arithmetic
+    put on afterwards — the recipient, the riders and the picker are whatever
+    "X damage to …" already lowers to. *lower_as_x* is the damage lowering
+    itself, handed down because a floor may not import its family
+    (``_conjuncts`` takes it the same way); the halving that re-enters it the
+    same way stayed in ``damage.py``, and this one came here for the cap.
+
+    The amount becomes ``{"minus_x": n}``, read by ``resolve_amount`` — the
+    one evaluator — and floored there at zero (CR 107.1b). One plain
+    ``deal_damage`` spending the letter is required rather than assumed: a
+    sweep, a counted amount or a bite reads its number some other way, and an
+    arithmetic those handlers never apply would deal the whole X on a card
+    reporting itself supported.
+    """
+    whole = lower_as_x(dataclasses.replace(node, amount=ast.Var("x")))
+    if (
+        len(whole) != 1
+        or whole[0].kind != "deal_damage"
+        or whole[0].payload.get("amount") != "x"
+        or X_FROM_COUNT in whole[0].payload
+    ):
+        raise LoweringError(
+            "no handler subtracts X from a printed damage amount here", node=node
+        )
+    return (
+        dataclasses.replace(
+            whole[0], payload={**whole[0].payload, "amount": subtracted}
+        ),
+    )
 
 
 def lower_difference_damage(node: ast.DealDamage) -> tuple[OracleInstruction, ...]:
@@ -478,6 +529,56 @@ def _lower_counted_damage(
         # about a player with no key would be dealt to the permanent instead.
         payload["recipient"] = "target_player"
     _describe_targets(payload, recipient)
+    return (OracleInstruction("deal_damage", "", payload),)
+
+
+def lower_ledger_damage(node: ast.DealDamage) -> tuple[OracleInstruction, ...]:
+    """"This creature deals damage to target creature equal to **the damage
+    already dealt to it this turn**." (Whipkeeper.)
+
+    The turn's damage ledger asked about the creature the sentence targets,
+    through the ``x_from_count`` channel every other computed amount travels
+    and the ``damage_ledger`` spec Blazing Effigy's where-clause already
+    writes — one reader (``handlers/_common._damage_dealt_this_turn``) for
+    both, so "damage dealt to a creature this turn" is one history.
+
+    **The recipient and the creature counted are one object**, and that is
+    checked rather than assumed: "it" in the clause is the sentence's own
+    target, so the spec names ``target`` and the damage is aimed by the same
+    announcement. A sweep, a player or a second recipient has no "it" for the
+    history to be about, and a narrowing by source ("…dealt to it by red
+    sources") is a reader nothing here writes — each refuses.
+    """
+    history = node.amount
+    assert isinstance(history, ast.DamageDealtThisTurn)
+    if (
+        history.recipient != "target"
+        or history.source_name is not None
+        or history.others_only
+    ):
+        raise LoweringError(
+            "this damage history is defined by a where-clause, not spent "
+            "as an amount",
+            node=node,
+        )
+    if node.riders != ast.DamageRiders():
+        raise LoweringError("a damage history carries no riders yet", node=node)
+    if len(node.recipients) != 1 or not _is_target(node.recipients[0]):
+        raise LoweringError(
+            "\"the damage already dealt to it\" names the one creature this "
+            "sentence targets",
+            node=node,
+        )
+    payload: dict[str, object] = {
+        "amount": "x",
+        X_FROM_COUNT: {
+            "damage_ledger": {
+                "recipient": "target", "source_name": None,
+                "others_only": False, "base": 0,
+            },
+        },
+    }
+    _describe_targets(payload, node.recipients[0])
     return (OracleInstruction("deal_damage", "", payload),)
 
 

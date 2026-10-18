@@ -30,7 +30,7 @@ entirely, which made every conditional trigger fire unconditionally.
 
 from . import ast
 from .errors import GrammarError
-from .bounds import parse_comparison
+from .bounds import accept_spelled_comparison, parse_comparison
 from .readers import accept_source_reference, accept_source_reference_spec
 from .references import parse_target_spec
 from .durations import _parse_duration
@@ -423,6 +423,15 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
             return ast.TurnIsYours()
         if stream.accept_phrase("an", "opponent", "'s", "turn"):
             return ast.TurnIsYours(negated=True)
+        # "…**if it's not that player's turn**, destroy that land." (Price of
+        # Glory.) The same question about the seat the firing event named;
+        # which seat that is, and whether this event froze one, is the
+        # lowering's to say.
+        outsider = bool(stream.accept_word("not"))
+        if stream.accept_phrase("that", "player", "'s", "turn"):
+            return ast.TurnIsYours(negated=outsider, whose="that_player")
+        if outsider and stream.accept_phrase("your", "turn"):
+            return ast.TurnIsYours(negated=True)
     stream.reset(turn_mark)
 
     # The long record readers — "it was a creature card", "a white creature dies
@@ -543,8 +552,14 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
     if stream.accept_word("its"):
         for words, characteristic in _ITS_CHARACTERISTICS:
             if stream.accept_phrase(*words, "is"):
+                # "Destroy target nonblack creature if **its toughness is less
+                # than or equal to the number of cards in your graveyard**."
+                # (Ghastly Demise.) The comparison spelled out in front of its
+                # bound, which is how a card compares against a count; the
+                # postfix "2 or less" keeps the reader it had.
                 return ast.SubjectCharacteristicIs(
-                    _TARGET_PRONOUN_SPEC, characteristic, parse_comparison(stream)
+                    _TARGET_PRONOUN_SPEC, characteristic,
+                    accept_spelled_comparison(stream) or parse_comparison(stream),
                 )
     stream.reset(its_mark)
 
@@ -662,6 +677,22 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
         # prints about a creature it chose). The same axis the present-tense
         # clause above reads, asked of the turn's record rather than of the
         # board — `Permanent.attacked_this_turn`, which the cleanup step sweeps.
+        # "…**didn't attack or come under your control this turn**" (Mad
+        # Dog). One negation over two records, so it is the conjunction of two
+        # negated clauses — De Morgan's reading of the printed "or", which is
+        # also what Erg Raiders prints as two clauses ("didn't attack this
+        # turn … unless it came under your control this turn"). Read in front
+        # of the shorter spelling below, which is its prefix up to "or".
+        if stream.accept_phrase(
+            "didn't", "attack", "or", "come", "under", "your", "control",
+            "this", "turn",
+        ):
+            return ast.EveryOf((
+                ast.IsState(subject, "attacked_this_turn", negated=True),
+                ast.CameUnderControlThisTurn(subject, negated=True),
+            ))
+        if stream.accept_phrase("came", "under", "your", "control", "this", "turn"):
+            return ast.CameUnderControlThisTurn(subject)
         if stream.accept_phrase("didn't", "attack", "this", "turn"):
             return ast.IsState(subject, "attacked_this_turn", negated=True)
         if stream.accept_phrase("attacked", "this", "turn"):

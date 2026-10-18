@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable
 
-from .color_changes import SPELL_COLOR_KEYS
 from .models import CardDefinition, Permanent, PlayerState
 from .oracle import OracleInstruction
 
@@ -37,13 +36,12 @@ class SimulationResult:
 #                    read by ``_stack_item_colors``. Its own key, not
 #                    new_color, because what a spell was announced with and
 #                    what was done to it are two facts — one key made Sleight
-#                    of Mind cast to write "red" a red spell. One of four
-#                    (``color_changes.SPELL_COLOR_KEYS``): the indefinite slot,
-#                    the until-end-of-turn slot and the timestamp of each
-#                    (CR 613.7b), written only by ``change_spell_color`` and
-#                    handed whole to the permanent a permanent spell becomes
-#                    (CR 400.7a). Declared from that module's constants, which
-#                    is the one place the four are spelled.
+#                    of Mind cast to write "red" a red spell.
+#   color_effect     beside color_override: how long that effect lasts and when
+#                    it was created (``color_changes.recolor_spell`` writes
+#                    both), so it can go on applying to the permanent the
+#                    spell becomes (CR 400.7a) with its own duration and its
+#                    own timestamp (CR 613.7b)
 #   divided_targets  a divided spell's full cross-seat target list (Fireball,
 #                    Volcanic Eruption) as (seat, battlefield_index) pairs, where
 #                    a (seat, None) entry is that player's face. Takes precedence
@@ -52,7 +50,8 @@ class SimulationResult:
 #                    choice prevention spells): a battlefield Permanent or a
 #                    stack spell's CardDefinition
 CHOICE_KEYS = (
-    "new_color", "old_color", *SPELL_COLOR_KEYS, "divided_targets", "chosen_source",
+    "new_color", "old_color", "color_override", "color_effect",
+    "divided_targets", "chosen_source",
     # "For each additional {1}{R} you paid, …" (Primitive Justice, Taste of
     # Paradise); "If this spell's additional cost was paid, …" (Undergrowth).
     # An *offer* the caster took, counted — not an object a cost ate like the
@@ -116,6 +115,12 @@ CHOICE_KEYS = (
     # the whole set, and a reader of "the exiled card" must not be handed a list
     # it would then treat as one card.
     "exiled_set_for_cost",
+    # The cards a printed **mill** cost put into the payer's graveyard ("{T},
+    # Mill a card: For each colored mana symbol in **the milled card's** mana
+    # cost, …", Charmed Pendant). A list for ``discarded_for_cost``'s reason,
+    # and on this channel for the others': by resolution the card is one of
+    # however many are in the graveyard, and only the payment knows which.
+    "milled_for_cost",
     # CR 107.4b's symbols a printed mana cost actually consumed ("Note the type
     # of mana spent to pay this activation cost", Jeweled Amulet, Ice Cauldron).
     # A symbol dict, and on this channel for the three above's reason: the pool
@@ -166,6 +171,15 @@ CHOICE_KEYS = (
     # item with no second field to keep in step. ``oracle_types`` names the
     # key and holds its one reader.
     "named_no_target",
+    # Every seat a **several-role** announcement named, one entry per role in
+    # role order with ``None`` where the role is not a player ("…creatures
+    # **target player** controls … creatures **another target player**
+    # controls", Cultural Exchange). A target rather than a choice beyond one,
+    # and on this channel for ``divided_targets``' reason: it is the other
+    # announcement that names several players, and ``target_player_index`` is
+    # one seat. Written only where there are two or more seat roles —
+    # ``targeting.ROLE_SEATS`` names the key and says who reads it.
+    "role_seats",
 )
 
 
@@ -275,6 +289,16 @@ class StackItem:
     # permission grant; every place a spell's card leaves the stack for the
     # graveyard — resolution, countering — routes on it.
     exile_instead_of_graveyard: bool = False
+    # CR 702.34a: this spell's **flashback cost was paid** — "exile this card
+    # instead of putting it *anywhere else* any time it would leave the stack."
+    # Wider than the rider above, which speaks only of a graveyard: a countered
+    # spell a card sends to its owner's library (Memory Lapse) or hand
+    # (Unsubstantiate) is neither, and a flashed-back one goes to exile all the
+    # same. Stamped at cast time beside that rider (a flashback cast carries
+    # both, so every site that bins to a graveyard is already right) and read
+    # through ``flashback.leaves_stack_to_exile`` by the sites that send a
+    # card somewhere else. Never set on a copy: CR 707.10, a copy is not cast.
+    flashback: bool = False
     # For a triggered ability on the stack: event data captured at fire time that the
     # effect handler reads at resolution (e.g. the dead creature's name, the damage
     # amount, the player who was dealt damage, an optional-pay cost).
@@ -348,20 +372,25 @@ class StackItem:
     # a trigger — a trigger's target is stamped at its fire site, which is the
     # bug ROADMAP's CR 608.2b entry declines the rule over.
     activated: bool = False
-    # CR 603.3d: this **triggered** ability's target was chosen for it as it
-    # was put on the stack, out of the picker's own list — by the seat that was
-    # asked, by the default a seat nobody asks takes, or by its permanent
-    # spell's cast where that announcement was one the trigger could have made
-    # (``cast_announcement_fault``). The triggered twin of ``activated`` above,
-    # and positive for the same reason: a trigger's target fields are also
-    # where a fire site threads an object *the event* named, and a slot nobody
-    # chose must not be read as a target that can later become illegal.
-    #
-    # Set by ``_resolve_trigger_target`` and by ``_stack_push`` for a standing
-    # cast announcement, and read by
-    # ``legality.vanished_graveyard_target_refusal`` — the one clause of
-    # CR 608.2b a trigger is held to so far.
-    target_chosen: bool = False
+    # CR 603.3d: this **triggered** ability's targets were *chosen for it* as
+    # it was put on the stack — out of the list ``_trigger_target_candidates``
+    # enumerates, by the ``trigger_target`` prompt's answer or its default —
+    # rather than stamped by the fire site that announced it. The other half
+    # of ``activated`` above, and positive for the same reason: a fire site's
+    # stamp may be a slot nobody chose (the death sweep records the dying
+    # permanent itself), so "has a target on it" says nothing about whether a
+    # player picked it. Set by the two answers that record a chosen target
+    # (``_resolve_trigger_target`` / ``_resolve_trigger_targets`` — unless the
+    # answer is a default taken while a permanent was on its way to a
+    # graveyard, ``Game.departing``, when the picker's list was the board
+    # before the event), by
+    # ``_stack_push`` for an entry trigger whose permanent spell named the
+    # target and whose own list accepted it (``cast_announcement_fault``), by
+    # the upkeep step for a pick made at its target prompt and accepted the
+    # same way (``_enqueue_triggered_ability(targets_chosen=)``), and by
+    # nothing else; what CR 608.2b may be asked of is
+    # ``activated or targets_chosen`` (``legality.announced_by_a_choice``).
+    targets_chosen: bool = False
 
     def __post_init__(self) -> None:
         if self.owner_index is None:

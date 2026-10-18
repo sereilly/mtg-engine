@@ -50,10 +50,18 @@ class ManaPayment:
     needed by the caller and neither can be derived from the other, which is why
     the plan is a value rather than the payment itself — a caller can ask
     "could this be paid?" without paying it, which is what CR 601.2h needs.
+
+    ``tapped_for`` is positional beside ``tapped``: the pip each land was
+    matched to, or None for a land the generic part takes. It is what the
+    payer **asks the land for** — a plan's tap is the player activating that
+    land's mana ability (CR 605.3a), and a land that offers a choice has to be
+    told which colour the plan counted on it for
+    (``Game._pay_planned_cost``).
     """
 
     from_pool: dict[str, int] = field(default_factory=dict)
     tapped: tuple["Permanent", ...] = ()
+    tapped_for: tuple["str | None", ...] = ()
 
 
 def fungible_colors_headroom(
@@ -215,6 +223,43 @@ def spend_under_permissions(
     return after
 
 
+def pips_payable_by(
+    player, symbols: "frozenset[str]", *, as_any_type: bool = False,
+    as_any_color: bool = False,
+) -> "frozenset[str]":
+    """The pips one unit of mana that may be any of *symbols* can pay for
+    *player* — coloured pips and ``{C}``; every unit also pays generic.
+
+    The payment's own cascade (``_pay_mana_cost_directly``), asked per unit:
+    CR 106.6 permissions through :func:`may_pay_pip`, Chromatic Orrery's "as
+    though it were mana of any color" (every unit pays a coloured pip, and
+    ``{C}`` still wants colourless), Sunglasses of Urza's white-as-red.
+
+    One reading for the two functions that plan a payment a unit at a time —
+    the castable highlight's (``board_payment``, where this was written) and
+    :func:`plan_payment`'s, which matched a pip to a land that *produces* its
+    colour and so never asked what the seat may spend that mana as.
+    """
+    if as_any_type:
+        return frozenset(PIP_SYMBOLS) | {"C"}
+    pays: set[str] = set()
+    if "C" in symbols:
+        pays.add("C")
+    if as_any_color or player.spends_mana_as_any_color:
+        return frozenset(pays | set(PIP_SYMBOLS))
+    if player.mana_spending_is_general:
+        permissions = player.mana_spending_permissions
+        pays.update(
+            pip for pip in PIP_SYMBOLS
+            if any(may_pay_pip(permissions, symbol, pip) for symbol in symbols)
+        )
+        return frozenset(pays)
+    pays.update(symbol for symbol in symbols if symbol in PIP_SYMBOLS)
+    if player.can_spend_white_as_red and "W" in symbols:
+        pays.add("R")
+    return frozenset(pays)
+
+
 def _normalized(required: dict[str, int]) -> dict[str, int]:
     return {
         **{symbol: int(required.get(symbol, 0)) for symbol in COLOR_SYMBOLS},
@@ -251,11 +296,83 @@ def _match_colored(
     return {land: pips[pip] for land, pip in holder.items()}
 
 
+def _plan_under_permissions(
+    pool: dict[str, int],
+    lands: Sequence["Permanent"],
+    want: dict[str, int],
+    produced: "Sequence[frozenset[str]]",
+    payer,
+) -> ManaPayment | None:
+    """:func:`plan_payment` for a seat holding a CR 106.6 spending permission.
+
+    With a permission in force "which land produces this pip's colour" is the
+    wrong question twice over: a unit may pay a pip it is not the colour of
+    (white as any colour, Celestial Dawn), and may **not** pay the pip it is
+    the colour of ("other mana only as though it were colorless mana" — a
+    floating {B} is no payment for a {B} pip there). So the pool is not spent
+    ahead of the matching the way the ordinary path spends it; every floating
+    unit and every land is one source carrying what :func:`pips_payable_by`
+    says it pays, and one matching places the pips over all of them.
+
+    Floating mana is listed first, which is the ordinary path's preference
+    ("a land kept untapped is worth more than one that is not") expressed as
+    the order the matching tries sources in.
+    """
+    units: list[str] = [
+        str(symbol) for symbol, amount in pool.items()
+        for _ in range(max(0, int(amount)))
+    ]
+    floating = len(units)
+    sources: list[tuple[int, frozenset[str]]] = [
+        (index, pips_payable_by(payer, frozenset({symbol})))
+        for index, symbol in enumerate(units)
+    ]
+    sources += [
+        (floating + index, pips_payable_by(payer, made) if made else frozenset())
+        for index, made in enumerate(produced)
+    ]
+    pips = [symbol for symbol in COLOR_SYMBOLS for _ in range(want[symbol])]
+    assignment = _match_colored(pips, sources) if pips else {}
+    if assignment is None:
+        return None
+
+    from_pool: dict[str, int] = {}
+    for index in assignment:
+        if index < floating:
+            from_pool[units[index]] = from_pool.get(units[index], 0) + 1
+    generic = want["generic"]
+    for index, symbol in enumerate(units):
+        if generic <= 0:
+            break
+        if index not in assignment:
+            from_pool[symbol] = from_pool.get(symbol, 0) + 1
+            generic -= 1
+    spare = [
+        index for index, made in enumerate(produced)
+        if floating + index not in assignment and made
+    ]
+    if generic > len(spare):
+        return None
+    matched = {
+        index - floating: pip
+        for index, pip in assignment.items() if index >= floating
+    }
+    tapped = sorted([*matched, *spare[:max(0, generic)]])
+    return ManaPayment(
+        from_pool=from_pool, tapped=tuple(lands[i] for i in tapped),
+        # The pip is what the land's mana pays *as*; whether the land can be
+        # asked for that symbol is the payer's to decide from what it makes.
+        tapped_for=tuple(matched.get(i) for i in tapped),
+    )
+
+
 def plan_payment(
     pool: dict[str, int],
     lands: Sequence["Permanent"],
     required: dict[str, int],
     produces: "Callable[[Permanent], Sequence[str]] | None" = None,
+    *,
+    payer=None,
 ) -> ManaPayment | None:
     """How *required* can be paid from *pool* plus tapping *lands*, or None.
 
@@ -273,8 +390,28 @@ def plan_payment(
     cost can be paid from is arithmetic, and the caller owns the board. A caller
     that omits it gets the permanent's own answer, which is what every caller
     got before the override existed.
+
+    *payer* is the seat paying (a ``PlayerState``), for what it may spend its
+    mana **as** (CR 609.4b, CR 106.6): "you may spend white mana as though it
+    were mana of any color" (Celestial Dawn, False Dawn), "…as though it were
+    red mana" (Sunglasses of Urza), "…mana as though it were mana of any
+    color" (Chromatic Orrery). The permissions are the seat's derived list, so
+    this stays arithmetic — and a seat holding none takes the path below
+    exactly as it always has, which is every board but the ones those cards
+    are on. Without it an effect-priced coloured cost could not be paid under
+    Celestial Dawn at all, where every land is a Plains and no land "produces"
+    the pip.
     """
     want = _normalized(required)
+    if payer is not None and getattr(payer, "mana_spending_permissions", ()):
+        return _plan_under_permissions(
+            pool, lands, want,
+            [
+                frozenset(produces(land) if produces else (land.effective_produced_mana or ()))
+                for land in lands
+            ],
+            payer,
+        )
     from_pool: dict[str, int] = {}
     left = dict(pool)
 
@@ -311,7 +448,10 @@ def plan_payment(
     if generic > len(spare):
         return None
     tapped = sorted([*assignment, *spare[:generic]])
-    return ManaPayment(from_pool=from_pool, tapped=tuple(lands[i] for i in tapped))
+    return ManaPayment(
+        from_pool=from_pool, tapped=tuple(lands[i] for i in tapped),
+        tapped_for=tuple(assignment.get(i) for i in tapped),
+    )
 
 
 #: Instruction kinds that put mana into a pool. CR 605.1a's "could add mana to
@@ -325,6 +465,65 @@ MANA_PRODUCING_KINDS: frozenset[str] = frozenset({
     "sacrifice_self_for_mana",
     "channel_life_for_mana",
 })
+
+#: Costs that move a card to or from a library, as fields of
+#: ``ActivatedAbilityCost`` - each a count, zero for "no such cost". CR 605.1a's
+#: fourth criterion (in the rules since the September 2026 edition): an
+#: activated ability is a mana ability only if "its cost and effect don't move
+#: any card to or from a library". Milling (Millikin, Charmed Pendant) and
+#: exiling the top of a library move one *from* it; a card put from a hand on
+#: top moves one *to* it.
+LIBRARY_MOVING_COSTS: tuple[str, ...] = (
+    "mill_cards", "exile_top_of_library", "hand_to_library_top",
+)
+
+#: The effect half of the same criterion, asked **the other way round**. Every
+#: effect that moves a card between zones lowers into one grammar category
+#: (:data:`_ZONE_MOVING_CATEGORY`, 166 kinds), and a step of that category
+#: beside an add-mana step is *presumed* to move a card to or from a library
+#: unless it is one of these - the zone-moving steps the pool's mana abilities
+#: carry that have been read and do not:
+#:
+#: * ``sacrifice_self`` - battlefield to graveyard (Gemstone Mine and the five
+#:   storage lands sacrifice themselves when the last counter is gone);
+#: * ``return_self_instead_of_untapping`` - battlefield to hand, later
+#:   (Undiscovered Paradise);
+#: * ``reveal_cards_from_hand`` - nothing moves (Metalworker).
+#:
+#: Presumed, because the two ways of being wrong are not alike. A mana ability
+#: read as an ordinary one still works, through the stack; an ordinary ability
+#: read as a mana ability can be activated in the middle of a payment and
+#: cannot be responded to, which is the card doing more than it prints with
+#: nothing to show for it. A draw is the step the pool actually carries ("Add
+#: one mana of any color. **Draw a card.**" - Chromatic Sphere, Odyssey's five
+#: Eggs), and a set collected off the pool would have held that one kind and
+#: called "{T}: Add {G}. Mill a card." a mana ability the day it was printed.
+#: ``tests/engine/test_mana_ability_library_criterion.py`` holds every such
+#: step in either manifest role to a reviewed verdict, so an entry is added
+#: here by reading a card, never by default.
+LIBRARY_SAFE_ZONE_KINDS: frozenset[str] = frozenset({
+    "sacrifice_self",
+    "return_self_instead_of_untapping",
+    "reveal_cards_from_hand",
+})
+
+#: The grammar category of an effect that moves a card between zones
+#: (``lowering/categories.INSTRUCTION_CATEGORIES``).
+_ZONE_MOVING_CATEGORY = "zones"
+
+#: A step that sets up a **later** ability rather than doing its work now. CR
+#: 603.7: "An effect may create a delayed triggered ability that can do
+#: something at a later time" - the delayed ability is another ability, with its
+#: own resolution, and what *it* moves is not moved by the cost or the effect of
+#: the ability that created it. So "Add one mana of any color. Draw a card at
+#: the beginning of the next turn's upkeep." (Barbed Sextant, Astrolabe) is a
+#: mana ability and "Add one mana of any color. Draw a card." (Chromatic Sphere)
+#: is not. No ruling says so of the Sextant by name; the Sphere's, Millikin's
+#: and Selvala's (all 2026-08-05) are each about a card moved as the ability is
+#: activated or resolves, and the mischief the criterion answers - a card drawn
+#: or revealed in the middle of paying for something - is one a draw at the next
+#: upkeep cannot do.
+_LATER_ABILITY_KINDS: frozenset[str] = frozenset({"create_delayed_trigger"})
 
 
 def has_nonmana_activated_ability(card) -> bool:
@@ -412,6 +611,34 @@ def is_mana_ability(ability) -> bool:
     other two clauses alone. That is the honest answer rather than a silent
     one — the four AI call sites pass a bare instruction and no planeswalker
     reaches them.
+
+    **And an ability that moves a card to or from a library is not a mana
+    ability** — the fourth criterion, which CR 605.1a has carried since the
+    September 2026 edition: "…and its cost and effect don't move any card to
+    or from a library." It first reached this function as a *ruling* (Millikin,
+    2026-08-05: "not a mana ability. Players can respond to it, and it can't be
+    activated in the middle of paying for a cost"), while the rules file this
+    repo shipped was the April edition, and was held to the one cost that
+    ruling was written about. Both halves are asked now:
+
+    * the **cost** (:data:`LIBRARY_MOVING_COSTS`) — a mill, the top of a
+      library exiled, a card put on top of one. A property of the cost, like
+      the loyalty clause, so a caller holding a bare instruction is not told;
+    * the **effect** (:func:`moves_a_library_card`) — "Add one mana of any
+      color. Draw a card." (Chromatic Sphere, the five Eggs). Asked of the
+      steps the ability carries out *as it resolves*: a delayed ability it
+      sets up is another ability (:data:`_LATER_ABILITY_KINDS`, with the
+      reasoning), so Barbed Sextant's draw at the next upkeep leaves its mana
+      ability one. And asked fail-closed: a zone-moving step that nobody has
+      read is presumed to reach a library (:data:`LIBRARY_SAFE_ZONE_KINDS`).
+
+    It is those cards' printed reminder text made true: an ability that uses
+    the stack is activated whenever its controller has priority, which is
+    "only as an instant". The rule's last sentence — "Do not take into account
+    replacement effects that may apply, other than self-replacement effects" —
+    is why this reads the compiled ability and never the board: a mana ability
+    whose draw something would replace is still not a mana ability, and one
+    that a replacement would *make* draw still is.
     """
     instruction = getattr(ability, "instruction", ability)
     if instruction is None or not hasattr(instruction, "kind"):
@@ -419,13 +646,56 @@ def is_mana_ability(ability) -> bool:
     cost = getattr(ability, "cost", None)
     if getattr(cost, "loyalty", None) is not None:
         return False
+    if any(getattr(cost, field, 0) for field in LIBRARY_MOVING_COSTS):
+        return False
     steps = (instruction, *_every_nested_step(instruction))
     if not any(step.kind in MANA_PRODUCING_KINDS for step in steps):
+        return False
+    if moves_a_library_card(instruction):
         return False
     return not any(
         (step.payload or {}).get("targets") or _names_a_target(step.payload)
         for step in steps
     )
+
+
+def moves_a_library_card(instruction) -> bool:
+    """Whether resolving *instruction* moves a card to or from a library, as
+    far as CR 605.1a's fourth criterion is concerned: any step it carries out
+    now (:func:`steps_carried_out_now`) that moves a card between zones and is
+    not one of :data:`LIBRARY_SAFE_ZONE_KINDS`."""
+    from .grammar.lowering.categories import INSTRUCTION_CATEGORIES
+
+    return any(
+        INSTRUCTION_CATEGORIES.get(step.kind) == _ZONE_MOVING_CATEGORY
+        and step.kind not in LIBRARY_SAFE_ZONE_KINDS
+        for step in steps_carried_out_now(instruction)
+    )
+
+
+def steps_carried_out_now(instruction) -> tuple:
+    """*instruction* and every step inside it that happens as it resolves —
+    :func:`_every_nested_step` that does not open a step which only sets up a
+    later ability (:data:`_LATER_ABILITY_KINDS`).
+
+    The walk CR 605.1a's fourth criterion needs and the first three do not:
+    "could add mana" and "doesn't require a target" are true of an ability
+    whatever part of it says so, while "its … effect [doesn't] move any card to
+    or from a library" is about what this ability's own resolution does.
+    """
+    if instruction is None or not hasattr(instruction, "kind"):
+        return ()
+    found = [instruction]
+    if instruction.kind in _LATER_ABILITY_KINDS:
+        return tuple(found)
+    from .grammar.lower import nested_instructions, offer_branches
+
+    inner = nested_instructions(instruction)
+    if inner is None:
+        inner = offer_branches(instruction)
+    for step in inner or ():
+        found.extend(steps_carried_out_now(step))
+    return tuple(found)
 
 
 def carries_an_offer(instruction) -> bool:
@@ -438,7 +708,7 @@ def carries_an_offer(instruction) -> bool:
     part-way through a payment — because the mana does not exist until every
     seat it asks has answered.
     """
-    from .grammar.lowering.control_flow import OFFER_BRANCH_KEYS
+    from .grammar.lower import OFFER_BRANCH_KEYS
 
     if instruction is None or not hasattr(instruction, "kind"):
         return False
@@ -490,11 +760,10 @@ def _every_nested_step(instruction) -> tuple:
     ``_sweeps._per_recipient_multiplier``. That the two tables exist at all is
     the real debt, and it belongs to whoever next needs a third reader.
     """
-    # `control_flow` rather than `categories`: this predicate was written
-    # against the latter's re-export, and the wave-1 split that moved
-    # `categories_of` out took the re-export with it. The name has one home
-    # and this is it.
-    from .grammar.lowering.control_flow import nested_instructions, offer_branches
+    # `grammar.lower` rather than `lowering.categories` or
+    # `lowering.control_flow`: the walk has lived in both, and each move took
+    # the old address with it. The name has one home and this is it.
+    from .grammar.lower import nested_instructions, offer_branches
 
     inner = nested_instructions(instruction)
     # **And an offer's branches**, which the category walk must not open and
@@ -590,6 +859,54 @@ def permanent_mana_cost(permanent) -> dict[str, int] | None:
     cost = mana_cost_from_symbols(spendable)
     if cost is None:
         return None
+    return {symbol: amount for symbol, amount in cost.items() if amount}
+
+
+def spell_mana_cost(item) -> dict[str, int] | None:
+    """The mana cost of the spell *item* (a stack object) as a payable symbol
+    dict, or None when it has none.
+
+    "…may pay **that spell's mana cost**." (Ice Cave.) :func:`permanent_mana_cost`
+    one zone over, and the zone is the whole difference: CR 107.3h — "if an
+    effect instructs a player to pay an object's mana cost that includes {X},
+    the value of X is treated as 0 unless the object is a spell on the stack.
+    In that case, the value of X is the value chosen or determined for it as
+    the spell was cast." So each ``{X}`` is that many generic mana here, where
+    the permanent reader drops it.
+
+    The **printed** cost, coloured symbols and all (CR 202.1a — "mana cost
+    includes color", as the card's own reminder says): never what was actually
+    paid, so a cost increase, a reduction or an alternative cost changes
+    nothing (the card's ruling: "the mana cost does not include cost increases
+    or reductions").
+
+    **None is "unpayable", not "free"** (CR 118.6, CR 202.1b), for
+    :func:`permanent_mana_cost`'s reason: ``{0}`` is a mana cost and comes back
+    as an empty requirement any player can meet, while a spell with no mana
+    cost comes back None and may not be paid for at all. A symbol this engine
+    cannot spend — hybrid, Phyrexian — is None too: refusing the payment is the
+    conservative answer to a cost it would otherwise under-charge.
+
+    The card is the stack item's own, so a split card's cost is the cast
+    half's (CR 709.3b) with no branch here.
+    """
+    card = getattr(item, "card", None)
+    symbols = _PRINTED_SYMBOL.findall(getattr(card, "mana_cost", "") or "")
+    if not symbols:
+        return None
+    announced = max(0, int(getattr(item, "x_value", 0) or 0))
+    spendable = "".join(
+        "{" + symbol + "}" for symbol in symbols if symbol.upper() != "X"
+    )
+    cost: dict[str, int] = {}
+    if spendable:
+        printed = mana_cost_from_symbols(spendable)
+        if printed is None:
+            return None
+        cost = dict(printed)
+    variable = sum(1 for symbol in symbols if symbol.upper() == "X")
+    if variable:
+        cost["generic"] = int(cost.get("generic", 0)) + variable * announced
     return {symbol: amount for symbol, amount in cost.items() if amount}
 
 
@@ -694,7 +1011,7 @@ def answer_color_choices(instruction, color: str | None):
     prompt, which is the safe direction. Rebuilt rather than mutated, because a
     compiled instruction is shared by every copy of the card.
     """
-    from .grammar.lowering.control_flow import OFFER_BRANCH_KEYS, WRAPPER_KINDS
+    from .grammar.lower import OFFER_BRANCH_KEYS, WRAPPER_KINDS
     from .oracle_types import OracleInstruction
 
     if not color or instruction is None:

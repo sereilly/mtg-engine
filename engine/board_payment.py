@@ -86,7 +86,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from .mana_payment import (MANA_PRODUCING_KINDS, PIP_SYMBOLS, _every_nested_step,
-                           may_pay_pip, plan_payment)
+                           pips_payable_by, plan_payment)
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .game import Game
@@ -468,31 +468,17 @@ def _expanded(
 
 def _pays(player, symbols: frozenset[str], *, as_any_type: bool = False,
           as_any_color: bool = False) -> frozenset[str]:
-    """The pips one unit that may be any of *symbols* can pay for *player*.
+    """The pips one unit that may be any of *symbols* can pay for *player*,
+    with the mark that counts it toward a generic cost.
 
-    The payment's own cascade (``_pay_mana_cost_directly``), asked per unit:
-    CR 106.6 permissions through ``may_pay_pip``, Chromatic Orrery's "as though
-    it were mana of any color" (every unit pays a coloured pip, and {C} still
-    wants colourless), Sunglasses of Urza's white-as-red.
+    ``mana_payment.pips_payable_by`` is the reading — the payment's own
+    cascade, asked per unit — and it is shared with ``plan_payment``, which is
+    how an effect-priced cost and the castable highlight come to agree about a
+    seat's CR 106.6 permissions.
     """
-    if as_any_type:
-        return frozenset(PIP_SYMBOLS) | {"C", _ANY}
-    pays: set[str] = {_ANY}
-    if "C" in symbols:
-        pays.add("C")
-    if as_any_color or player.spends_mana_as_any_color:
-        return frozenset(pays | set(PIP_SYMBOLS))
-    if player.mana_spending_is_general:
-        permissions = player.mana_spending_permissions
-        pays.update(
-            pip for pip in PIP_SYMBOLS
-            if any(may_pay_pip(permissions, symbol, pip) for symbol in symbols)
-        )
-        return frozenset(pays)
-    pays.update(symbol for symbol in symbols if symbol in PIP_SYMBOLS)
-    if player.can_spend_white_as_red and "W" in symbols:
-        pays.add("R")
-    return frozenset(pays)
+    return pips_payable_by(
+        player, symbols, as_any_type=as_any_type, as_any_color=as_any_color,
+    ) | {_ANY}
 
 
 def board_can_pay(

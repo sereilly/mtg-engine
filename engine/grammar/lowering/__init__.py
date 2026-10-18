@@ -39,10 +39,11 @@ cannot do.
 """
 
 from .categories import INSTRUCTION_CATEGORIES
-from .control_flow import categories_of
 from ._cost_records import _COST_PRODUCES
 from .where_x import lower_where_x
-from .conditions import _lower_condition, pronoun_target_referent
+from .conditions import (_lower_condition, announces_target_pair,
+                         pronoun_target_referent)
+from ._record_conditions import targets_one_graveyard_card
 from ._events import (CREATED_TOKEN, 
     _BLOCK_PAIR_EVENTS,
     binds_block_pair,
@@ -127,12 +128,13 @@ from .characteristics import (
     _lower_pump,
     _lower_change_text,
 )
+from .colors import _lower_become_color
 from .types import (
     _lower_land_type_swap,
-    _lower_become_color,
     _lower_become_copy,
     _lower_become_creature,
     _lower_change_land_type,
+    _lower_become_that_type,
     _lower_change_supertype,
     _lower_become_aura,
     _lower_gain_type,
@@ -261,6 +263,7 @@ from .control_changes import (
 from .exchanges import (
     _lower_exchange_control,
     _lower_exchange_greatest_mana_value,
+    _lower_exchange_chosen_sets,
     _lower_mutual_control_of_sets,
 )
 from .separations import _lower_separate_into_piles
@@ -284,6 +287,7 @@ from .cards import (
     _lower_mill_until,
     _lower_put_milled_card_onto_battlefield,
     _lower_scry,
+    _lower_surveil,
 )
 # The hand family, split off `.cards` at the size guard in the same round its
 # parse mirror was. Every name keeps its address: this package re-exports flat,
@@ -307,6 +311,8 @@ from .mana import (
     _lower_lose_unspent_mana,
     _lower_produces_mana_instead,
     _lower_spend_mana_as_though,
+    _lower_added_mana_becomes,
+    _lower_grant_mana_spending,
 )
 from .library import (
     _lower_look_top_exile_random,
@@ -338,6 +344,7 @@ from .reveal import (
     _lower_graveyard_top_opponent_chooses,
     _lower_put_revealed_card_onto_battlefield,
     _lower_reveal_top,
+    _lower_reveal_library_opponent_chooses,
     _lower_reveal_top_opponent_chooses,
     _lower_reveal_top_sorting_by_chosen_name,
     _lower_reveal_top_sorting_by_filter,
@@ -350,6 +357,7 @@ from .search import (
     _lower_search_player_library,
     _lower_search_reveal_opponent_chooses,
     _lower_strip_cards_with_chosen_name,
+    lower_strip_each_exiled,
 )
 from .retargeting import _lower_change_event_targets, _lower_change_target
 from .stack import (
@@ -394,6 +402,7 @@ from .repeats import (_lower_repeat_for_types,
                       _lower_repeat_optional_process, _lower_repeat_process,
                       _lower_repeat_process_request,
                       _lower_repeat_until_pile_chosen,
+                      _lower_repeat_process_until,
                       _lower_repeat_process_while)
 from .game import (
     _lower_count_objects,
@@ -406,6 +415,7 @@ from .game import (
     _lower_win_game,
     _lower_coin_flip_damage_loop,
     _lower_coin_flip_stakes_loop,
+    _lower_flip_coins_until_loss,
     _lower_damage_this_game_history,
     _lower_skip_phase,
     _lower_skip_step,
@@ -428,9 +438,10 @@ from .life import (
 __all__ = [
     "lower_where_x",
     "_lower_condition",
+    "announces_target_pair",
     "pronoun_target_referent",
+    "targets_one_graveyard_card",
     "INSTRUCTION_CATEGORIES",
-    "categories_of",
     "_COST_PRODUCES",
     "_mentions_x",
     "_refuse_unfused_distinctness",
@@ -488,6 +499,7 @@ __all__ = [
     "kicked_second_damage_target",
     "_lower_coin_flip_damage_loop",
     "_lower_coin_flip_stakes_loop",
+    "_lower_flip_coins_until_loss",
     "_lower_damage_this_game_history",
     "_lower_damage_cant_be_prevented",
     "_lower_damage_becomes_counter_removal",
@@ -523,6 +535,7 @@ __all__ = [
     "_lower_become_color",
     "_lower_become_copy",
     "_lower_change_land_type",
+    "_lower_become_that_type",
     "_lower_change_supertype",
     "_lower_become_aura",
     "_lower_gain_type",
@@ -563,6 +576,7 @@ __all__ = [
     "_lower_choose_permanents",
     "_lower_exchange_control",
     "_lower_exchange_greatest_mana_value",
+    "_lower_exchange_chosen_sets",
     "_lower_mutual_control_of_sets",
     "_lower_pay_or_sacrifice_greatest_mana_value",
     "_lower_regenerate",
@@ -605,6 +619,7 @@ __all__ = [
     "_lower_put_milled_card_onto_battlefield",
     "_lower_put_hand_cards_on_library",
     "_lower_scry",
+    "_lower_surveil",
     "_lower_add_mana",
     "_lower_note_mana_spent",
     "_TAPPED_LAND_MANA_RECIPIENTS",
@@ -613,6 +628,8 @@ __all__ = [
     "_lower_lose_unspent_mana",
     "_lower_produces_mana_instead",
     "_lower_spend_mana_as_though",
+    "_lower_added_mana_becomes",
+    "_lower_grant_mana_spending",
     "_lower_double_power",
     "_lower_switch_pt",
     "_fused_prepare_then_interact",
@@ -631,6 +648,7 @@ __all__ = [
     "_lower_look_at_hand",
     "_lower_bin_revealed_card",
     "_lower_graveyard_top_opponent_chooses",
+    "_lower_reveal_library_opponent_chooses",
     "_lower_reveal_top_opponent_chooses",
     "_lower_put_library_top_into_hand",
     "_lower_put_exiled_pile_on_library",
@@ -648,6 +666,7 @@ __all__ = [
     "_lower_search_library",
     "_lower_search_reveal_opponent_chooses",
     "_lower_strip_cards_with_chosen_name",
+    "lower_strip_each_exiled",
     "HELD_SEARCH_PILE",
     "_SEARCH_EXILE_HONOURED",
     "_lower_cast_from_exiled_with",
@@ -708,6 +727,7 @@ __all__ = [
     "_lower_repeat_until_pile_chosen",
     "_lower_repeat_process",
     "_lower_repeat_process_request",
+    "_lower_repeat_process_until",
     "_lower_repeat_process_while",
     "_lower_exchange_life_totals",
     "_lower_set_life_total",

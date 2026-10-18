@@ -103,6 +103,17 @@ _DELAYED_OPENERS: tuple[tuple[tuple[str, ...], str, bool, str, bool], ...] = (
     # wrong card — the same distinction the two upkeep rows draw.
     (("at", "the", "beginning", "of", "your", "next", "end", "step"),
      "controllers_next_end_step", True, "until_it_triggers", False),
+    # "At the beginning of **the end step of that player's next turn**, that
+    # player returns those cards to their hand." (Suppress.) The fourth end-step
+    # row and the fourth seat: not the next end step there is, not the
+    # controller's own, but one belonging to the player the sentence in front
+    # named — and of their *next* turn, which on that player's own turn is the
+    # one after this (see `delayed_triggers.EVENTS_AFTER_THIS_TURN`). Binds no
+    # object: the possessive names a seat, which is `binds_player` one layer
+    # down, exactly as the two bound-player upkeep rows below are read.
+    (("at", "the", "beginning", "of", "the", "end", "step", "of", "that",
+      "player", "'s", "next", "turn"),
+     "bound_players_next_turns_end_step", True, "until_it_triggers", False),
     # "At the beginning of your next upkeep, …" (Giant Slug, Hazezon Tamar).
     # The controller's own upkeep, however many turns away — so it waits for
     # the step rather than expiring with the turn.
@@ -497,9 +508,19 @@ _BLOCK_PAIR_WINDOWS: tuple[tuple[tuple[str, ...], str], ...] = (
 
 def _parse_targeted_damage_delay(
     stream: TokenStream,
-) -> "tuple[ast.TargetSpec, ast.ObjectFilter] | None":
+) -> "tuple[ast.TargetSpec, ast.ObjectFilter | None, bool, str | None] | None":
     """``target <noun> deals combat damage to <noun> this turn`` — the opener
     that **chooses** the creature whose damage it watches (Acidic Dagger).
+
+    …and ``target <noun> deals damage`` (Spiritualize: "Until end of turn,
+    whenever target creature deals damage, you gain that much life."). The
+    same opener with each of its three narrowings taken away, and each is
+    *read* rather than assumed: whether the word "combat" was printed, whether
+    a phrase after "to" narrows what was damaged, and whether the window was
+    printed here ("this turn") or is still owed by a duration in front of the
+    sentence. Returns ``(target, agent or None, combat_only, duration or
+    None)``; a None duration that no leading window fills is refused by the
+    lowering, because a repeating ability with no window is one nothing lifts.
 
     :func:`_parse_targeted_combat_delay`'s twin one event over, and the same
     reason it exists: CR 602.2b picks the target as the ability is activated, so
@@ -526,26 +547,58 @@ def _parse_targeted_damage_delay(
         # ``DelayedTrigger`` binds one id.
         stream.reset(mark)
         return None
-    if not stream.accept_phrase("deals", "combat", "damage", "to"):
+    if not stream.accept_word("deals"):
         stream.reset(mark)
         return None
-    stream.accept_word("a", "an")
-    try:
-        agent = parse_object_filter(stream)
-    except GrammarError:
+    combat_only = bool(stream.accept_word("combat"))
+    if not stream.accept_word("damage"):
         stream.reset(mark)
         return None
-    if agent is None or not stream.accept_phrase("this", "turn"):
+    agent = None
+    if stream.accept_word("to"):
+        stream.accept_word("a", "an")
+        try:
+            agent = parse_object_filter(stream)
+        except GrammarError:
+            stream.reset(mark)
+            return None
+        if agent is None:
+            stream.reset(mark)
+            return None
+    duration = "end_of_turn" if stream.accept_phrase("this", "turn") else None
+    if combat_only and (agent is None or duration is None):
+        # Acidic Dagger's whole sentence, as it was read before the opener
+        # learned the shorter one: the combat form with a word missing is a
+        # printing no card has, and the two it would be confused with — the
+        # bound-subject "whenever **that creature** deals combat damage this
+        # turn" — are read by the branch behind this one.
         stream.reset(mark)
         return None
-    return chosen, agent
+    return chosen, agent, combat_only, duration
+
+
+#: The two block events a delay may watch **about its own source**, by the
+#: words between the source and the partner's noun phrase.
+#:
+#: "…blocks or becomes blocked by" is the joined event (Goblin Flotilla) and
+#: "…becomes blocked by" its attacking half alone (Zombie Boa). Two events
+#: rather than one with the wider reading, because the difference is which
+#: declarations wake the entry: read as the joined event, an ability that says
+#: "becomes blocked" would also answer when its creature *blocks*. Longest
+#: first — the second row is the tail of the first.
+_SOURCE_BLOCK_PAIR_DELAYS: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("blocks", "or", "becomes", "blocked", "by"), "source_blocks_or_blocked_by"),
+    (("becomes", "blocked", "by"), "source_becomes_blocked_by"),
+)
 
 
 def _parse_source_block_pair_delay(
     stream: TokenStream,
-) -> "tuple[ast.ObjectFilter, str] | None":
+) -> "tuple[str, ast.ObjectFilter, str] | None":
     """``this creature blocks or becomes blocked by <noun> this combat`` — the
-    delayed spelling of the joined block event (Goblin Flotilla).
+    delayed spelling of the joined block event (Goblin Flotilla) — and
+    ``this creature becomes blocked by <noun> this turn``, its attacking half
+    (Zombie Boa). Returns ``(event, partner phrase, duration)``.
 
     The printed static form of the same sentence is a trigger of the permanent
     (``engine/oracle.py``'s ``creature_blocks_or_blocked_by``); this is that
@@ -561,7 +614,14 @@ def _parse_source_block_pair_delay(
     if not accept_source_reference(stream):
         stream.reset(mark)
         return None
-    if not stream.accept_phrase("blocks", "or", "becomes", "blocked", "by"):
+    event = next(
+        (
+            kind for phrase, kind in _SOURCE_BLOCK_PAIR_DELAYS
+            if stream.accept_phrase(*phrase)
+        ),
+        None,
+    )
+    if event is None:
         stream.reset(mark)
         return None
     described = parse_subject_filter_at(stream)
@@ -571,7 +631,7 @@ def _parse_source_block_pair_delay(
     for phrase, duration in _BLOCK_PAIR_WINDOWS:
         window = stream.mark()
         if stream.accept_phrase(*phrase):
-            return described, duration
+            return event, described, duration
         stream.reset(window)
     # A window is required: CR 603.7b's "unless it has a stated duration" is
     # what makes this ability repeat, and one with no window is a static the

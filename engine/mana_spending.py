@@ -176,14 +176,51 @@ def spending_permission_line(oracle_text: str) -> str | None:
     return None
 
 
-def permissions_for_seat(game, seat: int) -> tuple[ManaSpending, ...]:
-    """Every spending permission *seat* currently has, off the board.
+def turn_permissions_on(player) -> tuple[ManaSpending, ...]:
+    """The permissions a resolved effect granted *player* for this turn —
+    "Until end of turn, you may spend white mana as though it were mana of any
+    color" (False Dawn).
 
-    Derived rather than stored, so a source leaving ends its permission by no
-    longer being in the list — the same model ``global_statics.py`` uses and for
-    the same rule (CR 611.3a).
+    They hang off the seat as an attribute rather than a ``PlayerState``
+    field, for the reason ``engine/land_mana_swaps.py`` and
+    ``engine/shields.py`` hang theirs: the seat carries the list without
+    learning what a permission is, and the cleanup step's one call expires it.
+    Written by name (``_turn_mana_spending``) in the two functions below and
+    nowhere else.
     """
-    found: list[ManaSpending] = []
+    return tuple(getattr(player, "_turn_mana_spending", None) or ())
+
+
+def grant_turn_permission(player, permission: ManaSpending) -> ManaSpending:
+    """Record *permission* on *player* until the cleanup step (CR 611.2a).
+
+    The one write: the permission is **not** in force until the seat's derived
+    list is rebuilt (``Game._refresh_mana_spending``), which the caller does —
+    every payment site reads the derived list, never this one.
+    """
+    player._turn_mana_spending = [*turn_permissions_on(player), permission]
+    return permission
+
+
+def clear_turn_permissions(player) -> bool:
+    """End every turn-long permission on *player*; True when one was held."""
+    held = bool(turn_permissions_on(player))
+    if held:
+        player._turn_mana_spending = []
+    return held
+
+
+def permissions_for_seat(game, seat: int) -> tuple[ManaSpending, ...]:
+    """Every spending permission *seat* currently has: the board's statics and
+    whatever a resolved effect granted for this turn.
+
+    The statics are derived rather than stored, so a source leaving ends its
+    permission by no longer being in the list — the same model
+    ``global_statics.py`` uses and for the same rule (CR 611.3a). The turn's
+    grants are records with a window (CR 611.2a), read here beside them so
+    every payment site that asks the one derived list honours both.
+    """
+    found: list[ManaSpending] = list(turn_permissions_on(game.players[seat]))
     for perm in game.controlled_by(seat):
         # ``effective_card``, not ``card``: a permanent that copies one of these
         # grants the permission, and one whose text has been changed no longer
@@ -197,6 +234,7 @@ def permissions_for_seat(game, seat: int) -> tuple[ManaSpending, ...]:
 
 
 __all__ = [
-    "COLOR_SYMBOLS", "ManaSpending", "mana_spending_for",
-    "permissions_for_seat", "spending_permission_line",
+    "COLOR_SYMBOLS", "ManaSpending", "clear_turn_permissions",
+    "grant_turn_permission", "mana_spending_for",
+    "permissions_for_seat", "spending_permission_line", "turn_permissions_on",
 ]

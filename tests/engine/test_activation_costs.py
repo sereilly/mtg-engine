@@ -93,13 +93,43 @@ def test_every_admitted_cost_clause_is_charged(pool):
                 # The handler performs its own cost clause; charging it here
                 # too would collect the same cost twice.
                 continue
+            # With the card's own name, as the compiler reads it: a line that
+            # names its card ("{B}: Regenerate Lord of Tresserhorn.") does not
+            # parse without it, and this guard then skipped the line as if a
+            # hook performed it - 49 of the 98 lines it skipped were only
+            # that, every legend's among them.
             try:
-                node = parse_line(ability.source_line)
+                node = parse_line(ability.source_line, card_name=card.name)
             except Exception:
                 continue  # a card-hooked line; its hook performs the whole line
             if not isinstance(node, ast.ActivatedAbilityNode):
                 continue
-            charged = parse_activated_ability_cost(ability.source_line)
+            charged = parse_activated_ability_cost(
+                ability.source_line, card.name
+            )
+            # "Sacrifice **this creature**" / "Exile this artifact" / "Return
+            # this enchantment to its owner's hand": the source paying with
+            # itself. The chosen-permanent comparisons below skip an
+            # ``is_source`` clause, so nothing here asked whether the charger
+            # read one - and "{1}{W}, Sacrifice **Lieutenant Kirtar**" (the
+            # card naming itself, CR 201.5) was admitted by the grammar and
+            # charged as mana alone.
+            for cost in node.costs:
+                if isinstance(cost, ast.SacrificeCost) and cost.filter.is_source:
+                    if not charged.sacrifice_self:
+                        unpaid.append(
+                            f"{card.name}: its own sacrifice is not charged"
+                        )
+                if isinstance(cost, ast.ExileCost) and cost.filter.is_source:
+                    if not charged.exile_self:
+                        unpaid.append(
+                            f"{card.name}: its own exile is not charged"
+                        )
+                if isinstance(cost, ast.ReturnSelfToHandCost):
+                    if not charged.return_self_to_hand:
+                        unpaid.append(
+                            f"{card.name}: its own return to hand is not charged"
+                        )
             # "Sacrifice a creature **and a Swamp**" (Viscerid Drone) parses to
             # two `SacrificeCost` nodes, and the charger carries them in two
             # fields. Paired up *before* the loop so the comparison is
@@ -120,6 +150,28 @@ def test_every_admitted_cost_clause_is_charged(pool):
                     and not charged.sacrifice_attached
                 ):
                     unpaid.append(f"{card.name}: {ability.source_line}")
+            # **The source itself**, under either verb. "{T}, Sacrifice two
+            # lands **and this artifact**" (Sandstone Deadfall) parses to a
+            # counted sacrifice and a sacrifice of the source, and the charger
+            # read neither — but for as long as this guard compared only the
+            # *chosen* clauses, a charger that read the lands and dropped the
+            # artifact would have passed it. The source is a clause like any
+            # other: printed, admitted, and owed.
+            source_sacrificed = any(
+                isinstance(cost, ast.SacrificeCost) and cost.filter.is_source
+                for cost in node.costs
+            )
+            if source_sacrificed != bool(charged.sacrifice_self):
+                unpaid.append(
+                    f"{card.name}: charged sacrifice_self="
+                    f"{charged.sacrifice_self} for {source_sacrificed}"
+                )
+            source_exiled = any(isinstance(cost, ast.ExileSelf) for cost in node.costs)
+            if source_exiled != bool(charged.exile_self):
+                unpaid.append(
+                    f"{card.name}: charged exile_self={charged.exile_self} "
+                    f"for {source_exiled}"
+                )
             chosen_sacrifices = [
                 cost for cost in node.costs
                 if isinstance(cost, ast.SacrificeCost)
@@ -169,7 +221,12 @@ def test_every_admitted_cost_clause_is_charged(pool):
                             f"{wanted_exile}"
                         )
                     wanted_count = (
-                        cost.count.value if isinstance(cost.count, ast.Fixed) else None
+                        cost.count.value if isinstance(cost.count, ast.Fixed)
+                        # "Exile **any number of** cards from your graveyard"
+                        # (Painbringer): the payer's choice, as the sacrifice
+                        # spells it one comparison up.
+                        else "any" if isinstance(cost.count, ast.AnyNumber)
+                        else None
                     )
                     if charged.exile_count != wanted_count:
                         unpaid.append(
@@ -181,6 +238,14 @@ def test_every_admitted_cost_clause_is_charged(pool):
                             f"{card.name}: charged same_zone="
                             f"{charged.exile_same_zone} for {cost.same_zone}"
                         )
+                # "{T}, **Mill a card**: Add {C}." (Millikin.) A cost with no
+                # branch here is a cost nobody compared — the hole the tap and
+                # the counter costs each had once.
+                if isinstance(cost, ast.MillCost) and charged.mill_cards != cost.count:
+                    unpaid.append(
+                        f"{card.name}: charged {charged.mill_cards} mill(s) "
+                        f"for {cost.count}"
+                    )
                 if isinstance(cost, ast.DiscardCost) and not cost.last_drawn:
                     # "Discard your hand" and "Discard this card" are their own
                     # fields, not counts — one is never unpayable and the other

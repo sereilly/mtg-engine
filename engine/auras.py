@@ -109,8 +109,18 @@ _COLORS = "white|blue|black|red|green"
 #: *set*, and here the set is read off a board — so it is a third alternative
 #: beside a printed colour and a chosen one, resolved by the reader that holds
 #: the Aura (:data:`AMONG_CONTROLLED_PROTECTION_COLORS`).
+#:
+#: "…protection from **enchantments**" (Tattoo Ward). The check behind this
+#: alternation widened to every quality CR 702.16a names when the damage half
+#: and the state-based sweep moved onto ``_protection_qualities``, so the four
+#: permanent card types join the colours: the reader maps each printed word
+#: through ``keywords.protection_qualities_named``, the one vocabulary a
+#: printed line and a lord's grant are read with. Listed rather than `[a-z]+`
+#: for the reason the colours were: a word nothing answers stays unclaimed.
+_PROTECTION_CARD_TYPES = "artifacts|creatures|enchantments|lands"
 _PROTECTION_QUALITY = (
-    rf"(?:{_COLORS}|the chosen color|each color among permanents you control)"
+    rf"(?:{_COLORS}|{_PROTECTION_CARD_TYPES}"
+    r"|the chosen color|each color among permanents you control)"
 )
 _PROTECTION_QUALITIES = rf"{_PROTECTION_QUALITY}(?: and from {_PROTECTION_QUALITY})*"
 
@@ -160,6 +170,27 @@ def _build_type_addition_grant() -> re.Pattern[str]:
 
 
 _TYPE_ADDITION_GRANT = _LazyPattern(_build_type_addition_grant)
+
+
+def _build_creature_type_set() -> re.Pattern[str]:
+    from .grammar.vocabulary import CREATURE_TYPES
+
+    subtypes = "|".join(sorted(map(re.escape, CREATURE_TYPES), key=len, reverse=True))
+    return re.compile(rf"^{_ATTACHED} creature is an? (?P<subtype>{subtypes})$")
+
+
+#: "Enchanted creature **is a Flagbearer**." (Coalition Flag.) The sentence
+#: ``_TYPE_ADDITION_GRANT`` reads minus its rider, and the rider is the whole
+#: difference: CR 205.1b's "in addition to its other types" is what makes a
+#: type an addition, and a sentence printing none of 205.1b's phrases *sets*
+#: the subtype — CR 205.1a, "the new subtype(s) replaces any existing subtypes
+#: from the appropriate set (creature types, …)". So a Human Soldier under the
+#: Flag is a Flagbearer and nothing else, and stops being pumped by a Soldier
+#: lord. Anchored at both ends so the additive sentence, a P/T half or a
+#: condition never reads as this one; the type is held to CR 205.3m's list for
+#: ``_TYPE_ADDITION_GRANT``'s reason — a made-up word would be claimed here and
+#: then set nothing.
+_CREATURE_TYPE_SET = _LazyPattern(_build_creature_type_set)
 
 # Templates. Several of these genuinely repeat across the pool (the P/T
 # modifications, the keyword grants, the protection cycle, the upkeep damage
@@ -1063,6 +1094,7 @@ def _aura_line_claimed(line: str, card_name: str) -> bool:
     from .cast_costs import cast_cost_claims_line
     from .cast_timing import cast_permission_line
     from .enter_effects import enter_effect_line
+    from .target_requirements import must_choose_claims_line
     from .target_restrictions import target_restriction_line
 
     return bool(
@@ -1094,6 +1126,14 @@ def _aura_line_claimed(line: str, card_name: str) -> bool:
         # matcher cannot answer leaves the line unclaimed and the card
         # unsupported rather than admitted with the restriction absent.
         or target_restriction_line(line)
+        # "While an opponent is choosing targets …, that player must choose at
+        # least one Flagbearer on the battlefield if able." (Coalition Flag.)
+        # Not an effect the Aura has *on what it enchants* — it is the Aura's
+        # own static ability about its controller's opponents, read off the
+        # board at every cast and activation — so it is claimed by the table
+        # that enforces it, like the restriction above, rather than by a
+        # continuous-effect template with nothing continuous behind it.
+        or must_choose_claims_line(line)
         # "You may cast this card from your graveyard by paying 3 life and
         # discarding a card in addition to paying its other costs." (Demonic
         # Embrace.) Not an effect the Aura has while attached and not a
@@ -1226,7 +1266,14 @@ def aura_static_pt_grant(oracle_text: str) -> tuple[int, int] | None:
         # slipped between them and was read as permanent. Two readers of one
         # clause, and the sentence only has to put a word between them to defeat
         # both.
-        if "until end of turn" in tail:
+        #
+        # **Outside any quoted ability**, which is a different ability's text:
+        # 'Enchanted creature gets -1/-1 and has "{T}: Target creature gets
+        # -1/-1 **until end of turn**."' (Foul Presence.) The duration there
+        # belongs to the ability the host is granted, and read as this grant's
+        # own it made the Aura's -1/-1 vanish — the card reported supported,
+        # the host kept its printed size, and a 1/1 it enchanted lived.
+        if "until end of turn" in tail.split('"', 1)[0]:
             continue
         # "…gets +2/+2 **as long as an opponent controls a black permanent**"
         # (Ice Age's five Scarabs), and "for as long as this artifact remains
@@ -1236,7 +1283,20 @@ def aura_static_pt_grant(oracle_text: str) -> tuple[int, int] | None:
         # decline above exists for. The conditional grant lowers to a
         # ``conditional_static`` instruction instead (grammar/statics.py) and
         # the P/T refresh asks the condition on every recompute.
-        if re.match(r"(?:for )?as long as\b", tail):
+        #
+        # **Wherever on the line the condition is printed**, outside any quoted
+        # ability — the lesson the duration check above already paid for. This
+        # asked only the words straight after the numbers, so "gets +1/+1
+        # **and can't block** as long as …" and the fronted "As long as …,
+        # enchanted creature gets +1/+1 …" both slipped past it. No card
+        # printed either while the grammar could not read them, and the round
+        # that taught it to (Odyssey's threshold grants,
+        # ``static_lines._parse_conditional_grant_line``) would have made each
+        # a +1/+1 from here *on top of* the conditional one. Two readers of one
+        # clause again, and a word between them again.
+        if re.search(
+            r"\bas long as\b", (line[:match.start()] + tail).split('"', 1)[0]
+        ):
             continue
         # "…gets +3/+3 **unless it shares a color with the most common color**
         # …" (Heroic Defiance). "As long as" with the polarity printed the
@@ -2256,7 +2316,23 @@ def aura_keyword_grants(oracle_text: str) -> tuple[str, ...]:
         match = _KEYWORD_GRANT.match(line) or _TYPE_ADDITION_GRANT.match(line)
         if match is not None:
             grants.extend(_keyword_list(match.group("keyword")))
-        elif (compound := _KEYWORD_GRANT_AND_RESTRICTION.match(line)) is not None:
+        elif (
+            (compound := _KEYWORD_GRANT_AND_RESTRICTION.match(line)) is not None
+            # …and only when the restriction half **has** a reader. The
+            # pattern's own note says a tail the table cannot read "leaves the
+            # whole line unmatched", and nothing made that true: "has flying
+            # and can't block **as long as …**" matched, granted flying for
+            # good and dropped the restriction with its condition, on a card
+            # reporting supported. No printing reached it; asked now, the
+            # keyword is not granted and the line is left to a reader of the
+            # whole sentence. Either reader counts: the combat table, or the
+            # attached-restriction one Consecrate Land's "can't be enchanted
+            # by other Auras" is read by.
+            and (
+                aura_combat_restriction(raw_line) is not None
+                or aura_restrictions(raw_line)
+            )
+        ):
             # "…has phasing and can't be blocked except by Walls." The keyword
             # half only; the restriction half is claimed by
             # :func:`aura_combat_restriction` off the same line, exactly as
@@ -2671,6 +2747,24 @@ def aura_type_grants(oracle_text: str) -> tuple[str, ...]:
         if match is not None:
             granted.append(match.group("subtype"))
     return tuple(granted)
+
+
+def aura_creature_type_sets(oracle_text: str) -> tuple[str, ...]:
+    """Creature types an Aura **sets** on what it enchants (CR 613 layer 4).
+
+    "Enchanted creature is a Flagbearer." (Coalition Flag.) :func:`aura_type_
+    grants`' other half, and separate because the layer contribution differs:
+    this one replaces the creature's other creature types (CR 205.1a) and
+    leaves every other subtype it has alone — an animated Forest under the
+    Flag is still a Forest — which is ``add_types(replaces_subtypes_from=)``
+    scoped to the creature types.
+    """
+    found: list[str] = []
+    for raw_line in oracle_text.split("\n"):
+        match = _CREATURE_TYPE_SET.match(_line_text(raw_line))
+        if match is not None:
+            found.append(match.group("subtype"))
+    return tuple(found)
 
 
 #: "Enchanted creature gets +3/-1 **and is black**." (Grave Servitude.) The
@@ -3339,6 +3433,8 @@ def aura_continuous_claim(line: str) -> str | None:
         return "protection grant — auras.aura_protection_colors"
     if _CARD_TYPE_ADDITION_GRANT.match(normalized):
         return "card-type addition (layer 4) — auras.aura_card_type_grants"
+    if _CREATURE_TYPE_SET.match(normalized):
+        return "creature type set (layer 4) — auras.aura_creature_type_sets"
     if _ATTACHED_CONTROL_CHANGE.match(normalized):
         return "control change (layer 2) — auras.aura_grants_control"
     if aura_animates_artifact(normalized):

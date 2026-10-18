@@ -23,6 +23,7 @@ shows them as one panel.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -33,7 +34,7 @@ from engine.grammar.vocabulary import (CREATURE_TYPES, LAND_TYPES,
 from engine.mana_payment import mana_cost_label
 from engine.oracle_types import CLAIMABLE_EXILED_CARDS
 from engine.pending_choices import CHOICE_SPECS, public_data
-from engine.search_filters import search_matches, searched_seat
+from engine.search_filters import search_matches, search_slots, searched_seat
 
 
 @dataclass(frozen=True)
@@ -178,6 +179,58 @@ def _effect_order(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+_SEARCH_COLOR_WORDS = {"W": "white", "U": "blue", "B": "black", "R": "red", "G": "green"}
+
+_SEARCH_COMPARISON_WORDS = {
+    "eq": "{value}", "le": "{value} or less", "lt": "less than {value}",
+    "ge": "{value} or greater", "gt": "greater than {value}",
+}
+
+
+def search_slot_label(slot: dict) -> str:
+    """One printed description of a one-per-description search, in words a
+    dialog can put on a slot: "a creature card", "a noncreature, nonland card",
+    "a Plains land card".
+
+    *slot* is in ``search_matches``' own vocabulary (``card_type`` /
+    ``exclude_types`` / ``restrictions``), which is what the engine tests a
+    card against and nothing a player reads. This is presentation only — the
+    words are assembled from the keys that predicate honours, in the order a
+    card prints them (supertype, colour, subtype, type), and a key this does
+    not know adds nothing rather than a guess, so the label can say less than
+    the slot tests and never more.
+    """
+    restrictions = slot.get("restrictions") or {}
+    words: list[str] = []
+    excluded = [f"non{name}" for name in slot.get("exclude_types") or ()]
+    if excluded:
+        words.append(", ".join(excluded))
+    words.extend(str(word) for word in restrictions.get("supertypes") or ())
+    colors = [
+        _SEARCH_COLOR_WORDS.get(str(symbol).upper(), str(symbol))
+        for symbol in restrictions.get("any_colors") or ()
+    ]
+    if colors:
+        words.append(" or ".join(colors))
+    words.extend(str(word).capitalize() for word in restrictions.get("subtypes") or ())
+    card_type = slot.get("card_type", "any")
+    types = card_type if isinstance(card_type, (list, tuple)) else (card_type,)
+    types = [str(name) for name in types if name and name != "any"]
+    if types:
+        words.append(" or ".join(types))
+    words.append("card")
+    label = " ".join(words)
+    if restrictions.get("named"):
+        label += f" named {restrictions['named']}"
+    mana_value = restrictions.get("mana_value")
+    if isinstance(mana_value, dict) and mana_value.get("op") in _SEARCH_COMPARISON_WORDS:
+        label += " with mana value " + _SEARCH_COMPARISON_WORDS[mana_value["op"]].format(
+            value=mana_value.get("value")
+        )
+    article = "an" if label[:1].lower() in "aeiou" else "a"
+    return f"{article} {label}"
+
+
 @prompt_renderer("search_library")
 def _search_library(ctx: PromptContext, choices: list) -> dict:
     """The cards the search may look at, and which of them it may find.
@@ -198,9 +251,22 @@ def _search_library(ctx: PromptContext, choices: list) -> dict:
     destinations = list(choice.data.get("destinations") or ())
     payload = {
         "caster_seat": choice.player_index,
+        # **Whose** zones these are, which is not always the seat choosing:
+        # Guided Passage's opponent picks out of the caster's library, and the
+        # cards go to that library's owner's hand. The dialog said "your
+        # library" and "your hand" to whoever was asked.
+        "zone_seat": ctx.game.players.index(caster),
+        "zone_owner_name": caster.name,
         "count": choice.data["count"],
         "card_type": choice.data["card_type"],
         "card_name": choice.data.get("card_name", ""),
+        # CR 701.23d: how many cards this answer **must** name — the engine's
+        # own floor. 0 for a search with a stated quality (CR 701.23b: it may
+        # fail to find) and for "up to"; 1 for "search your library for a
+        # card" while the zone holds one (Demonic Tutor, Entomb), where "fail
+        # to find" is not an answer and ``search_library_decline`` is a 400.
+        # Sent for every search; the counted branch below sends the same key.
+        "min_picks": ctx.game._search_floor(choice),
         "zones": list(zones),
         # Where the find actually goes. The dialog wrote "into your hand" into
         # its own copy, so Sanctum of All — "…and put it onto the battlefield" —
@@ -221,10 +287,16 @@ def _search_library(ctx: PromptContext, choices: list) -> dict:
             [ctx.serialize_card(card) for card in caster.library]
             if "library" in zones else []
         ),
+        # Asked the way the resolver asks (``_resolve_search_library_picks``):
+        # with the game and the answering seat, so a colour or a creature type
+        # a static gives a card outside the battlefield (Celestial Dawn,
+        # Conspiracy) is in this list exactly when the answer would be taken.
         "legal_indices": (
             [
                 index for index, card in enumerate(caster.library)
-                if search_matches(card, choice.data)
+                if search_matches(
+                    card, choice.data, game=ctx.game, owner=choice.player_index
+                )
             ]
             if "library" in zones else []
         ),
@@ -239,13 +311,58 @@ def _search_library(ctx: PromptContext, choices: list) -> dict:
         payload["destinations"] = destinations
         payload["tapped"] = list(choice.data.get("tapped") or ())
         payload["up_to"] = bool(choice.data.get("up_to"))
+        # CR 701.23d: how many this answer **must** name — the engine's own
+        # floor, which is 0 for "up to" and for a search nothing can answer.
+        # Sent so the dialog can hold its confirm (and withhold "fail to
+        # find") until the answer is one the resolver will take, instead of
+        # sending an under-find to be refused whole.
+        payload["min_picks"] = ctx.game._search_floor(choice)
+    # "a land card **of each basic land type**" (Gaea's Balance); "a creature
+    # card, a land card, and a noncreature, nonland card" (Guided Passage). One
+    # find per printed description. `legal_indices` is the union of them, which
+    # is all a card-at-a-time list can say — two creatures are each legal and
+    # together are not an answer — so the descriptions ride beside it, in the
+    # engine's own words, for a dialog to label its picks with. Additive like
+    # everything else here: the engine checks the answer whole either way.
+    #
+    # Each description also says **which cards answer it** and what to call
+    # it. Which description a pick fills is not readable off the union — a
+    # Tropical Island answers the Forest slot and the Island slot — so a dialog
+    # that wants to refuse a second creature has to be told per slot, by the
+    # one predicate the resolver assigns with (``slot_assignment``).
+    described = search_slots(choice.data)
+    if described:
+        def _answers(slot: dict, cards) -> list[int]:
+            return [
+                index for index, card in enumerate(cards)
+                if search_matches(
+                    card, slot, game=ctx.game, owner=choice.player_index
+                )
+            ]
+
+        payload["one_of_each"] = [
+            {
+                **dict(slot),
+                "label": search_slot_label(slot),
+                "legal_indices": (
+                    _answers(slot, caster.library) if "library" in zones else []
+                ),
+                **(
+                    {"legal_graveyard_indices": _answers(slot, caster.graveyard)}
+                    if "graveyard" in zones else {}
+                ),
+            }
+            for slot in described
+        ]
     if "graveyard" in zones:
         payload["graveyard_cards"] = [
             ctx.serialize_card(card) for card in caster.graveyard
         ]
         payload["legal_graveyard_indices"] = [
             index for index, card in enumerate(caster.graveyard)
-            if search_matches(card, choice.data)
+            if search_matches(
+                card, choice.data, game=ctx.game, owner=choice.player_index
+            )
         ]
     return payload
 
@@ -295,6 +412,14 @@ def _look_top_pick(ctx: PromptContext, choices: list) -> dict:
         "top_count": top_count,
         "card_name": choice.data.get("card_name", ""),
         "cards": [ctx.serialize_card(card) for card in pile_owner.library[:top_count]],
+        # What the pick *is*, which the family varies and the prompt has to be
+        # able to say: where the chosen card goes, where the rest go, and how
+        # many picks are still owed. Sealed Fate exiles from an opponent's
+        # pile and Bamboozle bins two of four, and a prompt that could only
+        # say "keep one" describes neither.
+        "pick_destination": choice.data.get("pick_destination", "hand"),
+        "rest_destination": choice.data.get("rest_destination", "library_bottom"),
+        "remaining": int(choice.data.get("remaining", 1)),
     }
 
 
@@ -503,28 +628,50 @@ def _trigger_target(ctx: PromptContext, choices: list) -> dict:
     shape: whose pile, which slot of it, and the card's name — a graveyard is
     a public zone and its cards have no id, so the pile and the slot are the
     whole address, exactly as the cast picker's ``graveyard`` entries give it.
+
+    And a **spell** ("When this creature enters, counter target spell", Mystic
+    Snake). A spell has no id, so a ``stack`` candidate carries its position in
+    the stack as the client is shown it — ``stack_index``, topmost being 0, the
+    convention a cast's ``target_stack_index`` already uses — read off the
+    stack as it stands now rather than as it stood when the prompt was armed.
+    The answer is checked against the object, not the number
+    (``Game.trigger_target_stack_item``).
     """
     choice = choices[0]
-    payload = {
-        "player_seat": choice.player_index,
-        "card_name": choice.data.get("card_name", ""),
-        "candidates": [
-            {
+    depth = len(ctx.game.stack)
+    positions = {id(item): position for position, item in enumerate(ctx.game.stack)}
+    candidates = []
+    for target in choice.data.get("targets") or ():
+        if target.get("kind") == "stack":
+            position = positions.get(id(target.get("stack_item")))
+            if position is None:
+                continue
+            candidates.append({
+                "kind": "stack",
+                "stack_index": depth - 1 - position,
+                "seat": target.get("seat"),
+                "name": target.get("name"),
+            })
+            continue
+        if target.get("kind") == "graveyard":
+            candidates.append({
                 "kind": "graveyard",
                 "seat": target.get("seat"),
                 "graveyard_index": target.get("graveyard_index"),
                 "name": target.get("name"),
-            }
-            if target.get("kind") == "graveyard"
-            else {
-                "kind": target.get("kind", "permanent"),
-                "seat": target.get("seat"),
-                "index": target.get("permanent_index"),
-                "id": target.get("permanent_id"),
-                "name": target.get("name"),
-            }
-            for target in choice.data.get("targets") or ()
-        ],
+            })
+            continue
+        candidates.append({
+            "kind": target.get("kind", "permanent"),
+            "seat": target.get("seat"),
+            "index": target.get("permanent_index"),
+            "id": target.get("permanent_id"),
+            "name": target.get("name"),
+        })
+    payload = {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "candidates": candidates,
     }
     # "Up to two target creatures" (Basri's Acolyte, Cho-Arrim Bruiser): how
     # many the answer may name. Sent for ``modal_mode_targets``' reason — the
@@ -717,7 +864,16 @@ def _reorder_library(ctx: PromptContext, choices: list) -> dict:
         # stops the UI offering a rearrangement that will not happen.
         "may_reorder": bool(choice.data.get("may_reorder", True)),
         "target_name": target.name,
-        "cards": [ctx.serialize_card(card) for card in target.library[:top_count]],
+        # Which end of the library the pile is: "top" for every look-and-put-
+        # back, "bottom" for "…and the rest on the bottom of your library in
+        # any order" (Goblin Ringleader, CR 401.4). The cards come from the
+        # engine's own reader of the pile, so what is drawn here and what an
+        # answer permutes cannot be different ends of the deck.
+        "position": str(choice.data.get("position", "top")),
+        "cards": [
+            ctx.serialize_card(card)
+            for card in ctx.game.reorder_library_pile(choice)
+        ],
     }
 
 
@@ -738,6 +894,11 @@ def _scry(ctx: PromptContext, choices: list) -> dict:
         # the prompt still says "Scry 3" when only two cards are there.
         "amount": choice.data["amount"],
         "cards": [ctx.serialize_card(card) for card in owner.library[:top_count]],
+        # Where the cards the seat does not keep go: "bottom" is a scry
+        # (CR 701.22a) and "graveyard" a surveil (CR 701.25a). Sent because
+        # the one answer shape serves both and only the words on the prompt
+        # can tell the seat which it is deciding.
+        "destination": choice.data.get("destination", "bottom"),
     }
 
 
@@ -954,6 +1115,29 @@ def _reveal_until_kind_draw(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("skip_draw")
+def _skip_draw(ctx: PromptContext, choices: list) -> dict:
+    """Obstinate Familiar: draw the card, or skip that draw.
+
+    The Abundance offer's shape one option shorter, and for its reasons: one
+    offer at a time (the replacement arms one per draw) with how many are
+    queued behind it, and the labels come off the choice so what the client
+    shows and what the resolver accepts are one list. ``library_size`` rides
+    along because it is the whole decision — skipping matters when the next
+    draw would be from an empty library — and a seat always knows the size of
+    its own library.
+    """
+    choice = choices[0]
+    source = ctx.game.permanent_by_id(int(choice.data["source_id"]))
+    return {
+        "player_seat": choice.player_index,
+        "source_name": source.card.name if source is not None else "",
+        "options": list(choice.options),
+        "remaining": sum(1 for c in choices if c.player_index == choice.player_index),
+        "library_size": len(ctx.game.players[choice.player_index].library),
+    }
+
+
 @prompt_renderer("balance")
 def _balance(ctx: PromptContext, choices: list) -> dict:
     choice = choices[0]
@@ -1001,11 +1185,94 @@ def _sacrifice(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+_REMINDER_TEXT = re.compile(r"\([^)]*\)")
+_SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
+_OFFER_WORD = re.compile(r"\b(?:unless|may)\b", re.IGNORECASE)
+#: "At the beginning of your upkeep, " / "When this creature dies, ": the
+#: trigger a sentence opens with, which is not part of either answer.
+_TRIGGER_OPENING = re.compile(r"^(?:at|when|whenever)\b[^,]*,\s*", re.IGNORECASE)
+
+
+def _offer_source_card(data: dict):
+    """The card an offer or a number was asked by, as its text reads now: the
+    source permanent through ``effective_card`` (CR 612 - a text change is the
+    text), else the resolving spell."""
+    permanent = data.get("_source_permanent") or data.get("permanent")
+    card = getattr(permanent, "effective_card", None)
+    if card is None:
+        card = getattr(data.get("_context"), "card", None)
+    return card
+
+
+def offer_wording(data: dict) -> dict:
+    """What a prompt with no words of its own can say: the printed sentence
+    it was armed by, and for "X unless Y" which half each answer is.
+
+    An offer priced in mana or life says so (``prompt``: "Pay {2}?"). One
+    priced in an *action* said nothing - Blazing Salvo's payload is a card
+    name and four zeroes, and the browser showed "you may apply this optional
+    effect. Do it?" over a choice between 3 damage to a creature and 5 to its
+    controller's face. The engine knows the instructions and not their
+    English; the card does, so the sentence is read off it:
+
+    * ``card_text`` - the one sentence of the source that makes an offer
+      ("…unless…" / "…may…"), or the whole text when that is not exactly one
+      sentence, so nothing is guessed between two offers on one card;
+    * ``accept_text`` / ``decline_text`` - the halves of "X unless Y", which
+      is the form where "yes" is the *second* clause and so the one a bare
+      Yes / No gets backwards. Absent for "you may …", where yes is the
+      sentence.
+
+    A reading of printed text for a label, never a rule: nothing dispatches on
+    it, and the answer is the same index whatever the words say.
+    """
+    card = _offer_source_card(data)
+    text = getattr(card, "oracle_text", "") or ""
+    if not text:
+        return {}
+    sentences = [
+        sentence.strip()
+        for line in text.split("\n")
+        for sentence in _SENTENCE_END.split(_REMINDER_TEXT.sub("", line).strip())
+        if sentence.strip()
+    ]
+    offers = [sentence for sentence in sentences if _OFFER_WORD.search(sentence)]
+    if len(offers) != 1:
+        return {"card_text": text}
+    sentence = offers[0]
+    wording = {"card_text": sentence}
+    head, found, tail = sentence.rstrip(".").partition(" unless ")
+    if found and head and tail:
+        wording["decline_text"] = _TRIGGER_OPENING.sub("", head, count=1)
+        wording["accept_text"] = tail
+    return wording
+
+
 @prompt_renderer("optional_pay")
 def _optional_pay(ctx: PromptContext, choices: list) -> dict:
-    """The colour rods and friends: a seat can owe several at once."""
+    """The colour rods and friends: a seat can owe several at once.
+
+    An offer the engine gave a ``prompt`` (a mana or life price, Tainted
+    Pact's named card) is sent as it is; one it gave none carries the printed
+    sentence instead (:func:`offer_wording`).
+    """
     return {"pending": [
-        {**public_data(choice), "player_index": choice.player_index} for choice in choices
+        {
+            **public_data(choice),
+            "player_index": choice.player_index,
+            **({} if choice.data.get("prompt") else offer_wording(choice.data)),
+            # Whether "yes" would be accepted as the board stands: the price
+            # from the pool plus the lands the engine taps for a payer. False
+            # is not "cannot pay" — the seat may hold mana the plan does not
+            # tap (a Sol Ring, a filter land), and may tap it and answer again
+            # — it is "tap for it first": an accept now is a 400 that keeps
+            # the offer (`Game.seat_answers_for_itself`). The engine's own
+            # reader, so the button and the answer cannot disagree.
+            "payable": ctx.game._player_can_pay_optional(
+                ctx.game.players[choice.player_index], choice.data
+            ),
+        }
+        for choice in choices
     ]}
 
 
@@ -1149,12 +1416,12 @@ def _pay_any_amount(ctx: PromptContext, choices: list) -> dict:
     of the same reader the resolver uses — an offer the engine would refuse is
     not an offer.
     """
-    from engine.mana_payment import generic_cost, plan_payment, untapped_mana_lands
+    from engine.mana_payment import generic_cost, plan_payment
 
     choice = choices[0]
     seat = choice.player_index
     player = ctx.game.players[seat]
-    lands = untapped_mana_lands(ctx.game.controlled_by(seat))
+    lands = ctx.game.payment_lands(seat)
     affordable = 0
     # Walk up rather than compute: `plan_payment` is the one answer to "can
     # this be paid", and a second arithmetic here is a second answer. The
@@ -1270,6 +1537,12 @@ def _number_choice(ctx: PromptContext, choices: list) -> dict:
         "maximum": None if printed_high is None else offered_high,
         "options": list(range(low, offered_high + 1)),
         "default": int(data.get("default_number", low)),
+        # What the number is *for*. The payload is a range and a card name,
+        # and "Rites of Initiation: choose a number between 0 and 4" does not
+        # say that the number is how many cards leave the hand at random. The
+        # card says it, so its text rides along (``offer_wording``'s reader of
+        # the source) for the prompt to quote.
+        "card_text": getattr(_offer_source_card(data), "oracle_text", "") or "",
     }
 
 
@@ -1277,7 +1550,10 @@ def _number_choice(ctx: PromptContext, choices: list) -> dict:
 def _land_type_choice(ctx: PromptContext, choices: list) -> dict:
     return {
         "card_name": choices[0].data["card_name"],
-        "options": ["plains", "island", "swamp", "mountain", "forest"],
+        # The five, or the list the sentence narrowed them to ("becomes a
+        # Plains or an Island", Tundra Kavu) — read through the resolver's own
+        # reader, so the picker cannot offer a type the answer path refuses.
+        "options": list(ctx.game.land_type_choice_options(choices[0])),
     }
 
 
@@ -1304,18 +1580,12 @@ def _mana_payment(ctx: PromptContext, choices: list) -> dict:
         + (f" and {life} life" if life else ""),
         "life": life,
         "spell_name": target_item.card.name if target_item is not None else None,
-    }
-
-
-@prompt_renderer("kudzu_reattach")
-def _kudzu_reattach(ctx: PromptContext, choices: list) -> dict:
-    owner = ctx.game.players[choices[0].player_index]
-    return {
-        "lands": [
-            {"index": i, "name": p.card.name}
-            for i, p in enumerate(owner.battlefield)
-            if p.card.primary_type == "land"
-        ],
+        # Whether "pay" would be accepted as the board stands — the pool plus
+        # the lands the engine taps for a payer. False means "tap for it
+        # first": the payer may hold mana the plan does not tap (a Sol Ring, a
+        # filter land), and an accept sent now is a 400 that keeps this prompt
+        # rather than a counter. See `Game.mana_payment_is_payable`.
+        "payable": ctx.game.mana_payment_is_payable(choices[0]),
     }
 
 
@@ -2010,7 +2280,9 @@ def _creature_type_choice(ctx: PromptContext, choices: list) -> dict:
     return {
         "player_index": choices[0].player_index,
         "card_name": data.get("card_name", ""),
-        "creature_types": sorted(CREATURE_TYPES),
+        # …less a printed "other than Wall" (Unnatural Selection), through the
+        # resolver's own reader.
+        "creature_types": sorted(ctx.game.creature_type_choice_options(choices[0])),
         "default_creature_type": data.get("default_creature_type"),
     }
 
@@ -2277,6 +2549,13 @@ def _permanent_set_choice(ctx: PromptContext, choices: list) -> dict:
     checked against are one rule rather than two copies. ``up_to`` is sent
     because the client cannot derive it: unlike the tap prompt beside it, the
     ceiling is smaller than the candidate list and is what the card printed.
+
+    ``at_least`` is sent for the same reason, one bound over: a printed count
+    is a floor as well ("return **two** Forests", Bull Elephant; "choose **the
+    same number**", Cultural Exchange), the engine refuses an answer under it,
+    and until this the client was told only the ceiling — so a person could
+    confirm too few, be refused, and not know by how many. Zero for every
+    prompt that prints no floor.
     """
     choice = choices[0]
     live = {id(perm) for perm in ctx.game.live_permanent_set_choices(choice)}
@@ -2285,6 +2564,7 @@ def _permanent_set_choice(ctx: PromptContext, choices: list) -> dict:
         "card_name": choice.data.get("card_name", ""),
         "prompt": choice.data.get("prompt", ""),
         "up_to": int(choice.data.get("up_to", 1)),
+        "at_least": int(choice.data.get("at_least", 0) or 0),
         "candidates": [
             {
                 "seat": seat,

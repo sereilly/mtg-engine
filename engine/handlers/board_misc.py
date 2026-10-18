@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..color_changes import change_color, change_spell_color
+from ..color_changes import change_color, recolor_spell
 from ..continuous import next_timestamp
 from ..keywords import grant_protection_flag
 from ..delayed_triggers import (END_OF_TURN, DelayedTrigger,
@@ -16,6 +16,7 @@ from ..models import CardDefinition, Permanent
 from ..oracle_types import (CHOSEN_COLOR_THIS_WAY, CHOSEN_TARGET_PERMANENTS,
                             COUNTERS_REMOVED,
                             EVENT_SUBJECT_LAST_KNOWN, LAST_TARGET_CONTROLLER,
+                            SPELL_OR_OBJECT_TARGET,
                             X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT,
                             OracleInstruction)
 from ..exiled_records import source_object
@@ -26,8 +27,9 @@ from ..tokens import (CHOSEN_TOKEN_RECORDS, CREATED_TOKEN_RESULT_KEY,
                       CREATED_TOKENS_RESULT_KEY,
                      CREATED_WITH_PERMANENT_ID, default_token_name,
                      make_token_card, tokens_created_with)
-from ._common import (BLOCK_PAIR_SUBJECT, SUBJECT_FROM_TRIGGER,
-                      attached_host,
+from ._common import (BLOCK_PAIR_SUBJECT, COLOR_CHOSEN_THIS_WAY_KEY,
+                      SUBJECT_FROM_TRIGGER,
+                      attached_host, resolve_color_chosen_in_resolution,
                       block_pair_permanents, bound_permanent, evaluate_count,
                       one_recorded_permanent_id,
                       per_recipient_amount,
@@ -378,15 +380,27 @@ def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: 
             # the resolution's own player is whoever the fire site defaulted
             # to, so the Horn's controller paid and an opponent drew.
             recorded = (context.trigger_context or {}).get("event_subject_player")
-        elif binds_player == "resolution_player":
-            # "**Target player** draws a card at the beginning of the next
-            # turn's upkeep." (Sapphire Charm.) "**That player** draws a card
-            # …" (Lodestone Bauble.) The player this resolution holds — the one
-            # the spell or ability announced (CR 601.2c/602.2b), frozen now
-            # because the firing resolution a turn later holds a default
-            # instead. Read by identity: ``list.index`` compares by value.
+            if recorded is None:
+                # …and where no trigger froze one (an entry armed outside a
+                # firing), CR 603.7c's default below: the player this
+                # resolution was about.
+                recorded = next(
+                    (seat for seat, seated in enumerate(game.players)
+                     if seated is context.target),
+                    None,
+                )
+        elif binds_player == "target_player":
+            # "…the end step of **that player's** next turn" behind "target
+            # player exiles …" (Suppress); "**Target player** draws a card at
+            # the beginning of the next turn's upkeep" (Sapphire Charm); "**That
+            # player** draws a card …" (Lodestone Bauble). A fourth record and
+            # the plainest: the seat this resolution itself holds — the one the
+            # spell or ability announced (CR 601.2c/602.2b), frozen now because
+            # the firing resolution a turn later holds a default instead. By
+            # identity, because a `PlayerState` compares by value and two seats
+            # holding the same cards match each other.
             recorded = next(
-                (seat for seat, seated in enumerate(game.players)
+                (i for i, seated in enumerate(game.players)
                  if seated is context.target),
                 None,
             )
@@ -396,6 +410,56 @@ def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: 
             game.log.append(f"{context.card.name} had no player to watch")
             return True, "no player"
         bound_seat = recorded
+    else:
+        # CR 603.7c for every entry no record above seats: the player this
+        # resolution was *about* — its own target, or the seat an offer was
+        # put to — is the player a delayed "that player" names, frozen now.
+        #
+        # It used to be left unbound, and an unbound trigger's target is the
+        # seat opposite its controller (``_run_stack_item_resolution``'s
+        # default for a resolution that names nobody). So "…from a player's
+        # graveyard on top of their library. **That player** draws a card at
+        # the beginning of the next turn's upkeep" (Lodestone Bauble) drew
+        # for the opponent whenever it was aimed at its controller's own
+        # graveyard, "**Target player** draws a card at the beginning of the
+        # next turn's upkeep" (Sapphire Charm) did the same aimed at oneself,
+        # and Horn of Plenty paid for the other player's card — each right
+        # exactly when the named player happened to be the opponent, which is
+        # the half a two-player test tries first.
+        #
+        # For a resolution that named nobody the context's target *is* that
+        # default, so the entry carries the seat it would have been given at
+        # fire time and nothing else changes; an effect that does not read a
+        # target player never looks. By identity: a ``PlayerState`` compares
+        # by value, and two seats holding equal state match each other.
+        bound_seat = next(
+            (
+                index for index, seated in enumerate(game.players)
+                if seated is context.target
+            ),
+            None,
+        )
+    # "Choose a color. Whenever this creature becomes blocked by a creature
+    # **of that color** this turn, …" (Zombie Boa.) CR 608.2d's choice, made by
+    # an earlier step of this resolution and spent **now** into the ordinary
+    # ``color_filter`` — the entry outlives the scratchpad the colour was
+    # written to, so a filter still carrying the phrase at fire time would be
+    # asked of a resolution that never chose anything. Through the one reader
+    # of that phrase, so "of that color" means here what it means in a count or
+    # a sweep.
+    #
+    # A phrase nothing answered arms **nothing**, for the reason an unbound
+    # object does one screen up: both matchers refuse the key outright, so the
+    # entry would wait all turn for a creature that cannot exist.
+    narrowings = {
+        key: resolve_color_chosen_in_resolution(
+            dict(payload.get(key) or {}), context
+        )
+        for key in ("subject_filter", "agent_filter")
+    }
+    if any(COLOR_CHOSEN_THIS_WAY_KEY in found for found in narrowings.values()):
+        game.log.append(f"{context.card.name} had no chosen color to watch for")
+        return True, "no color"
     arm_delayed_trigger(game, DelayedTrigger(
         bound_player_index=bound_seat,
         controller_index=seat,
@@ -417,8 +481,8 @@ def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: 
         # (Subira). The narrowing travels as the same filter payload every
         # other one does; the fire sites ask `subject_matches`, which has the
         # seat "you control" needs. Empty means no narrowing.
-        subject_filter=dict(payload.get("subject_filter") or {}),
-        agent_filter=dict(payload.get("agent_filter") or {}),
+        subject_filter=narrowings["subject_filter"],
+        agent_filter=narrowings["agent_filter"],
         once=bool(payload.get("once")),
         duration=payload.get("duration", END_OF_TURN),
         batch=bool(payload.get("batch")),
@@ -439,30 +503,6 @@ def add_corpse_counters_for_each_creature_died(game: Game, instruction: OracleIn
         return True, "resolved"
     source.metadata["corpse_counters"] = int(source.metadata.get("corpse_counters", 0)) + count
     game.log.append(f"{source.card.name} gets {count} corpse counter(s)")
-    return True, "resolved"
-
-
-@effect_handler("end_step_damage_if_not_attacked")
-def end_step_damage_if_not_attacked(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    """Erg Raiders: "At the beginning of your end step, if this creature
-    didn't attack this turn, it deals 2 damage to you unless it came under
-    your control this turn." Both guards are re-checked at resolution (CR
-    603.4), matching the Pestilence intervening-if precedent."""
-    source = context.source_permanent
-    caster = context.caster
-    if source is None or caster is None:
-        return True, "resolved"
-    if source.metadata.get("attacked_this_turn"):
-        return True, "resolved"
-    if source.metadata.get("summoning_sickness_turn") == game.turn:
-        return True, "resolved"
-    amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
-    game._deal_damage_to_player(
-        caster, amount, source=source,
-        then=lambda dealt: game.log.append(
-            f"{source.card.name} dealt {dealt} damage to {caster.name}"
-        ),
-    )
     return True, "resolved"
 
 
@@ -637,21 +677,19 @@ def recolor_target_from_text(game: Game, instruction: OracleInstruction, context
     # override — its own key, never ``new_color``: that one is what the spell
     # was announced with (a text change's word, a mana spell's colour), and one
     # key for both made every such spell the colour it announced.
-    #
-    # Written through ``change_spell_color``, which stamps it (CR 613.7b): the
-    # effect goes on applying to the permanent a permanent spell becomes
-    # (CR 400.7a), and it can only be handed over with the timestamp it was
-    # created at if it was given one. The value is ``_colour_override_value``'s
-    # — the empty tuple for "becomes colorless" (Ersatz Gnomes), where the bare
-    # payload word used to be stored and read back as a colour named
-    # "colorless".
     if context.stack_target is not None and symbol:
-        written = _colour_override_value(symbol)
-        change_spell_color(context.stack_target, written)
-        game.log.append(
-            f"{context.stack_target.card.name} (on the stack) became "
-            f"{_colour_override_word(written)}"
-        )
+        # A phrase that names a spell *and its types* ("target instant spell
+        # becomes colorless") is re-asked here (CR 608.2b), through the reader
+        # the picker offered it with. The undescribed Lace union and the bare
+        # "target spell" carry no type and are untouched.
+        described = instruction.payload.get("targets") or {}
+        if described.get("card_types") and not stack_target_still_described(
+            game, described, context.stack_target
+        ):
+            game.log.append(f"{context.card.name}: no valid spell to recolour")
+            return True, "resolved"
+        recolor_spell(context.stack_target, symbol)
+        game.log.append(f"{context.stack_target.card.name} (on the stack) became {symbol}")
         return True, "resolved"
     # "…that creature becomes green" on a block trigger (Aisling Leprechaun):
     # nobody targeted it, the firing bound it, and which half fired decides how
@@ -707,7 +745,28 @@ def recolor_target_chosen_color(game: Game, instruction: OracleInstruction, cont
     """
     from ..subject_filters import subject_matches
 
-    filters = (instruction.payload.get("targets") or {}).get("filter") or {}
+    described = instruction.payload.get("targets") or {}
+    if described.get("kind") == "spell":
+        # "{T}: Target instant or sorcery **spell** becomes the color of your
+        # choice." (Vodalian Mystic.) An object on the stack rather than on the
+        # battlefield, so it is the half of the context a counter reads — and
+        # only that half: falling back to a permanent would recolour whatever
+        # the resolver could reach for an ability that named a spell.
+        return _recolor_stack_target_chosen_color(game, instruction, context)
+    if (
+        described.get("kind") == SPELL_OR_OBJECT_TARGET
+        and context.stack_target is not None
+    ):
+        # "Target **spell or permanent** becomes the color of your choice until
+        # end of turn." (Illusion, Blind Seer.) One target in one of two zones,
+        # and which one is what the announcement named: a stack object in the
+        # context is the answer "a spell", and it is the whole answer — a spell
+        # that has since left is CR 608.2b's illegal target, never a reason to
+        # go looking on the battlefield. That scan is what this card did while
+        # the union was unread: named a Lightning Bolt, recoloured the Grizzly
+        # Bears beside it.
+        return _recolor_stack_target_chosen_color(game, instruction, context)
+    filters = described.get("filter") or {}
     observer = game.players.index(context.caster)
     target = resolve_target_permanent(
         game, context,
@@ -752,6 +811,70 @@ def recolor_target_chosen_color(game: Game, instruction: OracleInstruction, cont
         f"{target.card.name} became {symbol}"
         + (" until end of turn" if instruction.payload.get("until_eot") else "")
         + f" ({context.card.name})"
+    )
+    return True, "resolved"
+
+
+def stack_target_still_described(game: Game, described: dict, item) -> bool:
+    """Whether *item* is still a spell the printed phrase *described* names.
+
+    CR 608.2b at the one place a handler can ask it: the object must still be
+    on the stack, must be a spell (an ability has no card and no colour,
+    CR 113.7a) and must still be one of the printed card types — through
+    ``_spell_is_one_of``, the reader the stack picker offered it with, so the
+    announcement and the resolution cannot name different sets.
+    """
+    # By identity: ``StackItem`` compares by value, and two casts of one card
+    # at one target are equal.
+    if item is None or not any(obj is item for obj in game.stack):
+        return False
+    if getattr(item, "ability_instruction", None) is not None or item.card is None:
+        return False
+    card_types = described.get("card_types")
+    if card_types:
+        from .stack import _spell_is_one_of
+
+        return _spell_is_one_of(item.card, card_types)
+    return True
+
+
+def _recolor_stack_target_chosen_color(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """The spell half of ``recolor_target_chosen_color``.
+
+    The colour is the one the ``choose_color`` step in front recorded while
+    this ability resolved (CR 608.2d), and it is written to the spell's own
+    colour record — the one the Lace cycle writes and ``_stack_item_colors``
+    reads (``color_changes.recolor_spell``). One record, so a spell this made
+    blue is blue to Blue Elemental Blast, to protection, to Jaded Response's
+    "shares a color" and to the cast triggers that ask a colour.
+
+    A replacement, not an addition (CR 105.3): the spell is the chosen colour
+    and no other. With no printed duration it lasts indefinitely (CR 611.2a),
+    on the spell and on the permanent the spell becomes (CR 400.7a); with
+    "until end of turn" (Illusion, Blind Seer) it ends at cleanup, which a
+    spell never sees and the permanent it became does.
+
+    An unanswered choice recolours nothing, for the permanent half's reason: a
+    spell that became a colour nobody picked is the wrong colour.
+    """
+    described = instruction.payload.get("targets") or {}
+    item = context.stack_target
+    name = context.card.name
+    if not stack_target_still_described(game, described, item):
+        game.log.append(f"{name}: no valid spell to recolour")
+        return True, "resolved"
+    symbol = game._normalize_mana_color(context.results.get(CHOSEN_COLOR_THIS_WAY))
+    if symbol is None:
+        game.log.append(f"{name}: no colour was chosen, so nothing is recoloured")
+        return True, "resolved"
+    until_eot = bool(instruction.payload.get("until_eot"))
+    recolor_spell(item, symbol, until_eot=until_eot)
+    game.log.append(
+        f"{item.card.name} (on the stack) became {symbol}"
+        + (" until end of turn" if until_eot else "")
+        + f" ({name})"
     )
     return True, "resolved"
 
@@ -938,36 +1061,6 @@ def recolor_self_until_eot(game: Game, instruction: OracleInstruction, context: 
     game.log.append(
         f"{source.card.name} became {_colour_override_word(written)} until end of turn"
     )
-    return True, "resolved"
-
-
-@effect_handler("change_target_land_type")
-def change_target_land_type(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    # Honor a specifically chosen land (e.g. a player selected the target land
-    # in the UI). Fall back to the first land the target player controls.
-    target_land = resolve_target_permanent(
-        game, context, predicate=lambda p: p.card.primary_type == "land"
-    )
-    if target_land is not None:
-        land_type = str(instruction.payload.get("land_type", "forest"))
-        # "...until this creature leaves the battlefield." The contribution is
-        # keyed on the source, so the revert hook drops exactly this one and
-        # whatever else says the land is something (an Evil Presence Swamp)
-        # reasserts itself (CR 611.3).
-        source = context.source_permanent
-        change_land_type(
-            target_land, land_type, source=source, label=context.card.name
-        )
-        game.log.append(f"{target_land.card.name} became a Forest")
-        if source is not None:
-            forested = source.metadata.setdefault("forested_lands", [])
-            if not any(land is target_land for land in forested):
-                forested.append(target_land)
-        # Forest count just changed; recompute characteristic-defining P/T now so
-        # Gaea's Liege reflects the new total immediately (not at the next step).
-        game._refresh_dynamic_creatures()
-    else:
-        game.log.append("No target land for Forest effect")
     return True, "resolved"
 
 
@@ -1267,6 +1360,13 @@ LAND_TYPE_UNTIL_UNTAP = "until_controllers_next_untap_step"
 #: sweep exists.
 LAND_TYPE_UNTIL_EOT = "until_end_of_turn"
 
+#: The window tied to the ability's own source: "Target land becomes a Forest
+#: **until this creature leaves the battlefield**" (Gaea's Liege, Graceful
+#: Antelope). Its sweep is the leaving transition itself
+#: (``Game.remove_all_from_battlefield``), through
+#: ``land_types.end_land_type_changes_tied_to``.
+LAND_TYPE_UNTIL_SOURCE_LEAVES = "until_source_leaves"
+
 
 @effect_handler("animate_target_indefinitely")
 def animate_target_indefinitely(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
@@ -1508,6 +1608,23 @@ def change_land_type_until(game: Game, instruction: OracleInstruction, context: 
     )
     land_type = str(instruction.payload.get("land_type", ""))
     duration = str(instruction.payload.get("duration", "permanent"))
+    ends_with_source = duration == LAND_TYPE_UNTIL_SOURCE_LEAVES
+    if ends_with_source:
+        # "…until this creature leaves the battlefield." CR 611.2b: a duration
+        # that has ended before the effect would first be applied means the
+        # effect does nothing - "it doesn't start and immediately stop again,
+        # and it doesn't last forever". Reachable whenever the source can be
+        # removed in response (an activated ability, a combat-damage trigger
+        # with the creature killed before it resolves), and forever is exactly
+        # what a change made then would be: nothing is left to end it. A
+        # phased-out source has not left (CR 702.26d).
+        from ..linked_exile import until_leaves_has_ended
+
+        if until_leaves_has_ended(game, context.source_permanent):
+            game.log.append(
+                f"{context.card.name} has left the battlefield; no land changes"
+            )
+            return True, "resolved"
     if isinstance(maximum, int) and maximum > 1:
         chosen = resolve_target_permanents(game, context, predicate=_eligible)
         if not chosen:
@@ -1520,8 +1637,12 @@ def change_land_type_until(game: Game, instruction: OracleInstruction, context: 
             # changing several lands rather than two activations.
             change_land_type(
                 land, land_type,
-                source=f"{duration}:{next_timestamp()}",
+                source=(
+                    context.source_permanent if ends_with_source
+                    else f"{duration}:{next_timestamp()}"
+                ),
                 label=context.card.name,
+                ends_with_source=ends_with_source,
             )
         game.log.append(
             ", ".join(land.card.name for land in chosen[:maximum])
@@ -1558,17 +1679,37 @@ def change_land_type_until(game: Game, instruction: OracleInstruction, context: 
         # by the resolver rather than here. The land travels by
         # ``permanent_id``: an index renumbers when anything leaves, and the
         # answer arrives after this handler has returned.
+        # "…becomes **a Plains or an Island**" (Tundra Kavu). The same choice
+        # with the list the sentence printed: carried on the prompt, which is
+        # what the picker offers and what the resolver checks the answer
+        # against (idiom 9), so the narrowing is enforced where the type is
+        # named rather than trusted to whoever asks. Absent for "the basic land
+        # type of your choice", whose prompt data is byte-identical to before.
+        printed_options = [
+            str(option) for option in
+            (instruction.payload.get("land_type_options") or ())
+        ]
         game.arm_pending_choice(
             "land_type_choice", game.players.index(context.caster),
             card_name=context.card.name,
             land_permanent_id=target.permanent_id,
             land_type_source=source,
+            **({"land_type_ends_with_source": True} if ends_with_source else {}),
+            **({"options": printed_options} if printed_options else {}),
         )
         game.log.append(
-            f"{context.card.name}: choose a basic land type for {target.card.name}"
+            f"{context.card.name}: choose "
+            + (
+                " or ".join(option.title() for option in printed_options)
+                if printed_options else "a basic land type"
+            )
+            + f" for {target.card.name}"
         )
         return True, "resolved"
-    change_land_type(target, land_type, source=source, label=context.card.name)
+    change_land_type(
+        target, land_type, source=source, label=context.card.name,
+        ends_with_source=ends_with_source,
+    )
     # A land that became a Forest is one a Forest-scoped static now reaches
     # (Living Lands), and one that became a Mountain is one Conversion does —
     # each of them depends on this effect (CR 613.8a), and where a dependent
@@ -1992,7 +2133,19 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
     # "that many" — a delayed attack trigger's batch count (Basri Ket's −2),
     # carried in the firing event's trigger context.
     raw_count = payload.get("count", 1)
-    if raw_count == "trigger_count":
+    if raw_count == "trigger_count" and payload.get("amount_from_trigger") is not None:
+        # "Whenever this creature is dealt damage, … create **that many** …
+        # tokens." (Saber Ants, Druid's Call.) The firing event's own number,
+        # out of the context its fire site froze (CR 603.10) — the channel
+        # `add_counter_to_self` reads for Light of Promise, and never the
+        # scratchpad, which for a sentence with no earlier step of its own is
+        # a key nothing writes.
+        count = int(
+            (context.trigger_context or {}).get(
+                str(payload["amount_from_trigger"]), 0
+            ) or 0
+        )
+    elif raw_count == "trigger_count":
         tctx = context.trigger_context or {}
         count = int(tctx.get("trigger_count", context.results.get("trigger_count", 0)))
     elif isinstance(raw_count, dict) and "source_record" in raw_count:
@@ -2268,7 +2421,7 @@ def add_named_counter_to_target(game: Game, instruction: OracleInstruction, cont
         # (Freyalise's Winds.) Nothing was chosen: the object is the one the
         # event was about, read by the id the announcement froze (CR 603.10) —
         # by resolution the permanent may have moved, and a board search would
-        # find a look-alike. Kudzu's destroy reads the same key.
+        # find a look-alike. Mine Layer's destroy reads the same key.
         subject_id = (context.trigger_context or {}).get(
             "event_subject_permanent_id"
         )
@@ -2675,6 +2828,47 @@ def remove_counters_from_bound(game: Game, instruction: OracleInstruction, conte
     remove_counters(victim, counter, taking)
     game.log.append(
         f"Removed {taking} {counter} counter(s) from {victim.card.name} "
+        f"({context.card.name})"
+    )
+    return True, "resolved"
+
+
+@effect_handler("remove_all_counters_from_event_subject")
+def remove_all_counters_from_event_subject(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Whenever a creature has four or more fuse counters on it, **remove all
+    fuse counters from it** and destroy it." (Bomb Squad.)
+
+    :func:`remove_all_counters_from_bound`'s twin one record over: the object
+    is the one the *trigger's own event* was about, carried by id in the
+    trigger's context, where that handler reads the object a delayed ability's
+    creator bound. Its own kind for the reason that one is — the self-reading
+    removal would empty the ability's source, which here is Bomb Squad rather
+    than the creature it lit.
+
+    Through the one removal seam (``named_counters.remove_counters``), so a P/T
+    counter's layer-7d bonus comes off with it and the emptied-kind record the
+    state sweep reads is written.
+
+    A creature already gone has no counters to take off (CR 122.2: they ceased
+    to exist with the zone change), which is CR 608.2c doing as much as it can
+    — the second of two Bomb Squads' triggers resolves into exactly this.
+    """
+    victim = game.permanent_by_id(
+        (context.trigger_context or {}).get("event_subject_permanent_id")
+    )
+    if victim is None or not game.is_on_battlefield(victim):
+        game.log.append(f"{context.card.name}: the permanent it named is gone")
+        return True, "resolved"
+    counter = str(instruction.payload.get("counter", ""))
+    held = counters_on(victim, counter)
+    if held <= 0:
+        game.log.append(
+            f"{victim.card.name} has no {counter} counters to remove"
+        )
+        return True, "resolved"
+    remove_counters(victim, counter, held)
+    game.log.append(
+        f"Removed all {held} {counter} counters from {victim.card.name} "
         f"({context.card.name})"
     )
     return True, "resolved"
@@ -3336,6 +3530,71 @@ def gain_type(game: Game, instruction: OracleInstruction, context: OracleExecuti
     return True, "resolved"
 
 
+@effect_handler("set_target_creature_type")
+def set_target_creature_type(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Choose a creature type other than Wall. **Target creature becomes that
+    type until end of turn.**" (Unnatural Selection.)
+
+    CR 205.1a's subtype set, as one layer-4 record: the chosen creature type
+    replaces the creature types the permanent has and no other subtype, and
+    the record carries its own timestamp (CR 613.7b) and its own duration, so
+    the cleanup step ends it by dropping it and whatever else says what the
+    creature is — a Conspiracy, an Aura's "is a Knight" — reasserts itself in
+    timestamp order rather than a printed line being put back.
+
+    The type is the one the choosing step in front recorded as this ability
+    resolved (CR 608.2d). An unanswered choice sets nothing: a creature that
+    became a type nobody picked is the wrong creature.
+
+    The printed noun phrase is re-asked here through ``subject_matches`` (CR
+    608.2b), with no fallback: a target that stopped being a creature in
+    response is not given a creature type, and no bystander is.
+    """
+    from ..grammar.vocabulary import CREATURE_TYPES
+    from ..subject_filters import subject_matches
+
+    name = context.card.name if context.card is not None else "Effect"
+    filters = (instruction.payload.get("targets") or {}).get("filter") or {}
+    observer = (
+        game.players.index(context.caster) if context.caster in game.players else None
+    )
+    target = resolve_target_permanent(
+        game, context,
+        predicate=lambda perm: subject_matches(
+            game, perm, filters, observer=observer, source=context.source_permanent
+        ),
+        fallback_players=(),
+        fallback_on_invalid_choice=False,
+    )
+    if target is None:
+        game.log.append(f"{name}: no valid creature to change the type of")
+        return True, "resolved"
+    chosen = context.results.get(str(instruction.payload.get("subtype_from") or ""))
+    word = str(chosen or "").strip().lower()
+    if word not in CREATURE_TYPES:
+        game.log.append(f"{name}: no creature type was chosen, so nothing changes")
+        return True, "resolved"
+    gain_types(
+        target,
+        subtypes=[word],
+        source=name,
+        duration=str(instruction.payload.get("duration") or "until_end_of_turn"),
+        # CR 205.1a: a subtype *set* replaces the subtypes "from the
+        # appropriate set" — the creature types, and nothing else the
+        # permanent is. Read by ``layer_bridge.collect_own_type_effects``.
+        replaces_creature_types=True,
+    )
+    # A creature that changed type is one a type-scoped static now reaches or
+    # no longer does ("Other Goblins get +1/+1", "All Zombies are …"), and
+    # where each applies is decided for the whole board (CR 613.8a).
+    game._refresh_dynamic_creatures()
+    game._recalculate_lord_buffs()
+    game.log.append(
+        f"{target.card.name} became a {word.title()} until end of turn ({name})"
+    )
+    return True, "resolved"
+
+
 @effect_handler("set_card_types_self")
 def set_card_types_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"{0}: This permanent becomes an enchantment." (Opal Acrolith.) "Whenever
@@ -3593,6 +3852,23 @@ def rebalance_lands(game: Game, instruction: OracleInstruction, context: OracleE
     return True, "pending_rebalance_lands"
 
 
+def keep_slots_sized(slots, fewest: int) -> list[dict]:
+    """*slots* with every keep that is sized by the table's minimum given that
+    number.
+
+    "…a number of permanents they control equal to the number of permanents
+    controlled by the player who controls the fewest" (Balancing Act) prints
+    no count: the lowering writes the word ``"fewest"`` where a printed keep
+    writes its number, and this is the one place the word becomes one — the
+    handler below with the minimum it measured, and the census of keep prompts
+    with a minimum it states, so both arm the prompt the same way.
+    """
+    return [
+        {**slot, "count": int(fewest)} if slot.get("count") == "fewest" else slot
+        for slot in (slots or ())
+    ]
+
+
 @effect_handler("keep_chosen_sacrifice_rest")
 def keep_chosen_sacrifice_rest(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Each player chooses from among the permanents they control an artifact,
@@ -3656,6 +3932,41 @@ def keep_chosen_sacrifice_rest(game: Game, instruction: OracleInstruction, conte
     # "Return those lands to their owners' hands" is one sentence about every
     # player's choice, read once they have all made it.
     fate = payload.get("fate")
+    if any(slot.get("count") == "fewest" for slot in slots):
+        # "…a number of permanents they control equal to the number of
+        # permanents controlled by **the player who controls the fewest**"
+        # (Balancing Act). One number for the whole table, taken here before
+        # any seat answers (CR 608.2h) and over the same candidates the prompt
+        # offers, so "how many may I keep" and "which may I keep" are one
+        # reading of the noun.
+        held = {seat: game.keep_choice_candidates(seat, pool) for seat in seats}
+        fewest = min((len(found) for found in held.values()), default=0)
+        if fewest <= 0:
+            # Somebody controls none, so nobody keeps any: the rest is the
+            # whole pool, and with one legal answer nobody is asked. Gathered
+            # before any leaves, and sacrificed in one event (CR 701.21a), as
+            # the batch below sacrifices every seat's rest together.
+            gone_ids = {
+                permanent.permanent_id
+                for permanent in game.sacrifice_permanents(
+                    [permanent for seat in seats for permanent in held[seat]]
+                )
+            }
+            for seat in seats:
+                gone = [
+                    permanent.card.name for permanent in held[seat]
+                    if permanent.permanent_id in gone_ids
+                ]
+                if gone:
+                    game.log.append(
+                        f"{game.players[seat].name} sacrificed {', '.join(gone)} "
+                        f"({card_name})"
+                    )
+            return True, "resolved"
+        slots = keep_slots_sized(slots, fewest)
+        # A seat already at the minimum keeps everything it has — no rest, no
+        # decision, no prompt.
+        seats = [seat for seat in seats if len(held[seat]) > fewest]
     batch = game.new_keep_batch()
     for seat in seats:
         game.arm_keep_permanents(

@@ -14,9 +14,10 @@ convention.
 registry, which is what its first paragraph claims and what the split above
 established; a walk over a lowered sequence is not one, and it belongs beside
 the wrapper table it has to consult on every step
-(``lowering/control_flow.nested_instructions``). Its address is unchanged —
-``lowering/__init__`` and ``lower.py`` both re-export it — which is the same
-promise this file's own move made about ``INSTRUCTION_CATEGORIES``.
+(``grammar/lower.nested_instructions``). Its address is unchanged — ``lower.py``
+is where a caller has always found it, as a re-export until the Phase 0 before
+Odyssey and as the definition since — which is the same promise this file's own
+move made about ``INSTRUCTION_CATEGORIES``.
 
 **And which kinds are *zone changes* left for `lowering/zones.py`**, for the
 same reason and by the same move — the third time this table was split at the
@@ -45,14 +46,17 @@ every reader imports is still this one — and no row's value changed in any of
 the moves, because a category names the family a kind migrates with and never
 the module its row is in.
 
-**Which kinds are wrappers is `lowering/control_flow.py`'s**, not this module's.
+**Which kinds are wrappers is `grammar/lower.py`'s**, not this module's.
 The table used to sit at the bottom of this file, and the split came at the
 thousand-line guard: the half that grows with the pool is the registry above,
 and the half that has been stable is the walk over `sequence` / `if_then` /
-`for_each` — which are exactly the kinds that family *produces*. Reusing the
-family name rather than inventing a module for the walk is the same move
-`by_node` recorded at Fallen Empires: the table is a registry either way, and
-what a wrapper carries belongs beside what builds one.
+`for_each`. It went to `lowering/control_flow.py` first, as "exactly the kinds
+that family *produces*" — which that family had stopped producing hours
+earlier, when `sequences` left it as `loops` had before. What a wrapper carries
+belongs beside what builds one, and some twenty modules build one now;
+`lower.py` is the module they all pass through and the only reader of the table
+in the grammar, so it went there at the Phase 0 before Odyssey rather than to a
+module invented for the walk.
 """
 
 from ...lord_buffs import (LORD_BUFF_KIND)
@@ -107,6 +111,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "sacrifice_expansion_permanents": "destruction",
     "become_aura_with_enchant": "characteristics",
     "gain_type": "characteristics",
+    # "Target creature becomes that type until end of turn." (Unnatural
+    # Selection.) The same layer-4 family — CR 205.1a's subtype set where the
+    # gain above is CR 205.1b's card-type addition.
+    "set_target_creature_type": "characteristics",
     # "{0}: This permanent becomes an enchantment." (Opal Acrolith.) The same
     # layer-4 family as the gain above it — CR 205.1a replacing rather than
     # CR 205.1b joining — so the same category.
@@ -222,6 +230,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # than the ability's own source.
     "remove_all_counters_from_bound": "counters",
     "remove_counters_from_bound": "counters",
+    # Bomb Squad's defusing. The event-subject twin of the two rows above —
+    # same effect, and the object is the one the trigger's own event was about
+    # rather than one a delayed ability's creator bound.
+    "remove_all_counters_from_event_subject": "counters",
     # A counter on a **player** (CR 122.1f poison) coming off, the mirror of
     # ``player_gets_poison_counters`` above it. Same category: the store differs
     # and the question does not.
@@ -449,6 +461,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "redirect_next_damage_to_source_until_eot": "damage",
     # Zhalfirin Crusader: the same sentence with its two ends swapped.
     "redirect_next_damage_from_source_until_eot": "damage",
+    # Captain's Maneuver: the same point pool with **both** ends announced —
+    # the source is neither, which is what lets a spell print it.
+    "redirect_next_damage_between_targets_until_eot": "damage",
     # Shaman en-Kor: CR 615.8's chosen source over a **targeted** protected
     # creature. Same family: what moves is still the recipient of one damage
     # event, and which end of it the sentence announces is payload.
@@ -484,6 +499,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # category, so GRAMMAR_CATEGORIES is unchanged — what a control change is
     # about does not depend on how many permanents it moves.
     "exchange_control_of_sets_until_eot": "control",
+    # Cultural Exchange: two sets earlier steps chose, exchanged for good
+    # (CR 701.12a-b). The bound exchange above with lists where it has ids.
+    "exchange_control_of_chosen_sets": "control",
     # A printed text change (CR 612). Its own category rather than "recolor":
     # the Lace cycle makes an object a colour, while this replaces a *word*
     # wherever the object's text uses it, and one of the two modes does not
@@ -756,6 +774,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # production of mana — the same category because what it is about is how
     # mana pays, and nothing else in the engine asks that.
     "grant_spend_mana_as_though": "mana",
+    # False Dawn's two sentences: the controller-wide swap over every spell
+    # and ability, and CR 609.4b's permission for the turn. The same family as
+    # the land swap and North Star's grant two rows up.
+    "swap_controller_added_mana_until_eot": "mana",
+    "grant_mana_spending_until_eot": "mana",
     "create_token": "tokens",
     "create_copy_token": "tokens",
     # Flipping a coin (CR 705). Its own category rather than sharing one with
@@ -763,6 +786,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # keeps the category of whatever that branch does — a coin flip over a
     # damage effect must not be able to turn "damage" on.
     "flip_coin": "coin_flips",
+    # "Flip a coin that many times or until you lose a flip, whichever comes
+    # first." (Squee's Revenge.) A run of the flip above, with two bounds.
+    "flip_coins_until_loss": "coin_flips",
     "coin_flip_stakes_loop": "coin_flips",
     # "…unless you pay {3} **and repeat this process**." (Crooked Scales.) The
     # loop the line is wrapped in, and the record one round writes to ask for
@@ -830,7 +856,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "choose_cast_this_turn": "chosen_players",
     "create_emblem": "tokens",
     # Optional actions. Parsed and lowered, not switched on — see
-    # `control_flow.WRAPPER_KINDS`.
+    # `lower.WRAPPER_KINDS`.
     "may": "optional",
     # "Each player may pay any amount of mana." (Liege of the Hollows.) The
     # collapsed form of a ``may`` made to a set of seats, so it keeps that
@@ -841,6 +867,13 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # asked of another seat, so GRAMMAR_CATEGORIES is unchanged: what differs is
     # who is offered the cost and which branch the effect sits on.
     "unless_player_pays": "optional",
+    # The end of one round of "repeat this process until …" (Tainted Pact):
+    # the step ``lowering/repeats._with_round_end`` puts on every way out of a
+    # round's last sentence. With the offers because that is where a round
+    # that needs it ends — on an answer — and for the reason the repeat marker
+    # two tables up sits with the flip: what the round *does* keeps its own
+    # category, and the loop itself is a wrapper (``lower.WRAPPER_KINDS``).
+    "end_process_round": "optional",
 }
 
 # Four halves live beside this one, and each states its own line where its rows

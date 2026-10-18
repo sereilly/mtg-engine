@@ -16,7 +16,7 @@ no spec, or registered with a part missing.
 
 Covered here: paying for an optional effect, discarding, sacrificing, naming a
 land type, choosing a body as a permanent enters, Balance's removals, Word of
-Command's borrowed turn, Kudzu's reattachment, and reordering a library.
+Command's borrowed turn, and reordering a library.
 """
 
 from __future__ import annotations
@@ -24,12 +24,12 @@ from __future__ import annotations
 import random
 from dataclasses import replace
 
-from ...auras import attach_aura
 from ...faces import castable_faces, has_name, is_multi_face, spell_named
 from ...handlers._common import apply_temp_pt_boost, permanent_matches_filter
 from ...grammar.lowering._events import EVENT_SUBJECT_PLAYER
 from ...grammar.phrases import BASIC_LAND_WORDS
 from ...color_changes import change_color
+from ...destruction_events import destruction_finished
 from ...continuous import next_timestamp
 from ...enter_effects import LIFE_PAID_AS_ENTERED
 from ...land_types import CHOSEN_LAND_TYPES, change_land_type
@@ -46,7 +46,7 @@ from ... import piles
 from ...pending_choices import (CHOICE_SPECS, PendingChoice,
                                 optional_pay_options, register_choice,
                                 spec_for)
-from ...replacement_choices import pending_choices_for
+from ...replacement_choices import pending_choices_for, stamp_draw_of
 from ...resumption import resume_after_answer, run_resumable
 from ...mana_payment import (generic_cost, mana_cost_label, plan_payment,
                             untapped_mana_lands)
@@ -56,7 +56,12 @@ from ...oracle_types import (SACRIFICED_CARDS_BY_SEAT, SACRIFICED_COUNT,
 # (Planar Overlay's "return those lands"); on a line of its own so the import
 # above, which every round appends to, cannot collide with it.
 from ...oracle_types import KEEP_FATES, RETURN_CHOSEN_TO_HAND
-from ...search_filters import landing_seat, search_matches, searched_seat
+# Which cards a chosen discard took (Gerrard's Verdict); its own line for the
+# reason the one above has one.
+from ...oracle_types import DISCARDED_THIS_WAY
+from ...search_filters import (landing_seat, search_matches,
+                               search_names_a_quality, search_slots,
+                               searched_seat, slot_assignment)
 from ...handlers.zones import FORGOTTEN_PICKS
 from ...oracle_types import OracleInstruction
 from ...subject_filters import subject_matches
@@ -190,6 +195,11 @@ class PendingChoicesMixin:
         # queue, so appending here is what stops the loop and nothing sets a
         # flag. Nothing is waiting on a default taken inline above — that already
         # happened.
+        #
+        # A prompt a *draw* armed says so (CR 121.2): the draws behind that one
+        # wait for it, whichever queue it sits on — see
+        # ``EffectsMixin._draw_prompt_open``.
+        stamp_draw_of(self, choice)
         self.pending_choices.append(choice)
         return choice
 
@@ -331,6 +341,11 @@ class PendingChoicesMixin:
                 if self.priority_player_index is not None:
                     self.priority_player_index = self.active_player_index
                     self.priority_pass_count = 0
+                # …and CR 603.3b's: the abilities this object's destructions
+                # triggered were waiting for it to finish, and it has. After
+                # the state-based check, which is the order the rule gives.
+                # See engine/destruction_events.py.
+                destruction_finished(self)
                 return
 
     def _answer_pending_choice(self, choice: PendingChoice, apply):
@@ -347,7 +362,12 @@ class PendingChoicesMixin:
         if item is not None:
             self.resolving_stack_item = item
         try:
-            answered = apply()
+            # A prompt a draw armed is answered inside that draw (CR 121.2):
+            # the draws parked behind it are released here, with the object
+            # they belong to still resolving, so a prompt one of *them* arms
+            # holds the same object. Inert for every other prompt.
+            with self.answering_draw_prompt(choice):
+                answered = apply()
         finally:
             self.resolving_stack_item = previous
         # An answer is a step of a resolution (CR 608.2), so the resolution
@@ -361,6 +381,14 @@ class PendingChoicesMixin:
             self._recompute_continuous_effects()
         if item is not None:
             self._release_stack_item(item)
+        if item is None or not item.resolution_held:
+            # The resolution this answer belonged to is over — or no object
+            # was held for it (a headless table arms its prompts against an
+            # empty stack) — so what its destructions triggered goes on the
+            # stack (CR 603.3b). While the object is still held on a later
+            # prompt they keep waiting with it. See
+            # engine/destruction_events.py.
+            destruction_finished(self)
         return answered
 
     def resolve_pending_choice(self, kind: str, player_index: int, **response) -> bool:
@@ -593,10 +621,6 @@ class PendingChoicesMixin:
     @property
     def pending_mana_payment(self) -> dict | None:
         return self._choice_view("mana_payment", "player_index")
-
-    @property
-    def pending_kudzu_reattach(self) -> dict | None:
-        return self._choice_view("kudzu_reattach", "player_index")
 
     @property
     def pending_face_down_cast(self) -> dict | None:
@@ -836,8 +860,12 @@ class PendingChoicesMixin:
             if zone == "library":
                 random.shuffle(caster.library)
             self.put_card_into_library(caster, card, "top")
+            shown = (
+                card.name if self.find_is_public(choice.data, destination, zone)
+                else "a card"
+            )
             self.log.append(
-                f"{caster.name} searched {zone} and put {card.name} "
+                f"{caster.name} searched {zone} and put {shown} "
                 "on top of their library"
             )
             self._record_search_reveal(choice)
@@ -868,8 +896,14 @@ class PendingChoicesMixin:
         # byte-identical.
         searcher = self.players[choice.player_index]
         whose = "" if searcher is caster else f"{caster.name}'s "
+        # Named only where the table may know it (``find_is_public``): a card
+        # that went from a library to a hand unrevealed is "a card".
+        shown = (
+            card.name if self.find_is_public(choice.data, destination, zone)
+            else "a card"
+        )
         self.log.append(
-            f"{searcher.name} searched {whose}{zone} and put {card.name} "
+            f"{searcher.name} searched {whose}{zone} and put {shown} "
             + (
                 "onto the battlefield" if destination == "battlefield"
                 else "into exile" if destination == "exile"
@@ -968,6 +1002,17 @@ class PendingChoicesMixin:
                     ],
                 }
             found.append((zone, index, card))
+        # "a land card **of each basic land type**" (Gaea's Balance): every
+        # find fills a printed description of its own. Asked of the answer as a
+        # whole, after each card has passed the union above — a Tropical Island
+        # beside a basic Forest is legal only with the dual read as the Island,
+        # which no card-at-a-time test can decide — and before anything moves,
+        # for this resolver's standing reason.
+        if search_slots(choice.data) and None in slot_assignment(
+            [card for _zone, _index, card in found], choice.data,
+            game=self, owner=choice.player_index,
+        ):
+            return False
         # Highest index first so the earlier picks still address the cards
         # they named (the two zones do not renumber each other).
         for zone, index, _card in sorted(found, key=lambda entry: entry[1], reverse=True):
@@ -979,9 +1024,27 @@ class PendingChoicesMixin:
         # lands is still being asked.
         if choice.data.get("reveal"):
             choice.data["revealed_names"] = [card.name for card in cards]
+        # **Who searched** is the seat that answered, which is not always the
+        # seat whose zones were opened (Jester's Cap; Guided Passage's opponent
+        # choosing out of the caster's library) — the single-find path has said
+        # so since Bribery, and this one named the zone's owner for both. Where
+        # they are the same seat the sentence is byte-identical.
+        searcher = self.players[choice.player_index]
+        whose = "" if searcher is caster else f"{caster.name}'s "
+        # The finds are named only if every one of them is public wherever it
+        # is about to land (``find_is_public``); otherwise the table is told
+        # how many, which it could count for itself.
+        everywhere_public = all(
+            self.find_is_public(choice.data, destination)
+            for destination, _tapped in (slots or [(choice.data.get("destination", "hand"), False)])
+        )
         self.log.append(
-            f"{caster.name} searched " + " and ".join(zones) + " and found "
-            + ", ".join(card.name for card in cards)
+            f"{searcher.name} searched {whose}" + " and ".join(zones)
+            + " and found "
+            + (
+                ", ".join(card.name for card in cards) if everywhere_public
+                else f"{len(cards)} card(s)"
+            )
         )
         # The search is over once the finds are named (CR 701.23h): shuffle
         # before the destination question, which happens after the search.
@@ -1007,6 +1070,20 @@ class PendingChoicesMixin:
         """
         searched = self.players[searched_seat(choice.data, choice.player_index)]
         picks: list[dict] = []
+        if search_slots(choice.data):
+            # One find per printed description: the cards a largest assignment
+            # gave a slot, which is by construction an answer the picks
+            # resolver admits and one that meets its floor.
+            findable = self._search_findable_entries(choice)
+            assigned = slot_assignment(
+                [card for _zone, _index, card in findable], choice.data,
+                game=self, owner=choice.player_index,
+            )
+            return [
+                {"zone": zone, "index": index}
+                for (zone, index, _card), slot in zip(findable, assigned)
+                if slot is not None
+            ][:limit]
         for zone in tuple(choice.data.get("zones", ("library",))):
             cards = searched.library if zone == "library" else searched.graveyard
             for index, card in enumerate(cards):
@@ -1018,23 +1095,49 @@ class PendingChoicesMixin:
                     picks.append({"zone": zone, "index": index})
         return picks
 
+    def _search_findable_entries(self, choice: PendingChoice) -> list[tuple]:
+        """Every ``(zone, index, card)`` in the searched zones the phrase
+        admits, in zone order — the population the slot assignment is taken
+        over, read through the one predicate every other reader asks."""
+        searched = self.players[searched_seat(choice.data, choice.player_index)]
+        return [
+            (zone, index, card)
+            for zone in tuple(choice.data.get("zones", ("library",)))
+            for index, card in enumerate(
+                searched.library if zone == "library" else searched.graveyard
+            )
+            if search_matches(
+                card, choice.data, game=self, owner=choice.player_index
+            )
+        ]
+
     def _search_floor(self, choice: PendingChoice) -> int:
         """How many cards this search **must** find (CR 701.23d), or 0.
 
         Three conditions, each a different sentence. A printed "up to" or "any
         number of" is a ceiling and no floor at all. A search naming **one** card
-        is left alone deliberately: the single-find flow's decline is the
-        engine's one escape from a prompt nothing can answer, and closing it
-        would strand a seat wherever the picker and the resolver read a
-        restriction even slightly differently. And what is left is bounded by
-        what is actually there — CR 701.23d's "or as many as possible", which is
-        what keeps an empty library from being a refusal.
+        *with a stated quality* is left alone deliberately: the single-find
+        flow's decline is the engine's one escape from a prompt nothing can
+        answer, and closing it would strand a seat wherever the picker and the
+        resolver read a restriction even slightly differently — and CR 701.23b
+        lets that search fail anyway. And what is left is bounded by what is
+        actually there — CR 701.23d's "or as many as possible", which is what
+        keeps an empty library from being a refusal.
+
+        **A search for "a card" names no quality and has a floor of one.** It
+        was caught by the single-find exemption, so Demonic Tutor and Entomb
+        offered "fail to find" and took it — the search CR 701.23d names by
+        its own example. No restriction means nothing for the picker and the
+        resolver to read differently, so the reason for the exemption does
+        not reach it (``search_filters.search_names_a_quality``).
         """
         if choice.data.get("up_to"):
             return 0
         slots = len(self._search_destination_slots(choice.data))
         if slots < 2:
-            return 0
+            if search_names_a_quality(choice.data):
+                return 0
+            return min(1, self._search_findable_count(choice))
         return min(slots, self._search_findable_count(choice))
 
     def _search_findable_count(self, choice: PendingChoice) -> int:
@@ -1049,7 +1152,20 @@ class PendingChoicesMixin:
         web picker all answer with: a second count written here would be a
         second reading of the restriction, and the two would disagree the first
         time a narrowing was added to either.
+
+        A search that finds **one card per printed description** (Guided
+        Passage's "a creature card, a land card, and a noncreature, nonland
+        card") can find no more than a largest assignment of cards to
+        descriptions: three creatures in a library answer one slot, not three.
         """
+        if search_slots(choice.data):
+            return sum(
+                slot is not None
+                for slot in slot_assignment(
+                    [card for _z, _i, card in self._search_findable_entries(choice)],
+                    choice.data, game=self, owner=choice.player_index,
+                )
+            )
         searched = self.players[searched_seat(choice.data, choice.player_index)]
         zones = tuple(choice.data.get("zones", ("library",)))
         return sum(
@@ -1253,7 +1369,8 @@ class PendingChoicesMixin:
             else "aside, for the next step to place" if destination == "held"
             else "into hand"
         )
-        self.log.append(f"{caster.name} put {card.name} {where}")
+        shown = card.name if self.find_is_public(data, destination) else "a card"
+        self.log.append(f"{caster.name} put {shown} {where}")
 
     def _resolve_search_destination(self, choice: PendingChoice, assignments: list) -> bool:
         """Apply the finder's answer to "which found card goes where".
@@ -1292,6 +1409,40 @@ class PendingChoicesMixin:
         self._resolve_search_destination(
             choice, list(range(len(choice.data.get("_cards") or ())))
         )
+
+    #: Where a card is face up for the whole table once it arrives (CR 400.2:
+    #: the battlefield, graveyards and exile are public zones) — and "held",
+    #: the pile a search hands the next step of its own resolution, which that
+    #: step then shows or places in one of the other three.
+    _PUBLIC_FIND_ZONES = frozenset({"battlefield", "graveyard", "exile", "held"})
+
+    @classmethod
+    def find_is_public(cls, data: dict | None, destination: str, zone: str | None = None) -> bool:
+        """Whether the table may be told **which** card a search or a look took.
+
+        ``game.log`` is one list and every seat and spectator is sent it, so a
+        line in it is an announcement. CR 701.20e: to look at a card is not to
+        reveal it, and a card that goes from a library to a hand never leaves
+        the hidden zones (CR 400.2) — nobody but the player holding it learns
+        what it was. So a find is named only when something made it public:
+
+        * the card's own sentence showed it — ``reveal`` on a search ("…,
+          reveal it, …"), ``revealed`` on a look ("Reveal the top three
+          cards…"), ``finds_are_public`` where an earlier step of the same
+          effect showed the whole pile (Guided Passage);
+        * it was found in a public zone (a search of a graveyard);
+        * or it arrived in one.
+
+        Impulse's kept card, Demonic Tutor's find and each of Doomsday's five
+        were in the log by name, where the other seat's ``/state`` read them.
+        """
+        data = data or {}
+        if data.get("reveal") or data.get("revealed") or data.get("finds_are_public"):
+            return True
+        zones = (zone,) if zone is not None else tuple(data.get("zones", ("library",)))
+        if zones == ("graveyard",):
+            return True
+        return destination in cls._PUBLIC_FIND_ZONES
 
     def _record_search_reveal(self, choice: PendingChoice) -> None:
         """The showing a printed "reveal it/those cards" performs, made when the
@@ -1332,6 +1483,14 @@ class PendingChoicesMixin:
             return
         found = choose_search_card(self, choice.player_index, choice.data)
         if found is None or not self._resolve_search_library(choice, found[1], found[0]):
+            # A search that must find (CR 701.23d: "a card", with no quality
+            # stated) is not one a policy may decline, so before the decline
+            # the fallback is the resolver's own first findable card — the
+            # arrangement the counted branch above already has.
+            if self._search_floor(choice) > 0:
+                for zone, index, _card in self._search_findable_entries(choice):
+                    if self._resolve_search_library(choice, index, zone):
+                        return
             self._resolve_search_library(choice, -1, "none", enforce_floor=False)
 
     # -- Look at the top N, keep one, bottom the rest (See the Truth) ---------
@@ -1540,7 +1699,14 @@ class PendingChoicesMixin:
             # looked at again.
             if choice.data.get("rest_destination") == "graveyard":
                 for card in rest:
-                    self.put_card_into_graveyard(caster, card)
+                    # The looked-at cards are the top of this library, so the
+                    # move is one out of a library and says so. The seam
+                    # announces a source zone only where a caller names it,
+                    # and unnamed this was a mill that Gaea's Blessing's own
+                    # trigger and "whenever a land card is put into your
+                    # graveyard from your library" (Pedantic Learning) could
+                    # not see.
+                    self.put_card_into_graveyard(caster, card, from_zone="library")
                 return
             # "…and **exile the rest**." (Browse.) The cards leave the game
             # rather than the library, which is why the same ability may be
@@ -1560,9 +1726,20 @@ class PendingChoicesMixin:
             # than folded into it: `reorder_library` is a prompt that already
             # exists, with its own UI, AI default and action, and CR 608.2 keeps
             # a decision armed by answering another inside the same resolution.
+            #
+            # (That first claim was wrong, and Apocalypse measured it: the
+            # bottom of a library *is* observed once the deck runs down to it.
+            # ``offer_library_bottom_order`` is the seam that asks — Goblin
+            # Ringleader's sorted reveal calls it — and the "any order" tail
+            # below calls it too, now that the client labels the prompt by the
+            # end of the library it is about.)
             if choice.data.get("rest_destination") == "library_top":
                 caster.library[:0] = list(rest)
-                if len(rest) > 1:
+                # "…You choose one of those cards and put it into their
+                # graveyard." (Balshan Beguiler.) No clause about the rest at
+                # all: they were revealed, not moved, so they are where they
+                # were and in the order they were — nobody is asked.
+                if len(rest) > 1 and choice.data.get("rest_order") != "unchanged":
                     # Whose library is reordered, and **who orders it**: one
                     # seat everywhere but Sealed Fate, where the cards go back
                     # on the opponent's library in an order the caster chooses
@@ -1577,12 +1754,22 @@ class PendingChoicesMixin:
             # Harbinger.) A stated order, not the player's freedom: the cards
             # go down shuffled, through the module RNG `run_ai_simulation`
             # seeds so a given seed still replays exactly. "In any order" is the
-            # other spelling and leaves them as they lay, because there the
-            # ordering is the player's by rule and nothing reads it.
+            # other spelling: the order is the player's by rule (CR 401.4), so
+            # the cards are laid down as they lay and an interactive seat is
+            # then asked to arrange them. Everybody else keeps "as they lay",
+            # which is what every seat got before the question was asked.
             if choice.data.get("rest_order") == "random":
                 rest = list(rest)
                 random.shuffle(rest)
+                caster.library.extend(rest)
+                return
             caster.library.extend(rest)
+            # Who arranges is the seat answering the look (CR 608.2): the
+            # pile's owner everywhere but a look through somebody else's
+            # library, which is the top-of-library tail's reading above.
+            self.offer_library_bottom_order(
+                caster, len(rest), chooser_index=choice.player_index,
+            )
 
         # "**You may** reveal a … card from among them" (Garruk's Harbinger).
         # Declining is a legal answer, and it is not the same as an illegal one:
@@ -1631,14 +1818,34 @@ class PendingChoicesMixin:
             taken_to = str(choice.data.get("pick_destination", "hand"))
             if taken_to == "exile":
                 caster.exile.append(kept)
+            elif taken_to == "graveyard":
+                # "You choose two of those cards and put them into that
+                # player's graveyard." (Bamboozle.) Through the graveyard
+                # seam, naming the zone the card left.
+                self.put_card_into_graveyard(caster, kept, from_zone="library")
             else:
                 self.put_card_into_hand(caster, kept)
             self.discard_pending_choice(choice)
-            self.log.append(
-                f"{caster.name} took {kept.name} "
-                + ("into exile " if taken_to == "exile" else "into their hand ")
-                + f"({remaining - 1} more to take)"
+            # W2G4 (log line only): the card is named where the table may know
+            # it — exiled face up, or shown by the card's own sentence — and is
+            # "a card" where it went from a library to a hand unseen.
+            shown = (
+                kept.name if self.find_is_public(choice.data, taken_to) else "a card"
             )
+            if taken_to == "graveyard":
+                # Who chose and whose pile are two seats here (Bamboozle), so
+                # the line names both, as the last link of the chain does.
+                self.log.append(
+                    f"{self.players[choice.player_index].name} put {kept.name} "
+                    f"from {caster.name}'s library into {caster.name}'s "
+                    f"graveyard ({remaining - 1} more to choose)"
+                )
+            else:
+                self.log.append(
+                    f"{caster.name} took {shown} "
+                    + ("into exile " if taken_to == "exile" else "into their hand ")
+                    + f"({remaining - 1} more to take)"
+                )
             # The keys are listed rather than the whole ``data`` dict passed
             # back, for `_rearm_revealed_hand_pick`'s reason: ``arm_pending_choice``
             # stamps its own bookkeeping into ``data`` (which stack object is
@@ -1657,6 +1864,8 @@ class PendingChoicesMixin:
                 pick_destination=choice.data.get("pick_destination", "hand"),
                 remaining=remaining - 1,
                 pile_index=choice.data.get("pile_index"),
+                # Still the same pile, shown or not (W2G4, for the log line).
+                **({"revealed": True} if choice.data.get("revealed") else {}),
             )
             return True
         del caster.library[:top_count]
@@ -1671,6 +1880,18 @@ class PendingChoicesMixin:
             self.log.append(
                 f"{self.players[choice.player_index].name} exiled a card from "
                 f"{caster.name}'s library"
+            )
+            return True
+        # "…and put it into **their graveyard**." (Balshan Beguiler; the last
+        # of Bamboozle's two.) The fifth printed destination for the taken
+        # card. A graveyard is public and so was the pile, so the card is
+        # named.
+        if choice.data.get("pick_destination") == "graveyard":
+            self.put_card_into_graveyard(caster, kept, from_zone="library")
+            self.discard_pending_choice(choice)
+            self.log.append(
+                f"{self.players[choice.player_index].name} put {kept.name} from "
+                f"{caster.name}'s library into {caster.name}'s graveyard"
             )
             return True
         # Where the *kept* card goes, read the same way the rest's destination
@@ -1707,8 +1928,19 @@ class PendingChoicesMixin:
             record_context.results[record_key] = int(kept.cmc or 0)
         self.put_card_into_hand(caster, kept)
         self.discard_pending_choice(choice)
+        # W2G4 (log line only): "Look at the top four cards … put one of them
+        # into your hand" (Impulse) shows the card to nobody (CR 701.20e), and
+        # this line is sent to every seat. Named only where the card's own
+        # sentence revealed it — the whole pile (Reviving Vapors, Eye of
+        # Yawgmoth) or the pick ("you may **reveal** a creature card from
+        # among them", which is every pick the prompt narrowed to a type).
+        shown = (
+            kept.name
+            if self.find_is_public(choice.data, "hand") or choice.data.get("filters")
+            else "a card"
+        )
         self.log.append(
-            f"{caster.name} put {kept.name} into their hand and the rest away"
+            f"{caster.name} put {shown} into their hand and the rest away"
         )
         return True
 
@@ -1927,10 +2159,15 @@ class PendingChoicesMixin:
             plan = self._optional_pay_plan(payer, {"cost": total})
             if plan is None:
                 return False
+            # Paid from the board the plan was made over — before anything is
+            # untapped, so a permanent this answer untaps is never what pays
+            # for its own untapping.
+            if not self._pay_planned_cost(
+                payer, lambda: self._optional_pay_plan(payer, {"cost": total})
+            ):
+                return False
         for perm in chosen:
             self.become_untapped(perm)
-        if plan is not None:
-            self._spend_payment_plan(payer, plan)
         names = ", ".join(perm.card.name for perm in chosen) if chosen else "nothing"
         self.log.append(
             f"{self.players[choice.player_index].name} untapped {names} "
@@ -1962,7 +2199,7 @@ class PendingChoicesMixin:
             affordable = 0
             while affordable < min(amount, len(own)):
                 total = {s: c * (affordable + 1) for s, c in cost_each.items()}
-                if plan_payment(payer.mana_pool, (), total) is None:
+                if plan_payment(payer.mana_pool, (), total, payer=payer) is None:
                     break
                 affordable += 1
             amount = affordable
@@ -2142,9 +2379,119 @@ class PendingChoicesMixin:
             "reorder_library", caster_index, new_order=new_order, shuffle=shuffle
         )
 
+    def reorder_library_pile(self, choice: PendingChoice) -> list:
+        """The cards a ``reorder_library`` prompt is arranging, uppermost first.
+
+        The top ``top_count`` of the target library, or — ``position ==
+        "bottom"`` — its last ``top_count``: the cards an effect has just put
+        "on the bottom of your library in any order" (CR 401.4). One reader for
+        what the prompt shows, what an answer permutes and what the default
+        leaves, because a second would be free to show one end of a library and
+        rearrange the other.
+        """
+        library = self.players[choice.data["target_index"]].library
+        count = int(choice.data["top_count"])
+        if choice.data.get("position") == "bottom":
+            return library[max(len(library) - count, 0):]
+        return library[:count]
+
+    def offer_library_bottom_order(
+        self, owner, count: int, *, chooser_index: int | None = None
+    ) -> bool:
+        """Ask for the order of the *count* cards an effect has just put on the
+        bottom of *owner*'s library "in any order". True when a seat was asked.
+
+        CR 401.4: "If an effect puts two or more cards in a specific position
+        in a library at the same time, the owner of those cards may arrange
+        them in any order. That library's owner doesn't reveal the order in
+        which the cards go into the library." The caller lays the cards down
+        first — it knows whether they came from another zone (the funnel,
+        CR 903.9b) or were only ever moved *within* the library, which is what
+        a looked-at or revealed pile is (CR 701.20b) — and the order is then
+        the ordinary ``reorder_library`` prompt pointed at the library's other
+        end. The arrangement Scroll Rack's top-of-library tail already has, for
+        its reason: the renderer, the wire action and the answer check all
+        exist, and a second prompt would be a second answer to one question.
+
+        **Only an interactive seat is asked.** "As they lay" is the default
+        order and taking it needs no prompt, so a headless or AI seat queues
+        nothing and consumes no randomness — which is what keeps a seeded run,
+        and every test written before the question existed, identical.
+
+        ``chooser_index`` is the seat that arranges where a card gives the
+        order to somebody other than the owner (the caster of a spell that
+        looks through an opponent's library, CR 608.2); absent, it is the
+        owner's by CR 401.4. Fewer than two cards leave no order to choose.
+        """
+        seat = self.seat_index(owner)
+        count = min(int(count), len(self.players[seat].library))
+        chooser = seat if chooser_index is None else chooser_index
+        if count < 2 or chooser not in self.interactive_seats:
+            return False
+        self.arm_pending_choice(
+            "reorder_library", chooser,
+            target_index=seat, top_count=count, position="bottom",
+            may_shuffle=False,
+        )
+        return True
+
+    def offer_library_top_order(
+        self, owner, count: int, *, chooser_index: int | None = None
+    ) -> bool:
+        """Ask for the order of the *count* cards an effect has just put on
+        **top** of *owner*'s library. True when a seat was asked.
+
+        :meth:`offer_library_bottom_order`'s twin for the library's other end,
+        and CR 401.4 is the same sentence for both: "If an effect puts two or
+        more cards in a specific position in a library at the same time, the
+        **owner** of those cards may arrange them in any order." The caller
+        lays the cards down first; the order is then the ordinary
+        ``reorder_library`` prompt over the top *count* — the look-and-put-back
+        prompt, with no shuffle on offer.
+
+        The owner, not the spell's controller, which is the half the order
+        "the targets were named in" could not carry: Lodestone Bauble puts
+        cards from *a player's* graveyard on top of *their* library, and the
+        player who named them is not the player whose draws they decide.
+
+        Only an interactive seat is asked, for the bottom twin's reason: "as
+        they lay" needs no prompt, so a headless or AI seat queues nothing and
+        a seeded run reads as it did.
+        """
+        seat = self.seat_index(owner)
+        count = min(int(count), len(self.players[seat].library))
+        chooser = seat if chooser_index is None else chooser_index
+        if count < 2 or chooser not in self.interactive_seats:
+            return False
+        self.arm_pending_choice(
+            "reorder_library", chooser,
+            target_index=seat, top_count=count, may_shuffle=False,
+        )
+        return True
+
     def _resolve_reorder_library(self, choice: PendingChoice, new_order: list, shuffle: bool) -> bool:
         target = self.players[choice.data["target_index"]]
         top_count = choice.data["top_count"]
+        # "…and the rest **on the bottom of your library in any order**."
+        # (Goblin Ringleader.) The same question about the library's other end:
+        # the pile is its last N cards, everything above them stays where it
+        # is, and element 0 of the answer is the uppermost of the pile — the
+        # first of them a draw would reach — which is what "leftmost" means on
+        # the prompt either way. No shuffle is ever offered there.
+        if choice.data.get("position") == "bottom":
+            pile = self.reorder_library_pile(choice)
+            count = len(pile)
+            if len(new_order) != count or sorted(new_order) != list(range(count)):
+                return False
+            target.library[len(target.library) - count:] = [
+                pile[i] for i in new_order
+            ]
+            self.log.append(
+                f"{target.name} put {count} cards on the bottom of their "
+                f"library in an order they chose"
+            )
+            self.discard_pending_choice(choice)
+            return True
         top = target.library[:top_count]
         rest = target.library[top_count:]
         # "Look at the top five cards of target player's library" (Visions) and
@@ -2170,6 +2517,16 @@ class PendingChoicesMixin:
     def _default_reorder_library(self, choice: PendingChoice) -> None:
         from ...ai_policy import choose_reorder_library_order
 
+        # The bottom of a library: as they lay. The order is the owner's
+        # freedom and nothing scores it — ``choose_reorder_library_order``
+        # ranks the *next draws*, which these are the furthest cards from — so
+        # the default is the order the effect put them down in, the one a seat
+        # that was never asked gets (``offer_library_bottom_order``).
+        if choice.data.get("position") == "bottom":
+            identity = list(range(len(self.reorder_library_pile(choice))))
+            if not self._resolve_reorder_library(choice, identity, shuffle=False):
+                self.discard_pending_choice(choice)
+            return
         order = choose_reorder_library_order(
             self, choice.player_index, choice.data["target_index"], choice.data["top_count"]
         )
@@ -2209,6 +2566,24 @@ class PendingChoicesMixin:
         rest = owner.library[top_count:]
         kept = [looked[i] for i in card_order[: top_count - bottom_count]]
         bottomed = [looked[i] for i in card_order[top_count - bottom_count :]]
+        if choice.data.get("destination") == "graveyard":
+            # Surveil (CR 701.25a): the cards not kept go to the graveyard
+            # where a scry sends them to the bottom. The same answer shape —
+            # ``bottom_count`` is "how many of the trailing entries leave the
+            # top" — because it is the same decision. They come off the
+            # library together and are then put where they go one by one,
+            # through the graveyard seam and naming the zone they left
+            # (CR 614 may divert one; "put into your graveyard from your
+            # library" is a trigger some cards watch).
+            owner.library = kept + rest
+            for card in bottomed:
+                self.put_card_into_graveyard(owner, card, from_zone="library")
+            self.log.append(
+                f"{self.players[choice.player_index].name} surveilled "
+                f"{top_count} ({bottom_count} to the graveyard)"
+            )
+            self.discard_pending_choice(choice)
+            return True
         # The bottomed cards go under everything that was already below the
         # looked-at ones, which is why `rest` sits between the two slices.
         owner.library = kept + rest + bottomed
@@ -2284,14 +2659,19 @@ class PendingChoicesMixin:
         if any(index not in eligible for index in chosen):
             return False
         # Remove in descending order so earlier indices stay valid as we pop.
+        took: list = []
         for hand_index in sorted(chosen, reverse=True):
-            if not _resolve_one_discard(self, choice.player_index, hand_index, to_library):
+            if not _resolve_one_discard(
+                self, choice.player_index, hand_index, to_library, took=took
+            ):
                 return False
         self.discard_pending_choice(choice)
-        self._after_discard_answered(choice, len(chosen))
+        self._after_discard_answered(choice, len(chosen), took)
         return True
 
-    def _after_discard_answered(self, choice: PendingChoice, discarded: int) -> None:
+    def _after_discard_answered(
+        self, choice: PendingChoice, discarded: int, took: list | None = None
+    ) -> None:
         """Everything that reads *how many* cards were actually discarded.
 
         One place, because both answer paths — a seat's own picks and the
@@ -2318,6 +2698,13 @@ class PendingChoicesMixin:
             # key cannot be both.
             by_seat = results.setdefault(DISCARDED_BY_SEAT, {})
             by_seat[choice.player_index] = discarded
+            # …and *which* cards went, for the sentence that asks about them
+            # rather than about how many: "You gain 3 life for each **land
+            # card** discarded this way" (Gerrard's Verdict). Extended rather
+            # than assigned, as the random discard's record is: two discards in
+            # one resolution are one "this way". A card that went somewhere
+            # hidden is not in *took* (CR 701.9c) and is counted above only.
+            results.setdefault(DISCARDED_THIS_WAY, []).extend(took or ())
         player = self.players[choice.player_index]
         if choice.data.get("draw_that_many") and discarded > 0:
             # CR 614.5: a draw a replacement effect *created* is not replaced
@@ -2334,9 +2721,19 @@ class PendingChoicesMixin:
         # CR 121.2 makes "draw three cards" three individual draws; a
         # replacement takes one of them and the rest have to wait for the
         # answer, because they are later steps of the same instruction.
+        # They are draws of the same event as the one the prompt replaced, so
+        # what that event had already been through stays excluded (CR 614.5:
+        # the doubler that made them does not double them again) — and the
+        # seam parks them while the draw above is waiting on another
+        # replacement's offer.
         queued = int(choice.data.get("queued_draws", 0) or 0)
         if queued > 0:
-            self._draw_with_replacements(player, queued)
+            self._draw_with_replacements(
+                player, queued,
+                exclude_sources=tuple(
+                    choice.data.get("queued_exclude_sources") or ()
+                ),
+            )
 
     # -- An opponent picks out of a revealed pile (Thran Tome) ---------------
 
@@ -2601,6 +2998,14 @@ class PendingChoicesMixin:
             # after one and not after two would be answering a card nobody
             # printed.
             up_to=bool(choice.data.get("up_to")),
+            # CR 109.5: the picks after the first are the same spell's, and
+            # they are armed from an *answer* — when nothing is resolving and
+            # `arm_pending_choice` has no seat to stamp. Carried, so the second
+            # card Mind Warp takes was caused by the same player as the first.
+            **(
+                {"_cause_seat": choice.data["_cause_seat"]}
+                if choice.data.get("_cause_seat") is not None else {}
+            ),
         )
 
     def _record_revealed_hand_pick(
@@ -2650,7 +3055,15 @@ class PendingChoicesMixin:
             # nothing else".
             return True
         if fate == "discard":
-            return _resolve_one_discard(self, victim_index, hand_index, to_library=False)
+            # The causing seat comes off *this* prompt: `_resolve_one_discard`
+            # looks its own up under the ``discard`` kind, which is not the
+            # prompt an opponent's pick out of a revealed hand is — so a
+            # Psychic Purge taken by Coercion was "caused by nobody" whenever
+            # the caster answered from a prompt rather than a default.
+            return _resolve_one_discard(
+                self, victim_index, hand_index, to_library=False,
+                cause_seat=choice.data.get("_cause_seat"),
+            )
         if fate == "library_top":
             # "Put that card on top of that player's library." (Painful
             # Memories.) Both seams, and both for the reason they exist: a hand
@@ -2857,12 +3270,14 @@ class PendingChoicesMixin:
         from ...handlers.zones import _resolve_one_discard
 
         discarded = 0
+        took: list = []
         for _ in range(int(choice.data["count"])):
             eligible = self.live_discard_candidates(choice)
             if not eligible:
                 break
             if not _resolve_one_discard(
-                self, choice.player_index, eligible[0], to_library=False
+                self, choice.player_index, eligible[0], to_library=False,
+                took=took,
             ):
                 break
             discarded += 1
@@ -2879,7 +3294,7 @@ class PendingChoicesMixin:
         # not evaluate, not a claim about the pool, and the next card to print a
         # ceiling whose payoff is *not* worth the cards is what would need a
         # real valuation here rather than a default.
-        self._after_discard_answered(choice, discarded)
+        self._after_discard_answered(choice, discarded, took)
 
     def auto_resolve_pending_discard(self) -> None:
         """Resolve a pending discard with a default choice (the lowest-index cards,
@@ -2959,6 +3374,18 @@ class PendingChoicesMixin:
             player_index, int(option_index), kind="reveal_until_kind_draw"
         )
 
+    def confirm_skip_draw(self, player_index: int, skip: bool) -> bool:
+        """Resolve the oldest pending "you may skip that draw instead" offer
+        for *player_index* (Obstinate Familiar).
+
+        Index 0 is the draw and index 1 the skip, the order the interceptor
+        offers them in; which of the two a non-interactive seat takes is the
+        interceptor's to say (it depends on whether there is a card to draw).
+        """
+        return self.resolve_replacement_choice(
+            player_index, 1 if skip else 0, kind="skip_draw"
+        )
+
     def confirm_leng_discard(self, player_index: int, to_library: bool) -> bool:
         """Resolve the oldest pending Library of Leng destination choice for
         *player_index*: the discarded card goes on top of their library (the
@@ -2970,6 +3397,40 @@ class PendingChoicesMixin:
     # -- Phantasmal Terrain's land type -------------------------------------
 
     _BASIC_LAND_TYPES = ("plains", "island", "swamp", "mountain", "forest")
+
+    def land_type_choice_options(self, choice: PendingChoice) -> tuple[str, ...]:
+        """The basic land types a pending ``land_type_choice`` may be answered
+        with: the list its sentence printed ("becomes **a Plains or an
+        Island**", Tundra Kavu), or CR 305.6's five where it printed none
+        ("the basic land type of your choice", Jinx; Phantasmal Terrain).
+
+        **One reader**, asked by the resolver that checks the answer, by the
+        default a non-interactive seat takes and by the prompt renderer
+        (idiom 9) — so the picker cannot show a type the answer path refuses,
+        and a seat cannot name one the card does not print. A printed entry
+        outside the five is dropped rather than offered: the wire field is the
+        five-way basic, and a type nobody can send is not an option.
+        """
+        printed = tuple(
+            word for word in (
+                str(option).strip().lower()
+                for option in (choice.data.get("options") or ())
+            )
+            if word in self._BASIC_LAND_TYPES
+        )
+        return printed or self._BASIC_LAND_TYPES
+
+    def default_land_type_choice(self, choice: PendingChoice) -> str:
+        """What a non-interactive seat answers a ``land_type_choice`` with.
+
+        An Island, which is the provisional default the kind has always taken
+        — unless the sentence offered a list that does not include one, where
+        the first printed type is the answer: the default has to be a type the
+        resolver accepts, or the prompt would be discarded unanswered and the
+        land left unchanged by an ability that resolved.
+        """
+        offered = self.land_type_choice_options(choice)
+        return "island" if "island" in offered else offered[0]
 
     def confirm_land_type(self, player_index: int, land_type: str) -> bool:
         """Resolve a pending Phantasmal Terrain choice with the controller's chosen
@@ -2989,7 +3450,7 @@ class PendingChoicesMixin:
         exactly as it was so its behaviour does not move.
         """
         land_type = str(land_type or "").strip().lower()
-        if land_type not in self._BASIC_LAND_TYPES:
+        if land_type not in self.land_type_choice_options(choice):
             return False
         permanent_id = choice.data.get("land_permanent_id")
         if permanent_id is not None:
@@ -3013,6 +3474,9 @@ class PendingChoicesMixin:
                 land, land_type,
                 source=choice.data.get("land_type_source", choice.data.get("_aura")),
                 label=choice.data["card_name"],
+                ends_with_source=bool(
+                    choice.data.get("land_type_ends_with_source")
+                ),
             )
             self.log.append(
                 f"{choice.data['card_name']}: "
@@ -3149,7 +3613,7 @@ class PendingChoicesMixin:
 
     def arm_creature_type_choice(
         self, player_index: int, *, card_name: str, result_key: str, context,
-        default: str | None,
+        default: str | None, excluded: tuple[str, ...] = (),
     ):
         """Queue "choose a creature type" for the resolving spell's controller.
 
@@ -3158,6 +3622,11 @@ class PendingChoicesMixin:
         creature-type shape: Extinction is a sorcery, so there is no permanent
         for a CR 614.1c entry choice to have been recorded on, and the sentence
         that spends the word is the next step of the same resolution.
+
+        *excluded* is a printed "**other than Wall**" (Unnatural Selection):
+        carried on the prompt, which is what the picker's list and the
+        resolver's check both read (``creature_type_choice_options``). Absent
+        from the prompt data when the card prints none.
         """
         return self.arm_pending_choice(
             "creature_type_choice", player_index,
@@ -3165,7 +3634,25 @@ class PendingChoicesMixin:
             result_key=result_key,
             default_creature_type=default,
             _context=context,
+            **({"excluded": list(excluded)} if excluded else {}),
         )
+
+    def creature_type_choice_options(self, choice: PendingChoice) -> frozenset[str]:
+        """The creature types a pending ``creature_type_choice`` may be
+        answered with: CR 205.3m's catalog, less whatever the sentence printed
+        after "other than".
+
+        **One reader** for the resolver and the prompt renderer (idiom 9), so
+        the picker cannot offer a word the answer path refuses and a seat
+        cannot name one the card forbids.
+        """
+        from ...grammar.vocabulary import CREATURE_TYPES
+
+        excluded = {
+            str(word).strip().lower()
+            for word in (choice.data.get("excluded") or ())
+        }
+        return frozenset(CREATURE_TYPES - excluded) if excluded else CREATURE_TYPES
 
     def confirm_creature_type_choice(
         self, player_index: int, creature_type: str
@@ -3188,11 +3675,9 @@ class PendingChoicesMixin:
         An empty answer keeps whatever the handler stamped before arming, which
         is a real choice already recorded rather than none at all.
         """
-        from ...grammar.vocabulary import CREATURE_TYPES
-
         word = str(creature_type or "").strip().lower()
         if word:
-            if word not in CREATURE_TYPES:
+            if word not in self.creature_type_choice_options(choice):
                 return False
             choice.data["_context"].results[choice.data["result_key"]] = word
             self.log.append(f"{choice.data.get('card_name', '')}: chose {word}")
@@ -3371,7 +3856,7 @@ class PendingChoicesMixin:
         silently repaired answer would let a client ask for eight Squirrels off
         four lands and be told it worked.
 
-        The payment goes through ``_spend_payment_plan``, the one writer, so the
+        The payment goes through ``_pay_planned_cost``, the one writer, so the
         pool and the lands are charged together.
         """
         try:
@@ -3385,16 +3870,24 @@ class PendingChoicesMixin:
         plan = (
             plan_payment(
                 player.mana_pool,
-                untapped_mana_lands(self.controlled_by(seat)),
+                self.payment_lands(seat),
                 generic_cost(value),
-                produces=self._land_payment_colors,
+                produces=self._land_payment_colors, payer=player,
             )
             if value else None
         )
         if value and plan is None:
             return False
-        if plan is not None:
-            self._spend_payment_plan(player, plan)
+        if plan is not None and not self._pay_planned_cost(
+            player,
+            lambda: plan_payment(
+                player.mana_pool,
+                self.payment_lands(seat),
+                generic_cost(value),
+                produces=self._land_payment_colors, payer=player,
+            ),
+        ):
+            return False
         self.log.append(
             f"{player.name} paid {value} mana" if value
             else f"{player.name} paid no mana"
@@ -4693,8 +5186,8 @@ class PendingChoicesMixin:
         could afford and lost the spell.
         """
         return plan_payment(
-            player.mana_pool, untapped_mana_lands(self.controlled_by(player)), cost,
-            produces=self._land_payment_colors,
+            player.mana_pool, self.payment_lands(player), cost,
+            produces=self._land_payment_colors, payer=player,
         )
 
     def narrowed_land_mana_colors(self, land) -> "tuple[str, ...] | None":
@@ -4789,7 +5282,47 @@ class PendingChoicesMixin:
                 return cost, plan
         return None
 
-    def _resolve_mana_payment(self, choice: PendingChoice, pay: bool) -> bool:
+    def seat_answers_for_itself(self, player_index: int) -> bool:
+        """Whether *player_index* is a seat somebody is asking (a person at the
+        table), as against one the engine answers for.
+
+        The line "pay" is read across. A seat the engine answers for that
+        cannot pay has declined — there is nobody to tell and nothing else it
+        would have done. A person who says "pay" and cannot be paid for has
+        **not** said "don't": CR 608.2d lets a player choose only an option
+        that is possible, and CR 118.3 makes a cost they cannot pay fully one
+        they cannot pay, so the answer is not one and the question stands —
+        for them to tap what they like (CR 605.3a; activating a mana ability
+        is theirs to decide, CR 118.3c) and answer again, or to decline.
+        """
+        return player_index in self.interactive_seats
+
+    def mana_payment_is_payable(self, choice: PendingChoice) -> bool:
+        """Whether "pay" would be accepted for this counter-unless price right
+        now: the pool, plus the lands the payer the engine plans for would tap.
+
+        One reader for the prompt's ``payable`` and for the refusal below, so
+        what a client is shown before the click and what the click is told
+        cannot be two answers.
+        """
+        return self._counter_payment_plan_any(
+            self.players[choice.player_index], choice.data
+        ) is not None
+
+    def _resolve_mana_payment(
+        self, choice: PendingChoice, pay: bool, *, asked: bool = False,
+    ) -> bool:
+        """Pay the price or have the object countered.
+
+        *asked* is whether this is a seat's own answer (the registered
+        ``resolve``) rather than the default taken for it. With it, a person's
+        "pay" that cannot be collected is **refused** and the prompt stays
+        owed — it used to be read as a decline: Mana Leak on a human's
+        Lightning Bolt with an Island, a filter land and a Sol Ring untapped,
+        "Pay", and the Bolt was countered with nothing tapped and no word
+        said, because the planner taps free land abilities only. See
+        :meth:`seat_answers_for_itself`.
+        """
         controller = self.players[choice.player_index]
         data = choice.data
         cost = self._mana_payment_cost(data)
@@ -4802,12 +5335,30 @@ class PendingChoicesMixin:
         # plan names both halves, and paying from one without the other would
         # let the same land answer two costs.
         chosen = self._counter_payment_plan_any(controller, data) if pay else None
+        held = bool(pay) and asked and self.seat_answers_for_itself(choice.player_index)
+        if held and chosen is None:
+            return False
         cost, plan = chosen if chosen is not None else (cost, None)
         if plan is not None:
-            for symbol, spent in plan.from_pool.items():
-                controller.mana_pool[symbol] = controller.mana_pool.get(symbol, 0) - spent
-            for land in plan.tapped:
-                self.become_tapped(land)
+            # The planned lands are tapped **for mana** (CR 605.3a), through
+            # the one payer every effect-collected cost shares: this is the
+            # payment Price of Glory is printed for, and it used to tap the
+            # lands without anything hearing that they had made mana. A price
+            # that cannot be met after all is a price not paid, and the spell
+            # is countered below as if it had been declined.
+            paid_cost = cost
+            if not self._pay_planned_cost(
+                controller,
+                lambda: self._counter_payment_plan(controller, paid_cost),
+            ):
+                if held:
+                    # Part-way: a land the plan counted made nothing it could
+                    # spend. What was tapped stays tapped and its mana stays
+                    # in the pool, as for any player who tapped and came up
+                    # short — and the question is still theirs to answer.
+                    return False
+                plan = None
+        if plan is not None:
             # "…and 1 life" (Mundungu). Charged after the mana and before the
             # object is left alone, because the two are one payment: the plan
             # above is only returned when both halves can be met, so nothing
@@ -4840,6 +5391,10 @@ class PendingChoicesMixin:
                 elif target.is_copy:
                     # 704.5e: a countered copy of a spell ceases to exist.
                     self.log.append(f"{data['card_name']} countered {target.card.name} (copy), which ceases to exist")
+                elif self._redirect_unpaid_countered_card(data, target):
+                    # "…If that spell is countered this way, exile it instead
+                    # of putting it into its owner's graveyard." (Syncopate.)
+                    pass
                 else:
                     # The payer is the spell's *controller*; the card goes to
                     # its *owner's* graveyard (CR 701.6a, CR 108.3), and the
@@ -4856,6 +5411,36 @@ class PendingChoicesMixin:
                     if hook is not None:
                         hook(self, counter_card, target)
         self.discard_pending_choice(choice)
+        return True
+
+    def _redirect_unpaid_countered_card(self, data: dict, target) -> bool:
+        """Send a spell countered for an unpaid price where its counterspell
+        prints, and say whether one did (CR 614.1 over CR 701.6a).
+
+        "Counter target spell unless its controller pays {X}. If that spell is
+        countered this way, exile it instead of putting it into its owner's
+        graveyard." (Syncopate.) The hard counter redirects in its own
+        handler; a priced one counters *here*, after the payer declined, so
+        the destination rides the prompt. Through the handler's own
+        ``_redirect_countered_card`` - one mover for both roads - and with its
+        class test ("if an artifact or creature spell is countered this way",
+        Desertion's narrowing) asked of the card exactly as it is there.
+        """
+        destination = data.get("countered_destination")
+        counter_card = data.get("counter_card")
+        if not destination or counter_card is None:
+            return False
+        from ...handlers._common import _card_matches_filter
+        from ...handlers.stack import _redirect_countered_card
+
+        described = data.get("countered_filter")
+        if described and not _card_matches_filter(target.card, described):
+            return False
+        seat = data.get("counterer_index")
+        _redirect_countered_card(
+            self, counter_card, target, str(destination),
+            counterer=self.players[seat] if isinstance(seat, int) else None,
+        )
         return True
 
     # -- A permanent chosen as an effect resolves -----------------------------
@@ -4999,6 +5584,16 @@ class PendingChoicesMixin:
         prefers = (choice.data.get("_payload") or {}).get("default_prefers")
         if prefers == "tapped":
             live = sorted(live, key=lambda perm: not perm.tapped)
+        elif prefers == "not_the_choosers":
+            # "That player attaches this Aura to a land of their choice."
+            # (Steam Vines, Kudzu.) The Aura destroys the land it is on, so a
+            # seat nobody asks puts it on somebody else's first. A preference,
+            # like the one above: with only its own lands to choose from, the
+            # seat still has to choose one.
+            live = sorted(
+                live,
+                key=lambda perm: self.controller_index_of(perm) == choice.player_index,
+            )
         # …and the one ordering a *later sentence* asks for: "Prevent all combat
         # damage target creature would deal this turn **if it shares a color
         # with that permanent**" (Guard Dogs). The pick decides whether the
@@ -5161,6 +5756,17 @@ class PendingChoicesMixin:
         floor = int(choice.data.get("at_least", 0) or 0)
         live = self.live_permanent_set_choices(choice)
         own = [perm for perm in live if self.controls(choice.player_index, perm)]
+        if (choice.data.get("_payload") or {}).get("default_none"):
+            # "Choose any number of creatures target player controls … Those
+            # players exchange control of those creatures." (Cultural
+            # Exchange.) The own-first rule above is written for a pick that
+            # *keeps* what it names; this one gives it away, so taking the
+            # ceiling in board order would hand a seat's creatures across for
+            # whatever stood first on the other side. The neutral answer to
+            # "any number" is none, and the lowering says which picks are
+            # this kind — a flag on the payload, never a card. A floor still
+            # binds: under one the list below is filled exactly as it was.
+            own = []
         # **The one place board order is not the answer: the permanent that is
         # asking is itself on the list.** "When this creature enters, return a
         # red or green creature you control to its owner's hand" (Planeshift's
@@ -6544,8 +7150,19 @@ class PendingChoicesMixin:
         order is seed-deterministic, which is what AI and headless play need. A
         seat that should pick cleverly needs a weight in
         ``engine/ai_valuation.py``, not a branch here.
+
+        One such weight, for another seat's pile: the cards their owner could
+        still cast from there go first (``ai_valuation.graveyard_denial_order``
+        — a flashback card is a spell that seat still holds). A pile with none
+        is taken in pile order exactly as before, and the seat's own pile is
+        never reordered.
         """
         live = self.live_graveyard_exile_candidates(choice)
+        owner_index = int(choice.data["owner_index"])
+        if owner_index != choice.player_index:
+            from ...ai_valuation import graveyard_denial_order
+
+            live = graveyard_denial_order(self, owner_index, live)
         wanted = self._how_many_graveyard_cards(choice)
         if not self._resolve_graveyard_exile_pick(choice, live[:wanted]):
             self._record_graveyard_exile(choice, [])
@@ -6990,48 +7607,28 @@ class PendingChoicesMixin:
         return True
 
     def _default_graveyard_pile_choice(self, choice: PendingChoice) -> None:
-        """The stated policy: the **first** live pile, in seat order.
+        """The stated policy: the first live pile **that is not the chooser's
+        own**, in seat order — and its own only when no other is live.
 
-        Not a valuation — seat order is seed-deterministic, which is what AI and
-        headless play need, and ``_default_player_choice`` states the same rule
-        for the same reason. A seat that should choose cleverly needs a weight
-        in ``engine/ai_valuation.py``, not a branch here.
+        This prompt is armed by one sentence, "exile … from a single
+        graveyard", and exiling is denial. The policy was "the first live pile
+        in seat order", stated as "not a valuation" — and it was one all the
+        same, a different one per chair: the seat at index 0 exiled its own
+        graveyard and the seat at index 1 its opponent's, over the same board
+        (Decompose, Rapid Decay, Ebony Charm, Carrion Beetles, Famished
+        Ghoul). Which pile a seat denies is
+        ``ai_valuation.denied_graveyard_pile``; still seat order within it,
+        so it is as seed-deterministic as it was.
         """
+        from ...ai_valuation import denied_graveyard_pile
+
         live = self.live_graveyard_pile_choices(choice)
-        if not live or not self._resolve_graveyard_pile_choice(choice, live[0]):
+        seat = denied_graveyard_pile(choice.player_index, live)
+        if seat is None or not self._resolve_graveyard_pile_choice(choice, seat):
             context = choice.data.get("_context")
             if context is not None:
                 context.results[EXILED_THIS_WAY_OBJECTS] = []
                 context.results[EXILED_THIS_WAY] = 0
-            self.discard_pending_choice(choice)
-
-    # -- Kudzu's reattachment ------------------------------------------------
-
-    def confirm_kudzu_reattach(self, player_index: int, land_index: int) -> bool:
-        """Resolve a pending Kudzu reattach by moving the detached Aura onto the
-        controller's chosen land."""
-        return self.resolve_pending_choice("kudzu_reattach", player_index, land_index=land_index)
-
-    def _resolve_kudzu_reattach(self, choice: PendingChoice, land_index: int) -> bool:
-        player = self.players[choice.player_index]
-        if not (0 <= land_index < len(player.battlefield)):
-            return False
-        new_land = player.battlefield[land_index]
-        if new_land.card.primary_type != "land":
-            return False
-        attach_aura(choice.data["aura"], new_land)
-        self.log.append(f"Kudzu attached to {new_land.card.name}")
-        self.discard_pending_choice(choice)
-        return True
-
-    def _default_kudzu_reattach(self, choice: PendingChoice) -> None:
-        """Re-attach to the first land the controller has, deterministically."""
-        player = self.players[choice.player_index]
-        index = next(
-            (i for i, p in enumerate(player.battlefield) if p.card.primary_type == "land"),
-            None,
-        )
-        if index is None or not self._resolve_kudzu_reattach(choice, index):
             self.discard_pending_choice(choice)
 
     # -- Illusionary Mask's face-down cast -----------------------------------
@@ -7720,7 +8317,16 @@ class PendingChoicesMixin:
         for perm in chosen_perms:
             self.sacrifice_permanent(perm)
         for i in sorted(hand, reverse=True):
-            self.put_card_into_graveyard(player, player.hand.pop(i))
+            # "…Players **discard** cards … the same way." Through the discard
+            # seam, never straight to the graveyard: it is CR 701.9a's event,
+            # and by the bare move no "whenever a player discards a card" ever
+            # heard of the largest discard the card makes. The cause is the
+            # seat that cast it, off the prompt (the answer arrives after the
+            # resolution has returned).
+            self._discard_card(
+                player, player.hand.pop(i),
+                cause_seat=choice.data.get("_cause_seat"),
+            )
         self.discard_pending_choice(choice)
         self.log.append(f"{player.name} resolved their Balance sacrifices")
         return True
@@ -7750,6 +8356,38 @@ class PendingChoicesMixin:
 
     # -- Optional "you may pay {N}" ------------------------------------------
 
+    def payment_lands(self, seat) -> list:
+        """The lands a cost an effect collects may be planned over: *seat*'s
+        untapped mana lands **whose tap would pay**.
+
+        ``mana_payment.untapped_mana_lands`` is the pure half — a land, not
+        tapped, with a free mana ability. Whether tapping it puts mana in the
+        pool that this payment can spend is the game's to answer, and two
+        readers already answer it for the AI's cast plan: the tap seam's own
+        gate (``land_mana_tap_refusal`` — a summoning-sick land creature, a
+        land under Interdict) and ``ai_policy._land_mana_is_unplannable``
+        (mana that may be spent only on something else, CR 106.6; an amount or
+        a colour the board decides and decides at nothing). A plan that
+        counted such a land said "can pay", tapped it, and failed part-way —
+        twelve cases in the tap census — which every payer then had to
+        survive: the counterspell countered, the upkeep logged "paid".
+
+        One reader for every payment with no priority window behind it — the
+        optional offer, counter-unless, pay-any-amount, the upkeep prices,
+        the attack and block tolls, the special actions — so "can pay" and
+        "pay it" are asked of one list. A land left out is not lost to a
+        person: it is mana beyond the plan (:meth:`mana_beyond_the_plan`),
+        theirs to tap before they answer.
+        """
+        from ...ai_policy import _land_mana_is_unplannable
+
+        return [
+            land
+            for land in untapped_mana_lands(self.controlled_by(seat))
+            if self.land_mana_tap_refusal(land) is None
+            and not _land_mana_is_unplannable(self, land)
+        ]
+
     def _optional_pay_plan(self, player, entry: dict, option: int | None = None):
         """How *player* would pay this entry's cost, or None if they cannot.
 
@@ -7769,7 +8407,7 @@ class PendingChoicesMixin:
         # where each way of covering the offer buys something different
         # (Winter's Chill), the payer is *choosing* rather than finding the
         # first they can afford, so only the option they chose may be planned.
-        lands = untapped_mana_lands(self.controlled_by(player))
+        lands = self.payment_lands(player)
         options = optional_pay_options(entry)
         if option is not None:
             options = options[option:option + 1]
@@ -7777,24 +8415,114 @@ class PendingChoicesMixin:
             plan = plan_payment(
                 player.mana_pool, lands, cost,
                 produces=self._land_payment_colors,
+                # What the payer may spend that mana *as* (CR 609.4b): white as
+                # any colour under Celestial Dawn or False Dawn, where no land
+                # "produces" the pip an effect is charging.
+                payer=player,
             )
             if plan is not None:
                 return plan
         return None
 
-    def _spend_payment_plan(self, player, plan) -> None:
-        """Carry out a :func:`plan_payment` answer: spend the floating mana it
-        names and tap the lands it names.
+    def _pay_planned_cost(self, player, planner, *, spend=None) -> bool:
+        """Pay a cost an effect collects, and say whether it was paid.
 
-        One writer, because a plan is *how* a cost is paid and a second
-        spelling of it is a second answer — the untap toll (Mudslide) collects
-        the same plan the optional-pay prompt does, and a payment that tapped
-        the lands but forgot the pool would be a cost half charged.
+        *planner* answers ``mana_payment.plan_payment`` for the cost **against
+        the board as it stands** each time it is called (None: cannot be
+        paid). One writer for every such cost — an optional "you may pay", a
+        counterspell's "unless its controller pays", an upkeep price, an
+        attack or block toll, a special action — because a plan is *how* a
+        cost is paid and a second spelling of it is a second answer.
+
+        **A planned land is tapped for mana, not merely tapped.** CR 605.3a:
+        a player may activate a mana ability "whenever a rule or effect asks
+        for a mana payment, even if it's in the middle of … resolving a
+        spell", and that is the only thing this payment can be — the payer
+        has no priority window, so the engine activates the mana abilities on
+        their behalf. It used to stop short of doing so: the planned lands
+        were tapped with ``become_tapped`` and the cost was deemed paid. No
+        mana ability ran, so nothing that follows from one happened either —
+        a painland dealt no damage, an Ancient Tomb neither hurt nor made its
+        second mana, a depletion land took no counter, and no "whenever a
+        player taps a land for mana" heard a thing: an opponent paying a
+        Force Spike on your turn kept the land Price of Glory should have
+        destroyed, and Manabarbs, Mana Flare, Storm Cauldron and Wild Growth
+        were silent for every cost an effect charged.
+
+        So each planned land goes through ``tap_land_for_mana`` — the tap
+        seam, whose event is the one every other road announces — **one at a
+        time, and the plan is asked again after each**. Asking again is what
+        makes the mana the tap really made count: under Mana Flare one land
+        makes two and the second planned land stays untapped; an Ancient
+        Tomb's second mana pays the next generic; and a tap a watcher answered
+        by changing the board (Mana Web tapping the rest) is planned around
+        rather than assumed. When the pool alone covers the cost it is spent,
+        through *spend* where a caller draws on more than the open pool (the
+        upkeep's restricted bucket).
+
+        False when the cost could not be met — up front, or part-way, in
+        which case the lands already tapped stay tapped and what they made
+        stays in the pool, exactly as for a player who tapped and then could
+        not pay. Callers treat it as the cost not having been paid.
         """
-        for symbol, amount in plan.from_pool.items():
-            player.mana_pool[symbol] = int(player.mana_pool.get(symbol, 0)) - amount
-        for land in plan.tapped:
-            self.become_tapped(land)
+        seat = next(
+            (index for index, found in enumerate(self.players) if found is player),
+            None,
+        )
+        if seat is None:
+            return False
+        # Each pass taps one land or finishes, so the bound is the board.
+        for _ in range(2 + sum(1 for _perm in self.controlled_by(seat))):
+            plan = planner()
+            if plan is None:
+                return False
+            if not plan.tapped:
+                if spend is not None:
+                    spend(plan)
+                else:
+                    for symbol, amount in plan.from_pool.items():
+                        player.mana_pool[symbol] = (
+                            int(player.mana_pool.get(symbol, 0)) - amount
+                        )
+                return True
+            land = plan.tapped[0]
+            wanted = plan.tapped_for[0] if plan.tapped_for else None
+            color = self._planned_tap_color(land, wanted)
+            if not self.tap_land_for_mana(
+                seat, land.card.name, color,
+                permanent_id=land.permanent_id,
+                # Which of the land's mana abilities makes that colour
+                # (CR 605): a painland's first is "{T}: Add {C}".
+                ability_index=self.land_mana_ability_for(land, color),
+            ):
+                # The seam refused a land the planner counted (a summoning-
+                # sick land creature, a land under Interdict). Refused is not
+                # paid: tapping it anyway is the free mana this used to make.
+                return False
+        return False
+
+    def _planned_tap_color(self, land, wanted: "str | None") -> str:
+        """The symbol a payment plan asks *land* for.
+
+        The pip the plan matched it to, when the land makes that symbol; else
+        the first symbol it makes — a land the generic part took, or one whose
+        mana pays the pip only *as* another colour (CR 106.6: white as any
+        colour under Celestial Dawn, where no land "produces" the pip).
+        """
+        from ...ai_valuation import mana_ability_symbols
+
+        offered = [str(symbol).upper() for symbol in self._land_payment_colors(land)]
+        if wanted is not None and str(wanted).upper() in offered:
+            return str(wanted).upper()
+        # Nothing in particular is wanted of it, so it is asked for what its
+        # **default** ability makes: a painland pays a generic pip with the
+        # {C} that costs it nothing, never with the colour that hurts.
+        free, _priced = self._land_mana_abilities(land)
+        default = mana_ability_symbols(free) if free is not None else frozenset()
+        for symbol in offered:
+            if symbol in default:
+                return symbol
+        return offered[0] if offered else "C"
 
     def _player_can_pay_optional(self, player, entry: dict) -> bool:
         """CR 601.2h, for an optional cost: whether it *could* be paid.
@@ -7826,6 +8554,60 @@ class PendingChoicesMixin:
             return True
         alternative = int(entry.get("life_alternative", 0) or 0)
         return bool(alternative) and player.life >= alternative
+
+    def mana_beyond_the_plan(self, seat) -> bool:
+        """Whether *seat* controls an untapped source of mana the payment
+        planner does not tap for it.
+
+        The planner taps a land's free mana ability and nothing else
+        (``mana_payment.untapped_mana_lands``): a Sol Ring, a Mox, a Llanowar
+        Elves, a filter land's "{1}, {T}: Add {U}{B}" and a storage land are
+        all the player's own to activate (CR 605.3a), and all are mana a plan
+        over this board says is not there. So "the plan cannot pay" is "this
+        seat cannot pay" only where this answers no.
+
+        Read off what the permanent makes (CR 106.1, through the layers) and
+        not off why the planner left it out — the planner's reasons are a list
+        that grows, and the question here is only whether anything is left.
+        """
+        mine = list(self.controlled_by(seat))
+        planned = self.payment_lands(seat)
+        return any(
+            not perm.tapped
+            and perm.effective_produced_mana
+            and not any(perm is land for land in planned)
+            for perm in mine
+        )
+
+    def payment_may_be_offered(self, player, entry: dict) -> bool:
+        """Whether an offer priced in mana is put to *player* at all.
+
+        ``_player_can_pay_optional`` for every seat the engine answers for: a
+        price its plan cannot collect is a price that seat does not pay, so
+        the offer is not made and the "if they don't" follows at once.
+
+        **A person is asked whenever they might pay by their own hand.** The
+        same gate used to stand in front of them, so "sacrifice it unless you
+        pay {2}" with a Sol Ring untapped sacrificed it without a word: the
+        plan taps free land abilities only, said "cannot pay", and the offer
+        was never armed. CR 118.12a makes "unless" a choice the player has,
+        and CR 605.3a lets them activate mana abilities to make it. What they
+        are shown says whether "pay" would be accepted as the board stands
+        (``payable``), and an answer it would not be is refused rather than
+        read as a decline (:meth:`seat_answers_for_itself`).
+
+        Still not made where nothing they control could change the answer —
+        no mana source beyond the plan, or a life half they cannot cover
+        (CR 119.4) — so a person is not asked a question with one answer.
+        """
+        if self._player_can_pay_optional(player, entry):
+            return True
+        seat = self.seat_index(player)
+        if not entry.get("cost") or not self.seat_answers_for_itself(seat):
+            return False
+        if player.life < int(entry.get("life_cost", 0) or 0):
+            return False
+        return self.mana_beyond_the_plan(seat)
 
     def graded_pay_options(self, entry: dict) -> list[dict] | None:
         """The costs a **graded** offer asks the payer to choose between, or None.
@@ -7876,38 +8658,50 @@ class PendingChoicesMixin:
 
     def _pay_optional(
         self, player_index: int, entry: dict, option: int | None = None,
-    ) -> None:
-        """Collect the entry's mana cost from its player and run what accepting
-        buys. A cost that turns out to be unpayable buys nothing.
+    ) -> bool:
+        """Collect the entry's price from its player and run what accepting
+        buys; True when it was paid. A price that turns out to be unpayable
+        buys nothing, and the caller is told so — an "unless they pay" that
+        was not paid has its other half to carry out (CR 118.12a).
 
         *option* is which of a graded offer's costs the payer chose; None
         everywhere else, and on a graded offer means "take the stated policy".
         """
+        paid, option = self._collect_optional_price(player_index, entry, option)
+        if paid:
+            self._run_optional_purchase(player_index, entry, option)
+        return paid
+
+    def _collect_optional_price(
+        self, player_index: int, entry: dict, option: int | None = None,
+    ) -> "tuple[bool, int | None]":
+        """Charge the whole price of an optional offer, or none of it.
+
+        ``(paid, option)`` — the option a graded offer was paid with comes
+        back because the purchase reads it. Separate from the purchase so a
+        caller can learn that the price was *not* paid before anything it
+        buys has run, and before the prompt that asked is given up: a
+        person's "pay" that cannot be collected leaves the question standing
+        (:meth:`seat_answers_for_itself`).
+
+        The mana is collected **before** any life is charged. A plan can fail
+        part-way — a land it counted makes nothing this payment can spend —
+        and a payer charged the life first would have paid it for nothing
+        (CR 601.2h: no partial payment).
+        """
         player = self.players[player_index]
         # A free optional "you may draw a card" rider (Verduran Enchantress): no
-        # cost to pay, just draw on accept.
+        # cost to pay; the draw is what accepting buys.
         if entry.get("draw"):
-            drawn = self._draw_with_replacements(player, int(entry["draw"]))
-            self.log.append(f"{player.name} drew {drawn} card(s) from {entry['card_name']}")
-            return
+            return True, option
         # "That player may pay 10 life." (Bronze Tablet.) A life cost rather
-        # than a mana one, and the two never appear together — a cost of one
-        # kind is not payable out of the other.
+        # than a mana one — or both, "You may pay {4} **and** 2 life."
+        # (Purgatory): both halves or neither, and CR 601.2h is asked of the
+        # whole price as the board stands now, which can have changed since
+        # the offer was made.
         life_cost = int(entry.get("life_cost", 0) or 0)
-        if life_cost:
-            if player.life < life_cost:
-                return
-            # "You may pay {4} **and** 2 life." (Purgatory.) Both halves or
-            # neither: the mana is planned *before* the life is spent, because
-            # a payer charged the life and then unable to cover the mana would
-            # have paid for nothing — CR 601.2h is asked of the whole price,
-            # and the board can have changed since the offer was made.
-            if entry.get("cost") and self._optional_pay_plan(player, entry) is None:
-                return
-            player.life -= life_cost
-            self.log.append(
-                f"{player.name} paid {life_cost} life ({entry.get('card_name', '')})"
-            )
+        if life_cost and player.life < life_cost:
+            return False, option
         if not life_cost or entry.get("cost"):
             # A graded offer is paid with the option that was chosen and with no
             # other: falling back through the alternatives would charge a cost
@@ -7916,9 +8710,11 @@ class PendingChoicesMixin:
             if self.graded_pay_options(entry) is not None:
                 option = self._graded_option_taken(player, entry, option)
                 if option is None:
-                    return
+                    return False, None
             plan = self._optional_pay_plan(player, entry, option=option)
             if plan is None:
+                if life_cost:
+                    return False, option
                 # CR 118.8's alternative ("…pays {1} **or 1 life**", Erosion).
                 # A *stated policy* rather than a second prompt: the mana is
                 # spent whenever the board can cover it, and the life only when
@@ -7928,14 +8724,34 @@ class PendingChoicesMixin:
                 # total for the alternatives that have no other currency.
                 alternative = int(entry.get("life_alternative", 0) or 0)
                 if not alternative or player.life < alternative:
-                    return
+                    return False, option
                 player.life -= alternative
                 self.log.append(
                     f"{player.name} paid {alternative} life "
                     f"({entry.get('card_name', '')})"
                 )
-            else:
-                self._spend_payment_plan(player, plan)
+            elif not self._pay_planned_cost(
+                player,
+                lambda: self._optional_pay_plan(player, entry, option=option),
+            ):
+                # Could not be met after all (CR 601.2h): nothing is bought.
+                return False, option
+        if life_cost:
+            player.life -= life_cost
+            self.log.append(
+                f"{player.name} paid {life_cost} life ({entry.get('card_name', '')})"
+            )
+        return True, option
+
+    def _run_optional_purchase(
+        self, player_index: int, entry: dict, option: int | None = None,
+    ) -> None:
+        """What a paid optional offer buys (the price is already collected)."""
+        player = self.players[player_index]
+        if entry.get("draw"):
+            drawn = self._draw_with_replacements(player, int(entry["draw"]))
+            self.log.append(f"{player.name} drew {drawn} card(s) from {entry['card_name']}")
+            return
         # A grammar-lowered "may" carries its consequence as instructions rather
         # than as one of the three fixed fields above, so any effect can sit
         # behind an optional cost.
@@ -8204,7 +9020,20 @@ class PendingChoicesMixin:
         if copy_item is None or not targets:
             self.discard_pending_choice(choice)
             return
-        if copy_item.target_permanent_index is None:
+        from ...stack_targets import chosen_targets
+
+        # What the copy is aimed at **now**, through the one reader of a stack
+        # object's announcement. An original announced by id alone - the
+        # wire's spelling, ``target_permanent_id=[id]`` with no slot - read
+        # off its missing slot as a *player* target, so "keep the original"
+        # re-aimed the copy of a spell pointed at a creature at that
+        # creature's controller: the answer that changes nothing moved the
+        # copy (Chain Lightning, 3 to the face where it had been aimed at a
+        # creature).
+        held_now = chosen_targets(self, copy_item) or ()
+        if len(held_now) == 1 and held_now[0].kind == "permanent":
+            current = {"permanent_id": held_now[0].permanent_id}
+        elif copy_item.target_permanent_index is None:
             current = {"seat": copy_item.target_player_index}
         else:
             # The id is what the answer is checked against, and a cast that
@@ -8372,6 +9201,7 @@ class PendingChoicesMixin:
         self, player_index: int, permanent_id: int | None = None,
         seat: int | None = None, permanent_ids: list[int] | None = None,
         graveyard_index: int | None = None,
+        stack_item=None,
     ) -> bool:
         """Answer a triggered ability's target choice.
 
@@ -8389,11 +9219,40 @@ class PendingChoicesMixin:
         *graveyard_index* with *seat* is a **card in a graveyard**: which pile
         and which slot of it, as the prompt listed them. A graveyard card has
         no id to be named by.
+
+        *stack_item* is the answer for an ability whose target is a **spell**
+        ("When this creature enters, counter target spell", Mystic Snake): the
+        stack object itself, because a spell has no id and its position is only
+        true until the stack next moves. The wire names it by position
+        (``trigger_target_stack_item``) and this is what that resolves to.
         """
         return self.resolve_pending_choice(
             "trigger_target", player_index, permanent_id=permanent_id, seat=seat,
             permanent_ids=permanent_ids, graveyard_index=graveyard_index,
+            stack_item=stack_item,
         )
+
+    def trigger_target_stack_item(self, player_index: int, top_first_index: int):
+        """The stack object *player_index*'s pending ``trigger_target`` prompt
+        offers at *top_first_index* — the position a client sees it at, topmost
+        being 0 — or None when the prompt offers no spell there.
+
+        Resolved against the prompt's own candidates and never against the
+        stack alone, so a position naming a spell the picker did not offer is
+        no answer at all rather than a counter aimed at something the printed
+        phrase excludes.
+        """
+        choice = self.pending_choice_of("trigger_target", player_index)
+        if choice is None or not isinstance(top_first_index, int):
+            return None
+        position = len(self.stack) - 1 - top_first_index
+        if not 0 <= position < len(self.stack):
+            return None
+        named = self.stack[position]
+        for target in choice.data.get("targets") or ():
+            if target.get("kind") == "stack" and target.get("stack_item") is named:
+                return named
+        return None
 
     def _resolve_trigger_targets(self, choice: PendingChoice, permanent_ids) -> bool:
         """Record **several** chosen targets on the stack object (CR 601.2c).
@@ -8453,7 +9312,7 @@ class PendingChoicesMixin:
         item.target_permanent_id = named
         item.target_permanent_index = None
         item.target_player_index = self.announced_target_seat(named)
-        item.target_chosen = True
+        item.targets_chosen = self._trigger_target_was_a_choice()
         self.log.append(
             f"{choice.data.get('card_name', 'Ability')}: targets "
             + ", ".join(permanent.card.name for permanent in permanents)
@@ -8500,7 +9359,7 @@ class PendingChoicesMixin:
         item.target_permanent_index = slot
         item.target_player_index = stamp.seat
         item.target_permanent_id = None
-        item.target_chosen = True
+        item.targets_chosen = self._trigger_target_was_a_choice()
         self.log.append(
             f"{choice.data.get('card_name', 'Ability')}: targets {stamp.card.name} "
             f"in {self.players[stamp.seat].name}'s graveyard"
@@ -8512,6 +9371,7 @@ class PendingChoicesMixin:
         self, choice: PendingChoice, permanent_id: int | None = None,
         seat: int | None = None, permanent_ids: list[int] | None = None,
         graveyard_index: int | None = None,
+        stack_item=None,
     ) -> bool:
         """Record the chosen target on the stack object that asked (CR 601.2c).
 
@@ -8537,6 +9397,26 @@ class PendingChoicesMixin:
             return self._resolve_trigger_graveyard_target(choice, seat, graveyard_index)
         targets = choice.data.get("targets") or ()
         card_name = choice.data.get("card_name", "Ability")
+        # "…counter target **spell**" (Mystic Snake). A prompt offers spells or
+        # it offers permanents and players, never both — the spec that armed it
+        # is one kind — so an answer in the other vocabulary names nothing this
+        # prompt offered and is refused rather than read as a seat.
+        offered_spells = [
+            target["stack_item"] for target in targets
+            if target.get("kind") == "stack"
+        ]
+        if offered_spells or stack_item is not None:
+            if not any(offered is stack_item for offered in offered_spells):
+                return False
+            # Still on the stack: a spell that has left is nobody's target.
+            if not any(existing is stack_item for existing in self.stack):
+                return False
+            queued = self._choice_is_queued(choice)
+            self.discard_pending_choice(choice)
+            item.target_stack_item = stack_item
+            self.log.append(f"{card_name}: targets {stack_item.card.name}")
+            self._announce_answered_targets(item, choice, queued)
+            return True
         if permanent_id is None:
             offered_seats = {
                 target.get("seat")
@@ -8550,7 +9430,7 @@ class PendingChoicesMixin:
             item.target_player_index = seat
             item.target_permanent_index = None
             item.target_permanent_id = None
-            item.target_chosen = True
+            item.targets_chosen = self._trigger_target_was_a_choice()
             self.log.append(f"{card_name}: targets {self.players[seat].name}")
             self._announce_answered_targets(item, choice, queued)
             return True
@@ -8572,10 +9452,31 @@ class PendingChoicesMixin:
         item.target_player_index = controller
         item.target_permanent_index = self.battlefield_index_of(perm)
         item.target_permanent_id = permanent_id
-        item.target_chosen = True
+        item.targets_chosen = self._trigger_target_was_a_choice()
         self.log.append(f"{card_name}: targets {perm.card.name}")
         self._announce_answered_targets(item, choice, queued)
         return True
+
+    def _trigger_target_was_a_choice(self) -> bool:
+        """Whether the target a triggered ability has just been given counts
+        as **chosen** for CR 608.2b (``StackItem.targets_chosen``).
+
+        Yes, with one exception: an answer given while a permanent is on its
+        way to a graveyard (``Game.departing``). The death sweep announces a
+        dies-trigger while the dying permanent is still listed, so the list
+        the picker offered then is the board *before* the event the trigger is
+        about — Blazing Effigy's "it deals X damage to target creature" is
+        offered the dying Effigy, and a seat with nobody to ask takes its
+        default there and then. CR 603.3d would never have offered that
+        permanent, and asking CR 608.2b of it would counter the ability for a
+        target the engine mis-chose: the decline ROADMAP has carried since
+        Nemesis, and it stands for exactly this moment and no wider.
+
+        A **person's** answer is given after the sweep has finished, names a
+        permanent that is still there (the answer is refused otherwise), and
+        counts.
+        """
+        return not self.departing
 
     def _choice_is_queued(self, choice: PendingChoice) -> bool:
         """Whether *choice* is sitting on the queue rather than being answered
@@ -8653,6 +9554,27 @@ class PendingChoicesMixin:
             self.discard_pending_choice(choice)
             return True
         item = choice.data.get("_trigger_item")
+        # "…counter target **spell**" (Mystic Snake): the topmost spell on the
+        # side the effect wants — a counter is aimed at an opponent's — and the
+        # topmost offered when that side has none, because the target is
+        # mandatory. The candidates were armed topmost first
+        # (``_choose_trigger_stack_target``).
+        spells = [target for target in targets if target.get("kind") == "stack"]
+        if spells:
+            wanted = (
+                self._default_trigger_target_side(item, choice.player_index)
+                if item is not None else set()
+            )
+            chosen = next(
+                (
+                    target for target in spells
+                    if target["stack_item"].caster_index in wanted
+                ),
+                spells[0],
+            )
+            return self._resolve_trigger_target(
+                choice, stack_item=chosen["stack_item"]
+            )
         if item is not None:
             standing = self._default_opposing_seat(choice.player_index)
             for target in targets:
@@ -8908,14 +9830,30 @@ class PendingChoicesMixin:
         if choice is None:
             return False
         return self._answer_pending_choice(
-            choice, lambda: self._resolve_optional_pay(choice, accept, option)
+            choice,
+            lambda: self._resolve_optional_pay(choice, accept, option, asked=True),
         )
 
     def _resolve_optional_pay(
         self, choice: PendingChoice, accept: bool, option: int | None = None,
+        *, asked: bool = False,
     ) -> bool:
+        """Apply one answer to an optional offer.
+
+        *asked* is whether this is a seat's own answer (the registered
+        ``resolve``) rather than a default taken for it. With it, a person's
+        "yes" to a price that cannot be collected — up front, or part-way
+        through the plan — is **refused** and the offer stands; it used to be
+        carried out as a "no", so "Pay" on an "unless you pay" took the
+        penalty. See :meth:`seat_answers_for_itself`.
+        """
         player_index = choice.player_index
         entry = choice.data
+        held = bool(accept) and asked and self.seat_answers_for_itself(player_index)
+        if held and not self._player_can_pay_optional(
+            self.players[player_index], entry
+        ):
+            return False
         # CR 601.2b: a player chooses among the options they are **able** to
         # take. A named option they cannot cover is not an answer, so the prompt
         # stands rather than being consumed — the alternative is an answer that
@@ -8932,14 +9870,27 @@ class PendingChoicesMixin:
             ) is None
         ):
             return False
-        self.discard_pending_choice(choice)
         if (
             accept
             and self._player_can_pay_optional(self.players[player_index], entry)
             and self._optional_action_still_takeable(player_index, entry)
         ):
-            self._pay_optional(player_index, entry, option)
+            # The price first, with the prompt still owed: a plan can fail
+            # part-way (a land it counted made nothing the payment can
+            # spend), and then nothing was bought. A person is told so and
+            # asked again; for any other seat the price was not paid, which
+            # for an "unless" is the other half (CR 118.12a) — it used to be
+            # neither, and a toll failed that way was simply forgiven.
+            paid, option = self._collect_optional_price(player_index, entry, option)
+            if not paid and held:
+                return False
+            self.discard_pending_choice(choice)
+            if paid:
+                self._run_optional_purchase(player_index, entry, option)
+            else:
+                self._apply_optional_pay_decline(player_index, entry)
         else:
+            self.discard_pending_choice(choice)
             self._apply_optional_pay_decline(player_index, entry)
         # The trigger ability that raised this prompt was held on the stack (human
         # priority path). Whether it now leaves is `_release_stack_item`'s answer,
@@ -8967,6 +9918,17 @@ class PendingChoicesMixin:
         """
         from ...handlers.control_flow import _narrow_to_takeable_actions
 
+        # "…may pay **that spell's mana cost**" (Ice Cave). The price was read
+        # off a spell, and a spell that has since left the stack has no mana
+        # cost to pay (CR 118.6) and nothing left to buy — so the offer is one
+        # that can no longer be taken, exactly as an action with nothing left
+        # to act on is. Asked here because both answer paths ask here, and a
+        # seat charged for a counter of nothing has paid a cost for no effect.
+        priced_spell = entry.get("_priced_spell")
+        if priced_spell is not None and not any(
+            item is priced_spell for item in self.stack
+        ):
+            return False
         context = entry.get("_context")
         steps = tuple(entry.get("_on_accept") or ())
         if context is None or not steps:
@@ -9098,15 +10060,15 @@ class PendingChoicesMixin:
         may_tap: list[bool] = []  # asked once, and only when the pool falls short
 
         def payable(cost) -> bool:
-            if plan_payment(player.mana_pool, (), cost) is not None:
+            if plan_payment(player.mana_pool, (), cost, payer=player) is not None:
                 return True
             if not may_tap:
                 may_tap.append(
                     optional_pay_may_tap_lands(self, choice.player_index, entry)
                 )
             return may_tap[0] and plan_payment(
-                player.mana_pool, untapped_mana_lands(self.controlled_by(player)),
-                cost, produces=self._land_payment_colors,
+                player.mana_pool, self.payment_lands(player),
+                cost, produces=self._land_payment_colors, payer=player,
             ) is not None
 
         # A life cost has no "already floating" reading — nothing is held in
@@ -9221,11 +10183,17 @@ class PendingChoicesMixin:
                     "(the penalty is the smaller loss)"
                 )
         self.discard_pending_choice(choice)
+        penalised = int(entry.get("damage", 0) or 0) > 0 or bool(entry.get("_on_decline"))
         if floating is not None and self._optional_action_still_takeable(
             choice.player_index, entry
         ):
-            self._pay_optional(choice.player_index, entry, option)
-        elif int(entry.get("damage", 0) or 0) > 0 or entry.get("_on_decline"):
+            # A price the policy meant to pay and the board then could not
+            # collect (a planned land that made nothing spendable) was not
+            # paid — so an "unless" carries out its other half (CR 118.12a)
+            # instead of being forgiven.
+            if not self._pay_optional(choice.player_index, entry, option) and penalised:
+                self._apply_optional_pay_decline(choice.player_index, entry)
+        elif penalised:
             # A decline is an *answer*, and an answer with a consequence has to
             # have it applied. This read the legacy damage field alone, so a
             # grammar-lowered "if you don't, …" branch was dropped for every
@@ -9300,6 +10268,7 @@ class PendingChoicesMixin:
     def arm_discard_unless_pay_life(
         self, player_index: int, *, card, life: int, source_name: str,
         queued_draws: int = 0, queued_exclude_sources: tuple[int, ...] = (),
+        cause_seat: int | None = None,
     ) -> None:
         """Offer *player_index* the choice of paying *life* or discarding *card*.
 
@@ -9330,6 +10299,12 @@ class PendingChoicesMixin:
             _card=card,
             _queued_draws=int(queued_draws),
             _queued_exclude_sources=tuple(queued_exclude_sources),
+            # Whose ability would make this seat discard (CR 109.5): the
+            # permanent printing the sentence, which is not whoever happens to
+            # be resolving when the draw it replaces is made — a draw step has
+            # nobody resolving at all. Named by the caller, so
+            # `arm_pending_choice`'s own stamp never overrides it.
+            **({"_cause_seat": int(cause_seat)} if cause_seat is not None else {}),
         )
 
     def confirm_discard_unless_pay_life(
@@ -9370,7 +10345,11 @@ class PendingChoicesMixin:
                 f"({data.get('source_name', '')})"
             )
         elif card is not None and self.take_card_from_hand(player, card):
-            self.put_card_into_graveyard(player, card)
+            # Through the discard seam, never straight to the graveyard: a
+            # discard is CR 701.9a's event, so a replacement over it (Library
+            # of Leng, Dodecapod) and every watcher of one (Megrim) sees this
+            # one too. The cause is the seat the offer was armed for.
+            self._discard_card(player, card, cause_seat=data.get("_cause_seat"))
             self.log.append(
                 f"{player.name} discarded {data.get('card_name', 'a card')} "
                 f"({data.get('source_name', '')})"
@@ -10511,7 +11490,7 @@ register_choice(
 register_choice(
     "optional_pay",
     resolve=lambda game, choice, r: game._resolve_optional_pay(
-        choice, r["accept"], r.get("option"),
+        choice, r["accept"], r.get("option"), asked=True,
     ),
     default=lambda game, choice: game._default_optional_pay(choice),
     action="resolve_optional_pay",
@@ -10520,13 +11499,20 @@ register_choice(
     # action, on a trigger or on a whole spell (Twiddle, Rebirth), so the
     # message names the offer rather than the one card it was written for.
     blocked_detail="answer the optional-cost offer before other actions",
+    # An offer priced in mana is paid by tapping for it, and the engine taps
+    # only free land abilities on a payer's behalf — so the seat's own mana
+    # abilities answer the offer as much as the yes does (CR 605.3a), exactly
+    # as they do for ``mana_payment`` below. The web layer admits a *mana*
+    # ability and nothing else while one of these is owed
+    # (``web/actions.py``): nobody has priority in the middle of a resolution.
+    also_answers=("tap", "activate"),
 )
 
 register_choice(
     "trigger_target",
     resolve=lambda game, choice, r: game._resolve_trigger_target(
         choice, r.get("permanent_id"), r.get("seat"), r.get("permanent_ids"),
-        r.get("graveyard_index"),
+        graveyard_index=r.get("graveyard_index"), stack_item=r.get("stack_item"),
     ),
     default=lambda game, choice: game._default_trigger_target(choice),
     action="trigger_target_confirm",
@@ -10711,7 +11697,11 @@ register_choice(
     resolve=lambda game, choice, r: game._resolve_land_type(choice, r["land_type"]),
     # The provisional default stamped when the Aura attached is an Island, so
     # taking it again is what a non-interactive controller does.
-    default=lambda game, choice: game._resolve_land_type(choice, "island"),
+    # …unless the sentence offered a list without one (``default_land_type_
+    # choice``): the default must be an answer the resolver accepts.
+    default=lambda game, choice: game._resolve_land_type(
+        choice, game.default_land_type_choice(choice)
+    ),
     action="land_type_confirm",
     prompt_key="land_type_choice",
     # Phantasmal Terrain arms this as it enters, and its own comment says "the
@@ -10720,6 +11710,15 @@ register_choice(
     # on the battlefield (not a spell held on the stack), so it is armed with
     # ``_stack_item=None``: holds priority, holds no finished object.
     blocked_detail="choose the land type before other actions",
+    # And nothing behind the choice may happen before it is made (CR 608.2c:
+    # the instructions are followed in the order written). "Target land
+    # becomes the basic land type of your choice until end of turn. / Draw a
+    # card." (Shimmering Mirage) drew the card while the type was still being
+    # chosen — the game waited, but only after the step behind the prompt had
+    # run. ``scry``'s arrangement, for Opt's reason, and like ``scry`` without
+    # ``default_at_arm``: the kind stays queued for every seat, which is what
+    # its callers and thirty-odd tests are written around.
+    suspends=True,
 )
 
 register_choice(
@@ -10813,7 +11812,9 @@ register_choice(
 
 register_choice(
     "mana_payment",
-    resolve=lambda game, choice, r: game._resolve_mana_payment(choice, r["pay"]),
+    resolve=lambda game, choice, r: game._resolve_mana_payment(
+        choice, r["pay"], asked=True,
+    ),
     default=lambda game, choice: game._default_mana_payment(choice),
     action="confirm_mana_payment",
     prompt_key="mana_payment",
@@ -11267,22 +12268,6 @@ register_choice(
 )
 
 register_choice(
-    "kudzu_reattach",
-    resolve=lambda game, choice, r: game._resolve_kudzu_reattach(choice, r["land_index"]),
-    default=lambda game, choice: game._default_kudzu_reattach(choice),
-    action="kudzu_reattach_confirm",
-    prompt_key="kudzu_reattach",
-    # Whether the controller is *asked* is the seat's interactivity, read here
-    # rather than passed in. It used to be a ``defer_choice`` flag threaded from
-    # ``tap_land_for_mana`` down through a name-keyed dispatcher, which is the
-    # same question ``interactive_seats`` already answers for every other
-    # prompt — and the web layer computed it a second way ("not ai" against this
-    # table's "is human"). One answer, so a new seat kind needs no new argument.
-    default_at_arm=True,
-    blocked_detail="choose where Kudzu moves before other actions",
-)
-
-register_choice(
     "face_down_cast",
     resolve=lambda game, choice, r: game._resolve_face_down_cast(choice, r["hand_index"]),
     default=lambda game, choice: game._default_face_down_cast(choice),
@@ -11669,6 +12654,26 @@ register_choice(
 )
 
 register_choice(
+    # "If you would draw a card, you may skip that draw instead." (Obstinate
+    # Familiar.) The third optional replacement of one draw, registered the
+    # way the two above are and for their reasons: the draw that armed it was
+    # consumed, both answers run through one resolver, and a non-interactive
+    # seat takes the stated default where it stands.
+    "skip_draw",
+    resolve=_resolve_replacement,
+    default=_default_replacement,
+    action="skip_draw_confirm",
+    prompt_key="skip_draw",
+    blocked_detail=(
+        "choose whether to skip that draw (Obstinate Familiar) before other "
+        "actions"
+    ),
+    default_at_arm=True,
+    spectator_visible=True,
+    hidden_for_ai=False,
+)
+
+register_choice(
     "lamp_draw",
     resolve=_resolve_replacement,
     default=_default_replacement,
@@ -11726,4 +12731,14 @@ register_choice(
     # the stated maximum keep is taken where the effect stands.
     default_at_arm=True,
     spectator_visible=True,
+    # "…then sacrifices the rest. **Each player discards cards the same
+    # way.**" (Balancing Act.) The first card with a step *behind* the keep,
+    # and that step arms a prompt of its own for the same seat. Left running,
+    # one seat owed a keep and a discard at once and each answer was refused
+    # naming the other — every blocking prompt refuses every action but its
+    # own. So the keep holds the resolution the way a forced sacrifice does,
+    # and the step behind it runs when the last keep is answered. Nothing
+    # changes for the four cards printed before it: none has a step behind
+    # the keep, and a seat nobody asks never queues one.
+    suspends=True,
 )

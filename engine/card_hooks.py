@@ -43,7 +43,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable
 
 from .auras import detach_aura
-from .land_types import end_land_type_change
 from .models import next_permanent_id
 from .oracle_types import OracleInstruction
 from .mana_payment import generic_cost, total_pips
@@ -208,11 +207,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         'creature loses flying."':
             _line('deal_damage', 'spell_pattern', amount=2),
     },
-    'Erg Raiders': {
-        "at the beginning of your end step, if this creature didn't attack this "
-        "turn, it deals 2 damage to you unless it came under your control this turn":
-            _line("end_step_damage_if_not_attacked", "triggered_damage", amount=2),
-    },
     'Eye for an Eye': {
         "the next time a source of your choice would deal damage to you this turn, "
         "instead that source deals that much damage to you and eye for an eye "
@@ -258,12 +252,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         "may choose new targets for the copy":
             _line("copy_top_stack_spell", "spell_pattern"),
     },
-    "Gaea's Liege": {
-        '{t}: target land becomes a forest until this creature leaves the '
-        'battlefield':
-            _line('change_target_land_type', 'activated_landtype',
-                land_type='forest'),
-    },
     # The first sentence is an ordinary numeric shield the grammar can read; the
     # rest of the line grants an activatable emblem, which is ON_SELF_RESOLVED
     # above. Claiming only the shield would drop the emblem silently, so the
@@ -307,20 +295,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         "{t}: ante this artifact. if you do, put all other cards you own from the "
         "ante into your graveyard, then draw a card":
             _line("ante_self_then_clear_ante_and_draw", "activated_ante"),
-    },
-    # The whole card, as one line. Bespoke by the entry bar's own test: give an
-    # invented card this text and it still needs a destroy whose subject is the
-    # trigger's, plus an attach whose chooser is that subject's controller and
-    # whose host is unchosen — three things the grammar reads separately and
-    # none of which it composes yet. It was a dispatcher inside
-    # ``tap_land_for_mana`` (``ENCHANTED_LAND_TAPPED_FOR_MANA``) until this
-    # entry: as an instruction the line is announced by the tap seam, so it
-    # fires however the land became tapped and goes on the stack like any other
-    # trigger.
-    'Kudzu': {
-        "when enchanted land becomes tapped, destroy it. that land's controller "
-        "may attach this aura to a land of their choice":
-            _line("destroy_tapped_land_and_reoffer_aura", "triggered_destruction"),
     },
     'Mijae Djinn': {
         "whenever this creature attacks, flip a coin. if you lose the flip, remove "
@@ -628,27 +602,6 @@ def _consecrate_land_leaves(game: Game, owner: PlayerState, permanent: Permanent
     detach_aura(permanent, land)
 
 
-def _gaeas_liege_leaves(game: Game, owner: PlayerState, permanent: Permanent) -> None:
-    # "{T}: Target land becomes a Forest until this creature leaves the
-    # battlefield." When Gaea's Liege leaves, the lands it forested revert to
-    # their printed type (CR 611.3 — the duration ends).
-    # Dropping this creature's own contribution, not clearing the land's type:
-    # the land goes back to whatever the *remaining* effects say it is, which is
-    # what "the duration ended" means. Reading the stored type back to check it
-    # was still Forest was the bookkeeping this replaces — and it was wrong
-    # whenever something newer had made the land something else, since the
-    # Liege's effect would then have gone on applying invisibly.
-    reverted = 0
-    for land in permanent.metadata.get("forested_lands", []) or []:
-        if end_land_type_change(land, source=permanent):
-            reverted += 1
-    if reverted:
-        game.log.append(
-            f"{permanent.card.name} left the battlefield; {reverted} land(s) reverted from Forest"
-        )
-    game._refresh_dynamic_creatures()
-
-
 def _revert_linked_steal_on_leave(game: Game, owner: PlayerState, permanent: Permanent) -> None:
     # A linked-duration "gain control for as long as you control this" steal
     # (Aladdin's artifact, Old Man of the Sea's creature) ends when its source
@@ -687,7 +640,6 @@ def _oubliette_leaves(game: Game, owner: PlayerState, permanent: Permanent) -> N
 ON_LEAVE_BATTLEFIELD: dict[str, LeaveBattlefieldHook] = {
     "Cyclopean Tomb": _cyclopean_tomb_leaves,
     "Consecrate Land": _consecrate_land_leaves,
-    "Gaea's Liege": _gaeas_liege_leaves,
     "Aladdin": _revert_linked_steal_on_leave,
     "Old Man of the Sea": _revert_linked_steal_on_leave,
     "Oubliette": _oubliette_leaves,
@@ -724,7 +676,10 @@ def _resolve_optional_pay_trigger(game: Game, item: StackItem) -> None:
         "cost": cost,
         "life": int(ev.get("life", 0)),
     }
-    if total_pips(cost) > 0 and not game._player_can_pay_optional(
+    # A person is offered it whenever they hold mana the plan does not tap
+    # (`Game.payment_may_be_offered`); every other seat only what its plan
+    # can collect.
+    if total_pips(cost) > 0 and not game.payment_may_be_offered(
         game.players[player_index], entry
     ):
         return

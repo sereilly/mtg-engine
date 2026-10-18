@@ -30,11 +30,17 @@ from __future__ import annotations
 from dataclasses import replace
 
 from . import ast
+from .amounts import expect_pt
 from .conditions import _parse_condition
+from .effects.characteristics import _parse_quoted_abilities
 from .errors import GrammarError
+from .keywords import parse_keyword_list
+from .lexer import QUOTE, SELF
 from .nouns import _STATE_ADJECTIVES
+from .references import parse_recipient
 from .statements import parse_statement
 from .stream import TokenStream
+from .vocabulary import COLOR_WORDS
 
 
 def _looks_static(statement: ast.Statement) -> bool:
@@ -177,12 +183,304 @@ def _parse_leading_static_condition_line(
     if not stream.exhausted or not _looks_static(statement):
         stream.reset(mark)
         return None
-    if not isinstance(condition, ast.SourceCounterCount) and (
+    # A third admitted shape, for the first one's reason: a **count of cards in
+    # a zone** ("As long as there are seven or more cards in your graveyard,
+    # this creature gets +1/+1 and has flying." — Odyssey's Mystics). That
+    # table has no row for "there are …", so no printing of it has a second
+    # reader to take a line from.
+    if not isinstance(condition, (ast.SourceCounterCount, ast.CardsInZones)) and (
         _distributive_subject(statement) is None
     ):
         stream.reset(mark)
         return None
     return ast.StaticAbilityNode(statement, condition)
+
+
+#: The first word of a predicate that is a whole **static sentence** about its
+#: subject rather than a delta, a keyword or a colour: "…and **can't** block",
+#: "…and **attacks** each combat if able". Closed on purpose. The words behind
+#: one are recovered as printed and handed over as the sentence they
+#: abbreviate ("This creature can't block."), and `statics` then asks the
+#: compiler whether it reads that sentence — so a head listed here admits
+#: nothing by itself, and a head not listed here fails the clause loudly
+#: rather than being swallowed as part of the predicate in front of it.
+_SENTENCE_PREDICATE_HEADS = ("can't", "attacks", "attack")
+
+#: Every word a predicate of a conditional grant may open with.
+_PREDICATE_HEADS = ("gets", "get", "has", "have", "is", "are") + _SENTENCE_PREDICATE_HEADS
+
+
+def _granted_subject(stream: TokenStream) -> ast.TargetSpec | None:
+    """The subject a conditional grant is printed about, or None.
+
+    "This creature", "this enchantment", "enchanted creature", or a described
+    set ("white creatures"). **Not the pronoun**: after a fronted condition
+    "it" names whatever the condition was about — the Aura's host in "As long
+    as enchanted permanent is red or green, **it** has …" (Essence Leak), the
+    source in Homarid's — and a production that guessed would hand one card's
+    ability to the wrong permanent. The readers that know which it is keep
+    those lines.
+    """
+    try:
+        subject = parse_recipient(stream)
+    except GrammarError:
+        return None
+    if not isinstance(subject, ast.TargetSpec):
+        return None
+    if subject.quantifier in ("all", "each"):
+        return subject
+    if subject.quantifier == "this" and subject.filter.is_source:
+        return subject
+    if subject.filter.is_enchanted and subject.quantifier != "it":
+        return subject
+    return None
+
+
+def _sentence_about(subject: ast.TargetSpec, words: str) -> str | None:
+    """*words* as the static sentence its subject would print alone.
+
+    "…this creature gets +2/+2 **and can't block**" abbreviates "This creature
+    can't block.", and that sentence is what the subject has while the
+    condition holds — on an Aura too, where "enchanted creature can't block"
+    is, on the creature, the same "This creature can't block." Only one
+    creature has one: every sentence admitted here is about combat, and a
+    sentence handed to a *set* is a lord's quoted grant, which no card prints
+    behind a condition.
+    """
+    if not _is_one_creature(subject) or not words.strip():
+        return None
+    return f"This creature {words.strip()}."
+
+
+def _is_one_creature(subject: ast.TargetSpec) -> bool:
+    return subject.quantifier not in ("all", "each") and (
+        subject.filter.card_types == ("creature",)
+    )
+
+
+def _parse_granted_predicates(
+    stream: TokenStream, subject: ast.TargetSpec
+) -> tuple[ast.Statement, ...] | None:
+    """``gets ±N/±N`` / ``has <keywords>`` / ``has "<ability>"`` / ``is
+    <colour>`` / a static sentence, joined by commas and "and" — every
+    predicate of one subject, as one statement apiece, or None.
+
+    "…this creature gets +3/+3, is black, has trample, and has "At the
+    beginning of your upkeep, sacrifice a creature."" (Wayward Angel) is four.
+    A joining word is consumed only when a predicate head follows it, so the
+    clause's own tail ("as long as …", the full stop) is left for the caller.
+    """
+    statements: list[ast.Statement] = []
+    while True:
+        head = stream.peek_word()
+        if head not in _PREDICATE_HEADS:
+            return None
+        if head in ("gets", "get"):
+            stream.advance()
+            # "gets **an additional** +2/-2" (Patriarch's Desire, Divine
+            # Sacrament). The words say this delta is on top of the one the
+            # line above grants, which is what a second contribution to layer
+            # 7c already is (CR 613.4c) — so they are read and add nothing.
+            stream.accept_phrase("an", "additional")
+            try:
+                power, power_negative, toughness, toughness_negative = expect_pt(stream)
+            except GrammarError:
+                return None
+            statements.append(ast.Pump(
+                subject, power, toughness,
+                power_negative=power_negative, toughness_negative=toughness_negative,
+            ))
+        elif head in ("has", "have"):
+            stream.advance()
+            if stream.at_kind(QUOTE):
+                try:
+                    abilities, self_name = _parse_quoted_abilities(stream)
+                except GrammarError:
+                    return None
+                statements.append(
+                    ast.GainAbilityText(subject, abilities, self_name=self_name)
+                )
+            else:
+                try:
+                    keywords, disjunctive = parse_keyword_list(stream)
+                except GrammarError:
+                    return None
+                if not keywords or disjunctive:
+                    return None
+                statements.append(ast.GainKeyword(subject, keywords))
+        elif head in ("is", "are"):
+            stream.advance()
+            color = COLOR_WORDS.get(stream.peek_word() or "")
+            if color is None:
+                return None
+            stream.advance()
+            statements.append(ast.BecomeColor(subject, color))
+        else:
+            start = stream.mark()
+            while not (
+                stream.exhausted
+                or stream.at_punct(".", ",")
+                or stream.at_kind(QUOTE)
+                or stream.at_word("and")
+                or (stream.at_word("as") and stream.words_from()[:3] == ("as", "long", "as"))
+            ):
+                stream.advance()
+            sentence = _sentence_about(subject, stream.text_between(start, stream.mark()))
+            if sentence is None:
+                return None
+            statements.append(ast.GainAbilityText(subject, (sentence,)))
+        joined = stream.mark()
+        stream.accept_punct(",")
+        stream.accept_word("and")
+        if stream.mark() == joined or stream.peek_word() not in _PREDICATE_HEADS:
+            stream.reset(joined)
+            return tuple(statements)
+
+
+def _parse_granted_clause(stream: TokenStream) -> ast.Statement | None:
+    """The effect half of a conditional grant: one subject and its predicates,
+    or the one whole sentence printed *about* a subject —
+
+    "**all creatures able to block** this creature **do so**" (Stone-Tongue
+    Basilisk; Seton's Desire prints it about the enchanted creature). CR
+    509.1c's requirement on every potential blocker, which the engine reads
+    off the attacker as "All creatures able to block this creature do so." —
+    so that sentence is what the subject is handed.
+    """
+    mark = stream.mark()
+    if stream.accept_phrase("all", "creatures", "able", "to", "block"):
+        subject = _granted_subject(stream)
+        if (
+            subject is None
+            or not _is_one_creature(subject)
+            or not stream.accept_phrase("do", "so")
+        ):
+            stream.reset(mark)
+            return None
+        return ast.GainAbilityText(
+            subject, ("All creatures able to block this creature do so.",)
+        )
+    subject = _granted_subject(stream)
+    if subject is None:
+        stream.reset(mark)
+        return None
+    statements = _parse_granted_predicates(stream, subject)
+    if not statements:
+        stream.reset(mark)
+        return None
+    return statements[0] if len(statements) == 1 else ast.Conjunction(statements)
+
+
+def _parse_conditional_grant_line(stream: TokenStream) -> ast.StaticAbilityNode | None:
+    """``As long as <condition>, <subject> <predicates>.`` and its trailing
+    twin, where a predicate is something the two productions above cannot
+    read: a **quoted ability**, a **colour**, a **static sentence**, or a delta
+    printed as "an additional" one.
+
+    "As long as there are seven or more cards in your graveyard, this creature
+    gets +2/+2 and can't block." (Childhood Horror.) "…this creature is white
+    and has "{T}: Destroy target black creature."" (Repentant Vampire.)
+    "Enchanted creature can't block as long as …" (Kirtar's Desire.) One
+    continuous ability whose effect has several parts in several layers
+    (CR 613.6), all of them there exactly while the condition is.
+
+    Tried **after** its two siblings and returning None for any clause they
+    could have read, which is the ordering rule this module keeps repeating:
+    a self bonus behind a condition about your own board is
+    ``engine/static_bonuses.py``'s, and a production that parsed those lines
+    here would have a second opinion about them. What makes a line this
+    production's is a predicate nothing else reads.
+
+    The line arrives here from two places — the ordinary path, and
+    ``parse_line``'s quote guard, which refuses every line carrying a
+    quotation mark before the ordinary path can see it.
+    """
+    mark = stream.mark()
+    condition: ast.Condition | None = None
+    statement: ast.Statement | None = None
+    if stream.accept_phrase("as", "long", "as"):
+        try:
+            condition = _parse_condition(stream)
+        except GrammarError:
+            condition = None
+        if condition is not None and stream.accept_punct(","):
+            statement = _parse_granted_clause(stream)
+    else:
+        statement = _parse_granted_clause(stream)
+        if statement is not None and stream.accept_phrase("as", "long", "as"):
+            try:
+                condition = _parse_condition(stream)
+            except GrammarError:
+                condition = None
+        else:
+            statement = None
+    stream.accept_punct(".")
+    if statement is None or condition is None or not stream.exhausted:
+        stream.reset(mark)
+        return None
+    effects = statement.effects if isinstance(statement, ast.Conjunction) else (statement,)
+    if not any(_only_this_production_reads(effect, stream) for effect in effects):
+        stream.reset(mark)
+        return None
+    if _a_text_table_reads(stream):
+        stream.reset(mark)
+        return None
+    return ast.StaticAbilityNode(statement, condition)
+
+
+def _a_text_table_reads(stream: TokenStream) -> bool:
+    """Whether one of the two text tables that read a whole conditional
+    sentence about "this creature" reads the line *stream* holds — in which
+    case the line is that table's and not a production's.
+
+    "This creature can't be blocked by creatures with power 2 or greater **as
+    long as defending player controls a snow land**." (Arctic Foxes,
+    ``engine/combat_restrictions.py``.) A combat restriction with a condition
+    the table reads itself, enforced at the declaration with the defending
+    player in hand — a seat no continuous recompute has. "This creature can't
+    be blocked **as long as it's enchanted**." (Metathran Elite,
+    ``engine/static_bonuses.py``.) Each table is reached where the grammar
+    does not lower the line, and ``tests/engine/test_grammar_derived_lines.py``
+    holds the first one's lines to *failing the parser*. This production's
+    static-sentence predicate is the same words: left unasked it parsed both
+    lines, refused them a layer later, and stood between a line and its only
+    reader. A differential of the grammar's verdict on every line in the pool
+    named them; the compiled programs had not moved.
+
+    So the tables are asked, of the line as the compiler would hand it over —
+    lower-cased, the card's own name read as "this creature" — rather than
+    this module keeping a second list of which conditions each one knows.
+    The imports are at call time: both modules read the grammar themselves.
+    """
+    from ..combat_restrictions import combat_restriction_for
+    from ..static_bonuses import static_bonus_for
+
+    pieces: list[str] = []
+    start = 0
+    for index, token in enumerate(stream.tokens):
+        if token.kind == SELF:
+            pieces += [stream.text_between(start, index), "this creature"]
+            start = index + 1
+    pieces.append(stream.text_between(start, len(stream.tokens)))
+    line = " ".join(" ".join(pieces).split()).lower()
+    return (
+        combat_restriction_for(line) is not None
+        or static_bonus_for(line) is not None
+    )
+
+
+def _only_this_production_reads(effect: ast.Statement, stream: TokenStream) -> bool:
+    """Whether *effect* is a predicate the older static productions cannot
+    read — the admission test :func:`_parse_conditional_grant_line` documents.
+
+    A plain delta or keyword is not, with one exception read off the tokens:
+    "gets **an additional** …", which the pump production refuses outright.
+    """
+    if isinstance(effect, (ast.GainAbilityText, ast.BecomeColor)):
+        return True
+    return isinstance(effect, ast.Pump) and "additional" in {
+        token.text.lower() for token in stream.tokens
+    }
 
 
 def _parse_static_condition_line(stream: TokenStream) -> ast.StaticAbilityNode | None:

@@ -70,6 +70,12 @@ _REJECTIONS: tuple[tuple[str, dict, str], ...] = (
         "Grizzly Bears",
     ),
     ("exclude_colors", {"exclude_colors": ["G"]}, "Grizzly Bears"),
+    # "a **multicolored** creature" (Dragon Arch's adjective, CR 105.2b).
+    # Grizzly Bears is one colour, so a matcher ignoring the key would admit
+    # it; the positive half — that a two-colour creature *is* matched, and that
+    # a painted one is what the layers say — is demonstrated below, because a
+    # matcher that always answered False also passes this row.
+    ("multicolored", {"multicolored": True}, "Grizzly Bears"),
     ("exclude_types", {"exclude_types": ["creature"]}, "Grizzly Bears"),
     ("exclude_subtypes", {"exclude_subtypes": ["bear"]}, "Grizzly Bears"),
     ("tapped_only", {"tapped_only": True}, "Grizzly Bears"),
@@ -249,6 +255,41 @@ def test_a_class_union_matches_on_either_axis(pool):
 
     assert subject_matches(game, black, described), "black, and no artifact"
     assert subject_matches(game, artifact, described), "an artifact, and colourless"
+
+
+def test_multicolored_is_two_or_more_of_the_computed_colours(pool):
+    """The positive half of ``multicolored`` (CR 105.2b), on a permanent and on
+    a card.
+
+    Shivan Wurm is red and green and matches; a colourless artifact creature
+    does not, and neither does a mono-coloured one — the rejection row above.
+    The count is taken off the **computed** colours (layer 5), so a Grizzly
+    Bears painted red-and-green by an effect is multicoloured for as long as
+    the effect says so, and the card matcher answers the same word off the
+    printed colours for a card in a zone (CR 202.2).
+    """
+    from engine.color_changes import change_color
+    from engine.handlers._common import _card_matches_filter
+
+    described = {"type_filter": "creature", "multicolored": True}
+    wurm = Permanent(card=pool["Shivan Wurm"])
+    bears = Permanent(card=pool["Grizzly Bears"])
+    thopter = Permanent(card=pool["Ornithopter"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[wurm, bears, thopter]),
+        PlayerState(name="P2"),
+    ])
+
+    assert subject_matches(game, wurm, described), "red and green"
+    assert not subject_matches(game, bears, described), "green alone"
+    assert not subject_matches(game, thopter, described), "no colour at all"
+
+    change_color(bears, ("R", "G"))
+    assert subject_matches(game, bears, described), "two colours once painted"
+
+    assert _card_matches_filter(pool["Shivan Wurm"], described)
+    assert not _card_matches_filter(pool["Grizzly Bears"], described)
+    assert not _card_matches_filter(pool["Ornithopter"], described)
 
 
 def test_untapped_only_rejects_a_tapped_permanent(pool):
@@ -735,6 +776,12 @@ _COVERED_ELSEWHERE = {
     # --- NEM W1G4 ---
     "superlative_among":
         "test_nem_w1g4_superlative_among_reads_the_extreme_off_the_whole_board",
+    # --- APC W1G9 ---
+    "in_combat_with_source":
+        "test_apc_w1g9_in_combat_with_source_is_the_union_of_both_block_relations",
+    # --- ODY W1G9 ---
+    "attached_to_permanent":
+        "test_ody_w1g9_attached_to_a_permanent_rejects_an_attachment_on_nothing",
 }
 
 
@@ -742,6 +789,32 @@ def _r30_attach(aura, host):
     from engine.auras import attach_aura
 
     attach_aura(aura, host)
+
+
+def test_ody_w1g9_attached_to_a_permanent_rejects_an_attachment_on_nothing(pool):
+    """"Target Aura **that's attached to a permanent**" (Aura Graft).
+
+    The host phrase that says nothing about the host. Its own demonstration
+    for ``attached_to_filter``'s reason: every row of ``_REJECTIONS`` rejects
+    a bare permanent, and here the bare one *is* the rejected case while the
+    accepted one has to be attached first. An empty ``attached_to_filter``
+    could not have said this - it is falsy, so the matcher skips it and the
+    loose Aura below would pass.
+    """
+    host = Permanent(card=pool["Grizzly Bears"])
+    attached = Permanent(card=pool["Holy Strength"])
+    loose = Permanent(card=pool["Holy Strength"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[host, attached, loose]),
+        PlayerState(name="P2"),
+    ])
+    _r30_attach(attached, host)
+
+    assert subject_matches(game, attached, {"attached_to_permanent": True})
+    assert not subject_matches(game, loose, {"attached_to_permanent": True})
+    assert subject_matches(game, loose, {"attached_to_filter": {}}), (
+        "the empty nested filter is the question nobody asks"
+    )
 
 
 def test_not_enchanted_rejects_a_permanent_carrying_an_aura(pool):
@@ -2414,3 +2487,92 @@ def test_nem_w1g4_superlative_among_reads_the_extreme_off_the_whole_board(pool):
     least = {"superlative_among": {**described["superlative_among"], "extreme": "least"}}
     assert subject_matches(game, big_mine, least)
     assert not subject_matches(game, small, least)
+
+
+def test_apc_w1g9_in_combat_with_source_is_the_union_of_both_block_relations(pool):
+    """"Destroy target creature **blocking or blocked by** Cromat."
+
+    The union of ``blocking_source`` and ``blocked_by_source``, and its own key
+    because no pair of keys can state a union — every matcher ANDs them. So it
+    is demonstrated from both ends in real combats: with the source attacking,
+    its blocker answers and the creature blocking somebody else does not; with
+    the source blocking, the attacker it blocked answers and the one that got
+    through does not. Nothing about any of those creatures tells them apart.
+
+    With no source the answer must be **no**, and the pure matcher must refuse
+    the key rather than ignore it: an in-combat relation dropped from a targeted
+    destroy is every creature on the board.
+    """
+    from engine.handlers._common import permanent_matches_filter
+
+    described = {"type_filter": "creature", "in_combat_with_source": True}
+
+    attacker = Permanent(card=pool["Grizzly Bears"])
+    other_attacker = Permanent(card=pool["Grizzly Bears"])
+    blocker = Permanent(card=pool["Grizzly Bears"])
+    elsewhere = Permanent(card=pool["Grizzly Bears"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[attacker, other_attacker]),
+        PlayerState(name="P2", battlefield=[blocker, elsewhere]),
+    ])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0, 1])[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: 0, 1: 1})[0]
+
+    # The source attacking: its blocker, and nobody else's.
+    assert subject_matches(game, blocker, described, source=attacker)
+    assert not subject_matches(game, elsewhere, described, source=attacker)
+    assert not subject_matches(game, other_attacker, described, source=attacker)
+    assert not subject_matches(game, attacker, described, source=attacker), (
+        "a creature is not in combat with itself"
+    )
+    # The source blocking: the attacker it blocked, and not the other one.
+    assert subject_matches(game, attacker, described, source=blocker)
+    assert not subject_matches(game, other_attacker, described, source=blocker)
+
+    assert not subject_matches(game, blocker, described), (
+        "with no source there is no combat to read the relation off"
+    )
+    assert not permanent_matches_filter(blocker, described), (
+        "the pure half refuses the key rather than ignoring it"
+    )
+    assert object_only_filter(described) is None, (
+        "a caller with no source may not be handed the relation"
+    )
+
+
+def test_apc_w1g9_observer_source_filter_is_the_rung_between_the_two_gates():
+    """What a handler holding the ability's **controller and source** — and no
+    other seat — may be handed.
+
+    ``object_only_filter`` refuses "you control" (no observer) and the full key
+    set promises "defending player controls" (to a caller with CR 506.2's
+    seat). ``pump_event_subject`` holds exactly the two in between, and
+    Fervent Charge's "whenever a creature **you control** attacks, it gets
+    +2/+2" was refused by the narrower gate while the handler asked the wider
+    question. Both directions: what it admits, and what it must still refuse.
+    """
+    from engine.subject_filters import observer_source_filter
+
+    yours = {"type_filter": "creature", "controller": "you"}
+    assert object_only_filter(yours) is None
+    assert observer_source_filter(yours) == yours
+    assert observer_source_filter({"exclude_self": True}) == {"exclude_self": True}
+    assert observer_source_filter({"controller": "active_player"}) is not None
+    assert observer_source_filter(
+        {"power_greater_than_cards_in_hand": "you"}
+    ) is not None
+
+    for seat in ("defending_player", "that_player", "target_opponent", "target_player"):
+        assert observer_source_filter({"controller": seat}) is None, seat
+    assert observer_source_filter(
+        {"power_greater_than_cards_in_hand": "their"}
+    ) is None, "their hand is a seat the event named, not the observer's"
+    assert observer_source_filter({"no_such_key": True}) is None
+    assert observer_source_filter(
+        {"controller_controls": {"controller": "defending_player"}}
+    ) is None, "a nested phrase is asked the same question"

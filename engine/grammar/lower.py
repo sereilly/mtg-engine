@@ -30,6 +30,12 @@ live in ``grammar/lowering/``, one module per subject, mirroring
 callers outside the package import them from this module
 (``tests/engine/test_grammar_categories.py``, ``grammar/__init__.py``); moving
 the table did not move its address.
+
+**What a wrapper carries is defined here**, not re-exported: ``WRAPPER_KINDS``,
+the two walks that read into a lowered instruction (``nested_instructions``,
+``offer_branches``) and ``categories_of`` itself, which until the Phase 0 before
+Odyssey reached this module from the bottom of ``lowering/control_flow.py``.
+The section's own header says why it is here and not there.
 """
 
 import dataclasses
@@ -39,13 +45,11 @@ from . import ast
 from .derived import derived_instruction_for_line
 from .errors import LoweringError
 from .statics import _lower_static_ability
-from .lowering.control_flow import WRAPPER_KINDS
 from .lowering._events import EVENT_PRODUCES
 from .lowering._roles import describe_sequence_target_roles
 from .lowering import (
     GRAMMAR_ONLY_PAYLOAD_KEYS,
     INSTRUCTION_CATEGORIES,
-    categories_of,
     _COST_PRODUCES,
     _fused_upkeep_pay_to_untap,
 
@@ -54,11 +58,166 @@ from .lowering import (
 )
 
 
+# ---------------------------------------------------------------------------
+# What a wrapper carries
+# ---------------------------------------------------------------------------
+#
+# `categories_of` walks a lowered sequence and has to look *inside* every
+# composer before it can say what a line touches. Which kinds are composers,
+# and under which payload keys each keeps its steps, is a fact about a lowered
+# **line** rather than about any one family: the rows below are built by
+# `lowering/sequences`, `loops` and `repeats`, by every family that folds two
+# steps into one `sequence`, and by `wrap_requested_repeat` further down. This
+# file is the one module all of them pass through, and the only one in the
+# grammar that reads the table.
+#
+# It has had two homes before this one. It began at the bottom of
+# `lowering/categories.py` and left at the thousand-line guard for
+# `lowering/control_flow.py`, as "the kinds the four lowerings above emit" —
+# written hours after `sequence` and `if_then` had left that module for
+# `lowering/sequences`, as `for_each` already had for `loops`. So it was a
+# lodger there from the day it arrived: nothing in that module called it and it
+# called nothing back. It came here at the Phase 0 before Odyssey, with that
+# module eight lines under the guard. Not to a module of its own under
+# `lowering/`, for ``by_node.py``'s stated reason — "a module inside that
+# package that no family reads would be neither a family nor a floor" — and
+# that module's other rule, that a registry leaves the dispatcher, is about the
+# half that grows with every card: this one has gained three rows since Mirage.
+#
+# Public names rather than underscore-prefixed ones: they have callers outside
+# the grammar (`engine/mana_payment.py`, `scripts/parse_coverage.py`).
+# Control-flow wrappers take the categories of whatever they wrap, so gating
+# "damage" is enough to turn on a sequence of damage instructions without
+# inventing a category nobody could reason about.
+#
+# ``may`` is deliberately NOT in here: it gets its own ungated category in
+# `lowering/categories.py`, because an offer is not the same switch as the
+# effect behind it. Wrapping it with the others would let "optional" be turned
+# off under a family that is on, which is a card that performs its offer's
+# consequence without asking.
+WRAPPER_KINDS: dict[str, tuple[str, ...]] = {
+    "sequence": ("steps",),
+    "if_then": ("then", "else"),
+    "for_each": ("effect",),
+    # A round of offers repeated until nobody takes it (Eureka). A wrapper for
+    # the same reason ``for_each`` is: what the round *does* is the act it
+    # carries, and the repetition is not an effect of its own.
+    "repeat_offer_round": ("action",),
+    # A whole printed process its controller may run again (Forbidden Ritual).
+    # The same reason again: what the process *does* is the steps it carries.
+    "repeat_optional_process": ("steps",),
+    # A process repeated while a condition about the round holds (Grindstone).
+    # The third repeat that is a wrapper, and for the same reason as the two
+    # above it: what the round *does* is the steps it carries, and the stopping
+    # question is not an effect.
+    "repeat_process_while": ("steps",),
+    # A process a toll inside it may ask for again (Crooked Scales). The fourth
+    # repeat that is a wrapper, and the same reason once more: what the round
+    # *does* is the steps it carries, and asking for another is not an effect.
+    "repeat_process_on_request": ("steps",),
+    # A process repeated until a condition about its rounds holds (Tainted
+    # Pact). The fifth repeat that is a wrapper, and the same reason again.
+    "repeat_process_until": ("steps",),
+}
+
+
+#: Where an **offer** keeps the instructions behind its answers — the two kinds
+#: ``WRAPPER_KINDS`` deliberately leaves out, for the reason its comment gives:
+#: an offer is a switch of its own, so ``categories_of`` must not descend into
+#: one. A reader asking what an effect *could do* has the opposite need. CR
+#: 605.1a's "could add mana to a player's mana pool when it resolves" is true
+#: of "{T}: Choose a color. Add one mana of that color unless any player pays
+#: {1}" (Rhystic Cave), whose only mana sits behind the toll.
+OFFER_BRANCH_KEYS: dict[str, tuple[str, ...]] = {
+    "may": ("action", "then", "otherwise"),
+    "unless_player_pays": ("unpaid", "paid"),
+}
+
+
+def offer_branches(instruction: OracleInstruction) -> tuple[OracleInstruction, ...] | None:
+    """The instructions behind an offer's answers, or None if it is not one.
+
+    :func:`nested_instructions`' sibling for the kinds it must not open — see
+    :data:`OFFER_BRANCH_KEYS`. Separate rather than a flag on that function so
+    no caller of the category walk can open an offer by accident.
+    """
+    keys = OFFER_BRANCH_KEYS.get(instruction.kind)
+    if keys is None:
+        return None
+    return tuple(
+        step for key in keys for step in (instruction.payload.get(key) or ())
+    )
+
+
+def nested_instructions(instruction: OracleInstruction) -> tuple[OracleInstruction, ...] | None:
+    """The instructions a wrapper carries, or None if it is not one.
+
+    ``choose_one`` is a wrapper too, and its options are ``{label, instruction}``
+    pairs rather than a bare tuple — the modal shape the pending-choice prompt
+    reads. Its categories are its options', because that is what the card can
+    actually do; giving it a category of its own would say the *choosing* is the
+    effect.
+    """
+    if instruction.kind == "create_delayed_trigger":
+        # A delayed ability's effect is one instruction rather than a list, so
+        # it cannot ride `WRAPPER_KINDS` above — but it is a wrapper all the
+        # same, and an inner effect no category gates must ungate the line that
+        # arms it. An entry with no instruction is an ability that would fire
+        # into nothing, which is the empty-wrapper refusal below.
+        inner = instruction.payload.get("instruction")
+        return (inner,) if inner is not None else ()
+    if instruction.kind == "arm_draw_replacement":
+        # "The next time you would draw a card this turn, instead <effect>."
+        # (Mangara's Tome.) A wrapper for ``create_delayed_trigger``'s reason
+        # exactly — the effect is one instruction rather than a list, and what
+        # the line touches is what the armed effect touches.
+        inner = instruction.payload.get("instruction")
+        return (inner,) if inner is not None else ()
+    if instruction.kind == "choose_one":
+        return tuple(
+            mode["instruction"] for mode in instruction.payload.get("modes") or ()
+        )
+    nested_keys = WRAPPER_KINDS.get(instruction.kind)
+    if nested_keys is None:
+        return None
+    nested: tuple[OracleInstruction, ...] = ()
+    for key in nested_keys:
+        nested += tuple(instruction.payload.get(key) or ())
+    return nested
+
+
+def categories_of(instructions: tuple["OracleInstruction", ...]) -> frozenset[str]:
+    """Migration categories covered by a lowered instruction sequence.
+
+    Here rather than in ``lowering/categories.py`` because that module is a
+    *registry* and this is a walk: every step of it asks
+    :func:`nested_instructions`, which lives in this file, and a wrapper whose
+    contents it could not see would report the wrapper's own kind as the whole
+    answer. The table is imported rather than the walk exported, which is the
+    direction the layering allows.
+    """
+    found: set[str] = set()
+    for instruction in instructions:
+        nested_keys = nested_instructions(instruction)
+        if nested_keys is not None:
+            if not nested_keys:
+                return frozenset({"__ungated__"})
+            inner = categories_of(nested_keys)
+            if "__ungated__" in inner:
+                return frozenset({"__ungated__"})
+            found |= inner
+            continue
+        category = INSTRUCTION_CATEGORIES.get(instruction.kind)
+        if category is None:
+            return frozenset({"__ungated__"})
+        found.add(category)
+    return frozenset(found)
+
 
 #: Where a wrapper keeps the instructions it carries, **for rewriting** — every
 #: row of :data:`WRAPPER_KINDS` plus the two an *offer* holds.
 #:
-#: Derived from ``lowering/control_flow``'s table rather than copied, so a
+#: Derived from the table above rather than copied, so a
 #: wrapper added there is rewritable by construction. Here, beside
 #: :func:`lower_ability`, because that function is the only caller and the only
 #: place a condition and the instructions it is about are both in view. ``may`` is the difference and it is a real one:
@@ -164,7 +323,7 @@ def wrap_requested_repeat(
     that is the one place holding all of it. Here rather than in
     ``lowering/repeats.py`` with the five loops it joins, because the search
     above reads :data:`_REWRITE_NESTED_KEYS` and a ``lowering/`` family may not
-    import another one.
+    import the dispatcher back.
 
     Returns *instructions* unchanged when no step of them asked, which is every
     line in the pool but one — so nothing else's compiled program moves. The
@@ -295,6 +454,31 @@ def _rebind_blocking_pronoun(statement: ast.Statement) -> ast.Statement:
     return dataclasses.replace(statement, **updates) if changed else statement
 
 
+def _returning_from_exile(instruction: OracleInstruction) -> OracleInstruction:
+    """*instruction* with every self-return inside it reading the source out
+    of **exile** — see the activated branch of :func:`lower_ability`.
+
+    Walked by shape rather than by a table of wrapper kinds, because the
+    return this is written for sits inside a delayed trigger inside an offer:
+    a nested instruction is an ``OracleInstruction`` wherever a payload holds
+    one, alone or in a sequence. Rebuilt, never mutated — a compiled
+    instruction is shared by every copy of the card.
+    """
+    def walk(value):
+        if isinstance(value, OracleInstruction):
+            return _returning_from_exile(value)
+        if isinstance(value, tuple):
+            return tuple(walk(item) for item in value)
+        if isinstance(value, list):
+            return [walk(item) for item in value]
+        return value
+
+    payload = {key: walk(value) for key, value in instruction.payload.items()}
+    if instruction.kind == "return_self_from_graveyard":
+        payload["from"] = "exile"
+    return OracleInstruction(instruction.kind, instruction.value, payload)
+
+
 def lower_ability(
     node: ast.AbilityNode, *, event: str | None = None,
 ) -> tuple[OracleInstruction, ...]:
@@ -410,9 +594,20 @@ def lower_ability(
             for cost in node.costs
             if type(cost) in _COST_PRODUCES
         )
-        return _lower_line_statement(
+        lowered = _lower_line_statement(
             _rebind_blocking_pronoun(node.statement), produced=produced
         )
+        if any(isinstance(cost, ast.ExileSelf) for cost in node.costs):
+            # "{3}{U}, **Exile this creature**: … If you do, **return this
+            # card to the battlefield**." (Shifty Doppelganger.) The sentence
+            # names no zone to return the card from, and the lowering reads
+            # that as a graveyard — Nether Spirit's reading, right for every
+            # card that prints the words anywhere else. Here the ability's own
+            # cost has said where "this card" is: in exile. This is the one
+            # place the cost clause and the effect clause are both in view,
+            # so it is where the zone is stamped.
+            lowered = tuple(_returning_from_exile(step) for step in lowered)
+        return lowered
     if isinstance(node, ast.KeywordLine):
         return ()
     if isinstance(node, ast.RegistryLine):
@@ -444,4 +639,5 @@ def lower_ability(
 __all__ = [
     "GRAMMAR_ONLY_PAYLOAD_KEYS",
     "INSTRUCTION_CATEGORIES", "categories_of", "lower_ability", "lower_statement",
+    "WRAPPER_KINDS", "OFFER_BRANCH_KEYS", "nested_instructions", "offer_branches",
 ]

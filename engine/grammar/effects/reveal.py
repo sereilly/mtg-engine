@@ -104,6 +104,13 @@ def _parse_reveal_top(stream: TokenStream) -> ast.Statement:
     counted_pick = _accept_reveal_number_from_top_pick(stream)
     if counted_pick is not None:
         return counted_pick
+    # "Reveal **the cards in your library**. An opponent chooses from among
+    # them a creature card, a land card, and a noncreature, nonland card. …"
+    # (Guided Passage.) The whole pile rather than its top, so it is tried in
+    # front of the literal "the top" and declines without consuming.
+    whole = _accept_reveal_library_opponent_chooses(stream)
+    if whole is not None:
+        return whole
     stream.expect_word("the")
     stream.expect_word("top")
     # "Reveal the top **three cards** of your library. Target opponent chooses
@@ -205,6 +212,87 @@ def _parse_reveal_top(stream: TokenStream) -> ast.Statement:
 _SORTED_MATCH_ZONES: tuple[str, ...] = ("hand", "battlefield")
 _SORTED_REST_ZONES: tuple[str, ...] = ("graveyard", "exile")
 
+#: "…and the rest **on the bottom of your library in any order**." (Goblin
+#: Ringleader and Apocalypse's six other recruiters.) The third place the rest
+#: of a sorted pile may go, and not a word in the list above because it is not
+#: printed as one: the two zones there follow "into your", and this one is a
+#: *position* in a zone — every word of which is required, "in any order"
+#: included. CR 401.4 makes that order the owner's to choose, so a printing
+#: that stated one ("in a random order") is a different instruction the handler
+#: does not perform, and a printing that named the *top* is a different card.
+_SORTED_REST_BOTTOM: tuple[str, ...] = (
+    "on", "the", "bottom", "of", "your", "library", "in", "any", "order",
+)
+
+
+def _accept_sorted_rest(stream: TokenStream) -> "str | None":
+    """Where "the rest" of a sorted reveal goes, at the cursor — the words
+    after "and the rest" — or None when they name nowhere this reads.
+
+    The caller holds the mark and resets on None; this consumes what it reads.
+    """
+    if stream.accept_phrase(*_SORTED_REST_BOTTOM):
+        return "library_bottom"
+    if not stream.accept_phrase("into", "your"):
+        return None
+    rest_zone = stream.peek_word()
+    if rest_zone not in _SORTED_REST_ZONES:
+        return None
+    stream.advance()
+    return rest_zone
+
+
+def _accept_reveal_library_opponent_chooses(
+    stream: TokenStream,
+) -> "ast.RevealLibraryOpponentChooses | None":
+    """``the cards in your library. An opponent chooses from among them
+    <a described card>, …, and <a described card>. You put the chosen cards
+    into your hand. Then shuffle.`` at the cursor, or None with the cursor
+    where it was. (Guided Passage.)
+
+    All four sentences, interior full stops included, for
+    :class:`ast.RevealLibraryOpponentChooses`' reason. The descriptions are read
+    by the ordinary noun parser, one per article, so "a noncreature, nonland
+    card" keeps its own comma and a fourth description is this production with
+    a longer list. Past the first sentence nothing declines: the pile is this
+    card's, and a tail that is not this one is a broken sentence rather than
+    somebody else's.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("the", "cards", "in", "your", "library"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    for word in ("an", "opponent", "chooses", "from", "among", "them"):
+        stream.expect_word(word)
+    described: list[ast.ObjectFilter] = []
+    while True:
+        stream.expect_word("a", "an")
+        described.append(parse_object_filter(stream))
+        # ", a land card" / ", and a …" / " and a …": the list goes on only
+        # where another article follows, so the sentence's own full stop ends
+        # it and a pair joined by a bare "and" is the same list.
+        joined = stream.mark()
+        stream.accept_punct(",")
+        stream.accept_word("and")
+        if not stream.at_word("a", "an"):
+            stream.reset(joined)
+            break
+    if not stream.accept_punct("."):
+        raise stream.error("expected where the chosen cards go")
+    for word in ("you", "put", "the", "chosen", "cards", "into", "your", "hand"):
+        stream.expect_word(word)
+    if not stream.accept_punct("."):
+        raise stream.error("expected the shuffle after the chosen cards")
+    # "**Then shuffle.**" The pile was every card in the library, so nothing is
+    # left in an order anybody did not see; required, so deleting it fails the
+    # line. The final full stop is the sequence parser's.
+    stream.expect_word("then")
+    stream.expect_word("shuffle")
+    return ast.RevealLibraryOpponentChooses(tuple(described))
+
 
 def _accept_counted_reveal_sorting_by_name(
     stream: TokenStream,
@@ -294,6 +382,13 @@ def _accept_counted_reveal_sorting_by_filter(
     Both destinations are read and checked against the same closed lists the
     named sort uses, so a printing that sorted somewhere the handler cannot
     reach refuses here rather than lowering onto a zone nothing moves to.
+
+    "…and the rest **on the bottom of your library in any order**." (Goblin
+    Ringleader; Apocalypse prints the sentence on seven cards with seven
+    different filters.) The rest's third destination, read by
+    :func:`_accept_sorted_rest` — and the filter in front of it is the ordinary
+    noun phrase, so "all **Goblin** cards" and "all creature cards **of the
+    chosen type**" (Brass Herald) are this production with nothing added.
     """
     mark = stream.mark()
     try:
@@ -333,14 +428,13 @@ def _accept_counted_reveal_sorting_by_filter(
         stream.reset(mark)
         return None
     stream.advance()
-    if not stream.accept_phrase("and", "the", "rest", "into", "your"):
+    if not stream.accept_phrase("and", "the", "rest"):
         stream.reset(mark)
         return None
-    rest_zone = stream.peek_word()
-    if rest_zone not in _SORTED_REST_ZONES:
+    rest_zone = _accept_sorted_rest(stream)
+    if rest_zone is None:
         stream.reset(mark)
         return None
-    stream.advance()
     return ast.RevealTopSortingByFilter(
         count, filt, match_zone=match_zone, rest_zone=rest_zone,
     )

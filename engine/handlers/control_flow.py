@@ -32,19 +32,24 @@ from ..named_counters import counters_on
 from ..oracle_types import (BIDDING_WINNER,
                             CHOSEN_CARD_TYPE_THIS_WAY, CHOSEN_COLOR_THIS_WAY,
                             CHOSEN_NUMBER_THIS_WAY, CLAIMABLE_EXILED_CARDS,
+                            COIN_FLIPS_MADE,
                             EXILED_THIS_WAY_OBJECTS, MANA_PAID_BY_SEAT,
                             SWEPT_OWNER_SEATS,
                             REVEALED_HAND_CARDS, REVEALED_TOP_CARDS_BY_SEAT,
                             MILLED_THIS_WAY, DISCARDED_THIS_WAY,
-                            PER_OBJECT_SEAT_RECORDS,
+                            PER_OBJECT_SEAT_RECORDS, PROCESS_ROUNDS_SO_FAR,
                             OracleInstruction)
 from ..oracle_types import SECRET_NUMBERS_BY_SEAT
+from ..oracle_types import (EVENT_SPELL_MANA_COST,
+                            OTHER_THAN_EVENT_SUBJECT_PLAYER,
+                            STACK_TARGET_CONTROLLER)
 from ..turn_state import started_the_turn
 from ..repeated_offers import OFFER_TAKEN_RESULTS
 from ..resumption import run_resumable
 from ._common import (CHOSEN_CARD_TYPE, _card_matches_filter, attached_host,
-                      defending_player_seat, flip_coin,
-                      permanent_matches_filter, permanent_state_holds)
+                      defending_player_seat, flip_coin, flip_coin_for,
+                      permanent_matches_filter, permanent_state_holds,
+                      triggering_spell)
 from .registry import effect_handler
 from ..mana_payment import mana_cost_label
 
@@ -227,6 +232,27 @@ def _role_scoped(
         announced.target, announced.target_permanent_id,
         announced.target_permanent_index,
     )
+    if entry.get("kind") == "spell":
+        # "Counter **target spell** and Suffocating Blast deals 3 damage to
+        # target creature." A role whose object is on the stack, which is the
+        # one channel the three saved above do not carry — a counter has read
+        # ``context.stack_target`` since Counterspell, and no scope here ever
+        # narrows it. So this scope takes the *neighbour's* permanent out of
+        # the other channels and leaves the spell where it was.
+        #
+        # A spell that has left the stack is CR 608.2b's illegal target: the
+        # step is skipped and the half beside it still happens. Asked here
+        # rather than left to the handler, whose own answer for "nothing
+        # named" is the top of the stack — right for a caller that named
+        # nothing and wrong for an announcement whose spell is gone. By
+        # identity, because ``StackItem`` compares by value.
+        named = context.stack_target
+        if named is None or not any(obj is named for obj in game.stack):
+            return context if wrapper else None
+        return dataclasses.replace(
+            context, target_permanent_index=None, target_permanent_id=None,
+            announced_targets=remembered,
+        )
     if role_is_seat(entry):
         seat = resolve_role_player(game, announced, payload, role)
         if seat is None or game.players[seat].lost:
@@ -1184,6 +1210,26 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         described = payload.get("filter") or {}
         return any(_card_matches_filter(card, described) for card in given)
 
+    if kind == "exiled_this_way_share_a_name":
+        # "…unless **it has the same name as another card exiled this way**" /
+        # "…until **you exile two cards with the same name**" (Tainted Pact).
+        # CR 201.2a over the cards this effect has exiled so far: the step in
+        # front of the clause wrote this round's, and a repeated process files
+        # the rounds before it under ``PROCESS_ROUNDS_SO_FAR``. By *position*
+        # (``cards_sharing_a_name``), because "another" cannot be asked by
+        # identity — two copies of a card in a library are one object.
+        from ..counted_names import cards_sharing_a_name
+
+        earlier = list(
+            (context.results.get(PROCESS_ROUNDS_SO_FAR) or {}).get("exiled_cards")
+            or ()
+        )
+        latest = list(context.results.get("exiled_cards") or ())
+        sharing = cards_sharing_a_name(earlier + latest)
+        if payload.get("of_latest"):
+            return any(index >= len(earlier) for index in sharing)
+        return bool(sharing)
+
     if kind == "it_happened":
         happened = bool(context.results.get(payload.get("key")))
         # "If you **can't**" (Cocoon) is the same record read the other way. An
@@ -1287,9 +1333,20 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
                 value = subject.effective_toughness
             else:
                 value = subject.effective_power
+        # "…less than or equal to **the number of cards in your graveyard**"
+        # (Ghastly Demise). A bound that is a count, taken now — as the
+        # instruction is followed (CR 608.2c) — through the evaluator every
+        # counted amount goes through. The spell itself is still on the stack
+        # while it resolves (CR 608.2n puts it in the graveyard as the last
+        # step), so it does not count itself: the card's own ruling.
+        bound = int(payload.get("count", 0))
+        counted = payload.get("count_from")
+        if isinstance(counted, dict):
+            from ._common import count_from_payload
+
+            bound = count_from_payload(game, context, counted)
         return _comparison_holds(
-            {"op": payload.get("op", "eq"), "value": int(payload.get("count", 0))},
-            value,
+            {"op": payload.get("op", "eq"), "value": bound}, value,
         )
 
     if kind == "is_state":
@@ -1428,12 +1485,19 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             return False
         return life_holds(player)
 
-    if kind == "cards_in_zones":
+    if kind in ("cards_in_zones", "distinct_among"):
         # "If there are **ten or more creature cards total in all graveyards**"
         # (Avatar of Woe). The count is a ``count_spec`` — the one a
         # where-clause over the same noun phrase builds — so it is answered by
         # the one evaluator every such count goes through, and the narrowings a
         # card in a graveyard can carry are the ones that one tests.
+        #
+        # "If there are **four or more basic land types among lands that player
+        # controls**" (Mask of Intolerance) is the same comparison over the
+        # same kind of spec, with the aggregate naming what is counted — two
+        # kinds because the two are admitted in different places (a cast-time
+        # cost gate reads piles, never a seat an event froze), one branch
+        # because nothing about answering them differs.
         from ._common import count_from_payload
 
         return _compare_count(
@@ -1683,6 +1747,79 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             game._effective_colors(target), game._effective_colors(chosen)
         )
 
+    if kind == "target_shares_color_with_matching":
+        # "Counter target spell **if it shares a color with a creature you
+        # control**." (Jaded Response.) CR 105.2's relation between the spell
+        # this effect targets and every permanent the printed phrase admits —
+        # both read now, while the instruction is followed (CR 608.2c): a
+        # creature that entered, left or was recoloured in response is judged
+        # as it stands, and so is a spell a Lace or a Vodalian Mystic changed.
+        #
+        # The picker offers every spell: the clause is a condition on the
+        # *effect*, not a targeting restriction ("target spell" is the whole of
+        # the printed target phrase, CR 608.2b), so a spell that fails it is a
+        # legal target the counter does nothing to.
+        #
+        # The spell's colours through ``_stack_item_colors`` — the one reader
+        # of what colour a stack object is — and each permanent's through layer
+        # 5. ``share_a_color`` is the one reading of the relation: a colourless
+        # object on either side shares nothing (CR 105.2c), and a spell that
+        # has left the stack answers no, like every clause beside this one.
+        from ..object_colors import share_a_color
+        from ..subject_filters import subject_matches
+
+        chosen = context.stack_target
+        if (
+            payload.get("target") != "spell"
+            or chosen is None
+            or chosen not in game.stack
+            or context.caster not in game.players
+        ):
+            return False
+        colors = game._stack_item_colors(chosen)
+        if not colors:
+            return False
+        described = dict(payload.get("filter") or {})
+        observer = game.players.index(context.caster)
+        return any(
+            share_a_color(colors, game._effective_colors(permanent))
+            for permanent in game.all_permanents()
+            if subject_matches(
+                game, permanent, described, observer=observer,
+                source=context.source_permanent,
+            )
+        )
+
+    if kind == "targets_differ_in_color":
+        # "…unless **either one is a color the other isn't**." (Dead Ringers.)
+        # CR 105.2 over the two targets' colour *sets*, read now, while the
+        # instruction is followed (CR 608.2h) and through layer 5: equal sets
+        # are the only way not to differ, so two colourless creatures do not
+        # (CR 105.2c — the card's ruling says so) and a white-blue creature
+        # beside a blue one does.
+        #
+        # **A pair this cannot read differs.** CR 608.2b: "If part of the
+        # effect requires information about an illegal target, it fails to
+        # determine any such information" — so with one target gone, or made
+        # illegal in response (protection from black is the ordinary way), the
+        # comparison has no answer, and the sentence that needs one does not
+        # happen. The clause is printed behind "unless", where "they differ" is
+        # the answer under which nothing is destroyed — the survivor is not
+        # destroyed alone on the strength of a comparison nobody could make.
+        from ._common import resolve_target_slots
+
+        first, second = resolve_target_slots(game, context, 2)
+        if (
+            first is None or second is None or first is second
+            or not game.is_on_battlefield(first)
+            or not game.is_on_battlefield(second)
+            or not game.resolving_targets_all_legal()
+        ):
+            return True
+        return frozenset(game._effective_colors(first)) != frozenset(
+            game._effective_colors(second)
+        )
+
     if kind == "color_is_most_common":
         # "…white is the most common color among all permanents or is tied for
         # most common." The Djinns print it on a static, where
@@ -1751,6 +1888,35 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         wanted = tuple(payload.get("keywords") or ())
         has = bool(wanted) and all(target.has_keyword(word) for word in wanted)
         return (not has) if payload.get("negated") else has
+
+    if kind == "target_card_shares_type_with_cost_card":
+        # "Return target card from your graveyard to your hand **if it shares
+        # a card type with the card exiled this way**." (Holistic Wisdom.) Two
+        # cards and no permanent: the target is the graveyard slot the
+        # activation announced (the handler beside this reads the same one),
+        # and the other is what the ability's own cost ate, off the payment
+        # path's record (CR 608.2h). Compared by **printed** card types
+        # (CR 205.2a; a card in a zone has no computed ones, CR 613.1), any one
+        # in common answering — an Artifact Creature shares with an artifact
+        # and with a creature both.
+        #
+        # No target or no record answers False: there is then nothing "it"
+        # names, and the return this guards must not happen.
+        from ..layer_bridge import printed_shape
+
+        slot = context.target_permanent_index
+        pile = context.caster.graveyard
+        if not isinstance(slot, int) or isinstance(slot, bool) or not 0 <= slot < len(pile):
+            return False
+        recorded = (context.choices or {}).get(str(payload.get("channel")))
+        if recorded is None:
+            return False
+        paid = recorded if isinstance(recorded, (list, tuple)) else (recorded,)
+        target_types = printed_shape(pile[slot])[0]
+        return any(
+            target_types & printed_shape(getattr(entry, "card", entry))[0]
+            for entry in paid
+        )
 
     if kind == "cost_object_was":
         # "…**if the exiled creature was a Thrull**" (Soul Exchange). The object
@@ -1998,6 +2164,28 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             (context.trigger_context or {}).get("attacked_or_blocked_this_combat")
         )
 
+    if kind == "came_under_your_control_this_turn":
+        # "…if this creature didn't attack **or come under your control this
+        # turn**" (Mad Dog). CR 302.6's own record, read through the predicate
+        # summoning sickness asks: a permanent not controlled continuously
+        # since its controller's turn began came under that control during it —
+        # by entering or by changing hands, which Erg Raiders' ruling says are
+        # both "coming under your control". The lowering admits the clause only
+        # under a trigger of the controller's own turn, which is when that
+        # reading holds.
+        #
+        # A source that has left answers False for the *positive* clause — the
+        # direction CR 603.4 takes for an intervening-if it cannot check — so
+        # the negated one is what answers True and lets a "sacrifice it" find
+        # nothing to sacrifice.
+        source = context.source_permanent
+        came = (
+            source is not None
+            and game.is_on_battlefield(source)
+            and not game._controlled_since_turn_start(source)
+        )
+        return (not came) if payload.get("negated") else came
+
     if kind == "came_under_your_control_since_your_last_upkeep":
         # CR 702.30a's intervening-if — echo's whole condition, and the reason
         # an echo creature pays once and never again. Read off the record the
@@ -2202,6 +2390,16 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         # The seat is the ability's controller (CR 109.5), which is
         # ``context.caster`` for a triggered ability as much as for a spell, and
         # the comparison is the one that other reader makes.
+        if payload.get("whose") == "event_subject_player":
+            # "…if it's not **that player's** turn" (Price of Glory). The seat
+            # the fire site froze. No record is a clause about nobody, and
+            # answers False either way round — the direction that stops the
+            # ability rather than the one that destroys on a guess.
+            seat = (context.trigger_context or {}).get("event_subject_player")
+            if not isinstance(seat, int):
+                return False
+            theirs = game.active_player_index == seat
+            return (not theirs) if payload.get("negated") else theirs
         if context.caster not in game.players:
             return False
         mine = game.active_player_index == game.players.index(context.caster)
@@ -2276,10 +2474,53 @@ def flip_a_coin(game: Game, instruction: OracleInstruction, context: OracleExecu
     effect of its own — it is the randomiser the conditionals branch on, and it
     lives beside ``if_then`` for the same reason ``sequence`` does.
     """
-    won = flip_coin()
+    won = flip_coin_for(game, context.caster, flip=flip_coin)
     context.results["coin_flip"] = won
     game.log.append(
         f"{context.card.name}: {'won' if won else 'lost'} the coin flip"
+    )
+    return True, "resolved"
+
+
+@effect_handler("flip_coins_until_loss")
+def flip_coins_until_loss(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Flip a coin that many times or until you lose a flip, whichever comes
+    first." (Squee's Revenge.)
+
+    ``flip_coin`` in a loop with the two bounds the sentence prints: the number
+    an earlier step of this resolution recorded, and the first loss. Each flip
+    is CR 705.1's own — one draw from the seeded RNG, logged in the words the
+    single flip logs, so a run reads as that many flips rather than as one
+    event — and CR 705.2's: the resolving player's, won or lost by nobody else.
+
+    Two records for the two questions the sentence behind it asks. ``coin_flip``
+    is whether the run **lost no flip**, which is what "if you win all the
+    flips" means and why the ordinary flip conditional can read it; a run of
+    zero flips lost none (and pays for none). ``COIN_FLIPS_MADE`` is how many
+    coins were actually flipped — a loss ends the run, so it can be fewer than
+    the number chosen, and "for each flip" counts these.
+
+    The loop is bounded by its own arithmetic and not by the number: a seat may
+    name any number at all (CR 107.1), and the run still ends at the first
+    loss.
+    """
+    limit = max(
+        0, int(context.results.get(str(instruction.payload.get("amount_from")), 0) or 0)
+    )
+    card_name = getattr(context.card, "name", "an effect")
+    made = 0
+    clean = True
+    while made < limit and clean:
+        clean = flip_coin_for(game, context.caster, flip=flip_coin)
+        made += 1
+        game.log.append(
+            f"{card_name}: {'won' if clean else 'lost'} the coin flip"
+        )
+    context.results["coin_flip"] = clean
+    context.results[COIN_FLIPS_MADE] = made
+    game.log.append(
+        f"{card_name}: {made} of {limit} flip(s) made, "
+        + ("every one won" if clean else "the last one lost")
     )
     return True, "resolved"
 
@@ -2311,7 +2552,7 @@ def coin_flip_stakes_loop(game: Game, instruction: OracleInstruction, context: O
         game.log.append(f"{card_name}: no opponent to play against")
         return True, "resolved"
     stake = max(0, int(instruction.payload.get("stake", 1)))
-    won = flip_coin()
+    won = flip_coin_for(game, caster, flip=flip_coin)
     context.results["coin_flip"] = won
     if won:
         game._gain_life(caster, stake, card_name)
@@ -2401,6 +2642,37 @@ def choose_number(game: Game, instruction: OracleInstruction, context: OracleExe
     low = int(instruction.payload.get("minimum", 0))
     printed_high = instruction.payload.get("maximum")
     high = None if printed_high is None else int(printed_high)
+    ceiling = instruction.payload.get("maximum_from_count")
+    if ceiling is not None:
+        # "Discard **any number** of cards at random." (Rites of Initiation.)
+        # A number with no printed range: its ceiling is a count only the
+        # resolution knows (the cards in the chooser's hand), and its reader is
+        # the next step of this same resolution — so it is recorded in the
+        # scratchpad alone, whatever the source is. A permanent's standing
+        # ``chosen_number`` is a different record with a different reader, and
+        # an ability printing this sentence must not overwrite it.
+        if context.caster not in game.players:
+            game.log.append(f"{context.card.name}: nobody to choose a number")
+            return True, "resolved"
+        seat = game.players.index(context.caster)
+        from ._common import count_from_payload
+
+        high = max(low, count_from_payload(game, context, dict(ceiling), instruction))
+        # The policy for a seat nobody asks is the whole offer — the one
+        # ``_default_discard`` states for the chosen form of this same
+        # sentence ("discard any number of cards"), so the two spellings of
+        # one decision default alike.
+        context.results[CHOSEN_NUMBER_THIS_WAY] = high
+        if high <= low:
+            # One legal answer is not a choice, so nobody is asked.
+            return True, "resolved"
+        game.arm_pending_choice(
+            "number_choice", seat,
+            card_name=context.card.name if context.card is not None else "",
+            permanent=None, minimum=low, maximum=high, default_number=high,
+            result_key=CHOSEN_NUMBER_THIS_WAY, _context=context,
+        )
+        return True, "resolved"
     if permanent is None:
         # "Choose a number. Destroy all artifacts and creatures with mana value
         # equal to that number." (Void.) A *spell* choosing a number: there is
@@ -2414,6 +2686,18 @@ def choose_number(game: Game, instruction: OracleInstruction, context: OracleExe
             return True, "resolved"
         seat = game.players.index(context.caster)
         default = _most_telling_mana_value(game, seat, low, high)
+        # …unless the number is not a mana value at all. "Flip a coin **that
+        # many times** or until you lose a flip" (Squee's Revenge): what the
+        # value is for is the sentence behind the choice, read off the compiled
+        # program where every such question is, and the length a seat nobody
+        # asks takes is a weight beside it.
+        from ..ai_valuation import (FLIP_RUN_LENGTH,
+                                    chosen_number_bounds_flip_run)
+
+        if context.card is not None and chosen_number_bounds_flip_run(
+            context.card, instruction
+        ):
+            default = max(low, FLIP_RUN_LENGTH if high is None else min(high, FLIP_RUN_LENGTH))
         context.results[CHOSEN_NUMBER_THIS_WAY] = default
         game.arm_pending_choice(
             "number_choice", seat,
@@ -2839,17 +3123,32 @@ def choose_creature_type(game: Game, instruction: OracleInstruction, context: Or
         game.log.append(f"{card_name}: nobody to choose a creature type")
         return True, "resolved"
     seat = game.players.index(context.caster)
-    default = _best_creature_type_to_sweep(game, seat)
+    # "Choose a creature type **other than Wall**." (Unnatural Selection.) The
+    # printed exclusion, applied to all three places a type can come from: the
+    # default stamped here, the list the prompt offers and the answer the
+    # resolver accepts (``arm_creature_type_choice`` carries it to the last
+    # two). Absent for every other card, whose default and prompt are
+    # byte-identical to what they were.
+    excluded = tuple(
+        str(word).strip().lower()
+        for word in (instruction.payload.get("excluded") or ())
+    )
+    default = _best_creature_type_to_sweep(game, seat, excluded=excluded)
     context.results[key] = default
     game.arm_creature_type_choice(
         seat, card_name=card_name, result_key=key, context=context,
-        default=default,
+        default=default, excluded=excluded,
     )
-    game.log.append(f"{card_name}: {game.players[seat].name} chooses a creature type")
+    game.log.append(
+        f"{card_name}: {game.players[seat].name} chooses a creature type"
+        + (f" other than {', '.join(word.title() for word in excluded)}" if excluded else "")
+    )
     return True, "resolved"
 
 
-def _best_creature_type_to_sweep(game: Game, seat: int) -> str | None:
+def _best_creature_type_to_sweep(
+    game: Game, seat: int, excluded: tuple[str, ...] = (),
+) -> str | None:
     """The creature type a sweep would most like to name, from *seat*'s side.
 
     The type maximising (opponents' creatures of it − own creatures of it), ties
@@ -2863,7 +3162,13 @@ def _best_creature_type_to_sweep(game: Game, seat: int) -> str | None:
 
     The subtypes are read through the CR 613 accessor, so a creature Artificial
     Evolution or an animated land has become a Zombie counts as one.
+
+    *excluded* is a printed "other than <type>": a word in it is never the
+    answer, so the default is one the resolver would accept. Only **creature**
+    types are scored — an animated Forest's "forest" is a subtype of the
+    permanent and no answer to "choose a creature type".
     """
+    from ..grammar.vocabulary import CREATURE_TYPES
     from ..layer_bridge import computed_types
 
     scores: dict[str, int] = {}
@@ -2872,6 +3177,8 @@ def _best_creature_type_to_sweep(game: Game, seat: int) -> str | None:
             continue
         for subtype in computed_types(perm)[1]:
             word = str(subtype).lower()
+            if word in excluded or word not in CREATURE_TYPES:
+                continue
             scores[word] = scores.get(word, 0) + (-1 if owner == seat else 1)
     if not scores:
         return None
@@ -2918,6 +3225,23 @@ def if_then(game: Game, instruction: OracleInstruction, context: OracleExecution
     if evaluate_condition(game, context, condition):
         return _run(game, _steps(instruction, "then"), context)
     return _run(game, _steps(instruction, "else"), context)
+
+
+def _exiled_cards_still_in_exile(game: Game, context) -> list:
+    """The cards "that card" names behind an exile step of this same effect,
+    less any that have left exile since — ``put_exiled_cards_into_zone``'s own
+    two readers (the scratchpad, and the copy a delayed ability froze), so an
+    offer of that step and the step itself cannot disagree about what is there.
+    """
+    recorded = (
+        (context.trigger_context or {}).get("exiled_cards")
+        or context.results.get("exiled_cards")
+        or ()
+    )
+    return [
+        card for card in recorded
+        if any(held is card for player in game.players for held in player.exile)
+    ]
 
 
 def _action_is_takeable(
@@ -3012,6 +3336,14 @@ def _action_is_takeable(
     # the reason the singular states: a choice drawn from anywhere else is not a
     # price this player pays, and a wrongly-False answer withdraws an offer the
     # card makes.
+    # "Exile the top card of your library. **You may put that card into your
+    # hand** …" (Tainted Pact, on an empty library.) The card is the one an
+    # earlier step of this effect exiled, so with none recorded — or with the
+    # recorded one gone from exile since — there is nothing to take and nothing
+    # to offer. The same two places ``put_exiled_cards_into_zone`` reads, so
+    # what is offered and what would move are one answer.
+    if instruction.kind == "put_exiled_cards_into_zone" and context is not None:
+        return bool(_exiled_cards_still_in_exile(game, context))
     if instruction.kind == "choose_permanents":
         if instruction.payload.get("controlled_by") != "chooser":
             return True
@@ -3092,8 +3424,29 @@ def _action_is_takeable(
     if instruction.kind == "exile_cards_from_graveyard":
         from ._common import graveyard_card_matches
 
+        pile_owner = instruction.payload.get("graveyard_owner")
+        if pile_owner == "damaged_player" and not instruction.payload.get("up_to"):
+            # "…you may exile **target card from that player's graveyard**."
+            # (Zombie Cannibal.) One card out of the pile the firing event
+            # named, so an empty pile is a real "nothing to exile" — there is
+            # no legal target, and asking "you may?" and then offering a pick
+            # with no answer is two prompts a seat has to dismiss. "Up to"
+            # keeps its offer (Rysorian Badger): zero is one of its answers.
+            # With no recorded seat the offer stands, the direction this
+            # function's docstring names.
+            seat = (
+                (context.trigger_context if context is not None else None) or {}
+            ).get("defending_player_index")
+            if isinstance(seat, int) and 0 <= seat < len(game.players):
+                return any(
+                    graveyard_card_matches(instruction.payload, card)
+                    for card in game.players[seat].graveyard
+                )
+            return True
         if (
-            instruction.payload.get("graveyard_owner") != "you"
+            # "you" and the seat an offer was made to (Gravestorm) are both
+            # *player* here — the offered seat picking from its own pile.
+            pile_owner not in ("you", "offered_player")
             or instruction.payload.get("targets")
         ):
             return True
@@ -3172,6 +3525,19 @@ def _action_is_takeable(
     if instruction.kind == "remove_counter_from_self":
         if source is None:
             return False
+        # "…sacrifice this creature **unless you remove a +1/+1 counter from
+        # it**." (Junk Golem.) A *permanent* that left while this ability
+        # waited has no counter to give: CR 122.2 — counters "are not retained
+        # if that object moves from one zone to another" — so the removal is
+        # an action nobody can take, however many the departed object still
+        # carries in memory. Without it the offer was made over a Golem in a
+        # graveyard, and a Living Artifact destroyed in response to its own
+        # trigger still paid out its life. Only a permanent is asked: the
+        # other source this reader answers for is a card in exile (All
+        # Hallow's Eve), which is where its counters are.
+        if context is not None and source is context.source_permanent:
+            if not game.is_on_battlefield(source):
+                return False
         counter = str(instruction.payload.get("counter", "doom"))
         # The same reader the removal itself uses (``named_counters.counters_on``),
         # so the offer and the action cannot disagree about where the counters
@@ -3443,7 +3809,10 @@ def may(game: Game, instruction: OracleInstruction, context: OracleExecutionCont
     )
 
     def offer(player_index: int) -> None:
-        _offer_to_seat(game, instruction, context, player_index, rebind=rebind)
+        _offer_to_seat(
+            game, instruction, context, player_index, rebind=rebind,
+            aim=actor in _NAMED_SEAT_ACTORS,
+        )
 
     # Through ``run_resumable`` like every other loop in this file, and for the
     # reason ``engine/resumption.py`` states: the offer suspends on an
@@ -3537,6 +3906,20 @@ _EACH_ACTORS = frozenset({
 _EVENT_ACTORS = frozenset({"event_subject_player", "event_subject_controller"})
 
 
+#: The actors that name **one seat the resolution's target channel does not
+#: hold**, and whose offer therefore *aims* the branches at it: ``target``
+#: becomes the offered seat, so a player word inside the offer ("has Molten
+#: Influence deal 4 damage to **them**") means the seat that was asked.
+#:
+#: Narrower than the rebind the two sets above make, and on purpose. Those
+#: move ``caster`` too, because their offered seat *performs* the action
+#: (sacrifices, discards, draws). Here nobody but the effect's controller
+#: performs anything: the spell deals the damage, and the spell's controller
+#: is who "a source you control" must go on naming (CR 109.5) - moved, a
+#: punisher's damage would be a source the punished player controls.
+_NAMED_SEAT_ACTORS = frozenset({STACK_TARGET_CONTROLLER})
+
+
 def _offered_seats(
     game: Game, actor: str, context: OracleExecutionContext,
     start_seat: int | None = None,
@@ -3608,6 +3991,31 @@ def _offered_seats(
         host = attached_host(game, context.source_permanent)
         seat = game.controller_index_of(host) if host is not None else None
         return [] if seat is None else [seat]
+    if actor == STACK_TARGET_CONTROLLER:
+        # "Counter target instant or sorcery spell unless **its controller**
+        # has Molten Influence deal 4 damage to them." The controller of the
+        # spell this object targeted, read off the stack object itself
+        # (CR 112.2: a spell's controller is the player who cast it) rather
+        # than off ``context.target``, which for an announcement that named a
+        # spell and no player is whatever seat a targetless resolution
+        # defaults to - the caster's opponent, even when the spell being
+        # countered is the caster's own.
+        #
+        # The object is the one ``counter_top_stack_spell`` will counter if
+        # the offer is declined, found the way that handler finds it: the
+        # named spell while it is still on the stack (by identity), nothing
+        # once a named spell has left (CR 608.2b - nobody is asked about a
+        # counter that cannot happen), and the top of the stack for the
+        # headless caller that named none.
+        #
+        # One reader with the recipients that name the same seat after the
+        # counter has run (``_common.stack_target_controller_seat``).
+        from ._common import stack_target_controller_seat
+
+        seat = stack_target_controller_seat(game, context, spells_only=True)
+        if seat is None or game.players[seat].lost:
+            return []
+        return [seat]
     if actor == "target_opponent":
         # "**Target opponent** may ante the top card of their library."
         # (Amulet of Quoz.) The seat the ability chose, held in
@@ -3750,9 +4158,15 @@ def _derived_cost_is_unpayable(printed, context: OracleExecutionContext, game) -
     return permanent_mana_cost(permanent) is None
 
 
+#: The instruction kinds that act on **an object on the stack** - which, by
+#: the time a queued answer is drained on the headless path, has resolved and
+#: left. See the last step of :func:`_offer_to_seat`.
+_STACK_OBJECT_KINDS = frozenset({"counter_top_stack_spell", "counter_stack_ability"})
+
+
 def _offer_to_seat(
     game: Game, instruction: OracleInstruction, context: OracleExecutionContext,
-    player_index: int, rebind: bool = False,
+    player_index: int, rebind: bool = False, aim: bool = False,
 ) -> None:
     """Arm one seat's copy of the offer.
 
@@ -3784,6 +4198,10 @@ def _offer_to_seat(
     # scratchpad shared by reference — which is exactly CR 608.2h's split
     # between what an offer was about and what the resolution knows.
     context = dataclasses.replace(context)
+    if aim:
+        # See ``_NAMED_SEAT_ACTORS``: the player word inside the offer names
+        # the offered seat, and the performer does not move.
+        context = dataclasses.replace(context, target=player)
     if rebind:
         # **Both ends of the sentence move to the offered seat.** ``target`` is
         # what a back-reference to a player reads ("that player's life total
@@ -3875,7 +4293,10 @@ def _offer_to_seat(
         _resolved_cost(alternative, context, game)
         for alternative in (instruction.payload.get("cost_alternatives") or ())
     ]
-    if (cost or life_cost) and not game._player_can_pay_optional(player, {
+    # "Cannot afford" is the plan's answer for a seat the engine answers for.
+    # A person is still asked whenever they hold mana the plan does not tap
+    # (`Game.payment_may_be_offered`): the choice in "unless" is theirs.
+    if (cost or life_cost) and not game.payment_may_be_offered(player, {
         "cost": cost,
         "cost_alternatives": alternatives,
         "life_cost": life_cost,
@@ -3976,6 +4397,21 @@ def _offer_to_seat(
         )
     elif life_cost:
         entry["prompt"] = f"{preamble}Pay {life_cost} life?"
+    elif (
+        on_accept
+        and on_accept[0].kind == "put_exiled_cards_into_zone"
+        and on_accept[0].payload.get("zone", "hand") == "hand"
+    ):
+        # "You may put **that card** into your hand" (Tainted Pact). A free
+        # offer says nothing about itself, and this one is a decision about a
+        # particular card — so the prompt names it. Public: the card is face up
+        # in exile and the exile's own log line has already said what it is.
+        offered = _exiled_cards_still_in_exile(game, context)
+        if offered:
+            entry["prompt"] = (
+                f"{preamble}Put {', '.join(card.name for card in offered)} "
+                "into your hand?"
+            )
     # Mirror a plain "gain N life" consequence into the legacy `life` field so
     # the prompt UI keeps describing what accepting does. Display only —
     # _pay_optional runs the instruction branch and returns before reading it.
@@ -3984,7 +4420,31 @@ def _offer_to_seat(
         amount = on_accept[0].payload.get("amount")
         if isinstance(amount, int):
             entry["life"] = amount
-    game.arm_pending_choice("optional_pay", player_index, **entry)
+    choice = game.arm_pending_choice("optional_pay", player_index, **entry)
+    # **An offer about something on the stack cannot outlive the resolution
+    # that made it.** "Counter target instant or sorcery spell unless its
+    # controller has Molten Influence deal 4 damage to them": the spell the
+    # decline branch counters is the next object to resolve. An interactive
+    # game holds this resolution open until the seat answers
+    # (``resolving_stack_item``, CR 608.2). A headless one does not - the
+    # object pops and the queue is drained when the stack is empty
+    # (``StackMixin._settle``) - which for every other offer is a harmless
+    # reordering and for this one is the whole card: the answer arrived after
+    # the spell it was about had resolved, so a declined punisher countered
+    # nothing and a paid Imprison bought a counter of an ability that had
+    # already happened. So where nothing is holding the resolution, the seat
+    # nobody is asking answers where the offer stands. Three cards print the
+    # shape (Imprison, Mana Vortex, Molten Influence).
+    if (
+        choice is not None
+        and game.resolving_stack_item is None
+        and player_index not in game.interactive_seats
+        and any(
+            step.kind in _STACK_OBJECT_KINDS
+            for step in (*on_accept, *on_decline)
+        )
+    ):
+        game._default_optional_pay(choice)
 
 
 @effect_handler("unless_player_pays")
@@ -4011,12 +4471,28 @@ def unless_player_pays(game: Game, instruction: OracleInstruction, context: Orac
     payload = dict(instruction.payload)
     unpaid = tuple(payload.get("unpaid") or ())
     paid = tuple(payload.get("paid") or ())
-    # "…unless any player pays {X}" (Soul Strings): the announced X, read now.
-    cost = _resolved_cost(payload.get("cost"), context, game)
     caster = context.caster
     if caster is None or caster not in game.players:
         return True, "resolved"
     caster_index = game.players.index(caster)
+    priced_spell = None
+    if dict(payload.get("cost") or {}).get("cost_from") == EVENT_SPELL_MANA_COST:
+        # "…may pay **that spell's mana cost**." (Ice Cave.) Read off the spell
+        # the trigger fired on, now — and on every link of the chain, since
+        # each is this handler again and the spell can leave between two
+        # answers. No spell left, or one with no mana cost (CR 118.6: an
+        # unpayable cost), is a price nobody can pay: the chain ends as though
+        # every seat had declined, which is what CR 118.6 makes of an offer no
+        # player may take.
+        priced_spell, cost = _event_spell_and_cost(game, context)
+        if cost is None:
+            for step in unpaid:
+                game._execute_oracle_instruction(step, context)
+            return True, "resolved"
+    else:
+        # "…unless any player pays {X}" (Soul Strings): the announced X, read
+        # now.
+        cost = _resolved_cost(payload.get("cost"), context, game)
     # Every seat the printed reference names, in the order they are asked. CR
     # 101.4 orders a multi-seat offer from the active player, so the chain
     # starts there rather than at seat 0 — the same order ``_offered_seats``
@@ -4027,15 +4503,29 @@ def unless_player_pays(game: Game, instruction: OracleInstruction, context: Orac
     # them. That is the only difference between the two, which is why it is a
     # payload key and not a second handler. A player who has left the game is
     # nobody (CR 800.4a), read off the engine's own state-based-action flag.
+    #
+    # "**Any other player** may pay …" (Ice Cave) is the third set: everyone
+    # but the seat the firing event froze — the player who cast the spell —
+    # which includes this ability's own controller whenever somebody else
+    # cast. With no seat recorded the words are measured from nobody, and
+    # nobody is asked.
     count = len(game.players)
     active = game.active_player_index or 0
+    payer = payload.get("payer")
+    excluded_seat = caster_index
+    if payer == OTHER_THAN_EVENT_SUBJECT_PLAYER:
+        excluded_seat = (context.trigger_context or {}).get("event_subject_player")
     seats = [
         index
         for index in sorted(
             range(count), key=lambda i: ((i - active) % count, i)
         )
         if not getattr(game.players[index], "lost", False)
-        and (payload.get("payer") == "any_player" or index != caster_index)
+        and (payer == "any_player" or index != excluded_seat)
+        and not (
+            payer == OTHER_THAN_EVENT_SUBJECT_PLAYER
+            and not isinstance(excluded_seat, int)
+        )
     ]
     asked = int(payload.get("asked_seats", 0))
     if asked >= len(seats):
@@ -4072,12 +4562,43 @@ def unless_player_pays(game: Game, instruction: OracleInstruction, context: Orac
         ),
         _on_reflexive=(),
         _context=context,
+        # The spell a derived price was read off. An answer that arrives after
+        # it has left the stack buys nothing, so it must charge nothing: the
+        # offer is then one no player may take (``_optional_action_still_
+        # takeable``), and its decline moves the chain on to find that out.
+        **({"_priced_spell": priced_spell} if priced_spell is not None else {}),
         prompt=(
-            f"Pay {mana_cost_label(cost)}?" if cost
+            # The derived price names the spell it was read off, so the seat
+            # being asked can see what the payment is for — and a spell that
+            # costs {0} is still a question ("Pay {0}?"), not a blank one.
+            f"Pay {mana_cost_label(cost)} ({priced_spell.card.name}'s mana cost)?"
+            if priced_spell is not None
+            else f"Pay {mana_cost_label(cost)}?" if cost
             else f"Pay {life_price} life?" if life_price else "Pay?"
         ),
     )
     return True, "resolved"
+
+
+def _event_spell_and_cost(game: Game, context: OracleExecutionContext):
+    """``(stack item, cost)`` for "that spell's mana cost" under a cast
+    trigger, or ``(None, None)`` when there is nothing payable to read.
+
+    The spell is the one the trigger fired on, found on the stack by the
+    object the event recorded — the lookup "counter it" one handler over makes
+    (``_common.triggering_spell``), so the price and the counter behind it are
+    read off one object, and off *that* object: two Fireballs cast for
+    different X are one card and two prices. The cost is
+    ``mana_payment.spell_mana_cost``: printed symbols, the announced X, None
+    for a spell with no mana cost.
+    """
+    from ..mana_payment import spell_mana_cost
+
+    spell = triggering_spell(game, context)
+    if spell is None:
+        return None, None
+    cost = spell_mana_cost(spell)
+    return (None, None) if cost is None else (spell, cost)
 
 
 #: The last item :func:`repeat_offer_round` walks: the end of one round, where
@@ -4429,6 +4950,113 @@ def repeat_process_while(game: Game, instruction: OracleInstruction, context: Or
         game.log.append(f"{getattr(context.card, 'name', 'Effect')}: repeating")
 
 
+#: The loop a round is running under, for :func:`end_process_round` — the step
+#: that is the end of that round and may run long after the loop has returned.
+#: ``REPEAT_PROCESS``'s arrangement and for its reason.
+PROCESS_UNTIL = "repeat_process_until_this_way"
+
+#: Whether :func:`repeat_process_until` is on the Python stack *right now*, and
+#: what the round that just ended inside it asked for. A round that ends
+#: inline is repeated by the loop that ran it; one that ends on a seat's answer
+#: finds no loop there and starts the next round itself.
+_PROCESS_LOOP_LIVE = "repeat_process_until_live"
+_PROCESS_ROUND_AGAIN = "repeat_process_until_again"
+
+
+@effect_handler("repeat_process_until")
+def repeat_process_until(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Exile the top card of your library. You may put that card into your
+    hand unless it has the same name as another card exiled this way. **Repeat
+    this process until you put a card into your hand or you exile two cards
+    with the same name, whichever comes first.**" (Tainted Pact.)
+
+    One more repeat in this file and one more mechanism: a loop that ends on
+    conditions asked **when the round is over** — and whose round may end in
+    an offer, so "over" can be an answer away. ``repeat_process_while`` asks
+    its condition on the line after the round and says why it cannot be
+    resumable; this one's question is a *step* of the round instead
+    (:func:`end_process_round`, which the lowering puts on every way out of
+    the round's last sentence), so it is asked wherever the round really ends:
+    here, inline, or in the resolver of the prompt the round stopped on.
+
+    That is why there are two ways to start the next round. A round that ended
+    inline says so in the scratchpad and this loop runs it — a ``while``, so a
+    process of sixty prompt-free rounds is sixty turns of a loop and not sixty
+    nested resolutions. A round that ended on an answer finds this function
+    long returned, and :func:`end_process_round` dispatches the instruction
+    again, which is ``request_process_repeat``'s shape.
+
+    ``resets`` are the records the round's own steps write. Before each round
+    their lists are filed under ``PROCESS_ROUNDS_SO_FAR`` and the keys cleared:
+    "that card" is this round's card, and "another card exiled this way" is
+    every round's.
+
+    The round is the last thing each turn of the loop does, which is
+    ``engine/resumption.py``'s rule — after it there is only the read of what
+    the round's own end step recorded.
+    """
+    steps = _steps(instruction, "steps")
+    if not steps:
+        return True, "resolved"
+    results = context.results
+    results[PROCESS_UNTIL] = instruction
+    while True:
+        earlier = results.setdefault(PROCESS_ROUNDS_SO_FAR, {})
+        for key in instruction.payload.get("resets") or ():
+            written = results.pop(key, None)
+            if isinstance(written, (list, tuple)) and written:
+                earlier.setdefault(key, []).extend(written)
+        results[_PROCESS_ROUND_AGAIN] = False
+        results[_PROCESS_LOOP_LIVE] = True
+        try:
+            _run(game, steps, context)
+        finally:
+            results[_PROCESS_LOOP_LIVE] = False
+        if not results.pop(_PROCESS_ROUND_AGAIN, False):
+            return True, "resolved"
+
+
+@effect_handler("end_process_round")
+def end_process_round(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """The end of one round of :func:`repeat_process_until`, and the only
+    place its stopping clauses are asked.
+
+    Three answers. **A stopping clause holds**: the process is over. **The
+    round did nothing** — not one record its steps write was written: a
+    process that can no longer be performed is not repeated (CR 101.3: any
+    part of an instruction that is impossible to perform is ignored). That is
+    Tainted Pact on an empty library, where exiling the top card exiles
+    nothing; nobody loses, because nothing was drawn. It is also what keeps a
+    loop whose clauses can no longer come true from being a hang. **Otherwise**
+    the process happens again.
+
+    The stopping clauses come first, so a round that both ended the process
+    and emptied the library reports the reason the card printed.
+    """
+    loop = context.results.get(PROCESS_UNTIL)
+    name = getattr(context.card, "name", "Effect")
+    if loop is None:
+        # Only reachable if the step outlived the wrapper its lowering puts
+        # round it, which no compiled program does — said rather than assumed.
+        game.log.append(f"{name}: no process to repeat")
+        return True, "resolved"
+    if any(
+        evaluate_condition(game, context, dict(condition))
+        for condition in loop.payload.get("until") or ()
+    ):
+        game.log.append(f"{name}: the process ends")
+        return True, "resolved"
+    if not any(context.results.get(key) for key in loop.payload.get("resets") or ()):
+        game.log.append(f"{name}: the process cannot continue")
+        return True, "resolved"
+    game.log.append(f"{name}: repeating the process")
+    if context.results.get(_PROCESS_LOOP_LIVE):
+        context.results[_PROCESS_ROUND_AGAIN] = True
+        return True, "resolved"
+    game._execute_oracle_instruction(loop, context)
+    return True, "resolved"
+
+
 @effect_handler("choose_one")
 def choose_one(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """A ``choose_one`` reached at *resolution*: alternatives that are a step of
@@ -4592,8 +5220,17 @@ def for_each(game: Game, instruction: OracleInstruction, context: OracleExecutio
     # is the only thing that can answer. Read beside the two counted forms
     # above, before either branch that wants a board to scan.
     repeat_cost = filters.get("repeat_from_cost")
+    # "For each **delay counter removed this way**" (Delaying Shield) — the
+    # fourth number, and the plainest: a count an earlier step of this same
+    # effect wrote into the resolution scratchpad, with no seat and no base.
+    # Read once, before the first repetition, for the snapshot rule above: a
+    # body that removed more counters must not lengthen its own loop.
+    repeat_result = filters.get("repeat_from_result")
     seat_set = filters.get("players")
-    if repeat_cost is not None:
+    if repeat_result is not None:
+        times = int(context.results.get(str(repeat_result), 0) or 0)
+        matched = [_A_REPETITION] * max(0, times)
+    elif repeat_cost is not None:
         paid = (context.choices or {}).get("additional_costs_paid") or {}
         times = int(paid.get(str(repeat_cost), 0) or 0)
         matched = [_A_REPETITION] * max(0, times)

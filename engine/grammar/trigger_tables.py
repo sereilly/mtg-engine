@@ -138,6 +138,9 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # discard seam, exactly as ``land_played``'s and ``draws_card``'s are.
     ("discards_card", ("you", "discard", "a", "card")),
     ("discards_card", ("an", "opponent", "discards", "a", "card")),
+    # "Whenever **a player** discards a card" (Confessor): the same event with
+    # no seat narrowed away.
+    ("discards_card", ("a", "player", "discards", "a", "card")),
     # "Whenever a spell or ability an opponent controls causes you to discard a
     # card" (Spiritual Focus). Carried here as well as in `engine/oracle.py`'s
     # table for this file's standing reason: a condition only one front end
@@ -337,6 +340,10 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # how much was lost is the event's, and "for each 1 life you lost" reads it
     # out of the trigger's captured context rather than out of these words.
     ("you_lose_life", ("you", "lose", "life")),
+    # "Whenever you win a coin flip …" (Chance Encounter). Bare, like the two
+    # above: which flip it was is the event's, and the effect reads nothing
+    # out of these words.
+    ("you_win_coin_flip", ("you", "win", "a", "coin", "flip")),
     # "Whenever you sacrifice a permanent …" (Havoc Jester). Announced from
     # ``Game.sacrifice_permanent``, the one place CR 701.21a happens. Bare, like
     # the life gain above: what was sacrificed is the event's, and no card in
@@ -377,6 +384,19 @@ _FILTERED_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
     # the two front ends turn one printed phrase into one filter.
     (("you", "activate", "a", "loyalty", "ability", "of"),
      "you_activate_loyalty_ability"),
+    # "Whenever a spell or ability an opponent controls **destroys** a
+    # noncreature permanent you control" (Karmic Justice). CR 701.8's keyword
+    # action as an event: the fixed words name who did it and what was done,
+    # and the noun phrase behind them is the permanent it was done to — this
+    # table's shape exactly, so it is a row and not a production. Whose spell
+    # or ability it was is payload on `engine/oracle.py`'s row
+    # (`destroyed_cause`), as every seat narrowing in this file is.
+    #
+    # No collision with the two "…an opponent controls **causes**…" readings
+    # (`_WHENEVER_EVENTS`' discard row, `trigger_matched`'s Sacred Ground
+    # clause): a phrase is accepted whole or not at all, and the verb differs.
+    (("a", "spell", "or", "ability", "an", "opponent", "controls", "destroys"),
+     "permanent_destroyed"),
 )
 
 # The same, for events whose subject comes *first* — "a creature you control
@@ -431,6 +451,12 @@ _BARE_BOARD_WIDE_BLOCK_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
 
 
 _SUBJECT_LED_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
+    # "Whenever **a creature** attacks or blocks, …" (Powerstone Minefield).
+    # The board-wide union, under the kind `engine/oracle.py`'s table gives it
+    # and announced at both combat fire sites. First, because "attacks" below
+    # is its strict prefix: read there, "or blocks" is left on the stream and
+    # the line dies on the effect's subject.
+    (("attacks", "or", "blocks"), "matching_creature_attacks_or_blocks"),
     (("attacks",), "matching_creature_attacks"),
     (("enters", "the", "battlefield"), "matching_permanent_enters"),
     (("enters",), "matching_permanent_enters"),

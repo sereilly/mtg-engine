@@ -56,7 +56,8 @@ from ._counted_redirects import (_lower_next_damage_redirect,
 # damage …" (Soltari Guerrillas, Shield Dancer): CR 615.8's instance named by
 # the sentence, a floor this module hands those two shapes down to.
 from ._instance_redirects import (_lower_named_source_redirect,
-                                  _lower_redirect_onto_dealer)
+                                  _lower_redirect_onto_dealer,
+                                  _lower_spell_class_instance_redirect)
 
 
 #: The key a Nova Pentacle-shaped redirect writes its opponent's pick under, and
@@ -94,6 +95,12 @@ def _lower_redirect_damage(node: ast.RedirectDamage) -> tuple[OracleInstruction,
       pointing at nothing, and CR 614.9 makes that a redirect that silently does
       nothing at all.
     """
+    if node.spell_types:
+        # "The next time **an instant or sorcery spell** would deal damage to
+        # you this turn, that spell deals that damage to its controller
+        # instead." (Aegis of Honor.) Read first: the source is a class of
+        # spells, which none of the branches below has a reading for.
+        return _lower_spell_class_instance_redirect(node)
     if node.amount is not None:
         # "**The next N** damage …" — a point pool rather than the whole event.
         # Read ahead of every branch below rather than beside them, because

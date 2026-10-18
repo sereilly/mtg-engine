@@ -21,8 +21,10 @@ when both halves of a split are description builders. The single-slot payload
 keys are a closed vocabulary CR 601.2 has not added to in decades; the roles
 builders have gained one per set since Fumarole — the dependent relation
 (Glyph of Delusion), the independent slots (Fumarole), the seat slot (Donate),
-the graveyard slot (Goblin Welder), and now the slots a sentence spends one
-step at a time (Lunge).
+the graveyard slot (Goblin Welder), the slots a sentence spends one step at a
+time (Lunge), and now a slot on the **stack** beside one that is not
+(Suffocating Blast: "counter target spell and … deals 3 damage to target
+creature").
 
 ``_common`` imports the three names its families read straight from here
 rather than through ``_targets``: a re-export chain is a binding nobody reads
@@ -242,6 +244,12 @@ def _sequence_role_name(
     filt = described.get("filter") or {}
     if described.get("kind") in SEAT_ROLE_KINDS:
         name = "player"
+    elif described.get("kind") == "spell":
+        # "Counter **target spell** and … deals 3 damage to target creature."
+        # (Suffocating Blast.) An object on the stack has no filter to read a
+        # noun off either, and the printed head noun is the one word every
+        # such slot shares.
+        name = "spell"
     else:
         name = filt.get("type_filter") or filt.get("subtype_filter") or typeless
     # **A repeat of a name already taken is qualified by the seat the slot
@@ -290,6 +298,31 @@ def _cannot_be_one_permanent(first: dict, second: dict) -> bool:
     }) in _CONTRADICTORY_CONTROLLERS
 
 
+def _names_different_nouns(first: dict, second: dict) -> bool:
+    """Whether the two slots' noun phrases have different **heads**.
+
+    "Destroy target **artifact or enchantment**. If this spell was kicked, it
+    deals damage … to target **creature**." (Orim's Thunder.) The third way a
+    line can prove it named two targets rather than one twice, and it is about
+    the copy rather than about the board: a back-reference is lowered to a copy
+    of its antecedent, and a copy may *lose* a narrowing on the way (Jabari's
+    Influence's "it" drops "that attacked you this turn") but never changes
+    what kind of thing the phrase names. So two slots whose printed nouns
+    differ have no antecedent either could be a copy of.
+
+    Weaker than :func:`_cannot_be_one_permanent` in one respect, which is why
+    it is its own predicate: an artifact creature answers both of Orim's
+    Thunder's phrases, and CR 115.3 lets one object be chosen once for each
+    instance of the word "target". The roles walk refuses the repeat
+    (``legality.role_target_options``), as it does for every roles spell.
+    """
+    nouns = [
+        (described.get("filter") or {}).get("type_filter")
+        for described in (first, second)
+    ]
+    return all(isinstance(noun, str) for noun in nouns) and nouns[0] != nouns[1]
+
+
 #: Where, below a line's own steps, an announced target can be printed.
 #:
 #: CR 601.2c is about the **printed instance of the word "target"** and says
@@ -305,19 +338,60 @@ def _cannot_be_one_permanent(first: dict, second: dict) -> bool:
 _ANNOUNCEMENT_BRANCH_KEYS = ("steps", "then", "else", "action", "otherwise")
 
 
-def _announced_slot_descriptions(instructions) -> list[dict]:
-    """Every ``targets`` description under *instructions*, in printed order."""
-    found: list[dict] = []
+def _announced_slots(instructions) -> list[tuple[dict, object]]:
+    """Every ``targets`` description under *instructions*, in printed order,
+    beside **the instruction that carries it**."""
+    found: list[tuple[dict, object]] = []
     for instruction in instructions:
         payload = getattr(instruction, "payload", None) or {}
         described = payload.get("targets")
         if isinstance(described, dict):
-            found.append(described)
+            found.append((described, instruction))
         for key in _ANNOUNCEMENT_BRANCH_KEYS:
             nested = payload.get(key)
             if isinstance(nested, (list, tuple)):
-                found.extend(_announced_slot_descriptions(nested))
+                found.extend(_announced_slots(nested))
     return found
+
+
+def _announced_slot_descriptions(instructions) -> list[dict]:
+    """Every ``targets`` description under *instructions*, in printed order."""
+    return [described for described, _carrier in _announced_slots(instructions)]
+
+
+def _spell_role_description(described: dict, carrier) -> dict:
+    """*described* as a **spell role** carries it: with every stack narrowing
+    its own step's picker enforces.
+
+    A role *is* its description — the roles walk enumerates a slot from
+    nothing else — and a counter keeps what narrows its spell on its own
+    payload rather than in ``targets`` ("counter target **creature** spell" is
+    ``card_types`` beside a bare description; ``targeting._counter_spec`` is
+    the reader). Stamped as it stood, such a slot would offer every spell on
+    the stack to a card that names some of them. So the step's own derived
+    picker is asked, and each ``stack_*`` key it answers with rides the role
+    under that name; ``targeting._from_targets_payload`` hands them back.
+
+    Anything else the step's picker says that a role has no word for refuses
+    the line, which is the direction that cannot widen an announcement. No
+    card prints one today: Suffocating Blast's "target spell" is bare.
+    """
+    from ...targeting import STACK_TARGET_KIND, derive_instruction_spec
+
+    own = derive_instruction_spec((carrier,)) or {}
+    unsaid = sorted(
+        key for key in own
+        if key != "kind" and not key.startswith("stack_")
+    )
+    if own.get("kind") != STACK_TARGET_KIND or unsaid:
+        raise LoweringError(
+            "the step that targets a spell is picked by more than a role can "
+            "say" + (": " + ", ".join(unsaid) if unsaid else "")
+        )
+    return {
+        **described,
+        **{key: value for key, value in own.items() if key.startswith("stack_")},
+    }
 
 
 def _stamp_slot_roles(instructions, roles: list, by_position: dict, seen: list):
@@ -399,6 +473,15 @@ def describe_sequence_target_roles(
     kind is still handed back rather than guessed at; that remainder is in
     SET_PLAYBOOK's Known gaps with the cards it costs.
 
+    **A spell beside anything that is not one is the first argument again**,
+    one zone over: "Counter **target spell** and Suffocating Blast deals 3
+    damage to **target creature**." A back-reference to a spell names a spell,
+    so a stack slot beside a battlefield slot or a seat is two targets. That
+    pair is the one this function **never hands back**: handed back, the line
+    is read off its first description — a picker offering the spell alone and
+    a creature slot nobody announced — so where the walk cannot take the other
+    slot (an "any target", an "up to one", a third slot) the line refuses.
+
     Narrow in four further ways, each of which is a card this must not claim:
 
     * the plain quantifier "target" only. "Up to one" may be answered with
@@ -443,26 +526,85 @@ def describe_sequence_target_roles(
     from ...subject_filters import untestable_filter_keys
     from ...targeting import SEAT_ROLE_KINDS
 
-    slots = list(enumerate(_announced_slot_descriptions(instructions)))
+    carried = _announced_slots(instructions)
+    slots = list(enumerate(described for described, _carrier in carried))
     announced = [
         (position, described) for position, described in slots
         if described.get("quantifier") == "target"
     ]
     if len(slots) != 2 or len(announced) != 2:
+        # **One spell beside anything else is still two targets**, whatever
+        # the other slot's quantifier and however many there are: the proof
+        # below is about the *kind* of thing each points at. So a line this
+        # function cannot turn into roles — "counter target spell and … deals
+        # 3 damage to **any target**", a third slot, an "up to one" — is not
+        # handed back to be read off its first description, which is the
+        # spell-only picker and the bystander the brief's four mis-plays were.
+        # It refuses, naming what the walk would have to learn.
+        lone_spell = [d.get("kind") for _p, d in slots].count("spell") == 1
+        if lone_spell and len(slots) > 1:
+            raise LoweringError(
+                "a line targeting a spell and another object or player "
+                "announces both (CR 601.2c), and the roles walk takes exactly "
+                "one plain 'target' beside the spell"
+            )
         return instructions
     kinds = [described.get("kind") for _position, described in announced]
     seats = len([kind for kind in kinds if kind in SEAT_ROLE_KINDS])
     objects = len([kind for kind in kinds if kind == "object"])
-    # One seat beside one object, or **two objects no one permanent could
-    # answer both of** — the two ways a line can prove it named two targets
-    # rather than one twice. See :data:`_CONTRADICTORY_CONTROLLERS`; everything
-    # else is handed back, which is the 42-announcement remainder the paragraph
-    # above is about.
-    if not (
+    spells = kinds.count("spell")
+    if spells == 1:
+        # "Counter **target spell** and Suffocating Blast deals 3 damage to
+        # **target creature**." A spell on the stack beside something that is
+        # not one: provably two targets, by this function's own argument — a
+        # back-reference can never change what kind of thing it points at — so
+        # CR 601.2c announces both. The line used to be left with its *first*
+        # description alone, and driven that was a picker offering the spell
+        # and nothing else, the cast accepted with no creature on any
+        # battlefield, a named artifact dealt the damage, and an unnamed
+        # creature slot answered by whichever creature the resolver's scan met
+        # first; then it was refused outright, because no roles walk had a
+        # stack slot. It has one now (``targeting.role_is_stack``): the walk
+        # enumerates it off the stack picker, the announcement carries the
+        # stack object beside the permanent ids on the two channels a
+        # ``StackItem`` has always had, and each step is scoped to its own
+        # (CR 608.2b: one illegal target is skipped and the other half still
+        # happens).
+        #
+        # Beside one object or one seat, and nothing else: a second spell is
+        # a back-reference by the same argument (Prohibit's "counter that
+        # spell"), and any other kind is a slot the walk has no word for —
+        # refused rather than handed back, because handed back is the
+        # one-description card above.
+        if seats + objects != 1:
+            other = next(kind for kind in kinds if kind != "spell")
+            raise LoweringError(
+                f"a line targeting a spell and a {other!r} slot announces both "
+                "(CR 601.2c), and no roles walk enumerates that pair"
+            )
+        announced = [
+            (
+                position,
+                _spell_role_description(described, carried[position][1])
+                if described.get("kind") == "spell" else described,
+            )
+            for position, described in announced
+        ]
+    # One seat beside one object, a **spell beside either**, or **two objects
+    # no one permanent could answer both of** — the ways a line can prove it
+    # named two targets rather than one twice. See
+    # :data:`_CONTRADICTORY_CONTROLLERS`; everything else is handed back, which
+    # is the 42-announcement remainder the paragraph above is about.
+    elif not (
         (seats == 1 and objects == 1)
         or (
             objects == 2
-            and _cannot_be_one_permanent(announced[0][1], announced[1][1])
+            and (
+                _cannot_be_one_permanent(announced[0][1], announced[1][1])
+                # …or **two objects named by different nouns** (Orim's
+                # Thunder), the copy's own evidence rather than the board's.
+                or _names_different_nouns(announced[0][1], announced[1][1])
+            )
         )
     ):
         return instructions
@@ -470,12 +612,21 @@ def describe_sequence_target_roles(
     names: set = set()
     for _position, described in announced:
         name = _sequence_role_name(described, names)
-        if name is None:
-            return instructions
         narrowing = described.get("filter") or {}
-        if untestable_filter_keys(narrowing):
-            return instructions
-        if narrowing.get("controller") in _UNENUMERABLE_CONTROLLERS:
+        if (
+            name is None
+            or untestable_filter_keys(narrowing)
+            or narrowing.get("controller") in _UNENUMERABLE_CONTROLLERS
+        ):
+            if spells:
+                # Beside a spell the pair is proven two targets, so a slot the
+                # walk cannot name or enumerate is a line that cannot be
+                # announced — not one to hand back to its first description.
+                raise LoweringError(
+                    "a line targeting a spell and another object announces "
+                    "both (CR 601.2c), and the roles walk cannot enumerate "
+                    "the other slot"
+                )
             return instructions
         names.add(name)
         # **Every narrowing the step's own description carried**, not just the

@@ -11,6 +11,11 @@ of them:
 * :func:`_sweep_graveyard_actor` reconciles *who empties a pile* with *whose
   pile it is* — read by `returns`' sweeps and by `exile`'s, which is exactly
   the two-families shape this floor exists for.
+* :data:`OWN_PILE_SEATS`, :func:`frozen_pile_record` and
+  :func:`one_card_pile_pick` say *whose* graveyard one unannounced card is
+  picked out of — the picker's own, or a seat the firing event recorded — and
+  build the payload naming it. Here since Odyssey, when `exile` grew three
+  spellings of that one pick (Rotting Giant, Gravestorm, Zombie Cannibal).
 
 A floor rather than a family, for ``_amounts``' reason one module over: both
 halves of the ``exile``/``permissions`` split ask them, and a leaf two families
@@ -26,6 +31,7 @@ import dataclasses
 from .. import ast
 from ..errors import LoweringError
 from ._common import _restrictions_beyond, chargeable_card_filter
+from ._frozen_seats import frozen_seat_record
 
 
 # Restrictions the exile-search picker tests (engine/search_filters.py's
@@ -118,6 +124,73 @@ def _chosen_graveyard_cards(
             }
         ),
     }
+
+
+#: Whose pile an **unannounced** pick of one card comes out of when the seat
+#: performing the exile picks from its *own* graveyard: ``{printed owner:
+#: payload value}``. "You may exile a land card from **your** graveyard"
+#: (Forgotten Harvest) is the resolution's controller; "**target opponent**
+#: may exile a card from their graveyard" (Gravestorm) is the seat the offer
+#: was made to, which the offer leaves in ``context.target``. A different value
+#: rather than "you" for that seat, because the handler reads "you" as the
+#: caster.
+OWN_PILE_SEATS = {
+    "you": "you",
+    "target_opponent": "offered_player",
+    "target_player": "offered_player",
+}
+
+
+def frozen_pile_record(owner, event: str | None) -> str | None:
+    """Which **recorded** seat's graveyard a printed possessive names under
+    *event*, as the payload value the handler reads — or None when the firing
+    event froze no seat for it.
+
+    "Whenever this creature deals combat damage to a player, you may exile
+    target card from **that player's** graveyard." (Zombie Cannibal.) The pile
+    is not chosen and not the controller's: it is the seat the event was about
+    (``frozen_seat_record`` — the damaged player for "that player", CR 506.2's
+    defender for "defending player"), so a card cannot come out of anybody
+    else's graveyard however the pick is made.
+
+    "That player's" and "their" reach here as the noun parser's ``owner``
+    (``zones.accept_zone_possessive`` reads the two as one node), so the word
+    asked of the event is "that player".
+    """
+    kind = getattr(owner, "kind", None)
+    word = {"owner": "that_player"}.get(kind, kind)
+    return None if word is None else frozen_seat_record(word, event)
+
+
+def one_card_pile_pick(filt: ast.ObjectFilter, pile_owner: str, node) -> dict[str, object]:
+    """The payload for **one card, picked as the effect resolves, out of one
+    named graveyard** — ``exile_cards_from_graveyard``'s keys with a count of
+    one and no ``targets`` description, so the handler prompts over exactly
+    that pile.
+
+    One builder for the three piles that print it (your own, the seat an offer
+    was made to, a seat the event recorded), so the narrowing they may carry is
+    one answer: a single card type or none, and anything else refuses rather
+    than being picked from a wider set than the card names.
+
+    Key order is the one this payload has always had — the differential
+    compares reprs, and a reordering moves every card that prints it.
+    """
+    leftover = _restrictions_beyond(
+        filt, frozenset({"card_types", "zone", "zone_owner", "is_card"})
+    )
+    if leftover or len(filt.card_types) > 1:
+        raise LoweringError(
+            "the chosen graveyard exile reads one card type", node=node
+        )
+    chosen: dict[str, object] = {
+        "count": 1, "graveyard_owner": pile_owner, "up_to": False,
+    }
+    if filt.card_types:
+        chosen["card_type"] = filt.card_types[0]
+    else:
+        chosen["any_card"] = True
+    return chosen
 
 
 def _sweep_graveyard_actor(node, subject) -> str | None:

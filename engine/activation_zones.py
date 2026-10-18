@@ -62,7 +62,20 @@ def ability_functions_from(ability) -> str:
         return str(stated)
     # CR 113.6j, reached through CR 701.9a: "Discard this card" moves the card
     # from its owner's *hand*, so the cost is payable there and nowhere else.
-    if getattr(getattr(ability, "cost", None), "discard_self", False):
+    cost = getattr(ability, "cost", None)
+    if getattr(cost, "discard_self", False):
+        return HAND
+    # CR 113.6j again, by the other cost that names a hand: "**Exile this card
+    # from your hand**: Add {G}." (Elvish Spirit Guide.) A card on the
+    # battlefield is not in a hand, so the cost is payable in a hand and
+    # nowhere else. The charger says so with the pair it already had — the
+    # source is what is exiled (``exile_self``, no chosen filter) and the zone
+    # it leaves is a hand.
+    if (
+        getattr(cost, "exile_self", False)
+        and getattr(cost, "exile_filter", None) is None
+        and getattr(cost, "exile_zone", BATTLEFIELD) == HAND
+    ):
         return HAND
     return BATTLEFIELD
 

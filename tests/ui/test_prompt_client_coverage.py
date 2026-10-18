@@ -47,3 +47,18 @@ def test_every_prompt_action_is_sent_by_the_client():
         if spec.action and f'action: "{spec.action}"' not in js
     )
     assert not missing, f"prompt answers the client never sends: {missing}"
+
+
+def test_the_auto_pass_asks_the_server_whether_a_prompt_is_owed():
+    """The client's auto-pass must not pass priority while its seat owes a
+    decision. It decided that from a hand-written list of prompt getters, which
+    named 49 of the registry's 86 blocking kinds — with a library reorder, a
+    search, a look-and-pick, a trigger's target or 33 others open it sent a
+    ``pass_priority`` the server refused, and one that crossed the answer on
+    the wire was accepted on the empty stack behind it. The state payload now
+    carries the action gate's own answer (``waiting_on_prompt``), and the
+    client reads it before anything it lists for itself."""
+    js = APP_JS.read_text(encoding="utf-8")
+    body = re.search(r"\nfunction hasBlockingPromptForAutoPass\(.*?\n\}\n", js, re.S).group(0)
+    assert "state?.waiting_on_prompt" in body
+    assert body.index("state?.waiting_on_prompt") < body.index("getCleanupDiscardInfo(state)")

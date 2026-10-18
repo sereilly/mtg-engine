@@ -6,7 +6,6 @@ import re
 from ..ante import is_ante_card
 from ..color_changes import change_color
 from ..card_hooks import UNTAPPED_ARTIFACT_PROTECTORS
-from ..control import base_controller
 from ..auras import aura_restriction_active
 from ..auras import attached_subject_triggers
 from ..damage_events import (EVENT_LOCK, EVENT_PREVENTION_LOCK,
@@ -22,11 +21,14 @@ from ..land_play_allowance import (
 from ..models import CardDefinition, Permanent, PlayerState
 from ..pt import add_plus1_counters, add_pt_counters
 from ..regeneration import regeneration_replaces_destruction
-from ..replacement_choices import pending_choices_for, resolve_choice
+from ..pending_choices import spec_for
+from ..replacement_choices import DRAW_OF, pending_choices_for, resolve_choice
 from ..replacements import TOP_OF_LIBRARY_DISCARD_TEXT, apply_replacements
 from ..oracle import compile_card_oracle, lex_oracle_text
 from ..trigger_utils import iter_triggered_abilities, make_trigger_event, matching_triggers
 from ..damage_redirects import source_matches
+from ..destruction_events import (RESOLVING, announce_destroyed,
+                                  destruction_finished)
 from ..search_filters import card_has_type
 
 def _damage_word_matches(trig, combat: bool) -> bool:
@@ -49,6 +51,44 @@ def _damage_word_matches(trig, combat: bool) -> bool:
     if word == "noncombat":
         return not combat
     return True
+
+
+class _DrawPromptAnswer:
+    """The span of one answer to a prompt a draw armed (CR 121.2).
+
+    ``EffectsMixin.answering_draw_prompt`` is the way in and says what the
+    span means; this is only its bookkeeping. Inert when no draw armed the
+    prompt, so every other answer in the engine passes straight through.
+    """
+
+    __slots__ = ("game", "seat", "frame")
+
+    def __init__(self, game, choice) -> None:
+        self.game = game
+        self.seat = choice.data.get(DRAW_OF)
+        self.frame = [choice, 0]
+
+    def __enter__(self) -> "_DrawPromptAnswer":
+        if self.seat is not None:
+            self.game.draw_answer_frames.append(self.frame)
+            self.game.draw_scopes.append(self.seat)
+        return self
+
+    def __exit__(self, exc_type, exc, traceback) -> bool:
+        if self.seat is None:
+            return False
+        game = self.game
+        game.draw_scopes.pop()
+        game.draw_answer_frames = [
+            frame for frame in game.draw_answer_frames if frame is not self.frame
+        ]
+        if exc_type is None:
+            # The draw this prompt belonged to has had its answer. If it is
+            # finished — the answer armed nothing further — the draws parked
+            # behind it are made now, inside whatever resolution this answer
+            # is part of.
+            game._release_parked_draws()
+        return False
 
 
 class EffectsMixin:
@@ -344,8 +384,17 @@ class EffectsMixin:
         source: "Permanent | None" = None,
         defending: int | None = None,
         that_player: int | None = None,
+        cause=RESOLVING,
     ) -> "Permanent | None":
         """Destroy the permanent *described* names on *target*'s battlefield.
+
+        **One of the two places a permanent is destroyed** (CR 701.8), and so
+        one of the two that announce it: ``destruction_events.announce_destroyed``
+        is called here once nothing has replaced the destruction, with *cause*
+        saying whose spell or ability did it. The default is CR 109.5's
+        controller of whatever is resolving, which is right for an effect
+        handler; a caller outside a resolution (an upkeep effect, a turn step)
+        names the seat itself. See ``engine/destruction_events.py``.
 
         **The whole noun phrase, as one payload.** This used to take seven named
         filter keys, which made the printed narrowing a hand-maintained
@@ -402,6 +451,13 @@ class EffectsMixin:
             # this was one of the two places asking half of it.
             if not bypass_regeneration and regeneration_replaces_destruction(self, perm):
                 return None  # type: ignore[return-value]
+            # It is destroyed (CR 701.8a), and said so while it is still on
+            # the battlefield: what watches a destruction looks back at the
+            # permanent as it last existed there (CR 603.10a), and may be this
+            # permanent itself. Before the move rather than after it, because
+            # a replaced move is still a destruction — the announcement is of
+            # what was done, not of where the card ended up.
+            announce_destroyed(self, perm, cause)
             self.remove_from_battlefield(perm)
             # `_permanent_to_graveyard` announces the land-dies triggers
             # (Dingus Egg) along with everything else a death announces — the
@@ -413,6 +469,11 @@ class EffectsMixin:
             # Gauntlet of Might, Lord of Atlantis, Nightmare's swamp count) must be
             # recomputed now that it has left the battlefield.
             self._recompute_continuous_effects()
+            # …and what the destruction triggered goes on the stack, unless a
+            # resolution is still running — then it waits for that to finish
+            # (CR 603.3b), so a target is chosen off the board the whole
+            # effect left behind.
+            destruction_finished(self)
             return perm
 
         if target_permanent_index is not None:
@@ -635,9 +696,16 @@ class EffectsMixin:
         gained = lifelink_life_gained(source, dealt)
         if gained <= 0:
             return
-        seat = self.controller_index_of(source)
-        if seat is None and isinstance(source, Permanent):
-            seat = base_controller(source)
+        # …and, since Bomb Squad, the seat that controlled it **as it left**
+        # where that is on record (`controller_or_last_known`): "that creature
+        # deals 4 damage to its controller" is dealt by a creature the same
+        # resolution has just destroyed, and a *stolen* one's lifelink is the
+        # thief's — the seat it entered under gained instead.
+        seat = (
+            self.controller_or_last_known(source)
+            if isinstance(source, Permanent)
+            else self.controller_index_of(source)
+        )
         if seat is None or not (0 <= seat < len(self.players)):
             return
         self._gain_life(self.players[seat], gained, source_name="lifelink")
@@ -826,6 +894,131 @@ class EffectsMixin:
         add_pt_counters(permanent, kind, count)
         return count
 
+    # ------------------------------------------------------------------
+    # One draw at a time (CR 121.2)
+    # ------------------------------------------------------------------
+    #
+    # "If a player is instructed to draw multiple cards, that player performs
+    # that many individual card draws." Each is its own event: CR 616.1 runs
+    # over it to the end (616.1f: apply the chosen effect, then ask again
+    # among those still applicable) before the next one exists, and CR 614.5
+    # gives each replacement one opportunity *per event*.
+    #
+    # A replacement that needs an answer suspends its draw and carries the
+    # draws behind it on its own prompt (``remaining_draws``, ``queued_draws``).
+    # What that arrangement could not carry is a draw the *answer* suspends
+    # again: an optional replacement declined remakes its draw through the
+    # seam, a second replacement asks about that draw — and the resolver went
+    # straight on to the draws queued behind, with the first still unanswered.
+    # Abundance and Pursuit of Knowledge on one battlefield, three cards drawn:
+    # the second draw's Pursuit offer and the third draw's CR 616.1e order
+    # were both owed, each refused every action but its own answer, and the
+    # game could not be continued by any click or any request.
+    #
+    # So the rule is kept by the seam rather than by each of the dozen tails
+    # that make "the draws behind": a draw does not begin while a prompt an
+    # earlier draw of the same seat armed is still owed.
+
+    def _draw_prompt_open(self, seat: int) -> bool:
+        """Whether a decision one of *seat*'s draws armed is still owed.
+
+        Read off both queues by the stamp a prompt is given as it is queued
+        (``replacement_choices.DRAW_OF``), so this knows no kind by name: a
+        replacement's own offer, CR 616.1e's order, Chains of Mephistopheles'
+        discard, Zur's Weirding's poll of the *other* players (the stamp is
+        the drawing seat, not the answering one) and whatever the next set
+        prints are one test.
+
+        The choice being answered right now holds nothing — its answer is the
+        work the draw was waiting for — whether or not its resolver has taken
+        it off the queue yet (``draw_answer_frames``). A notification that
+        blocks no action (``holds_priority``) never held a draw either.
+        """
+        for choice in self.pending_replacement_choices:
+            if choice.data.get(DRAW_OF) == seat:
+                return True
+        answering = [frame[0] for frame in self.draw_answer_frames]
+        for choice in self.pending_choices:
+            if choice.data.get(DRAW_OF) != seat:
+                continue
+            if choice.data.get("_answered") or any(choice is one for one in answering):
+                continue
+            spec = spec_for(choice.kind)
+            if spec.holds_priority and spec.open_for(self, choice):
+                return True
+        return False
+
+    def _park_draw(
+        self, seat: int, count: int, turn_based: bool, exclude_sources: tuple
+    ) -> None:
+        """Hold a draw behind the one still waiting on its player.
+
+        In order. A draw parked from inside an answer is a later step of *that*
+        prompt's draw, so it goes ahead of anything an outer answer parked,
+        after its own earlier ones (the frame's cursor); a draw parked from
+        anywhere else is a later instruction and goes to the back.
+        """
+        entry = {
+            "seat": seat,
+            "count": int(count),
+            "turn_based": bool(turn_based),
+            "exclude_sources": tuple(exclude_sources),
+        }
+        if self.draw_answer_frames:
+            frame = self.draw_answer_frames[-1]
+            self.parked_draws.insert(frame[1], entry)
+            frame[1] += 1
+        else:
+            self.parked_draws.append(entry)
+
+    def _release_parked_draws(self) -> None:
+        """Make the parked draws whose seat owes nothing any more, in order.
+
+        Called when an answer to a draw's prompt has been applied, and stops
+        the moment a released draw suspends in its turn — the next answer
+        comes back here. Not re-entered: a released draw goes through the
+        seam, and the seam must not release the draws parked *behind* it
+        before it has drawn.
+        """
+        if self.releasing_parked_draws or self.draw_scopes:
+            return
+        self.releasing_parked_draws = True
+        try:
+            # Each pass makes one draw or finds none it may make.
+            for _ in range(len(self.parked_draws) + 1):
+                entry = next(
+                    (
+                        parked for parked in self.parked_draws
+                        if not self._draw_prompt_open(parked["seat"])
+                    ),
+                    None,
+                )
+                if entry is None:
+                    return
+                self.parked_draws = [
+                    parked for parked in self.parked_draws if parked is not entry
+                ]
+                self._draw_with_replacements(
+                    self.players[entry["seat"]],
+                    entry["count"],
+                    turn_based=entry["turn_based"],
+                    exclude_sources=entry["exclude_sources"],
+                )
+        finally:
+            self.releasing_parked_draws = False
+
+    def answering_draw_prompt(self, choice):
+        """A context manager around applying the answer to *choice*.
+
+        Inert for a prompt no draw armed. For one that a draw did arm, the
+        answer is part of that seat's draw: a prompt it arms in turn is
+        stamped the same way (the order of the cards Abundance puts on the
+        bottom, CR 903.9b's offer about a commander it put into a hand), the
+        draws its resolver asks for behind an unfinished one are parked, and
+        when it has been applied the parked draws are released.
+        """
+        return _DrawPromptAnswer(self, choice)
+
     def _draw_with_replacements(
         self,
         player: PlayerState,
@@ -871,24 +1064,44 @@ class EffectsMixin:
         """
         if count <= 0:
             return player.draw(count)
-        consumed, payload = apply_replacements(
-            self,
-            "draw",
-            {
-                "player": player,
-                "count": count,
-                "drawn": 0,
-                "turn_based": turn_based,
-                "exclude_sources": tuple(exclude_sources),
-            },
-            # A draw can suspend: "the replacement took it, the cards arrive
-            # when you answer" is already this method's contract, so CR 616.1e's
-            # choice can be put to the player here. Re-running this call is what
-            # the answer resumes, which is why the thunk is the call itself.
-            restart=lambda: self._draw_with_replacements(
-                player, count, turn_based=turn_based, exclude_sources=exclude_sources
-            ),
-        )
+        # One draw at a time (CR 121.2). A draw this seat made earlier in the
+        # same instruction may still be waiting on its player — an optional
+        # replacement's offer, CR 616.1e's order, the card a discard takes —
+        # and this one does not begin until that one is finished: it is
+        # parked, and the answer releases it. See ``_draw_prompt_open``.
+        seat = self.seat_index(player)
+        if not self.draw_scopes and not self.releasing_parked_draws:
+            # Nothing of a draw's is running, so anything still parked for
+            # this seat is owed first (a prompt taken off the queue by a road
+            # that is not an answer leaves its draws here).
+            self._release_parked_draws()
+        if self._draw_prompt_open(seat):
+            self._park_draw(seat, count, turn_based, tuple(exclude_sources))
+            return 0
+        self.draw_scopes.append(seat)
+        try:
+            consumed, payload = apply_replacements(
+                self,
+                "draw",
+                {
+                    "player": player,
+                    "count": count,
+                    "drawn": 0,
+                    "turn_based": turn_based,
+                    "exclude_sources": tuple(exclude_sources),
+                },
+                # A draw can suspend: "the replacement took it, the cards arrive
+                # when you answer" is already this method's contract, so CR
+                # 616.1e's choice can be put to the player here. Re-running this
+                # call is what the answer resumes, which is why the thunk is the
+                # call itself.
+                restart=lambda: self._draw_with_replacements(
+                    player, count, turn_based=turn_based,
+                    exclude_sources=exclude_sources,
+                ),
+            )
+        finally:
+            self.draw_scopes.pop()
         if consumed:
             return int(payload["drawn"])
         # `payload["count"]`, not `count`: a replacement may have changed how
@@ -1064,7 +1277,11 @@ class EffectsMixin:
         if not (0 <= option_index < len(choice.options)):
             return False
         self.pending_replacement_choices.pop(index)
-        resolve_choice(self, choice, option_index)
+        # Inside the draw it belongs to, when a draw armed it: what the answer
+        # arms is that draw's too, and the draws parked behind it are released
+        # once it is applied (CR 121.2, ``answering_draw_prompt``).
+        with self.answering_draw_prompt(choice):
+            resolve_choice(self, choice, option_index)
         return True
 
     def auto_resolve_pending_replacement_choices(self) -> None:
@@ -1163,6 +1380,20 @@ class EffectsMixin:
         ]
 
     @property
+    def pending_skip_draws(self) -> list[dict]:
+        """Obstinate Familiar's outstanding CR 614.1 offers - one per draw a
+        permanent printing "you may skip that draw instead" would replace.
+        Shaped like the two views above."""
+        return [
+            {
+                "player_index": choice.player_index,
+                "options": list(choice.options),
+                "source_id": choice.data["source_id"],
+            }
+            for choice in pending_choices_for(self, "skip_draw")
+        ]
+
+    @property
     def pending_optional_damage_redirects(self) -> list[dict]:
         """CR 614.9's outstanding optional offers — one per damage event whose
         recipient a class-scoped redirect watches (Blood of the Martyr)."""
@@ -1194,20 +1425,49 @@ class EffectsMixin:
         then make any draws that were queued behind the replaced one."""
         return self.resolve_replacement_choice(player_index, chosen_index, kind="lamp_draw")
 
-    def _discard_card(self, player: PlayerState, card) -> None:
+    def discard_cause_seat(self, cause_seat: int | None = None) -> int | None:
+        """Which seat's spell or ability is causing a discard happening *now*
+        (CR 109.5), or None when nothing is — a cleanup-step discard, a cost
+        the player chose to pay.
+
+        One reader, because two cards ask and must agree: Psychic Purge's
+        "**when** a spell or ability an opponent controls causes you to discard
+        this card" is a trigger and Dodecapod's "**if** …, put it onto the
+        battlefield … instead" is a replacement, on the same condition.
+
+        *cause_seat* is the seat a **prompt** recorded when it was armed
+        (``arm_pending_choice``'s ``_cause_seat``): by the time a seat answers,
+        the resolution that asked has returned and ``resolving_seats`` is
+        empty, which would read as "nothing caused this".
+        """
+        if isinstance(cause_seat, int):
+            return cause_seat if 0 <= cause_seat < len(self.players) else None
+        return self.resolving_seats[-1] if self.resolving_seats else None
+
+    def _discard_card(
+        self, player: PlayerState, card, *, cause_seat: int | None = None
+    ) -> None:
         """Move a discarded card to the graveyard, or let a discard replacement
-        take it instead (Library of Leng, CR 701.9c).
+        take it instead (Library of Leng, CR 701.9c; Dodecapod, onto the
+        battlefield).
 
         Use for random/forced discards (combat damage, "discards X cards at
         random", cleanup) where the player can't pick the card but a
         replacement may still redirect it.
+
+        The event carries **who caused it** (``discard_cause_seat``), because a
+        replacement may turn on that and the card itself cannot say: it is the
+        seat resolving right now, or *cause_seat* when the caller is finishing
+        a discard some earlier resolution armed.
         """
+        cause = self.discard_cause_seat(cause_seat)
         consumed, _ = apply_replacements(
-            self, "discard", {"player": player, "card": card}
+            self, "discard",
+            {"player": player, "card": card, "cause_seat": cause},
         )
         if not consumed:
             self.put_card_into_graveyard(player, card)
-        self._announce_discard_triggers(player, card)
+        self._announce_discard_triggers(player, card, cause_seat=cause_seat)
         self.announce_discard(player, card)
 
     def announce_discard(self, player: PlayerState, card) -> None:
@@ -1253,7 +1513,13 @@ class EffectsMixin:
             ):
                 if trig.instruction is None:
                     continue
-                if trig.condition.payload.get("discarder") == "an opponent":
+                discarder = trig.condition.payload.get("discarder")
+                if discarder == "a player":
+                    # "Whenever **a player** discards a card" (Confessor):
+                    # nobody is narrowed away, the watcher's controller
+                    # included.
+                    pass
+                elif discarder == "an opponent":
                     if controller_index == seat:
                         continue
                 elif controller_index != seat:
@@ -1301,10 +1567,8 @@ class EffectsMixin:
         `resolving_seats` is empty by then and the caller passes the seat it
         read off the choice's own stack item instead.
         """
-        causer = cause_seat
+        causer = self.discard_cause_seat(cause_seat)
         if causer is None:
-            causer = self.resolving_seats[-1] if self.resolving_seats else None
-        if not isinstance(causer, int) or not (0 <= causer < len(self.players)):
             return
         # By identity, not `players.index`: PlayerState is a value-compared
         # dataclass, so two seats holding the same cards match each other.

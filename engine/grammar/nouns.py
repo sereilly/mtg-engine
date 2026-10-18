@@ -341,6 +341,18 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
             stream.advance()
             continue
 
+        # "a **multicolored** creature card" (Dragon Arch). CR 105.2b's
+        # adjective: two or more colours, whichever they are — so it is a flag
+        # of its own and not an entry in ``colors``, which is a union and is
+        # satisfied by one. Read here, among the leading adjectives, because
+        # that is where it is printed; a noun phrase the word *heads* ("protection
+        # from multicolored", "multicolored spells cost…") never reaches this
+        # loop with it, so those lines keep the readers they have.
+        if word == "multicolored":
+            d.multicolored = True
+            stream.advance()
+            continue
+
         if word in COLOR_WORDS:
             # "a **green or white** creature" (Abomination) — a union of colour
             # adjectives, read as one the way "attacking or blocking" below is.
@@ -568,6 +580,12 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
                         "a class union cannot also be a conjunction of types"
                     )
                 d.any_classes = tuple(cross_axis)
+            # "Destroy target **creature token**." (Dogged Hunter.) CR 111.1's
+            # fact printed after a card type, the third position of the three
+            # ("a token creature", "a Caribou token" below, and "a token" as
+            # the head). Unread it was one unconsumed word.
+            if stream.accept_word("token", "tokens"):
+                d.token_only = True
             d.is_card = _accept_card_noun(stream)
             # "target instant or sorcery **spell**" (Miscast): the head noun
             # after a type union may be "spell", naming an object on the stack
@@ -749,9 +767,13 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
                 d.is_card = True
             # "target spell or permanent" (the Lace cycle) unions two *generic*
             # nouns. Neither contributes a card type, so the union restricts
-            # nothing and the filter is unchanged — but the tokens still have to
-            # be consumed, or the line fails the full-consumption invariant and
-            # the card reports unsupported naming the clause.
+            # nothing about the *permanent* — but it is not nothing: it names a
+            # second zone, and that is recorded (``also_spell``) so the phrase
+            # stops being byte-identical to "target permanent". Consumed and
+            # dropped, it left Illusion and Blind Seer ("Target spell or
+            # permanent becomes the color of your choice") with a permanent
+            # picker and a spell half nobody could reach.
+            unioned = {singular}
             while True:
                 probe = stream.mark()
                 if not stream.accept_word("or", "and"):
@@ -766,7 +788,12 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
                 # union with another *spell* word leaves it standing.
                 if _singular(following) != "spell":
                     bare_spell = False
+                unioned.add(_singular(following))
                 stream.advance()
+            # The one cross-zone union the pool prints, in either order. Any
+            # other pairing of generic nouns keeps the reading it had.
+            if unioned == {"spell", "permanent"}:
+                d.also_spell = True
             # "counter target spell **or ability** that targets a creature"
             # (Diplomatic Escort). Not part of the union loop above, because
             # "ability" is deliberately not a generic noun — an ability on the

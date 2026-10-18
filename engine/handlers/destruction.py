@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..auras import detach_aura
 from ..dexterity import flip_lands_on
 from ..static_bonuses import singular_land_type
 from ..models import Permanent, PlayerState
 from ..object_colors import share_a_color
+from ..destruction_events import (begin_destruction_hold,
+                                  end_destruction_hold,
+                                  mark_delayed_destruction)
 from ..oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                             EVENT_SUBJECT_LAST_KNOWN, LAST_TARGET_CONTROLLER,
                             LAST_TARGET_NAME,
@@ -40,12 +42,26 @@ if TYPE_CHECKING:
 # Types are read through has_type/is_creature (CR 613 layer 4), so a Copy
 # Artifact copy counts as both its types and an animated land counts as a
 # creature.
+#
+# **Regeneration is allowed for all five**, and the column is kept only so the
+# table still says so out loud. Lands and enchantments read ``False`` here from
+# the consolidation onward — inherited from two Alpha-era handlers written when
+# "regenerate" was a thing creatures did. CR 701.19a makes it a replacement on
+# *a permanent's* destruction, and a land or an enchantment is often a creature
+# too: a Spawning Pool or a Mishra's Factory animated in response to
+# Armageddon, an enchantment under Opalescence wearing a Regeneration. Each was
+# destroyed through its shield, on seven shipped cards that say nothing about
+# regeneration (Armageddon, Impending Disaster; Tranquility, Hush, Essence
+# Filter, Multani's Decree, Reverent Silence), and Desolation Angel's two arms
+# — one this sweep, one the filtered one below — disagreed about the same
+# land. "They can't be regenerated" is the card's to say, and it arrives as
+# ``bypass_regeneration`` (Catastrophe).
 _SWEEP_TYPES: dict[str, tuple[tuple[str, ...], bool]] = {
     # kind -> (types any of which qualifies, regeneration allowed)
     "destroy_all_creatures": (("creature",), True),
     "destroy_all_artifacts": (("artifact",), True),
-    "destroy_all_enchantments": (("enchantment",), False),
-    "destroy_all_lands": (("land",), False),
+    "destroy_all_enchantments": (("enchantment",), True),
+    "destroy_all_lands": (("land",), True),
     "destroy_all_artifacts_creatures_enchantments": (
         ("artifact", "creature", "enchantment"),
         True,
@@ -1060,18 +1076,30 @@ def chaos_orb_flip(game: Game, instruction: OracleInstruction, context: OracleEx
     # ``engine.dexterity`` is the one place that substitution is made and
     # explained. Only the count is this card's ("up to two permanents").
     chosen = flip_lands_on(candidates, maximum=2)
+    # "…**destroy** all nontoken permanents it touches. Then **destroy** this
+    # artifact." Two destructions, through the destroy seam every sibling here
+    # uses. They were a bare removal and a move to the graveyard — one of the
+    # two destructions in the engine that went round the seam — so the Orb
+    # destroyed an indestructible permanent, destroyed a creature through its
+    # regeneration shield (CR 702.12b, CR 701.8c), and nothing watching a
+    # destruction heard of either.
     for victim_player, victim_perm in chosen:
-        game.remove_from_battlefield(victim_perm)
-        game._permanent_to_graveyard(victim_player, victim_perm)
-        game.log.append(f"Chaos Orb flip destroyed {victim_perm.card.name}")
-    # Always destroy Chaos Orb itself
+        if game._destroy_swept_permanents(
+            victim_player, lambda perm, victim=victim_perm: perm is victim
+        ):
+            game.log.append(f"Chaos Orb flip destroyed {victim_perm.card.name}")
+        else:
+            game.log.append(
+                f"Chaos Orb flip touched {victim_perm.card.name}, which was "
+                "not destroyed"
+            )
+    # "Then destroy this artifact."
     if source_permanent is not None:
         holder = game.controller_index_of(source_permanent)
-        if holder is not None:
-            player = game.players[holder]
-            game.remove_from_battlefield(source_permanent)
-            game._permanent_to_graveyard(player, source_permanent)
-    game.log.append("Chaos Orb was destroyed after flip")
+        if holder is not None and game._destroy_swept_permanents(
+            game.players[holder], lambda perm: perm is source_permanent
+        ):
+            game.log.append("Chaos Orb was destroyed after flip")
     return True, "resolved"
 
 
@@ -1180,7 +1208,12 @@ def arm_self_action_at_next_end_step(game: Game, instruction: OracleInstruction,
         "bounce": "bounce_at_next_end_step",
         "sacrifice": "sacrifice_at_next_end_step",
     }.get(action, "destroy_at_next_end_step")
-    source.metadata[key] = True
+    if key == "destroy_at_next_end_step":
+        # A destruction, so the mark carries who set it up (CR 603.7d–e) —
+        # the end step that carries it out has no spell or ability resolving.
+        mark_delayed_destruction(game, source, key)
+    else:
+        source.metadata[key] = True
     return True, "resolved"
 
 
@@ -1732,9 +1765,25 @@ def destroy_each_unless_life_paid(game: Game, instruction: OracleInstruction, co
         for permanent_id in targets
         for seat in [*offered, None]
     ]
+    # Whose spell or ability this is (CR 109.5), read now and handed to every
+    # destruction below. A verdict reached after a human seat's answer runs
+    # when nothing is resolving any more — the loop is resumed from the prompt
+    # — so "whatever is resolving" would be nobody, and a land an opponent's
+    # Cleansing destroyed would have been destroyed by no one.
+    destroyer = game.players.index(context.caster)
+    # …and the whole loop is one effect, however many answers it stops for:
+    # what its destructions trigger waits for the last verdict (CR 603.3b), so
+    # the final step — the only place a resumable loop may put work it owes —
+    # is what lets them go.
+    _FINISHED = object()
+    steps.append((_FINISHED, None))
+    begin_destruction_hold(game)
 
     def _step(item) -> None:
         permanent_id, seat = item
+        if permanent_id is _FINISHED:
+            end_destruction_hold(game)
+            return
         permanent = game.permanent_by_id(permanent_id)
         if permanent is None or permanent_id in saved:
             return
@@ -1746,6 +1795,7 @@ def destroy_each_unless_life_paid(game: Game, instruction: OracleInstruction, co
                 game.players[controller],
                 lambda candidate, target=permanent: candidate is target,
                 allow_regeneration=allow_regeneration,
+                cause=destroyer,
             )
             game.log.append(
                 f"{context.card.name} destroyed {permanent.card.name} "
@@ -1768,65 +1818,6 @@ def destroy_each_unless_life_paid(game: Game, instruction: OracleInstruction, co
         )
 
     run_resumable(game, steps, _step)
-    return True, "resolved"
-
-
-@effect_handler("destroy_tapped_land_and_reoffer_aura")
-def destroy_tapped_land_and_reoffer_aura(
-    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
-) -> tuple[bool, str]:
-    """Kudzu: "When enchanted land becomes tapped, destroy it. That land's
-    controller may attach this Aura to a land of their choice."
-
-    This used to be a name-keyed dispatcher (``ENCHANTED_LAND_TAPPED_FOR_MANA``)
-    called from inside ``tap_land_for_mana``, which is the bug ``become_tapped``
-    was built to end: the card says "becomes tapped" (CR 701.26a) and the
-    dispatcher only saw the mana path, so an Icy Manipulator tapping the
-    enchanted land destroyed nothing. As an instruction the line is *announced*
-    by the tap seam like any other trigger, which fixes both halves at once —
-    every tap path reaches it, and it goes on the stack (CR 603.3) rather than
-    resolving inline where a name-keyed pass had put it.
-
-    The land is read by the id the announcement froze rather than off the Aura's
-    ``attached_to`` at resolution: the Aura may have been removed in response,
-    and CR 603.10 says the ability uses the information the game had.
-    """
-    aura = context.source_permanent
-    land_id = (context.trigger_context or {}).get("event_subject_permanent_id")
-    land = game.permanent_by_id(land_id) if land_id is not None else None
-    if aura is None or land is None:
-        game.log.append("Kudzu: the enchanted land is gone, nothing to destroy")
-        return True, "resolved"
-
-    # The seat the announcement froze, not a board read (CR 603.10): "that
-    # land's controller" is the controller it had when it became tapped, and a
-    # control change in response does not move who is offered the re-attach.
-    controller_index = (context.trigger_context or {}).get("event_subject_controller")
-    if not isinstance(controller_index, int) or not (0 <= controller_index < len(game.players)):
-        game.log.append("Kudzu: no recorded controller, nothing destroyed")
-        return True, "resolved"
-    player = game.players[controller_index]
-    game.remove_from_battlefield(land)
-    # Through the one graveyard transition, not an append. This site was the
-    # only destruction in the engine that reached a graveyard by hand, so the
-    # land it destroyed fired no leaves-the-battlefield or dies trigger, was
-    # counted by nothing, and passed no CR 614 replacement — the five things
-    # `_permanent_to_graveyard` exists to do. The order is
-    # `sacrifice_permanent`'s: remove first, then move, so the trigger scans
-    # see the board the destruction left behind.
-    game._permanent_to_graveyard(player, land)
-    aura.metadata.pop("attached_to", None)
-    detach_aura(aura, land)
-    game.log.append(f"{aura.card.name} destroyed {land.card.name}")
-
-    # "…**may** attach this Aura to a land of their choice" — the land's
-    # controller decides, not the Aura's. One `pending_choice`, so an
-    # interactive seat is asked and every other seat takes the registered
-    # default (the first land it controls) at once; that is the same split the
-    # caller's old ``defer_choice`` flag hand-computed, asked of the registry
-    # instead so a new seat kind needs no new argument.
-    if any(perm.card.primary_type == "land" for perm in game.controlled_by(controller_index)):
-        game.arm_pending_choice("kudzu_reattach", controller_index, aura=aura)
     return True, "resolved"
 
 

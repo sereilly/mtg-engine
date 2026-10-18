@@ -705,6 +705,32 @@ def test_107_3a_every_card_in_the_pool_whose_x_is_in_a_cost_is_named():
         if cost_line.match(line.strip())
         and re.search(r"\bX\b", line.split("(")[0])
     }
+    # **Liquid Fire (Odyssey) is the seventh, and the first whose cost sentence
+    # spells no X at all**: "As an additional cost to cast this spell, choose a
+    # number between 0 and 5." The X is on the card's *other* line — "…, where
+    # X is the chosen number" — and CR 601.2b makes a variable "defined in the
+    # text of the spell by a choice that player would make later in the
+    # announcement" a choice made as the spell is announced, so the number
+    # chosen in the cost is the announced X exactly as "pay X life" is. The
+    # probe therefore reads the pair, still owing nothing to ``cast_costs``: a
+    # cost sentence that chooses a number, on a card that says in words that
+    # the number is its X. Measured over both manifest roles when it was
+    # written, this arm admits one card.
+    chosen = {
+        card.name
+        for card in _W4G2_POOL.values()
+        if any(
+            cost_line.match(line.strip())
+            and re.search(r"\bchoose a number\b", line, re.I)
+            for line in (card.oracle_text or "").splitlines()
+        )
+        and re.search(r"\bX is the chosen number\b", card.oracle_text or "")
+    }
+    assert len(chosen) <= 3, (
+        "the chosen-number arm is a reading of one printed pair, not a way "
+        f"round the probe: {sorted(chosen)}"
+    )
+    probe |= chosen
     detected = {
         card.name for card in _W4G2_POOL.values() if cast_announces_x(card)
     }

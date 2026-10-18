@@ -243,11 +243,20 @@ def test_the_timing_claims_are_the_only_derived_rules_that_carry_no_behaviour():
 
     A claim added here is a claim that stops holding a card up, so the set is
     asserted rather than left to grow by habit.
+
+    ``flashback`` joined at Odyssey, and is the one entry no printed card
+    earned: CR 702.34a's "You may cast this card from your graveyard by paying
+    [cost] rather than paying its mana cost" says *from where* and *for what* a
+    card may be cast, the same kind of clause as the two timing rows, and the
+    keyword is printed only on instants and sorceries — which the spell gate
+    already refuses when no handler implements their effect. It is here so the
+    claim cannot hold up a permanent either;
+    ``tests/rules/test_flashback.py`` asks the mechanism of an invented one.
     """
     from engine.oracle import _TIMING_ONLY_CLAIMS
 
     assert _TIMING_ONLY_CLAIMS == frozenset({
-        "activation_restrictions", "cast_timing",
+        "activation_restrictions", "cast_timing", "flashback",
     })
 
 

@@ -11,7 +11,7 @@
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700;800;900&family=Spectral:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,500&display=swap"
     />
-    <link rel="stylesheet" href="/styles.css?v=20261006-unblocked4" />
+    <link rel="stylesheet" href="/styles.css?v=20261012-odyw2g6" />
   </head>
   <body>
     <div id="auroraLayer" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
@@ -660,6 +660,10 @@
              prompt's `destination` before the dialog is shown; the defaults
              here name no zone rather than naming the wrong one. -->
         <p id="searchLibrarySubtitle" class="modal-subtitle">Choose a card.</p>
+        <!-- One find per printed description (Gaea's Balance, Guided Passage):
+             each description is a slot here, showing the card chosen for it.
+             Hidden for every other search. -->
+        <div id="searchLibrarySlots" class="search-slot-row hidden"></div>
         <div class="modal-search-row search-controls-row">
           <input id="searchLibraryFilter" type="text" placeholder="Filter by name or type…" autocomplete="off" />
           <label id="searchLibraryShowAllRow" class="modal-checkbox-row hidden">
@@ -910,14 +914,14 @@
       <button type="button" class="permanent-menu-item" role="menuitem" data-action="mark-test-result">Mark Test Result</button>
     </div>
 
-    <script src="/battlefield-canvas.js?v=20260818-handfly"></script>
+    <script src="/battlefield-canvas.js?v=20261012-odyw2g6"></script>
     <script src="/sfx.js?v=3-reveal"></script>
     <script src="/music.js?v=1-music"></script>
     <script src="/anime.min.js?v=3.2.2"></script>
     <script src="/animations.js?v=20260818-handfly2"></script>
     <script src="/personal-decks.js?v=20260614-desc1"></script>
     <script src="/legality.js?v=20261004-splitcount1"></script>
-    <script src="/app.js?v=20261006-r3j4j5"></script>
-    <script src="/deck-editor.js?v=20261004-splitcount1"></script>
+    <script src="/app.js?v=20261018-merge"></script>
+    <script src="/deck-editor.js?v=20261013-odyp5"></script>
   </body>
 </html>

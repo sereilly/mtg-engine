@@ -51,6 +51,8 @@ from .oracle_types import (
 from .characteristic_defining import dynamic_pt_for
 from .auras import aura_claim, unclaimed_aura_lines
 from .cycling import expand_cycling_lines, unread_cycling_line
+from .flashback import (FLASHBACK_CLAIM, expand_flashback_lines,
+                        flashback_claims_line, unread_flashback_line)
 from .fading import unread_fading_line
 from .equipment import expand_equip_lines, has_equip_ability, is_equip_line
 from .alternative_costs import (
@@ -59,6 +61,8 @@ from .alternative_costs import (
     unread_granted_alternative_cost_sentence,
 )
 from .cast_costs import (cast_cost_claims_line, read_discard_clause,
+                         unchosen_number_definition,
+                         unenforced_x_spend_restriction,
                          unlinked_kicker_question, unread_cost_sentence)
 from .special_actions import special_action_line
 from .combat_restrictions import combat_restriction_for
@@ -284,6 +288,41 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("permanent_dies",
      r"whenever (?P<dying_subject>an? [^,]+) is put into (?:a|a player's) "
      r"graveyard from the battlefield"),
+    # "Whenever **a spell or ability an opponent controls destroys** a
+    # noncreature permanent you control, you may destroy target permanent that
+    # opponent controls." (Karmic Justice.) CR 701.8's keyword action as an
+    # event, and **not** a spelling of the death rows above it: a sacrifice
+    # puts the same card in the same graveyard and is not this (CR 701.21a), a
+    # creature with toughness 0 is "put into its owner's graveyard" and is not
+    # this (CR 704.5f), and a destroyed permanent a replacement exiled instead
+    # never died and **is** this. So it has its own kind and its own seam
+    # (`engine/destruction_events.py`), which the two destroy paths announce
+    # from and nothing else does.
+    #
+    # Two narrowings, both payload. **What** was destroyed is a `_subject`
+    # group read by the noun parser, so "a creature you control", "an artifact"
+    # and "a nonland permanent an opponent controls" are this row with no
+    # code — asked of the permanent as it last existed on the battlefield
+    # (CR 603.10a). **Who** destroyed it is `destroyed_cause`, the seat CR
+    # 109.5 gives the spell or ability that did it; the event carries that
+    # seat or says there is none (CR 704.5g's lethal damage is a destruction
+    # no spell or ability performs, whoever dealt the damage). One printed
+    # value, for this table's rule that a narrowing is listed once the pool
+    # prints it.
+    #
+    # "**Another**" stands where the article does, as it does on the entry and
+    # departure rows: the noun parser folds it into the filter's own exclusion,
+    # and the watcher is then not one of the permanents it watches. The grammar
+    # reads that spelling whether or not this table does, and a condition only
+    # one front end names compiles to a bare instruction on a permanent — so it
+    # is listed although no card prints it.
+    #
+    # Neither a prefix of the two "…an opponent controls **causes**…" rows nor
+    # prefixed by them — the verb is the fork — so the position is
+    # documentation: beside the deaths it must not be confused with.
+    ("permanent_destroyed",
+     r"whenever a spell or ability (?P<destroyed_cause>an opponent) controls "
+     r"destroys (?P<destroyed_subject>(?:an?|another) [^,]+)"),
     # "Whenever **another card** is put into **a** graveyard **from anywhere**."
     # (Planar Void.) Not a death and not the row above it: the object is a
     # *card*, the source zone is unnamed, and the pile is anybody's — so nothing
@@ -313,6 +352,17 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("card_put_into_graveyard",
      r"whenever (?P<graveyard_card_subject>an? [a-z]+ card) is put into "
      r"(?P<opponent_graveyard>)an opponent's graveyard from anywhere"),
+    # "Whenever **a land card** is put into **your** graveyard **from your
+    # library**, you may pay {1}. If you do, draw a card." (Pedantic Learning.)
+    # The same event at the same seam with a third narrowing no sibling
+    # prints: the zone the card *came out of*. It rides as data like the other
+    # two — ``Game.put_card_into_graveyard`` already puts the source zone on
+    # the event for every caller that names one — so a mill, a search that
+    # bins a card and a look that discards the rest are this condition, and a
+    # discard or a death is not.
+    ("card_put_into_graveyard",
+     r"whenever (?P<graveyard_card_subject>an? [a-z]+ card) is put into "
+     r"(?P<your_graveyard>)your graveyard (?P<from_library>)from your library"),
     # "Whenever **you** discard a card" (Necropotence) beside "whenever **an
     # opponent** discards a card" (Megrim). CR 701.9a's discard is an action
     # abilities watch, and the two discard seams announce it — the random/forced
@@ -325,8 +375,14 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # whose discard it watches. The kind is named for the *event* for that
     # reason — it was `you_discard_card` while "you" was the only spelling the
     # pool printed, which is a kind named after one of its own narrowings.
+    #
+    # "Whenever **a player** discards a card, you may gain 1 life."
+    # (Confessor.) The third printed seat, and the widest: every discard there
+    # is, the controller's own included. The same capture, because the three
+    # are one question with three answers and the fire site reads the answer.
     ("discards_card",
-     r"whenever (?:you discard|(?P<discarder>an opponent) discards) a card"),
+     r"whenever (?:you discard|(?P<discarder>an opponent|a player) discards) "
+     r"a card"),
     # "Whenever a spell or ability an opponent controls causes you to discard
     # **a card**, you gain 2 life and you may draw a card." (Spiritual Focus.)
     # The **second dispatch scope** for the condition the "when" table carries
@@ -615,6 +671,23 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # player attacks somebody else's planeswalker and in a multiplayer game is
     # the whole restriction gone. The same silent widening the "and isn't
     # blocked" lookahead one line down exists to stop.
+    # "Whenever **a creature attacks or blocks**, this enchantment deals 2
+    # damage to it." (Powerstone Minefield.) CR 508.1 and CR 509.1 as one
+    # printed condition over the whole board — the union
+    # `creature_attacks_or_blocks` is for a source and its host, watched by a
+    # permanent that is neither. Its own kind for the reason those two give
+    # each other: one kind, announced at both combat fire sites, so the
+    # condition cannot be read as half of itself.
+    #
+    # Above the two per-attacker rows, which are strict prefixes of it and
+    # which claimed it: matched there, " or blocks" is left as the head of the
+    # *effect* and the trigger is an attack trigger that never sees a block.
+    # The trailing lookahead is the bare block row's — the condition ends at
+    # the comma, so "…attacks or blocks a Wall" is refused rather than read as
+    # this with its partner phrase dropped.
+    ("matching_creature_attacks_or_blocks",
+     r"whenever (?P<combatant_subject>(?:a|another) [^,]+?) attacks or blocks"
+     r"(?![^,])"),
     ("matching_creature_attacks",
      r"whenever (?P<attacker_subject>(?:a|another) [^,]+) attacks"
      r" (?P<attacker_attacking_you>)you(?![a-z])"),
@@ -1132,6 +1205,20 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("land_tapped_for_mana",
      r"whenever an opponent(?P<tapped_by_opponent>) taps an? "
      r"(?P<tapped_land_subtype>[a-z]+) for mana"),
+    # "Whenever **you** tap a land for mana, remove a +1/+1 counter from this
+    # creature." (Savage Firecat.) The third seat the active voice prints, and
+    # the opposite narrowing from the row above: ``tapped_by_you`` is tested at
+    # the tap seam against the watching permanent's controller too, and
+    # dropped it is a Firecat that shrinks every time *anybody* taps a land —
+    # a trigger firing on a strictly larger set, the direction no census sees.
+    #
+    # The bare "a land" row first and the land-type row after it, for the
+    # reason the "a player" pair above is ordered that way.
+    ("land_tapped_for_mana",
+     r"whenever you(?P<tapped_by_you>) tap a land for mana"),
+    ("land_tapped_for_mana",
+     r"whenever you(?P<tapped_by_you>) tap an? "
+     r"(?P<tapped_land_subtype>[a-z]+) for mana"),
     # "Whenever **a land an opponent controls** is tapped for mana" (Mana Web).
     # The passive voice with a whole *noun phrase* where the three rows above
     # carry a single word — so it is a `_subject` group read by the noun parser,
@@ -1325,6 +1412,18 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # reports supported and never fires.
     ("you_cast_spell",
      r"whenever you cast a (?P<cast_multicolored>)multicolored spell"),
+    # "Whenever you cast a **nonred** spell" (Dwarven Patrol), and the colour
+    # itself beside it. **Before the subtype row below** for the multicolored
+    # row's reason and a worse one: `[a-z][a-z-]+` took "nonred" for a creature
+    # type, so the Patrol compiled a trigger narrowed to a subtype called
+    # "nonred" that no spell has -- and only the grammar refusing the same
+    # words kept it from shipping silent. The negation is its own key rather
+    # than a "non" prefix on `color_word`: that key is looked up in the colour
+    # table, where "nonred" names nothing and admits every spell.
+    ("you_cast_spell",
+     r"whenever you cast a non(?P<cast_excluded_color>white|blue|black|red|green) spell"),
+    ("you_cast_spell",
+     r"whenever you cast a (?P<color_word>white|blue|black|red|green) spell"),
     ("you_cast_spell",              r"whenever you cast a (?P<cast_subtype>[a-z][a-z-]+) spell"),
     ("you_cast_spell",              r"whenever you cast a spell"),
     # "When **you play a card**, sacrifice this artifact." (Juju Bubble.)
@@ -1442,6 +1541,13 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # them is only ever as complete as the last card that touched it — the
     # argument `draws_card` is dispatched with, one record over.
     ("you_lose_life",               r"whenever you lose life"),
+    # "Whenever you win a coin flip …" (Chance Encounter). Announced from the
+    # one seam a player-won flip goes through (``handlers/_common.
+    # flip_coin_for``), carrying the flipper's seat — CR 705.2: "only the
+    # player who flips the coin wins or loses the flip". A flip nobody can win
+    # (Mana Clash's heads-or-tails) does not go through that seam and is not
+    # announced.
+    ("you_win_coin_flip",           r"whenever you win a coin flip"),
     # "Whenever you sacrifice a permanent …" (Havoc Jester). Emitted from
     # ``Game.sacrifice_permanent``, the one place CR 701.21a happens — which is
     # why this row could be added without hunting for a fire site: there are
@@ -1557,6 +1663,27 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("counters_reach_threshold",
      r"whenever there are (?P<counter_count>[a-z]+) or more (?P<counter_kind>[a-z]+) counters on this "
      r"(?:artifact|creature|enchantment|permanent|land)"),
+    # "**Whenever a creature has four or more fuse counters on it**, remove all
+    # fuse counters from it and destroy it. That creature deals 4 damage to its
+    # controller." (Bomb Squad.) The same CR 603.8 state, asked of **another
+    # permanent** — any one the noun phrase describes, on any battlefield — so
+    # it is its own kind and not a subject on the row above: that row's state
+    # is one fact about its source, and this one is a fact per watched
+    # permanent, which is what its sweep latches on (two creatures crossing the
+    # line are two triggers, and one of them leaving re-arms neither).
+    #
+    # The noun phrase is delimited as a ``_subject`` group and read by the noun
+    # parser, so "an artifact" or "a creature you control" is payload; the
+    # number and the counter kind are payload as they are one row up, with the
+    # wider character class ``source_has_no_counters`` uses because a P/T
+    # counter is spelled with symbols (CR 122.1a).
+    #
+    # No row above can claim the sentence: "there are" and "this creature's
+    # power" do not open with an article, and the two "this <noun> has" rows
+    # below name the source.
+    ("permanent_counters_reach_threshold",
+     r"whenever (?P<countered_subject>an? [^,]+?) has (?P<counter_count>[a-z0-9]+) or more "
+     r"(?P<counter_kind>[-+/0-9a-z]+) counters on it"),
     # "**When** this creature's power is 7 or greater, sacrifice it."
     # (Phyrexian Devourer.) CR 603.8 again, and the first state trigger that
     # reads a *characteristic* rather than a census or a counter store — so
@@ -2859,7 +2986,72 @@ def _split_mana_per_counter(
     return remaining, rate, match.group(2)
 
 
-def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
+_MILL_COST = re.compile(r"\bmill (an?|\w+) cards?\s*(?=,|$)")
+
+
+def _mill_cost(cost_lower: str) -> int:
+    """How many cards a "**Mill a card**" cost clause mills, or 0.
+
+    "{T}, Mill a card: Add {C}." (Millikin.) The charging half of
+    ``grammar/costs.py``'s mill branch, admitting exactly what that admits: an
+    article or a printed number, and nothing after the noun — "mill a card
+    from target player's library" is not this cost and has no payment path.
+    The regex delimits the count and ``_NUMBER_WORDS`` reads it, the split
+    every counted clause in this file makes; a word that is not a number
+    charges nothing, which the pool-wide cost guard names.
+    """
+    match = _MILL_COST.search(cost_lower)
+    if match is None:
+        return 0
+    word = match.group(1)
+    if word in ("a", "an"):
+        return 1
+    number = int(word) if word.isdigit() else _NUMBER_WORDS.get(word, 0)
+    return number if number >= 2 else 0
+
+
+_CONJOINED_SELF_COST = re.compile(
+    rf"\b(sacrifice|exile) (?!this\b)([^,:]+?) and this (?:{_SELF_COST_NOUNS})\b"
+    r"\s*(?=,|$)"
+)
+
+
+def _split_conjoined_self(cost_lower: str) -> tuple[str, frozenset[str]]:
+    """*cost_lower* with every "… **and this <permanent>**" tail removed, plus
+    the verbs whose tail it was.
+
+    "{T}, Sacrifice two lands **and this artifact**" (Sandstone Deadfall);
+    "{T}, Exile two cards from your graveyard **and this creature**" (Zombie
+    Assassin). One printed verb naming a chosen set *and* the ability's own
+    source, source last — the mirror of Kyscu Drake's "Sacrifice this creature
+    and a creature named …", which names it first and has its own reader.
+
+    The tail is **taken out** rather than merely noticed, for the reason
+    :func:`_split_mana_per_counter` takes its clause out: every reader below
+    delimits a noun phrase to the end of its cost segment, so "two lands and
+    this artifact" reached the noun parser whole, was refused whole, and the
+    cost was charged as *nothing* — Sandstone Deadfall destroyed an attacker
+    for {T} and stayed on the battlefield with its controller's lands.
+
+    One reader for both verbs because it is one shape: what differs is which
+    flag the source rides (``sacrifice_self`` / ``exile_self``), and the caller
+    sets that only once the chosen half has been read. ``(?!this\\b)`` keeps the
+    source-first spelling with its own reader, and ``[^,:]`` keeps an Oxford
+    list ("a creature named …, a creature named …, and this creature") with
+    the list reader, which already counts its source.
+    """
+    verbs: set[str] = set()
+
+    def strip(match: "re.Match[str]") -> str:
+        verbs.add(match.group(1))
+        return f"{match.group(1)} {match.group(2)}"
+
+    return _CONJOINED_SELF_COST.sub(strip, cost_lower), frozenset(verbs)
+
+
+def parse_activated_ability_cost(
+    line: str, card_name: str | None = None
+) -> ActivatedAbilityCost:
     required = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0, "generic": 0}
     requires_tap = False
     colon = activation_colon_index(line or "")
@@ -2900,11 +3092,40 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     # Non-mana additional costs written as prose in the cost clause. Only the
     # clause left of the ":" counts — "Draw a card" as an effect must not be read
     # as a cost.
-    cost_lower = cost_part.lower()
+    #
+    # "{1}{W}, Sacrifice **Lieutenant Kirtar**: …" A legendary permanent names
+    # itself where every other card prints "this creature" (CR 201.5), and the
+    # grammar reads the two as one reference - the lexer collapses the name to
+    # a SELF token. Collapsed here to the same words, so the self-cost readers
+    # below see one sentence: unread, the grammar admitted the line and this
+    # charger collected the mana and no sacrifice, which is the card kept on
+    # the battlefield and its ability repeatable.
+    cost_lower = _collapse_self_references(
+        cost_part.lower(), card_name, "this permanent"
+    )
+    # "{T}, Sacrifice two lands **and this artifact**" (Sandstone Deadfall);
+    # "{T}, Exile two cards from your graveyard **and this creature**" (Zombie
+    # Assassin). Taken off the clause before any reader below sees it — see
+    # :func:`_split_conjoined_self` — and put back as the source's own flag
+    # once the chosen half has been read.
+    cost_lower, conjoined_self = _split_conjoined_self(cost_lower)
     discard_last_drawn = "discard the last card you drew this turn" in cost_lower
     exile_self = bool(
         re.search(rf"\bexile this ({_SELF_COST_NOUNS})\b", cost_lower)
     )
+    # "**Exile this card from your hand**: Add {G}." (Elvish Spirit Guide.)
+    # The source, named as a *card* because that is what it is where this cost
+    # can be paid — and "card" is deliberately not among ``_SELF_COST_NOUNS``,
+    # so the line above read nothing and the ability compiled with **no cost
+    # at all**: on the battlefield the Guide made {G} for free as often as it
+    # was asked, and in a hand, where the card says the ability is, it could
+    # not be activated. Both halves are one fact (CR 113.6j) and it rides the
+    # two fields that already say it: the source is what is exiled, and the
+    # zone it is exiled from is a hand. ``activation_zones`` reads that pair.
+    exile_self_from_hand = bool(
+        re.search(r"\bexile this card from your hand\b", cost_lower)
+    )
+    exile_self = exile_self or exile_self_from_hand
     # "Exile a creature you control" (City of Shadows) / "Exile a creature
     # card from your graveyard" (Necropolis) - a *chosen* object rather than
     # the source. The regex only **delimits** the noun phrase to the end of
@@ -2986,7 +3207,7 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     # enumerates cards the payer holds, and answering "battlefield" would look
     # for a permanent that is not there and charge nothing while the ability
     # still resolved.
-    exile_zone = "battlefield"
+    exile_zone = "hand" if exile_self_from_hand else "battlefield"
     if chosen_exile is not None:
         phrase = chosen_exile.group(1)
         if "from your graveyard" in phrase:
@@ -3034,6 +3255,28 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
                         exile_zone_owner = (
                             "you" if "from your graveyard" in phrase else None
                         )
+    # "Exile **any number of** cards from your graveyard" (Painbringer). The
+    # count left to the payer, which is the sacrifice's "any number of" one
+    # verb over and is carried the same way: the same filter field, with the
+    # count saying it is a choice. The counted row above read "any" as a word
+    # that is not a number and charged nothing.
+    #
+    # Only "from your graveyard" — anchored in the regex rather than checked
+    # afterwards, because the activation path names the set by graveyard slot
+    # (``cost_graveyard_indices``) and has no such channel for a battlefield or
+    # a hand; the grammar refuses the other zones with the same words.
+    if exile_filter is None and not exile_self:
+        any_exile = re.search(
+            r"\bexile any number of ([^,:]+? from your graveyard)\s*(?=,|$)",
+            cost_lower,
+        )
+        if any_exile is not None:
+            narrowed = _chargeable_exile_filter(any_exile.group(1), plural=True)
+            if narrowed is not None:
+                exile_filter = narrowed
+                exile_count = "any"
+                exile_zone = "graveyard"
+                exile_zone_owner = "you"
     # "Sacrifice this artifact" (Black Lotus, Bottle of Suleiman). Older
     # printings name the card instead of saying "this artifact", so accept
     # either wording.
@@ -3420,6 +3663,15 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
             if number >= 2:
                 remove_counter = counted_removal.group(2)
                 remove_counter_count = number
+    # The source a conjoined tail named, charged only where the chosen half in
+    # front of it was read: with that half unread the clause charges nothing at
+    # all, which is the answer the pool-wide guard compares against the
+    # grammar's and names — a source charged alone would be a third of the
+    # printed cost passing as the whole of it.
+    if "sacrifice" in conjoined_self and sacrifice_filter is not None:
+        sacrifice_self = True
+    if "exile" in conjoined_self and exile_filter is not None:
+        exile_self = True
     return ActivatedAbilityCost(
         required, requires_tap, discard_last_drawn, exile_self, sacrifice_self,
         return_self_to_hand=return_self_to_hand,
@@ -3459,6 +3711,7 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         exile_graveyard_position=exile_graveyard_position,
         untap_filter=_chargeable_untap_cost(cost_lower),
         chosen_keyword_options=_chosen_keyword_options(cost_lower),
+        mill_cards=_mill_cost(cost_lower),
     )
 
 
@@ -4359,9 +4612,15 @@ def _protection_quality_word(word: str) -> bool:
     One reader, so what is admitted here and what a shield answers to cannot come
     apart again.
     """
-    from .keywords import protection_quality
+    from .keywords import protection_qualities_named
 
-    return protection_quality(word) is not None
+    # The shorthand reader (CR 702.16h/i), which answers every single-quality
+    # word exactly as ``protection_quality`` does and additionally reads the
+    # members that stand for several abilities — "each color" (Iridescent
+    # Angel). It is the function ``_protection_qualities`` builds a
+    # permanent's qualities with, so the delegation above is unchanged: one
+    # reader, one vocabulary.
+    return protection_qualities_named(word) is not None
 
 
 def _protection_clause_modelled(clause: str) -> bool:
@@ -4463,14 +4722,14 @@ def _parse_activated_ability(line: str, card_name: str | None = None) -> ParsedA
             source_line=line,
             normalized_effect=effect_text,
             supported=True,
-            cost=parse_activated_ability_cost(line),
+            cost=parse_activated_ability_cost(line, card_name),
             effect_kind="activated_delayed_trigger",
             instruction=delayed,
         )
     instruction, effect_kind = _reading(
         _line_instruction(line, card_name, activated=True)
     )
-    cost = parse_activated_ability_cost(line)
+    cost = parse_activated_ability_cost(line, card_name)
     # "Tap enchanted creature: Target creature **other than the creature tapped
     # this way** …" (Veteran's Voice). The grammar resolved that pronoun to the
     # attached host, because a target filter is tested before the cost is paid
@@ -5211,7 +5470,17 @@ def _grammar_static_creature_instructions(
     kind — a line that lowered to one of these *and* something else is not a
     static contribution and keeps its refusal.
     """
-    compiled = compile_grammar_line(normalize_creature_line(line), card_name=card_name)
+    # A line carrying a **quoted ability** goes to the grammar as printed:
+    # 'As long as …, this creature has "{T}: Destroy target black creature."'
+    # (Repentant Vampire) hands the quote over as text the compiler reads
+    # again and the table shows a player, and the normalised spelling would
+    # make that "{t}: destroy target black creature". The grammar strips the
+    # ability word and the reminder text itself; nothing else here printed a
+    # quote the grammar could read, so no other line changes spelling.
+    compiled = compile_grammar_line(
+        line if '"' in line else normalize_creature_line(line),
+        card_name=card_name,
+    )
     if not compiled.usable or not compiled.instructions:
         return ()
     if any(
@@ -5503,6 +5772,28 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     from .landwalk import landwalk_per_type_spec
 
     if landwalk_per_type_spec(normalized) is not None:
+        return True
+    # "While an opponent is choosing targets as part of casting a spell they
+    # control or activating an ability they control, that player must choose at
+    # least one Flagbearer on the battlefield if able." (Standard Bearer,
+    # Coalition Honor Guard.) A requirement on somebody else's announcement
+    # (CR 601.2c), enforced off the board at the cast and activation paths —
+    # no instruction, and a creature is refused for any line nothing reads.
+    # Asked of the reader those paths enforce through, so a noun it cannot test
+    # stays a refused card rather than a requirement that demands nothing.
+    from .target_requirements import must_choose_claims_line
+
+    if must_choose_claims_line(normalized):
+        return True
+    # "If this card is in a graveyard, effects from spells named Flame Burst
+    # count it as a card named Flame Burst." (Pardic Firecat, Diligent
+    # Farmhand.) A static that functions in the graveyard (CR 113.6b) and
+    # widens what one spell's name count sees — read off the card's own text by
+    # the count's name test (engine/counted_names.py), so there is no
+    # instruction. Asked of the reader that test asks.
+    from .counted_names import counts_as_claims_line
+
+    if counts_as_claims_line(normalized):
         return True
     # "You can't cast creature spells." (Steel Golem.) CR 601.3a scoped to the
     # permanent's own controller, enforced off the board at every cast — so
@@ -6375,6 +6666,17 @@ def expand_ability_lines(
       each. From there it is the named-counter entry state and an ordinary
       upkeep trigger with a ``CouldNot`` branch, none of which know the word.
 
+    * an **ability-word paragraph that says "…instead"** becomes the last
+      sentence of the paragraph above it
+      (:func:`expand_instead_paragraph_lines`) — "Thermal Blast deals 3 damage
+      to target creature.\\nThreshold — Thermal Blast deals 5 damage instead if
+      there are seven or more cards in your graveyard." CR 608.2c's later text
+      modifying earlier text, over a paragraph break the ability word put
+      there and CR 207.2c says means nothing. The one rewrite here that joins
+      lines; from there the pair is two sentences of one line to the sentence
+      loop, which already folds an "instead" sentence into the step it
+      replaces.
+
     And one rewrite that is the *card's* rather than the rules': a legendary
     card's shortened self-reference written out in full
     (``engine/self_reference.py``). It belongs in this pass for exactly the
@@ -6392,6 +6694,14 @@ def expand_ability_lines(
     oracle_text = expand_short_self_references(
         oracle_text, card_name, legendary=legendary
     )
+    # CR 608.2c's, and the one rewrite here that *joins* lines where the rest
+    # split or replace them: an ability-word paragraph saying "…instead" is the
+    # last sentence of the paragraph above it. Its own statement for echo's
+    # reason below, and ahead of every keyword rewrite on purpose: a printed
+    # keyword line does not end a sentence, which is the gate that keeps this
+    # from joining onto one, and several of them are rewritten into text that
+    # does.
+    oracle_text = expand_instead_paragraph_lines(oracle_text)
     # CR 702.30a's rewrite, as its own statement rather than another layer of
     # the composition below: an echo keyword line is a whole line and none of
     # the rewrites below reads one, so the order between them carries no
@@ -6415,6 +6725,18 @@ def expand_ability_lines(
     # appends cleanly where a nested argument collides. Order is free here —
     # no other rewrite produces a cycling line and none consumes one.
     oracle_text = expand_cycling_lines(oracle_text)
+    # CR 702.34a's, for cycling's reason and with its freedom of order: a whole
+    # flashback keyword line in, the rule's own first sentence out ("You may
+    # cast this card from your graveyard by paying [cost] rather than paying
+    # its mana cost."), read by none of the rewrites around it
+    # (``engine/flashback.py``). From there it is a CR 601.3 permission that
+    # requires a CR 118.9 alternative cost, to ``cast_permissions`` and to the
+    # cast path, neither of which knows the word. The rule's *second* static
+    # ability — the card is exiled instead of going anywhere else as it leaves
+    # the stack — has no sentence to rewrite into, for the reason buyback's
+    # second half has none: it is a fact about one cast, stamped on the stack
+    # object.
+    oracle_text = expand_flashback_lines(oracle_text)
     return expand_same_is_true_lines(
         expand_static_then_trigger_lines(expand_conjoined_trigger_lines(
             expand_buyback_lines(
@@ -6546,6 +6868,82 @@ def expand_same_is_true_lines(oracle_text: str) -> str:
             continue
         out.append(first)
         out.extend(first.replace(quality, other) for other in qualities)
+    return "\n".join(out)
+
+
+#: The sentence-replacing "instead": the word with no "of" behind it. "Instead
+#: of" compares two things inside one sentence ("…instead of any other type"),
+#: which is a sentence standing on its own.
+_REPLACING_INSTEAD = re.compile(r"\binstead\b(?! of\b)", re.IGNORECASE)
+
+#: Parenthesised reminder text, for asking how a printed line *ends* without it.
+_TRAILING_REMINDER = re.compile(r"\s*\([^()]*\)\s*$")
+
+
+def _replaces_the_paragraph_above(sentence: str) -> bool:
+    """Whether an ability-word paragraph's text replaces the paragraph above
+    it rather than standing as an ability of its own.
+
+    "Thermal Blast deals 5 damage **instead** if there are seven or more cards
+    in your graveyard." Three tests, each a way the word can mean something
+    else:
+
+    * it says "instead", and not "instead of";
+    * it does not say "would" — "If a creature would die, exile it instead" is
+      CR 614.1a's replacement of an *event*, complete in itself;
+    * it is not an ability with a cost or a trigger of its own, whose "instead"
+      is about its own effect.
+    """
+    lowered = sentence.lower()
+    if _REPLACING_INSTEAD.search(lowered) is None or re.search(r"\bwould\b", lowered):
+        return False
+    return not _is_ability_line(sentence)
+
+
+def expand_instead_paragraph_lines(oracle_text: str) -> str:
+    """*oracle_text* with an ability-word paragraph that replaces the one above
+    it joined onto that paragraph as its last sentence.
+
+    "Thermal Blast deals 3 damage to target creature.\\nThreshold — Thermal
+    Blast deals 5 damage instead if there are seven or more cards in your
+    graveyard." is **one** effect printed as two paragraphs: CR 608.2c's later
+    text modifying the meaning of earlier text, with exactly one of the two
+    amounts ever dealt. Every reader of a card's lines takes a line as a unit —
+    the compiler lowers each to its own instruction and a spell resolves them
+    all in order — so read as printed the second paragraph either means
+    nothing (it names no recipient) or happens *as well* (3 damage, then 5).
+    The sentence loop already folds an "…instead" sentence into the step it
+    replaces (``engine/grammar/conditional_instead.py``); what it needs is to
+    be handed both sentences on one line.
+
+    The paragraph break is typography, and the rule says so: an ability word
+    "has no rules meaning" (CR 207.2c), and it is the ability word that puts
+    the break there. So the join is gated on exactly that — the line must open
+    with one — and the word is dropped as the grammar would have dropped it.
+    Threshold prints it this way, and so do hellbent ("…deals 5 damage instead
+    if you have no cards in hand") and metalcraft after it.
+
+    Everything else about the gate is refusal: see
+    :func:`_replaces_the_paragraph_above`, and the paragraph above must *end a
+    sentence* — a keyword line ("Kicker {2}") is nothing an "instead" can
+    replace. A paragraph this does not join is left exactly as printed, where
+    it reports as unclaimed text rather than as a guess.
+    """
+    if not oracle_text or "instead" not in oracle_text.lower():
+        return oracle_text
+    out: list[str] = []
+    for line in oracle_text.splitlines():
+        printed = line.strip()
+        sentence = strip_ability_word(printed)
+        if (
+            out
+            and sentence != printed
+            and _TRAILING_REMINDER.sub("", out[-1]).rstrip().endswith((".", '."'))
+            and _replaces_the_paragraph_above(sentence)
+        ):
+            out[-1] = f"{out[-1].rstrip()} {sentence}"
+            continue
+        out.append(line)
     return "\n".join(out)
 
 
@@ -7047,6 +7445,25 @@ def _derived_static_claims(
     # reports unsupported however well the protection works.
     if any(immunity_claims_line(line) for line in oracle_text.splitlines()):
         claims.append(TARGET_IMMUNITY_CLAIM)
+    # "…that player must choose at least one Flagbearer on the battlefield if
+    # able." (Standard Bearer, Coalition Flag.) The mirror of the line above —
+    # a permanent's text about what somebody else's announcement must include
+    # rather than what it may not — read off the board by the cast and
+    # activation paths (engine/target_requirements.py), so there is no
+    # instruction and the claim asks the reader that enforces it.
+    from .target_requirements import CLAIM as TARGET_REQUIREMENTS_CLAIM
+    from .target_requirements import must_choose_claims_line
+
+    if any(must_choose_claims_line(line) for line in oracle_text.splitlines()):
+        claims.append(TARGET_REQUIREMENTS_CLAIM)
+    # "If this card is in a graveyard, effects from spells named ~ count it as
+    # a card named ~." (Pardic Firecat's line, on whatever prints it.) Read off
+    # the card in the graveyard by the count's own name test, so no instruction.
+    from .counted_names import CLAIM as COUNTED_NAMES_CLAIM
+    from .counted_names import counts_as_claims_line
+
+    if any(counts_as_claims_line(line) for line in oracle_text.splitlines()):
+        claims.append(COUNTED_NAMES_CLAIM)
     # "Players play with their hands revealed." (Revelation.) The per-seat
     # state payload derives who may see whose hand from the permanent's own
     # text (engine/revealed_hands.py), so there is no instruction — and on an
@@ -7142,6 +7559,17 @@ def _derived_static_claims(
 
     if any(library_top_line(line) for line in oracle_text.splitlines()):
         claims.append("library_top")
+    # "You may cast this card from your graveyard by paying {4}{R} rather than
+    # paying its mana cost." — CR 702.34a's first static ability, which is what
+    # a flashback keyword line is by the time this reads it
+    # (``expand_ability_lines``). A permission and a price rather than an
+    # effect, derived off the card's own text by ``cast_permissions`` at every
+    # cast, so there is no instruction — and the claim is asked of the reader
+    # that charges the cost, so a cost it cannot read is not claimed (and is
+    # refused by name above). Not evidence the card *does* anything: see
+    # ``_TIMING_ONLY_CLAIMS``.
+    if any(flashback_claims_line(line) for line in oracle_text.splitlines()):
+        claims.append(FLASHBACK_CLAIM)
     return claims
 
 
@@ -7178,8 +7606,14 @@ _EFFECT_HANDLER_KINDS: frozenset[str] | None = None
 #:   Credited as behaviour it read **supported** while reanimating nothing —
 #:   the debt Mirage's promotion rehearsal found on eleven cards, arriving from
 #:   the gate rather than from a whitelist word.
+#: * ``flashback`` — "You may cast this card from your graveyard by paying
+#:   {4}{R} rather than paying its mana cost" (CR 702.34a). *From where* and
+#:   *for what* rather than when, and the same kind of clause: it is about how
+#:   the card may be cast and says nothing about what the spell does. A
+#:   flashback sorcery whose effect line nothing reads must stay unsupported
+#:   however well it can be cast twice.
 _TIMING_ONLY_CLAIMS: frozenset[str] = frozenset({
-    "activation_restrictions", "cast_timing",
+    "activation_restrictions", "cast_timing", FLASHBACK_CLAIM,
 })
 
 
@@ -7293,6 +7727,41 @@ def _compile_card_oracle(
             normalized_text,
         )
 
+    # "Spend only colored mana on X. No more than one mana of each color may be
+    # spent this way." printed over an X this engine does not charge that way.
+    # The sentence is enforced on an optional {X} offer (Emblazoned Golem's
+    # "Kicker {X}") and claimed by the cost table for every card type, so on a
+    # card whose X lives anywhere else it would be claimed and dropped -- the
+    # uncharged cost's twin again, a restriction nothing applies. Asked of the
+    # printed text, which the reader expands for itself.
+    unenforced = unenforced_x_spend_restriction(printed_text, name, legendary)
+    if unenforced is not None:
+        return OracleProgram(
+            False,
+            "unsupported",
+            f"restricts an X nothing charges that way: {unenforced}",
+            normalized_text,
+        )
+
+    # "…, where X is the chosen number" on a card no cast of which chooses one
+    # (Liquid Fire prints the cost that does: "As an additional cost to cast
+    # this spell, choose a number between 0 and 5"). The words lower to the
+    # cast's own X, so without the cost the line compiles and spends an X
+    # nobody announced -- the uncharged cost's mirror, a number nothing
+    # chooses. A permanent is refused outright: its abilities' X is not its
+    # spell's.
+    unchosen = unchosen_number_definition(
+        printed_text, name, legendary,
+        spell=primary_type in {"instant", "sorcery"},
+    )
+    if unchosen is not None:
+        return OracleProgram(
+            False,
+            "unsupported",
+            f"defines X as a number nothing chooses: {unchosen}",
+            normalized_text,
+        )
+
     # A **cycling** keyword line the CR 702.29a rewrite could not read
     # (``engine/cycling.py``). Beside the uncharged-cost gate above and for its
     # reason: CR 702.29e's typecycling searches a library rather than drawing, so
@@ -7324,6 +7793,20 @@ def _compile_card_oracle(
             False,
             "unsupported",
             f"unimplemented fading ability: {unread_fading}",
+            normalized_text,
+        )
+    # …and a **flashback** line the CR 702.34a rewrite could not read
+    # (``engine/flashback.py``) — a cost with an {X} in it, or a clause the
+    # alternative-cost reader cannot charge. The case this gate exists for is
+    # the one the keyword was in before the rewrite: an instant or sorcery
+    # whose *other* line compiles reports supported with the keyword dropped,
+    # and 27 of Odyssey's 28 flashback cards did exactly that.
+    unread_flashback = unread_flashback_line(oracle_text)
+    if unread_flashback is not None:
+        return OracleProgram(
+            False,
+            "unsupported",
+            f"unimplemented flashback cost: {unread_flashback}",
             normalized_text,
         )
 

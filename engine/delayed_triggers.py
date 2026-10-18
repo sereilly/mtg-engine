@@ -96,6 +96,17 @@ DELAYED_EVENTS: dict[str, str] = {
     # form uses — so "that creature" is one reader for both, and a card that
     # prints the sentence as a static needs nothing new.
     "source_blocks_or_blocked_by": "the declare blockers step",
+    # "Whenever this creature **becomes blocked by** a creature of that color
+    # this turn, destroy that creature." (Zombie Boa.) The attacking half of
+    # the row above on its own, and a separate event rather than that one
+    # narrowed: an entry armed under the joined name answers when its creature
+    # *blocks* as well, which this sentence does not say.
+    #
+    # Announced per pair by ``_fire_delayed_block_pair_triggers``, beside the
+    # joined event's becomes-blocked half and with the same
+    # ``blocked_permanent_ids`` key — CR 509.3d, once for each creature the
+    # printed phrase admits.
+    "source_becomes_blocked_by": "the declare blockers step",
     # Subira, Tulzidi Caravanner.
     "creature_deals_combat_damage_to_player": "the combat damage step",
     # "When that creature **becomes blocked** this turn, …" (Barreling Attack).
@@ -166,6 +177,14 @@ DELAYED_EVENTS: dict[str, str] = {
     # Announced from the same seam, and only for *combat* damage — a creature's
     # ping ability is not what this card watches.
     "bound_permanent_deals_combat_damage": "the damage event's announcement",
+    # "Until end of turn, whenever target creature **deals damage**, you gain
+    # that much life." (Spiritualize.) The row above without CR 510.2's word:
+    # every damage event the bound permanent is the source of, a ping ability's
+    # as much as a combat step's, to a creature or to a player. Its own event
+    # rather than that one with a flag, for the reason the two block events
+    # above are two: which announcements wake an entry is what an event *is*,
+    # and an entry armed for combat damage must not answer to anything else.
+    "bound_permanent_deals_damage": "the damage event's announcement",
     # "At the beginning of your next main phase, …" (Mana Drain). Either main
     # phase of the controller's — the next one there is.
     "controllers_next_main_phase": "the main phase entry",
@@ -180,6 +199,15 @@ DELAYED_EVENTS: dict[str, str] = {
     # `next_end_step` row above, and the two upkeep rows below, for why that is
     # a separate event and not a second spelling.
     "controllers_next_end_step": "the end step",
+    # "At the beginning of the end step of **that player's next turn**, that
+    # player returns those cards to their hand." (Suppress.) The third end-step
+    # row, and the seat is what makes it a third: a player the creating effect
+    # named, who is neither the ability's controller nor (necessarily) the
+    # active player when it is created. Seated by ``bound_player_index`` — see
+    # :data:`EVENTS_SEATED_BY_BOUND_PLAYER` — and held past the turn it was
+    # armed in by :data:`EVENTS_AFTER_THIS_TURN`: cast on that player's own
+    # turn, their "next turn" is not this one.
+    "bound_players_next_turns_end_step": "the end step",
     # "Take an extra turn after this one. At the beginning of **that turn's**
     # end step, you lose the game." (Final Fortune.) Not the two rows above and
     # not a narrowing of either: "that turn" is the turn the *same effect* just
@@ -359,7 +387,14 @@ WHILE_THE_GAME_LASTS = "while_the_game_lasts"
 #: A set here rather than a flag on the entry, for :data:`DELAYED_EVENTS`'
 #: reason: which turn a printed phrase names is a fact about the *event*, and a
 #: per-entry flag would have a default whose safe value differs per card.
-EVENTS_AFTER_THIS_TURN: frozenset[str] = frozenset({"granted_extra_turns_end_step"})
+EVENTS_AFTER_THIS_TURN: frozenset[str] = frozenset({
+    "granted_extra_turns_end_step",
+    # "…the end step of that player's **next turn**" (Suppress). Cast during
+    # that player's own turn — a sorcery's caster targeting themselves, or an
+    # ability with the same words — the turn the end-step site is about to
+    # announce is *this* one, and the words name the one after.
+    "bound_players_next_turns_end_step",
+})
 
 
 #: Events whose *seat* is the player the creating effect recorded rather than
@@ -378,6 +413,9 @@ EVENTS_SEATED_BY_BOUND_PLAYER: frozenset[str] = frozenset({
     # possessive naming the same kind of seat: the player an earlier step of the
     # creating effect recorded, not the ability's controller.
     "bound_players_upkeep",
+    # "…the end step of **that player's** next turn" (Suppress). The same
+    # possessive on a different step.
+    "bound_players_next_turns_end_step",
 })
 
 

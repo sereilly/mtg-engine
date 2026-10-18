@@ -198,6 +198,27 @@ class SharedColorMilledThisWay:
 
 
 @dataclass(frozen=True)
+class ExiledThisWayShareAName:
+    """``it has the same name as another card exiled this way`` / ``you exile
+    two cards with the same name`` (Tainted Pact).
+
+    One relation (CR 201.2a) over the cards this effect has exiled so far,
+    asked two ways: ``of_latest`` asks it of the card the step in front of the
+    clause just exiled, the bare form of any two. A relation between cards and
+    so not a filter, for :class:`SharedColorMilledThisWay`'s reason.
+    """
+
+    of_latest: bool = False
+
+
+@dataclass(frozen=True)
+class PutIntoHandThisWay:
+    """``you put a card into your hand`` (Tainted Pact's stopping clause):
+    whether a step of this same effect put a card there. A record, because a
+    hand does not say which of its cards an effect added."""
+
+
+@dataclass(frozen=True)
 class MilledThisWay:
     """"If one or more creature cards **were put into that graveyard this
     way**" (Helm of Obedience).
@@ -391,6 +412,25 @@ class CountersPlacedThisWay:
 
     The lowering refuses it without a producer, as every back-reference in this
     grammar is refused.
+    """
+    counter: str
+@dataclass(frozen=True)
+class CountersRemovedThisWay:
+    """"**For each delay counter removed this way,** you lose 1 life unless you
+    pay {1}{W}." (Delaying Shield.)
+
+    :class:`EachLifeLost`'s shape — an iterator that is a *number*, not a set —
+    with the number read off this resolution's scratchpad: how many counters
+    the sentence in front of it took off ("remove all delay counters from this
+    enchantment"). One repetition per counter, so each is its own offer and
+    its own payment.
+
+    Not :class:`CountersPlacedThisWay`, which walks the *objects* a placement
+    put counters on and binds each one; nothing is bound here — the body means
+    what it would mean written once, run again.
+
+    ``counter`` is the printed kind. The lowering refuses the loop without a
+    producer, as every back-reference in this grammar is refused.
     """
     counter: str
 @dataclass(frozen=True)
@@ -608,6 +648,26 @@ class CameUnderControlSinceLastUpkeep:
     """
     subject: "TargetSpec"
 @dataclass(frozen=True)
+class CameUnderControlThisTurn:
+    """"if this creature didn't attack **or come under your control this
+    turn**" (Mad Dog); "…unless it **came under your control this turn**" (Erg
+    Raiders).
+
+    :class:`CameUnderControlSinceLastUpkeep`'s sibling over a narrower window,
+    and a record for that one's reason: nothing on the board says when a
+    permanent changed hands. **Control, not entry** — the word is load-bearing
+    here too, and Erg Raiders' 2018-03-16 ruling spells it out: a creature
+    "comes under your control" if it enters the battlefield under your control
+    *or* if you gain control of it while it is already there.
+
+    The record is the one CR 302.6 already keeps for summoning sickness, which
+    is this very question about the controller's own turn — and only about
+    that turn, which is why the lowering admits the clause under a trigger of
+    the controller's own turn and refuses it anywhere else.
+    """
+    subject: "TargetSpec"
+    negated: bool = False
+@dataclass(frozen=True)
 class AttackedOrBlockedThisCombat:
     """"if this creature **attacked or blocked this combat**" (Clockwork Beast,
     Avian, Steed and Swarm; Kjeldoran Home Guard).
@@ -767,6 +827,24 @@ class CostObjectWas:
 
     channel: str
     filter: "ObjectFilter"
+@dataclass(frozen=True)
+class SharesCardTypeWithCostCard:
+    """"…**if it shares a card type with the card exiled this way**." (Holistic
+    Wisdom.)
+
+    :class:`CostObjectWas`'s sibling, and a different question about the same
+    record: that one asks what the cost's object *was*, this one compares it
+    with the **target** of the effect the clause guards. Two cards, neither on
+    the battlefield, so what is compared is their printed card types
+    (CR 205.2a; CR 613.1 gives a card in a zone no computed ones) — and a card
+    may have several, any one of which answers.
+
+    ``channel`` is the participle the sentence prints, as it is on
+    :class:`CostObjectWas`, so the lowering can demand the cost that writes
+    the record it names.
+    """
+
+    channel: str
 @dataclass(frozen=True)
 class HadPlus1Counter:
     """"if it had a +1/+1 counter on it" (Basri's Lieutenant, CR 603.4).

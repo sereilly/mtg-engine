@@ -33,8 +33,11 @@ from .records import (AdditionalCostWasPaid, AttackedOrBlockedThisCombat,
                       RevealedCardHasChosenName,
                       RevealedChosenColorCount,
                       CameUnderControlSinceLastUpkeep,
+                      CameUnderControlThisTurn,
                       ChosenThisWay, CoinFlipResult, CostObjectWas,
+                      SharesCardTypeWithCostCard,
                       CouldNot, CountedNumber, CountersPlacedThisWay,
+                      CountersRemovedThisWay,
                       DamagedBySourceDiedThisTurn, DealtDamageThisTurn,
                       SeatCastSpellThisTurn,
                       SeatCastSpellThisTurn,
@@ -52,7 +55,8 @@ from .records import (AdditionalCostWasPaid, AttackedOrBlockedThisCombat,
                       ReturnedToHandThisTurn, RevealedCardIs,
                       ManaAddedWithThisAbility,
                       SacrificedThisWay, SourceAbilityActivations,
-                      StartedTheTurnState, TappedThisWay, WasKicked)
+                      StartedTheTurnState, TappedThisWay, WasKicked,
+                      ExiledThisWayShareAName, PutIntoHandThisWay)
 
 @dataclass(frozen=True)
 class Controls:
@@ -598,6 +602,43 @@ class SharesColorWithChosenPermanent:
 
 
 @dataclass(frozen=True)
+class SharesColorWithMatching:
+    """"Counter target spell **if it shares a color with a creature you
+    control**." (Jaded Response.)
+
+    CR 105.2's relation again, with a *described set* on the far side instead
+    of the census (:class:`SharesMostCommonColor`) or one chosen permanent
+    (:class:`SharesColorWithChosenPermanent`): the object is "it" — the target
+    the guarded effect announced, carried no more than those nodes carry it —
+    and the clause holds when **any** permanent the noun phrase admits shares a
+    colour with it.
+
+    ``filter`` is the printed noun phrase after the article, payload the whole
+    way down: "a creature you control" here, and "an artifact an opponent
+    controls" is this node with other words.
+    """
+
+    filter: "ObjectFilter"
+
+
+@dataclass(frozen=True)
+class TargetsDifferInColor:
+    """"Destroy two target nonblack creatures **unless either one is a color
+    the other isn't**." (Dead Ringers.)
+
+    CR 105.2's relation between the two targets the guarded effect announced:
+    true when their colour *sets* are not the same set. Not "they share no
+    color" — a white-blue creature and a blue one share blue and still differ
+    — and two colourless creatures do not differ at all (CR 105.2c), which the
+    card's ruling states outright.
+
+    No field, for :class:`SharesColorWithChosenPermanent`'s reason: "either
+    one" and "the other" are the pair beside the clause, and only the lowering
+    sees whether the effect it guards really announced exactly two.
+    """
+
+
+@dataclass(frozen=True)
 class TurnIsYours:
     """"**During your turn**, creatures you control get +2/+0." / "**During
     turns other than yours**, creatures you control get -0/-2." (Vibrating
@@ -613,9 +654,15 @@ class TurnIsYours:
     the other way round; a second node would be two readers of one fact, free to
     disagree about a game with three seats (it is *not* "an opponent's turn":
     with the source's controller inactive, every other seat's turn qualifies).
+
+    ``whose`` is the seat the clause names when it is not "your": "if it's not
+    **that player's** turn" (Price of Glory) asks about the player the firing
+    event was about. A field rather than a node, for ``negated``'s reason —
+    it is one question, whose turn is it, asked about a different seat.
     """
 
     negated: bool = False
+    whose: str = "you"
 
 
 @dataclass(frozen=True)
@@ -714,6 +761,8 @@ Condition = Union[
     SelfIsOnlyCardOfTypeInGraveyard,
     SharesMostCommonColor,
     SharesColorWithChosenPermanent,
+    SharesColorWithMatching,
+    TargetsDifferInColor,
     AttachedCounterCount,
     SourceCounterCount,
     SourceExiled,
@@ -729,10 +778,13 @@ Condition = Union[
     ChosenThisWay,
     CoinFlipResult,
     CameUnderControlSinceLastUpkeep,
+    CameUnderControlThisTurn,
     CostObjectWas,
+    SharesCardTypeWithCostCard,
     CouldNot,
     CountedNumber,
     CountersPlacedThisWay,
+    CountersRemovedThisWay,
     DamagedBySourceDiedThisTurn,
     DealtDamageThisTurn,
     SeatCastSpellThisTurn,
@@ -750,6 +802,8 @@ Condition = Union[
     EachShortOfThisWay,
     EnteredFrom,
     ExiledThisWay,
+    ExiledThisWayShareAName,
+    PutIntoHandThisWay,
     HadNamedCounter,
     HadPlus1Counter,
     InABlockSinceLastUpkeep,

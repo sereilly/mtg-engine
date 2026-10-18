@@ -15,7 +15,7 @@ import re
 
 from engine import Game
 from engine.activation_permissions import card_widens_activation
-from engine.color_changes import spell_color_override
+from engine.color_changes import spell_color_change
 from engine.cost_modifiers import spell_cost_tax
 from engine.divided_damage import DIVIDED_TARGETS, divided_entry
 from engine.enter_effects import chosen_as_entered
@@ -30,7 +30,8 @@ from engine.activation_prohibitions import activation_prohibition
 from engine.keywords import abilities_lost_at, derived_ability_lines
 from engine.hand_locks import locked_hand_indices
 from engine.revealed_hands import hand_revealed_to
-from engine.targeting import derive_cast_spec, usable_activated_abilities
+from engine.targeting import (derive_cast_spec, recorded_role_seats,
+                              usable_activated_abilities)
 from engine.text_changes import changed_words
 
 from .runtime import CARD_BY_NAME
@@ -184,6 +185,11 @@ def _protection_quality_word(kind: str, value: str) -> str:
         return _SYMBOL_TO_COLOR_WORD.get(value, value)
     if kind == "multicolored":
         return "multicolored"
+    if kind == "spell_type":
+        # "protection from **instant spells**" (Devoted Caretaker): the type
+        # narrowed to spells, spelled as printed. Falling through to the rule
+        # below would badge it "instants", which is a wider protection.
+        return f"{value} spells"
     # A card type or a creature subtype: printed plural, stored singular. The
     # supertyped form ("legendary creature", Tsabo Tavoc) ends in that same
     # noun, so the one rule spells it too — "legendary creatures".
@@ -289,6 +295,85 @@ def _offered_mana(game: Game, perm: Permanent) -> tuple[str, ...]:
         if len(payable) > 1 and set(payable) != set(own):
             return payable
     return own
+
+
+#: Payload keys of an add-mana step that change *how much* it makes or what the
+#: mana may pay for, never *which symbols* it can be asked for.
+_MANA_AMOUNT_KEYS = frozenset({
+    "per_each", "per_each_counter_removed", "per_each_counter_on_source",
+    "pips_amount", "spend_only", "x_from_count", "any_color_count", "oracle_text",
+})
+
+
+def _effect_steps(instruction) -> list:
+    """*instruction*'s own steps, a ``sequence`` opened up."""
+    if instruction is None:
+        return []
+    if instruction.kind == "sequence":
+        return [
+            leaf
+            for step in (instruction.payload or {}).get("steps") or ()
+            if hasattr(step, "kind")
+            for leaf in _effect_steps(step)
+        ]
+    return [instruction]
+
+
+def _ability_mana(instruction) -> dict | None:
+    """What one activation of a mana ability adds, as its own payload states
+    it: ``{"symbols": […], "choice": bool}``, or None where the payload alone
+    does not say.
+
+    ``choice`` is the question the client has to ask. "{1}, {T}: Add {R}{G}."
+    (Mossfire Valley) and "{T}: Add {C}{C}." make a **fixed** output — every
+    symbol, whichever is named — and "{T}: Add {R} or {G}." makes **one of**
+    its symbols. The permanent's ``produced_mana`` cannot tell those apart: it
+    is a summary of everything the permanent can make, so a filter land and a
+    dual land read the same there, and the client opened a colour fan for an
+    ability with nothing to choose and then sent an answer the engine ignored.
+
+    Riders that change the amount or restrict the spend are read through; a
+    shape whose symbols the board, a record or the seat's own split decides
+    (``any_color_from``, ``from_noted``, ``combination`` …) is None, and the
+    client falls back to the summary — which the server narrows for exactly
+    those (:func:`_offered_mana`).
+    """
+    adders = [step for step in _effect_steps(instruction) if step.kind == "add_mana_from_text"]
+    if not adders:
+        return None
+    symbols: list[str] = []
+    choice = False
+    for step in adders:
+        payload = step.payload or {}
+        shape = set(payload) - _MANA_AMOUNT_KEYS
+        if shape == {"pips"}:
+            found = [str(symbol) for symbol, _count in payload["pips"]]
+        elif shape == {"pips_choice"} and len(adders) == 1:
+            found = [str(symbol) for symbol, _count in payload["pips_choice"]]
+            choice = len(set(found)) >= 2
+        elif shape == {"any_color"} and payload.get("any_color") and len(adders) == 1:
+            found = ["W", "U", "B", "R", "G"]
+            choice = True
+        else:
+            return None
+        symbols.extend(symbol for symbol in found if symbol not in symbols)
+    return {"symbols": symbols, "choice": choice} if symbols else None
+
+
+def _ability_mana_payload(game: Game, perm: Permanent, usable) -> list | None:
+    """``ability_mana`` for one of the viewer's permanents: one entry per
+    usable ability, indexed like the ``ability_index`` the activate action
+    takes (so a one-ability permanent's is entry 0). None — the field is left
+    off — when no ability says anything, and when the board has changed what a
+    land offers (:func:`_offered_mana`'s swap or narrowing): there the summary
+    is the answer and an ability's printed symbols are not.
+    """
+    if not usable:
+        return None
+    if perm.has_type("land") and set(_offered_mana(game, perm)) != set(perm.effective_produced_mana):
+        return None
+    entries = [_ability_mana(getattr(ability, "instruction", None)) for ability in usable]
+    return entries if any(entry is not None for entry in entries) else None
 
 
 def _shield_source_payload(source_name: str | None) -> dict | None:
@@ -484,6 +569,14 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         # A color-changing effect (e.g. Lifelace: "Target ... becomes green.")
         # records the new color so the UI can label the recolored permanent.
         "color_override": perm.metadata.get("color_override"),
+        # …and a colour the *layers* give with no such record behind it:
+        # Repentant Vampire's threshold ("is white"), Darkest Hour, Shifting
+        # Sky, Alloy Golem. ``colors`` above already says what the permanent
+        # is; this says that it is not what its card (as copied, CR 707.2)
+        # prints, which is the one thing a player looking at the art cannot
+        # see. ``color_override`` is None for all of these - it is one
+        # effect's own slot - so a client reading it alone signalled nothing.
+        "color_changed": effective_colors != sorted(perm.effective_card.colors),
         # Corpse counters (Scavenging Ghoul) so the canvas can render them. Folded
         # into a generic ``counters`` map so future counter types render for free.
         "corpse_counters": int(perm.metadata.get("corpse_counters", 0)),
@@ -697,6 +790,42 @@ def _cast_tax(card, game: Game | None, caster_index: int | None) -> int:
     return int(spell_cost_tax(game, caster_index, card)[0])
 
 
+def _required_zone_cost(card, game, caster_index, from_zone: str) -> str | None:
+    """The mana a cast of *card* out of *from_zone* is charged **instead of**
+    its mana cost, as printed symbols — or None when it is charged its own.
+
+    The permission a bare cast would be made under
+    (``cast_permissions.permission_for`` in its own order, which is the one
+    ``Game._cast_onto_stack`` takes when the caster announces nothing) and the
+    alternative cost that permission requires (CR 118.9b). Flashback is the
+    card: CR 702.34a's "by paying [cost] rather than paying its mana cost".
+
+    With what a board changes about that cost folded in — "Flashback costs you
+    pay cost {2} less" (Catalyst Stone) — through the reader and the
+    arithmetic the cast path charges with, so the number shown is the number
+    paid. A cost this cannot spell as plain symbols (an {X}) is passed through
+    as printed.
+    """
+    if game is None or caster_index is None or from_zone != "graveyard":
+        return None
+    from engine.cast_permissions import permission_for
+    from engine.cost_modifiers import (CostReduction, keyword_cost_modifiers,
+                                       reduce_cost)
+    from engine.mana_payment import mana_cost_from_symbols, mana_cost_label
+
+    permission = permission_for(game, caster_index, card, from_zone)
+    cost = permission.cost if permission is not None else None
+    if cost is None or cost.mana is None:
+        return None
+    symbols = mana_cost_from_symbols(cost.mana)
+    if symbols is None:
+        return cost.mana
+    more, less, _names = keyword_cost_modifiers(game, caster_index, cost.keyword)
+    symbols = dict(symbols)
+    symbols["generic"] = symbols.get("generic", 0) + more
+    return mana_cost_label(reduce_cost(symbols, CostReduction(generic=less)))
+
+
 def _serialize_card(
     card,
     game: Game | None = None,
@@ -715,7 +844,18 @@ def _serialize_card(
     # Stand // Deliver read `{W}{5}{U}` under Gloom, the white half's tax on
     # the blue half's cost. Each face below is taxed as the spell it is.
     tax = 0 if face_cards(card) else _cast_tax(card, game, caster_index)
-    effective_cost = _apply_generic_tax_to_cost(card.mana_cost, tax)
+    # CR 118.9b, CR 702.34a: a copy in a graveyard that this seat may cast only
+    # by paying an alternative cost — its flashback cost — is charged *that*,
+    # and "the cost the UI shows and auto-taps for" is what this field is. The
+    # client reads it for three things, and the printed cost is wrong for each:
+    # which lands the insufficient-mana prompt taps (Firebolt's {R} where the
+    # cast charges {4}{R}, so the retry was refused again), what the prompt
+    # says the cast costs, and whether to ask for an X (an X spell flashed back
+    # for a cost with no X in it has X = 0, CR 107.3b).
+    zone_cost = _required_zone_cost(card, game, caster_index, from_zone)
+    effective_cost = _apply_generic_tax_to_cost(
+        card.mana_cost if zone_cost is None else zone_cost, tax
+    )
     serialized = _card_preview(card)
     serialized.update({
         "mana_cost": effective_cost,
@@ -849,6 +989,19 @@ def _stack_item_targets(item, game: Game) -> list[dict]:
                 break
         return targets
 
+    # Several **players**, each its own target ("…target player controls …
+    # another target player controls", Cultural Exchange). The announcement
+    # recorded a seat per role (``targeting.ROLE_SEATS``) and the scalar read
+    # below is only the first of them, so without this the table was shown a
+    # spell aimed at one player while it was aimed at two. A slot CR 608.2b
+    # blanked is ``None`` and draws no arrow.
+    named_seats = [
+        named for named in (recorded_role_seats(item) or ())
+        if isinstance(named, int) and 0 <= named < len(players)
+    ]
+    if named_seats:
+        return [{"kind": "player", "seat": named} for named in named_seats]
+
     seat = item.target_player_index
     if seat is None or not 0 <= seat < len(players):
         return targets
@@ -916,7 +1069,7 @@ def _serialize_stack_item(item, game: Game) -> dict:
 
     # A Lace card (Lifelace, Chaoslace, …) that targeted this spell on the stack
     # recolored it, recorded on the stack item by
-    # ``color_changes.change_spell_color`` (the effective color the engine
+    # ``color_changes.recolor_spell`` (the effective color the engine
     # reads via _stack_item_colors). Surface it as color_override so the canvas
     # badges the floating stack card exactly like a recolored permanent, and
     # swap the displayed colors to match "becomes [color]".
@@ -928,7 +1081,7 @@ def _serialize_stack_item(item, game: Game) -> dict:
     # badges from — "C", the swatch it already has, for a spell an effect made
     # colourless (Ersatz Gnomes), and the first of several.
     serialized_card = _serialize_card(item.card)
-    override = spell_color_override(item)
+    override = spell_color_change(item)
     recolored = None
     if override is not None:
         recolored = override[0] if override else "C"
@@ -1166,18 +1319,28 @@ def _serialize_player(
             # ``ability_index`` the activate action takes. One predicate
             # (``engine/activation_prohibitions.py``), the one the activation
             # path refuses with, so a menu built from this greys out exactly
-            # what a click would be refused for: a City of Solitude on an
-            # opponent's turn, a Null Rod, an Interdict. Absent when nothing
-            # is prohibited, which is nearly every permanent on every poll.
-            prohibitions = [
+            # what a click would be refused for: the ability's own printed
+            # restriction (Barbarian Ring's threshold, whose payload was
+            # identical at six and at seven cards in the graveyard and whose
+            # picker opened either way), and what another permanent forbids —
+            # a City of Solitude on an opponent's turn, a Null Rod, an
+            # Interdict. Present only when some ability is denied, which is
+            # nearly no permanent on any poll.
+            denials = [
                 activation_prohibition(game, seat, perm, ability)
                 for ability in usable
             ]
-            if any(found is not None for found in prohibitions):
-                perm_dict["ability_prohibitions"] = [
+            if any(found is not None for found in denials):
+                perm_dict["ability_denials"] = [
                     found.details if found is not None else None
-                    for found in prohibitions
+                    for found in denials
                 ]
+            # What each ability adds and whether activating it asks for a
+            # colour (:func:`_ability_mana`) - the per-ability fact behind the
+            # permanent-wide ``produced_mana`` summary.
+            ability_mana = _ability_mana_payload(game, perm, usable)
+            if ability_mana is not None:
+                perm_dict["ability_mana"] = ability_mana
 
     def _crowned(entries: list, cards) -> list:
         # CR 903.3: mark the designated commander card, wherever its zone

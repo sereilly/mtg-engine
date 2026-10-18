@@ -33,6 +33,7 @@ from .ownership import (
 from .paragraphs import (
     _parse_coin_flip_damage_loop,
     _parse_exchange_greatest_mana_value,
+    _parse_exchange_chosen_sets,
     _parse_pay_or_sacrifice_greatest_mana_value,
     _parse_random_graveyard_card_fate,
     _parse_rebalance_lands,
@@ -100,6 +101,15 @@ def parse_imperative(
     juxtaposition = _parse_exchange_greatest_mana_value(stream)
     if juxtaposition is not None:
         return juxtaposition
+    # "Choose any number of creatures target player controls. Choose the same
+    # number of creatures another target player controls. Those players
+    # exchange control of those creatures." (Cultural Exchange.) Three
+    # sentences that are one exchange, tried before the "choose" productions
+    # below, which read "choose a …" and refused this card on its third word.
+    # Refuses without consuming.
+    chosen_sets = _parse_exchange_chosen_sets(stream)
+    if chosen_sets is not None:
+        return chosen_sets
     # "You and that opponent each gain control of all creatures the other
     # controls until end of turn." (Reins of Power.) Juxtapose's opener one
     # verb over and the same reason for being read here: the compound subject

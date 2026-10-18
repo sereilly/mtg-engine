@@ -199,6 +199,44 @@ def accept_counters_removed_for_cost(
     return None
 
 
+#: The payment channels a "for each colored mana symbol in …'s mana cost"
+#: sentence may read a card off, keyed by the participle and mapped to the
+#: choices key the payment path records the card under.
+_MANA_COST_OF_COST_CARD: dict[str, str] = {"milled": "milled_for_cost"}
+
+
+def accept_mana_per_colored_symbol(stream: "TokenStream") -> "ast.AddMana | None":
+    """``For each colored mana symbol in the <participle> card's mana cost, add
+    one mana of that color.`` — or None, cursor unmoved.
+
+    "{T}, Mill a card: **For each colored mana symbol in the milled card's
+    mana cost, add one mana of that color.**" (Charmed Pendant.) A whole
+    sentence rather than a fragment, read here because every word of it is
+    about what the ability's own cost consumed: the count is not a count of
+    any zone and the colours are not printed, so neither the leading-count
+    reader nor the mana family's symbol reader has anything to hold.
+
+    Every word is expected. "…add **two** mana of that color" or "…in the
+    milled card's mana **value**" is a different sentence and refuses rather
+    than being read as this one with a word changed.
+    """
+    mark = stream.mark()
+    if stream.accept_phrase("for", "each", "colored", "mana", "symbol", "in", "the"):
+        record = _MANA_COST_OF_COST_CARD.get(stream.peek_word() or "")
+        if record is not None:
+            stream.advance()
+            if (
+                stream.accept_phrase("card", "'s", "mana", "cost")
+                and stream.accept_punct(",")
+                and stream.accept_phrase(
+                    "add", "one", "mana", "of", "that", "color"
+                )
+            ):
+                return ast.AddMana(colored_symbols_of_record=record)
+    stream.reset(mark)
+    return None
+
+
 def accept_cost_channel_possessive(stream: "TokenStream"):
     """``<participle> <noun>'s <characteristic>`` over **every** payment
     channel — or None, cursor unmoved.

@@ -39,7 +39,8 @@ from typing import Union
 
 from .conditions import Condition
 from .conditions import (ChosenThisWay, DiedThisTurn, DiedThisWay,
-                         CountersPlacedThisWay, EachAdditionalCostPaid,
+                         CountersPlacedThisWay, CountersRemovedThisWay,
+                         EachAdditionalCostPaid,
                          EachLifeLost, ExiledThisWay)
 from .costs import Cost
 from ._core import (
@@ -69,6 +70,7 @@ from .damage import (
 from .characteristics import (
     BecomeColor,
     BecomeCopy,
+    BecomeThatType,
     ChangeLandType,
     LandTypeSwap,
     ChangeSupertype,
@@ -143,6 +145,7 @@ from .control_changes import (
     BidLifeForControl,
     ExchangeControl,
     ExchangeGreatestManaValue,
+    ExchangeChosenSets,
     MutualControlOfSets,
 )
 from .mana import (
@@ -153,6 +156,8 @@ from .mana import (
     NoteManaSpent,
     ProducesManaInstead,
     SpendManaAsThough,
+    AddedManaBecomes,
+    GrantManaSpending,
 )
 from .library import (
     PutExiledPileOnLibrary,
@@ -162,6 +167,7 @@ from .library import (
     LookTopCycleForLife,
     LookTopExileRandom,
     RevealTopOpponentChooses,
+    RevealLibraryOpponentChooses,
     SearchRevealOpponentChooses,
     StripCardsWithChosenName,
     GraveyardTopOpponentChooses,
@@ -203,6 +209,7 @@ from .cards import (
     NameAndStrip,
     NameThenRevealTop,
     Scry,
+    Surveil,
     AnteOfferOwnershipExchange,
     OwnershipExchangeUnlessPaid,
     RandomRevealOwnershipExchange,
@@ -283,6 +290,7 @@ from .game import (
     ChooseOpponent,
     ChoosePlayerWhoCast,
     FlipCoin,
+    FlipCoinsUntilLoss,
     GainLife,
     LoseGame,
     LoseLife,
@@ -304,9 +312,9 @@ Effect = Union[
     CoinFlipStakesLoop,
     DamageThoseDamagedThisGame,
     DamageRidersUntilEndOfTurn,
-    DealDamage, Pump, SetBasePT, ChangeBasePT, GainAbilityText, GainKeyword, GainType, BecomeAura, ChangeSupertype, ChangeLandType, LandTypeSwap, LoseAbilityText, LoseKeyword, MoveCounter, PlayerGetsCounters, PutCounter, RemoveCounter,
+    DealDamage, Pump, SetBasePT, ChangeBasePT, GainAbilityText, GainKeyword, GainType, BecomeAura, ChangeSupertype, ChangeLandType, BecomeThatType, LandTypeSwap, LoseAbilityText, LoseKeyword, MoveCounter, PlayerGetsCounters, PutCounter, RemoveCounter,
     DoublePower, SwitchPT,
-    GainLife, LoseLife, PayLife, SetLifeTotal, ExchangeLifeTotals, Ante, Draw, Discard, LookTopCycleForLife, SeparateLibraryTopIntoPiles, SeparateIntoPiles, Mill, MillUntil, PutMilledCardOntoBattlefield, PutHandCardsOnLibrary, Scry, Destroy, Sacrifice, SacrificeAndReturnTargets,
+    GainLife, LoseLife, PayLife, SetLifeTotal, ExchangeLifeTotals, Ante, Draw, Discard, LookTopCycleForLife, SeparateLibraryTopIntoPiles, SeparateIntoPiles, Mill, MillUntil, PutMilledCardOntoBattlefield, PutHandCardsOnLibrary, Scry, Surveil, Destroy, Sacrifice, SacrificeAndReturnTargets,
     SacrificeExpansionPermanents, ShuffleGraveyardIntoLibrary, ShuffleHandIntoLibrary,
     ShuffleSourceIntoLibrary,
     ShuffleTargetIntoLibrary,
@@ -318,6 +326,7 @@ Effect = Union[
     DoesntUntapWhileCounter, UntapChosenByPaying,
     DelayedSelfAction, RebalanceLands, KeepChosenSacrificeRest, Attach, ExchangeControl,
     ExchangeGreatestManaValue,
+    ExchangeChosenSets,
     MutualControlOfSets,
     PayOrSacrificeGreatestManaValue,
     PayAnyAmountOfMana,
@@ -338,7 +347,7 @@ Effect = Union[
     PhaseOut,
     SimultaneousPhasing,
     ActivateEachLandsManaAbility, LoseUnspentMana,
-    AddManaForTappedLand, NoteManaSpent, ProducesManaInstead, SpendManaAsThough, PreventDamage,
+    AddManaForTappedLand, NoteManaSpent, ProducesManaInstead, SpendManaAsThough, AddedManaBecomes, GrantManaSpending, PreventDamage,
     RedirectDamage, DamageBecomesCounterRemoval,
     RedirectDamage, DoubleCombatDamage, ChooseDamageSource, ChosenSourceNextDamage,
     DamageCantBePreventedOrRedirected, DamageReducedByPaidMana,
@@ -355,6 +364,7 @@ Effect = Union[
     ExileTopOfLibrary, ExileGraveyardPosition, ExileEntireLibrary, PutExiledWithSource, ExileGraveyard, ExileCostSacrifices,
     CastPermission, LookTopExileRandom, LookTopPickToHand,
     RevealTopOpponentChooses,
+    RevealLibraryOpponentChooses,
     SearchRevealOpponentChooses,
     StripCardsWithChosenName,
     GraveyardTopOpponentChooses,
@@ -374,7 +384,7 @@ Effect = Union[
     DiscardRevealedMatchingUnlessPayLife,
     DiscardRevealedUnlessPayLife,
     ExtraTurn, ExtraLandPlays, CantPlayLands,
-    CantCastSpellTypes, CantActivateNonManaAbilities, EndTheTurn, ChooseNumber, SecretlyChooseNumbers, ChooseColor, ChooseCreatureType, ChooseCardType, ChooseCardName, ChooseOpponent, ChoosePlayerWhoCast, CountObjects, FlipCoin, WinGame, LoseGame, DrawGame, BecomeColor, BecomeCopy, BecomeCreature,
+    CantCastSpellTypes, CantActivateNonManaAbilities, EndTheTurn, ChooseNumber, SecretlyChooseNumbers, ChooseColor, ChooseCreatureType, ChooseCardType, ChooseCardName, ChooseOpponent, ChoosePlayerWhoCast, CountObjects, FlipCoin, FlipCoinsUntilLoss, WinGame, LoseGame, DrawGame, BecomeColor, BecomeCopy, BecomeCreature,
     SacrificeUnlessPay, DestroyUnlessPay, DestroyEachUnlessPaid, DamageUnlessPay, Fight, LookAtHand, LookAtLibraryTop,
     CantBe, AttackAsThough, CombatRestriction, BlockCountGrant,
     AttackingDoesntTap,
@@ -453,7 +463,9 @@ class UnlessPlayerPays:
     picks nobody, so every seat the phrase names is asked in turn until one pays.
     """
     payer: PlayerRef
-    cost: "ManaCost"
+    #: A printed symbol run, or "that spell's mana cost" (Ice Cave) — a price
+    #: read off the spell the trigger fired on (``EventSpellManaCost``).
+    cost: "ManaCost | EventSpellManaCost"
     otherwise: "Statement | None"
     #: What paying *buys* — "Then **if any player pays {2}**, discard three
     #: cards" (Rhystic Scrying) — the same chain with the polarity reversed.
@@ -602,6 +614,23 @@ class RepeatProcessWhile:
 
 
 @dataclass(frozen=True)
+class RepeatProcessUntil:
+    """"**Repeat this process until you put a card into your hand or you exile
+    two cards with the same name, whichever comes first.**" (Tainted Pact.)
+
+    :class:`RepeatProcessWhile` with the two things that make it a seventh
+    mechanism: the clause states when to **stop** rather than when to go on,
+    and it is asked when the round is *over* — which, for a round ending in an
+    offer, is after the offer is answered and not when the last step returns.
+    *round* is every sentence in front of the clause (Forbidden Ritual's
+    reading: the words name the process, not its last sentence), and
+    *condition* is the printed one, a ``SomeOf`` when the card names several.
+    """
+    round: "Statement"
+    condition: "Condition"
+
+
+@dataclass(frozen=True)
 class RepeatUntilPileChosen:
     """"**Repeat this process until all cards exiled this way have been
     chosen.**" (Thieves' Auction.)
@@ -716,7 +745,8 @@ class ForEach:
     """
     iterator: (ObjectFilter | PlayerRef | DiedThisTurn | DiedThisWay
                 | ExiledThisWay | ChosenThisWay | EachLifeLost
-                | EachAdditionalCostPaid | CountersPlacedThisWay)
+                | EachAdditionalCostPaid | CountersPlacedThisWay
+                | CountersRemovedThisWay)
     effect: "Statement"
 
 
@@ -866,4 +896,4 @@ class NextDrawReplacement:
     effect: "Statement"
 
 
-Statement = Union[Sequence, Conjunction, Conditional, May, UnlessPlayerPays, ForEach, RepeatProcess, RepeatProcessWhile, RepeatUntilPileChosen, RepeatOptionalProcess, RepeatForEachType, RepeatProcessRequest, WhereX, CreateDelayedTrigger, NextDrawReplacement, Effect]
+Statement = Union[Sequence, Conjunction, Conditional, May, UnlessPlayerPays, ForEach, RepeatProcess, RepeatProcessWhile, RepeatProcessUntil, RepeatUntilPileChosen, RepeatOptionalProcess, RepeatForEachType, RepeatProcessRequest, WhereX, CreateDelayedTrigger, NextDrawReplacement, Effect]

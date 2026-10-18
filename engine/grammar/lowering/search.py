@@ -21,9 +21,11 @@ reported supported.
 """
 
 from ...oracle_types import (COUNTERED_SPELL_CONTROLLER, COUNTERED_SPELL_NAME,
+                             EXILED_THIS_WAY_OBJECTS,
                              LAST_TARGET_CONTROLLER, LAST_TARGET_NAME,
                              REVEALED_HAND_CARDS, OracleInstruction)
-from ...search_filters import SEARCH_COMPARISONS, SEARCH_RESTRICTIONS
+from ...search_filters import (ONE_OF_EACH, SEARCH_COMPARISONS,
+                               SEARCH_RESTRICTIONS)
 from ._deaths import BOUND_CARD_EVENTS
 from .. import ast
 from ..errors import LoweringError
@@ -32,6 +34,7 @@ from ._common import (
     _amount_payload,
     _describe_targets,
     _restrictions_beyond,
+    search_slot,
 )
 from ._events import _back_reference_payload
 
@@ -269,6 +272,21 @@ def _lower_search_library(
         # engine. Spelling it the same way is what stops one field meaning
         # "or" to the battlefield and "and" to a library.
         restrictions["any_colors"] = list(filt.colors)
+    if node.one_of_each:
+        # "…a land card **of each basic land type**" (Gaea's Balance). One
+        # description per find, each in the predicate's own vocabulary, under
+        # the one key the picker's union, the resolver's assignment and the
+        # AI's pick all read. The production sized the destinations to match,
+        # which is checked rather than trusted: a description with nowhere to
+        # land is a find the flow would drop.
+        if len(node.one_of_each) != 1 + len(node.extra_destinations):
+            raise LoweringError(
+                "a search for one card per description names a place for each",
+                node=node,
+            )
+        restrictions[ONE_OF_EACH] = [
+            search_slot(described, node) for described in node.one_of_each
+        ]
     # One entry per find, in the printed order: how many are found and where each
     # goes are the same fact, so a card that names two destinations cannot lower
     # to a search that finds one.
@@ -300,6 +318,32 @@ def _lower_search_library(
         # the picker and ``legality`` gates the announcement — the search's find
         # is chosen at resolution and this is not that choice.
         payload.update(payload_targets)
+    if node.count_amount is not None:
+        # "…for up to **that many** basic land cards" (Rites of Spring) / "up
+        # to **X**" (New Frontiers). A ceiling the resolution reads: a record
+        # goes on ``amount_from``, the channel the other-library search's "that
+        # many" already travels to this handler, behind the gate every
+        # back-reference carries; the cast's X goes as the word, resolved where
+        # ``"any"`` is. Either way the handler sizes the slots, so the one
+        # destination and the one entry state ride as the single-find keys.
+        if len(destinations) != 1 or node.named_alternatives or node.one_of_each:
+            raise LoweringError(
+                "a search with a computed ceiling puts its finds in one zone",
+                node=node,
+            )
+        if isinstance(node.count_amount, ast.ThatMuch):
+            del payload["count"]
+            payload.update(_back_reference_payload(node.count_amount, produced, None))
+            if "amount_from" not in payload:
+                raise LoweringError(
+                    "a search ceiling reads a step of this same effect", node=node
+                )
+        else:
+            payload["count"] = "x"
+        payload["up_to"] = True
+        payload["destination"] = _SEARCH_DESTINATIONS[node.to.name]
+        if node.all_tapped:
+            payload["enters_tapped"] = True
     if node.unbounded:
         # "…for **any number of** Goblin cards" (Goblin Recruiter). The ceiling
         # is the zone rather than the card, and only the resolution knows how
@@ -648,6 +692,61 @@ _STRIP_NAME_RECORDS: dict[str, tuple[str, str]] = {
 }
 
 
+def lower_strip_each_exiled(
+    statement: "ast.ForEach", produced: frozenset[str],
+) -> tuple[OracleInstruction, ...] | None:
+    """"**For each card exiled this way,** search that player's library for all
+    cards with the same name as that card and exile them. Then that player
+    shuffles." (Haunting Echoes.) None when *statement* is any other loop.
+
+    A loop whose body is a strip by "that card" is one strip by **every name
+    the sweep recorded**: the library is opened once and shuffled once
+    (CR 701.24), and what leaves it is each card sharing a name with any card
+    exiled this way (CR 201.2a). So it lowers onto the instruction the
+    Lobotomy and Eradicate strips already run, with a list where they carry
+    one name — never onto a per-card loop, which would shuffle the library
+    once per exiled card and search it again each time.
+
+    The producer gate every "this way" reading carries: with no step of this
+    effect recording the exiled cards, the words name an empty set and the
+    spell would resolve, report supported and strip nothing. The seat is the
+    one the sentence in front targeted — "that player" — which the handler
+    reads off the resolution, as it does for Lobotomy.
+    """
+    body = statement.effect
+    if not (
+        isinstance(statement.iterator, ast.ExiledThisWay)
+        and isinstance(body, ast.StripCardsWithChosenName)
+        and body.name_of == "card"
+    ):
+        return None
+    counted = statement.iterator.filter
+    if not counted.is_card or _restrictions_beyond(counted, frozenset({"is_card"})):
+        # The record is every card the sweep took, so a narrower loop ("for
+        # each **creature** card exiled this way") would strip names the
+        # sentence never asked for.
+        raise LoweringError(
+            "the strip reads every card exiled this way and nothing narrower",
+            node=statement,
+        )
+    if EXILED_THIS_WAY_OBJECTS not in produced:
+        raise LoweringError(
+            '"each card exiled this way" names cards no step of this effect '
+            "exiled", node=statement,
+        )
+    if body.player.kind != "that_player":
+        raise LoweringError(
+            f"no flow strips {body.player.kind!r}'s zones by a recorded pile",
+            node=statement,
+        )
+    return (
+        OracleInstruction(
+            "strip_cards_with_chosen_name", "",
+            {"zones": list(body.zones), "names_record": EXILED_THIS_WAY_OBJECTS},
+        ),
+    )
+
+
 def _lower_strip_cards_with_chosen_name(
     node: "ast.StripCardsWithChosenName", produced: frozenset[str],
 ) -> tuple[OracleInstruction, ...]:
@@ -677,6 +776,14 @@ def _lower_strip_cards_with_chosen_name(
             f"no flow strips {node.player.kind!r}'s zones", node=node
         )
     payload: dict[str, object] = {"zones": list(node.zones)}
+    if node.name_of == "card":
+        # "that card" names the card a loop is on, and only
+        # :func:`lower_strip_each_exiled` reads the loop. Reached here the
+        # sentence stands alone, and the words name nothing.
+        raise LoweringError(
+            '"that card" names a card no loop in front of this sentence is on',
+            node=node,
+        )
     if node.name_of is not None:
         # "…with the same name as **that creature**" (Eradicate, and its four
         # siblings). The same gate as Lobotomy's below and the same reason for

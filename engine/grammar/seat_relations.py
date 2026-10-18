@@ -189,6 +189,23 @@ def accept_seat_relation(stream: TokenStream, d) -> bool:
     if stream.accept_phrase("of", "that", "color"):
         d.color_chosen_this_way = True
         return True
+    # "…discards all cards **of each of the sacrificed creature's colors**."
+    # (Mind Extraction.) A third time the colour can be settled: not chosen at
+    # all, but read off what this spell's own cost sacrificed (CR 601.2h). The
+    # noun is read as printed and not carried — "the sacrificed **artifact's**
+    # colors" would name the same one thing the payment ate, which is how
+    # ``cost_records`` reads the genitive for a number — and the whole phrase
+    # consumes or resets, so "of each of …" anything else is left to refuse.
+    relation = stream.mark()
+    if (
+        stream.accept_phrase("of", "each", "of", "the", "sacrificed")
+        and stream.peek_word() is not None
+    ):
+        stream.advance()
+        if stream.accept_word("'s") and stream.accept_word("colors"):
+            d.colors_of_sacrificed_for_cost = True
+            return True
+    stream.reset(relation)
     # "Return all permanents **of the color of your choice** to their owners'
     # hands." (Wash Out.) The row above with nobody having chosen yet: the
     # choice is made while this very sentence is applied (CR 608.2d), so the

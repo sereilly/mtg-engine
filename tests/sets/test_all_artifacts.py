@@ -517,20 +517,20 @@ def test_floodwater_dam_charges_one_generic_per_x_symbol(set_pool):
     game = _w2g5a_duel()
     game.enforce_mana_costs = True
     _w2g5a_put(game, 0, set_pool("ALL")["Floodwater Dam"], ready=True)
-    # Two lands: "Tap X target lands" at X = 2 names two (CR 601.2c). This
-    # named one, which the activation gate accepted until it counted.
-    lands = [_w2g5a_put(game, 1, "Forest"), _w2g5a_put(game, 1, "Forest")]
-    named = [land.permanent_id for land in lands]
+    # "Tap **X** target lands": X = 2 names two (CR 601.2c). This named one
+    # until the activation gate began to count; the cost is still the subject.
+    lands = [_w2g5a_put(game, 1, "Forest").permanent_id for _ in range(2)]
     game.players[0].mana_pool["C"] = 4
 
     refused = game.activate_permanent_ability(
-        0, "Floodwater Dam", x_value=2, target_permanent_ids=named,
+        0, "Floodwater Dam", x_value=2, target_permanent_ids=lands,
     )
     assert not refused.supported, "{1} plus two lots of X=2 is five mana, not four"
+    assert "mana" in refused.details
 
     game.players[0].mana_pool["C"] = 5
     assert game.activate_permanent_ability(
-        0, "Floodwater Dam", x_value=2, target_permanent_ids=named,
+        0, "Floodwater Dam", x_value=2, target_permanent_ids=lands,
     ).supported
 
 

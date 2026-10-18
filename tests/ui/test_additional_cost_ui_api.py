@@ -98,6 +98,27 @@ def test_a_stale_cost_id_is_a_404_and_nothing_is_sacrificed():
     assert [c.name for c in game.players[0].hand] == ["Sacrifice"]
 
 
+def test_a_cost_id_naming_the_other_seats_creature_is_refused_not_slid_onto_ours():
+    """CR 601.2h through the wire. The request resolver turns
+    ``cost_permanent_id`` into a bare slot, and the engine counts a cost slot
+    into the *caster's* battlefield — so an id naming the other seat's Hill
+    Giant arrived as "slot 0" and the caster's own Grizzly Bears, which sat in
+    that slot, was sacrificed. The id travels now, and the engine refuses a
+    named payment that cannot pay (``_named_cast_cost_refusal``)."""
+    sid, _sess, game = _session("Grizzly Bears")
+    game.players[1].battlefield = [Permanent(card=_CARDS["Hill Giant"])]
+    giant = game.players[1].battlefield[0]
+
+    resp = _cast(sid, cost_permanent_id=giant.permanent_id)
+
+    assert resp.status_code >= 400 or not resp.json().get("supported", True)
+    assert [p.card.name for p in game.players[0].battlefield] == ["Grizzly Bears"]
+    assert [p.card.name for p in game.players[1].battlefield] == ["Hill Giant"]
+    assert [c.name for c in game.players[0].hand] == ["Sacrifice"]
+    assert not game.stack
+    assert any("Hill Giant cannot pay its additional cost" in line for line in game.log)
+
+
 def test_the_spell_is_refused_when_no_creature_can_pay():
     """CR 601.2h through the wire: the action reports the failure and the card
     stays in hand, rather than resolving for free."""

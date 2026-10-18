@@ -34,7 +34,7 @@ from ..trigger_utils import iter_triggered_abilities, matching_triggers
 from ..turn_state import record_controllers_upkeep
 from ..mixins._constants import _UPKEEP_PAY_KINDS
 from ..cumulative_upkeep import upcoming_cost
-from ..mana_payment import plan_payment, untapped_mana_lands
+from ..mana_payment import mana_cost_label, plan_payment
 from ..upkeep_costs import (UpkeepCost, cost_from_payload, cost_prompt_fields,
                             resolved_toll_instruction)
 from ..effect_labels import triggered_label
@@ -221,9 +221,9 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         about which lands and which units are in play."""
         return plan_payment(
             self._upkeep_pool(player, purpose),
-            untapped_mana_lands(self.controlled_by(player)),
+            self.payment_lands(player),
             mana,
-            produces=self._land_payment_colors,
+            produces=self._land_payment_colors, payer=player,
         )
 
     def _upkeep_pool(self, player, purpose) -> dict[str, int]:
@@ -245,17 +245,23 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             merged[symbol] = merged.get(symbol, 0) + amount
         return merged
 
-    def _spend_upkeep_mana(self, player, mana: dict[str, int], *, purpose=None) -> None:
+    def _spend_upkeep_mana(self, player, mana: dict[str, int], *, purpose=None) -> bool:
         """Spend an upkeep cost validated by ``can_pay_upkeep_mana``: the plan's
         floating units out of the pool (restricted bucket first where the
         purpose admits it) and the plan's lands tapped.
 
         Both halves, because a plan is *how* a cost is paid and paying from one
         without the other would let the same land answer two costs — the
-        sibling ``_spend_payment_plan`` says the same. A plan that cannot be
+        sibling ``_pay_planned_cost`` says the same. A plan that cannot be
         formed here is a caller that skipped the affordability test, and that
         is raised rather than spent in part: a cost half charged is a free
         ability, the class Vodalian War Machine's tap costs were.
+
+        True when the cost was paid. False is a plan that held when it was
+        made and failed part-way — which, since the plan is made over
+        ``Game.payment_lands``, takes a tap that changed the board under it
+        (a watcher answering the first land by tapping the rest). It is said
+        in the log rather than left to read as paid.
         """
         from ..restricted_mana import debit_restricted_mana, spendable_restricted_mana
 
@@ -265,16 +271,32 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                 f"{player.name} cannot pay {mana} at upkeep; the caller must ask "
                 "can_pay_upkeep_mana first"
             )
-        restricted = spendable_restricted_mana(player, purpose)
-        for symbol, amount in plan.from_pool.items():
-            from_restricted = min(amount, restricted.get(symbol, 0))
-            if from_restricted:
-                debit_restricted_mana(player, purpose, symbol, from_restricted)
-            player.mana_pool[symbol] = (
-                int(player.mana_pool.get(symbol, 0)) - (amount - from_restricted)
+
+        def spend(final) -> None:
+            restricted = spendable_restricted_mana(player, purpose)
+            for symbol, amount in final.from_pool.items():
+                from_restricted = min(amount, restricted.get(symbol, 0))
+                if from_restricted:
+                    debit_restricted_mana(player, purpose, symbol, from_restricted)
+                player.mana_pool[symbol] = (
+                    int(player.mana_pool.get(symbol, 0)) - (amount - from_restricted)
+                )
+
+        # The planned lands are tapped **for mana** (CR 605.3a) through the one
+        # payer every effect-collected cost shares (``_pay_planned_cost``), and
+        # the plan is asked again after each tap — so a Snowfall's extra mana,
+        # which lands in the very bucket this purpose admits, pays the upkeep
+        # it was made for instead of floating beside it.
+        paid = self._pay_planned_cost(
+            player, lambda: self._upkeep_payment_plan(player, mana, purpose),
+            spend=spend,
+        )
+        if not paid:
+            self.log.append(
+                f"{player.name} could not pay {mana_cost_label(mana)} in full: "
+                "a land the payment counted on made nothing it could spend"
             )
-        for land in plan.tapped:
-            self.become_tapped(land)
+        return paid
 
     def can_pay_upkeep_cost(self, player, cost, *, purpose=None) -> bool:
         """Whether *player* can pay a whole upkeep cost — CR 702.24a's [cost],
@@ -852,12 +874,32 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         seat = self.seat_index(controller)
 
         def find_candidates(_controller, source):
-            return [
+            described_set = [
                 perm
                 for perm in self.all_permanents()
                 if subject_matches(
                     self, perm, filters, observer=seat, source=source
                 )
+            ]
+            # What the phrase *describes* is not yet what the ability may
+            # *target* (CR 115.1): shroud, hexproof and protection from the
+            # source are asked by the picker, not by the noun phrase. This
+            # prompt answered with the described set alone, so Erhnam Djinn was
+            # offered an Autumn Willow — and the answer is stamped on the stack
+            # object as the choice the event made, which nothing re-checks.
+            #
+            # Held to the list the trigger would choose from for itself
+            # (``_trigger_target_candidates``, asked of the trigger as it will
+            # exist — the prospective-object reading
+            # ``legality.entry_trigger_cast_targets`` takes of an entry
+            # trigger). Only ever narrower: where that picker declines the
+            # phrase there is no list to hold this one to, and it stands.
+            legal = self._upkeep_trigger_legal_targets(source, seat, trig)
+            if legal is None:
+                return described_set
+            return [
+                perm for perm in described_set
+                if any(perm is allowed for allowed in legal)
             ]
 
         return (
@@ -866,6 +908,38 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             lambda name: f"{name}: choose a target for its upkeep trigger.",
             find_candidates,
         )
+
+    def _upkeep_trigger_legal_targets(
+        self, source: Permanent, seat: int, trig
+    ) -> "list[Permanent] | None":
+        """The permanents *trig* could legally target if it went on the stack
+        now, or None when the trigger's own picker makes no choice it could
+        list (a player, a phrase it cannot narrow, no target at all).
+
+        ``_trigger_target_candidates`` asked of the trigger as it will exist:
+        a prospective stack object with this source and this instruction and
+        nothing announced, which is what ``_enqueue_triggered_ability`` builds
+        a moment later. The upkeep step has two readers of it, and both are
+        an answer given *before* the object exists — the prompt that offers a
+        target, and the pick that comes back.
+        """
+        from ..game_types import StackItem
+
+        offer = self._trigger_target_candidates(StackItem(
+            source.card, seat, None, None, None,
+            ability_instruction=trig.instruction,
+            ability_effect_kind=trig.effect_kind,
+            ability_text=trig.source_line,
+            source_permanent=source,
+        ))
+        if offer is None:
+            return None
+        return [
+            found
+            for entry in offer[2] if entry.get("kind") == "permanent"
+            for found in (self.permanent_at(entry["seat"], entry["index"]),)
+            if found is not None
+        ]
 
     def get_upkeep_target_triggers(self, player_index: int) -> list[dict]:
         """Mandatory upkeep triggers that need the controller to choose a target.
@@ -1174,6 +1248,30 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                 # other, where `count_from_payload` answers it.
                 if handler is not None and "x_from_count" in trig.instruction.payload:
                     handler = None
+                # The two fixed-damage rows read a number and deal it to the
+                # player whose upkeep it is, and nothing else. A printed
+                # **target** is something else: "…deals 1 damage to target
+                # opponent or planeswalker" (Scalding Tongs, Thumbscrews) and
+                # "…deals 3 damage to target creature you control" (Spiteful
+                # Bully) all dealt their damage to their own controller's face.
+                # So is an **intervening "if"**: the row queues a damage event
+                # of its own with no condition on it, so CR 603.4's second
+                # check — as the ability resolves — was never made (Misers'
+                # Cage, Kezzerdrix, Mask of Intolerance: answer the trigger by
+                # making its condition false and the damage came anyway).
+                # Either one is declined exactly as the where-clause above is,
+                # and the trigger goes on the stack as itself, where the
+                # target is chosen (CR 603.3d) and the gate re-asked.
+                if (
+                    handler is not None
+                    and kind == "deal_damage"
+                    and cond in ("upkeep_self", "upkeep_each")
+                    and (
+                        "targets" in trig.instruction.payload
+                        or "intervening_if" in trig.instruction.payload
+                    )
+                ):
+                    handler = None
                 if handler is None and cond in _ORDINARY_UPKEEP_SEATS:
                     # An upkeep trigger with nothing interactive about it —
                     # "At the beginning of your upkeep, you may search your
@@ -1208,6 +1306,34 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                         # the answer for an AI seat and the wrong one for a
                         # player who was just asked.
                         picked = (trigger_targets or {}).get(permanent.permanent_id)
+                        # …and it is an answer to CR 603.3d's choice, so it
+                        # has to be one that choice would have accepted. The
+                        # stamp below reads as "the event made the choice",
+                        # which skips the picker — so a pick naming something
+                        # the ability cannot target (a land for "target
+                        # creature", a creature with shroud) reached the
+                        # handler unchecked, and the handler's own fallback
+                        # then acted on whichever bystander it scanned first.
+                        # Set aside instead: the trigger goes on the stack
+                        # with nothing announced and chooses for itself.
+                        picked_from_its_list = False
+                        if picked is not None:
+                            legal = self._upkeep_trigger_legal_targets(
+                                permanent, controller_seat, trig
+                            )
+                            named = self.permanent_at(picked[0], picked[1])
+                            if legal is not None and not any(
+                                named is allowed for allowed in legal
+                            ):
+                                picked = None
+                            else:
+                                # A pick the ability's own list accepted is a
+                                # target chosen for it (CR 603.3d), and says so
+                                # on the stack object — which is what lets CR
+                                # 608.2b be asked of it as it resolves. Where
+                                # the picker has no list the pick rides
+                                # unjudged, here and there alike.
+                                picked_from_its_list = legal is not None
                         upkeep_events.append({
                             "controller_index": controller_seat,
                             "source_permanent": permanent,
@@ -1227,6 +1353,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                                 else None
                             ),
                             "target_permanent_index": picked[1] if picked else None,
+                            "targets_chosen": picked_from_its_list,
                             "instruction": trig.instruction,
                             "effect_kind": triggered_label(kind, cond),
                             "ability_text": trig.source_line or None,

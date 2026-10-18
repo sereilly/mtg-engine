@@ -24,6 +24,7 @@ from ._core import (
     PlayerRef,
     ObjectFilter,
     Recipient,
+    ThatMuch,
 )
 
 
@@ -68,6 +69,15 @@ class Pump:
     # number: "beyond the first" is the only offset Magic prints on this
     # clause, and a free integer would invite a lowering to invent one.
     per_each_beyond_first: bool = False
+    # "Creatures you control get +0/+1 until end of turn **for each card
+    # discarded this way**" (Sacred Rites). A count an earlier step of this
+    # same effect *recorded* — the back-reference ``records`` reads for a life
+    # gain and a counter placement, spent by a pump. Not ``per_each`` above:
+    # that describes a set on a board, and what was discarded is on no board
+    # and is not the graveyard either (which holds everything else that ever
+    # got there). The node carries the record's key, and lowering refuses it
+    # unless a step in front of the sentence writes that key.
+    per_each_recorded: "ThatMuch | None" = None
 
 
 @dataclass(frozen=True)
@@ -686,9 +696,41 @@ class ChangeLandType:
     because a card printed about a Forest is this sentence with one word
     changed. ``duration`` with no kind is CR 611.2's "indefinitely", which is
     what Evil Presence's targeted cousins print.
+
+    ``options`` is the printed alternatives of "becomes **a Plains or an
+    Island**" (Tundra Kavu): the same CR 608.2d choice "the basic land type of
+    your choice" makes, with the list the sentence narrows it to. Set only
+    beside :data:`CHOSEN_LAND_TYPE`, and never one entry long — one printed
+    type is ``land_type`` itself, and a choice of one is no choice.
     """
     subject: Recipient
     land_type: str
+    duration: Duration = field(default_factory=Duration)
+    options: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class BecomeThatType:
+    """``Target creature becomes that type until end of turn.`` (Unnatural
+    Selection, behind "Choose a creature type other than Wall.")
+
+    A subtype **set** to a value the sentence in front chose (CR 205.1a: "the
+    new subtype(s) replaces any existing subtypes from the appropriate set").
+    "That type" is a back-reference and names no type and no *kind* of type by
+    itself — which set it belongs to is the record the choosing sentence wrote,
+    so the lowering reads it off what the effect has produced and refuses the
+    words where nothing has.
+
+    Distinct from :class:`ChangeLandType`, which carries its own printed land
+    type or its own choice, and from :class:`GainType`, which adds a card type
+    and replaces nothing.
+
+    The duration is read rather than defaulted, for :class:`ChangeLandType`'s
+    reason: without the words the change would last as long as the game does
+    (CR 611.2a), which is a different card.
+    """
+
+    subject: Recipient
     duration: Duration = field(default_factory=Duration)
 
 

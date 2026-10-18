@@ -88,6 +88,10 @@ ACTIVATED_LABELS: dict[str, str] = {
     # clause only became a grammar production in this set's second wave; before
     # that the kind existed and no activated ability reached it.
     "target_cant_block_until_eot": "activated_restriction",
+    # "{R}: Enchanted creature can't block this turn." (Manacles of Decay.)
+    # The row above with the Aura's host in place of a chosen creature, and
+    # the same bucket for the same reason.
+    "attached_cant_block_until_eot": "activated_restriction",
     # "{1}{R}: Target creature can't block this creature this turn."
     # (Duct Crawler.) The same denial as the row above, narrowed to one
     # named attacker, so it reads the same bucket: what the ability is for
@@ -697,6 +701,11 @@ ACTIVATED_LABELS: dict[str, str] = {
     # not what the ability does, and the library is still the object it acts on.
     "shuffle_hand_cards_into_library": "activated_library",
     "reorder_own_library_top": "activated_library",
+    # Whirlpool Warrior: "{R}, Sacrifice this creature: Each player shuffles
+    # the cards from their hand into their library, then draws that many
+    # cards." The whole-hand spelling of Credit Voucher's row two up, and in
+    # its bucket for that row's reason: the library is the object it acts on.
+    "shuffle_hand_into_library": "activated_library",
     # Rishadan Pawnshop shuffles a permanent into its owner's library — the
     # same destination, reached from the battlefield instead, and beside
     # `put_target_on_library_top` for that row's reason.
@@ -747,6 +756,32 @@ ACTIVATED_LABELS: dict[str, str] = {
     # walked in the open rather than searched, so `name_then_reveal_top`'s
     # `activated_look` rather than `search_library`'s `activated_search`.
     "name_then_consult": "activated_look",
+    # --- Odyssey, at its promotion ----------------------------------------
+    # Four kinds five of the set's activated abilities reach, each of which
+    # existed already and had only ever been a spell's or a trigger's. Settled
+    # against a shipped neighbour, as Mirage's block at the top was:
+    #
+    # Aboshan, Cephalid Emperor: "{U}{U}{U}: Tap all creatures without
+    # flying." The sweep of `tap_target_permanent`, and the mirror image of
+    # `untap_all_matching` above -- how many permanents is not what the
+    # ability does.
+    "tap_all_matching": "activated_tapping",
+    # Aven Windreader: "{1}{U}: Target player reveals the top card of their
+    # library." A card is seen and stays where it was, which is
+    # `look_at_target_library_top`'s bucket; that the table sees it too is
+    # not a different thing to do.
+    "reveal_top_of_library": "activated_look",
+    # Crypt Creeper and Steamclaw: "Sacrifice this: Exile target card from a
+    # graveyard." One card out of a pile by name, beside
+    # `exile_graveyard_position` (one card off a named end) and
+    # `exile_target_graveyard` (the whole zone): what the ability is for is
+    # that the graveyard stops holding it.
+    "exile_target_graveyard_card": "activated_recursion",
+    # Pardic Miner: "Sacrifice this creature: Target player can't play lands
+    # this turn." A thing its target may no longer do, which is the
+    # restriction word wherever the thing denied happens to be -- a block, a
+    # phasing, here a land play.
+    "forbid_land_plays_this_turn": "activated_restriction",
 }
 
 # Instruction kind -> label, for an ability the grammar reads in the **triggered**
@@ -1032,8 +1067,18 @@ TRIGGERED_LABELS: dict[str, str] = {
     "tap_any_number_then_pump_self": "triggered_pump",
     # Looking at cards and choosing among them.
     "look_top_pick_to_hand": "triggered_look",
+    # Goblin Ringleader and Apocalypse's six other recruiters: "reveal the top
+    # four cards of your library. Put all Goblin cards revealed this way into
+    # your hand and the rest on the bottom of your library in any order." The
+    # kind is Mulch's, which no trigger had produced; its bucket is Raven
+    # Familiar's one row up — a pile off the top, part of it kept, the rest
+    # bottomed — with the pick made by a printed filter instead of the player.
+    "reveal_top_sorting_by_filter": "triggered_look",
     "reveal_hand_and_choose": "triggered_look",
     "scry": "triggered_look",
+    # "At the beginning of your upkeep, surveil 1." (Think Tank.) Scry's
+    # bucket: the same look, with the graveyard for the bottom.
+    "surveil": "triggered_look",
     "mill_target_player": "triggered_mill",
     # Life loss is not damage by the rules (CR 120.3), but for a report about
     # what an ability does to a player it is the same bucket.
@@ -1157,6 +1202,14 @@ TRIGGERED_LABELS: dict[str, str] = {
     # (Alabaster Dragon.) The card goes from one zone to another, which is what
     # every self-move in these tables reports.
     "shuffle_source_card_into_library": "triggered_library",
+    # "When this creature enters, shuffle the cards from your hand into your
+    # library, then draw that many cards." (Whirlpool Rider; the Drake prints
+    # it on dying too.) The same effect as the Warrior's row in the other
+    # table, in the position that makes it a trigger — and it needs the row for
+    # more than a bucket: without one it kept the `spell_pattern` marker, and
+    # the `triggered_` prefix is what the web layer serializes a stack item's
+    # `is_triggered` from.
+    "shuffle_hand_into_library": "triggered_library",
     "add_named_counter_to_target": "triggered_counter",
     "prevent_damage_to_target_until_eot": "triggered_prevention",
     "exile_target_permanent": "triggered_exile",
@@ -1261,6 +1314,16 @@ TRIGGERED_LABELS: dict[str, str] = {
     # claim about the payload rather than about what the ability does to the
     # turn.
     "skip_next_phase": "triggered_turn",
+    # --- Odyssey, at its promotion ------------------------------------------
+    # Battle of Wits and Chance Encounter: "At the beginning of your upkeep,
+    # if <you have 200 or more cards in your library / this enchantment has
+    # ten or more luck counters on it>, you win the game." The other end of
+    # `player_loses_game` above and the same bucket: the game ends.
+    "player_wins_game": "triggered_game_end",
+    # Decaying Soil: "At the beginning of your upkeep, exile a card from your
+    # graveyard." Beside `exile_graveyard_cards` -- whose pile and how the
+    # card is picked are payload.
+    "exile_cards_from_graveyard": "triggered_exile",
 }
 
 # The one instruction kind whose label depends on what triggered it: `may` wraps
@@ -1289,6 +1352,11 @@ TRIGGERED_LABELS_BY_CONDITION: dict[tuple[str, str], str] = {
     # narrows the trigger, not what the ability is about.
     ("creature_you_control_dies", "may"): "triggered_death",
     ("spell_cast", "if_then"): "triggered_counterspells",
+    # Ice Cave: "Whenever a player casts a spell, any other player may pay that
+    # spell's mana cost. If a player does, counter the spell." The chain kind
+    # says only that a price is offered round the table; the condition is what
+    # says this is a counterspell, the bucket the conditional one above takes.
+    ("spell_cast", "unless_player_pays"): "triggered_counterspells",
     ("creature_dies", "may"): "spell_pattern",
     ("enchantment_cast", "may"): "triggered_draw",
     ("spell_cast", "may"): "spell_pattern",
@@ -1400,6 +1468,16 @@ TRIGGERED_LABELS_BY_CONDITION: dict[tuple[str, str], str] = {
     # is declined — the same reading `unless_player_pays` takes for Scarwood
     # Bandits in the activated table above.
     ("matching_permanent_enters", "may"): "triggered_damage",
+    # --- Odyssey, at its promotion ------------------------------------------
+    # `may` says nothing, so each row names the moment, as M21's and Legends'
+    # blocks above do. Confessor: "Whenever a player discards a card, you may
+    # gain 1 life."
+    ("discards_card", "may"): "triggered_discard",
+    # Karmic Justice: "Whenever a spell or ability an opponent controls
+    # destroys a noncreature permanent you control, you may destroy target
+    # permanent that opponent controls." The moment is a destruction, and so
+    # is the answer.
+    ("permanent_destroyed", "may"): "triggered_destruction",
 }
 
 

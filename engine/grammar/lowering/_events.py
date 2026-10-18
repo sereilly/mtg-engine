@@ -95,10 +95,10 @@ from ._frozen_seats import (  # noqa: F401
 #:
 #: Membership is a claim about the fire site, and the site is what makes it
 #: true: ``become_tapped`` stamps the id (CR 400.7 — an index is not an
-#: identity, and by resolution the permanent may have moved). Kudzu's "destroy
-#: it" already reads the same key from its own handler.
+#: identity, and by resolution the permanent may have moved). Mine Layer's
+#: "destroy it" reads the same key.
 _EVENT_SUBJECT_OBJECTS: frozenset[str] = frozenset({
-    "permanent_becomes_tapped",         # Freyalise's Winds, Kudzu
+    "permanent_becomes_tapped",         # Freyalise's Winds, Mine Layer
     # "Whenever a Djinn or Efreet enters, **destroy it**." (Suleiman's Legacy.)
     # The entering permanent, stamped by the one entry transition
     # (`_put_permanent_onto_battlefield`) — every path onto a battlefield goes
@@ -111,6 +111,13 @@ _EVENT_SUBJECT_OBJECTS: frozenset[str] = frozenset({
     # is game-wide and per object, and by resolution the creature may have been
     # removed from combat or destroyed.
     "matching_creature_attacks",
+    # "Whenever a creature attacks or blocks, this enchantment deals 2 damage
+    # to **it**." (Powerstone Minefield.) The declared attacker *or* the
+    # declared blocker, stamped by whichever of the union's two fire sites
+    # announced it (`_fire_matching_creature_attacks_triggers`,
+    # `declare_blockers_step._announce_bare_board_wide_blocks`). The event has
+    # one object — no partner is named — so the pronoun has one referent.
+    "matching_creature_attacks_or_blocks",
     # "Whenever a creature of the chosen color deals damage to you …, this
     # enchantment deals that much damage to **that creature**." (Mangara's
     # Equity.) CR 120.4b's event, whose one seam (`damage_events._announce`)
@@ -156,7 +163,62 @@ _EVENT_SUBJECT_OBJECTS: frozenset[str] = frozenset({
     # "**this** creature becomes the target" the frozen id is the source's own,
     # which is what "that creature" would mean there too.
     "self_becomes_target",
+    # "Whenever a creature has four or more fuse counters on it, remove all fuse
+    # counters from **it** and destroy **it**." (Bomb Squad.) CR 603.8's state
+    # trigger about *another* permanent: the sweep that announces it
+    # (``engine/state_triggers.announce_watched_counter_thresholds``) stamps
+    # the id of the permanent whose counters crossed the line, once per
+    # permanent, so the pronoun has exactly one referent per firing.
+    "permanent_counters_reach_threshold",
 })
+
+
+#: The events above whose fire site freezes the **object itself** beside its id
+#: (``oracle_types.EVENT_SUBJECT_LAST_KNOWN``), so a sentence may make that
+#: object *do* something after it has left: "**That creature** deals 4 damage
+#: to its controller" (Bomb Squad), printed behind "destroy it". CR 608.2h: "If
+#: an ability states that an object does something, it's the object as it
+#: exists—or as it most recently existed—that does it", and an id resolves to
+#: nothing once the permanent is gone (CR 400.7).
+#:
+#: A narrower claim than :data:`_EVENT_SUBJECT_OBJECTS`, exactly as
+#: :data:`EVENT_SUBJECT_NAMES` below is: every kind there freezes an id and
+#: only these freeze the object, so a dealer admitted under the wider set would
+#: compile clean and then deal nothing the moment its creature died.
+EVENT_SUBJECT_LAST_KNOWN_EVENTS: frozenset[str] = frozenset({
+    "matching_permanent_enters",          # the entry seam, since Dual Nature
+    "permanent_counters_reach_threshold",
+})
+
+
+def dealer_is_event_subject(source, event: str | None) -> bool:
+    """Whether a damage sentence's printed dealer is the object the firing
+    event was about — "**that creature** deals …" under a trigger whose fire
+    site froze that creature.
+
+    One predicate because two lowerings ask it and must not disagree: the one
+    that moves the *dealer* off the ability's source (CR 120.7), and the one
+    that reads "its controller" behind such a dealer as that object's
+    controller rather than as a seat nothing chose.
+
+    **Only the demonstrative.** A bare "it" in the dealer's position is the
+    ability's own source wherever the pool prints one — "When another creature
+    enters, sacrifice this creature and **it** deals 3 damage to target
+    player" (Mogg Bombers), where the nearest antecedent is the creature the
+    clause in front just named — even though
+    ``rebinding.rebind_pronoun_to_event_subject`` has by then given the word
+    the trigger subject's filter. Reading that pronoun here moved Mogg
+    Bombers' damage onto the creature that entered; the program differential
+    caught it.
+    """
+    return (
+        isinstance(source, ast.TargetSpec)
+        and source.quantifier == "that"
+        and not source.targeted
+        and not source.filter.is_source
+        and not source.filter.is_enchanted
+        and event in EVENT_SUBJECT_LAST_KNOWN_EVENTS
+    )
 
 
 #: Trigger conditions whose fire site freezes the **name** of the object the
@@ -178,6 +240,34 @@ _EVENT_SUBJECT_OBJECTS: frozenset[str] = frozenset({
 EVENT_SUBJECT_NAMES: frozenset[str] = frozenset({
     "matching_permanent_enters",
     "matching_permanent_leaves_battlefield",
+})
+
+
+#: Trigger events whose fire site freezes **the spell that was cast** — its own
+#: stack object as ``cast_item`` and its card as ``cast_card``
+#: (``mixins/oracle_instructions._apply_spell_cast_any_triggers``) — so "that
+#: spell" under one of them names an object: its mana value (Pure Reflection),
+#: its mana cost (Invoke Prejudice's toll), its **name** (Bazaar of Wonders,
+#: the five Shrines).
+#:
+#: One table because there were three, and they disagreed. ``where_x`` and
+#: ``conditions`` each kept ``{"player_casts_spell", "spell_cast"}`` — the
+#: first a kind no fire site emits — and ``control_flow`` kept the pair below,
+#: so "that spell" had an antecedent under an opponent-scoped cast trigger in
+#: one sentence position and none in the other two. Membership is a claim
+#: about a stamp, as it is for the table above: an event joins when its emit
+#: carries both keys.
+#:
+#: The three caster-scoped kinds joined together, each read off its own emit in
+#: ``_apply_cast_triggers``. ``you_cast_spell`` was the one cast event that
+#: froze nothing - and "copy **that spell**" was lowered under it all the
+#: same, with no gate at all, so Mirari took its {3} and copied nothing. It
+#: carries both keys now; ``self_cast`` and ``you_cast_first_spell_each_turn``
+#: always did and were simply never listed. "Copy that spell" is gated on
+#: this table like every other reader of the phrase.
+CAST_SPELL_EVENTS: frozenset[str] = frozenset({
+    "spell_cast", "opponent_casts_spell",
+    "you_cast_spell", "self_cast", "you_cast_first_spell_each_turn",
 })
 
 
@@ -257,6 +347,10 @@ _EVENT_QUANTITIES: dict[str, str] = {
     # delayed announcement, which has frozen the same number under the same
     # key since Acidic Dagger — nothing read it until a card asked how much.
     "bound_permanent_deals_combat_damage": "damage_dealt",
+    # "…whenever target creature deals damage, you gain **that much** life."
+    # (Spiritualize.) The unnarrowed event beside it, announced from the same
+    # seam with the same number under the same key.
+    "bound_permanent_deals_damage": "damage_dealt",
 }
 
 
@@ -431,6 +525,9 @@ _BLOCK_PAIR_EVENTS = frozenset({
     # set that left it out would refuse the created ability while admitting the
     # printed one.
     "source_blocks_or_blocked_by",
+    # …and its attacking half alone (Zombie Boa), announced by the second of
+    # those two sites under the same key, so "that creature" is the blocker.
+    "source_becomes_blocked_by",
 })
 
 

@@ -81,10 +81,20 @@ def test_a_grant_shows_up_in_castable_from_zones_and_casts_through_the_api():
     # a card into the *searched* player's exile and hands the permission to the
     # searcher), and it is stated on every entry rather than only on that one so
     # the client has a single rule to read.
-    assert entries == [
+    # Less ``ways`` / ``castable_now``, which the web layer adds for a person
+    # (``state_view._zone_cast_options``); the grant has one way and no price
+    # of its own.
+    assert [
+        {key: value for key, value in entry.items() if key not in ("ways", "castable_now")}
+        for entry in entries
+    ] == [
         {"zone": "graveyard", "index": 0, "name": "Test Ember", "free": False,
          "source": "Test Grant", "owner_seat": 0}
     ]
+    assert [
+        (way["alternative_cost"], way["keyword"], way["source"])
+        for way in entries[0]["ways"]
+    ] == [(False, None, "Test Grant")]
     # The opponent's view carries no permission — it is seat 0's, not a
     # property of the card.
     assert _state(sid, seat=1)["castable_from_zones"] == []
@@ -222,9 +232,18 @@ def test_w3g4_a_library_grant_is_offered_and_casts_through_the_api():
         source_name="Test Aperture",
     )
 
-    assert _state(sid)["castable_from_zones"] == [
-        {"zone": "library", "index": 0, "name": "Test Comet", "free": True,
-         "source": "Test Aperture", "owner_seat": 0}
+    offered, = _state(sid)["castable_from_zones"]
+    # ``ways`` / ``castable_now`` are what the web layer adds for a person
+    # (``state_view._zone_cast_options``): the one way this card may be cast,
+    # that it is a waiver, and that it could be cast right now.
+    ways = offered.pop("ways")
+    assert offered.pop("castable_now") is True
+    assert offered == {
+        "zone": "library", "index": 0, "name": "Test Comet", "free": True,
+        "source": "Test Aperture", "owner_seat": 0,
+    }
+    assert [(way["alternative_cost"], way["free"], way["price"], way["source"]) for way in ways] == [
+        (False, True, "", "Test Aperture"),
     ]
     # A library is hidden, so the offer is the viewer's own top card and
     # nothing else — the opponent's deck is not listed even for a viewer who

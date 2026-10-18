@@ -125,6 +125,11 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "matching_creature_becomes_blocked":
         "whenever a creature becomes blocked by a creature with lesser power",
     "creature_attacks_or_blocks": "whenever this creature attacks or blocks",
+    # The same union watched over the whole board (Powerstone Minefield): the
+    # subject is a printed noun phrase, and its row sits above the per-attacker
+    # one it would otherwise be read as a prefix of — which is what the
+    # shadowing guard below checks from both sides.
+    "matching_creature_attacks_or_blocks": "whenever a creature attacks or blocks",
     # Both printed spellings, because the narrowing is a named group on a second
     # pattern (Wall of Essence, Wall of Souls) — without the entry the shadowing
     # guard would only ever check the bare one, which is the lookup being by
@@ -169,6 +174,10 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "player_chooses_targets": "whenever a player chooses one or more targets",
     "opponent_casts_spell": "whenever an opponent casts a spell",
     "you_cast_spell": "whenever you cast a spell",
+    # Chance Encounter. CR 705.2: only the player who flipped wins a flip, so
+    # the event is the flipper's and is announced by the one seam that flips
+    # for a seat (`handlers/_common.flip_coin_for`).
+    "you_win_coin_flip": "whenever you win a coin flip",
     # Multani's Presence. CR 701.6a's cancel rather than a cast, and the one
     # condition in the pool whose event happens after its spell has left the
     # stack (CR 603.10e: such an ability looks back in time).
@@ -194,6 +203,15 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "counters_reach_threshold": (
         "whenever there are four or more tide counters on this creature",
         "when there are four or more page counters on this artifact",
+    ),
+    # Bomb Squad. The same state asked of *another* permanent, so the noun
+    # phrase is a subject group and the kind is its own. In the whenever table
+    # for the row above's reason; the "when" spelling and a printed digit are
+    # here because a card may print either and neither may be read as the
+    # source's own threshold or as a keyword the creature "has".
+    "permanent_counters_reach_threshold": (
+        "whenever a creature has four or more fuse counters on it",
+        "when an artifact you control has 2 or more charge counters on it",
     ),
     # Phyrexian Devourer. CR 603.8 read off a characteristic, and the row is in
     # the *whenever* table under the "when" the card prints — so the "whenever"
@@ -248,6 +266,19 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     # is what holds that.
     "permanent_returned_to_hand": (
         "whenever a permanent is returned to a player's hand"
+    ),
+    # Karmic Justice. CR 701.8's keyword action as an event, and its own kind
+    # rather than a spelling of the deaths above: a sacrifice and a state-based
+    # "put into the graveyard" are deaths and are not this. Two spellings, so
+    # the noun phrase is seen to be payload — the second is no printed card.
+    # Neither is a prefix of, or prefixed by, the two "…an opponent controls
+    # **causes**…" rows (Sacred Ground's, Spiritual Focus'): the verb is the
+    # fork, and the example is what holds that.
+    "permanent_destroyed": (
+        "whenever a spell or ability an opponent controls destroys a "
+        "noncreature permanent you control",
+        "whenever a spell or ability an opponent controls destroys a "
+        "creature you control",
     ),
     "one_or_more_attack": "whenever one or more creatures you control attack",
     # Both printed seats, because one pattern names both and the narrowing is

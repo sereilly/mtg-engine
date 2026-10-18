@@ -171,6 +171,9 @@ class _FilterDraft:
     # local is dropped before it even gets that far, so the guard on this
     # mirror could not see it either.
     colored: bool = False
+    # "a **multicolored** creature card" (Dragon Arch) — see the field of the
+    # same name on ``ast.ObjectFilter``.
+    multicolored: bool = False
     # "permanents **of the chosen color**" (Psychic Allergy) — see
     # ``ast.ObjectFilter.chosen_color``.
     chosen_color: bool = False
@@ -221,6 +224,8 @@ class _FilterDraft:
     attached_to: str | None = None
     attached_to_filter: ast.ObjectFilter | None = None
     attached_to_target: ast.ObjectFilter | None = None
+    # "…that's **attached to a permanent**" - see ``ast.ObjectFilter``.
+    attached_to_permanent: bool = False
     # "…**whose controller controls an Island**" (Seasinger) — see
     # ``ast.ObjectFilter``.
     controller_controls: ast.ObjectFilter | None = None
@@ -238,6 +243,8 @@ class _FilterDraft:
     name_from_recorded_card: bool = False
     #: See ``ast.ObjectFilter.shares_color_with_it``.
     shares_color_with_it: bool = False
+    #: See ``ast.ObjectFilter.colors_of_sacrificed_for_cost``.
+    colors_of_sacrificed_for_cost: bool = False
     excluded_basic_lands: bool = False
     created_with_source: bool = False
     #: See ``ast.ObjectFilter.put_onto_battlefield_by_source``.
@@ -251,6 +258,11 @@ class _FilterDraft:
     #: (Diplomatic Escort). Set only by the bare-"spell" head noun, so it never
     #: travels without ``zone == "stack"``.
     also_ability: bool = False
+    #: See ``ast.ObjectFilter.also_spell`` — "target **spell or permanent**"
+    #: (the Lace cycle). Set only where the bare-"spell" head noun is unioned
+    #: with a generic noun that is not one, so it never travels with
+    #: ``zone == "stack"``.
+    also_spell: bool = False
     zone_owner: ast.PlayerRef | None = None
     saw_head: bool = False
     type_match: str = "any"
@@ -292,6 +304,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         name_from_event=d.name_from_event,
         name_from_recorded_card=d.name_from_recorded_card,
         shares_color_with_it=d.shares_color_with_it,
+        colors_of_sacrificed_for_cost=d.colors_of_sacrificed_for_cost,
         excluded_basic_lands=d.excluded_basic_lands,
         any_classes=d.any_classes,
         targets_object=d.targets_object,
@@ -331,6 +344,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         power_greater_than_cards_in_hand=d.power_greater_than_cards_in_hand,
         zone=d.zone,
         also_ability=d.also_ability,
+        also_spell=d.also_spell,
         zone_owner=d.zone_owner,
         is_card=d.is_card,
         with_plus1_counter=d.with_plus1_counter,
@@ -338,6 +352,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         with_nonmana_activated_ability=d.with_nonmana_activated_ability,
         nontoken=d.nontoken,
         colored=d.colored,
+        multicolored=d.multicolored,
         chosen_color=d.chosen_color,
         chosen_keyword=d.chosen_keyword,
         chosen_creature_type=d.chosen_creature_type,
@@ -365,6 +380,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         attached_to=d.attached_to,
         attached_to_filter=d.attached_to_filter,
         attached_to_target=d.attached_to_target,
+        attached_to_permanent=d.attached_to_permanent,
         controller_controls=d.controller_controls,
         of_bound_type=d.of_bound_type,
         in_combat_with_source=d.in_combat_with_source,

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from engine.untap_restrictions import permanent_in_limited_scope
 from engine.phases.upkeep_step import upkeep_prompt_key
-from engine.upkeep_costs import cost_from_payload
 from fastapi import HTTPException
 
 from .action_registry import HUMAN_ONLY, action_handler
@@ -18,6 +17,7 @@ from .game_flow import _advance_ai_turn, _advance_phase, _ai_step
 from .seats import _ai_should_hold, _hold_priority_for_human, _seat_type
 from .turn_steps import (
     _advance_after_upkeep_choices,
+    _can_pay_upkeep_choice,
     _cleanup_discard_requirement,
     _clear_untap_selection,
     _consume_draw_step_life_loss,
@@ -316,9 +316,11 @@ def _action_pay_upkeep(session, req, seat_type):
     controller = session.game.players[req.seat]
     # The whole cost, not its mana half: an upkeep may print life or a
     # sacrifice beside the mana (CR 702.24a), and a gate that reads one part
-    # lets a player pay a cost they cannot afford.
-    cost = cost_from_payload(choice.get("cost") or {})
-    if not session.game.can_pay_upkeep_cost(controller, cost):
+    # lets a player pay a cost they cannot afford. And on top of every upkeep
+    # cost this seat has already agreed to pay: they are paid afterwards off
+    # one board, and an accept that board cannot honour used to be carried
+    # out as a decline when its turn came (`_can_pay_upkeep_choice`).
+    if not _can_pay_upkeep_choice(session, controller, choice):
         raise HTTPException(
             status_code=400,
             detail=f"cannot pay upkeep cost for {choice['card_name']}",
@@ -413,6 +415,11 @@ def _action_island_sanctuary_skip(session, req, seat_type):
 def _action_ai_step(session, req, seat_type):
     if _seat_type(session, session.current_turn) != "ai":
         raise HTTPException(status_code=400, detail="current turn is not AI")
+    # The turn this step belongs to. Everything below may advance *it* and no
+    # other: `_advance_phase` from the AI's end step runs the cleanup and the
+    # next player's whole beginning phase, and whatever turn that leaves is not
+    # this request's to walk any further.
+    stepped_turn = session.current_turn
     if _ai_step(session):
         # The AI finished acting in the current step. Hold here if the human
         # flagged this (main) step; otherwise leave it and advance the turn,
@@ -424,4 +431,5 @@ def _action_ai_step(session, req, seat_type):
             _hold_priority_for_human(session)
         else:
             _advance_phase(session)
-            _advance_ai_turn(session)
+            if session.current_turn == stepped_turn:
+                _advance_ai_turn(session)

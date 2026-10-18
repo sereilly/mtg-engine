@@ -54,8 +54,8 @@ from __future__ import annotations
 from ...oracle_types import (CHOSEN_COLOR_THIS_WAY, CHOSEN_HAND_CARDS_BY_SEAT,
                              LAST_TARGET_CONTROLLER,
                              OracleInstruction, REVEALED_HAND_CARDS,
-                             REVEALED_THIS_WAY)
-from ...subject_filters import card_only_filter
+                             REVEALED_THIS_WAY, X_FROM_COUNT)
+from ...subject_filters import SOURCE_RESOLVED_CARD_KEYS, card_only_filter
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
@@ -65,8 +65,10 @@ from ._common import (
     _restrictions_beyond,
     _targets_only,
     dropped_narrowings,
+    search_slot,
 )
 from ._filters import chargeable_card_filter
+from ._record_keys import CHOSEN_PLAYER
 from ._events import (
     _DAMAGED_PLAYER_EVENTS,
     _DEFENDING_PLAYER_EVENTS,
@@ -173,8 +175,20 @@ def _lower_reveal_top_sorting_by_filter(
     (CR 400.1), so a restriction that can only be tested on a permanent is one
     the sort would silently drop, and dropping it here would put the whole pile
     in the hand.
+
+    "Put all creature cards **of the chosen type** revealed this way into your
+    hand" (Brass Herald). The type is the CR 614.1c record on the ability's
+    *source*, which no card in a library can answer — so the key rides past the
+    card-only gate, exactly as Belbe's Portal's does in ``zones``, and the
+    handler turns it into an ordinary ``subtype_filter`` off that source before
+    any card is tested. Named at this call because each name is a claim that
+    the resolver really does that; unresolved, the key makes
+    ``_card_matches_filter`` refuse every card, and the whole pile goes to the
+    rest rather than to the hand.
     """
-    described = card_only_filter(node.filter.to_payload())
+    described = card_only_filter(
+        node.filter.to_payload(), carried_separately=SOURCE_RESOLVED_CARD_KEYS
+    )
     if described is None:
         raise LoweringError(
             "the sorted reveal cannot test this restriction on a card",
@@ -260,6 +274,62 @@ def _lower_graveyard_top_opponent_chooses(
     _describe_targets(payload, node.chooser)
     return (
         OracleInstruction("reveal_top_opponent_chooses", "", payload),
+    )
+
+
+def _lower_reveal_library_opponent_chooses(
+    node: ast.RevealLibraryOpponentChooses,
+) -> tuple[OracleInstruction, ...]:
+    """"Reveal the cards in your library. An opponent chooses from among them a
+    creature card, a land card, and a noncreature, nonland card. You put the
+    chosen cards into your hand. Then shuffle." (Guided Passage.)
+
+    Two instructions. "An opponent" is CR 608.2d's unnamed seat, picked by the
+    controller as the effect is applied — the ``choose_opponent`` step every
+    "an opponent …" sentence in this grammar puts in front of itself, writing
+    the key the reveal then reads. The reveal, the pick, the hand and the
+    shuffle are one step because they are one pile.
+
+    Each description becomes a slot in the search predicate's own vocabulary
+    (``_filters.search_slot``, which refuses a narrowing that predicate cannot
+    test), because the pick is asked through the search prompt: a seat choosing
+    cards out of a library, one per description, is what that prompt already
+    is, and a second picker would be a second reading of the same phrases.
+    """
+    if node.chooser != "an_opponent":
+        raise LoweringError(
+            f"no flow lets {node.chooser!r} choose from a revealed library",
+            node=node,
+        )
+    if len(node.described) < 2:
+        raise LoweringError(
+            "a pick of one card per description names at least two", node=node
+        )
+    return (
+        OracleInstruction(
+            "sequence", "",
+            {
+                "steps": (
+                    OracleInstruction(
+                        "choose_opponent", "",
+                        {
+                            "result_key": CHOSEN_PLAYER,
+                            "prompt": "Choose an opponent to choose from your library.",
+                        },
+                    ),
+                    OracleInstruction(
+                        "reveal_library_opponent_chooses", "",
+                        {
+                            "one_of_each": [
+                                search_slot(described, node)
+                                for described in node.described
+                            ],
+                            "destination": "hand",
+                        },
+                    ),
+                ),
+            },
+        ),
     )
 
 
@@ -720,9 +790,28 @@ def _lower_reveal_hand_and_choose(
         payload["exclude_basic_lands"] = True
     # Both keys are emitted only when the card carries them, so Duress's payload
     # stays byte-identical and no behaviour signature moves.
-    amount = _amount_payload(node.count)
-    if amount != 1:
-        payload["count"] = amount
+    if isinstance(node.count, ast.ThatMuch):
+        # "…you choose a nonland card from it **for each card discarded this
+        # way**." (Last Rites.) A count an earlier step of this effect
+        # recorded, on the channel every recorded amount travels: the handler
+        # already sizes its pick through ``resolve_amount`` (Mind Warp's X), so
+        # the record becomes that X where every other computed amount does.
+        # Behind the gate every back-reference carries — with no producer the
+        # words name nothing and the pick would be of no cards.
+        if (
+            node.count.source is None or node.count.bonus
+            or node.count.source not in produced
+        ):
+            raise LoweringError(
+                f"back-reference to {node.count.source!r} with no producer in "
+                "this effect", node=node,
+            )
+        payload["count"] = "x"
+        payload[X_FROM_COUNT] = {"back_reference": node.count.source}
+    else:
+        amount = _amount_payload(node.count)
+        if amount != 1:
+            payload["count"] = amount
     if node.up_to:
         # "…choose **up to** X cards from it" (Discordant Dirge). CR 601.2c's
         # ceiling, carried so the prompt lets the chooser stop early. Emitted

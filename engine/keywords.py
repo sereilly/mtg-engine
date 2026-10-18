@@ -260,6 +260,17 @@ def protection_quality(word: str) -> tuple[str, str] | None:
     # word no catalog holds) answers None, which keeps the line refused rather
     # than admitted with part of its quality dropped.
     words = word.split()
+    # "protection from **instant spells** and from **sorcery spells**"
+    # (Devoted Caretaker). A card type narrowed to *spells*: CR 702.16a's
+    # card-type quality reaches every source of that type wherever it is, and
+    # the printed word "spells" keeps only the ones on the stack — so it is
+    # its own family rather than ``card_type``, which a permanent can answer
+    # to. A spell is never a permanent, so the Aura, Equipment and blocking
+    # halves of protection (CR 702.16c/d/f) can never apply to this quality,
+    # and the two that can — targeting (702.16b) and damage (702.16e) — are
+    # asked of the spell's card.
+    if len(words) == 2 and words[1] == "spells" and words[0] in CARD_TYPES:
+        return ("spell_type", words[0])
     if len(words) >= 2 and all(w in TYPE_LINE_SUPERTYPES for w in words[:-1]):
         noun = protection_quality(words[-1])
         if noun is None or noun[0] not in ("card_type", "subtype"):
@@ -282,6 +293,49 @@ def protection_quality(word: str) -> tuple[str, str] | None:
     if singular in CREATURE_TYPES:
         return ("subtype", singular)
     return None
+
+
+#: "Protection from **each color**" (Iridescent Angel). CR 702.16h: shorthand
+#: for one protection ability per value the characteristic can take — five
+#: separate abilities, which is why this is a member that names *several*
+#: qualities rather than a sixth colour: an effect that removes protection from
+#: black leaves the other four standing.
+EACH_COLOR = "each color"
+
+#: "…protection from **each of its colors**" (Earnest Fellowship). CR 702.16i:
+#: shorthand for one protection ability per member of a *set*, and the set is
+#: read off the permanent that has the ability — so the answer depends on who
+#: is asked, and a colourless holder has no protection at all.
+EACH_OF_ITS_COLORS = "each of its colors"
+
+_WUBRG = ("W", "U", "B", "R", "G")
+
+
+def protection_qualities_named(
+    word: str, *, holder_colors=None,
+) -> tuple[tuple[str, str], ...] | None:
+    """Every quality one member of a protection clause names — or **None**
+    when it names nothing a shield answers to.
+
+    :func:`protection_quality` reads a member that is one quality. This is the
+    reader for a member that is *shorthand for several* (CR 702.16h/i), and it
+    is the one every clause reader asks, so the gate that admits a line, the
+    reader that builds a permanent's qualities from it and the lord grant that
+    hands it out cannot read different sentences out of one printed phrase.
+
+    *holder_colors* is the layer-5 colours of the permanent the protection is
+    **on**, for "each of its colors" alone. A gate asking whether the phrase is
+    readable passes nothing and gets ``()`` — readable, and naming no quality
+    until a holder is known — which is deliberately not None.
+    """
+    text = " ".join((word or "").strip().lower().split())
+    if text == EACH_COLOR:
+        return tuple(("color", symbol) for symbol in _WUBRG)
+    if text == EACH_OF_ITS_COLORS:
+        held = set(holder_colors or ())
+        return tuple(("color", symbol) for symbol in _WUBRG if symbol in held)
+    quality = protection_quality(text)
+    return None if quality is None else (quality,)
 
 
 #: How long a layer-6 keyword grant or removal lasts, each key naming the sweep

@@ -28,6 +28,7 @@ import dataclasses
 from .. import ast
 from ..errors import GrammarError
 from ..nouns import parse_object_filter
+from ..rebinding import statement_bound_target
 from ..references import parse_player_ref, parse_recipient, parse_target_spec
 from ..stream import TokenStream
 
@@ -43,8 +44,12 @@ def _parse_attach(stream: TokenStream) -> ast.Statement:
     is read by the noun phrase every other production already uses rather than
     by anything here. The whole line must be consumed: a trailing clause this
     does not read is a refusal, never a silent partial attach.
+
+    "attaches" is the same verb behind a printed player ("**That player
+    attaches** this Aura to a land of their choice", Steam Vines), which only
+    the player-subject dispatch reaches; it puts the seat on the node.
     """
-    stream.expect_word("attach")
+    stream.expect_word("attach", "attaches")
     subject = parse_recipient(stream)
     if subject is None:
         raise stream.error("expected what to attach")
@@ -53,7 +58,47 @@ def _parse_attach(stream: TokenStream) -> ast.Statement:
     host = parse_recipient(stream)
     if host is None:
         raise stream.error("expected what to attach to")
-    return ast.Attach(subject, host)
+    # "…to another permanent **it can enchant**." (Aura Graft.) CR 303.4j's
+    # legality, printed where Enchantment Alteration leaves it to the rule.
+    # Recorded on the node rather than swallowed: only the lowering that
+    # offers legal hosts alone may take it.
+    legal = bool(stream.accept_phrase("it", "can", "enchant"))
+    return ast.Attach(subject, host, host_it_can_enchant=legal)
+
+
+def _parse_pronoun_attach_rider(
+    stream: TokenStream, steps: "list[ast.Statement]"
+) -> "ast.Statement | None":
+    """``Attach it to another permanent it can enchant.`` after a sentence
+    that chose an object (Aura Graft: "Gain control of target Aura that's
+    attached to a permanent. Attach **it** to another permanent it can
+    enchant.").
+
+    The attach's own pronoun, beside the counter's and the grant's
+    (``pronouns._parse_pronoun_counter_rider``): parsed fresh, "it" is the
+    ability's source, and this sentence would move the *spell* - or, on a
+    permanent, the permanent printing it - instead of the Aura the sentence
+    in front took. Read by parsing the sentence with the ordinary attach
+    production and substituting the subject, for that rider's reason: a second
+    spelling of the production would be free to disagree with it.
+
+    Only the bare pronoun is rebound. "Attach this Aura to …" names the source
+    and keeps it.
+    """
+    target = statement_bound_target(steps[-1]) if steps else None
+    if target is None or not stream.at_word("attach"):
+        return None
+    mark = stream.mark()
+    try:
+        statement = _parse_attach(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    subject = statement.subject
+    if not isinstance(subject, ast.TargetSpec) or subject.quantifier != "it":
+        stream.reset(mark)
+        return None
+    return dataclasses.replace(statement, subject=target)
 
 
 #: The seats an "in excess of" head clause may count the larger side on. Held to

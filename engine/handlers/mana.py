@@ -532,6 +532,41 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
         )
         return True, "resolved"
 
+    # "**For each colored mana symbol in the milled card's mana cost**, add one
+    # mana of that color." (Charmed Pendant.) Read off the card the ability's
+    # own cost put into the graveyard — the payment path's record, because by
+    # now it is one card among however many the pile holds (CR 701.17c) — and
+    # off its *printed* mana cost (CR 202.1): one mana per symbol that has a
+    # colour, nothing for a generic, colourless, snow or {X} symbol. A land
+    # has no mana cost and adds nothing, which is the card working.
+    #
+    # A hybrid symbol is one symbol and adds one mana (Scryfall ruling,
+    # 2005-11-01: "you get one of either color mana, not both, for each mana
+    # symbol"). Which of its colours is the player's choice and nothing asks
+    # yet; the first printed is the deterministic default.
+    symbols_key = instruction.payload.get("colored_symbols_of_record")
+    if symbols_key:
+        import re
+
+        recorded = (context.choices or {}).get(str(symbols_key)) or ()
+        added: list[str] = []
+        for recorded_card in recorded:
+            printed = getattr(recorded_card, "mana_cost", "") or ""
+            for symbol in re.findall(r"\{([^}]+)\}", printed):
+                colours = [
+                    part for part in symbol.upper().split("/")
+                    if part in ("W", "U", "B", "R", "G")
+                ]
+                if colours:
+                    added.append(colours[0])
+        for symbol in added:
+            caster.mana_pool[symbol] = caster.mana_pool.get(symbol, 0) + 1
+        game.log.append(
+            f"{card.name} produced " + "".join("{" + symbol + "}" for symbol in added)
+            if added else f"{card.name} produced no mana"
+        )
+        return True, "resolved"
+
     count_key = instruction.payload.get("count_from_trigger")
     if count_key:
         symbol = str(instruction.payload.get("symbol", "C"))
@@ -1031,6 +1066,92 @@ def swap_controller_land_mana_until_eot(game: Game, instruction: OracleInstructi
     game.log.append(
         f"{getattr(context.card, 'name', 'an effect')}: {whose} lands "
         f"produce {what} this turn"
+    )
+    return True, "resolved"
+
+
+@effect_handler("swap_controller_added_mana_until_eot")
+def swap_controller_added_mana_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Until end of turn, spells and abilities you control that would add
+    colored mana instead add that much white mana." (False Dawn.)
+
+    A CR 614.1a replacement over the mana-production event with a window
+    (CR 611.2a), recorded on the **seat** for the reason the land swap above is:
+    what it covers is a class — every spell and ability this player controls,
+    including ones from permanents that have not entered yet — and which of
+    them the seat controls is answered each time one produces mana.
+
+    One record, two seams (``engine/land_mana_swaps.py``): a land tapped for
+    mana is answered at the tap seam, where the payment planner and the
+    client's castable highlight ask what a land would make; everything else —
+    a creature's mana ability, a ritual, a triggered "adds an additional {G}" —
+    at ``Game._execute_oracle_instruction``.
+
+    Nothing about any permanent changes: the card's own ruling is that it
+    "does not change the color of any permanents" and "does not change any
+    lands into Plains".
+    """
+    from ..land_mana_swaps import LandManaSwap, add_swap
+
+    caster = context.caster
+    produced = str(instruction.payload.get("produced") or "")
+    if not produced:
+        return True, "resolved"
+    add_swap(
+        caster,
+        LandManaSwap(
+            produced=produced,
+            lands={},
+            source_name=getattr(context.card, "name", None),
+            colors_only=bool(instruction.payload.get("colors_only", True)),
+            all_sources=True,
+        ),
+    )
+    game.log.append(
+        f"{getattr(context.card, 'name', 'an effect')}: colored mana "
+        f"{caster.name}'s spells and abilities would add is {{{produced}}} "
+        "this turn"
+    )
+    return True, "resolved"
+
+
+@effect_handler("grant_mana_spending_until_eot")
+def grant_mana_spending_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Until end of turn, you may spend white mana as though it were mana of
+    any color." (False Dawn.)
+
+    CR 609.4b: "this affects only how the player may pay a cost. It doesn't
+    change that cost, and it doesn't change what mana was actually spent." So
+    nothing in the pool moves — the grant is a ``mana_spending.ManaSpending``
+    on the seat for the turn, folded into the one derived list every payment
+    site reads (the cast path, the castable highlight, the AI's proposal gate),
+    and rebuilt here so it is in force for the very next payment.
+    """
+    from ..mana_spending import ManaSpending, grant_turn_permission
+
+    caster = context.caster
+    permission = grant_turn_permission(
+        caster,
+        ManaSpending(
+            fungible_colors=tuple(
+                str(symbol) for symbol in instruction.payload.get("fungible_colors") or ()
+            ),
+            as_colors=tuple(
+                str(symbol) for symbol in instruction.payload.get("as_colors") or ()
+            ),
+        ),
+    )
+    game._refresh_mana_spending()
+    spent = (
+        "".join(f"{{{symbol}}}" for symbol in permission.fungible_colors) or "mana"
+    )
+    as_what = (
+        "".join(f"{{{symbol}}}" for symbol in permission.as_colors)
+        or "mana of any color"
+    )
+    game.log.append(
+        f"{getattr(context.card, 'name', 'an effect')}: {caster.name} may spend "
+        f"{spent} as though it were {as_what} this turn"
     )
     return True, "resolved"
 

@@ -89,9 +89,13 @@ def _accept_land_tapped_for_mana_by_a_player(
     # whose two halves watch different sets, which is the whole reason this
     # reader exists — so the words are consumed here even though nothing here
     # asks what they mean.
+    # "Whenever **you** tap a land for mana" (Savage Firecat) is the third
+    # seat, in the second person — the same event again, and the same split:
+    # the words are consumed here and ``tapped_by_you`` rides the other table.
     if not (
         stream.accept_phrase("a", "player", "taps")
         or stream.accept_phrase("an", "opponent", "taps")
+        or stream.accept_phrase("you", "tap")
     ):
         stream.reset(mark)
         return None
@@ -147,9 +151,19 @@ def _accept_card_put_into_graveyard_from_anywhere(
     if described is None:
         stream.reset(mark)
         return None
-    if not stream.accept_phrase(
-        "is", "put", "into", "an", "opponent", "'s", "graveyard",
-        "from", "anywhere",
+    # Compost's tail, or "…into **your** graveyard **from your library**"
+    # (Pedantic Learning) — the same event with the pile and the source zone
+    # printed differently. Both are read whole: which pile and which zone are
+    # the compiler's narrowings (``your_graveyard`` / ``from_library``), and a
+    # tail this did not check would be a narrowing consumed and unrecorded.
+    if not (
+        stream.accept_phrase(
+            "is", "put", "into", "an", "opponent", "'s", "graveyard",
+            "from", "anywhere",
+        )
+        or stream.accept_phrase(
+            "is", "put", "into", "your", "graveyard", "from", "your", "library",
+        )
     ):
         stream.reset(mark)
         return None

@@ -182,6 +182,18 @@
       "file": "7ED_cards.json"
     },
     {
+      "code": "APC",
+      "name": "Apocalypse",
+      "released": "2001-06-04",
+      "file": "APC_cards.json"
+    },
+    {
+      "code": "ODY",
+      "name": "Odyssey",
+      "released": "2001-10-01",
+      "file": "ODY_cards.json"
+    },
+    {
       "code": "M21",
       "name": "Core Set 2021",
       "released": "2020-07-03",

@@ -26,8 +26,8 @@ from ...oracle_types import OracleInstruction, TAPPED_THIS_WAY, X_FROM_COUNT
 from .. import ast
 from ..errors import LoweringError
 from ._common import dropped_narrowings
-from ._cost_records import cost_record_spec
-from ._events import _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER
+from ._events import (CAST_SPELL_EVENTS, _EVENT_SUBJECT_PLAYERS,
+                      EVENT_SUBJECT_PLAYER)
 
 
 # ---------------------------------------------------------------------------
@@ -57,7 +57,14 @@ _COUNTABLE_ZONES = ("battlefield", "graveyard", "hand", "exile", "library")
 # behind the count actually answers: a key admitted here and unanswered there is
 # a narrowing dropped on the floor, and a count that ignores its adjective is
 # larger than the card printed.
-_CARD_ZONE_KEYS = frozenset({"type_filter", "named", "color_filter"})
+_CARD_ZONE_KEYS = frozenset({"type_filter", "named", "color_filter", "named_from"})
+
+#: The spec's spelling of "…with the same name as **that spell**": a name no
+#: lowering can know, carried as *whose* name it is. ``count_spec_in_resolution``
+#: turns it into an ordinary ``named`` where the trigger's context is in hand,
+#: and a card matcher that meets it unresolved answers no — a count of nothing
+#: rather than of every card in the zone.
+NAMED_FROM_TRIGGERING_SPELL = "triggering_spell"
 
 #: Narrowings a count cannot apply even on the battlefield.
 #:
@@ -204,7 +211,7 @@ def count_filter_on_targeted_seat(
 
 def count_spec(
     filt: "ast.ObjectFilter", node, *, aggregate: str = "count", multiplier: int = 1,
-    offset: int = 0,
+    offset: int = 0, event: str | None = None,
 ) -> dict:
     """What ``count_from_payload`` needs to take this count at resolution.
 
@@ -212,10 +219,38 @@ def count_spec(
     amount that *is* one ("draw cards equal to the number of …"). They ask the
     same question of the same noun phrase, so a restriction one of them refused
     and the other silently dropped would be the same count meaning two things.
+
+    *event* is the trigger condition the sentence is printed under, for the one
+    narrowing that reads it — a name the firing event froze. A caller that
+    passes none refuses that phrase rather than counting without it.
     """
     if filt.zone not in _COUNTABLE_ZONES:
         raise LoweringError(f"no count reads the {filt.zone}", node=node)
     payload = dict(filt.to_payload())
+    # "…the number of cards in all graveyards **with the same name as that
+    # spell**" (Aven, Cabal, Cephalid, Dwarven and Nantuko Shrine). CR 201.2a
+    # against the spell the cast trigger fired on — a stack object the fire
+    # site froze (``cast_item``), whose name no lowering can know. So the key
+    # says whose name, and the resolution turns it into ``named``.
+    #
+    # Gated on the events that freeze a spell, like every reader of the phrase:
+    # under any other the words name nothing and the count would be of no card
+    # at all, on a card reporting supported. And only off the battlefield — a
+    # permanent's name is computed (CR 707.2) and the matcher behind a
+    # battlefield count has no key for the relation.
+    if payload.pop("name_from_event", None):
+        if event not in CAST_SPELL_EVENTS:
+            raise LoweringError(
+                "'the same name as that spell' names the spell a cast trigger "
+                f"fired on, and no event named {event!r} freezes one",
+                node=node,
+            )
+        if filt.zone == "battlefield" or "named" in payload:
+            raise LoweringError(
+                "a count compares a spell's name with cards in a zone, once",
+                node=node,
+            )
+        payload["named_from"] = NAMED_FROM_TRIGGERING_SPELL
     # The same gate `_filter_payload` puts in front of every other consumer of a
     # noun phrase, and it was missing here: `to_payload` emits nothing for a
     # *relative* narrowing, so "for each creature **blocking it**" reduced to
@@ -508,6 +543,94 @@ def seat_scoped_count_spec(
     return spec
 
 
+#: The aggregates a definition may take over a set of objects, by node class,
+#: as the ``aggregate`` word :func:`count_spec` writes for each.
+_SET_AGGREGATES: dict[type, str] = {
+    ast.CountOf: "count",
+    ast.GreatestPowerAmong: "greatest_power",
+    ast.ColorsAmong: "distinct_colors",
+}
+
+
+def counted_definition_spec(
+    definition: "ast.Amount", node, *, rewrite=None, nested: bool = True,
+    event: str | None = None,
+) -> dict | None:
+    """The spec for an X defined as **an aggregate over a set, and the printed
+    arithmetic on it** — or None when *definition* is not one.
+
+    "…where X is **3 plus** the number of cards named ~ in all graveyards"
+    (Muscle Burst, Kindle), "…**twice** the number of white creatures that
+    player controls" (Jovial Evil), "…the number of cards in your hand **minus
+    the number of cards in that player's hand**" (Bulwark), "…the **greatest
+    power among** creature cards in your graveyard" (Carrion Grub).
+
+    **One reader, because there were two and they had drifted both ways.** A
+    where-clause wrapping a sentence (``where_x.lower_where_x``) unwrapped the
+    constant, the factor and the subtracted count and then demanded a plain
+    count; one riding a ``Pump`` node (``_counted_pumps._x_definition_spec``)
+    read the
+    count, the maximum and the colours and none of the arithmetic. So "3 plus
+    the number of …" defined a damage and refused a pump, and "the greatest
+    power among …" defined a pump and refused a damage — which arithmetic a
+    card could print depended on which sentence it printed it in, the fork
+    ``grammar/where_x.parse_where_x_definition`` closed on the parse side.
+
+    The constant is unwrapped *before* the multiplier so the two compose in the
+    order the sentence prints them, and it becomes ``plus`` rather than
+    ``offset``: ``_scaled`` applies ``offset`` ahead of the multiplier, which
+    for "twice the number … minus 2" would be 2N-4. A subtrahend on the
+    **left** ("2 minus the number of …") is not taken — a constant minus a
+    count is no key on this spec — so it is left wrapped and the caller's own
+    refusal answers.
+
+    *rewrite* is applied to every filter counted: the sentence form moves a
+    "that player controls" narrowing onto the axis a count reads, and only it
+    knows the sentence. *nested* says whether a count may be taken off a count
+    (``minus_count``): only ``count_from_payload`` evaluates one, so a reader
+    asked through ``evaluate_count`` alone — a CR 613 recompute — refuses the
+    shape instead of dropping the subtrahend. *event* is :func:`count_spec`'s.
+    """
+    if rewrite is None:
+        rewrite = lambda filt: filt  # noqa: E731 - the identity, named above
+    subtracted: dict | None = None
+    if (
+        isinstance(definition, ast.Minus)
+        and isinstance(definition.left, ast.CountOf)
+        and isinstance(definition.right, ast.CountOf)
+    ):
+        if not nested:
+            raise LoweringError(
+                "a continuous X cannot be one count minus another", node=node
+            )
+        subtracted = count_spec(rewrite(definition.right.filter), node, event=event)
+        definition = definition.left
+    plus = 0
+    if isinstance(definition, (ast.Plus, ast.Minus)):
+        sign = -1 if isinstance(definition, ast.Minus) else 1
+        left, right = definition.left, definition.right
+        if isinstance(right, ast.Fixed) and not isinstance(left, ast.Fixed):
+            plus, definition = sign * right.value, left
+        elif sign > 0 and isinstance(left, ast.Fixed) and not isinstance(right, ast.Fixed):
+            plus, definition = left.value, right
+    factor = 1
+    if isinstance(definition, ast.Times):
+        factor = definition.factor
+        definition = definition.of
+    aggregate = _SET_AGGREGATES.get(type(definition))
+    if aggregate is None:
+        return None
+    spec = count_spec(
+        rewrite(definition.filter), node, aggregate=aggregate, multiplier=factor,
+        event=event,
+    )
+    if plus:
+        spec["plus"] = plus
+    if subtracted is not None:
+        spec["minus_count"] = subtracted
+    return spec
+
+
 def recorded_count_spec(
     amount: "ast.Amount", produced: frozenset[str], node
 ) -> dict | None:
@@ -586,8 +709,8 @@ def tapped_this_way_record(filt: "ast.ObjectFilter", produced, node) -> str:
       count would be a zero the card never printed.
 
     A floor rather than a helper in either family, for this module's own reason:
-    ``lowering/where_x`` and ``lowering/damage`` both ask it and neither may
-    import the other.
+    the where-clause (``_record_definitions``, for ``where_x``) and
+    ``lowering/damage`` both ask it and neither may import the other.
     """
     described = filt.to_payload()
     if filt.zone != "battlefield" or set(described) - {
@@ -650,7 +773,8 @@ def halved_count_spec(amount: "ast.Amount", node) -> dict | None:
 # back, which is what makes them floor rather than family.
 # ---------------------------------------------------------------------------
 def x_offset_amount(amount: ast.Amount) -> dict | None:
-    """``{"plus_x": n}`` for "**X plus n**", or None when the amount is not one.
+    """``{"plus_x": n}`` for "**X plus n**", ``{"minus_x": n}`` for "**n minus
+    X**", or None when the amount is neither.
 
     "You gain X plus 1 life, where X is the number of green creatures on the
     battlefield." (An-Havva Inn.) The constant belongs to the *sentence that
@@ -671,6 +795,16 @@ def x_offset_amount(amount: ast.Amount) -> dict | None:
         and isinstance(amount.right, ast.Fixed)
     ):
         return {"plus_x": amount.right.value}
+    # "**5 minus X**" (Liquid Fire). The mirror, with the printed number on
+    # the left because that is the only order a subtraction of X from a
+    # constant can be printed in; "X minus 1" is a different quantity and
+    # no reader of this shape, so it stays refused.
+    if (
+        isinstance(amount, ast.Minus)
+        and isinstance(amount.left, ast.Fixed)
+        and isinstance(amount.right, ast.Var)
+    ):
+        return {"minus_x": amount.left.value}
     return None
 
 
@@ -706,133 +840,6 @@ def _per_each_amount(amount: ast.Amount, negative: bool, node) -> dict | int:
     return {"times_x": value} if value else 0
 
 
-def _x_definition_spec(
-    definition: ast.Amount, node, *, recorded: "frozenset[str] | None" = None
-) -> dict:
-    """The spec behind a where-clause's X, whichever aggregate it names.
-
-    *recorded* is the set of scratchpad keys steps of this same effect write,
-    and passing one admits a back-reference — "…, where X is the number of
-    cards **revealed this way**" (Ivy Seer, Nightshade Seer and their two
-    Scents). ``None`` means no back-reference may define an X here at all, and
-    it is the default because the two callers ask different questions of one
-    helper. A **durational** pump is evaluated once, at resolution, where the
-    record the reveal wrote is sitting in the scratchpad; a durationless one is
-    a CR 613 layer 7c contribution the P/T refresh rebuilds on every recompute,
-    and a scratchpad key is not there to be read the second time. A continuous
-    effect sized by a frozen record is the failure
-    ``characteristics._lower_pump_per_milled`` refuses in its own words.
-
-    One parameter rather than a flag beside a set, because the two questions
-    are one: may a record define this X, and which records exist. A caller that
-    answered the first and not the second would admit a clause naming a step
-    nothing performs, which is a pump of zero on a card reporting supported.
-    """
-    # "…, where X is **half** the creature's power, **rounded down**."
-    # (Catacomb Dragon.) The halving rides on the spec rather than on the
-    # definition, so every alternative below carries it without knowing it can
-    # — `_scaled` is the one place that applies it, the same arrangement the
-    # multiplier and the offset already have. Unwrapped first because it is not
-    # a definition at all: it is an arithmetic over whichever one follows.
-    if isinstance(definition, ast.Half):
-        spec = _x_definition_spec(definition.of, node, recorded=recorded)
-        spec["half"] = definition.rounding
-        # Omitted at 2, so every spec written before fractions existed stays
-        # byte-identical (see `ast.Half`).
-        if definition.divisor != 2:
-            spec["divide_by"] = definition.divisor
-        return spec
-    if isinstance(definition, ast.GreatestPowerAmong):
-        return count_spec(definition.filter, node, aggregate="greatest_power")
-    if isinstance(definition, ast.ColorsAmong):
-        return count_spec(definition.filter, node, aggregate="distinct_colors")
-    if isinstance(definition, ast.CountOf):
-        return count_spec(definition.filter, node)
-    if isinstance(definition, ast.CountersOnSource):
-        # "…, where X is the number of **verse counters on this enchantment**"
-        # (War Dance, and the four other verse cards Urza's Saga prints). Not an
-        # aggregate over a set either: a counter is not an object, so there is
-        # no zone to scan — what the words name is a number sitting on the
-        # ability's own source, which only a resolution knows.
-        #
-        # The same ``source_counters`` spec ``where_x._lower_where_x_counters``
-        # and ``cards._lower_draw`` already build for the identical phrase in
-        # their own word orders, so the one evaluator answers all three and the
-        # spellings cannot count differently. It reaches here rather than there
-        # because a P/T where-clause carries its definition on the ``Pump``
-        # node instead of wrapping the sentence in a ``WhereX``.
-        #
-        # Reading it off a *sacrificed* source is CR 608.2h's last known
-        # information and needs no code: the counters live in the permanent
-        # object's own metadata (``engine/named_counters.py``), and a cost that
-        # sacrificed it took it off the battlefield without destroying the
-        # object the resolution still holds.
-        return {"source_counters": definition.kind}
-    if isinstance(definition, ast.CharacteristicOfSubject):
-        # "…, where X is **its** mana value" (Great Defender, Subdue, Kry
-        # Shield), "…, where X is **its toughness minus 1**" (Blood Lust). Not
-        # an aggregate over a set: the object is the one the sentence already
-        # named, and the resolution reads the characteristic off it — mana
-        # value off the card (CR 202.3), power and toughness through the layers
-        # (CR 613), which is the resolution's business rather than this one's.
-        return {
-            "object_characteristic": {
-                "object": "target",
-                "characteristic": definition.characteristic,
-                "offset": definition.offset,
-            }
-        }
-    # "{1}{B}, Discard a creature card: Volrath the Fallen gets +X/+X until end
-    # of turn, where X is **the discarded card's mana value**." A quantity the
-    # ability's own *cost* recorded (CR 601.2h), read off the payment path's
-    # record at resolution — so only where a resolution reads this spec at all
-    # (``recorded`` set): a durationless pump is a layer-7c contribution the
-    # P/T refresh rebuilds with no resolution context, where no payment record
-    # exists to be read.
-    if recorded is not None:
-        paid = cost_record_spec(definition, node)
-        if paid is not None:
-            return paid
-    if recorded is not None and isinstance(definition, ast.ThatMuch):
-        # "…, where X is the number of cards **revealed this way**." The parse
-        # resolved the printed noun and participle against
-        # ``records._THIS_WAY_COUNTS`` and what arrives is the key, so this
-        # reads it onto the ``back_reference`` channel ``count_from_payload``
-        # already answers — the same one the damage and the life gain spend the
-        # identical clause on, so one evaluator answers all three.
-        #
-        # A printed bonus refuses: "…plus one" over a record is arithmetic this
-        # spec has no key for, and dropping it is a pump one smaller than the
-        # card.
-        if definition.source is None or definition.bonus:
-            raise LoweringError(
-                "a recorded X names its producer and carries no bonus", node=node
-            )
-        if definition.source not in recorded:
-            # The gate every back-reference in this grammar carries: with no
-            # step in front of it the words name nothing, and the spec would be
-            # answered 0 — a card that reports supported and pumps by nothing.
-            raise LoweringError(
-                f"back-reference to {definition.source!r} with no producer in "
-                "this effect", node=node,
-            )
-        return {"back_reference": definition.source}
-    if recorded is not None and isinstance(definition, ast.RecordedCardManaValue):
-        # "…gets +X/+X until end of turn, where X is **the revealed card's mana
-        # value**." (Planeswalker's Favor, Scorn.) The spec
-        # ``where_x.lower_where_x`` stamps for the same definition wrapped
-        # round a sentence (Infernal Genesis), behind the same producer gate —
-        # it reaches here instead because a P/T where-clause rides the ``Pump``
-        # node. One evaluator answers both.
-        if definition.record not in recorded:
-            raise LoweringError(
-                f"back-reference to {definition.record!r} with no producer in "
-                "this effect", node=node,
-            )
-        return {"recorded_card_mana_value": definition.record}
-    raise LoweringError("only a count or a maximum can define X here", node=node)
-
-
 def _per_each_offset(node: ast.Pump) -> int:
     """"…beyond the first" as the count spec's offset."""
     return -1 if node.per_each_beyond_first else 0
@@ -842,13 +849,13 @@ def _per_each_offset(node: ast.Pump) -> int:
 # The other end of a computed quantity: the sentence that spends it.
 #
 # Moved here from ``_common`` at the thousand-line guard, along the line this
-# module's own docstring already draws. These two are read by
-# ``lowering/where_x.py`` and by nothing else, and what they do is the "against
-# the sentence that spends it" half of CR 107.3: one asks whether the sentence
-# reads an X at all, the other writes the definition onto every step of it.
-# ``count_spec`` above answers what the quantity *is*; these answer where it
-# goes. `_common` is the module every family imports, so a pair with one caller
-# and one subject belongs in the floor that owns the subject.
+# module's own docstring already draws. These two are read by the where-clause
+# (``where_x.py`` and its floor ``_record_definitions.py``) and by nothing
+# else, and what they do is the "against the sentence that spends it" half of
+# CR 107.3: one asks whether the sentence reads an X at all, the other writes
+# the definition onto every step of it. ``count_spec`` above answers what the
+# quantity *is*; these answer where it goes. `_common` is the module every
+# family imports; one clause calls this pair, so it sits with its subject.
 # ---------------------------------------------------------------------------
 
 def _stamp_x_from_count(
@@ -885,7 +892,7 @@ def _stamp_x_from_count(
 #: makes a key one of these is that ``handlers/_common.resolve_amount`` reads
 #: the X for it — and a key added here that resolver does not read is an
 #: instruction reporting itself computed and resolving to a literal.
-_X_ARITHMETIC_KEYS = frozenset({"times_x", "plus_x"})
+_X_ARITHMETIC_KEYS = frozenset({"times_x", "plus_x", "minus_x"})
 
 
 def _mentions_x(instructions: tuple[OracleInstruction, ...]) -> bool:

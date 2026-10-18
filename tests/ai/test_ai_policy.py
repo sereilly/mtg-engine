@@ -448,3 +448,46 @@ def test_a_divided_spell_with_no_legal_target_is_not_proposed(set_pool):
     game.start_turn(0)
 
     assert choose_cast_action(game, 0) is None
+
+
+def test_an_each_of_up_to_n_list_is_filled_rather_than_concentrated(set_pool):
+    """"…deals 2 damage to **each of up to three targets**" (Odyssey's Shower
+    of Coals) rides the divided channel and divides nothing: every target takes
+    the whole amount. The policy that damage *concentrates* is about a total
+    that is split — a share is measured against a toughness — and it named one
+    target of the three here, so the AI cast a third of the card.
+
+    An invented card and not the name, on the opponent's face and two of its
+    creatures: the side is derived off `damage`, the count off the printed
+    ceiling, and the announcement is the one the cast gate takes.
+    """
+    from engine.ai_policy import choose_divided_targets
+    from tests.helpers import _mk_card, resolve_stack
+
+    pool = set_pool("LEA")
+    hail = _mk_card(
+        name="Hail of Embers", mana_cost="{R}", type_line="Sorcery",
+        oracle_text="Hail of Embers deals 1 damage to each of up to two targets.",
+        colors=("R",),
+    )
+    p1 = PlayerState(
+        name="P1", hand=[hail], battlefield=[Permanent(card=pool["Grizzly Bears"])],
+    )
+    p2 = PlayerState(
+        name="P2", battlefield=[
+            Permanent(card=pool["Grizzly Bears"]), Permanent(card=pool["Gray Ogre"]),
+        ],
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    game.current_turn_phase = "precombat_main"
+
+    announced = choose_divided_targets(game, 0, hail)
+
+    # Two of the opponent's three (its face and a creature), none of the
+    # caster's own, and no share beside either: there is nothing to share out.
+    assert announced == [(1, None), (1, 0)], announced
+    assert game.cast_from_hand(0, hail.name, divided_targets=list(announced)).supported
+    resolve_stack(game)
+    assert game.players[1].life == 19 and game.players[0].life == 20

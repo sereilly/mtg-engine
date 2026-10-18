@@ -238,10 +238,28 @@ class Attach:
     recipients rather than one, because "Attach target Equipment you control
     to target creature you control" is a real sentence (Brass Squire) and a
     node with one slot would have to be replaced rather than extended.
+
+    *host_it_can_enchant* is the printed "…another permanent **it can
+    enchant**" (Aura Graft): CR 303.4j's legality, said out loud. Recorded so
+    that a lowering which does not test it refuses - the words consumed and
+    dropped would be an Aura moved onto something its own enchant line
+    forbids.
+
+    *chooser* and *optional* are for the host nobody targeted: "**That player
+    attaches** this Aura to a land **of their choice**." (Steam Vines.) "That
+    land's controller **may** attach this Aura to a land of their choice."
+    (Kudzu.) The seat the sentence names picks the host as the ability
+    resolves (CR 115.10 — nothing was targeted), and "may" with "of their
+    choice" is one decision by one seat, so it folds onto the node as the
+    pick being declinable rather than wrapping it in an offer: two nodes
+    would be two prompts to the same player.
     """
 
     subject: Recipient
     host: Recipient
+    host_it_can_enchant: bool = False
+    chooser: "PlayerRef | None" = None
+    optional: bool = False
 
 
 @dataclass(frozen=True)
@@ -802,6 +820,13 @@ class KeepSlot:
     """
     count: int
     filter: ObjectFilter
+    #: "…chooses **a number of** permanents they control **equal to the number
+    #: of permanents controlled by the player who controls the fewest**"
+    #: (Balancing Act). The slot's size is not printed: it is the smallest
+    #: number of such permanents any player controls, one number for the whole
+    #: table that only the resolution knows. ``count`` is 0 beside it — there
+    #: is no printed number to carry — and the flag is what a lowering reads.
+    as_many_as_fewest: bool = False
 
 
 @dataclass(frozen=True)
@@ -847,3 +872,10 @@ class KeepChosenSacrificeRest:
     pool: ObjectFilter
     slots: tuple[KeepSlot, ...]
     fate: str = "sacrifice_rest"
+    #: "…then sacrifices the rest. **Each player discards cards the same
+    #: way.**" (Balancing Act.) A second sentence that cannot be read alone:
+    #: "the same way" is the first sentence's whole procedure — keep as many
+    #: as the player with the fewest, lose the rest — said of hands. On the
+    #: node because the production has to consume it with the sentence it
+    #: refers to; the lowering emits it as its own step.
+    discard_same_way: bool = False

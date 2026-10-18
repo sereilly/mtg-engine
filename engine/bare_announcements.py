@@ -62,6 +62,8 @@ from .legality import (
     targeting_instruction,
 )
 from .oracle import compile_card_oracle
+from .stack_targets import names_a_target
+from .target_requirements import narrow_offer
 from .targeting import (
     ROLES_TARGET_KIND, activation_target_slot, cast_target_slot,
     graveyard_target_spec, spec_offers_a_player, spec_roles,
@@ -141,6 +143,15 @@ def default_activation_target(
         source_permanent=source,
         ability_source=source,
     )
+    if names_a_target(getattr(ability, "source_line", None)):
+        # …out of what the activator may announce **now**: where an
+        # opponent's Flagbearer narrows a one-target ability's legal
+        # announcement to the Flagbearers it could name
+        # (``target_requirements.narrow_offer``), the default is one of them —
+        # the list the picker shows, not the list the requirement refuses.
+        offered = narrow_offer(
+            game, controller_index, {**spec, "valid_targets": offered}
+        ).get("valid_targets") or []
     ordered = standing_order(
         offered,
         named_seat if named_seat is not None
@@ -200,6 +211,12 @@ def default_cast_target(
         caster_index, card, dict(spec), for_cast=True,
         optional_cost_payments=optional_cost_payments, mode_index=mode_index,
     )
+    # …as the cast picker presents it under a Flagbearer's requirement
+    # (``LegalityMixin._under_target_requirements``), for the activation
+    # side's reason.
+    offered = game._under_target_requirements(
+        caster_index, card, {**spec, "valid_targets": offered}, True, mode_index,
+    ).get("valid_targets") or []
     standing = named_seat
     if standing is None:
         standing = game._spell_default_seat(caster_index)

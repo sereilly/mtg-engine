@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..card_hooks import ON_SPELL_COUNTERED
-from ..color_changes import without_spell_color_changes
+from ..color_changes import forget_spell_color_change, recolor_spell
 from ..counter_conditions import cant_be_countered
 from ..divided_damage import DIVIDED_TARGETS, divided_entry, stamped_entry
 from ..exiled_records import (EXILE_RECORD_KEY, EXILED_SPELL_CONTROLLER_KEY,
@@ -11,11 +11,13 @@ from ..exiled_records import (EXILE_RECORD_KEY, EXILED_SPELL_CONTROLLER_KEY,
                               record_in_context)
 from ..game_types import StackItem
 from ..faces import is_face, spell_named, whole_card
+from ..flashback import leaves_stack_to_exile
 from ..mana_payment import mana_cost_label, total_pips
 from ..oracle_types import (COUNTERED_ABILITY_SOURCE, COUNTERED_SPELL_CONTROLLER,
                             COUNTERED_SPELL_NAME)
 from ..resumption import run_resumable
-from ._common import _card_matches_filter, count_from_payload, resolve_amount
+from ._common import (_card_matches_filter, count_from_payload, resolve_amount,
+                      triggering_spell)
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -29,47 +31,115 @@ def copy_triggering_spell(game: Game, instruction: OracleInstruction, context: O
     """"Copy that spell. You may choose new targets for the copy."
     (Double Vision.)
 
-    "That spell" is the one the trigger fired on. Located on the stack by the
-    card the event recorded — not by taking the topmost instant or sorcery,
-    which is the same object only while nothing has been cast in response, and a
-    different one the moment something has.
+    "That spell" is the one the trigger fired on: the object the event
+    recorded (``cast_item``) — not the topmost instant or sorcery, which is
+    the same object only while nothing has been cast in response, and not the
+    card it was cast from, which every other copy of that card on the stack
+    shares.
 
-    A spell that has already left the stack is copied by nothing: CR 707.10
-    copies an object, and by then there is none. That is the honest outcome
-    rather than reaching for whatever else is up there.
+    **A spell that has left the stack is still copied**, as it last existed
+    there (CR 608.2h: an effect that needs information from an object no
+    longer in the zone it was expected in uses its last known information).
+    Both cards printing the sentence are ruled so — Double Vision
+    (2020-06-23): "A copy is created even if the spell that caused Double
+    Vision's ability to trigger has been countered by the time that ability
+    resolves"; Mirari (2004-10-04): "the ability will make a copy of how the
+    spell looked right before it was countered". This handler copied nothing
+    then, which was the right answer to a different mistake: the lookup it
+    replaced went by card, so with the first Bolt of the turn countered in
+    response it copied an opponent's Bolt underneath. The frozen object is
+    what answers both - it is that spell and no other, on the stack or off.
+
+    A trigger whose event froze no spell copies nothing: there is no "that
+    spell" for the words to name.
     """
     caster = context.caster
-    cast_card = (context.trigger_context or {}).get("cast_card")
-    copied = next(
-        (item for item in reversed(game.stack) if item.card is cast_card), None
-    )
+    copied = triggering_spell(game, context)
+    if copied is None:
+        copied = (context.trigger_context or {}).get("cast_item")
     if copied is None:
         game.log.append(f"{context.card.name}: that spell is no longer on the stack")
         return True, "resolved"
     caster_index = game.players.index(caster)
-    game._stack_push(
-        # CR 707.10: a copy has the original's targets (or the ones the
-        # copying effect changed them to). It does not choose again.
-        targets_already_chosen=True,
-        item=StackItem(
-            card=copied.card,
-            caster_index=caster_index,
-            target_player_index=copied.target_player_index,
-            target_permanent_index=copied.target_permanent_index,
-            x_value=copied.x_value,
-            # CR 707.10: the copy has the original's choices. New targets are
-            # the copy controller's option and are not chosen here — the AI and
-            # the headless path keep the original's, which is the legal default.
-            # Not what an effect did to the original's colour (CR 707.2: "other
-            # effects … are not copied"), which rides the same dict.
-            choices=without_spell_color_changes(copied.choices),
-            chosen_mode_index=copied.chosen_mode_index,
-            target_stack_item=copied.target_stack_item,
-            is_copy=True,
-        )
-    )
+    copy = _copy_of_spell(copied, caster_index)
+    # CR 707.10: a copy has the original's targets (or the ones the copying
+    # effect changed them to). It does not choose again.
+    game._stack_push(targets_already_chosen=True, item=copy)
     game.log.append(f"{context.card.name} copied {copied.card.name}")
+    # "**You may choose new targets for the copy.**" (CR 707.10c.) The
+    # sentence is part of this production - the parse requires it - and it was
+    # consumed and never offered. Asked through the prompt Chain Lightning's
+    # copy already uses, which re-aims **one** permanent-or-player target of
+    # a spell with one mode: a copy that chose anything else (several targets,
+    # a spell, a card in a graveyard, a mode other than the first) keeps the
+    # original's, which is the offer declined rather than a list for the wrong
+    # slot. A seat that is not asked keeps the original's too.
+    if _copy_reaim_is_one_slot(game, copy):
+        game.arm_copy_spell_target(caster_index, copy)
     return True, "resolved"
+
+
+def _copy_of_spell(copied: StackItem, controller_index: int) -> StackItem:
+    """A copy of the spell *copied*, controlled by *controller_index*, with
+    every decision made for the original (CR 707.10: "…it copies all
+    decisions made when casting it, including modes, targets, the value of X,
+    and additional or alternative costs").
+
+    One builder for every effect that copies a spell on the stack. There were
+    two, written a set apart, and each had been taught a different half of the
+    rule: the trigger's copy (Double Vision, Mirari) carried the graveyard
+    card and the several modes of a "choose one or more", and Fork's carried
+    neither — so a Forked spell aimed at a card in a graveyard, or one cast
+    with two modes, was a copy that had forgotten what it was for.
+
+    **The identity travels with the copy.** An original announced by
+    ``permanent_id`` alone, which is how the web layer announces every target,
+    has no slot: a copy holding a seat and no object resolved as a spell aimed
+    at that player's face, and a copied Lightning Bolt pointed at a creature
+    dealt its 3 to the creature's controller.
+    """
+    copy = StackItem(
+        card=copied.card,
+        caster_index=controller_index,
+        target_player_index=copied.target_player_index,
+        target_permanent_index=copied.target_permanent_index,
+        target_permanent_id=copied.target_permanent_id,
+        target_graveyard_card=copied.target_graveyard_card,
+        x_value=copied.x_value,
+        # The copy has the original's choices, so this is one assignment
+        # rather than one per choice the original made.
+        choices=dict(copied.choices),
+        chosen_mode_index=copied.chosen_mode_index,
+        chosen_modes=copied.chosen_modes,
+        target_stack_item=copied.target_stack_item,
+        is_copy=True,
+    )
+    # …less the one thing in that dict that is not a choice: a colour an effect
+    # gave the original (a Lace's record rides ``choices``). CR 707.2 copies
+    # the printed values and the decisions, and "other effects … are not
+    # copied".
+    forget_spell_color_change(copy)
+    return copy
+
+
+def _copy_reaim_is_one_slot(game: Game, copy: StackItem) -> bool:
+    """Whether *copy* chose exactly one target ``arm_copy_spell_target`` can
+    re-aim: a permanent or a player, on a spell that announced no mode.
+
+    Read off ``stack_targets.chosen_targets``, the one reader of what a stack
+    object announced, so "one target" is what the object says rather than a
+    count of the channels this handler happens to know.
+    """
+    from ..stack_targets import chosen_targets
+
+    if copy.chosen_mode_index is not None or copy.chosen_modes:
+        return False
+    chosen = chosen_targets(game, copy)
+    return (
+        chosen is not None
+        and len(chosen) == 1
+        and chosen[0].kind in ("permanent", "player")
+    )
 
 
 @effect_handler("copy_top_stack_spell")
@@ -95,49 +165,76 @@ def copy_top_stack_spell(game: Game, instruction: OracleInstruction, context: Or
         return True, "resolved"
 
     caster_index = game.players.index(caster)
-    # "You may choose new targets for the copy." When the Fork caster supplied a
-    # new target (a creature/permanent index, optionally on a specific player),
-    # the copy uses it; otherwise the copy keeps the original spell's targets.
-    if context.target_permanent_index is not None:
-        new_target_player_index = game.players.index(context.target) if context.target is not None else copied.target_player_index
-        new_target_permanent_index = context.target_permanent_index
-        new_target_permanent_id = None
-    else:
-        new_target_player_index = copied.target_player_index
-        new_target_permanent_index = copied.target_permanent_index
-        # **The identity travels with the copy** (CR 707.10: "all decisions
-        # made for it, including … targets"). It was left behind: the copy took
-        # the seat and the *slot*, and an original announced by ``permanent_id``
-        # alone — which is how the web layer announces every target — has no
-        # slot. So the copy arrived holding a seat and no object, and resolved
-        # as a spell aimed at that player's face: a Forked Lightning Bolt
-        # pointed at a creature dealt its 3 to the creature's controller.
-        # ``copy_this_spell`` below has always carried it.
-        new_target_permanent_id = copied.target_permanent_id
+    # Every decision made for the original (CR 707.10), through the one
+    # builder — this handler had its own, which left the graveyard card and
+    # the several modes of a "choose one or more" behind.
+    copy = _copy_of_spell(copied, caster_index)
+    # "You may choose new targets for the copy." Two ways a caster says so.
+    # **On the cast**: a new permanent target named beside the Fork (a
+    # creature/permanent index, optionally on a specific player) is where the
+    # copy goes, and is the whole of the answer. **Or, having named none, at
+    # the prompt below.**
+    #
+    # Asked of the **id** first: the slot beside it is re-read at resolution
+    # relative to the seat the resolution is about
+    # (``bare_announcements.resolving_slots``), which for Fork is the forked
+    # spell's controller (below) — so a creature named on the other
+    # battlefield has no slot there, and read by the slot alone the new target
+    # was "not named".
+    named_id = (
+        context.target_permanent_id
+        if isinstance(context.target_permanent_id, int) else None
+    )
+    named_on_the_cast = (
+        named_id is not None or context.target_permanent_index is not None
+    )
+    if named_on_the_cast:
+        # **By the id the cast stamped, not by a seat read off the context.**
+        # ``context.target`` is no longer the seat the caster named: an
+        # instant whose every target is a spell on the stack resolves about
+        # that spell's *controller* (``Game.stack_target_seat``, "counter
+        # target spell. Its controller loses 3 life"), and Fork's one target
+        # is a spell. So the named slot was counted into the forked spell's
+        # controller's battlefield — a Fork of one's own Bolt re-aimed at an
+        # opponent's creature hit one's own creature in that slot instead,
+        # two of the four seatings wrong. The id names the object and its
+        # battlefield both (CR 400.7), and travels onto the copy.
+        named = game.permanent_by_id(named_id) if named_id is not None else None
+        if named is not None:
+            copy.target_player_index = game.controller_index_of(named)
+            copy.target_permanent_index = game.battlefield_index_of(named)
+            copy.target_permanent_id = named.permanent_id
+        elif named_id is not None:
+            # The permanent named on the cast has left: the copy's new target
+            # is gone with it, and CR 608.2b removes the copy as it resolves.
+            copy.target_permanent_index = None
+            copy.target_permanent_id = named_id
+        else:
+            # A caller that announced a slot and stamped no id: the slot is
+            # all there is, on the seat the resolution was given.
+            copy.target_player_index = (
+                game.players.index(context.target)
+                if context.target is not None else copied.target_player_index
+            )
+            copy.target_permanent_index = context.target_permanent_index
+            copy.target_permanent_id = None
 
     game._stack_push(
         # CR 707.10: a copy has the original's targets (or the ones the
         # copying effect changed them to). It does not choose again.
         targets_already_chosen=True,
-        item=StackItem(
-            card=copied.card,
-            caster_index=caster_index,
-            target_player_index=new_target_player_index,
-            target_permanent_index=new_target_permanent_index,
-            target_permanent_id=new_target_permanent_id,
-            x_value=copied.x_value,
-            # CR 707.10: the copy has the same choices as the original, so this
-            # is one assignment rather than one per choice the original made —
-            # less the one thing in the dict that is not a choice: a lace on
-            # the original is an effect, and CR 707.2 does not copy effects.
-            choices=without_spell_color_changes(copied.choices),
-            chosen_mode_index=copied.chosen_mode_index,
-            target_stack_item=copied.target_stack_item,
-            is_copy=True,
-        )
+        item=copy,
     )
+    # "…**except that the copy is red.**" CR 707.9b: a characteristic the copy
+    # effect sets is the copy's own. It was the one rider of Fork's line nothing
+    # did — a Forked Ancestral Recall was a blue spell — and the copy also kept
+    # whatever colour an *effect* had given the original (a Lace's record rides
+    # ``choices``, which is copied whole): CR 707.2 copies the printed values
+    # and the decisions made in casting, not other effects on the object.
+    forget_spell_color_change(game.stack[-1])
+    recolor_spell(game.stack[-1], "R")
     game.log.append(f"{card.name} copied {copied.card.name} (copy put on the stack)")
-    if context.target_permanent_index is not None:
+    if named_on_the_cast:
         # CR 707.10c: "You may choose new targets for the copy" — and this
         # caster did. A copy that kept the original's targets chose nothing,
         # which is why ``_stack_push`` announces no copy on its own.
@@ -145,6 +242,25 @@ def copy_top_stack_spell(game: Game, instruction: OracleInstruction, context: Or
         # No ``newly_targeted``: this copy was *pushed* with its new target,
         # so ``_stack_push_object`` has already announced it.
         game.announce_targets_chosen(game.stack[-1], chooser=caster_index)
+    elif caster_index in game.interactive_seats and _copy_reaim_is_one_slot(
+        game, game.stack[-1]
+    ):
+        # …and a caster who named none **is asked**. The sentence was offered
+        # only through the cast's own second step, which a client runs for a
+        # permanent picker and cannot run for a player at all — so a Forked
+        # Lightning Bolt aimed at a face could not be re-aimed, by any click
+        # or any request: no prompt was armed. The prompt the trigger's copy
+        # one handler up already uses (and Chain Lightning's), under its
+        # condition: one permanent-or-player target, no mode. Its candidates
+        # are the copied card's own picker's, the original's target among
+        # them — keeping it is the "may" declined.
+        #
+        # Never beside a target named on the cast: that caster has answered,
+        # and a second question would be the same one asked twice. And only
+        # of a seat somebody is asking — the prompt's default for any other
+        # is "keep the original's", which is what the copy already holds, so
+        # an AI's or a headless Fork is left exactly as it was.
+        game.arm_copy_spell_target(caster_index, game.stack[-1])
     return True, "resolved"
 
 
@@ -172,6 +288,9 @@ def _stack_announcement(item: StackItem) -> StackAnnouncement:
         target_stack_item=item.target_stack_item,
         choices=dict(item.choices),
         face_name=item.card.name if is_face(item.card) else None,
+        # Through the one reader, so "was the flashback cost paid for this
+        # object" means here what it means to every site that moves it.
+        flashback=leaves_stack_to_exile(item),
     )
 
 
@@ -340,17 +459,28 @@ def put_exiled_card_onto_stack_as_copy(game: Game, instruction: OracleInstructio
         target_graveyard_card=announcement.target_graveyard_card,
         x_value=announcement.x_value,
         # A **copy** of the original spell (CR 707.2): its choices, and not a
-        # colour an effect gave the original while it was on the stack.
-        choices=without_spell_color_changes(announcement.choices),
+        # colour an effect gave the original while it was on the stack
+        # (forgotten below).
+        choices=dict(announcement.choices),
         chosen_mode_index=announcement.chosen_mode_index,
         chosen_modes=announcement.chosen_modes,
         target_stack_item=announcement.target_stack_item,
+        # CR 707.10 copies "additional or alternative costs" with the other
+        # decisions, and a paid flashback cost is the one that still has
+        # something to say: CR 702.34a exiles this card "instead of putting it
+        # anywhere else any time it would leave the stack". Both stamps a
+        # flashback cast carries — the wide one every hand-or-library site
+        # asks, and the graveyard rider every bin site routes on — because the
+        # physical card is this object and has somewhere to go.
+        flashback=announcement.flashback,
+        exile_instead_of_graveyard=announcement.flashback,
         # ``cast_from_zone`` is deliberately left at its default. CR 707.10: "a
         # copy of a spell isn't cast" — so the honest answer to "was this spell
         # cast from somewhere other than your hand" is *no*, and that is what
         # the default gives. Stamping "exile" because the card came from there
         # would answer *yes* to a question about a casting that never happened.
     )
+    forget_spell_color_change(copy)
     game._stack_push(item=copy, targets_already_chosen=True)
     game.log.append(
         f"{game.players[seat].name} put {record.card.name} onto the stack as a "
@@ -630,10 +760,9 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
             # the trigger fired on, found on the stack by identity — CR 603.3
             # puts the trigger *above* it, so the stack top is this ability's
             # own object and everything cast in response sits between them.
-            cast_card = (context.trigger_context or {}).get("cast_card")
-            chosen = next(
-                (item for item in game.stack if item.card is cast_card), None
-            )
+            # The identity is the stack object's, not its card's
+            # (``triggering_spell``): the second of two Bolts is not the first.
+            chosen = triggering_spell(game, context)
             if chosen is None:
                 # Countered, exiled or already resolved while the trigger waited
                 # (CR 608.2b's shape: the object is gone, the rest happens).
@@ -655,7 +784,21 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
                     f"{card.name}: the spell it would counter is no longer on the stack"
                 )
                 return True, "resolved"
-        target = chosen if (chosen is not None and chosen in game.stack) else game.stack[-1]
+        if chosen is not None and not any(item is chosen for item in game.stack):
+            # CR 608.2b for every object that **named** a spell: the target has
+            # left the stack, so nothing is countered. The fallback below is
+            # the headless convention for a caller that named *none*; taken for
+            # one that named a spell which is gone, it counters a bystander. A
+            # counterspell never reached here that way (the stack removes a
+            # spell whose every target is illegal before its instructions run),
+            # but an ability did: Mystic Snake's trigger, its named Shock
+            # countered in response, countered the Lightning Bolt under it. By
+            # identity, for the reason the branch above gives.
+            game.log.append(
+                f"{card.name}: the spell it would counter is no longer on the stack"
+            )
+            return True, "resolved"
+        target = chosen if chosen is not None else game.stack[-1]
         # **The one place this engine decides which kind of object it
         # countered.** CR 701.6a counters a spell and an ability alike, and
         # CR 113.7a is the entire difference between them: a countered spell's
@@ -948,6 +1091,16 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
             per_recorded = instruction.payload.get("unless_pays_per_recorded")
             if per_recorded is not None:
                 cost *= count_from_payload(game, context, per_recorded)
+            # "…pays {1} **for each basic land type among lands you control**."
+            # (Evasive Action.) The rate over a count of the board, taken now
+            # (CR 608.2h) through the evaluator every counted amount shares —
+            # "you" is this counter's controller, whose lands they are, and a
+            # land that changed type in response is counted as it stands. No
+            # basic land type at all is a price of {0}: nothing is countered,
+            # which is what a domain of zero says.
+            per_counted = instruction.payload.get("unless_pays_per")
+            if per_counted is not None:
+                cost *= max(0, count_from_payload(game, context, dict(per_counted)))
             # "…and 1 life" (Mundungu). The life half of one offer, sent on
             # the same prompt: what the payer decides is whether to pay the
             # whole price, so a second prompt would be a second decision and a
@@ -971,6 +1124,27 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
                 # Absent when the card prints no life, so every prompt written
                 # before this existed carries byte-identical data.
                 **({"life": life} if life else {}),
+                # "…If that spell is countered this way, exile it instead of
+                # putting it into its owner's graveyard." (Syncopate.) Where
+                # the card goes if the price is not paid, carried to the
+                # decline path that does the countering - with whose
+                # counterspell it was, for the one destination that names a
+                # controller. Absent when the card prints no tail.
+                **(
+                    {
+                        "countered_destination": str(
+                            instruction.payload["countered_destination"]
+                        ),
+                        "countered_filter": instruction.payload.get(
+                            "countered_filter"
+                        ),
+                        "counterer_index": (
+                            game.players.index(context.caster)
+                            if context.caster in game.players else None
+                        ),
+                    }
+                    if instruction.payload.get("countered_destination") else {}
+                ),
                 _new=True,
             )
             game.log.append(
@@ -1065,6 +1239,21 @@ def _redirect_countered_card(
     another player's zone (Psychic Theft, Grinning Totem).
     """
     owner = game.players[countered.owner_index]
+    if leaves_stack_to_exile(countered):
+        # CR 702.34a: "If the flashback cost was paid, exile this card instead
+        # of putting it **anywhere else** any time it would leave the stack."
+        # Two replacements want the same event — this card's own, and the
+        # counterspell's "put it on top of its owner's library instead" — and
+        # whichever is applied first, the other then finds the card bound for
+        # somewhere that is not a graveyard and still sends it to exile
+        # (CR 616.1: flashback's applies to *any* destination, the
+        # counterspell's only to the graveyard). So the answer does not depend
+        # on the order and is asked here, ahead of every destination below.
+        game._bin_spell_card(
+            owner, countered.card, exile_instead=True,
+            verb=f"was countered by {card.name}",
+        )
+        return
     if destination == "battlefield_your_control":
         # "…put that card onto the battlefield **under your control** instead
         # of into its owner's graveyard." (Desertion.) The one destination on
@@ -1257,7 +1446,7 @@ def copy_this_spell(game: Game, instruction: OracleInstruction, context: OracleE
             else context.target_permanent_id
         ),
         x_value=original.x_value if original is not None else context.x_value,
-        choices=without_spell_color_changes(
+        choices=dict(
             original.choices if original is not None else context.choices
         ),
         chosen_mode_index=original.chosen_mode_index if original is not None else None,
@@ -1267,6 +1456,8 @@ def copy_this_spell(game: Game, instruction: OracleInstruction, context: OracleE
         ),
         is_copy=True,
     )
+    # CR 707.2: not what an effect did to the original's colour.
+    forget_spell_color_change(copy)
     game._stack_push(item=copy, targets_already_chosen=True)
     game.log.append(
         f"{game.players[seat].name} copied {context.card.name} (copy put on the stack)"

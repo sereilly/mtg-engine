@@ -51,13 +51,14 @@ from . import ast
 from .amounts import parse_amount
 from .bounds import parse_comparison
 from .errors import GrammarError
-from .distinct import accept_one_of_each
+from .distinct import accept_one_of_each, parse_counted_objects
 from .nouns import parse_object_filter
 from .references import parse_player_ref
 from .seat_comparisons import accept_margin
 from .seats import accept_life_total_of
 from .stream import TokenStream
 from .vocabulary import CARD_TYPES, COLOR_WORDS
+from .zones import names_each_zone_ahead
 
 
 def _parse_count_bound(stream: TokenStream) -> ast.Comparison:
@@ -207,6 +208,15 @@ def _accept_color_census_condition(stream: TokenStream) -> "ast.Condition | None
     the tail is what the card says about a level board; a reader that stopped
     at the superlative would be picking one of those for the card.
     """
+    # "…unless **either one is a color the other isn't**." (Dead Ringers.) The
+    # relation with a target on *both* sides — the pair the guarded effect
+    # announced — so it names neither and the lowering checks there are two.
+    # Whole or not at all: every word is the clause, and the phrase opens on a
+    # word no other condition here reads.
+    if stream.accept_phrase(
+        "either", "one", "is", "a", "color", "the", "other", "isn't",
+    ):
+        return ast.TargetsDifferInColor()
     mark = stream.mark()
     colour = stream.peek_word()
     if colour in COLOR_WORDS and stream.peek_word(1) == "is":
@@ -233,6 +243,22 @@ def _accept_color_census_condition(stream: TokenStream) -> "ast.Condition | None
         # which object "it" is.
         if stream.accept_phrase("that", "permanent"):
             return ast.SharesColorWithChosenPermanent()
+        # "…if it shares a color with **a creature you control**" (Jaded
+        # Response). The relation once more, with a described set on the far
+        # side: any permanent the noun phrase admits. Read last, because the
+        # two clauses above open on "the" and "that", which no object phrase
+        # behind an article does — and read whole, by the noun reader, or the
+        # sentence is not this one: a phrase that left words behind it would be
+        # a narrowing consumed and dropped.
+        if stream.accept_word("a", "an"):
+            try:
+                matching = parse_object_filter(stream)
+            except GrammarError:
+                matching = None
+            if matching is not None and (
+                stream.exhausted or stream.at_punct(".", ",")
+            ):
+                return ast.SharesColorWithMatching(matching)
     stream.reset(mark)
     return None
 
@@ -373,8 +399,22 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
         comparison = _parse_count_bound(stream)
         if stream.accept_word("life"):
             return ast.PlayerLifeIs(counted, comparison)
-        if stream.accept_word("cards", "card") and stream.accept_phrase("in", "hand"):
-            return ast.ZoneHasCards(counted, "hand", comparison)
+        if stream.accept_word("cards", "card") and stream.accept_word("in"):
+            if stream.accept_word("hand"):
+                return ast.ZoneHasCards(counted, "hand", comparison)
+            # "if **you have 200 or more cards in your library**" (Battle of
+            # Wits). The third word order of the one question, with the pile
+            # named after the count: the possessive has to be the subject's
+            # own ("you … your", anybody else "… their"), because a clause
+            # counting one player's pile on another's say-so is a different
+            # sentence and nothing here would carry whose.
+            own = "your" if counted.kind == "you" else "their"
+            if stream.accept_word(own) and stream.peek_word() in (
+                "library", "graveyard", "hand",
+            ):
+                zone = stream.peek_word()
+                stream.advance(1)
+                return ast.ZoneHasCards(counted, zone, comparison)
     stream.reset(have_mark)
 
     # "if **a player controls more creatures than each other player**" (Wild
@@ -754,11 +794,39 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
             # refuses rather than being read as a different bound.
             stream.reset(number_mark)
             there_comparison = None
+        if names_each_zone_ahead(stream):
+            # "…seven or more cards **in each graveyard**": a threshold asked of
+            # each pile separately. The zone reader would hand back every
+            # seat's pile and this clause would compare the *sum* — a condition
+            # that holds on a board the words do not name. No card prints it,
+            # and it refuses rather than being counted as "all graveyards".
+            raise stream.error(
+                "a threshold over each zone separately is not a count over all "
+                "of them"
+            )
         there_quantifier = None
         if there_comparison is None:
             there_quantifier = "no" if stream.accept_word("no") else (
                 "a" if stream.accept_word("a", "an") else None
             )
+        if there_comparison is not None:
+            # "if there are four or more **basic land types among** lands that
+            # player controls" (Mask of Intolerance). Domain (CR 207.2c) held
+            # to a threshold rather than spent as a number: the same count
+            # every "for each basic land type among" sentence takes, read by
+            # the one reader of that phrase and carried the way they carry it
+            # (``ObjectFilter.distinct``), so the lowering hands it to the one
+            # evaluator a count has. Only behind a printed number -- "there is
+            # a basic land type among" is not a sentence -- and it rewinds
+            # for any other noun phrase, which the reader below owns.
+            counted_mark = stream.mark()
+            try:
+                counted = parse_counted_objects(stream)
+            except GrammarError:
+                counted = None
+            if counted is not None and counted.distinct is not None:
+                return ast.OnBattlefield(counted, there_comparison)
+            stream.reset(counted_mark)
         if there_comparison is not None or there_quantifier is not None:
             try:
                 there_filter = parse_object_filter(stream)

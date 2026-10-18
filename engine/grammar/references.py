@@ -117,7 +117,15 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
     # ordinary punctuation on dozens of cards ("Destroy target creature, then
     # …"), so a partial match rewinds and the noun parser sees the stream it
     # would have seen.
+    #
+    # "…is dealt to **another** target creature, planeswalker, or player
+    # instead." (Captain's Maneuver.) The union's second instance in one
+    # sentence, and "another" is CR 601.2c's printed way of saying it may not
+    # be the first — ``distinct_from_prior``, exactly as the noun-phrase reader
+    # below records the word. Read only in front of the long form: before a
+    # bare noun the ordinary reader already has it.
     long_union = stream.mark()
+    another = stream.accept_word("another")
     if (
         stream.accept_word("target")
         and stream.accept_word("creature")
@@ -128,7 +136,8 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
         and stream.accept_word("player")
     ):
         return ast.TargetSpec(
-            "any_target", _any_target_chooser(stream), targeted=True
+            "any_target", _any_target_chooser(stream), targeted=True,
+            distinct_from_prior=another,
         )
     stream.reset(long_union)
 
@@ -485,6 +494,17 @@ def parse_recipient(stream: TokenStream) -> ast.Recipient | None:
         "permanent", "or", "player"
     ):
         return ast.TargetSpec("permanent_or_player")
+    stream.reset(mark_either)
+    # "…deals 4 damage to **each of those permanents and/or players**
+    # instead" (Shower of Coals). The plural of the marker above: whatever
+    # several "any target"s chose, each of which is either kind of thing. Its
+    # own marker for that one's reason and with that one's default — no
+    # lowering knows it, so it refuses unless
+    # ``conditional_instead._instead_subject`` has replaced it with the list
+    # the sentence it replaces announced. ("And/or" lexes as two words.)
+    stream.accept_phrase("each", "of")
+    if stream.accept_phrase("those", "permanents", "and", "or", "players"):
+        return ast.TargetSpec("permanents_or_players")
     stream.reset(mark_either)
     mark_definite = stream.mark()
     if stream.accept_word("the"):

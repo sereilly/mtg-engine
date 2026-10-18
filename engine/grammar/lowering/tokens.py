@@ -24,7 +24,8 @@ from .. import ast
 from ..errors import LoweringError
 from ._events import (EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER,
                       _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_OBJECTS,
-                      _EVENT_SUBJECT_PLAYERS, _back_reference_payload)
+                      _EVENT_SUBJECT_PLAYERS, _back_reference_payload,
+                      trigger_quantity_key)
 from ._record_keys import (LOOP_BOUND_OBJECT, SWEPT_CONTROLLER_SEATS,
                            _RECORDED_PERMANENTS)
 from ._amounts import count_spec, printed_count_spec
@@ -268,7 +269,7 @@ def _lower_create_token(
         }
         if node.colors:
             payload["colors"] = node.colors
-        _stamp_token_count(payload, node, produced)
+        _stamp_token_count(payload, node, produced, event)
         return (OracleInstruction("create_token", "", payload),)
     if "creature" not in node.types:
         raise LoweringError("make_token_card only builds creature tokens", node=node)
@@ -395,7 +396,7 @@ def _lower_create_token(
                 )
         payload["oracle_text"] = chr(10).join(node.granted_lines)
     _stamp_token_recipient(payload, node, event, produced)
-    count = _stamp_token_count(payload, node, produced)
+    count = _stamp_token_count(payload, node, produced, event)
     # "…that are tapped and attacking" (Basri Ket): entry state the handler
     # stamps as the tokens arrive.
     if node.tapped:
@@ -427,6 +428,7 @@ def _lower_create_emblem(node: ast.CreateEmblem) -> tuple[OracleInstruction, ...
 def _stamp_token_count(
     payload: dict, node: "ast.CreateToken",
     produced: frozenset[str] = frozenset(),
+    event: str | None = None,
 ):
     """Record how many tokens to make, and return it.
 
@@ -591,6 +593,23 @@ def _stamp_token_count(
         # number (a delayed attack trigger's matching attackers), recorded by
         # the firing site in the resolution scratchpad.
         payload["count"] = "trigger_count"
+        # …and the **third** channel, which the counter placements one family
+        # over have read since Light of Promise and this one had not: a bare
+        # "that many" under a *trigger whose event carries a number* names
+        # that number, frozen into the trigger's context by the fire site.
+        # "Whenever this creature is dealt damage, you may create **that
+        # many** 1/1 green Insect creature tokens" (Saber Ants) and "Whenever
+        # enchanted creature is dealt damage, its controller creates that many
+        # 1/1 green Squirrel creature tokens" (Druid's Call) have no earlier
+        # step of their own — the damage is the event — so the scratchpad key
+        # above is one nothing writes, and both resolved, reported themselves
+        # done and made **zero** tokens. The key is `trigger_quantity_key`'s,
+        # the one table of which event freezes what; an event with no row
+        # (Tetravus' upkeep, Basri Ket's delayed attack) keeps the scratchpad
+        # read it has always had.
+        event_key = trigger_quantity_key(event)
+        if event_key is not None and not node.count.bonus:
+            payload["amount_from_trigger"] = event_key
         return "trigger_count"
     count = _amount_payload(node.count)
     if count != 1:

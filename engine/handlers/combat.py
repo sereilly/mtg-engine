@@ -8,6 +8,7 @@ from ._common import (recorded_permanent_ids,
     bound_permanent,
     block_pair_permanents,
     flip_coin,
+    flip_coin_for,
     resolve_own_combatant,
     resolve_role_permanent,
     resolve_target_permanent,
@@ -17,6 +18,7 @@ from ._common import (recorded_permanent_ids,
 )
 from .registry import effect_handler
 from ..keywords import grant_keyword
+from ..destruction_events import mark_delayed_destruction
 from ..mana_payment import mana_cost_label
 from ..combat_assignment import (ASSIGNS_NO_COMBAT_DAMAGE,
                                 MUST_ASSIGN_AS_UNBLOCKED,
@@ -56,7 +58,7 @@ def coin_flip_remove_attacker_and_tap(game: Game, instruction: OracleInstruction
     if combatant is None:
         return True, "resolved"
     controller, idx, permanent = combatant
-    if flip_coin():
+    if flip_coin_for(game, controller, flip=flip_coin):
         game.log.append(f"{context.card.name} won the coin flip")
         return True, "resolved"
     # Through the one transition rather than by popping the attacker map.
@@ -84,7 +86,7 @@ def coin_flip_remove_blocker(game: Game, instruction: OracleInstruction, context
     if combatant is None:
         return True, "resolved"
     controller, idx, _permanent = combatant
-    if flip_coin():
+    if flip_coin_for(game, controller, flip=flip_coin):
         game.log.append(f"{context.card.name} won the coin flip")
         return True, "resolved"
     controller_index = game.players.index(controller)
@@ -135,7 +137,7 @@ def delayed_destroy_blocked_or_blocker(game: Game, instruction: OracleInstructio
         game.log.append(f"{context.card.name} block trigger had no valid target")
         return True, "no target"
     for victim in victims:
-        victim.metadata["destroy_at_end_of_combat"] = True
+        mark_delayed_destruction(game, victim, "destroy_at_end_of_combat")
         game.log.append(
             f"{context.card.name} will destroy {victim.card.name} at end of combat"
         )
@@ -789,7 +791,7 @@ def mark_non_wall_target_to_attack(game: Game, instruction: OracleInstruction, c
         game.log.append(f"{context.card.name}: no legal creature to force into combat")
         return True, "resolved"
     chosen.metadata["must_attack_until_eot"] = True
-    chosen.metadata["destroy_if_did_not_attack_eot"] = True
+    mark_delayed_destruction(game, chosen, "destroy_if_did_not_attack_eot")
     game.log.append(f"{chosen.card.name} marked to attack this turn")
     return True, "resolved"
 
@@ -1147,13 +1149,16 @@ def force_subject_to_attack_until_eot(game: Game, instruction: OracleInstruction
         if stamp is not None:
             perm.metadata[MUST_ATTACK_ON_SEAT_TURN_KEY] = dict(stamp)
             if destroy:
-                perm.metadata[
-                    DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY
-                ] = dict(stamp)
+                mark_delayed_destruction(
+                    game, perm, DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY,
+                    dict(stamp),
+                )
         else:
             perm.metadata["must_attack_until_eot"] = True
             if destroy:
-                perm.metadata["destroy_if_did_not_attack_eot"] = True
+                mark_delayed_destruction(
+                    game, perm, "destroy_if_did_not_attack_eot"
+                )
         marked.append(perm.card.name)
     if marked:
         when = (
@@ -1256,9 +1261,12 @@ def destroy_subject_at_end_step_if_it_didnt_attack(game: Game, instruction: Orac
     marked: list[str] = []
     for perm in subjects:
         if stamp is not None:
-            perm.metadata[DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY] = dict(stamp)
+            mark_delayed_destruction(
+                game, perm, DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY,
+                dict(stamp),
+            )
         else:
-            perm.metadata["destroy_if_did_not_attack_eot"] = True
+            mark_delayed_destruction(game, perm, "destroy_if_did_not_attack_eot")
         marked.append(perm.card.name)
     if marked:
         game.log.append(
@@ -1392,6 +1400,34 @@ def target_cant_block_until_eot(game: Game, instruction: OracleInstruction, cont
         return True, "resolved"
     target_creature.metadata[CANT_BLOCK_UNTIL_EOT] = True
     game.log.append(f"{target_creature.card.name} can't block this turn")
+    return True, "resolved"
+
+
+@effect_handler("attached_cant_block_until_eot")
+def attached_cant_block_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"{R}: **Enchanted creature** can't block this turn." (Manacles of Decay.)
+
+    ``target_cant_block_until_eot``'s mark on a creature nobody chose: the
+    permanent the ability's own source is attached to, read as the ability
+    resolves (CR 303.4) rather than at activation — an Aura moved in response
+    restricts the creature it is on now, which is what "enchanted creature"
+    means whenever it is read.
+
+    Last-known attachment when the Aura has left since (CR 608.2h): the ability
+    is independent of its source once on the stack (CR 113.7a), and the
+    creature it was on is still the creature the words named. With no host at
+    all there is nothing to mark, and the ability resolves to nothing.
+
+    Swept with the turn by ``_EOT_METADATA_KEYS`` and read by the blocker gate,
+    exactly as the targeted mark is — one key, so the two cannot disagree about
+    when it ends.
+    """
+    host = attached_host(game, context.source_permanent)
+    if host is None or not game.is_on_battlefield(host) or not host.is_creature:
+        game.log.append(f"{context.card.name}: no enchanted creature to stop blocking")
+        return True, "resolved"
+    host.metadata[CANT_BLOCK_UNTIL_EOT] = True
+    game.log.append(f"{host.card.name} can't block this turn")
     return True, "resolved"
 
 

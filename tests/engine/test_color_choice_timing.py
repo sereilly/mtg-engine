@@ -24,6 +24,7 @@ census added; run on the tree before the fix, the guard named all eleven
 
 from __future__ import annotations
 
+import functools
 import re
 
 import pytest
@@ -114,7 +115,23 @@ def _w3g2_table(catalog):
         perm.metadata["summoning_sick"] = False
     game.players[0].battlefield.extend([mine, *fodder])
     game.players[1].battlefield.append(theirs)
+    # The same fodder one zone over: a card in hand, for a line whose cost is
+    # a discard. "Discard a card: This creature gains protection from the
+    # color of your choice until end of turn." (Resilient Wanderer) is the
+    # first such line in the population, and with an empty hand the engine
+    # rightly refuses the activation (CR 602.2b through CR 601.2h) — so the
+    # sweep stopped at a cost it could not pay and never reached the choice
+    # it is about. The Forests above are there for the same reason, for a
+    # sacrifice.
+    game.players[0].hand.append(catalog["Forest"])
     return game, mine
+
+
+@functools.lru_cache(maxsize=1)
+def _w3g2_instant():
+    """A spell for a stack-targeting line to name: an instant any seat can put
+    on the stack with nothing else on the table."""
+    return _w3g2_catalog()["Lightning Bolt"]
 
 
 def _w3g2_announce(game, card, ability_index, mine):
@@ -139,6 +156,21 @@ def _w3g2_announce(game, card, ability_index, mine):
         {"target_player_index": 0, "target_permanent_ids": [mine.permanent_id]},
         {},
     )
+    # "{T}: Target instant or sorcery **spell** becomes the color of your
+    # choice." (Vodalian Mystic.) A line whose target is an object on the
+    # stack has nothing to name on this table, so the opponent casts an
+    # instant first — asked of the engine's own picker rather than of the
+    # card, and the shape is whatever that picker then offers (top-first on
+    # the wire, bottom-first to the engine).
+    slot = len(game.players[0].battlefield) - 1
+    if game.activation_target_spec(0, slot, ability_index).get("kind") == "stack":
+        game.players[1].hand.append(_w3g2_instant())
+        assert game.queue_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+        offered = game.activation_target_spec(0, slot, ability_index)["valid_targets"]
+        shapes = tuple(
+            {"target_stack_index": len(game.stack) - 1 - entry["stack_index"]}
+            for entry in offered
+        ) + shapes
     for shape in shapes:
         queued = game.queue_permanent_ability(
             0, card.name, ability_index=ability_index, mana_color="R", **shape

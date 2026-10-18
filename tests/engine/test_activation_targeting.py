@@ -290,23 +290,16 @@ _FALLBACK_ABILITIES: dict[tuple[str, int], str] = {}
 #: (CR 601.2c) — a different claim from the one above, and the reason they are
 #: two lists rather than one.
 #:
-#: Carrion Beetles: "{2}{B}, {T}: Exile up to three target cards from a single
-#: graveyard." The ability works — driven in a game, the three cards leave the
-#: pile — and what it does not do is choose them at announcement; the handler
-#: picks at resolution. `picker_sweep.py` has reported it since the day Urza's
-#: Saga was ingested and it is ROADMAP's recorded decline, with its four
-#: missing pieces enumerated there: a picker for several cards in one
-#: graveyard, a cross-pile distinctness constraint ("from a single graveyard"
-#: is a fact about the *set*, not about each card), an arm in
-#: `legality._enumerate_targets` for a graveyard-card kind at activation, and
-#: CR 608.2b at resolution for a graveyard target.
-#:
-#: **Delete the entry when a graveyard target can be announced.** It is the only
-#: card in the shipped pool that needs it, so the entry and the gap have the
-#: same lifetime.
-_UNANNOUNCEABLE_TARGETS: dict[tuple[str, int], str] = {
-    ("Carrion Beetles", 0): "a graveyard target is chosen at resolution, not announced",
-}
+#: Carrion Beetles was its one entry from Urza's Saga to Odyssey: "{2}{B},
+#: {T}: Exile up to three target cards from a single graveyard" worked, and
+#: chose its cards at resolution instead of announcing them. The entry said
+#: "delete the entry when a graveyard target can be announced", and Odyssey's
+#: second wave did both — the cards are named at activation, held to one pile
+#: by the announcement's own shape (a seat and slots in that seat's graveyard),
+#: enumerated by the list every graveyard picker reads and judged again at
+#: resolution (CR 608.2b). The list stays, empty, for the next ability whose
+#: printed target really cannot be announced.
+_UNANNOUNCEABLE_TARGETS: dict[tuple[str, int], str] = {}
 
 _REMINDER = re.compile(r"\([^)]*\)")
 # A **quoted** ability is not this ability's text. "You get an emblem with 'At

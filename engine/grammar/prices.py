@@ -22,9 +22,10 @@ from __future__ import annotations
 from . import ast
 from .amounts import parse_amount
 from .errors import GrammarError
-from .lexer import MANA
+from .lexer import MANA, PT, WORD
 from .readers import accept_source_reference
 from .stream import TokenStream
+from .vocabulary import CARD_TYPES, singular as _singular
 
 def _parse_mana_payment(stream: TokenStream, *, allow_variable: bool = False) -> ast.ManaCost:
     """The mana half of "you may pay {1}" / "unless its controller pays {X}".
@@ -244,3 +245,125 @@ def _accept_life_only_offer(stream: TokenStream) -> "ast.May | None":
         stream.reset(mark)
         return None
     return ast.May(ast.PlayerRef("you"), life_cost=payment.amount)
+
+
+# ---------------------------------------------------------------------------
+# A payment written as prose inside an **activation cost** — "Pay {1} for each
+# +1/+1 counter on this creature", "Pay 2 life or {2}".
+#
+# Moved here from ``costs.py`` at Odyssey's first wave, with that module thirty
+# lines under the guard after a mill cost, an "any number of" exile and a
+# conjoined source joined it. The seam is the one this module's docstring has
+# drawn since it was cut: ``costs`` reads a whole activation cost and this is
+# the floor under it that reads a printed mana or life price out of a
+# sentence. ``_accept_mana_alternatives`` above is the toll's spelling of the
+# same "or {2}" and ``_accept_per_counter_multiplier`` the toll's spelling of
+# the same "for each … counter on …"; these three are the cost's, and differ
+# from them in what the caller can charge (a rate rather than a cost, the
+# ability's own source and no other) rather than in what family they are.
+# ---------------------------------------------------------------------------
+
+
+def _accept_mana_run(
+    stream: TokenStream,
+) -> tuple[tuple[str, int], ...] | None:
+    """A run of mana symbols at the cursor as ``(symbol, count)`` pairs, or None
+    with the cursor where it was.
+
+    The same symbols ``_parse_costs``' own mana branch reads, gathered here for
+    a payment written as prose ("Pay {1} for each ...") -- where the symbols are
+    a *rate* rather than the cost, so they must not reach the pips dict that
+    branch accumulates into.
+    """
+    mark = stream.mark()
+    pips: dict[str, int] = {}
+    while True:
+        token = stream.accept_kind(MANA)
+        if token is None:
+            break
+        symbol = token.text.strip("{}")
+        if symbol.isdigit():
+            pips["generic"] = pips.get("generic", 0) + int(symbol)
+        elif symbol in ("W", "U", "B", "R", "G", "C"):
+            pips[symbol] = pips.get(symbol, 0) + 1
+        else:
+            # {T}, {X} and the hybrids: a rate this cannot multiply. Refused
+            # whole rather than read as the part that matched.
+            stream.reset(mark)
+            return None
+    if not pips:
+        stream.reset(mark)
+        return None
+    return tuple(sorted(pips.items()))
+
+
+def _accept_per_counter(stream: TokenStream) -> str | None:
+    """``for each <kind> counter on this <noun>`` at the cursor, as the counter's
+    printed name — or None with the cursor where it was.
+
+    Only the ability's **own source** is admitted. "On this enchantment" is the
+    permanent the cost is being paid to activate, which is the one permanent a
+    cost charger has in hand; a counter on anything else would be a board read
+    the charger cannot make, and reading it as the source anyway would charge
+    the wrong number.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("for", "each"):
+        stream.reset(mark)
+        return None
+    # "for each **+1/+1** counter" (Skeleton Scavengers). A counter named by a
+    # power/toughness change is its own token kind, so a reader that asked only
+    # for a word saw nothing here and refused the clause -- which for an
+    # activation cost is the ability's whole line. The name is the token's text
+    # either way, which is what ``named_counters`` is keyed by.
+    named = stream.peek()
+    if named is None or named.kind not in (WORD, PT):
+        stream.reset(mark)
+        return None
+    counter = named.text
+    stream.advance()
+    if not stream.accept_word("counter", "counters"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("on"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("this"):
+        stream.reset(mark)
+        return None
+    noun = stream.peek_word()
+    if noun is None or _singular(noun) not in CARD_TYPES:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    return str(counter)
+
+
+def _accept_mana_alternative(stream: TokenStream) -> tuple[tuple[str, int], ...]:
+    """``or <mana symbols>`` at the cursor, as ``(symbol, count)`` pairs — or an
+    empty tuple with the cursor where it was.
+
+    Only a written-out run of ordinary symbols. ``{X}`` is deliberately not
+    admitted: an alternative whose size the payer announces would need the
+    announcement to reach a payment path that has none, and the empty tuple
+    keeps the words unconsumed so the ability refuses instead.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("or"):
+        stream.reset(mark)
+        return ()
+    pips: dict[str, int] = {}
+    while stream.at_kind(MANA):
+        token = stream.next()
+        symbol = token.text.strip("{}")
+        if symbol.isdigit():
+            pips["generic"] = pips.get("generic", 0) + int(symbol)
+        elif symbol in ("W", "U", "B", "R", "G", "C"):
+            pips[symbol] = pips.get(symbol, 0) + 1
+        else:
+            stream.reset(mark)
+            return ()
+    if not pips:
+        stream.reset(mark)
+        return ()
+    return tuple(sorted(pips.items()))

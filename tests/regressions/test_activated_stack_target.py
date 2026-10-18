@@ -190,6 +190,13 @@ def _handler_sweep(catalog, monkeypatch):
     monkeypatch.setattr(
         Game, "activation_target_refusal", lambda self, *args, **kwargs: None,
     )
+    # …and the same gate's other end (APC wave 2). CR 608.2b now re-asks the
+    # picker's list as an activated ability resolves, so an object the picker
+    # does not offer is removed above its instructions and the handler is
+    # never asked — which is the rule working, and would leave this sweep
+    # with nothing to compare. It is about what the **handler** reads, so both
+    # ends of the gate are off.
+    monkeypatch.setattr(Game, "ability_targets_refusal", lambda self, item: None)
     by_name = {card.name: card for card in catalog}
     examined = 0
     findings: list[tuple[str, str]] = []

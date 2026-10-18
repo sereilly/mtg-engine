@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from functools import lru_cache
 
+from ..destruction_events import NO_SPELL_OR_ABILITY, NOT_A_DESTRUCTION
 from ..lethal_damage import lethal_damage_destroys
 from ..control import (
     LINKED_CONTROL_CONDITIONS,
@@ -728,6 +729,9 @@ class GameEndingMixin:
                     player, _zero_toughness,
                     allow_regeneration=False, respect_indestructible=False,
                     on_destroy=_on_destroy_5f,
+                    # "…it's put into its owner's graveyard" — CR 701.8b: not
+                    # destroyed, so nothing watching a destruction hears of it.
+                    cause=NOT_A_DESTRUCTION,
                 ):
                     changed = True
 
@@ -778,6 +782,11 @@ class GameEndingMixin:
                     player, _lethally_damaged,
                     on_regenerate=_regenerated,
                     on_destroy=_on_destroy_5g,
+                    # Destroyed (CR 701.8b names these two actions), and by no
+                    # spell or ability — whoever dealt the damage. Said here
+                    # rather than read off ``resolving_seats``, because this
+                    # check runs inside resolutions too.
+                    cause=NO_SPELL_OR_ABILITY,
                 ):
                     changed = True
 
@@ -807,6 +816,7 @@ class GameEndingMixin:
                     on_destroy=lambda perm: self.log.append(
                         f"{perm.card.name} went to graveyard (704.5i: 0 loyalty)"
                     ),
+                    cause=NOT_A_DESTRUCTION,
                 ):
                     changed = True
 
@@ -889,6 +899,7 @@ class GameEndingMixin:
                     player, _illegally_attached,
                     allow_regeneration=False, respect_indestructible=False,
                     on_destroy=_on_destroy_5m,
+                    cause=NOT_A_DESTRUCTION,
                 ):
                     changed = True
 
@@ -982,21 +993,47 @@ class GameEndingMixin:
             # (``_can_be_targeted``, which asks ``_card_has_quality``) had already
             # refused to *put* it there. A rule enforced at announcement and not
             # at the sweep is a rule that holds until something changes.
+            #
+            # **"This effect doesn't remove this Aura" exempts the Aura from
+            # its own grant and from nothing else** (CR 702.16n's last
+            # sentence: "If the creature has other instances of protection
+            # from the same quality, those instances affect Auras as normal").
+            # The exemption was the bare phrase — any Aura printing it stayed
+            # on however the creature came by the protection, so a White Ward
+            # survived a second source of protection from white. The question
+            # is asked with that one Aura's grant left out
+            # (``ignoring_aura``), which is the rule as written: Tattoo Ward
+            # stays on under its own protection from enchantments and comes
+            # off under a second Ward's.
+            #
+            # Every verdict is reached before anything moves (CR 704.3: the
+            # actions are performed simultaneously), so two Auras that remove
+            # each other both go.
+            verdicts = []
             for player in self.players:
-                departing = []
                 for perm in list(self.controlled_by(player)):
                     attached_to = perm.metadata.get("attached_to")
                     if "Aura" in perm.card.type_line and attached_to is not None:
-                        if self._is_protected_from(attached_to, perm):
-                            text = perm.effective_card.oracle_text.lower()
-                            exempt = "remove this aura" in text or "remove all auras" in text
-                            if not exempt:
-                                self._permanent_to_graveyard(player, perm)
-                                self.log.append(
-                                    f"{perm.card.name} put into graveyard (702.16c: enchanted permanent has protection)"
-                                )
-                                changed = True
-                                departing.append(perm)
+                        text = perm.effective_card.oracle_text.lower()
+                        if "remove all auras" in text:
+                            continue
+                        own_exempt = "remove this aura" in text
+                        if self._is_protected_from(
+                            attached_to, perm,
+                            ignoring_aura=perm if own_exempt else None,
+                        ):
+                            verdicts.append((player, perm))
+            for player in self.players:
+                departing = []
+                for owner, perm in verdicts:
+                    if owner is not player:
+                        continue
+                    self._permanent_to_graveyard(player, perm)
+                    self.log.append(
+                        f"{perm.card.name} put into graveyard (702.16c: enchanted permanent has protection)"
+                    )
+                    changed = True
+                    departing.append(perm)
                 self.remove_all_from_battlefield(departing)
 
             # CR 704.5n (and 702.16d, 301.5c, 701.3d): an Equipment attached
@@ -1071,10 +1108,12 @@ class GameEndingMixin:
                     on_destroy=lambda perm: self.log.append(
                         f"{perm.card.name} sacrificed (704.5s: Saga reached final chapter)"
                     ),
+                    # A sacrifice (CR 701.21a: "doesn't destroy it").
+                    cause=NOT_A_DESTRUCTION,
                 ):
                     changed = True
 
-            # 704.5y: Role rule — per creature per controller, keep only the most recent Role
+            # 704.5z: Role rule — per creature per controller, keep only the most recent Role
             for perm in self.all_permanents():
                 if perm.card.primary_type != "creature":
                     continue
@@ -1097,7 +1136,7 @@ class GameEndingMixin:
                         if self.controls(ctrl_player, role_perm):
                             self.remove_from_battlefield(role_perm)
                             self._permanent_to_graveyard(ctrl_player, role_perm)
-                            self.log.append(f"{role_perm.card.name} put into graveyard (704.5y: role rule)")
+                            self.log.append(f"{role_perm.card.name} put into graveyard (704.5z: role rule)")
                     changed = True
 
             if changed:
@@ -1126,6 +1165,8 @@ class GameEndingMixin:
 
         from ..events import emit
         from ..named_counters import EMPTIED_KINDS_MARK, counters_on
+        from ..state_triggers import (STATE_TRIGGER_LATCH,
+                                      announce_watched_counter_thresholds)
 
         # The two draw announcements — "your second card each turn" and CR
         # 121.2's per-card event — are one method, because the draw step asks
@@ -1204,8 +1245,11 @@ class GameEndingMixin:
         # (Mazemind Tome.) CR 603.8's *state* trigger: it fires whenever the
         # game state matches rather than on an event, so this sweep is where it
         # belongs — there is no call site to hang it on, and CR 603.8 says it
-        # fires only once until the state stops matching, which is why the
-        # permanent remembers that it announced.
+        # does not trigger again until it has left the stack, which is why the
+        # permanent remembers that it announced. The blocks below forget when
+        # the state stops matching; an ability that is *countered* gives its
+        # latch back through the key its stack object carries
+        # (`engine/state_triggers.py`, which has the rule and its one bound).
         # "When this enchantment has no +1/+1 counters on it, sacrifice it."
         # (Afiya Grove.) The mirror state of the threshold sweep below, and it
         # shares that sweep's CR 603.8 bookkeeping: it fires once and does not
@@ -1242,7 +1286,9 @@ class GameEndingMixin:
                     "instruction": trig.instruction,
                     "effect_kind": trig.effect_kind,
                     "ability_text": trig.source_line,
-                    "trigger_context": {},
+                    # The latch key rides the object, so one that is countered
+                    # gives it back (CR 603.8; `engine/state_triggers.py`).
+                    "trigger_context": {STATE_TRIGGER_LATCH: key},
                 }])
                 any_changed = True
 
@@ -1277,7 +1323,9 @@ class GameEndingMixin:
                     "instruction": trig.instruction,
                     "effect_kind": trig.effect_kind,
                     "ability_text": trig.source_line,
-                    "trigger_context": {},
+                    # The latch key rides the object, so one that is countered
+                    # gives it back (CR 603.8; `engine/state_triggers.py`).
+                    "trigger_context": {STATE_TRIGGER_LATCH: key},
                 }])
                 any_changed = True
 
@@ -1298,7 +1346,8 @@ class GameEndingMixin:
         #
         # The latch is the neighbours' ``_state_trigger_announced`` set, and the
         # rule is theirs: fire once, and not again until the state has stopped
-        # matching. CR 603.4 finishes the job at resolution — both cards print
+        # matching or the ability was countered (the key rides the object, as
+        # theirs does). CR 603.4 finishes the job at resolution — both cards print
         # "if this permanent is an enchantment", which is false once the
         # animation has replaced its types (CR 205.1a), so the ability an
         # unchanged board announces again does nothing.
@@ -1405,8 +1454,17 @@ class GameEndingMixin:
                     "instruction": trig.instruction,
                     "effect_kind": trig.effect_kind,
                     "ability_text": trig.source_line,
-                    "trigger_context": {},
+                    # See the two counter sweeps above: CR 603.8's latch key.
+                    "trigger_context": {STATE_TRIGGER_LATCH: key},
                 }])
                 any_changed = True
+
+        # "Whenever **a creature** has four or more fuse counters on it, …"
+        # (Bomb Squad.) CR 603.8 asked of every *other* permanent the noun
+        # phrase describes, so the state is true per watched permanent and the
+        # sweep is its own function (`engine/state_triggers.py`) rather than a
+        # sixth block here.
+        if announce_watched_counter_thresholds(self):
+            any_changed = True
 
         return any_changed

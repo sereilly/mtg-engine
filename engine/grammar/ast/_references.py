@@ -278,6 +278,22 @@ class ObjectFilter:
     # lowering not written for it refuse the phrase by name rather than drop
     # the union and counter (or exile, or recolour) a spell alone.
     also_ability: bool = False
+    # "target **spell or permanent**" (the Lace cycle, Illusion, Blind Seer,
+    # the three text-changers). The union across two **zones** — an object on
+    # the stack or one on the battlefield — where ``also_ability`` above is the
+    # union across the two kinds of stack object. ``zone`` stays
+    # ``"battlefield"``, because the permanent half is what every other field
+    # of the filter describes; this says the phrase names a spell as well.
+    #
+    # The noun parser consumed the union and recorded nothing, so "target
+    # spell or permanent" and "target permanent" were one filter: every
+    # lowering not written for the union read it as a permanent, the picker
+    # offered permanents alone, and a spell named anyway was dropped at
+    # resolution for whatever permanent a scan could reach. It is listed in
+    # ``lowering/_filters.CONDITIONALLY_EMITTED_FIELDS`` with no payload form,
+    # so ``_filter_payload`` refuses the phrase by name for every lowering but
+    # the three that say what they do with the spell half.
+    also_spell: bool = False
     # "…activated ability **from an artifact source**" (Rust, Ayesha Tanaka).
     # A narrowing on the *permanent the ability came from*, which is the only
     # thing about an ability on the stack there is to narrow by — it has no card
@@ -530,9 +546,24 @@ class ObjectFilter:
     # sentence's other clause named. Only a lowering knowing that object can
     # resolve it; one that does not must refuse.
     of_bound_type: bool = False
+    # "target Aura **that's attached to a permanent**" (Aura Graft). The host
+    # phrase that says nothing about the host except that it is a permanent -
+    # CR 303.4: an Aura may be attached to an object or to a player, and this
+    # is the half the words name. Its own flag rather than an empty
+    # ``attached_to_filter``, which is "no host phrase at all" to every
+    # reader: an empty nested filter is falsy, so the matcher would skip the
+    # question and an Aura on nothing would be a legal target.
+    attached_to_permanent: bool = False
     # "that's one or more colors" (Ugin, the Spirit Dragon's −X): the object
     # has at least one color, read off its effective colors.
     colored: bool = False
+    # "a **multicolored** creature card" (Dragon Arch). CR 105.2b: an object
+    # with two or more colours. Its own field rather than a value of ``colors``
+    # because that field is a *union* — "green or white" is satisfied by one of
+    # them — and no list of colours says "any two". Emitted as the payload key
+    # of the same name, which both matchers answer: a permanent's off its
+    # computed colours (layer 5) and a card's off its printed ones (CR 202.2).
+    multicolored: bool = False
     # "…that isn't the target of an ability from another creature named ~"
     # (Goblin Artisans). A restriction on the object's *situation* rather than
     # on the object: it asks what else on the stack is pointing at it. The
@@ -576,6 +607,18 @@ class ObjectFilter:
     # this position has one at all — is the lowering's to decide, and a
     # lowering not written for the field refuses it by name.
     shares_color_with_it: bool = False
+    #: "…discards all cards **of each of the sacrificed creature's colors**."
+    #: (Mind Extraction.) The same relation with a different referent: not
+    #: the object an event was about but the permanent this spell's own
+    #: **cost** sacrificed (CR 601.2h), which is gone by resolution and read as
+    #: last-known information (CR 608.2h) off the record the payment kept.
+    #: "Each of" a multicolored creature's colors is *any* of them — CR 105.2b,
+    #: and the card's own ruling — and a colorless one has none.
+    #:
+    #: Its own field rather than a value of the one above, because who can
+    #: answer differs: that one needs the firing event and this one the cast's
+    #: cost record, and a lowering written for either refuses the other by name.
+    colors_of_sacrificed_for_cost: bool = False
     # "…**other than a basic land**" / "…**except for basic lands**" (Eye of
     # Singularity prints both, one on each line). One field for two spellings,
     # because they name the same set: a permanent that is a land with the Basic
@@ -607,9 +650,11 @@ class ObjectFilter:
     # "blocking or blocked by this creature" (Sentinel) — the object is in
     # combat with the ability's own source (CR 509). Relative, like
     # ``other_than_source``: no read of the object alone can answer it, so
-    # ``to_payload`` never emits it and ``permanent_matches_filter`` is never
-    # told about it — the one lowering that accepts it carries the relation as
-    # its own payload key and the handler that has the source tests it.
+    # ``permanent_matches_filter`` **refuses** it — and it is emitted, since
+    # Cromat ("Destroy target creature blocking or blocked by Cromat"), on
+    # ``blocking_source``'s footing below: ``subject_matches`` takes the source
+    # and answers it off the combat maps. The lowerings older than that each
+    # strip the field and carry the relation as their own payload key.
     in_combat_with_source: bool = False
     # "creatures that dealt damage to it this turn" (Brine Hag) — a *history*
     # relative to the source, read off the damage record the victim carries

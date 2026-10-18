@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import dataclasses
 from typing import TYPE_CHECKING
 
 from ._common import (bound_permanent, count_from_payload,
-                      per_recipient_amount, resolve_amount)
+                      per_recipient_amount, resolve_amount,
+                      stack_target_controller_seat)
 from ..exiled_records import source_object
 from ..life_prohibitions import life_gain_banned
 from ..named_counters import counters_on
@@ -269,6 +271,19 @@ def target_loses_life(game: Game, instruction: OracleInstruction, context: Oracl
             game.log.append(f"{card.name}: no recorded defending player, no life lost")
             return True, "resolved"
         victims = [game.players[seat]]
+    elif recipient == COUNTERED_SPELL_CONTROLLER:
+        # "Counter target spell. **Its controller** loses 3 life." (Undermine.)
+        # The seat the counter step recorded when it *chose* its spell — not
+        # when it succeeded, so a spell that can't be countered still costs
+        # its controller the life (CR 608.2: as much as possible; the sentence
+        # is not an "if you do"). No record means no spell was chosen, and
+        # nobody loses life: an effect aimed at a player nothing named is one
+        # that should not happen rather than one that lands on a default.
+        seat = stack_target_controller_seat(game, context, recorded_only=True)
+        if seat is None:
+            game.log.append(f"{card.name}: no countered spell, no life lost")
+            return True, "resolved"
+        victims = [game.players[seat]]
     elif recipient == "last_target_controller":
         # "Destroy target creature. Its controller loses 2 life." (Liliana,
         # Death Mage.) The destroy step recorded the controller before the
@@ -472,7 +487,9 @@ def target_gains_life(game: Game, instruction: OracleInstruction, context: Oracl
         cost = tctx.get("optional_pay_cost")
         if cost is not None:
             entry = {"card_name": card.name, "cost": generic_cost(int(cost)), "life": life}
-            if game._player_can_pay_optional(controller, entry):
+            # Offered to a person whenever they hold mana the plan does not
+            # tap (`Game.payment_may_be_offered`).
+            if game.payment_may_be_offered(controller, entry):
                 game.arm_pending_choice(
                     "optional_pay", game.players.index(controller), **entry
                 )
@@ -483,6 +500,29 @@ def target_gains_life(game: Game, instruction: OracleInstruction, context: Oracl
     # affects the chosen target (CR 115.10b). Default to target for legacy
     # instructions that predate the recipient payload.
     recipient = instruction.payload.get("recipient", "target")
+    if recipient in ("each_player", "each_opponent"):
+        # "**Each player** gains 1 life." (Putrid Warrior.) "…**each opponent**
+        # gains that much life." (Grollub.) One gain per seat, each a life-gain
+        # event of its own (CR 119.3) — so each goes back through this handler
+        # as the single-seat sentence it is for that player, and every amount
+        # channel below (a printed number, the firing event's, a count) is
+        # answered once, by the code that already answers it.
+        #
+        # The seats are `_offered_seats`': APNAP order (CR 101.4) for every
+        # player, the caster's opponents for the other word, and nobody who has
+        # left the game (CR 800.4a). The same set "each player loses 1 life"
+        # reaches one handler up.
+        from .control_flow import _offered_seats
+
+        single = dataclasses.replace(
+            instruction, payload={**instruction.payload, "recipient": "target"}
+        )
+        for seat in _offered_seats(game, recipient, context):
+            target_gains_life(
+                game, single,
+                dataclasses.replace(context, target=game.players[seat]),
+            )
+        return True, "resolved"
     if recipient == "event_subject_player":
         # "…**they** gain 1 life" under "at the beginning of each player's
         # upkeep" (Spiritual Sanctuary): the seat the firing event named,

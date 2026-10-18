@@ -8,7 +8,7 @@ rest of `board` is about (tapping, destruction, regeneration, control).
 It had no twin in `effects/` for most of its life: a `return`/`exile`/`put`
 parses in one small production, and the work is all on this side, deciding
 *which* handler moves the object and refusing the shapes none implement. The
-twin arrived at Weatherlight, when `effects/library.py` crossed the guard and
+twin arrived at Mirage, when `effects/library.py` crossed the guard and
 the shuffles came out under this module's name — so the mirror re-formed rather
 than forking, and neither half imports the other.
 

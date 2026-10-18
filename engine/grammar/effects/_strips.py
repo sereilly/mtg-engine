@@ -14,9 +14,11 @@ hands down the player — never from the tutor — so when that production left
 under a floor; nothing reads back.
 
 **And the seam is a real one, which is what makes it a floor and not a
-convenience.** Everything in ``search`` and ``_other_libraries`` is CR 701.23's
-library walk — whose library, what may be found, where the find goes, and the
-shuffle that ends it. This is not a library search at all. It opens three zones
+convenience.** Everything in ``search``, and the production in
+``_other_libraries`` that tries this, is CR 701.23's library walk — whose
+library, what may be found, where the find goes, and the shuffle that ends it
+(the look that joined that floor at the Phase 0 before Odyssey is no search and
+never reaches here). This is not a library search at all. It opens three zones
 of three different kinds (an open zone, its owner's hidden hand, and a
 library), it finds by a name nothing printed rather than by a described card,
 it exiles everything it finds rather than moving one card somewhere, and it
@@ -63,6 +65,12 @@ _STRIPPED_NAME_SUBJECTS: frozenset[str] = frozenset(CARD_TYPES) | {
 }
 
 
+#: What ``name_of`` holds for "…with the same name as **that card**": not a
+#: printed card type, and not an object one earlier step chose — the card a
+#: "for each card exiled this way" loop is on.
+EACH_EXILED_CARD = "card"
+
+
 def _accept_strip_cards_with_chosen_name(
     stream: TokenStream, player: "ast.PlayerRef",
 ) -> "ast.StripCardsWithChosenName | None":
@@ -103,7 +111,7 @@ def _accept_strip_cards_with_chosen_name(
         if stream.accept_word("and"):
             continue
         break
-    if len(zones) < 2:
+    if not zones:
         stream.reset(mark)
         return None
     if not stream.accept_phrase(
@@ -113,6 +121,16 @@ def _accept_strip_cards_with_chosen_name(
         return None
     name_of = _accept_named_object(stream)
     if name_of is False:
+        stream.reset(mark)
+        return None
+    # One zone is the ordinary counted search's sentence, with one exception:
+    # "For each card exiled this way, search that player's **library** for all
+    # cards with the same name as **that card** and exile them." (Haunting
+    # Echoes.) "All cards with the same name as that card" is no count and no
+    # described card, so that production has no reading for it — and "that
+    # card" is the one referent that is neither of the two above: the card the
+    # loop in front of this sentence is on. The lowering demands the loop.
+    if len(zones) < 2 and name_of != EACH_EXILED_CARD:
         stream.reset(mark)
         return None
     if not stream.accept_phrase("and", "exile", "them"):
@@ -155,6 +173,8 @@ def _accept_named_object(stream: TokenStream) -> "str | bool | None":
         return None
     if not stream.accept_word("that"):
         return False
+    if stream.accept_word("card"):
+        return EACH_EXILED_CARD
     noun = singular(stream.peek_word() or "")
     if not noun or noun not in _STRIPPED_NAME_SUBJECTS:
         return False

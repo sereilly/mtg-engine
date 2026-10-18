@@ -72,7 +72,8 @@ from engine import ai_simulator
 from engine.ai_policy import (choose_cast_action,
                               choose_combat_instant_cast_action)
 from engine.ai_valuation import (CARD_WORTH, instruction_target_side,
-                                 standing_swing, standings, swing_worth)
+                                 several_target_slot_sides, standing_swing,
+                                 standings, swing_worth)
 from engine.auras import attach_aura
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units
@@ -684,7 +685,17 @@ def plan(card, index) -> dict:
         candidates = [c for c in candidates if mode_acts_on(card, index, c)] or candidates
     elif shape == "graveyard":
         candidates = []
-        for owner in (ME, OPP):
+        # Whose pile the bait goes in, the way the permanent branch below
+        # places its own: on the side the mode's effect wants. Only a
+        # graveyard *exile* has one — "Exile up to three target cards from a
+        # single graveyard" (Ebony Charm) is a denial, announced since
+        # Odyssey's second wave, and a bait in the caster's own pile is a
+        # board the mode is rightly not cast on. A return names cards in the
+        # pile its phrase prints, and keeps both.
+        denies = set(several_target_slot_sides(
+            program, (program.modes[index].instruction,)
+        )) == {"opponent"}
+        for owner in ((OPP,) if denies else (ME, OPP)):
             for key in GRAVE:
                 game, _ = board(card, grave=[(owner, key)])
                 if index in game.announceable_modes(ME, card):

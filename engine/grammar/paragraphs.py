@@ -25,6 +25,17 @@ hidden hand, a choice no board read can recover and every later sentence
 checks. What stays is the remainder, and that is the honest description of
 it: a paragraph comes here when no narrower family has claimed it.
 
+**One came in under that rule at the Phase 0 before Odyssey**: Forgotten Lore's
+four sentences (:func:`_parse_repeated_graveyard_pick`), from
+``effects/cards.py``, 45 lines under the guard. It was a paragraph in a module
+of one-line verbs, as its node says ("One node for the paragraph, for the
+reason every other paragraph node here is one"), and its nearest relative was
+already here: Search for Survivors opens on an opponent's pick out of the same
+graveyard. It is the one production here handed its subject, because
+``player_verbs`` has read "target opponent" by the time it sees "chooses"; the
+price of a repetition is read through ``prices``, which this module sits
+above, and not through ``phrases``, which it sits below.
+
 They live together rather than in `statements.py` because they are the same kind
 of thing and because that file is where every *ordinary* sentence goes — the one
 that grows with the card pool. Keeping the paragraph productions there took it
@@ -38,11 +49,15 @@ its own words to the end, which is what lets this module sit below
 
 from __future__ import annotations
 
+import dataclasses
+
 from . import ast
 from .amounts import parse_amount
 from .errors import GrammarError
 from .lexer import MANA, SELF
 from .nouns import parse_object_filter
+from .prices import _parse_mana_payment
+from .readers import accept_source_reference
 from .references import parse_recipient
 from .stream import TokenStream
 from .vocabulary import CARD_TYPES
@@ -449,6 +464,89 @@ def _parse_exchange_greatest_mana_value(stream: TokenStream) -> ast.Statement | 
 
 
 
+#: The seat words a chosen set's noun phrase may be scoped by, each a player
+#: the sentence **targets** — and whether the word narrows that target to an
+#: opponent. A phrase scoped by anything else ("you control", "that player
+#: controls") names a seat the announcement did not choose, and is not this
+#: paragraph.
+_CHOSEN_SET_SEATS = {"target_player": False, "target_opponent": True}
+
+
+def _parse_exchange_chosen_sets(stream: TokenStream) -> ast.Statement | None:
+    """Cultural Exchange's whole three-sentence effect, as one statement.
+
+    ``Choose any number of <noun> target player controls. Choose the same
+    number of <noun> another target player controls. Those players exchange
+    control of those <noun>.``
+
+    Every sentence is required and none can be read alone — see
+    :class:`ast.ExchangeChosenSets`. The nouns are read rather than fixed, so
+    "creatures" is payload: both sets through the shared noun parser, and the
+    closing "those <noun>" held to the phrase the two sets were printed with
+    (or to "permanents", which names any set). A closing noun that names
+    neither is a sentence about objects this paragraph did not choose, and
+    refuses.
+
+    The second seat is read **here** rather than by the noun parser, which
+    stops at "another": the word is CR 115.3's exception, a relation between
+    two targets, and a filter key has nothing to compare against.
+
+    Refuses without consuming, like every production here.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("choose", "any", "number", "of"):
+        stream.reset(mark)
+        return None
+    try:
+        first = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if first.controller not in _CHOSEN_SET_SEATS or not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("choose", "the", "same", "number", "of"):
+        stream.reset(mark)
+        return None
+    try:
+        second = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if second.controller is not None or not stream.accept_phrase("another", "target"):
+        stream.reset(mark)
+        return None
+    second_seat = stream.peek()
+    if second_seat is None or second_seat.text not in ("player", "opponent"):
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if not stream.accept_word("controls") or not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase(
+        "those", "players", "exchange", "control", "of", "those"
+    ):
+        stream.reset(mark)
+        return None
+    try:
+        exchanged = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    first_noun = dataclasses.replace(first, controller=None)
+    if exchanged != ast.ObjectFilter() and not (
+        exchanged == first_noun and exchanged == second
+    ):
+        stream.reset(mark)
+        return None
+    return ast.ExchangeChosenSets(
+        first_noun, second,
+        first_opponent=_CHOSEN_SET_SEATS[first.controller],
+        second_opponent=second_seat.text == "opponent",
+    )
+
+
 def _parse_reassign_blockers_between_attackers(
     stream: TokenStream,
 ) -> "ast.ReassignBlockersBetweenAttackers | None":
@@ -644,3 +742,63 @@ def _parse_random_graveyard_card_fate(stream: TokenStream) -> ast.Statement | No
     stream.expect_word("exile")
     stream.expect_word("it")
     return ast.RandomGraveyardCardFate(card_type)
+
+
+def _parse_repeated_graveyard_pick(
+    stream: TokenStream, who: ast.PlayerRef
+) -> "ast.RepeatedGraveyardPick | None":
+    """Forgotten Lore's whole four-sentence effect. The subject has already
+    been read, so this starts at the verb.
+
+    Refuses without consuming, so "chooses a card name…" (Petra Sphinx) and
+    "chooses a creature…" (Takklemaggot) keep their own productions.
+
+    Every word is required, the exclusion clause included: without it the loop
+    would let one card be chosen forever, which is a different card — and the
+    self-reference at the end of it is the lexer's SELF token, because the
+    sentence names the spell by name.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("chooses", "a", "card", "in", "your", "graveyard"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("you", "may", "pay"):
+        stream.reset(mark)
+        return None
+    try:
+        cost = _parse_mana_payment(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("if", "you", "do"):
+        stream.reset(mark)
+        return None
+    # The comma is a token of its own to the lexer, so it is consumed on its
+    # own rather than as a word inside the phrase.
+    if not stream.accept_punct(","):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase(
+        "repeat", "this", "process", "except", "that", "opponent", "can't",
+        "choose", "a", "card", "already", "chosen", "for",
+    ):
+        stream.reset(mark)
+        return None
+    if not accept_source_reference(stream):
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase(
+        "then", "put", "the", "last", "chosen", "card", "into", "your", "hand"
+    ):
+        stream.reset(mark)
+        return None
+    return ast.RepeatedGraveyardPick(who, cost)

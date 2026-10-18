@@ -66,6 +66,18 @@ def _lower_add_mana(
     would add nothing while reporting success; it keeps its own fused
     ``sacrifice_self_for_mana`` handler on the legacy path.
     """
+    # "For each colored mana symbol in **the milled card's** mana cost, add one
+    # mana of that color." (Charmed Pendant.) Gated on the cost that writes the
+    # record: with no mill in front of the colon the words name no card.
+    if node.colored_symbols_of_record:
+        if node.colored_symbols_of_record not in produced:
+            raise LoweringError(
+                "a mana cost is read off a card this ability's own cost took, "
+                "and its cost takes none", node=node,
+            )
+        return (OracleInstruction("add_mana_from_text", "", {
+            "colored_symbols_of_record": node.colored_symbols_of_record,
+        }),)
     # "Add an amount of {B} equal to the sacrificed artifact's mana value."
     # (Priest of Yawgmoth.) The mana is one symbol and the *amount* is the mana
     # value of what the ability's sacrifice cost ate, which the handler reads
@@ -754,6 +766,60 @@ def _lower_controller_mana_swap(
         # Emitted only when printed, so every "type" swap's payload is unchanged.
         payload["colors_only"] = True
     return (OracleInstruction("swap_controller_land_mana_until_eot", "", payload),)
+
+
+def _lower_added_mana_becomes(
+    node: ast.AddedManaBecomes,
+) -> tuple[OracleInstruction, ...]:
+    """"Until end of turn, spells and abilities you control that would add
+    colored mana instead add that much white mana." (False Dawn.)
+
+    The controller-wide swap above with the widest class there is — every
+    spell and ability the seat controls rather than its lands — so it is the
+    same seat record with one more word on it, and its own kind because nothing
+    about it is a land: no noun phrase travels and no filter is tested.
+
+    ``colors_only`` is the printed "colored mana" (CR 106.1a: {C} is a type and
+    not a color, so it is left alone), stated on the payload rather than
+    implied by the kind so the record and the tap seam read it the way Hall of
+    Gemstone's is read. The window is the one the cleanup sweep ends; any other
+    would be a swap nothing ever lifts.
+    """
+    if node.duration.kind not in _REST_OF_TURN:
+        raise LoweringError("a recorded mana swap lasts exactly this turn", node=node)
+    return (
+        OracleInstruction(
+            "swap_controller_added_mana_until_eot", "",
+            {"produced": node.produced, "colors_only": True},
+        ),
+    )
+
+
+def _lower_grant_mana_spending(
+    node: ast.GrantManaSpending,
+) -> tuple[OracleInstruction, ...]:
+    """"Until end of turn, you may spend white mana as though it were mana of
+    any color." (False Dawn.)
+
+    CR 609.4b's permission for a window. The two colour lists are the ones
+    ``mana_spending.ManaSpending`` is built from, carried whole, so the turn's
+    permission and a static one (Celestial Dawn) are one record type read by
+    one payment arithmetic. "Until end of turn" only: the record hangs off the
+    seat and the cleanup step is the one sweep that ends it.
+    """
+    if node.duration.kind not in _REST_OF_TURN:
+        raise LoweringError(
+            "a granted spending permission lasts exactly this turn", node=node
+        )
+    return (
+        OracleInstruction(
+            "grant_mana_spending_until_eot", "",
+            {
+                "fungible_colors": list(node.fungible_colors),
+                "as_colors": list(node.as_colors),
+            },
+        ),
+    )
 
 
 def _lower_spend_mana_as_though(

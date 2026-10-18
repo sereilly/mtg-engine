@@ -52,6 +52,7 @@ from .effects import (_parse_damage_becomes_counter_removal,
                       _parse_return_instead_of_untapping,
                       _parse_count_objects,
                       _parse_tapped_lands_produce_chosen,
+                      parse_turn_mana_change,
                       _parse_spend_mana_as_though,
                       _parse_choose_blocks_for_defenders,
                       _parse_sacrifice_expansion_permanents,
@@ -61,8 +62,10 @@ from .effects import (_parse_damage_becomes_counter_removal,
                       _parse_bound_permanent_activation_ban,
                       _parse_targeting_ban)
 from .sacrifices import _parse_counted_sacrifice
-from .effects.game import parse_extra_land_plays, parse_extra_phases
-from .effects.permissions import _parse_cast_from_exiled_with
+from .effects.game import parse_extra_phases
+from .effects.permissions import (_parse_cast_from_exiled_with,
+                                  _parse_gains_flashback,
+                                  parse_extra_land_plays)
 
 
 from .sentence_clauses import (
@@ -439,6 +442,17 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
         permission = _parse_cast_permission(stream)
         if permission is not None:
             return permission
+    # "Target sorcery card in your graveyard **gains flashback** until end of
+    # turn. The flashback cost is equal to its mana cost." (Recoup.) The same
+    # permission granted as a keyword (CR 702.34a), read here beside the
+    # sentence it is a spelling of and before the subject-verb reader, whose
+    # keyword grant answers "gains flashback" for a permanent and can only
+    # refuse it. Gated on the opening word and refusing without consuming, so
+    # every other "target …" sentence keeps its reading and its refusal site.
+    if stream.at_word("target"):
+        flashback_grant = _parse_gains_flashback(stream)
+        if flashback_grant is not None:
+            return flashback_grant
 
     # "Players and permanents can't be the targets of spells or activated
     # abilities." (Peace Talks.) Read here rather than by the subject-verb
@@ -487,6 +501,16 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
         try:
             duration = _parse_duration(stream)
             if duration.kind is not None and stream.accept_punct(","):
+                # "Until end of turn, **spells and abilities you control that
+                # would add colored mana instead add that much white mana**. …
+                # **you may spend white mana as though it were mana of any
+                # color**." (False Dawn.) Two sentences that are effects only
+                # *behind* a printed window — the second is a static line
+                # elsewhere — so they are read here, with the window in hand,
+                # and refuse without consuming for every other sentence.
+                mana_change = parse_turn_mana_change(stream, duration)
+                if mana_change is not None:
+                    return mana_change
                 return _distribute_duration(
                     parse_statement(stream, top_level=False), duration, stream
                 )

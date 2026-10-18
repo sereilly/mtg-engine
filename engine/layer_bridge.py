@@ -31,6 +31,7 @@ from .auras import (
     aura_pt_grant_per_counter,
     aura_static_pt_grant,
     aura_card_type_grants,
+    aura_creature_type_sets,
     aura_type_grants,
     auras_attached_to,
     chosen_landwalk_grants,
@@ -818,11 +819,25 @@ def collect_own_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect
     # Snow-Covered Forest thawed by Arcum's Weathervane and then frozen again
     # was not snow.
     for gained in gained_types(perm):
+        # "Target creature **becomes that type** until end of turn."
+        # (Unnatural Selection.) CR 205.1a's subtype *set*: "the new
+        # subtype(s) replaces any existing subtypes from the appropriate set" —
+        # the creature types, and no other subtype the permanent has, which is
+        # the scoped replacement Conspiracy's static makes below. The record
+        # says so rather than this collector inferring it: an *addition* of a
+        # creature type ("is a Knight in addition to its other types") is the
+        # same list with nothing replaced.
+        replaced: frozenset[str] = frozenset()
+        if gained.get("replaces_creature_types"):
+            from .grammar.vocabulary import CREATURE_TYPES
+
+            replaced = CREATURE_TYPES
         effects.append(add_types(
             only,
             card_types=list(gained.get("card_types") or ()),
             subtypes=list(gained.get("subtypes") or ()),
             supertypes=list(gained.get("supertypes") or ()),
+            replaces_subtypes_from=replaced,
             timestamp=int(gained.get("timestamp") or 0),
             label=f"gained:{gained.get('source', 'effect')}",
         ))
@@ -955,6 +970,29 @@ def collect_own_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect
                 card_types=list(added_card_types),
                 timestamp=int(aura.metadata.get("aura_timestamp", 0)),
                 label=f"aura:{aura.card.name}",
+            )
+        )
+    # "Enchanted creature **is a Flagbearer**." (Coalition Flag.) The same
+    # sentence without CR 205.1b's rider, so CR 205.1a applies: the new creature
+    # type *replaces* the creature types it had and nothing else — scoped to
+    # CR 205.3m's list, so an animated Forest under the Flag is still a Forest.
+    # Timestamped like the addition above; two such Auras on one creature do
+    # not commute, and the later one is what the creature is (CR 613.7).
+    for aura in auras_attached_to(perm):
+        set_types = aura_creature_type_sets(aura.effective_card.oracle_text)
+        if not set_types:
+            continue
+        # Imported here for `global_static_type_effect`'s reason below: a
+        # top-level import of the vocabulary closes a cycle through the grammar.
+        from .grammar.vocabulary import CREATURE_TYPES
+
+        effects.append(
+            add_types(
+                only,
+                subtypes=list(set_types),
+                replaces_subtypes_from=CREATURE_TYPES,
+                timestamp=int(aura.metadata.get("aura_timestamp", 0)),
+                label=f"aura sets type:{aura.card.name}",
             )
         )
     # "Enchanted land is a 5/6 green **Treefolk creature** that's still a land."

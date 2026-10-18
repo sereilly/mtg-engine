@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 
 # Re-exported for backwards compatibility with external importers.
 from .damage_ledger import DamageLedger
+from .destruction_events import DestructionLedger
 from .game_types import SimulationResult, StackItem
 from .models import CardDefinition, PlayerState
 from .mixins import (
@@ -360,6 +361,29 @@ class Game(
     # ``interactive_seats`` — every other seat takes the choice's default at
     # once, through the same resolver. See engine/replacement_choices.py.
     pending_replacement_choices: list = field(default_factory=list)
+    # CR 121.2 — "If a player is instructed to draw multiple cards, that player
+    # performs that many individual card draws." One at a time: the draws an
+    # instruction owes behind one that is still waiting on a decision. A draw
+    # for a seat does not *start* while a prompt an earlier draw of that seat
+    # armed is owed (``Game._draw_prompt_open``); it is parked here, in order,
+    # and released by the answer that finishes the draw in front of it. Each
+    # entry is ``{"seat", "count", "turn_based", "exclude_sources"}``. Empty
+    # in every headless and AI game that never queues such a prompt.
+    parked_draws: list = field(default_factory=list)
+    # Seats whose draw machinery is on the Python call stack right now — the
+    # seam applying a draw's replacements, or the answer to a prompt one of
+    # them armed. A prompt armed while it is non-empty is stamped with the
+    # seat (``DRAW_OF``), which is what "a prompt an earlier draw armed" reads.
+    draw_scopes: list = field(default_factory=list, repr=False, compare=False)
+    # One ``[choice, cursor]`` per answer in progress to such a prompt. The
+    # choice is the one being answered — it no longer holds anything, whether
+    # or not its resolver has taken it off the queue yet — and the cursor is
+    # where a draw parked from inside that answer goes: ahead of the draws an
+    # outer answer parked, in the order this one asks for them.
+    draw_answer_frames: list = field(default_factory=list, repr=False, compare=False)
+    # True while parked draws are being released — the release is not
+    # re-entered by the draws it makes (see ``_release_parked_draws``).
+    releasing_parked_draws: bool = field(default=False, repr=False, compare=False)
     # 610.3: tracks creatures exiled "until end of turn" — (owner_player_index, card)
     exile_until_eot: list[tuple[int, CardDefinition]] = field(default_factory=list)
     # Cards in exile that something still reads — All Hallow's Eve's scream
@@ -573,6 +597,14 @@ class Game(
     # waits on a prompt, which is the honest answer both times: nothing is
     # running.
     resolving_items: list = field(default_factory=list)
+    # Permanents on their way to a graveyard **right now**: pushed and popped
+    # around ``_permanent_to_graveyard``, which announces a dies-trigger while
+    # the dying permanent is still listed on its battlefield. A target that
+    # trigger's picker defaults to at that moment is chosen off a board the
+    # event has already made stale — it can be the dying permanent itself — so
+    # it is not recorded as a choice (``StackItem.targets_chosen``). Empty
+    # everywhere else.
+    departing: list = field(default_factory=list)
     # What every source dealt this turn, and every cast that could have dealt
     # something — one record, read by "the amount of damage dealt to this
     # creature this turn by other sources named …" (Blazing Effigy) and by "the
@@ -581,6 +613,12 @@ class Game(
     # which is why it is a record and not a scan. Written from `deal_damage`,
     # cleared with the turn. See engine/damage_ledger.py.
     damage_ledger: DamageLedger = field(default_factory=DamageLedger)
+    # What the destroy seam is holding between an event and the stack: the
+    # triggers a destruction has triggered, waiting for the resolution that
+    # destroyed to finish (CR 603.3b), and the watchers taken earlier in the
+    # same simultaneous event (CR 603.10a). Empty outside a destruction. See
+    # engine/destruction_events.py.
+    destruction: DestructionLedger = field(default_factory=DestructionLedger)
 
     def __post_init__(self) -> None:
         # Preserve legacy external phase naming while internally tracking phase/step.

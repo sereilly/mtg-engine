@@ -224,6 +224,20 @@ def _referent_seat_optional_draw(
 _TARGETED_ACTORS = frozenset({"target_opponent", "target_player"})
 
 
+def _is_their_own_graveyard_card(subject) -> bool:
+    """Whether *subject* is "a <card> from **their** graveyard" — one chosen
+    card out of a pile named by the pronoun (which the noun parser spells as
+    the owner's)."""
+    return (
+        isinstance(subject, ast.TargetSpec)
+        and not subject.targeted
+        and subject.quantifier in ("a", "an")
+        and subject.filter.zone == "graveyard"
+        and subject.filter.is_card
+        and getattr(subject.filter.zone_owner, "kind", None) == "owner"
+    )
+
+
 def offered_seat_performs(node: ast.May) -> ast.May:
     """"**Target opponent** may draw a card." (Phelddagrif, Soldevi Heretic,
     Questing Phelddagrif.) *node* with the offer's bare imperative given the
@@ -261,6 +275,20 @@ def offered_seat_performs(node: ast.May) -> ast.May:
     ):
         return node
     action = node.action
+    # "**Target opponent** may exile a card from **their** graveyard."
+    # (Gravestorm.) The same missing subject one clause over: the bare exile
+    # names its pile with a pronoun, and the pronoun is the seat the offer
+    # names. Rewritten to that seat so the lowering reads one printed owner —
+    # the node ``tolls.accept_graveyard_exile_price`` builds for "unless that
+    # player exiles a card from their graveyard".
+    if isinstance(action, ast.Exile) and _is_their_own_graveyard_card(action.subject):
+        return dataclasses.replace(node, action=dataclasses.replace(
+            action, subject=dataclasses.replace(
+                action.subject, filter=dataclasses.replace(
+                    action.subject.filter, zone_owner=node.actor,
+                ),
+            ),
+        ))
     performer = getattr(action, "player", None)
     if not (isinstance(performer, ast.PlayerRef) and performer.kind == "you"):
         # No action, or one that names its own seat ("…may ante the top card of

@@ -240,6 +240,25 @@ class SearchLibrary:
     #: production.
     discard_after: int = 0
     discard_after_at_random: bool = False
+    #: "…for a land card **of each basic land type**" (Gaea's Balance). One
+    #: description per find, in the printed order — the phrase read as what it
+    #: abbreviates ("a Plains card, an Island card, …"), each entry the
+    #: ``filter`` above narrowed by one value. Beside ``named_alternatives``
+    #: and for its reason: the filter says what *one* find may be, and this is
+    #: a list of them, each filled by at most one card.
+    one_of_each: tuple[ObjectFilter, ...] = ()
+    #: "…for up to **that many** basic land cards" (Rites of Spring) and "…for
+    #: up to **X** basic land cards" (New Frontiers). A ceiling that is not a
+    #: printed number, so ``extra_destinations`` and ``tapped`` cannot be sized
+    #: by the parse — ``unbounded``'s situation with a different answer: there
+    #: the ceiling is the zone, here it is a number the resolution reads (a
+    #: record an earlier step wrote, or the cast's X). The amount itself rides,
+    #: because which of the two it is decides where the handler looks.
+    count_amount: "Amount | None" = None
+    #: Whether every find of a ``count_amount`` search enters tapped. One flag
+    #: for however many finds there turn out to be, since ``tapped`` above is
+    #: one entry per *printed* find and this shape prints none.
+    all_tapped: bool = False
 
 @dataclass(frozen=True)
 class LookAtLibraryTop:
@@ -269,6 +288,12 @@ class LookAtLibraryTop:
     #: are three different things to be allowed to do with what you saw, and a
     #: card that only looks must never be handed one of the others.
     may_bottom: bool = False
+    #: "**That player** looks at the top three cards of your library, then puts
+    #: them back in any order." (Tahngarth's Glare.) Who looks, when the
+    #: sentence prints somebody other than the ability's controller — the one
+    #: thing ``player`` cannot say, because that field is whose *library* it is.
+    #: ``None`` is the imperative, which CR 608.2c gives to the controller.
+    looker: "PlayerRef | None" = None
 
 @dataclass(frozen=True)
 class LookTopPickToHand:
@@ -444,6 +469,32 @@ class StripCardsWithChosenName:
     #: counter leaves behind, and a node that named a scratchpad key would be
     #: the grammar reaching across the pipeline for it.
     name_of: str | None = None
+
+
+@dataclass(frozen=True)
+class RevealLibraryOpponentChooses:
+    """``Reveal the cards in your library. An opponent chooses from among them
+    a creature card, a land card, and a noncreature, nonland card. You put the
+    chosen cards into your hand. Then shuffle.`` (Guided Passage.)
+
+    All four sentences, for :class:`RevealTopOpponentChooses`' reason: "them",
+    "the chosen cards" and the shuffle all name the one pile the first sentence
+    turned face up. What is new is the *pick*: not one card out of a pile but
+    **one card per printed description**, each description filled by at most
+    one card (the card's ruling: a description the library cannot answer is
+    simply skipped).
+
+    Not a search — CR 701.23 never applies, because the pile is revealed and
+    the picker is not its owner — so nothing here is optional: every
+    description the library can answer is answered, which is the floor the
+    lowering leaves switched on.
+    """
+    #: One entry per printed description, in the printed order.
+    described: tuple[ObjectFilter, ...]
+    #: Who chooses, as the printed word. Only "an opponent" has a printing —
+    #: CR 608.2d's unnamed opponent, whom the controller picks at a table of
+    #: more than two.
+    chooser: str = "an_opponent"
 
 
 @dataclass(frozen=True)
@@ -677,6 +728,12 @@ class RevealTopSortingByFilter:
     cards revealed this way onto the battlefield **tapped**". Carried rather
     than dropped for the reason every rider here is — a land that arrives
     untapped is a strictly better card than the one printed.
+
+    ``rest_zone`` is a zone word ("graveyard", "exile") or the one *position*
+    the pool prints: ``"library_bottom"``, "and the rest on the bottom of your
+    library in any order" (Goblin Ringleader). The order is the owner's by
+    CR 401.4 and the node carries none — a printing that stated one is a
+    sentence the parse refuses.
     """
 
     count: Amount

@@ -75,17 +75,20 @@ STACK_RECEIVERS = frozenset({"item", "stack_item", "target_item"})
 #: module -> how many printed reads survive in it, and why. A ratchet: it may
 #: only go down.
 PRINTED_READ_BASELINE: dict[str, int] = {
-    # Balance's land/creature lists (2) and Kudzu's land list (1). All three
-    # mirror engine resolvers that ask the same printed question —
-    # ``handlers/board_misc.balance_resources`` counts by ``primary_type``,
-    # ``_resolve_balance`` and ``_default_balance`` validate by it, and
-    # ``_resolve_kudzu_reattach`` refuses a chosen land by it. Under Living
-    # Lands or Kormus Bell those counts are wrong, and they are wrong in the
-    # *engine*: correcting only the prompt would offer a permanent the resolver
-    # rejects. Draining this entry means the engine's five sites and a rule for
-    # what happens when one permanent is both a land and a creature (Balance
-    # sacrifices lands, then creatures, as two separate steps).
-    "prompts.py": 3,
+    # Balance's land/creature lists (2). Both mirror engine resolvers that ask
+    # the same printed question — ``handlers/board_misc.balance_resources``
+    # counts by ``primary_type``, and ``_resolve_balance`` and
+    # ``_default_balance`` validate by it. Under Living Lands or Kormus Bell
+    # those counts are wrong, and they are wrong in the *engine*: correcting
+    # only the prompt would offer a permanent the resolver rejects. Draining
+    # this entry means the engine's four sites and a rule for what happens when
+    # one permanent is both a land and a creature (Balance sacrifices lands,
+    # then creatures, as two separate steps).
+    #
+    # It was 3 until Odyssey: the third was Kudzu's own land list, which went
+    # with that card's hook — its reattachment is the general permanent choice
+    # now, whose candidates are the engine's and read the layers.
+    "prompts.py": 2,
 }
 
 # A permanent's printed card handed whole to a card renderer. The same class

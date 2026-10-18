@@ -125,6 +125,13 @@ def accept_added_base(stream: TokenStream) -> int | None:
 
     Returns None with the cursor where it found it, so a definition that does
     not open with a sum keeps the refusal it already had.
+
+    "…where X is **one plus** the number of cards named ~ in all graveyards"
+    (Aether Burst, Mind Burst). The same constant as a number *word*, which is
+    how Oracle spells 1 where it spells every other base as a digit ("2 plus",
+    Flame Burst; "3 plus", Muscle Burst) — so the cycle's two halves were one
+    production apart. The articles are number words too and are deliberately
+    not read here: "a plus" is no quantity.
     """
     mark = stream.mark()
     token = stream.peek()
@@ -132,6 +139,12 @@ def accept_added_base(stream: TokenStream) -> int | None:
         stream.advance()
         if stream.accept_word("plus"):
             return int(token.text)
+    stream.reset(mark)
+    word = stream.peek_word()
+    if word in NUMBER_WORDS and word not in ("a", "an"):
+        stream.advance()
+        if stream.accept_word("plus"):
+            return int(NUMBER_WORDS[word])
     stream.reset(mark)
     return None
 
@@ -759,6 +772,39 @@ def parse_for_each_sacrificed_this_way(
         stream.reset(mark)
         return None
     return ast.CountOfSacrificesThisWay(filt)
+
+
+def parse_for_each_discarded_this_way(
+    stream: TokenStream, parse_filter,
+) -> "ast.CountOfDiscardsThisWay | None":
+    """``for each <cards> discarded this way`` — how many of what an earlier
+    step of this same effect *discarded* answer a printed noun phrase.
+
+    "Target player discards two cards. You gain 3 life **for each land card
+    discarded this way**." (Gerrard's Verdict.)
+
+    Its own reader beside :func:`parse_for_each_sacrificed_this_way`, which it
+    is shaped exactly like and names a different record. The **bare** "for each
+    card discarded this way" is ``_THIS_WAY_COUNTS``' row and is read first by
+    every caller, so this one is reached only by a *narrowed* phrase — which a
+    slot holding a number cannot answer. A phrase that does not say **card** is
+    refused: what is discarded is a card in a hand (CR 701.9a), and "for each
+    creature discarded this way" is a sentence nobody printed.
+
+    Returning None leaves the cursor where it was.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("for", "each"):
+        return None
+    try:
+        filt = parse_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not filt.is_card or not stream.accept_phrase("discarded", "this", "way"):
+        stream.reset(mark)
+        return None
+    return ast.CountOfDiscardsThisWay(filt)
 
 
 def parse_for_each_revealed_this_way(

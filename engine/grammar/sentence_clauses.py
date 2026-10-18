@@ -144,10 +144,18 @@ def _parse_leading_for_each(
         kind = stream.peek()
         if kind.kind in (PT, WORD):
             stream.advance()
-            if stream.accept_word("counter", "counters") and stream.accept_phrase(
-                "you", "put", "on", "a", "creature", "this", "way"
-            ) and stream.accept_punct(","):
-                return ast.CountersPlacedThisWay(counter=kind.text)
+            if stream.accept_word("counter", "counters"):
+                # "**For each delay counter removed this way,** you lose 1
+                # life unless you pay {1}{W}." (Delaying Shield.) The same
+                # opening with the other participle: a count of what the
+                # sentence in front took *off*, with nothing bound.
+                if stream.accept_phrase("removed", "this", "way"):
+                    if stream.accept_punct(","):
+                        return ast.CountersRemovedThisWay(counter=kind.text)
+                elif stream.accept_phrase(
+                    "you", "put", "on", "a", "creature", "this", "way"
+                ) and stream.accept_punct(","):
+                    return ast.CountersPlacedThisWay(counter=kind.text)
     stream.reset(placed)
     paid = stream.mark()
     symbols = accept_additional_cost_paid(stream)
@@ -366,7 +374,17 @@ def _parse_leading_recorded_count(
     if not stream.accept_punct(","):
         stream.reset(mark)
         return None
-    return _scale_by_recorded_count(parse_body(stream), counted, stream)
+    body = parse_body(stream)
+    if isinstance(body, ast.StripCardsWithChosenName):
+        # "For each card exiled this way, search that player's library for all
+        # cards with the same name as **that card** and exile them." (Haunting
+        # Echoes.) The body names one turn of a *loop* — "that card" — and
+        # carries no count a rate could replace, so the words in front of it
+        # are the loop's and not this reader's. Handed back unread rather than
+        # refused, so `_parse_leading_for_each` below gets the sentence.
+        stream.reset(mark)
+        return None
+    return _scale_by_recorded_count(body, counted, stream)
 
 
 def _scale_by_recorded_count(

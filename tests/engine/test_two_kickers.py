@@ -35,8 +35,11 @@ from engine.card_loader import load_cards, manifest_set_paths
 from engine.cast_costs import (additional_costs, is_kicker_line, kicked,
                                kicked_with, kicker_cost, kicker_costs,
                                kickers_paid)
+from engine.enter_effects import kicked_entry
 from engine.faces import compilation_units
-from engine.oracle import compile_card_oracle, expand_ability_lines
+from engine.models import Permanent
+from engine.oracle import (compile_card_oracle, expand_ability_lines,
+                           expand_card_lines)
 
 #: Planeshift prints five; a later set raises it and an empty census fails.
 _TWO_KICKER_FLOOR = 5
@@ -136,7 +139,15 @@ def test_a_named_kicker_condition_names_a_cost_the_card_offers(pool):
     """CR 702.33f: "if it was kicked with its [A] kicker" is linked to one of
     the card's own kicker costs. The lowered key must therefore be one of
     ``kicker_costs`` — a key nothing records is a condition that never holds —
-    and a card with two kickers must ask about each of them somewhere."""
+    and a card with two kickers must ask about each of them somewhere.
+
+    Asked in **both** places the sentence can live: a ``was_kicked`` condition
+    in the compiled program (the Battlemages' entry triggers), and an entry
+    replacement, which is no instruction at all — "If this creature was kicked
+    with its {1}{U} kicker, it enters with …" (the Volvers, CR 614.1c) is read
+    off the permanent's text by ``enter_effects.kicked_entry`` as it arrives.
+    A census that knew only the first would pass over all five Volvers without
+    examining one."""
     named = 0
     for card in pool.values():
         if not compile_card_oracle(card).supported:
@@ -145,6 +156,12 @@ def test_a_named_kicker_condition_names_a_cost_the_card_offers(pool):
             condition["kicker"]
             for condition in _program_conditions(card, "was_kicked")
             if "kicker" in condition
+        ]
+        asked += [
+            entry["kicker"]
+            for line in expand_card_lines(card)
+            if (entry := kicked_entry(line, card.name)) is not None
+            and entry["kicker"] is not None
         ]
         if not asked:
             continue
@@ -158,12 +175,20 @@ def test_a_named_kicker_condition_names_a_cost_the_card_offers(pool):
 
 
 def _rich_duel(card):
-    forest = _both_roles()["Forest"]
+    """A duel in which *card* can be cast whichever kickers are announced: all
+    the mana it could want, and a creature across the table — Illuminate is an
+    instant that must name one (CR 601.2c), and a census that casts every
+    two-kicker card cannot be one that only casts the creatures among them."""
+    cards = _both_roles()
+    forest = cards["Forest"]
     game = Game(players=[
         PlayerState("Caster", library=[forest] * 10, hand=[card]),
         PlayerState("Other", library=[forest] * 10),
     ])
     game.enforce_mana_costs = True
+    game._put_permanent_onto_battlefield(
+        1, Permanent(card=cards["Grizzly Bears"]), None
+    )
     for symbol in "WUBRG":
         game.players[0].mana_pool[symbol] = 20
     return game

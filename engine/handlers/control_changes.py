@@ -959,6 +959,85 @@ def exchange_control_of_bound(game: Game, instruction: OracleInstruction, contex
     return True, "resolved"
 
 
+@effect_handler("exchange_control_of_chosen_sets")
+def exchange_control_of_chosen_sets(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"**Those players exchange control of those creatures.**" (Cultural
+    Exchange, CR 701.12.)
+
+    ``exchange_control_of_bound`` beside it with a *set* on each side: two
+    lists earlier steps of this resolution recorded, read back as the
+    permanents themselves (``choose_permanents`` records objects). The effect
+    lasts indefinitely, which here means what it means for every exchange in
+    this file — two plain layer-2 contributions per pair of seats with no
+    duration stamped, so nothing ends them and each permanent keeps the
+    ``base_controller_index`` it entered under.
+
+    **Atomic, over the whole of both sets** (CR 701.12a: "if the entire
+    exchange can't be completed, no part of the exchange occurs"). So every
+    check runs before the first contribution is recorded, and any one of them
+    failing leaves the board exactly as it was:
+
+    * the sets are the same size — the card's own "the same number", which the
+      picks enforce; a side whose step was skipped (CR 608.2b: its player is no
+      longer a legal target) is a side of none against a side of some;
+    * every chosen permanent is still on the battlefield;
+    * each side has one controller and the two differ (CR 701.12b — two sets
+      one player controls exchange to nothing);
+    * no chosen permanent is barred from changing controllers (Guardian
+      Beast, CR 614.17).
+
+    Both sets are read before either moves (CR 611.2c), which is what makes
+    the exchange simultaneous: the new controllers are computed off the board
+    as it stood, never off a board half the change had already rewritten.
+    """
+    from ..control import change_control
+
+    card = context.card
+    payload = instruction.payload
+    first = list(context.results.get(payload["first_from"]) or ())
+    second = list(context.results.get(payload["second_from"]) or ())
+    if not first and not second:
+        game.log.append(f"{card.name}: nothing was chosen, so nothing is exchanged")
+        return True, "resolved"
+    incomplete = f"{card.name}: the exchange could not be completed, so nothing happens"
+    if len(first) != len(second):
+        game.log.append(incomplete)
+        return True, "resolved"
+    if not all(game.is_on_battlefield(perm) for perm in (*first, *second)):
+        game.log.append(incomplete)
+        return True, "resolved"
+    first_seats = {game.controller_index_of(perm) for perm in first}
+    second_seats = {game.controller_index_of(perm) for perm in second}
+    if (
+        len(first_seats) != 1 or len(second_seats) != 1
+        or None in first_seats or first_seats == second_seats
+    ):
+        game.log.append(incomplete)
+        return True, "resolved"
+    seat_of_first = next(iter(first_seats))
+    seat_of_second = next(iter(second_seats))
+    if any(game.cant_gain_control(perm, seat_of_second) for perm in first) or any(
+        game.cant_gain_control(perm, seat_of_first) for perm in second
+    ):
+        game.log.append(
+            f"{card.name}: a permanent can't change controllers, so nothing happens"
+        )
+        return True, "resolved"
+    for perm in first:
+        change_control(perm, seat_of_second, source=card)
+    for perm in second:
+        change_control(perm, seat_of_first, source=card)
+    game._sync_control()
+    game.log.append(
+        f"{card.name}: {game.players[seat_of_first].name} and "
+        f"{game.players[seat_of_second].name} exchanged control of "
+        + ", ".join(perm.card.name for perm in first)
+        + " and "
+        + ", ".join(perm.card.name for perm in second)
+    )
+    return True, "resolved"
+
+
 @effect_handler("bid_life_for_control")
 def bid_life_for_control(
     game: "Game", instruction: "OracleInstruction",

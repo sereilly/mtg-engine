@@ -373,6 +373,23 @@ def _accept_record_condition(stream: TokenStream) -> "ast.Condition | None":
                 pass
     stream.reset(cost_mark)
 
+    # "Return target card from your graveyard to your hand **if it shares a
+    # card type with the card exiled this way**." (Holistic Wisdom.) The cost
+    # channel again, compared with the guarded effect's own target rather than
+    # tested against a noun phrase. Every word is required: "shares a
+    # *creature* type" and "the card *discarded* this way" are other sentences,
+    # and the participle is carried so the lowering can find the cost.
+    shares_mark = stream.mark()
+    if stream.accept_phrase(
+        "it", "shares", "a", "card", "type", "with", "the", "card"
+    ):
+        participle = stream.peek_word()
+        if participle in ("exiled", "sacrificed", "discarded"):
+            stream.advance()
+            if stream.accept_phrase("this", "way"):
+                return ast.SharesCardTypeWithCostCard(str(participle))
+    stream.reset(shares_mark)
+
     # "if it's a creature or land card" (Track Down) — the present-tense twin of
     # the clause above, and a different question: that one asks what an object
     # *was* before it left a zone, this one asks what a card revealed by an
@@ -478,6 +495,34 @@ def _accept_record_condition(stream: TokenStream) -> "ast.Condition | None":
         "that", "card", "has", "the", "chosen", "name",
     ):
         return ast.RevealedCardHasChosenName()
+    stream.reset(named_mark)
+
+    # "…unless **it has the same name as another card exiled this way**" /
+    # "…until you put a card into your hand or **you exile two cards with the
+    # same name**" (Tainted Pact). CR 201.2a's relation over the cards this
+    # effect has exiled so far, asked of the latest one and of any two — one
+    # node, because it is one record's question twice. Every word is required:
+    # "two" is the only size the relation is asked at, and a printed "three"
+    # must fail here rather than be answered as two.
+    if (
+        stream.accept_word("it") or stream.accept_phrase("that", "card")
+    ) and stream.accept_phrase(
+        "has", "the", "same", "name", "as", "another", "card", "exiled",
+        "this", "way",
+    ):
+        return ast.ExiledThisWayShareAName(of_latest=True)
+    stream.reset(named_mark)
+    if stream.accept_phrase(
+        "you", "exile", "two", "cards", "with", "the", "same", "name",
+    ):
+        return ast.ExiledThisWayShareAName()
+    stream.reset(named_mark)
+    # "…until **you put a card into your hand**" (the same card's other
+    # stopping clause). Whether a step of this effect put one there; the
+    # lowering refuses it with no such step in front of it.
+    if stream.accept_phrase("you", "put", "a", "card", "into", "your", "hand"):
+        stream.accept_phrase("this", "way")
+        return ast.PutIntoHandThisWay()
     stream.reset(named_mark)
 
     milled_mark = stream.mark()

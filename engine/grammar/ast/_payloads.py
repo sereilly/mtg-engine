@@ -104,6 +104,8 @@ def object_filter_payload(self: "ObjectFilter") -> dict[str, object]:
         payload["exclude_types"] = list(self.excluded_types)
     if self.attached_to_filter is not None:
         payload["attached_to_filter"] = self.attached_to_filter.to_payload()
+    if self.attached_to_permanent:
+        payload["attached_to_permanent"] = True
     if self.named_as_target is not None:
         payload["named_as_target"] = self.named_as_target.to_payload()
     if self.controller_controls is not None:
@@ -150,6 +152,15 @@ def object_filter_payload(self: "ObjectFilter") -> dict[str, object]:
     # written before this are byte-identical.
     if self.blocking_source:
         payload["blocking_source"] = True
+    # "target creature **blocking or blocked by** Cromat" — the union of the
+    # two keys above, which no pair of them can state (every matcher ANDs its
+    # keys, so both together name a creature on both sides of one block, a set
+    # that is always empty). Emitted for ``blocking_source``'s reason and on
+    # its footing: ``subject_matches`` takes the source the relation is to.
+    # The four lowerings written before this each strip the field and carry
+    # the relation themselves, so their payloads are byte-identical.
+    if self.in_combat_with_source:
+        payload["in_combat_with_source"] = True
     if self.blocking_attached_host:
         payload["blocking_attached_host"] = True
     if self.blocked_or_was_blocked_this_turn:
@@ -200,6 +211,11 @@ def object_filter_payload(self: "ObjectFilter") -> dict[str, object]:
         # set, so a lowering that does not lift it out and resolve the pronoun
         # refuses the phrase rather than sweeping without the narrowing.
         payload["shares_color_with_it"] = True
+    if self.colors_of_sacrificed_for_cost:
+        # Emitted for the reason directly above: outside every testable set,
+        # so the phrase refuses unless a lowering lifts it out and names the
+        # cost record the colours are read from.
+        payload["colors_of_sacrificed_for_cost"] = True
     if self.excluded_basic_lands:
         payload["exclude_basic_lands"] = True
     if self.not_enchanted:
@@ -342,6 +358,10 @@ def object_filter_payload(self: "ObjectFilter") -> dict[str, object]:
         }
     if self.colored:
         payload["colored_only"] = True
+    # "a **multicolored** creature card" (Dragon Arch). Emitted only when set,
+    # so every payload written before this key existed is byte-identical.
+    if self.multicolored:
+        payload["multicolored"] = True
     # "with a +1/+1 counter on it" (Tempered Veteran). Emitted only when
     # set, so every payload written before this key existed is
     # byte-identical.

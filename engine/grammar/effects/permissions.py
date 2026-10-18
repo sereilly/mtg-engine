@@ -47,6 +47,16 @@ here reads *several sentences*"; this read one, and its subject was this
 module's. It is imported from here by name rather than through the package's
 front door, so its one caller says where it lives.
 
+**CR 305.2's grant came over at Odyssey's Phase 0**, from the module the bans
+had left without it: "You may play up to three additional lands this turn"
+(Summer Bloom, :func:`parse_extra_land_plays`). The ban below it had gone on
+calling itself "the mirror of" that production and arguing its own duration
+"for the same reason as above" with nothing above it — a sentence about this
+seam that was wrong in *this* file, not in ``game``'s. The "may" it reads is
+the permission and not an offer, which is this module's first paragraph said
+of a land drop. Its node and its lowering stay where the ban's are, in
+``ast/game.py`` and ``lowering/game.py``: no guard has fired on either.
+
 Every arrival moved byte-identically, so no card's compiled program moves —
 which is the only thing a parse-side split can get wrong, and it can get it
 wrong only by renaming a lowering **category**. Nothing here has one: a
@@ -63,7 +73,7 @@ from ..durations import _parse_duration
 from ..phrases import _parse_zone
 from ..references import parse_player_ref, parse_target_spec
 from ..stream import TokenStream
-from ..vocabulary import CARD_TYPES, singular as _singular
+from ..vocabulary import CARD_TYPES, NUMBER_WORDS, singular as _singular
 
 
 def _accept_spell_type_union(stream: TokenStream) -> "tuple[str, ...] | None":
@@ -381,6 +391,62 @@ def _parse_cast_permission(stream: TokenStream) -> ast.Statement | None:
     return None
 
 
+def _parse_gains_flashback(stream: TokenStream) -> "ast.CastPermission | None":
+    """``Target sorcery card in your graveyard gains flashback until end of
+    turn. The flashback cost is equal to its mana cost.`` (Recoup.)
+
+    CR 702.34a defines flashback as a permission — "You may cast this card
+    from your graveyard … by paying [cost] rather than paying its mana cost" —
+    so a sentence *granting* it is a cast permission over one targeted card,
+    which is :class:`ast.CastPermission`'s ``target_card`` reading with a
+    price on it. That is why it is read here and not by the keyword-grant
+    production, which answers the same four words ("… gains flashback until
+    end of turn") for a *permanent* and whose lowering can only refuse them:
+    flashback is not a characteristic a layer could carry, it is a way to cast
+    a card.
+
+    **Both sentences, read whole.** The second states the price, and a grant
+    with no price is not a sentence any card prints — "gains flashback" alone
+    would leave nothing to pay. So the pair is one production: the full stop
+    between them is consumed here, and a printing that stated the cost any
+    other way ("The flashback cost is {2}.") is refused with the cursor
+    exactly where it was, so the line keeps its own refusal rather than being
+    lowered as a grant at a price the card does not name.
+
+    The duration is required for the reason every targeted grant states one or
+    is bounded by its card's zone: CR 611.2a, and the cleanup sweep is the
+    only thing that ends this one.
+    """
+    mark = stream.mark()
+    try:
+        spec = parse_target_spec(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if spec is None or spec.quantifier != "target" or not spec.filter.is_card:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("gains", "flashback"):
+        stream.reset(mark)
+        return None
+    if _parse_duration(stream).kind != "until_end_of_turn":
+        stream.reset(mark)
+        return None
+    if not (
+        stream.accept_punct(".")
+        and stream.accept_phrase(
+            "the", "flashback", "cost", "is", "equal", "to", "its", "mana",
+            "cost",
+        )
+    ):
+        stream.reset(mark)
+        return None
+    return ast.CastPermission(
+        mode="cast", what="target_card", target=spec,
+        until_end_of_turn=True, flashback_cost="mana_cost",
+    )
+
+
 #: "Play with the top card of your library revealed", in the tokens the grammar
 #: reads it in — **derived from the implementing module's own sentence**
 #: (``engine/library_top.REVEALED_TEXT``) rather than spelled again here.
@@ -474,6 +540,65 @@ def _parse_cast_from_exiled_with(stream: TokenStream) -> ast.Statement | None:
     ):
         return None
     return ast.CastFromExiledWith(filt)
+
+
+def parse_extra_land_plays(stream: TokenStream) -> "ast.ExtraLandPlays | None":
+    """``You may play up to three additional lands this turn.`` (Summer Bloom.)
+
+    CR 305.2's ceiling raised for one turn. Read as **one** production rather
+    than as the ordinary "you may <action>" wrapper, because the "may" is the
+    permission and not an offer: nothing is asked of anybody as the spell
+    resolves, and the wrapper would put a yes/no prompt in front of a card that
+    prints no decision. That is why it is tried in ``statements.py`` *ahead* of
+    the "you may" branch.
+
+    Non-consuming on every refusal. Two sentences it must leave alone sit one
+    word away and both belong to ``engine/land_play_allowance.py``'s derivation
+    table — "You may play **any number of** lands on each of your turns"
+    (Fastbond) and "You may play an additional land **on each of your turns**" —
+    and a production that consumed either would take that table's line and give
+    it to nobody, since a parsed-but-unlowered line is still parsed
+    (``derived.py`` is consulted only where the grammar refuses in full).
+    The duration is what separates them, so the duration is required.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("you"):
+        return None
+    if not stream.accept_word("may"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("play"):
+        stream.reset(mark)
+        return None
+    # "up to three additional lands" (Summer Bloom) and "an additional land"
+    # (the shape a one-turn printing of Fastbond's sibling would take) are the
+    # same clause with the count spelled differently, so the count is payload.
+    # "up to" is CR 601.2c's ceiling and adds nothing here: a land drop is a
+    # permission a player uses or does not, so "up to three more" and "three
+    # more" grant the same thing.
+    stream.accept_phrase("up", "to")
+    amount = 1
+    if not stream.accept_word("an", "a"):
+        word = stream.peek_word()
+        number = NUMBER_WORDS.get(word or "")
+        if number is None:
+            stream.reset(mark)
+            return None
+        stream.advance()
+        amount = number
+    if not stream.accept_word("additional"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("land", "lands"):
+        stream.reset(mark)
+        return None
+    duration = _parse_duration(stream)
+    if duration.kind != "this_turn":
+        # The derivation table's two sentences end here, in the parse, with
+        # nothing consumed — see the docstring.
+        stream.reset(mark)
+        return None
+    return ast.ExtraLandPlays(ast.PlayerRef("you"), amount, duration)
 
 
 def parse_cant_play_lands(
@@ -577,6 +702,16 @@ def parse_cant_cast_spell_types(
     if not stream.accept_word("spells"):
         stream.reset(mark)
         return None
+    # "Target player can't cast creature spells **this turn**." (Cease-Fire.)
+    # The window printed behind the typed list, where Abeyance prints it in
+    # front of the sentence: the same field either way. Any other trailing
+    # window is left unread, so the line refuses on it rather than being
+    # recorded for a turn it does not name.
+    window_mark = stream.mark()
+    window = _parse_duration(stream)
+    if window.kind == "this_turn":
+        return ast.CantCastSpellTypes(subject, tuple(types), window)
+    stream.reset(window_mark)
     return ast.CantCastSpellTypes(subject, tuple(types))
 
 

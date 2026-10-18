@@ -348,12 +348,18 @@ class TestKudzu:
         # arrangement that kept it from firing on any other way a land becomes
         # tapped. Now the trigger uses the stack (CR 603.3) and its offer is a
         # prompt like every other, so the seat has to be interactive to be asked.
+        #
+        # And the prompt is the ordinary "choose a permanent" one, answered by
+        # the land's id: the card's line compiles from the grammar since
+        # Odyssey's Steam Vines printed the same sentence, and the prompt of
+        # its own that Kudzu had — a battlefield index, the chooser's own lands
+        # only — went with the hook.
         game.interactive_seats = {0}
         game.tap_land_for_mana(0, "Forest", chosen_color="G", permanent_index=0)
-        game.resolve_top_of_stack()
+        game.resolve_top_of_stack(pause_for_choices=True)
         assert not any(p.card.name == "Forest" for p in p1.battlefield)
 
-        assert game.confirm_kudzu_reattach(0, 1)
+        assert game.confirm_permanent_choice(0, game.permanent_id_of(plains))
         assert kudzu.metadata.get("attached_to") is plains
 
 

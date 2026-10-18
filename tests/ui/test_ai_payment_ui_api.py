@@ -3,7 +3,7 @@
 ``web/game_flow._ai_step`` is the second executor of an AI seat's choice (the
 simulator's is held by ``tests/ai``). Two things it could not do, and a third
 it did wrong, each for want of a line the two executors now share
-(``engine.ai_policy.tap_planned_lands`` / ``cast_zone_of``):
+(``engine.ai_policy.tap_planned_lands`` / ``zone_being_cast_from``):
 
 * pay with a source that is **sacrificed** — and still announce the target it
   chose, which the sacrifice has moved to another slot;

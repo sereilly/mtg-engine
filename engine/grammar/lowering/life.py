@@ -45,7 +45,8 @@ from ...oracle_types import (COUNTERED_SPELL_CONTROLLER, LAST_TARGET_CONTROLLER,
 from .. import ast
 from ..errors import LoweringError
 from ._seats import _player_recipient
-from ._amounts import halved_count_spec, seat_scoped_count_spec, x_offset_amount
+from ._amounts import (count_spec, halved_count_spec, seat_scoped_count_spec,
+                       x_offset_amount)
 from ._common import (
     _amount_payload,
     _describe_targets,
@@ -99,6 +100,16 @@ def _lower_gain_life(
     event: str | None = None,
 ) -> tuple[OracleInstruction, ...]:
     recipient = "caster" if node.player.kind == "you" else "target"
+    # "**Each player** gains 1 life." (Putrid Warrior.) "…**each opponent**
+    # gains that much life." (Grollub.) A *set* of seats, which is the loss's
+    # own reading of the same two words one function down — and until Putrid
+    # Warrior was driven it was not this function's: the quantifier fell
+    # through to "target", so one seat gained and the card compiled supported.
+    # In a duel "each opponent" and "the default target" are the same player,
+    # which is how Grollub looked right for nine sets; "each player" is wrong
+    # at two seats already, because the gain reached one of them.
+    if node.player.kind in _PER_SEAT_LIFE_RECIPIENTS:
+        recipient = node.player.kind
     # "**Its controller** gains life equal to its mana value." (Illumination.)
     # The controller of the object the previous step acted on, which is neither
     # of the two seats a life gain normally knows — and by the time this runs
@@ -394,9 +405,28 @@ def _lower_lose_life(
                     "recipient": node.player.kind,
                 }),
             )
+    # "Target opponent loses 2 life **for each Swamp you control**." (Last
+    # Stand.) The count is the effect's controller's own board — one number
+    # whoever loses the life, so it is the shared ``x_from_count`` channel with
+    # the printed rate as its multiplier and the recipient stays whatever the
+    # branches below make of the subject. Only "you control": a phrase naming
+    # the *losing* seat is the per-recipient reading above, and one naming no
+    # seat at all is a count nothing here scopes.
+    if (
+        isinstance(node.per_each, ast.ObjectFilter)
+        and node.per_each.zone == "battlefield"
+        and node.per_each.controller == "you"
+        and isinstance(node.amount, ast.Fixed)
+    ):
+        payload = {
+            "amount": "x",
+            X_FROM_COUNT: count_spec(
+                node.per_each, node, multiplier=node.amount.value
+            ),
+        }
     # "…for each creature card in their graveyard" (Liliana, Death Mage) — the
     # loss is multiplied by a zone count of the losing player's.
-    if node.per_each is not None:
+    elif node.per_each is not None:
         filt = node.per_each
         if node.player.kind != "target_opponent" or filt.zone != "graveyard":
             raise LoweringError(
@@ -486,6 +516,19 @@ def _lower_lose_life(
         # wrote one, so "Destroy target creature. Its controller loses 2 life."
         # keeps the reading it has: inside one resolution the pronoun names
         # what that resolution acted on, not what fired it.
+        #
+        # "Counter target spell. **Its controller** loses 3 life." (Undermine.)
+        # The object the step in front chose is a *spell*, and a spell's seat
+        # has its own record (``COUNTERED_SPELL_CONTROLLER`` — a countered
+        # spell is a card in a graveyard, which CR 109.4 gives no controller).
+        # This branch wrote the permanent record whatever the step in front
+        # had produced, so the sentence compiled and read a key only a destroy
+        # writes: Undermine shipped and never made anyone lose life. Asked in
+        # the order `_lower_gain_life` above already asks for the same word —
+        # one module, one phrase, and until now two answers.
+        if COUNTERED_SPELL_CONTROLLER in produced:
+            payload["recipient"] = COUNTERED_SPELL_CONTROLLER
+            return (OracleInstruction("target_loses_life", "", payload),)
         if LAST_TARGET_CONTROLLER not in produced and (
             event in _EVENT_SUBJECT_CONTROLLERS
         ):

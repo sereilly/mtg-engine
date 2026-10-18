@@ -98,8 +98,10 @@ def test_an_opponent_priced_chain_never_asks_the_controller(set_pool):
 
 
 def test_a_seat_below_the_price_cannot_pay_it(set_pool):
-    """CR 119.4. The accept is not a payment: no life moves and the chain goes
-    on to its unpaid branch."""
+    """CR 119.4. The accept is not a payment, and not an answer either: a
+    seat that is asked cannot choose what it cannot do (CR 608.2d), so the
+    "yes" is refused and the offer stands until it says the "no" it can say.
+    No life moves and the chain goes on to its unpaid branch."""
     game = _duel(
         set_pool, "Draw a card unless any player pays 5 life.", interactive=(0, 1),
     )
@@ -107,7 +109,9 @@ def test_a_seat_below_the_price_cannot_pay_it(set_pool):
     game.cast_from_hand(0, "Probe")
 
     assert game.confirm_optional_pay(0, accept=False)
-    assert game.confirm_optional_pay(1, accept=True)
+    assert game.confirm_optional_pay(1, accept=True) is False
+    assert game.players[1].life == 4 and game.pending_optional_pays
+    assert game.confirm_optional_pay(1, accept=False)
     game._settle()
 
     assert game.players[1].life == 4
@@ -179,10 +183,34 @@ def test_the_pronoun_returns_the_discarded_card_and_only_to_the_battlefield(set_
     ] == ["Grizzly Bears"]
 
 
+@pytest.mark.parametrize("picked, drew", [("Grizzly Bears", True), ("Forest", False)])
+def test_a_typed_discard_test_reads_the_cards_a_chosen_discard_took(
+    set_pool, picked: str, drew: bool
+):
+    """The chosen discard lists its cards too, since Gerrard's Verdict ("You
+    gain 3 life for each land card discarded this way") needed it to.
+
+    This sentence sat in the refusal list below, for the reason that list
+    gives: a chosen discard counted its cards and did not list them, so
+    against that producer the typed test would never have been true. The
+    prompt's answer writes the list now (``_after_discard_answered``), and the
+    branch follows the card the seat actually picked.
+    """
+    text = "Discard a card. If you discard a creature card this way, draw a card."
+    assert compile_card_oracle(_spell(text)).supported
+    game = _duel(set_pool, text, interactive=(0,), hand=["Grizzly Bears", "Forest"])
+    game.queue_from_hand(0, "Probe")
+    game.resolve_top_of_stack()
+    hand = [card.name for card in game.players[0].hand]
+    assert game.confirm_discard(0, [hand.index(picked)])
+
+    kept = "Forest" if picked == "Grizzly Bears" else "Grizzly Bears"
+    assert [card.name for card in game.players[0].hand] == (
+        [kept, "Island"] if drew else [kept]
+    ), game.log
+
+
 @pytest.mark.parametrize("text", [
-    # A chosen discard counts its cards and does not list them: against that
-    # producer the typed test would never be true.
-    "Discard a card. If you discard a creature card this way, draw a card.",
     # No step put a card there for "it" to name.
     "Return it from your graveyard to the battlefield.",
     # The record's reader moves a card onto the battlefield and nowhere else.

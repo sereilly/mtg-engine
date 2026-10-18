@@ -23,7 +23,7 @@ from .. import ast
 from ..errors import LoweringError
 from ...subject_filters import untestable_filter_keys
 from ...oracle_types import X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT
-from ._amounts import tapped_this_way_record
+from ._amounts import tapped_this_way_record, x_offset_amount
 from ._counted_damage import (
     _LOOPED_PLAYER_RECIPIENTS,
     _lower_board_count_damage,
@@ -33,8 +33,10 @@ from ._counted_damage import (
     _lower_cost_discard_damage,
     _lower_cost_tap_damage,
     _lower_counted_damage,
+    lower_ledger_damage,
     lower_difference_damage,
     lower_revealed_this_way_damage,
+    lower_subtracted_damage,
 )
 
 from ._bites import lower_bite
@@ -51,7 +53,7 @@ from ._common import (
     _filter_payload, _is_enchanted,
 )
 from ._events import (_chosen_cast_amount, SWEPT_CONTROLLER_SEATS,
-                      _back_reference_payload)
+                      _back_reference_payload, dealer_is_event_subject)
 from ._recipients import lower_damage_recipient
 from ._conjuncts import lower_damage_conjunction, lower_split_recipients
 
@@ -199,7 +201,7 @@ def _lower_damage(
             "no damage handler carries the printed seat narrowing here", node=node
         )
     lowered = _with_attached_dealer(node, lowered)
-    lowered = _with_foreign_dealer(node, lowered, produced)
+    lowered = _with_foreign_dealer(node, lowered, produced, event)
     return lowered
 
 
@@ -220,7 +222,7 @@ _CLASS_DEALER_QUANTIFIERS = frozenset({"all", "each", "target"})
 
 def _with_foreign_dealer(
     node: ast.DealDamage, lowered: tuple[OracleInstruction, ...],
-    produced: frozenset[str],
+    produced: frozenset[str], event: str | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """"Destroy target artifact. **That artifact** deals damage equal to its
     mana value to this creature." (Goblin Tinkerer.)
@@ -242,6 +244,15 @@ def _with_foreign_dealer(
       (``"attached"``, ``"event_subject"``); its value here is the record the
       handler reads it from. With no such record the line refuses — a
       back-reference to nothing is a dealer nobody can find.
+
+      …unless the firing **event** recorded it: "Whenever a creature has four
+      or more fuse counters on it, … destroy it. **That creature** deals 4
+      damage to its controller." (Bomb Squad.) The dealer is the object the
+      trigger was about, frozen whole by the fire site so that it still deals
+      the damage after the sentence in front has destroyed it — and after
+      *another* Bomb Squad's trigger has, which is the card's ruling
+      (``_events.dealer_is_event_subject``). A step's record is the nearer
+      antecedent and is read first.
     * **a class or a target** ("creatures deal …", "target creature deals …")
       has no handler that makes each of them the source, so it refuses. No card
       in the pool prints it; it was found by the deletion probe on cards whose
@@ -267,6 +278,8 @@ def _with_foreign_dealer(
         return lowered
     if source.quantifier == "that":
         record = next((key for key in _DEALER_RECORDS if key in produced), None)
+        if record is None and dealer_is_event_subject(source, event):
+            record = "event_subject"
         if record is None:
             raise LoweringError(
                 "no earlier step records the object this damage's printed "
@@ -452,7 +465,21 @@ def _lower_damage_shape(
     # inside them: the subtrahend is scoped to a *different* seat, which is the
     # one thing `count_spec` cannot carry on a filter.
     if isinstance(node.amount, ast.Minus):
+        # "**5 minus X** damage" is a printed number less the sentence's own
+        # X, not two counted sets — read first, so the counted reading
+        # below keeps refusing everything else with its own sentence.
+        subtracted = x_offset_amount(node.amount)
+        if subtracted is not None:
+            return lower_subtracted_damage(
+                node, subtracted,
+                lambda bare: _lower_damage(bare, event, produced, event_subject),
+            )
         return lower_difference_damage(node)
+    # "…equal to **the damage already dealt to it this turn**" (Whipkeeper). A
+    # history of the recipient rather than a count of anything on a board,
+    # beside the counts for the reason the cost channels below are.
+    if isinstance(node.amount, ast.DamageDealtThisTurn):
+        return lower_ledger_damage(node)
     if isinstance(node.amount, ast.SacrificedForCost):
         return _lower_cost_sacrifice_damage(node)
     # "…equal to **the tapped creature's power**" (Unerring Sling) — the same
@@ -633,6 +660,13 @@ def _lower_damage_shape(
             return (OracleInstruction(sweep, "", dict(back_reference)),)
         return (OracleInstruction(sweep, "", {"amount": amount}),)
 
+    if not node.recipients:
+        # "…deals 3 damage" with nobody named. The split below lowers one
+        # instruction per recipient, so none lowered to *nothing* and the
+        # clause reported supported while dealing no damage (Raka Sanctuary's
+        # "deals 3 damage instead", before the rider gave it the replaced
+        # sentence's recipient).
+        raise LoweringError("a damage clause names no recipient", node=node)
     if len(node.recipients) != 1:
         return lower_split_recipients(
             node, event, produced, event_subject, _lower_damage

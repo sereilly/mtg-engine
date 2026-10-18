@@ -339,7 +339,10 @@ POSITIONAL_BASELINE: dict[str, int] = {
     # same announcement.
     "engine/mixins/stack/activation.py": 1,
     "engine/mixins/stack/casting.py": 4,
-    "engine/mixins/stack/choices.py": 4,
+    # 4 -> 3 at Odyssey: Kudzu's own reattach prompt subscripted its chooser's
+    # battlefield by a wire index, and went with the card's hook — the general
+    # permanent choice answers by id.
+    "engine/mixins/stack/choices.py": 3,
     # One read moved between these two in LEG round 32, and nothing else about
     # them changed: "whenever this creature attacks and isn't blocked" fires
     # when blocks lock (CR 509.1h) rather than inside `resolve_combat_damage`,

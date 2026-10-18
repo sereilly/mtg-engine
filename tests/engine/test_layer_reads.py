@@ -392,8 +392,8 @@ _PRINTED_PRIMARY_TYPE = re.compile(r"\.card\.primary_type\b")
 PRIMARY_TYPE_BASELINE: dict[str, int] = {
     "ai_policy.py": 8,
     "card_hooks.py": 1,
-    "handlers/board_misc.py": 5,
-    "handlers/destruction.py": 2,
+    "handlers/board_misc.py": 4,
+    "handlers/destruction.py": 1,   # 2 -> 1: Kudzu's hook handler (ODY W1G8)
     "handlers/mana.py": 1,
     "handlers/prevention.py": 1,
     "handlers/stack.py": 2,
@@ -404,7 +404,7 @@ PRIMARY_TYPE_BASELINE: dict[str, int] = {
     "mixins/oracle_instructions.py": 6,
     "mixins/permanent_state.py": 4,
     "mixins/stack/casting.py": 3,
-    "mixins/stack/choices.py": 7,
+    "mixins/stack/choices.py": 5,   # 7 -> 5: Kudzu's reattach prompt (ODY W1G8)
     "mixins/stack/resolution.py": 1,
     "phases/untap_step.py": 2,
     "phases/upkeep_step.py": 3,
@@ -503,8 +503,14 @@ PRINTED_COMPILE_BASELINE: dict[str, int] = {
     # A spell on the stack: the stack item's card is the object being asked.
     "counter_conditions.py": 1,
     "mixins/helpers.py": 1,
-    "mixins/stack/casting.py": 1,
+    # …and a modal spell's announced mode (``arm_modal_mode_targets``) and a
+    # spell cast from a graveyard's own card target (Odyssey).
+    "mixins/stack/casting.py": 2,
     "stack_targets.py": 1,
+    # The resolving spell CR 608.2b re-asks (``resolving_targets_all_legal``)
+    # and the stack item whose graveyard target Ground Seal made untargetable
+    # (``sealed_graveyard_target_refusal``).
+    "legality.py": 2,
     # CR 707.9: a copier's *own* exceptions ("except it's an enchantment in
     # addition to its other types") are read off the copier as printed, before
     # the copy that would replace its text is recorded.

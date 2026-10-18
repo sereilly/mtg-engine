@@ -420,8 +420,28 @@ def _card_put_into_graveyard_filter(
     without either word says.
     """
     payload = trig.condition.payload
+    # "…**from your library**" (Pedantic Learning). The one narrowing here that
+    # is about where the card came *from*, tested first because it is the
+    # cheapest and rules out the most: a discard, a death and a spell finishing
+    # all reach this seam with another source zone or none. The seam names the
+    # library for every caller that moves a card out of one.
+    if "from_library" in payload and event.payload.get("graveyard_from_zone") != "library":
+        return False
+    described = payload.get("graveyard_card_filter")
     if "your_graveyard" in payload:
-        return game.controller_index_of(permanent) == event.payload.get("owner_index")
+        if game.controller_index_of(permanent) != event.payload.get("owner_index"):
+            return False
+        if not described:
+            return True
+        # …and the phrase, where the sentence printed one ("a **land** card"):
+        # Energy Field's "a card" carries none and returned above.
+        from .handlers._common import _card_matches_filter
+
+        card = event.subject
+        return card is not None and _card_matches_filter(
+            card, described, game=game,
+            owner=game.players[event.payload["owner_index"]],
+        )
     if "another_card" in payload:
         return event.subject is not permanent.card
     # "Whenever **a black card** is put into **an opponent's** graveyard from
@@ -442,7 +462,6 @@ def _card_put_into_graveyard_filter(
     # position. Dropped, Compost would draw on every card reaching any
     # opponent's pile, which is a strictly larger card than the one printed and
     # one every census in this repo reads as implemented.
-    described = payload.get("graveyard_card_filter")
     if "opponent_graveyard" in payload or described:
         watcher = game.controller_index_of(permanent)
         owner = event.payload.get("owner_index")
@@ -690,6 +709,16 @@ def _cast_narrowing_admits(
 
         if not is_multicolored(_cast_colors(game, card, caster)):
             return False
+    # "…cast a **nonred** spell" (Dwarven Patrol). The colour rows above with
+    # the answer turned over, and over the same effective colours: a red-green
+    # spell *is* red (CR 105.2b) and does not answer, a colourless one is not
+    # and does (CR 105.2c) -- and a land is not a spell, so playing one never
+    # reaches here at all (the card's own ruling).
+    excluded_colour = trig.condition.payload.get("cast_excluded_color")
+    if excluded_colour and _COLOR_SYMBOLS.get(excluded_colour) in _cast_colors(
+        game, card, caster
+    ):
+        return False
     # "…casts a spell **of the chosen color**" (Jeweled Torque). CR 614.1c's
     # choice, recorded on the permanent as it entered — so, unlike every
     # narrowing above, the colour is not in the trigger's text at all and the
@@ -746,6 +775,17 @@ def _cast_narrowing_admits(
                 continue
             if cast_colors & game._effective_colors(candidate):
                 return False
+    # "…a **Dog** spell" (Rin and Seri). The printed subtype, read through the
+    # same reader the layer seed uses rather than as a substring of the type
+    # line — a substring match would let "Dog" answer for a "Dogpile", and would
+    # answer for a card *type* word too, which is the `cast_type` row's job.
+    cast_subtype = trig.condition.payload.get("cast_subtype")
+    if cast_subtype:
+        from .layer_bridge import printed_shape
+
+        _, subtypes = printed_shape(card)
+        if cast_subtype.lower() not in subtypes:
+            return False
     return True
 
 
@@ -791,40 +831,14 @@ def _controller_cast_filter(
         return False
     if trig.condition.kind == "enchantment_cast" and "enchantment" not in card.type_line.lower():
         return False
-    # "…a spell that's white, blue, black, or red" (Quirion Dryad): the
-    # colour list arrives as condition payload, the raw captured phrase; the
-    # trigger fires only when the cast spell shares at least one listed
-    # colour (CR 105.2b — a multicoloured object *is* each of its colours).
-    if not _cast_colour_union_admits(
-        trig.condition.payload.get("cast_colors"),
-        _cast_colors(game, card, caster_index),
-    ):
+    # Every printed narrowing of the cast — a colour, a colour list, a type, a
+    # union of types, a subtype — is asked of the one helper the other two cast
+    # scopes ask. This filter used to test four of them inline and none of the
+    # rest, so a narrowing the table carried on this scope and the helper
+    # alone read was dropped here in silence: "whenever you cast a
+    # **multicolored** spell" fired on every spell its controller cast.
+    if not _cast_narrowing_admits(game, permanent, trig, card, caster_index):
         return False
-    # "…a noncreature spell" (Spellgorger Weird): the type word from the
-    # trigger's own text, tested against the cast card's type line — "non"
-    # negates, so a noncreature trigger stays silent for a creature spell.
-    cast_type = trig.condition.payload.get("cast_type")
-    if cast_type:
-        type_line = card.type_line.lower()
-        if cast_type.startswith("non"):
-            if cast_type[3:] in type_line:
-                return False
-        elif cast_type not in type_line:
-            return False
-    # "…a **Dog** spell" (Rin and Seri). The printed subtype, read through the
-    # same reader the layer seed uses rather than as a substring of the type
-    # line — a substring match would let "Dog" answer for a "Dogpile", and would
-    # answer for a card *type* word too, which is the row above's job.
-    # "an **instant or sorcery** spell" — a printed union, so any of the listed
-    # types answers it (CR 205.2b — an object with several card types satisfies
-    # an effect applying to any of them). Its own key because
-    # the single-type row above tests "this one" and a union tests "any of
-    # these", and folding them would make one of the two silently wrong.
-    cast_types = trig.condition.payload.get("cast_types")
-    if cast_types:
-        type_line = card.type_line.lower()
-        if not any(word in type_line for word in cast_types.split(" or ")):
-            return False
     # "…your **first** … spell each turn" (Double Vision). The ordinal is asked
     # of the caster's own record of what they have cast this turn, counting only
     # the spells this condition's narrowing admits — the spell that fired this
@@ -838,13 +852,6 @@ def _controller_cast_filter(
             if _cast_narrowing_admits(game, permanent, trig, spell, caster_index)
         ]
         if len(matching) != 1 or matching[0] is not card:
-            return False
-    cast_subtype = trig.condition.payload.get("cast_subtype")
-    if cast_subtype:
-        from .layer_bridge import printed_shape
-
-        _, subtypes = printed_shape(card)
-        if cast_subtype.lower() not in subtypes:
             return False
     return True
 
@@ -1465,6 +1472,10 @@ _SEAT_SCOPED_EVENTS = frozenset({
     "you_lose_life",
     "draws_second_card",
     "you_sacrifice_permanent",
+    # "Whenever **you** win a coin flip" (Chance Encounter). The seat is the
+    # flipper's, which is the only seat that can win it (CR 705.2) — so an
+    # opponent winning their own flip, or losing one, leaves this silent.
+    "you_win_coin_flip",
     # "Whenever a spell **you've cast** is countered" (Multani's Presence).
     # The seat is the *caster* of the countered spell, which is the only seat
     # the announcement could carry — CR 108.4 gives the card in the graveyard
@@ -1714,6 +1725,12 @@ def _attack_declaration_filter(
 # event, so the registration is a row rather than a predicate.
 _SUBJECT_LED_FILTER_KEYS: dict[str, str] = {
     "matching_creature_attacks": "attacker",
+    # "Whenever a creature attacks or blocks" (Powerstone Minefield). One noun
+    # phrase and no partner, so it is a row here rather than in the block
+    # pair's filter below: the subject is whichever creature was declared, as
+    # an attacker (CR 508.1) or as a blocker (CR 509.1), and the announcement
+    # at each of those two sites names it.
+    "matching_creature_attacks_or_blocks": "combatant",
     "matching_permanent_enters": "enterer",
     # "Whenever a nontoken creature leaves the battlefield" (Dual Nature). The
     # filter is asked while the subject is still on a battlefield — the fire
@@ -1833,6 +1850,65 @@ def _loyalty_activation_filter(
         return False
     return trigger_subject_matches(
         game, trig, "walker", event.subject, observer=seat, source=permanent,
+    )
+
+
+def destroyed_trigger_applies(
+    game: Game,
+    observer: Permanent,
+    observer_seat: int | None,
+    trig: ParsedTriggeredAbility,
+    event: Event,
+) -> bool:
+    """"Whenever a spell or ability an opponent controls destroys a noncreature
+    permanent you control" (Karmic Justice) — CR 701.8's event, asked for one
+    watching ability.
+
+    Two narrowings, and the condition's payload names both:
+
+    * ``destroyed_cause`` — **whose** spell or ability did it. The event
+      carries the seat (``cause_seat``) or None, and None is an answer: lethal
+      damage destroys a creature and no spell or ability did (CR 704.5g),
+      whoever dealt the damage. "An opponent" is every seat but the watcher's
+      own (CR 102.2, CR 102.3). A cause word this does not know refuses, which
+      is the direction a trigger must fail in.
+    * ``destroyed_filter`` — **what** was destroyed, through the one matcher
+      every printed noun phrase is read by. Asked while the permanent is still
+      on its battlefield (CR 603.10a): its types are layer 4's, so a land an
+      effect animated is a creature at the moment it is destroyed.
+
+    *observer_seat* is passed rather than read off the board, and that is the
+    reason this is a function beside the registered filter: a watcher destroyed
+    earlier in the same simultaneous event still sees the rest of it
+    (CR 603.10a), and it has no controller to ask by then
+    (``destruction_events.DestructionLedger.departed``).
+    """
+    if observer_seat is None:
+        return False
+    payload = trig.condition.payload
+    cause = payload.get("destroyed_cause")
+    if cause is not None:
+        causer = event.payload.get("cause_seat")
+        if not isinstance(causer, int):
+            return False
+        if cause != "an opponent" or causer == observer_seat:
+            return False
+    return subject_matches(
+        game,
+        event.subject,
+        payload.get("destroyed_filter"),
+        observer=observer_seat,
+        source=observer,
+    )
+
+
+@event_filter("permanent_destroyed")
+def _permanent_destroyed_filter(
+    game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
+) -> bool:
+    """The watcher on the battlefield: its seat is the control seam's."""
+    return destroyed_trigger_applies(
+        game, permanent, game.controller_index_of(permanent), trig, event,
     )
 
 

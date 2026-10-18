@@ -266,6 +266,62 @@ def _parse_tapper_produces_instead(
     )
 
 
+def parse_turn_mana_change(
+    stream: TokenStream, duration: "ast.Duration"
+) -> "ast.Statement | None":
+    """The two sentences a *leading duration* turns into a turn-long change to
+    a seat's mana (False Dawn), or None with the cursor untouched.
+
+    * "…**spells and abilities you control that would add colored mana instead
+      add that much <colour> mana**." — :class:`ast.AddedManaBecomes`.
+    * "…**you may spend <colour> mana as though it were mana of any color**."
+      — :class:`ast.GrantManaSpending`.
+
+    **Reached only behind the printed window**, which is why the duration is an
+    argument rather than something the statement layer distributes afterwards.
+    The second sentence is, word for word, a *static* line two shipped cards
+    print with nothing in front of it (Celestial Dawn, Sunglasses of Urza), and
+    those are ``engine/mana_spending.py``'s by derivation — a table the grammar
+    reaches only where every production refuses the line in full. A production
+    that read the bare sentence would take both cards' lines away and give them
+    to a lowering with no window to arm; behind "Until end of turn," there is
+    no static to steal from.
+
+    The permission is read by ``mana_spending.mana_spending_for``, the static
+    table's own reader, so the one-shot and the static spellings are one
+    reading of the sentence. The half that *takes away* ("…other mana only as
+    though it were colorless mana") is not a permission and is refused here:
+    no card prints it for a turn, and the turn record carries only a widening.
+    """
+    mark = stream.mark()
+    if stream.accept_phrase(
+        "spells", "and", "abilities", "you", "control", "that", "would", "add",
+        "colored", "mana", "instead", "add", "that", "much",
+    ):
+        produced = _parse_produced_mana_word(stream)
+        # A colour, never "colorless": the sentence replaces coloured mana, and
+        # "instead add that much colorless mana" is a different card whose {C}
+        # the colour-only record below would refuse to write.
+        if produced is not None and produced != "C":
+            return ast.AddedManaBecomes(produced, duration)
+        stream.reset(mark)
+        return None
+    if stream.at_word("you") and stream.peek_word(1) == "may" and stream.peek_word(2) == "spend":
+        from ...mana_spending import mana_spending_for
+
+        words: list[str] = []
+        while not stream.exhausted and not stream.at_punct("."):
+            words.append(str(stream.next().text))
+        permission = mana_spending_for(" ".join(words))
+        if permission is not None and not permission.others_colorless_only:
+            return ast.GrantManaSpending(
+                tuple(permission.fungible_colors), tuple(permission.as_colors),
+                duration,
+            )
+    stream.reset(mark)
+    return None
+
+
 def _parse_tapped_lands_produce_chosen(
     stream: TokenStream,
 ) -> "ast.ProducesManaInstead | None":

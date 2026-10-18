@@ -52,8 +52,20 @@ def _action_search_library_decline(session, req, seat_type):
     if req.seat != pending["caster_index"]:
         raise HTTPException(status_code=400, detail="not your library search")
     # Failing to find is legal (CR 701.23b) and is the only answer available
-    # when nothing in the searched zones matches the restriction.
-    session.game.decline_search_library(req.seat)
+    # when nothing in the searched zones matches the restriction — for a
+    # search with a stated quality. A search simply for a quantity of cards
+    # ("a card", "three cards") must find that many, or as many as the zone
+    # holds (CR 701.23d); the engine refuses the decline, and the refusal is
+    # said rather than swallowed — this used to return 200 either way, which
+    # for a refused decline is a click that does nothing.
+    if not session.game.decline_search_library(req.seat):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "this search must find a card — it names no quality, so it "
+                "can't fail to find while the zone has one (CR 701.23d)"
+            ),
+        )
 
 @action_handler("search_destination_confirm")
 def _action_search_destination_confirm(session, req, seat_type):
@@ -236,6 +248,21 @@ def _action_trigger_target_confirm(session, req, seat_type):
         ):
             raise HTTPException(status_code=400, detail="invalid target selection")
         return
+    # ...or a **spell** ("counter target spell", Mystic Snake), named the way a
+    # cast names one: `target_stack_index`, top-first into the stack the client
+    # was shown. Resolved against the prompt's own candidates — a position the
+    # picker did not offer names nothing — and read ahead of the two fields
+    # below, because an answer carrying it is about the stack whatever else it
+    # happens to carry.
+    if req.target_stack_index is not None:
+        named = session.game.trigger_target_stack_item(
+            req.seat, req.target_stack_index
+        )
+        if named is None or not session.game.confirm_trigger_target(
+            req.seat, stack_item=named
+        ):
+            raise HTTPException(status_code=400, detail="invalid target")
+        return
     # A **card in a graveyard** (Gravedigger): the pile and the slot, the two
     # things the prompt listed it by. Ahead of the seat-alone branch below,
     # which would otherwise read the pile's seat as a targeted player.
@@ -252,7 +279,7 @@ def _action_trigger_target_confirm(session, req, seat_type):
     if req.target_permanent_id is None and req.target_seat is None:
         raise HTTPException(
             status_code=400,
-            detail="target_permanent_id or target_seat is required",
+            detail="target_permanent_id, target_seat or target_stack_index is required",
         )
     # Checked against the list the prompt offered, not against the board:
     # CR 603.3d chose the targets as the ability went on the stack.
@@ -477,10 +504,15 @@ def _action_discard_confirm(session, req, seat_type):
         raise HTTPException(status_code=400, detail="no discard pending")
     if req.seat != pending["player_index"]:
         raise HTTPException(status_code=400, detail="not your discard")
-    if not req.discard_indices:
+    # "Discard **up to** two cards" / "discard **any number of** cards": none
+    # is a legal answer, and the engine has always taken it. This refused an
+    # empty list before the engine was asked, so over the wire a ceiling was a
+    # floor of one. Only a ceiling may be answered with nothing — an exact
+    # discard with no cards named is still a malformed request.
+    if not req.discard_indices and not pending.get("up_to"):
         raise HTTPException(status_code=400, detail="discard_indices is required")
     ok = session.game.confirm_discard(
-        req.seat, list(req.discard_indices), to_library=bool(req.to_library)
+        req.seat, list(req.discard_indices or []), to_library=bool(req.to_library)
     )
     if not ok:
         raise HTTPException(status_code=400, detail="invalid discard selection")
@@ -595,6 +627,24 @@ def _action_reveal_until_kind_draw_confirm(session, req, seat_type):
     if not session.game.confirm_reveal_until_kind_draw(req.seat, option):
         raise HTTPException(status_code=400, detail="invalid reveal-until choice")
 
+@action_handler("skip_draw_confirm")
+def _action_skip_draw_confirm(session, req, seat_type):
+    # Obstinate Familiar: "If you would draw a card, you may skip that draw
+    # instead." Answered by index into the offered options, the Abundance
+    # offer's shape: 0 draws the card, 1 skips the draw.
+    pending = [
+        e for e in session.game.pending_skip_draws if e["player_index"] == req.seat
+    ]
+    if not pending:
+        raise HTTPException(status_code=400, detail="no skip-the-draw choice pending for you")
+    if req.option_index is None:
+        raise HTTPException(status_code=400, detail="option_index is required")
+    option = int(req.option_index)
+    if not 0 <= option < len(pending[0]["options"]):
+        raise HTTPException(status_code=400, detail="option_index is out of range")
+    if not session.game.confirm_skip_draw(req.seat, skip=option == 1):
+        raise HTTPException(status_code=400, detail="invalid skip-the-draw choice")
+
 @action_handler("resolve_optional_pay")
 def _action_resolve_optional_pay(session, req, seat_type):
     # Color rods (Wooden Sphere, …): "you may pay {1}. If you do, gain life."
@@ -616,9 +666,17 @@ def _action_resolve_optional_pay(session, req, seat_type):
         # The offer is still owed -- the engine rejected the answer rather than
         # consuming it (CR 601.2b: a player chooses among the options they are
         # able to take). Saying so beats a silent no-op that leaves the same
-        # prompt on screen with no explanation.
+        # prompt on screen with no explanation. An accept of a price the board
+        # cannot be made to pay as it stands arrives here too, where it used
+        # to be carried out as a decline: the engine taps only free land
+        # abilities for a payer, so the seat taps what else it has and answers
+        # again (CR 605.3a) -- `Game.seat_answers_for_itself`.
         raise HTTPException(
-            status_code=400, detail="that payment option can't be paid",
+            status_code=400,
+            detail=(
+                "that payment option can't be paid — tap for the mana "
+                "first, or decline"
+            ),
         )
 
 @action_handler("pay_life_to_save_confirm")
@@ -751,18 +809,22 @@ def _action_confirm_mana_payment(session, req, seat_type):
     # or declines and it is countered. They tap lands to fill their pool first.
     if req.accept is None:
         raise HTTPException(status_code=400, detail="accept (true/false) is required")
+    owed = session.game.pending_choice_of("mana_payment", req.seat)
+    if owed is None:
+        raise HTTPException(status_code=400, detail="no mana payment pending for you")
     ok = session.game.confirm_mana_payment(req.seat, bool(req.accept))
     if not ok:
-        raise HTTPException(status_code=400, detail="no mana payment pending for you")
-
-@action_handler("kudzu_reattach_confirm")
-def _action_kudzu_reattach_confirm(session, req, seat_type):
-    # Kudzu: the controller picks which land to re-enchant (battlefield index).
-    if req.target_permanent_index is None:
-        raise HTTPException(status_code=400, detail="target_permanent_index is required")
-    ok = session.game.confirm_kudzu_reattach(req.seat, req.target_permanent_index)
-    if not ok:
-        raise HTTPException(status_code=400, detail="invalid Kudzu reattach selection")
+        # "Pay" that cannot be collected is refused, never read as a decline
+        # (CR 608.2d, CR 118.3): the prompt is still owed, and the payer may
+        # tap whatever makes mana — the engine taps only free land abilities
+        # for them (CR 605.3a, 118.3c) — and answer again, or decline.
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "you can't pay that from your mana pool and untapped lands — "
+                "tap for the mana first, or decline"
+            ),
+        )
 
 @action_handler("flip_again_confirm")
 def _action_flip_again_confirm(session, req, seat_type):

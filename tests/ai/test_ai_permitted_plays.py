@@ -141,6 +141,11 @@ def test_every_grant_the_pool_prints_is_one_the_ai_takes():
         zone = payload["zone"]
         if zone == "hand":
             continue  # a waiver over the hand: the Aluren test below
+        if payload.get("flashback"):
+            # A granted flashback (Recoup): its price is the chosen card's
+            # mana cost, built as the grant resolves — a cast under a required
+            # alternative cost, which is `tests/ai/test_ai_zone_casts.py`'s.
+            continue
         seats = (0, 1) if zone == "exile" else (0,)
         for owner_seat in seats:
             card = _subject(payload)
@@ -157,7 +162,7 @@ def test_every_grant_the_pool_prints_is_one_the_ai_takes():
             action = choose_cast_action(game, 0)
             assert action is not None and action.card_name == card.name, (label, action)
             assert action.from_zone == zone, label
-            assert (action.zone_owner_index or 0) == owner_seat, label
+            assert (action.zone_seat or 0) == owner_seat, label
             proposed += 1
             free = bool(payload.get("free"))
             assert bool(action.land_tap_indices) != free, (label, action.land_tap_indices)
@@ -239,11 +244,12 @@ def test_yawgmoths_agenda_opens_the_graveyard_to_a_land_and_then_a_spell():
     assert sum(1 for p in game.controlled_by(0) if p.tapped) == 2
 
 
-def test_demonic_embrace_is_cast_from_the_graveyard_only_above_the_life_reserve():
+def test_demonic_embrace_is_cast_from_the_graveyard_but_never_with_the_last_life():
     """"You may cast this card from your graveyard by paying 3 life and
     discarding a card in addition to paying its other costs." Proposed with
-    life to spare; not at a life total the price would take below the reserve
-    every other life price in this policy keeps."""
+    life to spare; never at a life total the price would take to zero
+    (`ai_policy._cast_life_price`: a cost paid in life is not paid with the
+    seat's last point)."""
     embrace = _POOL["Demonic Embrace"]
 
     def board(life: int) -> Game:
@@ -269,7 +275,7 @@ def test_demonic_embrace_is_cast_from_the_graveyard_only_above_the_life_reserve(
     bears = next(p for p in game.controlled_by(0) if p.card.name == "Grizzly Bears")
     assert bears.effective_power == 5 and game._has_keyword(bears, "flying")
 
-    game = board(11)
+    game = board(3)
     if choose_land_drop(game, 0) is not None:
         _play_land_drops(game, 0, _report(), 1, 1)
     assert choose_cast_action(game, 0) is None
@@ -294,7 +300,7 @@ def test_planeswalkers_mischief_buys_the_cast_it_pays_for():
 
     cast = choose_cast_action(game, 0)
     assert cast is not None and cast.card_name == "Lightning Bolt", cast
-    assert (cast.from_zone, cast.zone_owner_index, cast.land_tap_indices) == ("exile", 1, ())
+    assert (cast.from_zone, cast.zone_seat, cast.land_tap_indices) == ("exile", 1, ())
     assert _play_one_cast(game, 0, report, 1, 1), game.log[-4:]
     resolve_stack(game)
     assert game.players[1].life == 17, game.log[-6:]

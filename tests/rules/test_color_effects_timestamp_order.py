@@ -907,16 +907,19 @@ _J6_STACK_RECOLOURERS = {
     "Ersatz Gnomes": [],
 }
 
-#: Printed "target spell … becomes <colour>" whose **picker offers no spell**:
-#: Blind Seer's "Target spell or permanent becomes the color of your choice
-#: until end of turn" loses "spell or" in the noun parser (the union of two
-#: generic nouns restricts nothing, so the filter is a bare permanent's), and
-#: the chosen-colour lowering describes what is left. The write API and the
-#: carry below take its duration already
-#: (``test_j6_a_turn_long_recolour_of_a_spell_lasts_the_turn_on_the_permanent``);
-#: what is missing is the announcement. Pinned so the day it is aimable it
-#: moves into the census above rather than staying a card nothing drives.
-_J6_PICKER_OFFERS_NO_SPELL = {"Blind Seer"}
+#: The cards that aim a recolour at a spell and **choose the colour** as it
+#: resolves (CR 608.2d) — Blind Seer's "Target spell or permanent becomes the
+#: color of your choice until end of turn", Illusion's, Vodalian Mystic's. The
+#: matrix below fixes the colour per card, so these are driven by
+#: ``tests/regressions/test_spell_or_permanent_targets.py`` and the Apocalypse
+#: set tests instead; listed so a fourth such
+#: card is a decision here, not a silent widening of the census above.
+_J6_CHOSEN_COLOUR_RECOLOURERS = {"Blind Seer", "Illusion", "Vodalian Mystic"}
+
+#: Printed "target spell … becomes <colour>" whose **picker offers no spell**.
+#: Blind Seer stood here until "spell or permanent" became one slot in either
+#: zone (``targeting``'s ``spell_or_permanent``); none is left.
+_J6_PICKER_OFFERS_NO_SPELL: set = set()
 
 #: One permanent spell of each card type that is cast (a land is played, never
 #: a spell), with its printed colours. The Aura is aimed at a creature.
@@ -976,9 +979,8 @@ def test_j6_the_cards_that_can_recolour_a_spell_are_the_ones_driven_here():
     asked what the pool really offers. A seventh card that can aim a recolour
     at a spell, or one of these six that no longer can, fails here."""
     pool_size, found, text_only = _j6_stack_recolourers()
-    assert set(found) == set(_J6_STACK_RECOLOURERS), (
-        sorted(set(found) ^ set(_J6_STACK_RECOLOURERS))
-    )
+    expected = set(_J6_STACK_RECOLOURERS) | _J6_CHOSEN_COLOUR_RECOLOURERS
+    assert set(found) == expected, sorted(set(found) ^ expected)
     assert text_only == _J6_PICKER_OFFERS_NO_SPELL, text_only
     assert pool_size >= 4700, pool_size
 
@@ -1115,17 +1117,17 @@ def test_j6_a_turn_long_recolour_of_a_spell_lasts_the_turn_on_the_permanent(
     A turn-long black and an indefinite white on one spell: the later of the
     two is what the spell is and what the permanent is, and at cleanup the
     turn-long one ends and the indefinite one is what is left."""
-    from engine.color_changes import change_spell_color
+    from engine.color_changes import recolor_spell
 
     card = lambda name: _w2g4_card(catalog_by_name, set_pool, name)  # noqa: E731
     game = _w2g4_table()
     item = _j6_cast_onto_stack(game, card("Grizzly Bears"))
     if turn_long_first:
-        change_spell_color(item, "B", until_eot=True)
+        recolor_spell(item, "B", until_eot=True)
         _j6_recolour_spell(game, card("Purelace"), ("spell", None), item, {})
     else:
         _j6_recolour_spell(game, card("Purelace"), ("spell", None), item, {})
-        change_spell_color(item, "B", until_eot=True)
+        recolor_spell(item, "B", until_eot=True)
     later = ["W"] if turn_long_first else ["B"]
     assert sorted(game._stack_item_colors(item)) == later
 
@@ -1136,7 +1138,7 @@ def test_j6_a_turn_long_recolour_of_a_spell_lasts_the_turn_on_the_permanent(
 
     # …and alone, it ends and leaves the printed colour.
     item = _j6_cast_onto_stack(game, card("Grizzly Bears"))
-    change_spell_color(item, "U", until_eot=True)
+    recolor_spell(item, "U", until_eot=True)
     second = _j6_became(game, item)
     assert _w2g4_colours(game, second) == ["U"]
     game.resolve_cleanup_step(0)

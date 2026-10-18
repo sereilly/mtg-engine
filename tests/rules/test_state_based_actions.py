@@ -923,14 +923,14 @@ def test_704_5s_saga_sacrificed_when_lore_counters_reach_final_chapter():
 
 
 # ---------------------------------------------------------------------------
-# Rule 704.5y – If a permanent has more than one Role controlled by the same
+# Rule 704.5z – If a permanent has more than one Role controlled by the same
 # player attached to it, each of those Roles except the one with the most
 # recent timestamp is put into its owner's graveyard.
 # ---------------------------------------------------------------------------
 
-@pytest.mark.cr("704.5y")
-def test_704_5y_only_newest_role_from_same_controller_survives():
-    """704.5y: When the same player attaches two Roles to the same creature, only the
+@pytest.mark.cr("704.5z")
+def test_704_5z_only_newest_role_from_same_controller_survives():
+    """704.5z: When the same player attaches two Roles to the same creature, only the
     Role with the most recent timestamp remains; the older Role goes to the graveyard."""
     role1 = _mk_card(
         "Warrior Role",

@@ -1,7 +1,8 @@
 """Two answers a seat nobody asks used to give without looking at the board.
 
 * **The mode of a modal triggered ability** (CR 700.2b) — the pool prints
-  three: Relic Bind, Elder Gargaroth, Trufflesnout. The registry's default was
+  four: Relic Bind, Elder Gargaroth, Trufflesnout and Apocalypse's Putrid
+  Warrior. The registry's default was
   the first offered mode that is not a price, so Trufflesnout took its counter
   at three life and Relic Bind pinged an opponent at twenty while its
   controller sat at one. The default now asks the policy
@@ -70,7 +71,7 @@ def _settle(game) -> None:
 # --- the mode of a modal triggered ability -----------------------------------
 
 
-def test_the_pool_prints_three_modal_triggered_abilities(pool):
+def test_the_pool_prints_four_modal_triggered_abilities(pool):
     """The floor: every one of them is driven below, and a fourth is a card
     this file has not looked at."""
     carriers = sorted(
@@ -80,7 +81,9 @@ def test_the_pool_prints_three_modal_triggered_abilities(pool):
             for ability in compile_card_oracle(card).triggered_abilities
         )
     )
-    assert carriers == ["Elder Gargaroth", "Relic Bind", "Trufflesnout"]
+    assert carriers == [
+        "Elder Gargaroth", "Putrid Warrior", "Relic Bind", "Trufflesnout",
+    ]
 
 
 def test_trufflesnout_takes_the_life_when_life_is_what_it_is_short_of(pool):
@@ -150,6 +153,37 @@ def test_elder_gargaroth_makes_the_beast(pool):
     names = sorted(permanent.card.name for permanent in game.controlled_by(ME))
     assert len(names) == 2 and "Elder Gargaroth" in names
     assert game.players[ME].life == 20 and not game.players[ME].hand
+
+
+@pytest.mark.parametrize("life, gains", [((3, 20), True), ((20, 3), False)])
+def test_putrid_warrior_takes_the_side_of_the_swing_its_seat_is_short_of(
+    pool, life, gains,
+):
+    """"Whenever this creature deals damage, choose one — • Each player loses
+    1 life. • Each player gains 1 life." The two modes are symmetric, so what
+    decides is that a point of life is worth more the less of it there is: at
+    three against twenty the seat gains, and at twenty against a player its
+    attack has just put on one, everybody loses."""
+    game = _table(pool, life=life)
+    warrior = _put(game, ME, pool["Putrid Warrior"])
+    game.start_turn(ME)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.current_step == "declare_attackers", game.current_step
+    declared, why = game.declare_attackers(
+        ME, [game.battlefield_index_of(warrior)], defending_player_index=OPP,
+    )
+    assert declared, why
+    for _ in range(8):
+        _settle(game)
+        if game.players[OPP].life < life[1] or game.current_turn_phase != "combat":
+            break
+        game.advance_combat_phase()
+    _settle(game)
+    swing = 1 if gains else -1
+    assert game.players[ME].life == life[0] + swing, game.log[-6:]
+    assert game.players[OPP].life == max(0, life[1] - 2 + swing), game.log[-6:]
 
 
 def test_an_interactive_seat_is_still_asked(pool):

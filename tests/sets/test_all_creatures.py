@@ -1799,7 +1799,7 @@ def test_a_chosen_player_binding_needs_a_choose_step(set_pool):
     # resolution's default seat, so a Bauble aimed at its controller's own
     # graveyard drew for the opponent. The seat its own target named is frozen
     # as the ability is created (tests/engine/test_delayed_announced_subjects.py).
-    assert delayed[0].payload.get("binds_player") == "resolution_player"
+    assert delayed[0].payload.get("binds_player") == "target_player"
 
 
 # --- W3G3: Balduvian Horde and the offer nobody could afford ---

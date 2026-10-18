@@ -27,6 +27,8 @@ from ..errors import GrammarError
 from ..keywords import parse_keyword_list
 from ..durations import _parse_duration
 from ..back_references import _parse_that_object
+from ..lexer import SELF
+from ..readers import _SELF_NOUNS
 from ..stream import TokenStream
 from ..vocabulary import (CARD_TYPES, COLOR_WORDS, LAND_TYPES, SUBTYPE_INDEX,
                           TYPE_LINE_SUPERTYPES, match_longest,
@@ -61,6 +63,13 @@ def _parse_becomes(stream: TokenStream, subject: ast.Recipient) -> ast.Statement
         return ast.BecomeColor(subject, ast.CHOSEN_COLORS, _parse_duration(stream))
     if stream.accept_phrase("the", "color", "of", "your", "choice"):
         return ast.BecomeColor(subject, ast.CHOSEN_COLOR, _parse_duration(stream))
+    # "…becomes **that type** until end of turn." (Unnatural Selection.) The
+    # type a "Choose a creature type …" sentence in front of this one named.
+    # Read before the colour and body branches, which would refuse on "that" —
+    # and it is the whole of the predicate: which set of types "that type"
+    # belongs to is the lowering's question, asked of what the effect produced.
+    if stream.accept_phrase("that", "type"):
+        return ast.BecomeThatType(subject, _parse_duration(stream))
     token = stream.peek()
     word = str(token.text).lower() if token is not None else ""
     # "…becomes **colorless** until end of turn." (Raging Spirit, Ersatz
@@ -206,6 +215,47 @@ def _parse_become_copy(
     return ast.BecomeCopy(subject, of, keeps_own_ability=keeps_own_ability)
 
 
+#: The window "…until this creature leaves the battlefield" (Gaea's Liege,
+#: Graceful Antelope). A duration tied to the ability's own source rather than
+#: to a step of the turn, so its sweep is the one transition a permanent
+#: leaves by (``Game.remove_all_from_battlefield``).
+UNTIL_SOURCE_LEAVES = "until_source_leaves"
+
+
+def _parse_land_type_window(stream: TokenStream) -> ast.Duration:
+    """The duration behind a land-type change: any window the shared table
+    reads, or "until this <noun> leaves the battlefield".
+
+    Read here rather than as a row of ``durations._DURATIONS``, on purpose.
+    That table is consulted by every production that ends in a duration, and
+    four other sentences print these words with a reader of their own (the
+    linked exiles, Oubliette's phase-out): a row there would hand them a
+    duration their lowering has no sweep for, in place of the node they parse
+    today. The window joins the table when a second family prints it.
+
+    The source is named as the card names itself anywhere - "this creature",
+    or its own name, which the lexer has collapsed to one SELF token - and
+    never as a bare "it", which after a target is the land.
+    """
+    window = _parse_duration(stream)
+    if window.kind is not None:
+        return window
+    mark = stream.mark()
+    if stream.accept_word("until"):
+        named = stream.accept_kind(SELF) is not None
+        if not named and stream.accept_word("this"):
+            # A permanent's word for itself: a spell or a card is on no
+            # battlefield to leave.
+            noun = stream.peek_word()
+            if noun in _SELF_NOUNS and noun not in ("spell", "card"):
+                stream.advance()
+                named = True
+        if named and stream.accept_phrase("leaves", "the", "battlefield"):
+            return ast.Duration(UNTIL_SOURCE_LEAVES)
+    stream.reset(mark)
+    return window
+
+
 def _parse_becomes_land_type(
     stream: TokenStream, subject: ast.Recipient
 ) -> "ast.ChangeLandType | None":
@@ -227,7 +277,7 @@ def _parse_becomes_land_type(
     # the article branch below, which would see "the" and refuse.
     if stream.accept_phrase("the", "basic", "land", "type", "of", "your", "choice"):
         return ast.ChangeLandType(
-            subject, ast.CHOSEN_LAND_TYPE, _parse_duration(stream)
+            subject, ast.CHOSEN_LAND_TYPE, _parse_land_type_window(stream)
         )
     if not (stream.accept_word("a") or stream.accept_word("an")):
         # "**X target lands become Forests** until end of turn." (Deepwood
@@ -250,13 +300,42 @@ def _parse_becomes_land_type(
             stream.reset(mark)
             return None
         stream.advance()
-        return ast.ChangeLandType(subject, singular, _parse_duration(stream))
+        return ast.ChangeLandType(
+            subject, singular, _parse_land_type_window(stream)
+        )
     word = stream.peek_word()
     if word is None or word not in LAND_TYPES:
         stream.reset(mark)
         return None
     stream.advance()
-    return ast.ChangeLandType(subject, word, _parse_duration(stream))
+    # "…becomes a Plains **or an Island** until end of turn." (Tundra Kavu.)
+    # "The basic land type of your choice" with the list printed instead of the
+    # adjective: CR 608.2d's choice among the named types, made while the
+    # ability resolves. The same node and the same sentinel, with what may be
+    # answered carried beside it — a reader that stopped at the first type
+    # would leave "or an Island" unconsumed, which is the refusal this card met,
+    # and one that skipped it would make every such land a Plains.
+    #
+    # Each alternative takes its own article and must be a land type; a
+    # disjunction that opens anything else ("…a Plains or loses all abilities")
+    # is a sentence this has not read, and the whole branch resets.
+    options = [word]
+    while stream.accept_word("or"):
+        if not (stream.accept_word("a") or stream.accept_word("an")):
+            stream.reset(mark)
+            return None
+        other = stream.peek_word()
+        if other is None or other not in LAND_TYPES or other in options:
+            stream.reset(mark)
+            return None
+        stream.advance()
+        options.append(other)
+    if len(options) > 1:
+        return ast.ChangeLandType(
+            subject, ast.CHOSEN_LAND_TYPE, _parse_land_type_window(stream),
+            options=tuple(options),
+        )
+    return ast.ChangeLandType(subject, word, _parse_land_type_window(stream))
 
 
 def _parse_becomes_supertype(

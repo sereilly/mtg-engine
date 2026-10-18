@@ -28,9 +28,10 @@ from __future__ import annotations
 
 from .. import ast
 from ..errors import LoweringError
-from ._amounts import count_spec
+from ._amounts import count_filter_on_frozen_seat, count_spec
 from ._common import _is_enchanted, testable_filter_payload
-from ._events import (ATTACHED_PERMANENT_CONTROLLER, CHOSEN_PERMANENT,
+from ._events import (ATTACHED_PERMANENT_CONTROLLER, CAST_SPELL_EVENTS,
+                      CHOSEN_PERMANENT,
                       _EVENT_SUBJECT_OBJECTS,
                       _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER,
                       names_attached_permanent)
@@ -68,6 +69,26 @@ def pronoun_target_referent(instructions) -> str | None:
     return _PRONOUN_REFERENTS.get(described.get("kind"))
 
 
+def announces_target_pair(instructions) -> bool:
+    """Whether the effect a clause guards announced **exactly two** permanents
+    (CR 601.2c) — what "either one" and "the other" name between them.
+
+    :func:`pronoun_target_referent`'s question for the other pronoun, and as
+    strict for its reason: one instruction, one list of exactly two objects.
+    "Destroy **two target** nonblack creatures unless either one is a color the
+    other isn't." (Dead Ringers.) Asked separately rather than as a third
+    referent word, so every clause written for "it" keeps the answer it had.
+    """
+    if len(instructions) != 1:
+        return False
+    described = instructions[0].payload.get("targets") or {}
+    return (
+        described.get("kind") == "object"
+        and described.get("quantifier") == "exactly"
+        and described.get("count") == 2
+    )
+
+
 def _condition_seat(condition, player, event, what: str) -> str:
     """Which seat a condition's player reference names, as a payload word.
 
@@ -99,7 +120,8 @@ def _condition_seat(condition, player, event, what: str) -> str:
 #: Only a cast trigger does today (``cast_card`` in the trigger's context), and
 #: the set is the gate rather than a comment: a condition asking about a name
 #: nobody recorded answers False forever, which is an ability that never fires.
-_SAME_NAME_EVENTS = frozenset({"player_casts_spell", "spell_cast"})
+#: The floor's one table of those events, under the name this reader asks by.
+_SAME_NAME_EVENTS = CAST_SPELL_EVENTS
 
 
 def _subject_could_be_counted(event_subject, counted) -> bool:
@@ -129,6 +151,9 @@ def _lower_condition(
     event: str | None = None,
     referent: str | None = None,
     event_subject=None,
+    *,
+    target_pair: bool = False,
+    graveyard_target: bool = False,
 ) -> dict[str, object]:
     """*produced* names the scratchpad values earlier steps of this same effect
     recorded. It defaults to empty, which is what refuses a coin-flip condition
@@ -151,6 +176,10 @@ def _lower_condition(
     is the event's subject rather than the ability's source. Only
     :func:`lower.lower_ability` holds both, so every other caller leaves it None
     and the word keeps its source reading.
+
+    *target_pair* is :func:`announces_target_pair`'s answer for that same
+    guarded effect — whether "either one" and "the other" have two announced
+    permanents to name. Supplied where *referent* is and by nobody else.
     """
     if isinstance(condition, ast.SelfInGraveyardWithCardsAbove):
         # CR 113.6b and CR 404.3 in one payload. ``functions_from`` is the same
@@ -282,6 +311,56 @@ def _lower_condition(
             "target": referent,
             "permanent_from": CHOSEN_PERMANENT,
         }
+    if isinstance(condition, ast.SharesColorWithMatching):
+        # "Counter target spell **if it shares a color with a creature you
+        # control**." (Jaded Response.) "It" is the target of the effect this
+        # guards — :class:`ItIsColor`'s referent, refused for that clause's two
+        # reasons — and the far side is every permanent the printed phrase
+        # admits, re-read as the instruction is followed (CR 608.2c).
+        #
+        # A **spell** only. The question about a targeted *permanent* is not
+        # one this can settle: "destroy target creature if it shares a color
+        # with a creature you control", aimed at the controller's own
+        # creature, turns on whether an object is one of the things it is
+        # compared with, and no card prints the sentence to rule on. A spell is
+        # never a permanent, so there the clause has one reading.
+        if event is not None:
+            raise LoweringError(
+                "'it' names no chosen target under this trigger", node=condition
+            )
+        if referent != "spell":
+            raise LoweringError(
+                "a colour shared with a described permanent is asked of a "
+                "targeted spell, and this effect names none",
+                node=condition,
+            )
+        return {
+            "kind": "target_shares_color_with_matching",
+            "target": referent,
+            # Every key the phrase produces must be one ``subject_matches``
+            # tests: a narrowing nothing can ask ("a creature you control" read
+            # as "a creature") widens the set the spell is compared with, and
+            # a wider set counters spells the card does not name.
+            "filter": testable_filter_payload(
+                condition.filter,
+                refusal="nothing tests the permanents this colour is shared with",
+                node=condition,
+            ),
+        }
+    if isinstance(condition, ast.TargetsDifferInColor):
+        # "…unless **either one is a color the other isn't**." (Dead Ringers.)
+        # The two targets of the effect this guards, and admitted only where
+        # that effect really announced two: beside one target, or a sweep, the
+        # words name a pair nobody chose and the evaluator would answer the
+        # same way for ever on a card reporting supported. Under a trigger the
+        # pair is refused for ``ItIsColor``'s reason one clause up.
+        if event is not None or not target_pair:
+            raise LoweringError(
+                "'either one' and 'the other' name the two targets of the "
+                "effect beside them, and this effect announces no such pair",
+                node=condition,
+            )
+        return {"kind": "targets_differ_in_color"}
     if isinstance(condition, ast.ObjectHasKeyword):
         # "If **it** doesn't have rampage" (Rapid Fire). The pronoun names the
         # object the sentence in front of it chose — which for a spell or an
@@ -392,6 +471,29 @@ def _lower_condition(
             "kind": "same_named_object",
             "zone": condition.zone,
             "nontoken": bool(condition.nontoken),
+        }
+    if isinstance(condition, ast.OnBattlefield) and condition.filter.distinct:
+        # "if there are four or more **basic land types among** lands that
+        # player controls" (Mask of Intolerance). Not a count of permanents but
+        # of the distinct values among them, so it is ``count_spec``'s -- the
+        # reader every "for each basic land type among" amount goes through --
+        # and the one evaluator behind it (``count_from_payload``) answers the
+        # threshold exactly as it answers the number. A kind of its own rather
+        # than an ``on_battlefield`` with a key: that evaluator counts objects
+        # through ``subject_matches`` and would read the key as nothing, which
+        # is four *lands* where the card says four *types*.
+        #
+        # "That player controls" is moved onto the count's seat by the same
+        # floor function the amounts use, which refuses under an event that
+        # froze no seat -- there the words name nobody.
+        return {
+            "kind": "distinct_among",
+            "count": count_spec(
+                count_filter_on_frozen_seat(condition.filter, event, condition),
+                condition,
+            ),
+            "op": condition.comparison.op,
+            "value": condition.comparison.value.value,
         }
     if isinstance(condition, ast.OnBattlefield):
         # No seat travels down: the payload names the zone and the noun phrase,
@@ -519,13 +621,21 @@ def _lower_condition(
             payload["of_each_color"] = True
         return payload
     if isinstance(condition, ast.SubjectCharacteristicIs):
-        # The bound must be a printed number: the evaluator compares an integer,
-        # and an X or a board count would be compared against a node. Refused
-        # rather than coerced, so the day a card prints one the gate is visibly
-        # missing instead of silently answering about the wrong quantity.
-        if not isinstance(condition.comparison.value, ast.Fixed):
+        # The bound is a printed number or a **count** ("…less than or equal
+        # to the number of cards in your graveyard", Ghastly Demise) — the two
+        # things the evaluator can turn into an integer. The count rides as the
+        # ``x_from_count`` spec every other counted amount carries and is
+        # taken when the condition is asked (CR 608.2c), through the same
+        # evaluator. An X or any other amount would be compared against a
+        # node, and is refused rather than coerced.
+        bound = condition.comparison.value
+        bound_count = count_spec(bound.filter, condition) if isinstance(
+            bound, ast.CountOf
+        ) else None
+        if bound_count is None and not isinstance(bound, ast.Fixed):
             raise LoweringError(
-                "a characteristic gate compares against a printed number",
+                "a characteristic gate compares against a printed number or a "
+                "count",
                 node=condition,
             )
         # Which object is asked is payload, and only two answers exist because
@@ -578,8 +688,10 @@ def _lower_condition(
             "subject": asked,
             "characteristic": condition.characteristic,
             "op": condition.comparison.op,
-            "count": condition.comparison.value.value,
+            "count": 0 if bound_count is not None else bound.value,
         }
+        if bound_count is not None:
+            payload["count_from"] = bound_count
         if pronoun_referent is not None:
             # Which half of the resolution context holds the target. Written
             # only by the pronoun spelling: a clause that announced its own
@@ -812,10 +924,29 @@ def _lower_condition(
         payload: dict[str, object] = {"kind": "your_turn"}
         if condition.negated:
             payload["negated"] = True
+        if condition.whose == "that_player":
+            # "…if it's not **that player's** turn" (Price of Glory). The seat
+            # the firing event was about, which only an event that freezes one
+            # can answer; anywhere else the words name nobody and the clause
+            # would be asked about the ability's controller instead.
+            if event not in _EVENT_SUBJECT_PLAYERS:
+                raise LoweringError(
+                    "\"that player's turn\" names the firing event's player, "
+                    "and this event records none",
+                    node=condition,
+                )
+            payload["whose"] = EVENT_SUBJECT_PLAYER
+        elif condition.whose != "you":
+            raise LoweringError(
+                f"no turn condition names {condition.whose!r}", node=condition
+            )
         return payload
     # Every condition that reads a **record** rather than the board, handed down
     # as the last thing this function does — the arrangement `_bound_returns`
     # has with `_described_returns`, so one call still covers every condition
     # and no caller learns which side of the cut a node landed on. The refusal
     # this line used to carry moved with them and is unchanged.
-    return lower_record_condition(condition, produced, event, referent, event_subject)
+    return lower_record_condition(
+        condition, produced, event, referent, event_subject,
+        graveyard_target=graveyard_target,
+    )

@@ -32,7 +32,7 @@ of a cut belongs on the floor rather than in one of the two families.
 import dataclasses
 
 from ...oracle_types import OracleInstruction
-from ...subject_filters import (object_only_filter,
+from ...subject_filters import (observer_source_filter,
                                 unimplemented_filter_keywords,
                                 untestable_filter_keys)
 from .. import ast
@@ -42,9 +42,9 @@ from ._amounts import (
     _per_each_amount,
     _per_each_offset,
     _static_x_amount,
-    _x_definition_spec,
 )
-from ._counted_pumps import _TARGET_PUMP_DURATIONS, lower_counted_pump
+from ._counted_pumps import (_TARGET_PUMP_DURATIONS, lower_counted_pump,
+                             _x_definition_spec)
 from ._events import (binds_block_pair, _EVENT_SUBJECT_OBJECTS,
                       ROLE_NAMES_EVENT_SUBJECT)
 from ._common import (
@@ -103,6 +103,8 @@ def _lower_pump(
     # team buff, the bound target, the event's own subject), so a reading
     # placed after the subject branches below would be a counted pump
     # sized by its printed number alone.
+    if node.per_each_recorded is not None:
+        return _lower_pump_per_recorded(node, event, event_subject, produced)
     counted = lower_counted_pump(node, event)
     if counted is not None:
         return counted
@@ -200,7 +202,7 @@ def _lower_pump(
         # nothing, which refuses the shape outright — see
         # ``_x_definition_spec``.
         definition_spec = _x_definition_spec(
-            node.x_definition, node, recorded=produced
+            node.x_definition, node, recorded=produced, event=event
         )
         # Only the characteristics the card writes as X are variable: "+X/+0"
         # pumps power alone, so the literal half stays literal.
@@ -336,11 +338,18 @@ def _lower_pump(
                 node=node,
             )
         described = _filter_payload(node.subject.filter)
-        if object_only_filter(described) is None:
+        if observer_source_filter(described) is None:
             # The printed noun phrase restates the trigger's own narrowing, so
             # it is carried and re-checked rather than dropped — a word consumed
             # and never read is a word that could be deleted with no change to
             # what the card does.
+            #
+            # Held to what ``pump_event_subject`` can answer, which is more
+            # than the object alone: it hands the matcher the ability's
+            # controller and its source, so "a creature **you control**"
+            # (Fervent Charge) is a word it re-asks. A seat it has no argument
+            # for — "defending player controls" — still refuses here, because
+            # the matcher would answer no to it every time.
             raise LoweringError(
                 "the event subject's pump carries a restriction the resolution "
                 "cannot test", node=node,
@@ -555,6 +564,22 @@ def _lower_pump(
         if filt.excluded_types:
             payload["exclude_types"] = list(filt.excluded_types)
         payload["all"] = filt.controller != "you"
+        # "Creatures **target player** controls get +1/+1 until end of turn."
+        # (Day.) A seat the announcement chooses (CR 601.2c), and the one
+        # controller word `all` cannot say: it means "every player's", so the
+        # sentence pumped the whole table and derived no picker at all. The
+        # word travels as payload — `targeting._sweep_controller_spec` reads it
+        # for the picker and the handler narrows by it through
+        # ``subject_matches``, the arrangement the tap, destroy and animation
+        # sweeps over the same printed phrase already have. Any other seat
+        # word (one the firing event would have to name) is refused rather
+        # than widened to everybody.
+        if filt.controller in ("target_player", "target_opponent"):
+            payload["controller"] = filt.controller
+        elif filt.controller not in (None, "you", "opponent"):
+            raise LoweringError(
+                f"the global buff cannot scope to {filt.controller}", node=node
+            )
         # "**Other** creatures you control get +1/+0" (Bolt Hound). Dropped, the
         # Hound buffed itself as well: a strictly better card than the one
         # printed. Emitted only when set, so every payload written before this
@@ -636,6 +661,57 @@ def _lower_pump(
         return (OracleInstruction("buff_creatures_global", "", payload),)
 
     raise LoweringError("unsupported pump subject", node=node)
+
+
+def _lower_pump_per_recorded(
+    node: ast.Pump, event: str | None, event_subject: object | None,
+    produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """"Creatures you control get +0/+1 until end of turn **for each card
+    discarded this way**." (Sacred Rites, Rites of Initiation.)
+
+    A "for each" pump whose count is a *record* rather than a board: the
+    printed P/T sizes one repetition, exactly as it does for "for each creature
+    you control", and what multiplies it is the number the step in front of
+    the sentence wrote. So it is lowered as that sentence — every subject it
+    can be printed on (a class, one target, the source) reaches the branch
+    that already reads it — and the one key that differs is swapped: the count
+    spec becomes the ``back_reference`` ``count_from_payload`` answers for the
+    life gain and the counter placement that print the identical clause.
+
+    Two refusals, both the direction that cannot invent a number:
+
+    - **no duration** — a continuous bonus is rebuilt on every recompute, and
+      the scratchpad the record lives in is gone after the resolution that
+      wrote it (``_counted_pumps._lower_pump_per_milled`` says the same of its
+      own record);
+    - **no producer** — with no step writing the key the words name nothing,
+      and the pump would be a silent +0/+0 on a card reporting supported.
+    """
+    counted = node.per_each_recorded
+    if node.duration.kind is None:
+        raise LoweringError(
+            'a "this way" pump with no duration would be a continuous effect '
+            "sized by a frozen record", node=node,
+        )
+    if counted.source is None or counted.bonus or counted.source not in produced:
+        raise LoweringError(
+            f"back-reference to {counted.source!r} with no producer in this "
+            "effect", node=node,
+        )
+    stand_in = dataclasses.replace(
+        node, per_each_recorded=None,
+        per_each=ast.ObjectFilter(card_types=("creature",), controller="you"),
+    )
+    lowered = _lower_pump(stand_in, event, event_subject, produced)
+    if len(lowered) != 1 or "x_from_count" not in lowered[0].payload:
+        raise LoweringError(
+            "no pump handler sizes this subject by a recorded count", node=node
+        )
+    payload = {
+        **lowered[0].payload, "x_from_count": {"back_reference": counted.source},
+    }
+    return (OracleInstruction(lowered[0].kind, "", payload),)
 
 
 def _lower_double_power(node: ast.DoublePower) -> tuple[OracleInstruction, ...]:
@@ -724,6 +800,19 @@ def _lower_change_text(node: ast.ChangeText) -> tuple[OracleInstruction, ...]:
             )
         payload["duration"] = "until_end_of_turn"
     assert isinstance(node.subject, ast.TargetSpec)
-    if _filter_payload(node.subject.filter):
-        _describe_targets(payload, node.subject)
+    # "…target **spell or permanent**" (Sleight of Mind, Magical Hack, Crystal
+    # Spray). The noun records the union now (``ObjectFilter.also_spell``), and
+    # this lowering carries it **without acting on the spell half** — stated
+    # here rather than left to the kind's fixed ``permanent`` row, because a
+    # union a lowering consumes in silence is how the half went unnoticed.
+    # What it would take is a text channel on a stack object: a spell's text
+    # is its ``StackItem.card``, every stack reader reads that field, and the
+    # card it holds is also the card that goes to the graveyard — so a changed
+    # spell needs an effective card beside its printed one (and CR 400.7a's
+    # carry to the permanent it becomes, as ``color_changes`` does for a
+    # colour). Until then the three offer a permanent and change a permanent,
+    # exactly as before the field existed; no compiled program moves.
+    union = frozenset({"also_spell"})
+    if _filter_payload(node.subject.filter, carried_separately=union):
+        _describe_targets(payload, node.subject, carried_separately=union)
     return (OracleInstruction("mark_text_modified", "", payload),)

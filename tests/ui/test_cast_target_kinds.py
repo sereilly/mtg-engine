@@ -212,8 +212,24 @@ _EXACT_COUNT = re.compile(
 )
 
 
+#: The other printed spelling of an exact number: **one mandatory target per
+#: instance of the word**. "Target creature gets +2/+2 until end of turn.
+#: **Another target** creature gets -2/-2 until end of turn." (Steal Strength,
+#: Consume Strength, Rookie Mistake; Deadshot over a tap and a bite.) Two
+#: instances, neither softened, are as exact as "two target creatures"
+#: (CR 601.2c: a choice "for each target the spell requires") — and were
+#: reported, and gated, as a ceiling until Apocalypse's Consume Strength was
+#: cast at one creature. "Up to one target" beside it (Primal Might) is the
+#: softening, exactly as it is for a bare count.
+_ANOTHER_TARGET = re.compile(r"\banother target\b", re.I)
+_UP_TO = re.compile(r"\bup to\b", re.I)
+
+
 def _prints_a_bare_count(card) -> bool:
-    return bool(_EXACT_COUNT.search(card.oracle_text or ""))
+    text = card.oracle_text or ""
+    return bool(_EXACT_COUNT.search(text)) or bool(
+        _ANOTHER_TARGET.search(text) and not _UP_TO.search(text)
+    )
 
 
 def test_a_printed_number_is_reported_exact():
@@ -250,6 +266,8 @@ def test_a_printed_number_is_reported_exact():
     # having nothing on one side of it.
     exact = {name for name, spec in specs.items() if spec.get("exact_targets")}
     assert {"Ashes to Ashes", "Dust to Dust", "Retribution", "Undo"} <= exact
+    assert {"Deadshot", "Rookie Mistake", "Steal Strength"} <= exact
+    assert not specs["Primal Might"].get("exact_targets")
     assert not specs["Sanguine Indulgence"].get("exact_targets")
     assert not specs["Basri's Acolyte"].get("exact_targets")
 

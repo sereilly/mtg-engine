@@ -48,7 +48,7 @@ from .cast_costs import (additional_costs, costs_charged_from, kicker_costs,
                          kickers_paid)
 from .divided_damage import CARD_DIVIDED, CHOSEN, DIVIDED_TARGETS, divided_entry
 from .enter_effects import copy_on_enter_type
-from .oracle_types import _COLOR_WORD_TO_SYMBOL
+from .oracle_types import SPELL_OR_OBJECT_TARGET, _COLOR_WORD_TO_SYMBOL
 
 #: The payload key a computed amount's count spec is stamped under. Spelled here
 #: rather than imported from ``oracle_types`` beside the module's other
@@ -1007,9 +1007,8 @@ _KIND_TO_SPEC: dict[str, dict] = {
     # `deal_damage`, which takes a player or a permanent; the opponent's half is
     # a pending choice made after resolution, not a target chosen here.
     "deal_damage_and_opponent_choice": {"kind": "any"},
-    # Gaea's Liege and Pyramids' second mode: both resolve through a
-    # `primary_type == "land"` predicate.
-    "change_target_land_type": {"kind": "land"},
+    # Pyramids' second mode resolves through a `primary_type == "land"`
+    # predicate.
     "shield_target_land_from_destruction": {"kind": "land"},
     # Cyclopean Tomb's handler refuses a Swamp outright
     # (`primary_type == "land" and not _is_swamp(p)`), so the exclusion belongs
@@ -1157,12 +1156,38 @@ def _cost_picker_specs(cost, *, announced: dict | None = None) -> list[dict]:
             wanted = described.get("type_filter")
             if isinstance(wanted, str):
                 spec["card_type"] = wanted
+            else:
+                # "Exile **two cards** from your graveyard" (Psychatog,
+                # Bearscape), "Exile **a card** …" (Screams of the Damned).
+                # The phrase names no type, and a graveyard spec that names
+                # none is read as "a creature card" — the reanimation Auras'
+                # default (``graveyard_card_matches``). So the picker offered
+                # creature cards only for a cost the charger takes any card
+                # for: a pile of lands could pay and showed nothing to click.
+                # No card printed the unnarrowed phrase until Odyssey.
+                spec["any_card"] = True
+            # Whatever else the phrase narrows by rides along and is asked
+            # through the charger's own matcher (``_card_matches_filter``) by
+            # the enumerator, so what is offered and what is accepted cannot
+            # disagree. Emitted only when there is something to carry.
+            narrowing = {
+                key: value for key, value in described.items()
+                if not (key == "type_filter" and isinstance(value, str))
+            }
+            if narrowing:
+                spec["cost_filter"] = narrowing
             # How many the payer names. Emitted only when the printed count is
             # more than one, so every spec written before a counted cost existed
             # stays byte-identical.
-            count = int(getattr(cost, "exile_count", 1) or 1)
-            if count > 1:
-                spec["count"] = count
+            count = getattr(cost, "exile_count", 1) or 1
+            if count == "any":
+                # "Exile **any number of** cards from your graveyard"
+                # (Painbringer). No size to state — the set is the payer's,
+                # none included — so the spec says that instead of a number.
+                # The answer rides ``cost_graveyard_indices``.
+                spec["any_number"] = True
+            elif int(count) > 1:
+                spec["count"] = int(count)
             # "…from **a single** graveyard": all of them out of the same pile,
             # which is a restriction on the *set* rather than on any one card
             # and so cannot ride the filter.
@@ -1824,20 +1849,29 @@ def _graveyard_exile_pile_spec(payload: dict) -> dict | None:
     """"Exile X target creature cards from **your** graveyard." (Midnight
     Ritual.)
 
-    The counted graveyard exile is one instruction over three piles, and only
-    one of them is announced. Rysorian Badger's is "defending player's", frozen
-    into a *trigger's* context by the declare-attackers fire site, and Ebony
-    Charm's is "a single graveyard", named by the chooser as the spell resolves
-    — neither seat exists when the object goes on the stack, so neither has a
-    picker to derive and both keep the resolution prompt they were written with.
-    The caster's own pile does exist then, which is the whole of what separates
-    this row from those two.
+    The counted graveyard exile is one instruction over three piles, and the
+    payload's ``targets`` description says which of them are announced — the
+    lowering writes it for exactly the piles this derives a picker for:
 
-    So the answer is **None** for both of them rather than a spec that would
-    describe cards nobody is being asked to name: a picker the client fills for
-    an effect whose handler then prompts anyway is two questions for one
-    decision, and CLAUDE.md's rule for this module is to return None when the
-    program lacks the evidence rather than to guess.
+    * the caster's own (Midnight Ritual), scoped by ``own_graveyard_only``;
+    * "**a single** graveyard" on a spell or an activated ability (Ebony Charm,
+      Rapid Decay, Decompose, Carrion Beetles, Famished Ghoul). Every pile is
+      offered, and ``single_graveyard`` says what the announcement gates then
+      hold the answer to: a graveyard announcement is one seat and a list of
+      slots in *that seat's* pile (``Game.graveyard_target_seat``), so the
+      cards are in one graveyard by construction once the seat is named — and
+      the gate requires that it is (``legality._unnamed_single_pile_refusal``).
+      This row answered None for these until Odyssey's second wave, on the
+      ground that the pile "is named by the chooser as the spell resolves"; the
+      cards are targets (CR 115.1), chosen as the object is put on the stack
+      (CR 601.2c), and choosing them at resolution let a caster pick after the
+      opponent had passed.
+
+    Rysorian Badger's is "defending player's", frozen into a *trigger's*
+    context by the declare-attackers fire site. A trigger has no picker for a
+    card in a graveyard, so it carries no description, answers **None** here
+    and keeps its resolution prompt: a picker the client fills for an effect
+    whose handler then prompts anyway is two questions for one decision.
 
     Everything else is handed straight over in the key names
     ``graveyard_card_matches`` reads — the arrangement every graveyard spec in
@@ -1845,11 +1879,16 @@ def _graveyard_exile_pile_spec(payload: dict) -> dict | None:
     that same predicate and a spec described in this module's own spelling
     would be a second answer to which cards may be named.
     """
-    if payload.get("graveyard_owner") != "you" or not payload.get("targets"):
+    owner = payload.get("graveyard_owner")
+    if owner not in ("you", "chosen") or not payload.get("targets"):
         # No ``targets``: "exile a land card from your graveyard" (Forgotten
         # Harvest) names nothing at announcement and is picked at resolution.
         return None
-    spec: dict = {"kind": GRAVEYARD_TARGET_KIND, "own_graveyard_only": True}
+    spec: dict = {"kind": GRAVEYARD_TARGET_KIND}
+    if owner == "you":
+        spec["own_graveyard_only"] = True
+    else:
+        spec[SINGLE_GRAVEYARD] = True
     card_type = payload.get("card_type")
     if payload.get("any_card") or card_type is None:
         spec["any_card"] = True
@@ -2539,6 +2578,13 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     # same two-halves payload; without the row the ability announced no seat
     # and its picker offered only the discard cost.
     "animate_matching_until_eot": _sweep_controller_spec,
+    # "Creatures **target player** controls get +1/+1 until end of turn."
+    # (Day.) The pump sweep's turn at the same two-halves payload, and the one
+    # finding `picker_sweep.py` had in Apocalypse: with no row the half derived
+    # no picker, so a client sent a bare cast. ``_matching_sweep_spec`` so a
+    # payload that reaches the picker through the ordinary ``targets`` key
+    # keeps the prompt it had.
+    "buff_creatures_global": _matching_sweep_spec,
     # "Draw a card for each tapped creature **target opponent** controls."
     # (Theft of Dreams.) The seat is inside the counted amount rather than
     # inside a noun phrase, which is the only thing that separates this row
@@ -3022,6 +3068,43 @@ def entry_trigger_instructions(
     return _as_kicked(instructions, kickers)
 
 
+#: Set on a graveyard-target spec derived for a cast **out of a graveyard**:
+#: the card being cast is in that pile as the caster looks at it and is not a
+#: candidate. CR 601.2a moves the card to the stack as the *first* step of
+#: casting it and CR 601.2c chooses targets two steps later, so by the time
+#: there is anything to choose the spell is no longer a card in a graveyard.
+#:
+#: Flashback is what made it reachable (CR 702.34a): Coffin Purge's "exile
+#: target card from a graveyard" flashed back out of a graveyard holding only
+#: itself was offered itself, announced at itself, paid for and resolved
+#: having exiled nothing, and Recoup granted flashback to the Recoup doing the
+#: granting. A flag on the spec rather than a parameter to the enumerator,
+#: because the spec is the one thing the picker, the announcement gate and
+#: the no-legal-target gate are all handed — and it is set only where the
+#: caller says which zone the cast leaves, so the resolution-time re-check
+#: (which derives the spec with no zone) never sees it: the spell is on the
+#: stack by then, and a *second copy* in the pile is a legal target.
+CAST_FROM_GRAVEYARD = "cast_from_graveyard"
+
+
+def as_cast_from(spec: "dict | None", from_zone: str) -> "dict | None":
+    """*spec* as the announcement of a cast leaving *from_zone* reads it.
+
+    Unchanged for every zone but a graveyard and for every spec that does not
+    choose a graveyard card, so a caller may pass anything. Returns a copy:
+    the derived specs below are built per call but the tables behind them are
+    shared, and a flag written in place would follow the spec to a caller
+    that named no zone.
+    """
+    if (
+        spec is not None
+        and from_zone == "graveyard"
+        and spec.get("kind") == GRAVEYARD_TARGET_KIND
+    ):
+        return {**spec, CAST_FROM_GRAVEYARD: True}
+    return spec
+
+
 def derive_cast_spec(
     card, program, *, from_zone: str = "hand",
     optional_cost_payments: dict | None = None,
@@ -3029,6 +3112,27 @@ def derive_cast_spec(
 ) -> dict | None:
     """The cast-time spec of *card* cast from *from_zone*, or None when it
     chooses nothing.
+
+    A spec that chooses a graveyard card is marked :data:`CAST_FROM_GRAVEYARD`
+    when the cast itself leaves a graveyard (:func:`as_cast_from`).
+    """
+    return as_cast_from(
+        _derive_cast_spec(
+            card, program, from_zone=from_zone,
+            optional_cost_payments=optional_cost_payments,
+            mode_index=mode_index,
+        ),
+        from_zone,
+    )
+
+
+def _derive_cast_spec(
+    card, program, *, from_zone: str = "hand",
+    optional_cost_payments: dict | None = None,
+    mode_index: "int | None" = None,
+) -> dict | None:
+    """:func:`derive_cast_spec` before the zone the cast leaves is read onto
+    the target half.
 
     *mode_index* is the mode a "Choose one —" spell was announced with
     (CR 601.2b): the spec is then **that mode's**, through
@@ -3322,9 +3426,13 @@ def _first_described_slot(instructions) -> "tuple[dict, object] | None":
         # reading for the same reason as the two repeats beside it: both
         # targets are announced once as the ability is activated (CR 602.2b),
         # and every round spends the ones the announcement chose.
+        # "Repeat this process until …" (Tainted Pact's wrapper) is the fifth,
+        # listed for the reason the others are and before any card needs it: a
+        # targeted round inside it announces once (CR 601.2c), and a wrapper
+        # this did not open would derive no spec — the Roots class again.
         if instruction.kind in (
             "sequence", "repeat_optional_process", "repeat_process_while",
-            "repeat_process_on_request",
+            "repeat_process_on_request", "repeat_process_until",
         ):
             nested = _first_described_slot(instruction.payload.get("steps") or ())
             if chosen(nested) is not None:
@@ -3496,6 +3604,20 @@ def _sized_division(described: dict | None, instruction) -> dict | None:
 
 def _from_instruction(instruction) -> dict | None:
     """The spec one instruction describes, or None when it describes none."""
+    # **A step of a several-role announcement answers with the announcement.**
+    # "Counter target spell **and** Suffocating Blast deals 3 damage to target
+    # creature" stamps one ordered ``roles`` list on both steps, and the first
+    # of them is a counter — a kind with a payload reader of its own two lines
+    # down, which pre-empts the generic ``targets`` reading. Left to it, the
+    # line's picker was the counter's alone: a stack picker, the creature
+    # never asked for. A stamped step (``payload_own_role``) says which slot
+    # of a shared announcement it spends, so the announcement is the answer
+    # whatever kind carries it; every instruction that names no role falls
+    # through exactly as before.
+    if payload_own_role(instruction.payload) is not None:
+        announced = _from_targets_payload(instruction.payload.get("targets"))
+        if announced is not None:
+            return announced
     # A kind with several specs settles its own case first, because it is the
     # only reader that knows how to combine its payload with its `targets`
     # description — a colour-restricted counterspell carries both, and the
@@ -3604,6 +3726,64 @@ SEAT_ROLE_KINDS = frozenset({"player", "player_or_planeswalker"})
 def role_is_seat(role: dict | None) -> bool:
     """Whether *role*'s object is a seat rather than an object in a zone."""
     return bool(role) and role.get("kind") in SEAT_ROLE_KINDS
+
+
+#: The ``choices`` key an announcement naming **more than one seat** records
+#: them under: one entry per role, positional in role order, an ``int`` seat
+#: where the role's object is a player and ``None`` everywhere else.
+#:
+#: "Choose any number of creatures **target player** controls. Choose the same
+#: number of creatures **another target player** controls." (Cultural Exchange.)
+#: Two instances of the word, both players, and a stack object has one field
+#: that means "the player this targets" (``target_player_index``) — which every
+#: roles reader filled every seat slot from, so the second player was never
+#: announced at all and ``resolve_role_player`` refused the pair outright.
+#:
+#: **A fourth positional list beside the three a roles announcement already
+#: has** (ids, graveyard stamps, indices —
+#: ``activation._role_announcement_stamps``), for the reason those are lists:
+#: a reader holding slot *n* asks each and exactly one replies. It rides
+#: ``choices`` rather than a new ``StackItem`` field for the reason the divided
+#: list does (``divided_targets``, the other announcement that names several
+#: players): that dict is copied whole onto a copy (CR 707.10) and carried
+#: whole into the resolution context, so no construction site has to remember
+#: a new field.
+#:
+#: **Present only where the scalar cannot say it** — two or more seat roles.
+#: An announcement with one seat role records nothing here and is read off
+#: ``target_player_index`` exactly as it always was, which is every roles card
+#: the pool held before this one; where the list is present the scalar still
+#: holds the first seat named, so a reader of "the player this spell targets"
+#: sees a player the spell really targets.
+#:
+#: A ``None`` in a seat slot is a slot that **names nobody**: either the
+#: announcement left it out (which the gate refuses) or CR 608.2b found its
+#: player an illegal target as the object resolved
+#: (``stack_targets.blank_illegal_targets``) — and the step that spends that
+#: role is then skipped, never re-aimed at the scalar.
+ROLE_SEATS = "role_seats"
+
+
+def recorded_role_seats(holder) -> "list | None":
+    """The per-role seat list *holder* recorded (:data:`ROLE_SEATS`), or None.
+
+    *holder* is anything carrying an announcement's ``choices`` — a stack item
+    or the resolution context cut from it. None is every announcement that
+    named at most one seat, and a ``ChosenMode``, which has no ``choices`` at
+    all: a "choose one or more" mode naming two players is not something this
+    engine can record, and it answers the way an unrecorded seat always has.
+    """
+    seats = (getattr(holder, "choices", None) or {}).get(ROLE_SEATS)
+    return list(seats) if isinstance(seats, (list, tuple)) else None
+
+
+def role_seat_positions(roles) -> list[int]:
+    """Which slots of *roles* — a spec's or a payload's ordered list — are
+    seats."""
+    return [
+        index for index, role in enumerate(roles or ())
+        if isinstance(role, dict) and role_is_seat(role)
+    ]
 
 
 #: The narrowings a **graveyard** role carries, and the whole of what separates
@@ -3868,6 +4048,30 @@ def _carry_player_comparison(spec: dict, targets: dict) -> None:
         spec["chooser"] = chooser
 
 
+def slot_list_is_exact(targets: dict) -> bool:
+    """Whether a ``targets`` description is a slot list that must be named in
+    full — one mandatory target per printed instance of the word (CR 601.2c).
+
+    "Target creature gets +2/+2 … **Another** target creature gets -2/-2"
+    (Consume Strength). The several-slot shape with the bare quantifier
+    ``target`` and no slot the card lets the caster leave empty
+    (``optional_slots``, Primal Might's "up to one"). One predicate for the two
+    readers that have to agree about it: the picker's ``exact_targets`` flag
+    just below, and ``legality.exact_target_count``, which the cast gate counts
+    an announcement against. Asked of one and not the other it is a confirm
+    button that waits for two targets in front of an engine that takes one.
+    """
+    slots = targets.get("filters")
+    count = targets.get("count")
+    return (
+        targets.get("quantifier") == "target"
+        and isinstance(slots, list) and len(slots) > 1
+        and isinstance(count, int) and not isinstance(count, bool)
+        and count == len(slots)
+        and not targets.get("optional_slots")
+    )
+
+
 def _slot_roles_spec(targets: dict, slot_filters: list) -> dict | None:
     """A roles spec for a multi-slot description whose slots differ, or None.
 
@@ -4018,6 +4222,21 @@ def _from_targets_payload(targets) -> dict | None:
         printed_count = targets.get("target_count")
         if printed_count is not None and not isinstance(printed_count, bool):
             spec["divided_target_count"] = printed_count
+        # **What each position of the list is**, for a picker to say as the
+        # caster clicks (``_targets.card_divided_target_description``). The
+        # sentence's own roles where it gives its targets different jobs
+        # (Captain's Maneuver: the protected end, then the taker), and the
+        # printed shares where it gives them different amounts — "1 damage to
+        # any target, 2 damage to another target, and 3 damage to a third
+        # target" (Cone of Flame) is read by position exactly as the redirect
+        # is, and the first click is the one that gets 1. Absent wherever the
+        # positions are interchangeable, which is every other divided spell.
+        named = targets.get("target_roles")
+        shares = targets.get("shares")
+        if isinstance(named, (list, tuple)) and named:
+            spec["target_roles"] = [str(name) for name in named]
+        elif isinstance(shares, (list, tuple)) and len(set(shares)) > 1:
+            spec["target_roles"] = [f"target that gets {share}" for share in shares]
         if printed_count == "x":
             # "…to **each of X targets**" (Firestorm). X *is* how many targets
             # were chosen, so the caster is never asked for it separately —
@@ -4075,7 +4294,31 @@ def _from_targets_payload(targets) -> dict | None:
     if kind == "spell":
         # A spell on the stack, which the UI picks from a different zone than
         # any permanent — "stack" is the name for that picker.
-        return {"kind": "stack"}
+        spec: dict = {"kind": "stack"}
+        card_types = targets.get("card_types")
+        if card_types:
+            # "Target **instant or sorcery** spell becomes the color of your
+            # choice." (Vodalian Mystic.) The printed union, handed to the
+            # enumeration under the key the counter's own spec uses
+            # (``_counter_spec``), so a described spell target and a counter
+            # narrow the picker through one reader.
+            spec["stack_card_types"] = list(card_types)
+        # A **spell role** carries what narrows it in the picker's own keys
+        # (``lowering/_roles._spell_role_description``): a counter keeps its
+        # colour and type on its payload, not in ``targets``, so the role was
+        # stamped with the step's derived ``stack_*`` flags and they are handed
+        # straight back. Absent on every description that is not a role.
+        for key, value in targets.items():
+            if key.startswith("stack_"):
+                spec[key] = value
+        return spec
+    if kind == SPELL_OR_OBJECT_TARGET:
+        # "Target **spell or permanent** becomes the color of your choice until
+        # end of turn." (Illusion, Blind Seer.) One object in one of two zones
+        # — the picker the Lace cycle's kind row (``_KIND_TO_SPEC``) has always
+        # answered with, reached here by a card that *describes* the union.
+        # Bare, because the lowering admits no narrowing beside it.
+        return {"kind": "spell_or_permanent"}
     if kind != "object":
         return None
     filt = targets.get("filter") or {}
@@ -4128,7 +4371,7 @@ def _from_targets_payload(targets) -> dict | None:
         # apart since it parsed them — `quantifier` is "exactly" or "up_to".
         # The spec dropped the distinction and reported both as a maximum, so
         # the picker offered "up to 2" for a card that prints a number.
-        if targets.get("quantifier") == "exactly":
+        if targets.get("quantifier") == "exactly" or slot_list_is_exact(targets):
             flags = {**flags, "exact_targets": True}
         if targets.get("same_controller"):
             # "Choose two target creatures **controlled by the same
@@ -4385,6 +4628,14 @@ def cast_time_count_spec(program, *, mode_index: int | None = None) -> dict | No
 # battlefield it never targeted.
 GRAVEYARD_TARGET_KIND = "graveyard_creature"
 
+#: "…target cards from **a single** graveyard" (Ebony Charm). A relation across
+#: the targets rather than a narrowing of any one of them — "two target
+#: creatures controlled by the same player" one zone over (``same_controller``)
+#: — so it rides the spec as a flag: every pile is offered, and an announcement
+#: is all in one of them. The client reads it to keep a selection inside the
+#: pile its first card came from.
+SINGLE_GRAVEYARD = "single_graveyard"
+
 
 def graveyard_target_spec(
     card, program, *, mode_index: int | None = None, instruction=None
@@ -4551,6 +4802,48 @@ def spec_offers_a_player(spec: dict | None) -> bool:
         and not spec.get("land_filter")
         and not spec.get("creatures_only")
     )
+
+
+#: The spec kind of a picker over the **stack** — a spell or an ability there
+#: and nothing else — and, since Suffocating Blast, the kind of a *role* whose
+#: object is one. A role is "itself an ordinary object description"
+#: (:func:`roles_spec`), so its kind is the one-target kind for the same slot.
+STACK_TARGET_KIND = "stack"
+
+
+def role_is_stack(role: dict | None) -> bool:
+    """Whether *role*'s object is a spell or ability on the stack.
+
+    :func:`role_is_seat`'s sibling, for the same readers: the walk that turns
+    a candidate back into an object, the gate that fills each slot from the
+    channel it travels on, the stamp reader and the resolution. A role's
+    object is a permanent unless one of these says otherwise, and a reader
+    that did not ask would look a stack slot up on a battlefield.
+    """
+    return bool(role) and role.get("kind") == STACK_TARGET_KIND
+
+
+def spec_names_the_stack(spec: dict | None) -> bool:
+    """Whether an announcement under *spec* may name an **object on the
+    stack** (CR 601.2c) — as its target, as one of two zones its target may
+    be in, as CR 609.7a's chosen source, or as one role of several.
+
+    The one answer to "has ``target_stack_index`` anything to say here?", for
+    the gate that refuses a stack object named where it has not
+    (``legality.stray_stack_target_refusal``, and its activation twin). Four
+    shapes, because the stack reaches a spec four ways: the ``stack`` kind (a
+    counter, a copy, a retarget), ``spell_or_permanent`` (the Laces, Illusion,
+    Unsubstantiate), the ``also_stack`` flag on a chosen-source picker (Circle
+    of Protection, Reverse Damage) and a ``stack`` **role** beside a permanent
+    or a seat (Suffocating Blast).
+    """
+    if not spec:
+        return False
+    if spec.get("kind") in (STACK_TARGET_KIND, "spell_or_permanent"):
+        return True
+    if spec.get("also_stack"):
+        return True
+    return any(role_is_stack(role) for role in spec_roles(spec))
 
 
 def stack_object_mana_value(item) -> int:
@@ -4895,6 +5188,13 @@ _TRIGGER_PREFIX = re.compile(
     r"^\s*(?:until [^,]{1,40}, )?(when|whenever|at the beginning)\b"
 )
 _TARGET_WORD = re.compile(r"\btargets?\b")
+#: The one delayed line that *is* a cast target: a stated window, then an
+#: opener whose own subject is "target <noun>". The window is required — a bare
+#: "whenever target creature …" on a spell is an activated ability's effect
+#: (Acidic Dagger), which ``_cast_lines`` has already split away from its cost.
+_DELAY_OPENER_CHOOSES_ITS_TARGET = re.compile(
+    r"^\s*until [^,]{1,40}, (?:when|whenever) target\b", re.I
+)
 
 # Line shapes whose target is not a *cast* target, each excluded for the reason
 # the trigger prefix above is. `legality._cast_lines` cannot drop them: it
@@ -4951,6 +5251,16 @@ _CANT_BE_TARGETED = re.compile(r"can't be the targets? of[^.;]*")
 _QUOTED_ABILITY = re.compile("[\"“][^\"”]*[\"”]")
 
 
+# **Somebody else's announcement, described** — "While an opponent **is
+# choosing targets** as part of casting a spell they control…, that player
+# must choose at least one Flagbearer" (Standard Bearer). The word is about the
+# targets an *opponent's* spell chooses, so the creature printing it raises no
+# picker of its own: `picker_sweep.py` reported both Flagbearers as the Roots
+# class the day they compiled. Erased, for `_CANT_BE_TARGETED`'s reason — the
+# clause is one part of a sentence, and ends at its comma.
+_OTHERS_CHOOSING_TARGETS = re.compile(r"(?:is|are) choosing targets[^,.;]*")
+
+
 def line_names_a_cast_target(line: str) -> bool:
     """Whether *line* names a target the caster chooses as the spell is cast.
 
@@ -4963,6 +5273,18 @@ def line_names_a_cast_target(line: str) -> bool:
     """
     if not _TARGET_WORD.search(line):
         return False
+    if _DELAY_OPENER_CHOOSES_ITS_TARGET.match(line):
+        # "Until end of turn, whenever **target creature** deals damage, you
+        # gain that much life." (Spiritualize.) The trigger prefix below is
+        # right about every delayed line whose target sits *behind* the
+        # opener's comma — that one is chosen when the delayed ability fires —
+        # and wrong about this one: the object the ability watches is named by
+        # the opener itself, so it is chosen as the spell is cast (CR 601.2c)
+        # and bound as the ability is created (CR 603.7c). Read first, because
+        # the veto below would otherwise make the spell an object with no
+        # target at all: nothing announced it, and CR 608.2b had nothing to
+        # re-check.
+        return True
     if (
         _TRIGGER_PREFIX.match(line)
         or _LOYALTY_PREFIX.match(line)
@@ -4975,6 +5297,7 @@ def line_names_a_cast_target(line: str) -> bool:
     # and the quoted grant do not cover still has to name a target for this to
     # be one.
     remaining = _QUOTED_ABILITY.sub("", _CANT_BE_TARGETED.sub("", line))
+    remaining = _OTHERS_CHOOSING_TARGETS.sub("", remaining)
     return bool(_TARGET_WORD.search(remaining))
 
 

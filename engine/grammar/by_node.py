@@ -45,7 +45,9 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_keep_chosen_discar
                        _lower_bid_life_for_control, _lower_become_blocked,
                        _lower_bid_life_contest,
                        _lower_produces_mana_instead, _lower_spend_mana_as_though,
+                       _lower_added_mana_becomes, _lower_grant_mana_spending,
                        _lower_change_land_type, _lower_change_supertype,
+                       _lower_become_that_type,
                        _lower_become_aura, _lower_untap_chosen_by_paying,
                        _lower_reveal_hand_and_choose, _lower_look_top_pick,
                        _lower_player_gets_counters,
@@ -62,6 +64,7 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_keep_chosen_discar
                        _lower_create_emblem, _lower_create_copy_token,
                        _lower_damage_dealt_riders, _lower_coin_flip_damage_loop,
                        _lower_coin_flip_stakes_loop, _lower_damage_this_game_history,
+                       _lower_flip_coins_until_loss,
                        _lower_repeat_process_request,
                        _lower_put_source_into_zone,
                        _lower_return_self_instead_of_untapping, _lower_extra_turn,
@@ -82,6 +85,7 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_keep_chosen_discar
                        _lower_separate_library_top_into_piles,
                        _lower_lose_game, _lower_mill_until,
                        _lower_put_hand_cards_on_library, _lower_scry,
+                       _lower_surveil,
                        _lower_damage_becomes_counter_removal,
                        _lower_redirect_damage, _lower_double_combat_damage,
                        _lower_choose_damage_source,
@@ -121,6 +125,7 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_keep_chosen_discar
                        _lower_look_top_exile_random, _lower_search_and_exile,
                        _lower_put_exiled_pile_on_library,
                        _lower_graveyard_top_opponent_chooses,
+                       _lower_reveal_library_opponent_chooses,
                        _lower_reveal_top_opponent_chooses,
                        _lower_search_reveal_opponent_chooses,
                        _lower_strip_cards_with_chosen_name,
@@ -141,6 +146,7 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_keep_chosen_discar
                        _lower_attach, _lower_count_objects, _lower_exchange_control,
                        _lower_secretly_choose_numbers,
                        _lower_exchange_greatest_mana_value,
+                       _lower_exchange_chosen_sets,
                        _lower_mutual_control_of_sets,
                        _lower_pay_or_sacrifice_greatest_mana_value,
                        _lower_win_game,
@@ -256,12 +262,16 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.SecretlyChooseNumbers: _lower_secretly_choose_numbers,
     ast.ExchangeControl: _lower_exchange_control,
     ast.ExchangeGreatestManaValue: _lower_exchange_greatest_mana_value,
+    ast.ExchangeChosenSets: _lower_exchange_chosen_sets,
     ast.MutualControlOfSets: _lower_mutual_control_of_sets,
     ast.PayOrSacrificeGreatestManaValue: _lower_pay_or_sacrifice_greatest_mana_value,
     ast.MillUntil: _lower_mill_until,
     ast.Scry: _lower_scry,
+    ast.Surveil: _lower_surveil,
     ast.ProducesManaInstead: _lower_produces_mana_instead,
     ast.SpendManaAsThough: _lower_spend_mana_as_though,
+    ast.AddedManaBecomes: _lower_added_mana_becomes,
+    ast.GrantManaSpending: _lower_grant_mana_spending,
     ast.CreateEmblem: _lower_create_emblem,
     ast.DestroyEachUnlessPaid: _lower_destroy_each_unless_paid,
     ast.BecomeCreature: _lower_become_creature,
@@ -316,6 +326,9 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.RandomGraveyardCardFate: _lower_random_graveyard_card_fate,
     ast.LookTopExileRandom: _lower_look_top_exile_random,
     ast.RevealTopOpponentChooses: _lower_reveal_top_opponent_chooses,
+    # The whole library revealed and one card picked per printed description
+    # (Guided Passage) — a different pile and a different pick, so its own row.
+    ast.RevealLibraryOpponentChooses: _lower_reveal_library_opponent_chooses,
     ast.RevealTopSortingByFilter: _lower_reveal_top_sorting_by_filter,
     # The same pick over a pile a **search** found (Intuition), which is
     # why it is a row of its own rather than a field on that node: a search
@@ -546,6 +559,14 @@ _BY_NODE_TYPE_WITH_EVENT_AND_PRODUCED: dict[type, object] = {
     # reaches the bound branch through the *delay's* event, which is a fact
     # about the sentence rather than about where in it the clause sits.
     ast.Sacrifice: _lower_sacrifice,
+    # "The next time **that source** would deal damage this turn, …"
+    # (Desperate Gambit) names a source a step in front of it chose; "the next
+    # time **that creature** would deal combat damage this turn, …" (Impulsive
+    # Maneuvers) names the creature its trigger's event was about. One node,
+    # two antecedents, two places to look — the row left the records-only
+    # table below when the second arrived, as ``ast.SearchLibrary`` and
+    # ``ast.CreateCopyToken`` did above.
+    ast.ChosenSourceNextDamage: _lower_chosen_source_next_damage,
 }
 
 
@@ -567,6 +588,11 @@ _BY_NODE_TYPE_WITH_EVENT_AND_PRODUCED: dict[type, object] = {
 #: consulted first.
 _BY_NODE_TYPE_WITH_PRODUCED: dict[type, object] = {
     ast.Attach: _lower_attach,
+    # "Target creature becomes **that type** until end of turn." (Unnatural
+    # Selection.) Here for ``ast.Attach``'s reason: the two words name what a
+    # "Choose a creature type" step recorded, and with no such step they name
+    # nothing.
+    ast.BecomeThatType: _lower_become_that_type,
     # "…change **the target or targets**." (Psychic Battle.) A back-reference
     # to what the firing event froze, so it is here for ``ast.Attach``'s
     # reason: with no such record the five words name nothing.
@@ -634,9 +660,6 @@ _BY_NODE_TYPE_WITH_PRODUCED: dict[type, object] = {
     # record from an earlier step of the same sentence, "it" has no referent but
     # the source, and the two readings lower to different machinery.
     ast.SacrificeUnlessPay: _lower_sacrifice_unless_pay,
-    # Beside ``ast.PreventDamage``'s shield, which is an arm of the chain: the
-    # source this names is one a step in front of it chose (idiom 7).
-    ast.ChosenSourceNextDamage: _lower_chosen_source_next_damage,
     ast.AddMana: _lower_add_mana,
     # "it" names the card an earlier step of *this* effect turned up, so the
     # lowering needs ``produced`` where the event-bearing table passes
@@ -671,4 +694,8 @@ _BY_NODE_TYPE_WITH_PRODUCED: dict[type, object] = {
     # "one of the exiled cards" names what a step of this same effect exiled,
     # which is a reading only the producer set can admit.
     ast.EachPlayerClaimsExiledCard: _lower_each_player_claims_exiled_card,
+    # "Flip a coin **that many** times …" (Squee's Revenge): the bound is the
+    # number a step in front of it chose, so only the producer set can say
+    # whether the words name anything.
+    ast.FlipCoinsUntilLoss: _lower_flip_coins_until_loss,
 }

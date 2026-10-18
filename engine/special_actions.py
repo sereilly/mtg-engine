@@ -160,6 +160,15 @@ def take_special_action(
             if arrived
             else f"{player.name} discarded {card.name}, and it was diverted"
         )
+        # …and it is still CR 701.9a's discard, so the board's watchers hear of
+        # it: the move alone was a discard nothing could see, and "whenever an
+        # opponent discards a card" (Megrim) did nothing. Announced rather than
+        # run through ``_discard_card``, because the two replacements that seam
+        # asks are both about a discard something *caused* — "if an effect
+        # causes you to discard" (Library of Leng), "a spell or ability an
+        # opponent controls causes" (Dodecapod) — and a special action is the
+        # player's own (CR 116.1), caused by nothing.
+        game.announce_discard(player, card)
         _priority_returns(game)
         return None
     return f"no special action named {kind!r}"
@@ -417,15 +426,15 @@ def _payment_plan(game: "Game", seat: int, cost: "dict[str, int]"):
     other "you may pay" in this engine goes through
     (``mana_payment.plan_payment``).
     """
-    from .mana_payment import plan_payment, untapped_mana_lands
+    from .mana_payment import plan_payment
 
     if not any(cost.values()):
         return {}
     return plan_payment(
         game.players[seat].mana_pool,
-        untapped_mana_lands(game.controlled_by(seat)),
+        game.payment_lands(seat),
         cost,
-        produces=game._land_payment_colors,
+        produces=game._land_payment_colors, payer=game.players[seat],
     )
 
 
@@ -514,7 +523,12 @@ def take_permanent_special_action(
             victim = game.default_sacrifice_pick(candidates)
     plan = _payment_plan(game, seat, offer.mana) if offer.mana else None
     if plan:
-        game._spend_payment_plan(game.players[seat], plan)
+        # The planned lands are tapped for mana through the one payer
+        # (``Game._pay_planned_cost``, CR 605.3a).
+        if not game._pay_planned_cost(
+            game.players[seat], lambda: _payment_plan(game, seat, offer.mana)
+        ):
+            return "that cost can't be paid"
     if victim is not None:
         game.sacrifice_permanent(victim)
         game.log.append(

@@ -10,7 +10,7 @@ from . import shields as _shields
 # timestamp counter, nothing from here. effective_card is read on nearly every
 # rules query, so this is not a function-local import.
 from .continuous import next_timestamp
-from .copies import copiable_card, copied_name
+from .copies import card_identity, copiable_card, copied_name
 # …and land_types the same: the layer system's types and nothing from here.
 from .land_types import added_land_types, lost_abilities_to_type_change
 from .text_changes import apply_text_changes, has_text_changes, text_changes
@@ -179,31 +179,21 @@ class CardDefinition:
         return self.printings[0] if self.printings else self.set_code
 
 
-#: Every card one of the four caches below has an entry for, **kept alive**.
-#:
-#: Those caches are keyed on ``id(card)`` — a `CardDefinition` carries a dict
-#: and cannot be hashed — and an ``id`` is an address: once the card is freed,
-#: the next object built there has the same one. A cache that did not hold its
-#: key then answered for a card that no longer existed. Asked about a basic
-#: Island, `_without_any_abilities` returned a nonbasic land some earlier
-#: board had built at that address, and "lands with the basic supertype"
-#: found none. It needed a short-lived card, an entry made for it, and a
-#: second card at its address asked the same question, so it showed as one
-#: test failing in one run of the suite out of two.
-_CACHE_KEY_CARDS: dict[int, "CardDefinition"] = {}
-
-
 def _with_granted_abilities(
     card: "CardDefinition", granted: tuple[str, ...]
 ) -> "CardDefinition":
-    """*card* with abilities a static grants appended to its rules text."""
-    key = (id(card), granted)
+    """*card* with abilities a static grants appended to its rules text.
+
+    Memoised, like the three folds below it, on ``copies.card_identity`` - the
+    card's printed fields - and not on ``id(card)``: see that function for the
+    creature that became another creature.
+    """
+    key = (card_identity(card), granted)
     cached = _GRANTED_CARDS.get(key)
     if cached is None:
         text = chr(10).join(filter(None, (card.oracle_text, *granted)))
         cached = dataclasses.replace(card, oracle_text=text)
         _GRANTED_CARDS[key] = cached
-        _CACHE_KEY_CARDS[id(card)] = card
     return cached
 
 
@@ -240,12 +230,11 @@ def _without_any_abilities(card: "CardDefinition") -> "CardDefinition":
     an ability: a Serra Angel under Humility is still a 4/4 Angel with a flying
     ability it no longer has, and layer 7b is what makes it 1/1.
     """
-    key = (id(card), "no-abilities")
+    key = (card_identity(card), "no-abilities")
     cached = _STRIPPED_CARDS.get(key)
     if cached is None:
         cached = dataclasses.replace(card, oracle_text="", keywords=())
         _STRIPPED_CARDS[key] = cached
-        _CACHE_KEY_CARDS[id(card)] = card
     return cached
 
 
@@ -264,7 +253,7 @@ def _without_ability_lines(
     """
     from .keywords import normalized_ability_line
 
-    key = (id(card), removed)
+    key = (card_identity(card), removed)
     cached = _REMOVED_CARDS.get(key)
     if cached is None:
         kept = [
@@ -284,7 +273,6 @@ def _without_ability_lines(
             card, oracle_text=chr(10).join(kept), keywords=keywords
         )
         _REMOVED_CARDS[key] = cached
-        _CACHE_KEY_CARDS[id(card)] = card
     return cached
 
 
@@ -317,7 +305,7 @@ def _without_keyword_parts(
     from .keywords import keyword_ability_name
     from .oracle import _is_supported_keyword_line, normalize_creature_line
 
-    key = (id(card), removed)
+    key = (card_identity(card), removed)
     cached = _REMOVED_KEYWORD_CARDS.get(key)
     if cached is not None:
         return cached
@@ -343,7 +331,6 @@ def _without_keyword_parts(
             lines.append(", ".join(part[:1].upper() + part[1:] for part in kept))
     if not changed:
         _REMOVED_KEYWORD_CARDS[key] = card
-        _CACHE_KEY_CARDS[id(card)] = card
         return card
     keywords = tuple(
         word for word in card.keywords
@@ -353,7 +340,6 @@ def _without_keyword_parts(
         card, oracle_text=chr(10).join(lines), keywords=keywords
     )
     _REMOVED_KEYWORD_CARDS[key] = cached
-    _CACHE_KEY_CARDS[id(card)] = card
     return cached
 
 

@@ -92,15 +92,27 @@ def test_the_completeness_check_fires():
     assert any("is not an ActionKind" in p for p in problems)
 
 
+#: The two actions a payment prompt admits without being answered by them: a
+#: price in mana is paid by tapping for it, and the seat's own mana abilities
+#: are how (CR 605.3a). They are ordinary game actions — neither dispatches to
+#: any prompt's resolver — so every prompt that is paid in mana lists the same
+#: two (``mana_payment``, ``optional_pay``), and that is not an ambiguity.
+_MANA_ACTIONS = {"tap", "activate"}
+
+
 def test_kinds_and_keys_are_unique():
     actions = [
         action
         for spec in CHOICE_SPECS.values()
         for action in (spec.action, *spec.also_answers)
+        if action not in _MANA_ACTIONS
     ]
     keys = [spec.prompt_key for spec in CHOICE_SPECS.values()]
     assert len(set(actions)) == len(actions), "two prompts answered by one action"
     assert len(set(keys)) == len(keys), "two prompts sharing a state key"
+    # …and no prompt's own answer is one of the two: a kind answered *by*
+    # "tap" would make every land tap an answer to it.
+    assert not _MANA_ACTIONS & {spec.action for spec in CHOICE_SPECS.values()}
 
 
 def test_duplicate_registration_raises():
@@ -264,6 +276,22 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
     suspending = {kind for kind, spec in CHOICE_SPECS.items() if spec.suspends}
     assert suspending == {
         "effect_order",     # CR 616.1e — the event itself has not happened yet
+        # "…then sacrifices the rest. **Each player discards cards the same
+        # way.**" (Balancing Act.) The first keep with a step behind it, and
+        # that step arms a discard for the same seat: armed together, each
+        # prompt refused the other's answer over the wire and the seat owing
+        # both could answer neither. The keep holds the resolution, so the
+        # discard is asked once every keep is answered — which is also the
+        # printed order.
+        "keep_permanents",
+        # "Target land becomes the basic land type of your choice until end of
+        # turn. / **Draw a card.**" (Shimmering Mirage.) CR 608.2c follows the
+        # instructions in the order written, and the first is not done until
+        # the type is named: run ahead of the answer, the draw put the card in
+        # hand while its controller was still choosing. Jinx's delayed draw is
+        # the same step behind the same prompt, created early where nobody
+        # could see it.
+        "land_type_choice",
         # "Starting with you, each player chooses one of the exiled cards
         # and puts it onto the battlefield tapped under their control.
         # **Repeat this process until all cards exiled this way have been

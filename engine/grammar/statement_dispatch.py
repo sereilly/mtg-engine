@@ -71,11 +71,13 @@ from .lowering.control_flow import (
     _lower_may, _lower_one_of, _lower_unless_player_pays,
 )
 from .lowering._chosen_members import _lower_exile_one_of_chosen
+from .lowering._destroy_sweeps import one_sweep_kind
 from .lowering.sequences import _lower_steps
 from .lowering.loops import (
     _lower_for_each,
     _lower_for_each_cost_paid,
     _lower_for_each_counters_placed,
+    _lower_for_each_counter_removed,
     _lower_for_each_life_lost,
     _lower_for_each_matching,
     _lower_for_each_player,
@@ -112,10 +114,12 @@ from .lowering import (
     _lower_repeat_for_types,
     _lower_repeat_optional_process,
     _lower_repeat_process,
+    _lower_repeat_process_until,
     _lower_repeat_process_while,
     _lower_repeat_until_pile_chosen,
     _lower_for_each_destroyed,
     _lower_for_each_exiled,
+    lower_strip_each_exiled,
     _lower_for_each_tapped,
     _lower_for_each_chosen,
     _lower_for_each_short_of_this_way,
@@ -142,7 +146,9 @@ from .lowering import (
     _lower_graveyard_pick_onto_battlefield,
     _lower_untap_restriction,
     _lower_condition,
+    announces_target_pair,
     pronoun_target_referent,
+    targets_one_graveyard_card,
 )
 from .statement_dispatch_naming import lower_naming_statement
 # The four registries `lower_statement` reads before its chain — see
@@ -298,7 +304,13 @@ def lower_statement(
             statement, dispatch_event, produced, event_subject, event
         )
     if isinstance(statement, ast.RemoveCounter):
-        return _lower_remove_counter(statement, dispatch_event)
+        # Both events, as the placement one branch up takes them and for its
+        # reason: which *object* a pronoun names is a fact about the trigger
+        # and true of every clause under it ("…remove all fuse counters from
+        # it **and** destroy it", Bomb Squad — a conjunction, so the filtered
+        # event is already None), while the branches that pick a dispatch path
+        # by trigger kind keep reading the filtered one.
+        return _lower_remove_counter(statement, dispatch_event, event)
     if isinstance(statement, ast.GainLife):
         return _lower_gain_life(statement, produced, event)
     if isinstance(statement, ast.LoseLife):
@@ -571,6 +583,13 @@ def lower_statement(
         if isinstance(statement.iterator, ast.DiedThisWay):
             return _lower_for_each_destroyed(statement, repeated(object_loop), produced)
         if isinstance(statement.iterator, ast.ExiledThisWay):
+            # "…search that player's library for all cards with the same name
+            # as **that card** and exile them." (Haunting Echoes.) One strip by
+            # every recorded name rather than a loop of strips — asked before
+            # the body is lowered, because the body alone refuses.
+            stripped = lower_strip_each_exiled(statement, produced)
+            if stripped is not None:
+                return stripped
             return _lower_for_each_exiled(statement, repeated(object_loop), produced)
         # "For each creature **tapped this way**, …" (Raiding Party) — the third
         # "this way" window, over a record whose objects never left the
@@ -593,6 +612,13 @@ def lower_statement(
         # exactly as the three object-shaped ones are.
         if isinstance(statement.iterator, ast.CountersPlacedThisWay):
             return _lower_for_each_counters_placed(
+                statement, repeated(), produced
+            )
+        # "For each **delay counter removed this way**" (Delaying Shield) — a
+        # count off this resolution's scratchpad, refused without the step
+        # that wrote it.
+        if isinstance(statement.iterator, ast.CountersRemovedThisWay):
+            return _lower_for_each_counter_removed(
                 statement, repeated(), produced
             )
         # "For each **card less than two a player draws this way**" (Truce) —
@@ -648,6 +674,12 @@ def lower_statement(
     # takes the statement one: both live below this dispatcher.
     if isinstance(statement, ast.RepeatProcessWhile):
         return _lower_repeat_process_while(
+            statement, lower_statement, _lower_condition, produced, event,
+        )
+    # The seventh: the same two lowerings handed back, for a clause that says
+    # when to stop instead of when to go on (Tainted Pact).
+    if isinstance(statement, ast.RepeatProcessUntil):
+        return _lower_repeat_process_until(
             statement, lower_statement, _lower_condition, produced, event,
         )
     # The fifth, and the only one whose bound is a *pile*. It takes the
@@ -789,6 +821,13 @@ def lower_statement(
 
     if isinstance(statement, ast.Conditional):
         then = lower_statement(statement.then, produced, event=event, event_subject=event_subject, whole_effect=False)
+        # The printed body, held before the "unless" swap below moves it to the
+        # false branch: a pronoun in the condition names what the *body*
+        # announced whichever branch it ends up on, and read after the swap an
+        # "unless" clause was handed an empty arm — so it had no referent, and
+        # "…unless either one is a color the other isn't" (Dead Ringers) could
+        # not see the pair it is about.
+        body = then
         if not statement.negated and _guard_is_the_arms_own_precondition(
             statement.condition, then
         ):
@@ -797,6 +836,10 @@ def lower_statement(
             lower_statement(statement.otherwise, produced, event=event, event_subject=event_subject, whole_effect=False)
             if statement.otherwise else ()
         )
+        # "Destroy all lands you control. If it was kicked, destroy all lands
+        # instead." (Desolation Angel.) Two arms of one printed verb go through
+        # one handler — see ``_destroy_sweeps.one_sweep_kind``.
+        then, otherwise = one_sweep_kind(then, otherwise)
         if statement.negated:
             # "<body> **unless** <condition>" (Antagonism). The body is what
             # happens when the condition does *not* hold, which is exactly the
@@ -824,7 +867,9 @@ def lower_statement(
                     # refuses rather than answering about nothing.
                     "condition": _lower_condition(
                         statement.condition, produced, event,
-                        referent=pronoun_target_referent(then),
+                        referent=pronoun_target_referent(body),
+                        target_pair=announces_target_pair(body),
+                        graveyard_target=targets_one_graveyard_card(body),
                     ),
                     "then": then,
                     "else": otherwise,

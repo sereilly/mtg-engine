@@ -402,14 +402,13 @@ def _g5c_game():
 def test_w1g5_carrion_beetles_exiles_three_cards_from_one_graveyard(set_pool):
     """{2}{B}, {T}: Exile up to three target cards from a single graveyard.
 
-    Carrion Beetles is in ``picker_sweep`` and in **neither** of the other two
-    instruments, which is the whole reading of it: the ability is implemented
-    and works. What the sweep names is that its cards are chosen at *resolution*
-    rather than announced (CR 601.2c) — ROADMAP.md's recorded decline for a
-    graveyard target, not a card doing nothing.
-
-    So this test is the evidence for that reading rather than a fix: the cards
-    leave the pile, and they all leave the same one.
+    Carrion Beetles sat in ``picker_sweep`` and in neither of the other two
+    instruments for six sets, which was the whole reading of it: the ability
+    worked, and what the sweep named was that its cards were chosen at
+    *resolution* rather than announced (CR 602.2b through CR 601.2c). Odyssey's
+    second wave announced them, and this test — written as the evidence for
+    that reading — now drives the announcement: the cards named leave the
+    pile, they all leave the same one, and nothing is asked as it resolves.
     """
     game, _p1, p2 = _g5c_game()
     beetles = Permanent(card=set_pool("USG")["Carrion Beetles"])
@@ -422,12 +421,17 @@ def test_w1g5_carrion_beetles_exiles_three_cards_from_one_graveyard(set_pool):
     for i in range(4):
         p2.graveyard.append(_mk_creature_card("G5 Corpse%d" % i, 1, 1))
 
-    assert game.activate_permanent_ability(0, "Carrion Beetles").supported
+    spec = game.activation_target_spec(0, 0, ability_index=0)
+    assert spec["single_graveyard"] and spec["max_targets"] == 3
+    assert len(spec["valid_targets"]) == 4
+    assert game.activate_permanent_ability(
+        0, "Carrion Beetles", target_player_index=1, target_permanent_index=[0, 1, 3],
+    ).supported
     resolve_stack(game)
 
     assert len(p2.exile) == 3
-    assert len(p2.graveyard) == 1
-    assert not game.pending_choices, "one pile with legal cards is not a decision"
+    assert [card.name for card in p2.graveyard] == ["G5 Corpse2"]
+    assert not game.pending_choices, "the cards were named at activation"
 
 
 # --- W2G3: an Aura put onto the battlefield attached as it arrives ---

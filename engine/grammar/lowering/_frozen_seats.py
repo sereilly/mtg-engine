@@ -173,6 +173,18 @@ _EVENT_SUBJECT_CONTROLLERS: frozenset[str] = frozenset({
     # path. Absent from this table the phrase fell through to `target_player`,
     # a choice neither card offers — which is Psychic Venom's bug one row up.
     "matching_permanent_enters",
+    # "Whenever a creature has four or more fuse counters on it, …" (Bomb
+    # Squad's condition). The watched creature's, stamped by the state sweep
+    # (`engine/state_triggers.announce_watched_counter_thresholds`) with the id
+    # beside it. Here so that "that creature's controller loses 2 life" under
+    # this event reads a seat somebody recorded rather than falling through to
+    # `target_player`, which for a trigger that targets nothing is whatever the
+    # resolution was carrying — Psychic Venom's bug, which every row here is
+    # the fix for. Bomb Squad's own sentence does not read it: "that creature
+    # deals 4 damage to **its controller**" asks the dealer as the damage is
+    # dealt (`_recipients`, the `biter_controller` branch), because that
+    # creature is still on the battlefield while the trigger waits.
+    "permanent_counters_reach_threshold",
     # Funeral March — the departing host's. CR 603.6c's event about the
     # permanent an Aura or Equipment is attached to, announced from the one
     # transition off the battlefield (`remove_all_from_battlefield`), which
@@ -366,6 +378,25 @@ _EVENT_SUBJECT_PLAYERS: frozenset[str] = frozenset({
     # loop and the same stamp, gated the same way: the seat is whichever
     # player the returning enchantment was told to watch.
     "upkeep_chosen",
+    # "Whenever a spell or ability **an opponent** controls destroys a
+    # noncreature permanent you control, you may destroy target permanent
+    # **that opponent** controls." (Karmic Justice.) The player the condition
+    # names — whose spell or ability did the destroying (CR 109.5) — frozen by
+    # the destroy seam (`destruction_events.announce_destroyed`) for the reason
+    # every row here is: once the spell has resolved nothing on a board says
+    # who cast it, and at three seats "an opponent" is not "the opponent".
+    # The seam stamps the seat only when a spell or ability destroyed; a
+    # state-based destruction (CR 704.5g) names nobody, and "that player" under
+    # it reads nothing rather than a default.
+    #
+    # **Deliberately absent from `_EVENT_SUBJECT_CONTROLLERS` above**, although
+    # the seam freezes the destroyed permanent's controller too. That table's
+    # meaning is "under this event *that player* is the subject's controller",
+    # and several lowerings ask it first — so listed there, "that player loses
+    # 2 life" under this event took the life from the permanent's own
+    # controller, which under this card's condition is "you". The event has
+    # two seats and the sentence names one of them.
+    "permanent_destroyed",
     # "**An opponent** chooses one — … • You put a -1/-1 counter on each
     # creature **that player** controls and this deals 4 damage to **that
     # player**." (Misfortune; Fatal Lore prints the same back-reference.)

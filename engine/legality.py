@@ -44,7 +44,7 @@ from .cast_costs import (buyback_cost, cast_announces_x, costs_charged_from,
                          kicker_costs)
 from .cast_restrictions import timing_fixed_seat
 from .divided_damage import divided_entry
-from .faces import is_multi_face
+from .faces import is_multi_face, whole_card
 from .combat_restrictions import restriction_condition_holds
 from .cost_x_definitions import (caps_cast_x, cast_x_ceiling,
                                  cast_x_value, defines_cast_x)
@@ -57,23 +57,75 @@ from .resolution_overrides import resolves_with_illegal_targets
 from .static_bonuses import conditional_static_holds
 from .subject_filters import card_matches_any, subject_matches
 from .modal_triggers import modal_trigger_mode_spec, modal_trigger_modes
+from .target_requirements import (announcement_refusal, cast_is_bound,
+                                  narrow_offer, requirements_binding)
 from .targeting import (
+    CAST_FROM_GRAVEYARD,
     GRAVEYARD_TARGET_KIND,
+    SINGLE_GRAVEYARD,
     ROLES_TARGET_KIND,
     _nested_steps,
     activation_target_slot,
     announced_mode_instructions,
+    as_cast_from,
     cast_announced_entry_trigger,
     cast_target_slot,
     derive_activation_spec,
     derive_cast_spec,
     derive_instruction_spec,
+    role_is_stack,
     role_relation_holds,
+    slot_list_is_exact,
     spec_is_a_cost,
+    spec_names_the_stack,
     spec_offers_a_player,
     spec_roles,
     usable_activated_abilities,
 )
+
+
+def _unnamed_single_pile_refusal(card, spec: dict, seat) -> str | None:
+    """Why graveyard slots named for "…target cards from **a single**
+    graveyard" may not be accepted without the seat whose graveyard they are
+    in, or None.
+
+    The relation across the targets (``targeting.SINGLE_GRAVEYARD``) is held by
+    the announcement's own shape: one seat, and slots counted into that seat's
+    pile — a split across two graveyards cannot be spelled. What *can* be
+    spelled is slots with no seat, and both gates read that as "legal in any
+    pile the enumeration offers", so slot 0 could be one player's card and slot
+    1 another's while ``Game.graveyard_target_seat`` resolved both out of the
+    caster's own. So the pile is part of the announcement here and has to be
+    said. Asked by the cast gate and the activation gate alike.
+    """
+    if spec.get(SINGLE_GRAVEYARD) and seat is None:
+        return f"{card.name}: name the graveyard its targets are in"
+    return None
+
+
+def _cast_from_graveyard_slot(spec: dict, graveyard, spell) -> int | None:
+    """The slot of *graveyard* the spell being cast out of it occupies, or
+    None when this spec is not such a cast's.
+
+    ``handlers/_common.excluded_graveyard_slot``'s shape, for the other reason
+    one slot of a pile is not a candidate: there the printed word "another"
+    rules out an ability's own source, here CR 601.2a has already moved the
+    card to the stack. A **slot** for that function's reason too — two copies
+    of one card in one graveyard are one ``CardDefinition`` object, so
+    excluding by identity would take both where the cast takes one. The first
+    matching slot is the one the cast path itself takes
+    (``_cast_onto_stack`` walks the pile from the bottom).
+
+    The card as the zone holds it: a split card is held whole and cast as a
+    half (CR 709.4), so the half is widened before it is looked for.
+    """
+    if not (spec or {}).get(CAST_FROM_GRAVEYARD) or spell is None:
+        return None
+    held = whole_card(spell)
+    return next(
+        (index for index, entry in enumerate(graveyard) if entry is held),
+        None,
+    )
 
 
 def _iter_instruction_tree(instruction):
@@ -209,6 +261,39 @@ def _cant_be_enchanted_by_auras(perm) -> bool:
 # restriction than the kind alone (a tapped/coloured destroy, a non-Wall attack
 # mark). The enumerator gates candidates through these so an ability offers
 # exactly what it could legally affect, matching its resolution.
+def _cast_picker_is_a_target(card: CardDefinition, mode_index: int | None) -> bool:
+    """Whether the picker in front of casting *card* (in *mode_index*, for a
+    modal spell) chooses a **target** — the printed-word half of
+    ``stack_targets``' two-evidence rule, asked before a target requirement is
+    applied to it.
+
+    A derived spec alone over-answers: the Circles' "a source of your choice"
+    and two graveyard picks derive a picker with no ``source_of_choice`` flag,
+    and a requirement read off the spec would demand a Flagbearer be chosen as
+    a *source*. An Aura targets by CR 115.1b with no printed word at all; any
+    other permanent spell targets nothing (its picker is an entry trigger's).
+    """
+    from .stack_targets import _spell_names_a_target, names_a_target
+
+    if not cast_is_bound(card):
+        return False
+    if card.primary_type not in ("instant", "sorcery"):
+        return True
+    modes = compile_card_oracle(card).modes
+    if modes:
+        index = 0 if mode_index is None else mode_index
+        return 0 <= index < len(modes) and names_a_target(modes[index].label)
+    return _spell_names_a_target(card)
+
+
+def _ability_picker_is_a_target(ability) -> bool:
+    """The activation twin of :func:`_cast_picker_is_a_target`: whether
+    *ability*'s own printed line says "target" about a choice it makes."""
+    from .stack_targets import names_a_target
+
+    return names_a_target(getattr(ability, "source_line", None))
+
+
 def targeting_instruction(instruction):
     """The instruction inside *instruction* that actually names a target.
 
@@ -800,7 +885,20 @@ def exact_target_count(spec: dict | None, instruction, x_value: int | None) -> i
     if spec.get("kind") == "divided" or spec.get("division"):
         return None
     described = (getattr(instruction, "payload", None) or {}).get("targets")
-    if not isinstance(described, dict) or described.get("quantifier") != "exactly":
+    if not isinstance(described, dict):
+        return None
+    # "Target creature gets +2/+2 until end of turn. **Another** target
+    # creature gets -2/-2 until end of turn." (Consume Strength, Steal
+    # Strength, Rookie Mistake; Deadshot prints it over a tap and a bite.) Two
+    # printed instances of the bare word "target", so two targets — as exact a
+    # number as "two target creatures", spelled a different way. This asked
+    # only for the quantifier ``exactly``, a slot list carries ``target``, and
+    # its slots were a ceiling the announcement could fall short of: each of
+    # those four was castable naming one creature, which made the drawback half
+    # of the card optional. ``targeting.slot_list_is_exact`` is the question the
+    # picker's ``exact_targets`` flag asks too; a list with an "up to one" slot
+    # in it (Primal Might) may legally name fewer and answers False to both.
+    if described.get("quantifier") != "exactly" and not slot_list_is_exact(described):
         return None
     count = described.get("count")
     if isinstance(count, bool):
@@ -963,7 +1061,34 @@ def _role_object_key(obj) -> tuple:
     # and needed a key built by hand.
     if isinstance(obj, PlayerState):
         return ("player", id(obj))
+    # A **stack** role's object is a spell or ability there (Suffocating
+    # Blast's "target spell"). Identity again, and it has to be: ``StackItem``
+    # compares by value, and two casts of one card at one target are equal.
+    from .game_types import StackItem
+
+    if isinstance(obj, StackItem):
+        return ("stack", id(obj))
     return ("graveyard", obj.seat, id(obj.card), obj.ordinal)
+
+
+def announced_by_a_choice(item) -> bool:
+    """Whether the **ability** *item*'s recorded targets are an announcement a
+    player made — the bound on everything CR 608.2b asks of an ability.
+
+    An activated ability's are (CR 602.2b; ``StackItem.activated``), and so
+    are a triggered ability's where CR 603.3d's picker chose them
+    (``StackItem.targets_chosen``). A target a **fire site** stamped is not,
+    and neither is a default the picker took while a permanent was on its way
+    to a graveyard: the death sweep announces a dies-trigger while the dying
+    permanent is still listed, so the id on the item may be one nobody could
+    have chosen, and asking the rule of it would report the engine's own
+    mis-targeting as a fizzle. One predicate for the gate and for the
+    per-target blanking, so the two cannot disagree about which abilities are
+    judged.
+    """
+    return bool(
+        getattr(item, "activated", False) or getattr(item, "targets_chosen", False)
+    )
 
 
 class LegalityMixin:
@@ -1149,6 +1274,48 @@ class LegalityMixin:
         context = OracleExecutionContext(caster=caster, target=caster, card=card)
         return max(0, int(count_from_payload(self, context, spec)))
 
+    def _size_conditional_division(
+        self, caster_index: int, card: CardDefinition, spec: dict
+    ) -> None:
+        """Make a divided spec's ``division_total`` the amount of the arm the
+        board selects **now**, where the card prints two.
+
+        "Shower of Coals deals 2 damage to each of up to three targets. …
+        deals 4 damage to each of those permanents and/or players instead if
+        there are seven or more cards in your graveyard." One list, two
+        amounts, and the amount is settled as the spell resolves (CR 608.2h).
+        The card-level spec carries the replacing arm's (``derive_cast_spec``
+        has no game to ask), so a picker and the AI's "how much does each
+        target take" were told 4 over a graveyard of none.
+
+        Asked through the resolution's own evaluator with the caster's game as
+        it stands — the answer a spell cast and resolved now would get. It can
+        still change before the spell resolves, which is the rule; what this
+        stops is the spec naming a number the present board contradicts.
+
+        A condition settled at the cast (``was_kicked``) is not this:
+        ``divided_damage.conditional_division`` hands back only the
+        resolution-time kind, and the kicker's arm is already chosen by the
+        announcement the spec was derived for.
+        """
+        from .divided_damage import conditional_division
+        from .game_types import OracleExecutionContext
+        from .handlers.control_flow import evaluate_condition
+
+        arms = conditional_division(compile_card_oracle(card).instructions)
+        if arms is None:
+            return
+        condition, replacing, base = arms
+        caster = self.players[caster_index]
+        holds = evaluate_condition(
+            self,
+            OracleExecutionContext(caster=caster, target=caster, card=card),
+            condition,
+        )
+        amount = (replacing if holds else base).payload.get("amount")
+        if isinstance(amount, int) and not isinstance(amount, bool):
+            spec["division_total"] = amount
+
     def cast_target_spec(
         self,
         caster_index: int,
@@ -1158,6 +1325,7 @@ class LegalityMixin:
         spell_hand_index: int | None = None,
         optional_cost_payments: dict[str, int] | None = None,
         mode_index: int | None = None,
+        requirements: bool = True,
     ) -> dict:
         """Target spec for casting ``card`` from ``caster_index``'s *from_zone*:
         the target kind plus every legal target, enumerated and gated through the
@@ -1187,7 +1355,17 @@ class LegalityMixin:
         Justice destroys one artifact, plus another for each {1}{R} and each
         {1}{G} paid). ``spell_hand_index`` is which copy is being cast, needed
         for the same reason CR 601.2a is: a spell cannot be exiled to pay for
-        itself, and a second copy in hand can."""
+        itself, and a second copy in hand can.
+
+        **The list is what this caster may announce now**, so a requirement an
+        opponent's permanent prints about that announcement is already in it
+        ("…that player must choose at least one Flagbearer on the battlefield if
+        able", ``engine/target_requirements.py``): a one-target spell that
+        could name a Flagbearer is offered Flagbearers alone, and a spell with
+        several slots keeps its list and carries ``required_targets``.
+        ``requirements=False`` is the same spec without that — every *legal*
+        target — which is what the announcement gate measures "if able"
+        against (:meth:`cast_target_requirement_refusal`)."""
         # CR 709.3: a split card is not a spell until a half is chosen, and each
         # half has its own spec — asked of the half (`faces.face_cards`), which
         # is the card the cast path and the serializer both hand this method.
@@ -1221,6 +1399,8 @@ class LegalityMixin:
             mode_index=mode_index,
         ) or {"kind": "none"}
         spec["requires_target"] = spec["kind"] != "none"
+        if spec.get("kind") == "divided" and mode_index is None:
+            self._size_conditional_division(caster_index, card, spec)
         # CR 107.3c: a spell that defines its own X takes the announcement away
         # from the caster, so the picker must not ask for one — and a divided
         # spell's caster needs the number *before* announcing the division
@@ -1299,6 +1479,40 @@ class LegalityMixin:
                     bound if spec.get("max_x") is None
                     else min(int(spec["max_x"]), bound)
                 )
+            # …and the **floor**, for the one cost that prints one: "choose a
+            # number between 1 and 3" may not announce 0. ``max_x`` above is
+            # that range's other end (`_additional_cost_x_ceiling`), so the two
+            # keys are the card's own range and ``number_refusal`` is what
+            # refuses anything outside it. Absent when the floor is 0, which is
+            # where every X box already starts.
+            floor = max(
+                (
+                    cost.choose_number[0]
+                    for cost in costs_charged_from(card, from_zone)
+                    if cost.choose_number is not None
+                ),
+                default=0,
+            )
+            if floor > 0:
+                spec["min_x"] = floor
+        # "This spell costs {1} more to cast for each target beyond the first."
+        # (Fireball; Phyrexian Purge charges life.) CR 601.2f prices the spell
+        # by the targets CR 601.2c chose, and the picker sizes its X box from
+        # the same arithmetic — which it did by assuming Fireball's sentence of
+        # every divided spell, so Captain's Maneuver's two targets were taxed a
+        # mana its card does not charge and its X stopped one short of what the
+        # pool could pay. The table the cast path charges from
+        # (``cost_modifiers.self_per_target_tax``), reported rather than
+        # mirrored; absent where no such line is printed.
+        from .cost_modifiers import self_per_target_tax
+
+        per_target = self_per_target_tax(card.oracle_text or "")
+        if per_target is not None:
+            spec["per_target_tax"] = {
+                "amount": per_target.amount,
+                "life": per_target.life,
+                "beyond_first": per_target.beyond_first,
+            }
         # CR 601.2b's *optional* prices, and how many times each is payable
         # against the answer so far. The picker had no shape for an offer at
         # all — it modelled a cost the caster will certainly pay — so every card
@@ -1307,6 +1521,13 @@ class LegalityMixin:
         offers = self.cast_cost_offers(
             caster_index, card, from_zone=from_zone,
             spell_hand_index=spell_hand_index, taken=optional_cost_payments,
+            # CR 903.8's tax is a cost increase like any other, and CR 118.9d
+            # applies it to an alternative cost: the offer's ``payable`` is
+            # told what this zone adds.
+            extra_generic=(
+                self.commander_tax(caster_index, card)
+                if from_zone == "command" else 0
+            ),
         )
         if offers:
             spec["cost_offers"] = offers
@@ -1346,7 +1567,9 @@ class LegalityMixin:
                     caster_index, card, cost_spec, for_cast=True,
                 )
                 spec["cost_spec"] = cost_spec
-            return spec
+            return self._under_target_requirements(
+                caster_index, card, spec, requirements, mode_index
+            )
         # **A permanent spell's picker is its entry trigger's own list.** The
         # target named here is the one the trigger will choose as it is put on
         # the stack (CR 603.3d), so what may be named is what that choice
@@ -1355,6 +1578,23 @@ class LegalityMixin:
         trigger_targets = self.entry_trigger_cast_targets(
             caster_index, card, optional_cost_payments=optional_cost_payments or {},
         )
+        if trigger_targets is not None:
+            # …less the card being cast, when the cast is out of the caster's
+            # own graveyard (CR 601.2a: it is on the stack before anything is
+            # named) — the exclusion the spell's own enumeration makes, asked
+            # of the trigger's list (Gravedigger cast from a graveyard).
+            leaving = _cast_from_graveyard_slot(
+                spec, self.players[caster_index].graveyard, card,
+            )
+            if leaving is not None:
+                trigger_targets = [
+                    entry for entry in trigger_targets
+                    if not (
+                        entry.get("kind") == "graveyard"
+                        and entry.get("seat") == caster_index
+                        and entry.get("index") == leaving
+                    )
+                ]
         spec["valid_targets"] = (
             trigger_targets if trigger_targets is not None
             else self._enumerate_targets(
@@ -1388,7 +1628,93 @@ class LegalityMixin:
         # source as well as a target, which is the activation path's Jade
         # Monolith shape one announcement step over.
         self._attach_chosen_source_targets(caster_index, card, spec)
-        return spec
+        return self._under_target_requirements(
+            caster_index, card, spec, requirements, mode_index
+        )
+
+    def _under_target_requirements(
+        self, caster_index: int, card: CardDefinition, spec: dict, wanted: bool,
+        mode_index: int | None,
+    ) -> dict:
+        """*spec* as the cast picker presents it under the target
+        requirements in force (``target_requirements.narrow_offer``).
+
+        Asked only of a spell that **targets as it is cast** — an instant, a
+        sorcery or an Aura (CR 115.1a/b). Any other permanent spell's picker
+        is its entry trigger's, and a triggered ability "doesn't have to
+        target a Flagbearer" (ruling, 2016-06-08).
+        """
+        if not wanted or not _cast_picker_is_a_target(card, mode_index):
+            return spec
+        return narrow_offer(self, caster_index, spec)
+
+    def cast_target_requirement_refusal(
+        self, caster_index: int, card: CardDefinition, *,
+        announcements, divided_targets=None, from_zone: str = "hand",
+        optional_cost_payments: dict | None = None,
+    ) -> str | None:
+        """CR 601.2c under a requirement an opponent's permanent prints: why
+        this cast's **whole announcement** is not one the caster may make, or
+        None.
+
+        "While an opponent is choosing targets as part of casting a spell they
+        control…, that player must choose at least one Flagbearer on the
+        battlefield if able." A rule about the announcement rather than about
+        any one target, which is why it is a gate of its own beside
+        :meth:`cast_target_refusal` and not a narrowing inside
+        ``_enumerate_targets``: that list is also what the resolution re-asks
+        (CR 608.2b) and what a retarget and a trigger choose from, none of
+        which the card binds.
+
+        *announcements* is ``casting._mode_announcements``' rows — one per
+        announced mode — and *divided_targets* CR 601.2d's list; between them
+        they are everything the cast named. "If able" is measured against the
+        picker's own un-narrowed list for each row, so a Flagbearer the spell
+        could not legally target binds nothing. An opponent-chosen mode
+        (CR 700.2e) names its targets after the cast and is not asked here.
+        """
+        if not cast_is_bound(card) or not requirements_binding(self, caster_index):
+            return None
+        program = compile_card_oracle(card)
+        if program.modes and program.mode_chooser is not None:
+            return None
+        specs: list[dict] = []
+        named: set = set()
+        for mode_index, seat, slot, ids, _stack_item in announcements:
+            if mode_index is None and program.modes:
+                # A cast naming no mode is the mode-0 cast it resolves as.
+                mode_index = 0
+            if not _cast_picker_is_a_target(card, mode_index):
+                continue
+            specs.append(self.cast_target_spec(
+                caster_index, card, from_zone=from_zone,
+                optional_cost_payments=optional_cost_payments,
+                mode_index=mode_index, requirements=False,
+            ))
+            listed = [pid for pid in (ids or ()) if isinstance(pid, int)]
+            if listed:
+                named.update(listed)
+                continue
+            # A slot beside a seat — the legacy spelling, and the only one a
+            # "choose one or more" mode has. With no seat the cast resolves on
+            # its default one, so that is the battlefield the slot counts into.
+            board = (
+                seat if isinstance(seat, int)
+                else self._spell_default_seat(caster_index)
+            )
+            for index in (slot if isinstance(slot, list) else [slot]):
+                if isinstance(index, int) and not isinstance(index, bool):
+                    permanent = self.permanent_at(board, index)
+                    if permanent is not None:
+                        named.add(permanent.permanent_id)
+        for entry in divided_targets or ():
+            seat, index, _share = divided_entry(entry)
+            if index is None:
+                continue
+            permanent = self.permanent_at(seat, index)
+            if permanent is not None:
+                named.add(permanent.permanent_id)
+        return announcement_refusal(self, caster_index, card.name, specs, named)
 
     def entry_trigger_cast_targets(
         self, caster_index: int, card: CardDefinition, *,
@@ -1450,9 +1776,14 @@ class LegalityMixin:
         from_zone: str = "hand",
         spell_hand_index: int | None = None,
         taken: dict[str, int] | None = None,
+        extra_generic: int = 0,
     ) -> list[dict]:
         """Every *optional* price CR 601.2b lets the caster announce for *card*,
         with what each one costs and how many times it is payable.
+
+        *extra_generic* is what the zone adds to this cast's cost (CR 903.8's
+        commander tax), for the one offer whose ``payable`` is a promise about
+        the whole cast: the alternative cost's (see below).
 
         The two optional cost kinds this engine has grown, described in one
         vocabulary because the browser asks one question about them ("what are
@@ -1497,6 +1828,30 @@ class LegalityMixin:
                     caster_index, card, cost, spell_hand_index=spell_hand_index,
                 ) is None,
             }
+            # CR 118.9d: "any additional costs, cost increases, and cost
+            # reductions that affect that spell are applied to that alternative
+            # cost." So a pitched card and a life are not the whole price under
+            # Sphere of Resistance — the {1} is owed beside them, and an offer
+            # that says "payable" over a board that cannot make it is a cast
+            # the payment refuses (and the reason the castable highlight, which
+            # falls back to this flag, glowed over it). Priced by the one
+            # reader the AI plans the same announcement with, and asked of the
+            # pool plus the untapped lands as every other ceiling here is.
+            # ``mana_owed`` tells the prompt what to float.
+            if self.enforce_mana_costs:
+                from .board_payment import board_can_pay
+                from .mana_payment import mana_cost_label
+                from .restricted_mana import CAST, PaymentPurpose
+
+                owed = self.alternative_cost_mana(
+                    caster_index, card, cost, extra_generic=extra_generic,
+                )
+                if any(owed.values()):
+                    entry["mana_owed"] = mana_cost_label(owed)
+                    entry["payable"] = entry["payable"] and board_can_pay(
+                        self, caster_index, owed,
+                        purpose=PaymentPurpose(CAST, card=card),
+                    )
             if (
                 cost.exile_from_hand is not None
                 or cost.discard_from_hand is not None
@@ -1605,7 +1960,7 @@ class LegalityMixin:
                 payable = plan_payment(
                     dict(caster.mana_pool),
                     untapped_mana_lands(self.controlled_by(caster_index)),
-                    wanted,
+                    wanted, payer=caster,
                 ) is not None
             offers.append({
                 "kind": "optional_cost",
@@ -1673,7 +2028,7 @@ class LegalityMixin:
                 required = dict(floor)
                 for symbol, amount in one.items():
                     required[symbol] = required.get(symbol, 0) + amount * times
-                if plan_payment(pool, lands, required) is not None:
+                if plan_payment(pool, lands, required, payer=caster) is not None:
                     payable = times
                     break
             offers.append({
@@ -1757,6 +2112,12 @@ class LegalityMixin:
                 bounds.append(len(self._discard_cost_payers(
                     caster_index, cost, spell_hand_index=spell_hand_index,
                 )))
+            # "…, **choose a number between 0 and 5**." (Liquid Fire.) Not a
+            # resource at all: the ceiling is the top of the range the card
+            # prints, the same number ``AdditionalCost.number_refusal`` refuses
+            # anything above.
+            if cost.choose_number is not None:
+                bounds.append(cost.choose_number[1])
             # "Kicker **{X}**" (Verdeloth the Ancient). The fifth resource, and
             # the one that *is* mana -- but not the mana cost's, so the
             # browser's own pool arithmetic (which prices an {X} it can see in
@@ -1781,6 +2142,12 @@ class LegalityMixin:
         Read against the printed cost for ``cast_cost_offers``' reason: a
         CR 601.2f increase in force makes the number optimistic, and an
         optimistic announcement is refused by the payment with nothing spent.
+
+        Through ``payments_at``, every way the offer may be paid at that X:
+        "no more than one mana of each color may be spent" on Emblazoned
+        Golem's X makes the ceiling a count of the *colours* the board can
+        reach rather than of its mana, and an X no choice of colours pays is
+        not offered.
         """
         caster = self.players[caster_index]
         pool = dict(caster.mana_pool)
@@ -1788,16 +2155,29 @@ class LegalityMixin:
         printed = mana_cost_from_symbols(card.mana_cost or "") or {}
         reachable = sum(pool.values()) + len(lands)
         for x_value in range(reachable, -1, -1):
-            required = dict(printed)
-            for symbol, amount in offer.cost_at(x_value).items():
-                required[symbol] = required.get(symbol, 0) + amount
-            if plan_payment(pool, lands, required) is not None:
-                return x_value
+            for payment in offer.payments_at(x_value):
+                required = dict(printed)
+                for symbol, amount in payment.items():
+                    required[symbol] = required.get(symbol, 0) + amount
+                if plan_payment(pool, lands, required, payer=caster) is not None:
+                    return x_value
         return 0
 
     # -- Several targets of different kinds (CR 601.2c) ---------------------
-    def named_role_objects(self, target_permanent_ids, target_role_refs) -> list:
+    def named_role_objects(
+        self, target_permanent_ids, target_role_refs, *,
+        roles=(), target_stack_item=None,
+    ) -> list:
         """The objects an activator named for a roles announcement, in role order.
+
+        **A stack role is filled from the stack channel** (*target_stack_item*,
+        which an activation has carried since Deathgrip), for the reason a
+        cast's player role is filled from ``target_player_index``
+        (``casting._named_role_targets``): the announcement already has a field
+        meaning exactly that, and a second arity beside it is a second answer
+        to one question. Which slot is the stack one comes from *roles*, so an
+        id list positional in role order carries ``None`` there, and a role ref
+        marks the slot ``{"stack": True}``.
 
         **Two spellings of one announcement, and only one of them can say
         "graveyard".** ``target_permanent_ids`` is what every roles ability
@@ -1817,6 +2197,9 @@ class LegalityMixin:
         :meth:`_role_targets_legal` already refuses — an announcement with a
         hole in it is not one.
         """
+        stack_slots = {
+            index for index, role in enumerate(roles) if role_is_stack(role)
+        }
         if target_role_refs:
             named = []
             for ref in target_role_refs:
@@ -1824,6 +2207,9 @@ class LegalityMixin:
                 permanent_id = ref.get("permanent_id")
                 if isinstance(permanent_id, int):
                     named.append(self.permanent_by_id(permanent_id))
+                    continue
+                if ref.get("stack"):
+                    named.append(target_stack_item)
                     continue
                 # …or a **seat**, for a role whose object is a player (Donate).
                 # A third shape rather than a third list, for the reason the
@@ -1843,6 +2229,14 @@ class LegalityMixin:
                     )
                 )
             return named
+        if stack_slots:
+            # Positional, holes kept: with a slot that is not a permanent the
+            # list cannot be compacted without losing which id is whose.
+            return [
+                target_stack_item if index in stack_slots
+                else (self.permanent_by_id(pid) if isinstance(pid, int) else None)
+                for index, pid in enumerate(target_permanent_ids or [])
+            ]
         return [
             self.permanent_by_id(pid)
             for pid in (target_permanent_ids or [])
@@ -1880,6 +2274,18 @@ class LegalityMixin:
             if not isinstance(seat, int) or not (0 <= seat < len(self.players)):
                 return None
             return self.players[seat]
+        # …nor always in a zone a board or a pile is. "Counter **target spell**
+        # and … deals 3 damage to target creature" (Suffocating Blast) announces
+        # an object on the stack in slot 0, which ``_enumerate_stack_targets``
+        # already emits for every stack spec — top-first, the convention the
+        # client and the wire use, so it is turned back into the engine's
+        # bottom-first list here and nowhere else in the walk.
+        if candidate.get("kind") == "stack":
+            index = candidate.get("stack_index")
+            depth = len(self.stack)
+            if not isinstance(index, int) or not (0 <= depth - 1 - index < depth):
+                return None
+            return self.stack[depth - 1 - index]
         return self.permanent_at(candidate.get("seat"), candidate.get("index"))
 
     def role_target_options(
@@ -2377,6 +2783,8 @@ class LegalityMixin:
                 ability_instruction=ability_instruction,
                 ability_source=source_permanent,
             )
+            if _ability_picker_is_a_target(spec_ability):
+                narrow_offer(self, controller_index, spec)
             return spec
         spec["valid_targets"] = self._enumerate_targets(
             controller_index, card, spec, for_cast=False,
@@ -2407,7 +2815,115 @@ class LegalityMixin:
                 controller_index, card, spec, source_permanent
             )
         self._attach_chosen_source_targets(controller_index, card, spec)
+        # What this activator may announce *now* (CR 602.2b through
+        # CR 601.2c): a requirement an opponent's permanent prints about the
+        # announcement — "…must choose at least one Flagbearer … if able" —
+        # is in the list, exactly as on the cast picker.
+        if _ability_picker_is_a_target(spec_ability):
+            narrow_offer(self, controller_index, spec)
         return spec
+
+    def activation_offer(
+        self, controller_index: int, source_permanent, ability, *, x_value=None,
+    ) -> dict:
+        """*ability*'s target spec with **every legal target** enumerated —
+        the list :meth:`activation_target_refusal` checks a named target
+        against, as one value.
+
+        :meth:`activation_target_spec` without the board address (a permanent
+        slot and an ability index, which an ability activated from another
+        seat's permanent or out of a graveyard does not have) and without the
+        announcement requirements, which is what the requirement gate has to
+        measure "if able" against.
+        """
+        card = getattr(source_permanent, "effective_card", source_permanent)
+        source = source_permanent if hasattr(
+            source_permanent, "permanent_id"
+        ) else None
+        spec, _ = _activation_spec([ability])
+        spec = dict(spec)
+        self._size_activation_x_targets(controller_index, spec, ability, source)
+        if spec.get("x_targets") and x_value is not None:
+            spec.pop("x_targets", None)
+            spec["max_targets"] = max(0, int(x_value))
+        instruction = targeting_instruction(getattr(ability, "instruction", None))
+        if spec.get("kind") == ROLES_TARGET_KIND:
+            spec["valid_targets"] = self._role_target_walk(
+                controller_index, card, spec, (), for_cast=False,
+                source_permanent=source,
+                ability_instruction=instruction,
+                ability_source=source,
+            )
+            return spec
+        spec["valid_targets"] = self._enumerate_targets(
+            controller_index, card, spec, for_cast=False,
+            ability_instruction=instruction,
+            source_permanent=source,
+            ability_source=source,
+        )
+        return spec
+
+    def activation_target_requirement_refusal(
+        self, controller_index: int, source_permanent, ability, *,
+        target_player_index=None, target_permanent_index=None,
+        target_permanent_ids=None, target_role_refs=None, divided_targets=None,
+        x_value=None,
+    ) -> str | None:
+        """CR 602.2b under a requirement an opponent's permanent prints: why
+        this activation's whole announcement is not one the activator may
+        make, or None. The activation twin of
+        :meth:`cast_target_requirement_refusal`, over
+        :meth:`activation_offer`.
+        """
+        if not requirements_binding(self, controller_index):
+            return None
+        if not _ability_picker_is_a_target(ability):
+            return None
+        spec = self.activation_offer(
+            controller_index, source_permanent, ability, x_value=x_value
+        )
+        if spec.get("kind") in _UNOBLIGED_ACTIVATION_KINDS or spec.get("also_stack"):
+            return None
+        named: set = set()
+        for ref in target_role_refs or ():
+            if isinstance(ref, dict) and isinstance(ref.get("permanent_id"), int):
+                named.add(ref["permanent_id"])
+        listed = [
+            pid for pid in (
+                target_permanent_ids
+                if isinstance(target_permanent_ids, (list, tuple))
+                else [target_permanent_ids]
+            )
+            if isinstance(pid, int) and not isinstance(pid, bool)
+        ]
+        named.update(listed)
+        if not listed and spec.get("kind") != GRAVEYARD_TARGET_KIND:
+            seats = (
+                [target_player_index] if isinstance(target_player_index, int)
+                else list(range(len(self.players)))
+            )
+            for index in (
+                target_permanent_index
+                if isinstance(target_permanent_index, list)
+                else [target_permanent_index]
+            ):
+                if not isinstance(index, int) or isinstance(index, bool):
+                    continue
+                for seat in seats:
+                    permanent = self.permanent_at(seat, index)
+                    if permanent is not None:
+                        named.add(permanent.permanent_id)
+        for entry in divided_targets or ():
+            seat, index, _share = divided_entry(entry)
+            if index is None:
+                continue
+            permanent = self.permanent_at(seat, index)
+            if permanent is not None:
+                named.add(permanent.permanent_id)
+        card = getattr(source_permanent, "effective_card", source_permanent)
+        return announcement_refusal(
+            self, controller_index, card.name, [spec], named
+        )
 
     def _attach_more_cost_targets(
         self, controller_index: int, card: CardDefinition, cost_spec: dict,
@@ -2553,6 +3069,17 @@ class LegalityMixin:
             return announced
         spec, _ = _activation_spec([ability])
         kind = spec.get("kind")
+        # Above every early return below, because the two shapes that accepted
+        # a stray stack object are the two that return first.
+        stray = self.stray_activation_stack_target_refusal(
+            card, spec, target_stack_item,
+            names_a_permanent=(
+                target_permanent_index is not None
+                or any(isinstance(pid, int) for pid in target_permanent_ids or ())
+            ),
+        )
+        if stray is not None:
+            return stray
         if kind in _UNOBLIGED_ACTIVATION_KINDS:
             return None
         # A cost payment (Sacrifice) and a chosen *source* (Circle of
@@ -2584,7 +3111,8 @@ class LegalityMixin:
             ability_instruction = targeting_instruction(instruction)
             refused = f"no valid target for {card.name}"
             named = self.named_role_objects(
-                target_permanent_ids, target_role_refs
+                target_permanent_ids, target_role_refs,
+                roles=spec_roles(spec), target_stack_item=target_stack_item,
             )
             if named:
                 legal = self._role_targets_legal(
@@ -2594,6 +3122,22 @@ class LegalityMixin:
                     ability_source=source,
                 )
                 return None if legal else refused
+            if target_stack_item is not None or any(
+                role_is_stack(role) for role in spec_roles(spec)
+            ):
+                # A stack object named with no slot list beside it is half an
+                # announcement, and there is no reading of it as "nothing
+                # named": the spell would ride the stack item into a
+                # resolution whose other role nobody chose.
+                #
+                # …and with a stack role, nothing named at all is refused too,
+                # as a roles *cast* naming nothing is ("requires 2 targets").
+                # The bare activation every other roles ability is allowed is
+                # the headless convention of letting the resolution pick; a
+                # role-scoped step picks nothing (``_role_scoped`` skips it),
+                # so here the cost would be paid for an effect that cannot
+                # happen.
+                return refused
             # Nothing named. CR 602.2b's half of the question first — could
             # the whole announcement be made at all? An empty walk means no,
             # and the cost is never paid.
@@ -2646,10 +3190,22 @@ class LegalityMixin:
             spec.pop("x_targets", None)
             spec["max_targets"] = max(0, int(x_value))
         maximum = spec.get("max_targets")
+        # A card in a graveyard is named by **slot** and has no id (the
+        # graveyard branch below says why the stamped ids are not read), so
+        # for that kind the list counted is the slot list. It was the id list
+        # for every kind, which no graveyard announcement fills: "Exile up to
+        # **two** target cards from a single graveyard" (Famished Ghoul) named
+        # at three was accepted, paid for — the Ghoul sacrificed — and resolved
+        # the first two.
+        named_list = (
+            target_permanent_index
+            if spec.get("kind") == GRAVEYARD_TARGET_KIND
+            else target_permanent_ids
+        )
         if (
             isinstance(maximum, int)
-            and isinstance(target_permanent_ids, list)
-            and len(target_permanent_ids) > maximum
+            and isinstance(named_list, list)
+            and len(named_list) > maximum
         ):
             return f"too many targets for {card.name}"
         # CR 115.3's twin on this side, beside the count gate for the same
@@ -2766,6 +3322,20 @@ class LegalityMixin:
             # targeted, and comparing its seat against a list of graveyard
             # slots answered about a different zone.
             if named_indices:
+                unnamed_pile = _unnamed_single_pile_refusal(
+                    card, spec, target_player_index
+                )
+                if unnamed_pile is not None:
+                    return unnamed_pile
+                # CR 115.3 for slots, as the cast gate asks it: the repeat
+                # check above this branch reads only the id list, which a card
+                # in a graveyard never fills, so one slot named twice was
+                # accepted and quietly resolved once.
+                repeated = self._repeated_target_refusal(
+                    card, spec, [], named_indices, target_player_index
+                )
+                if repeated is not None:
+                    return repeated
                 seats = (
                     [target_player_index] if target_player_index is not None
                     else list(range(len(self.players)))
@@ -3035,6 +3605,7 @@ class LegalityMixin:
         optional_cost_payments: dict | None = None,
         x_value: int | None = None,
         mode_index: int | None = None,
+        from_zone: str = "hand",
     ) -> str | None:
         """CR 601.2c's first half: a spell that must announce a target cannot
         be cast while **no legal target exists**. Returns the refusal, or None.
@@ -3089,6 +3660,11 @@ class LegalityMixin:
         )
         if spec is None or spec.get("kind") == "stack":
             return None
+        # *from_zone*: a spell cast out of a graveyard is not itself a card in
+        # that graveyard by the time targets are chosen (CR 601.2a), so it is
+        # not what makes "a legal target exists" true. Read onto the spec by
+        # the reader ``derive_cast_spec`` uses, so this list is the picker's.
+        spec = as_cast_from(spec, from_zone)
         offered = self._enumerate_targets(
             caster_index, card, dict(spec), for_cast=True,
             optional_cost_payments=optional_cost_payments,
@@ -3331,6 +3907,11 @@ class LegalityMixin:
             )
             if repeated is not None:
                 return repeated
+            unnamed_pile = _unnamed_single_pile_refusal(
+                card, spec, target_player_index
+            )
+            if unnamed_pile is not None:
+                return unnamed_pile
             valid = self._enumerate_targets(
                 caster_index, card, spec, for_cast=True, mode_index=mode_index,
             )
@@ -3594,9 +4175,17 @@ class LegalityMixin:
         nothing else on the stack, and the enumeration already says so — an
         ability is not a spell (CR 113.7a). Its permanent half is
         :meth:`cast_target_refusal`'s.
+
+        A **roles** spec with a stack role (Suffocating Blast's "target spell"
+        beside its "target creature") answers for that role — the role is the
+        description of its slot, so it is the spec to enumerate.
         """
         if spec.get("kind") not in _STACK_TARGET_KINDS:
-            return None
+            spec = next(
+                (role for role in spec_roles(spec) if role_is_stack(role)), None
+            )
+            if spec is None:
+                return None
         depth = len(self.stack)
         chosen: set[int] = set()
         for entry in self._enumerate_stack_targets(caster_index, card, spec):
@@ -3703,6 +4292,107 @@ class LegalityMixin:
             return refused
         return None
 
+    def stray_stack_target_refusal(
+        self, caster_index: int, card: CardDefinition, target_stack_item, *,
+        from_zone: str = "hand", mode_index: int | None = None,
+        optional_cost_payments: dict | None = None,
+        names_a_permanent: bool = False,
+    ) -> str | None:
+        """CR 601.2c from the other side: an announcement chooses "an
+        appropriate object or player **for each target the spell requires**" —
+        and a stack object named for a spell that requires none there is not a
+        choice the rule has a place for. Returns the refusal, or None.
+
+        :meth:`cast_stack_target_refusal` asks whether the spell that was named
+        is one the printed phrase admits, and returns None for every spell with
+        no stack target to ask about — which is how a ``target_stack_index`` on
+        a Lightning Bolt, a Terror or a Wrath of God came to be accepted,
+        recorded on the stack item and ignored: 888 of 888 casts in a census of
+        the pool's instants and sorceries. No client sends one and nothing was
+        countered by it, but the record is not inert — CR 608.2b counts a
+        recorded stack object as one of the spell's targets
+        (:meth:`_announcement_target_legality`), so a Terror whose creature had
+        left stayed "partly legal" for as long as the stray spell was on the
+        stack.
+
+        A stack object is announceable where the derived spec says the stack is
+        where a target (or CR 609.7a's chosen source, ``also_stack``) may be:
+        :func:`spec_names_the_stack`. For "target spell **or** permanent" it is
+        one target in one of two zones, so naming a permanent beside it
+        (*names_a_permanent*) is two answers to one question and is refused
+        too.
+
+        Asked of every card type, because the spec is: a permanent spell's is
+        its entry trigger's, and the engine names that trigger's target as the
+        permanent is cast — Mystic Snake's "counter target spell" takes a stack
+        index and a Grizzly Bears does not. Where **an opponent** chooses the
+        mode (CR 700.2e) the caster names no target at all as it casts, so the
+        question is asked of every mode at once: a stack object is stray unless
+        some mode could have named one.
+        """
+        if target_stack_item is None:
+            return None
+        program = compile_card_oracle(card)
+        if program.modes and program.mode_chooser is not None:
+            specs = [
+                derive_cast_spec(
+                    card, program, from_zone=from_zone,
+                    optional_cost_payments=optional_cost_payments,
+                    mode_index=index,
+                )
+                for index in range(len(program.modes))
+            ]
+            if any(spec_names_the_stack(spec) for spec in specs):
+                return None
+            spec = None
+        else:
+            spec = derive_cast_spec(
+                card, program, from_zone=from_zone,
+                optional_cost_payments=optional_cost_payments,
+                mode_index=mode_index,
+            )
+        if not spec_names_the_stack(spec):
+            return (
+                f"{card.name} targets nothing on the stack, so it cannot name "
+                "a spell there (CR 601.2c)"
+            )
+        if names_a_permanent and spec.get("kind") == "spell_or_permanent":
+            return (
+                f"{card.name} has one target: a spell or a permanent, not one "
+                "of each (CR 601.2c)"
+            )
+        return None
+
+    def stray_activation_stack_target_refusal(
+        self, card: CardDefinition, spec: dict, target_stack_item, *,
+        names_a_permanent: bool = False,
+    ) -> str | None:
+        """:meth:`stray_stack_target_refusal` for an **activation** (CR 602.2b
+        sends it through CR 601.2c): a stack object named for an ability whose
+        announcement has no target there, or beside a permanent for "target
+        spell **or** permanent" (Blind Seer). Returns the refusal, or None.
+
+        *spec* is the ability's own derived spec, which the activation gate
+        already holds. The two shapes that accepted one were an ability that
+        targets nothing at all — 881 in a census of the pool's abilities, the
+        gate returning before it looked — and one whose permanent target was
+        named beside it (429), where the ids were checked and the stack object
+        was recorded unread: 1,311 of 1,458 activations examined.
+        """
+        if target_stack_item is None:
+            return None
+        if not spec_names_the_stack(spec):
+            return (
+                f"{card.name}'s ability targets nothing on the stack, so it "
+                "cannot name a spell there (CR 602.2b)"
+            )
+        if names_a_permanent and spec.get("kind") == "spell_or_permanent":
+            return (
+                f"{card.name}'s ability has one target: a spell or a "
+                "permanent, not one of each (CR 602.2b)"
+            )
+        return None
+
     def default_stack_target(
         self, caster_index: int, card: CardDefinition, *, from_zone: str = "hand",
         mode_index: int | None = None,
@@ -3783,10 +4473,15 @@ class LegalityMixin:
         (Topple): every narrowing the picker enforced is re-enforced here
         without being re-read. The shapes that question does not cover are
         named in :func:`_resolution_rechecks_description`. A spell with several
-        targets still resolves while **any** one is legal; the illegal ones are
-        each left alone by their handler's own resolver (608.2b's last
-        sentence), which is what the census over the pool's multi-target spells
-        found every one of them already doing.
+        targets still resolves while **any** one is legal, and the illegal ones
+        are blanked out of its announcement before any instruction runs
+        (:meth:`blank_illegal_resolution_targets`, 608.2b's last sentence).
+        This paragraph used to say each was "left alone by its handler's own
+        resolver, which is what the census over the pool's multi-target spells
+        found every one of them already doing" — true of a target that had
+        *left* or stopped answering a description the handler re-read, and
+        never asked of one that had merely become untargetable: 42 of the 48
+        acted on a first target given shroud in response.
 
         **A spell that can target a player is answered too** — "any target", a
         divided one, a player-targeted one — through
@@ -3829,15 +4524,43 @@ class LegalityMixin:
             # id recorded on a spell is a choice that was legal when it was
             # made and this rule is exactly the question to ask of it later.
             #
-            # A triggered ability's are stamped at its fire site, and the death
-            # sweep enqueues a dies-trigger *while the dying permanent is still
-            # listed* (``_destroy_swept_permanents``) — so Blazing Effigy's
-            # "it deals 3 damage to target creature" records the dying Effigy
-            # itself, a permanent CR 603.3d would never have offered. Asking
-            # 608.2b of that id counters an ability the engine mis-targeted and
-            # reports it as a rules-correct fizzle, which buries the targeting
-            # bug under a rule. The fire sites have to choose targets after the
-            # permanent has left before this can widen; see ROADMAP.
+            # A triggered ability's may be **stamped at its fire site**: the
+            # object its event was about, threaded through the target fields
+            # so the resolution can find it again, and the death sweep
+            # enqueues a dies-trigger *while the dying permanent is still
+            # listed* (``_destroy_swept_permanents``). An id like that is one
+            # nobody chose — CR 603.3d would never have offered it — and
+            # asking 608.2b of it counters an ability the engine mis-targeted
+            # and reports that as a rules-correct fizzle, which buries the
+            # targeting bug under a rule.
+            #
+            # **An activated ability has no such excuse**, and is asked. Its
+            # targets were chosen by the player who activated it (CR 602.2b),
+            # held to the picker's list before a cost was paid and recorded on
+            # the item, and ``StackItem.activated`` is the positive mark that
+            # tells the two apart — set by the three activation paths and by
+            # nothing else.
+            #
+            # **Nor has a triggered ability whose target was chosen for it**
+            # (CR 603.3d) rather than stamped: ``StackItem.targets_chosen``,
+            # set where the choice is made out of the list
+            # ``_trigger_target_candidates`` enumerates — the ``trigger_target``
+            # prompt's answer and its default, an entry trigger's accepted
+            # cast announcement, an upkeep prompt's accepted pick. The bound
+            # is that distinction — chosen against stamped — and not
+            # "triggered".
+            #
+            # Blazing Effigy's dies-trigger, the card this decline was first
+            # written about, shows where the line falls. Its picker chooses
+            # now (a stamp of its own source is read as a reference), and a
+            # **person's** answer is a choice like any other. A seat with
+            # nobody to ask takes its default *inside* the death sweep, off a
+            # board that still lists the dying Effigy — which that default
+            # can therefore be — so that one is not recorded as a choice
+            # (``Game.departing``, ``_trigger_target_was_a_choice``) and is
+            # not asked the rule.
+            if announced_by_a_choice(item):
+                return self.ability_targets_refusal(item)
             return None
         if card.primary_type not in ("instant", "sorcery"):
             # The same reason the announcement gate is instants and sorceries
@@ -3861,6 +4584,37 @@ class LegalityMixin:
         if not legality or any(legality):
             return None
         return f"{card.name} was removed from the stack: every target is illegal (608.2b)"
+
+    def resolving_targets_all_legal(self) -> bool:
+        """Whether **every** target the spell now resolving announced is still
+        legal (CR 608.2b), by the per-target verdicts
+        :meth:`illegal_targets_refusal` takes its all-or-nothing answer from.
+
+        For the one kind of sentence that needs them one at a time: an effect
+        that reads information **about** its targets. CR 608.2b's last line —
+        "If part of the effect requires information about an illegal target, it
+        fails to determine any such information" — means a comparison between
+        two targets ("unless either one is a color the other isn't", Dead
+        Ringers) has no answer once either is illegal, even though the other
+        is still there to be read; a target given protection in response is
+        the ordinary way to get there.
+
+        True where the question is not asked: nothing resolving, an ability
+        (declined for the reason ``illegal_targets_refusal`` gives), or an
+        announcement that gate cannot judge. A reader then falls back on what
+        it can see for itself, which is no worse than it had.
+        """
+        item = self.resolving_items[-1] if self.resolving_items else None
+        if item is None or item.ability_instruction is not None:
+            return True
+        program = compile_card_oracle(item.card)
+        for spec, holder, mode_index in self._resolving_announcements(item, program):
+            verdict = self._announcement_target_legality(
+                item, program, spec, holder, mode_index
+            )
+            if verdict is not None and not all(verdict):
+                return False
+        return True
 
     def _resolving_announcements(self, item, program) -> list[tuple]:
         """``(spec, holder, mode_index)`` for every announcement the spell
@@ -3916,11 +4670,21 @@ class LegalityMixin:
         )]
 
     def _announcement_target_legality(
-        self, item, program, spec, holder, mode_index
+        self, item, program, spec, holder, mode_index, *,
+        addresses: "list | None" = None,
     ) -> "list[bool] | None":
         """Whether each target one announcement of *item* recorded is still
         legal (CR 608.2b) — or None when "every target" cannot be answered for
         the whole object, and it must simply resolve.
+
+        *addresses*, where a caller passes a list, is filled in step with the
+        verdicts: for each one, ``(kind, channel, position, permanent_id)`` —
+        where on *holder* that target is recorded — or None for a target no
+        caller rewrites (a graveyard stamp, a stack object).
+        :meth:`blank_illegal_resolution_targets` is the reader, and it is an
+        out-parameter rather than a second walk so that "which targets are
+        illegal" and "which slots to blank" cannot be two readings of one
+        announcement.
 
         The body :meth:`illegal_targets_refusal` had, asked once per
         announcement so a modal spell is judged against **the mode that was
@@ -3943,7 +4707,7 @@ class LegalityMixin:
             # object has a target this loop cannot read" — and the reading it
             # lacked exists now: see :meth:`_player_target_legality`.
             return self._player_target_legality(
-                item, program, spec, holder, mode_index
+                item, program, spec, holder, mode_index, addresses=addresses,
             )
         if spec_is_a_cost(spec):
             # …and the second spelling of "does not target at all": a spell
@@ -3975,13 +4739,25 @@ class LegalityMixin:
             # the wrong "yes" the table above is named for, arriving through a
             # role instead of through a kind.
             #
-            # That was the reason this returned None, and the reading it
-            # lacked exists: ``stack_targets.announcement_targets`` says which
-            # role named a seat and which an object, so each is judged as what
-            # it is — see :meth:`_role_target_legality`.
-            return self._role_target_legality(item, spec, holder)
+            # **Answered where the announcement recorded its seats per role**
+            # (``targeting.ROLE_SEATS``): "…creatures **target player** controls
+            # … creatures **another target player** controls" (Cultural
+            # Exchange). There the reading this branch lacked exists — each
+            # player is on a slot of its own, so each has a verdict of its own
+            # and the object-level question is answerable.
+            seated = self._role_seat_target_legality(
+                item, spec, holder, addresses=addresses,
+            )
+            if seated is None:
+                # …and where it recorded one seat on the scalar (Donate, Lunge,
+                # Shower of Sparks), ``stack_targets.announcement_targets`` says
+                # which role named a seat and which an object, so each is
+                # judged as what it is — see :meth:`_role_target_legality`.
+                return self._role_target_legality(item, spec, holder)
+            legality: list[bool] = list(seated)
+        else:
+            legality = []
 
-        legality: list[bool] = []
         # **The printed description is re-asked too** (CR 608.2b: "Other
         # changes to the game state may cause a target to no longer be legal;
         # for example, its characteristics may have changed"). This loop
@@ -4034,7 +4810,9 @@ class LegalityMixin:
                     if entry.get("kind") == "permanent"
                 }
         ids = getattr(holder, "target_permanent_id", None)
-        for permanent_id in (ids if isinstance(ids, (list, tuple)) else [ids]):
+        for position, permanent_id in enumerate(
+            ids if isinstance(ids, (list, tuple)) else [ids]
+        ):
             if not isinstance(permanent_id, int):
                 continue
             target = self.permanent_by_id(permanent_id)
@@ -4070,6 +4848,8 @@ class LegalityMixin:
                     self.battlefield_index_of(target),
                 ) in offered
             legality.append(legal)
+            if addresses is not None:
+                addresses.append(("permanent", "item", position, permanent_id))
         # A graveyard stamp is recorded on the item alone — a "choose one or
         # more" mode carries no such field — so it is read for the item's own
         # announcement and for nothing else.
@@ -4081,10 +4861,16 @@ class LegalityMixin:
             # remains in that graveyard — the unambiguous "gone", per the
             # docstring above. While a copy survives, `graveyard_index_of`
             # answers a slot (clamping where it must) and the target is legal.
-            legality.append(self.graveyard_index_of(stamp) is not None)
+            # …and legal only while a card in a graveyard may be targeted at
+            # all (Ground Seal arriving in response): one reader for both.
+            legality.append(self.graveyard_target_is_legal(stamp))
+            if addresses is not None:
+                addresses.append(None)
         stack_target = getattr(holder, "target_stack_item", None)
         if stack_target is not None and (
-            not program.modes or spec.get("kind") in _STACK_TARGET_KINDS
+            not program.modes
+            or spec.get("kind") in _STACK_TARGET_KINDS
+            or any(role_is_stack(role) for role in spec_roles(spec))
         ):
             # A countered or already-resolved spell has left the zone it was
             # targeted in, which is CR 608.2b's first sentence.
@@ -4113,6 +4899,8 @@ class LegalityMixin:
                         obj is stack_target for obj in admitted
                     )
             legality.append(still_there)
+            if addresses is not None:
+                addresses.append(None)
         return legality
 
     def _mode_chooser_seat(self, item) -> int | None:
@@ -4202,8 +4990,58 @@ class LegalityMixin:
             ))
         return legality
 
+    def _role_seat_target_legality(
+        self, item, spec, holder, *, addresses: "list | None" = None,
+    ) -> "list[bool] | None":
+        """CR 608.2b for the **player roles** of a roles announcement that
+        named more than one seat — one verdict per named player, in role
+        order — or None where the announcement recorded no per-role seats and
+        the question stays declined.
+
+        Legal is the announcement's question asked again, as it is everywhere
+        in this rule: still among what the role's own enumeration would offer
+        the caster now. The roles walk enumerates each slot through
+        ``_enumerate_targets`` with the role as the spec
+        (:meth:`role_target_options`), so the same call over the same role
+        is the list the picker was built from — a player who gained shroud in
+        response (CR 702.18a) or left the game (CR 800.4a) is missing from it
+        for the reason they could not have been named.
+
+        A slot already holding ``None`` names nobody and has no verdict:
+        blanking is idempotent, and a re-asked resolution must not count a
+        target that is not there.
+
+        What is *not* re-asked is the walk's relation between slots (the
+        printed "another"): two players named as different players cannot
+        come to be one.
+        """
+        from .targeting import recorded_role_seats, role_seat_positions
+
+        recorded = recorded_role_seats(holder)
+        if recorded is None:
+            return None
+        roles = spec_roles(spec)
+        verdicts: list[bool] = []
+        for position in role_seat_positions(roles):
+            seat = recorded[position] if position < len(recorded) else None
+            if seat is None:
+                continue
+            offered = {
+                entry.get("seat")
+                for entry in self._enumerate_targets(
+                    item.caster_index, item.card, dict(roles[position]),
+                    for_cast=False,
+                )
+                if entry.get("kind") == "player"
+            }
+            verdicts.append(seat in offered)
+            if addresses is not None:
+                addresses.append(("player", "role", position, None))
+        return verdicts
+
     def _player_target_legality(
-        self, item, program, spec, holder, mode_index
+        self, item, program, spec, holder, mode_index, *,
+        addresses: "list | None" = None,
     ) -> "list[bool] | None":
         """CR 608.2b for an announcement whose target **may be a player** —
         "target player", "any target", "player or planeswalker", a division —
@@ -4271,6 +5109,7 @@ class LegalityMixin:
             (t["seat"], t["index"]) for t in offered if t.get("kind") == "permanent"
         }
         legality: list[bool] = []
+        found: list = []
         for target in chosen:
             if target.kind == "player":
                 legality.append(target.seat in faces)
@@ -4289,6 +5128,11 @@ class LegalityMixin:
                 # kinds describe; an announcement carrying one is not one this
                 # can count.
                 return None
+            found.append(
+                (target.kind, target.channel, target.position, target.permanent_id)
+            )
+        if addresses is not None:
+            addresses.extend(found)
         return legality
 
     def stale_comparison_refusal(self, item) -> str | None:
@@ -4388,7 +5232,8 @@ class LegalityMixin:
 
         * an **activated** ability (``StackItem.activated``), or a triggered
           one whose target was **chosen for it as it went on the stack**
-          (``StackItem.target_chosen``, CR 603.3d). A trigger's target fields
+          (``StackItem.targets_chosen``, CR 603.3d) — together
+          :func:`announced_by_a_choice`. A trigger's target fields
           are also where a fire site threads a slot the *event* named, and a
           slot nobody chose is not a target that can become illegal — that is
           ROADMAP's first decline under this rule, and it stands for every
@@ -4411,9 +5256,7 @@ class LegalityMixin:
         one named for it as it was announced, so it carries a stamp like any
         other and is judged like any other.
         """
-        if not (
-            getattr(item, "activated", False) or getattr(item, "target_chosen", False)
-        ):
+        if not announced_by_a_choice(item):
             return None
         if resolves_with_illegal_targets(item.card, item.ability_text):
             return None
@@ -4424,12 +5267,332 @@ class LegalityMixin:
             return None
         if any(target.kind != "graveyard" for target in chosen):
             return None
-        if any(self.graveyard_index_of(target.stamp) is not None for target in chosen):
+        if any(self.graveyard_target_is_legal(target.stamp) for target in chosen):
             return None
+        if any(self.graveyard_index_of(target.stamp) is not None for target in chosen):
+            # Still in its pile and no longer targetable: "Cards in graveyards
+            # can't be the targets of spells or abilities" arrived in response
+            # (Ground Seal). Said in its own words, because "no longer in the
+            # graveyard" would be false of a card anyone can see there.
+            from .target_immunity import graveyard_cards_untargetable
+
+            return (
+                f"{item.card.name} ability was removed from the stack: its "
+                f"target can't be targeted "
+                f"({graveyard_cards_untargetable(self)}, 608.2b)"
+            )
         return (
             f"{item.card.name} ability was removed from the stack: its target "
             "is no longer in the graveyard (608.2b)"
         )
+
+    def sealed_graveyard_target_refusal(self, item) -> str | None:
+        """Why the **ability** *item* cannot have its one target — a card in a
+        graveyard — while "Cards in graveyards can't be the targets of spells
+        or abilities" (Ground Seal) is on the battlefield, or None.
+
+        The half of that sentence the target enumeration cannot reach. A cast
+        and an activation name their target through
+        ``_enumerate_graveyard_creatures``, which offers nothing under the
+        Seal, so CR 601.2c / 602.2b refuse them before anything is paid. A
+        **triggered** ability has no picker for a card in a graveyard at all —
+        the kind is not one ``_trigger_target_candidates`` chooses — so its
+        handler scans the pile for itself as it resolves, and a scan asks
+        nobody whether the card may be targeted: Karmic Guide went on
+        returning a creature card and Monk Idealist an enchantment card with
+        the Seal in play. (A bare, headless activation takes the same scan.)
+
+        Asked at both ends of the rule by the two callers: as a trigger is put
+        on the stack (CR 603.3d — no legal target, so it is removed) and as
+        any ability resolves (CR 608.2b — the Seal arrived in response).
+
+        What makes the scan's pick a **target** is not in the compiled
+        program: "you may return target creature card from your graveyard"
+        (Gravedigger) and "…unless you return a basic land card from your
+        graveyard" (Harvest Wurm) lower to one instruction with one payload,
+        and the card's ruling protects exactly the second ("abilities that
+        don't target cards in graveyards … can still affect those cards"). So
+        the evidence is the one this engine already keeps for CR 115.3 —
+        ``stack_targets._printed_target_instances``, how many times the
+        ability's own printed line says "target" — and the bounds are:
+
+        * an **ability** (a spell's target is announced and stamped, and
+          ``illegal_targets_refusal`` judges it);
+        * its derived spec is the graveyard target kind and not a cost;
+        * its line prints the word **exactly once**, so its one target is
+          that card. Two instances are two targets, one of which this cannot
+          judge (Goblin Welder), and none is a choice that is not a target;
+        * it does not say "up to" — zero targets is then a legal announcement
+          (CR 601.2c) and the ability stays to do whatever else it prints.
+        """
+        from .target_immunity import graveyard_cards_untargetable
+
+        sealed = graveyard_cards_untargetable(self)
+        if sealed is None or not getattr(item, "is_ability", False):
+            return None
+        instruction = item.ability_instruction
+        if instruction is None or item.hook_key is not None:
+            return None
+        if modal_trigger_modes(instruction):
+            return None
+        if resolves_with_illegal_targets(item.card, item.ability_text):
+            return None
+        from .targeting import graveyard_target_spec
+
+        spec = graveyard_target_spec(
+            item.card, compile_card_oracle(item.card), instruction=instruction,
+        )
+        if spec is None or spec_is_a_cost(spec):
+            return None
+        from .stack_targets import _printed_target_instances
+
+        if _printed_target_instances(item) != 1:
+            return None
+        if "up to" in (item.ability_text or "").lower():
+            return None
+        return (
+            f"{item.card.name} ability was removed from the stack: its "
+            f"target can't be targeted ({sealed}, 608.2b)"
+        )
+
+    def ability_target_verdicts(self, item) -> "list[tuple] | None":
+        """Every target the **ability** *item* announced, each paired with
+        whether it is still legal as the ability resolves (CR 608.2b) — or
+        None where "is every target illegal?" cannot be answered for the whole
+        object, and it must simply resolve as it always has.
+
+        ``[(ChosenTarget, legal), …]`` in announcement order. Which targets
+        there are is ``stack_targets``' answer, the one reader of what a stack
+        object announced; whether each is legal is **the announcement's own
+        question, asked again** — still among what ``_enumerate_targets`` would
+        offer this ability now, through the instruction's own narrowing, with
+        its source (CR 608.2b: "if the source of an ability has left the zone
+        it was in, its last known information is used") and for the card the
+        activation gate enumerated it for. That is the list
+        :meth:`activation_target_refusal` held the announcement to and the
+        list the browser's picker was handed, so a target is illegal here by
+        exactly the predicate that would have refused naming it: it has left,
+        it gained shroud or protection from the source, it stopped being the
+        printed noun, colour, tapped state or controller, it left the combat
+        the phrase names, its player gained shroud or left the game, the spell
+        it named has left the stack or stopped answering the phrase.
+
+        The shapes this declines, each named:
+
+        * an object ``stack_targets`` cannot read (a hook-keyed one) or whose
+          legal targets cannot be enumerated (``_candidates`` answers None: a
+          "that player controls" with no frozen seat, a triggered ability's
+          controller narrowing the spec does not carry);
+        * an ability that prints **more than one instance** of the word and is
+          not a roles announcement (Keeper of the Dead: "Choose target opponent
+          … Destroy target nonblack creature that player controls"). The spec
+          describes the first slot only and the second is the handler's pick as
+          it resolves, so "every target" is not something the stack object
+          records — :meth:`stale_comparison_refusal` leaves the same card alone
+          for the same reason;
+        * a **roles** announcement with a role that is not a permanent (Goblin
+          Welder's graveyard card), for the reason the spell side gives of a
+          player role. A roles announcement of permanents is judged the way a
+          roles *spell* is — still there and still targetable; each role's
+          description and relation is ``handlers/_common.roles_still_legal``'s.
+
+        A **graveyard** target is legal while any copy of the chosen card is
+        left in that pile, the deliberately ambiguous case
+        ``Game.graveyard_index_of`` documents.
+        """
+        from .stack_targets import (_candidates, _printed_target_instances,
+                                    _read, announcements)
+
+        announced = announcements(item)
+        if announced is None:
+            return None
+        source = getattr(item, "source_permanent", None)
+        verdicts: list[tuple] = []
+        for announcement in announced:
+            targets = _read(self, item, announcement)
+            if not targets:
+                continue
+            spec = announcement.spec
+            if spec.get("kind") == ROLES_TARGET_KIND:
+                if any(target.kind != "permanent" for target in targets):
+                    return None
+                # The card the announcement was enumerated for: an activation
+                # reads its permanent's **effective** card (a Clone's abilities
+                # are the copied creature's, CR 707.2), a trigger the card on
+                # its stack object — ``stack_targets._candidates`` draws the
+                # same line for the flat announcement below.
+                card = item.card
+                if getattr(item, "activated", False):
+                    card = getattr(source, "effective_card", None) or item.card
+                role_specs = spec_roles(spec)
+                for target in targets:
+                    permanent = self.permanent_by_id(target.permanent_id)
+                    role = (
+                        role_specs[target.position]
+                        if 0 <= target.position < len(role_specs) else None
+                    )
+                    verdicts.append((target, bool(
+                        permanent is not None
+                        and self.is_on_battlefield(permanent)
+                        and self._can_be_targeted(
+                            permanent, card, caster_index=item.caster_index,
+                            ability_source=source, source_spec=role,
+                        )
+                    )))
+                continue
+            instances = _printed_target_instances(item)
+            if instances is not None and instances != 1:
+                return None
+            candidates = _candidates(self, item, announcement, targets[0])
+            if candidates is None:
+                return None
+            for target in targets:
+                if target.kind == "graveyard":
+                    legal = self.graveyard_target_is_legal(target.stamp)
+                else:
+                    legal = any(candidate.same_object(target) for candidate in candidates)
+                verdicts.append((target, legal))
+        return verdicts
+
+    def ability_targets_refusal(self, item) -> str | None:
+        """CR 608.2b for an **ability whose targets were chosen**: the reason
+        it leaves the stack without resolving, or None.
+
+        :meth:`illegal_targets_refusal`'s answer for the abilities whose
+        targets are an announcement (:func:`announced_by_a_choice`): an
+        **activated** one — chosen by a player as the ability was activated
+        (CR 602.2b), held to the picker's list by
+        :meth:`activation_target_refusal` before any cost was paid, recorded on
+        the stack item and marked (``StackItem.activated``) — and a
+        **triggered** one whose own picker chose them as it went on the stack
+        (CR 603.3d, ``StackItem.targets_chosen``). The reason that method gives
+        for declining a trigger's *stamped* target — a fire site records an id
+        nobody chose — is not true of either, so the rule's two halves are
+        both asked of them:
+
+        * **every** target illegal → the ability does not resolve. Nothing
+          printed behind the targeted sentence happens ("Target creature gets
+          -3/-3 until end of turn. **Draw a card.**" — Savage Gorilla's ruling:
+          no card), nothing is acted on that has become illegal, and nothing
+          that was not named is acted on in its place. Costs stay paid; the
+          rule refunds nothing.
+        * some target still legal → it resolves, and the illegal ones are
+          blanked out of the announcement first
+          (:meth:`blank_illegal_resolution_targets`).
+
+        "Legal" is :meth:`ability_target_verdicts`. An ability that named no
+        target — a bare activation, the headless caller's standing convention,
+        or an "up to one" that chose none — has nothing to judge and resolves
+        on its handler's pick.
+
+        A bare activation whose only recorded target is the **default seat** a
+        player-targeted ability resolves at is judged like any other target:
+        the default is the target (``stack_targets``' reading), and a seat
+        that could not have been named is not one the ability may reach.
+        """
+        verdicts = self.ability_target_verdicts(item)
+        if not verdicts or any(legal for _target, legal in verdicts):
+            return None
+        if all(target.kind == "graveyard" for target, _legal in verdicts):
+            # Every target was a card in a graveyard and none is left there:
+            # :meth:`vanished_graveyard_target_refusal` is asked one call
+            # later and says so in its own words. The same answer from the
+            # same reader (``graveyard_index_of``); left to the gate that has
+            # been giving it so its log line stays the one players and tests
+            # already read.
+            return None
+        return (
+            f"{item.card.name} ability was removed from the stack: "
+            "every target is illegal (608.2b)"
+        )
+
+    def blank_illegal_resolution_targets(self, item) -> int:
+        """Rewrite each **illegal** slot of an object that is about to resolve
+        so that it names nothing, and return how many were rewritten.
+
+        CR 608.2b's last sentences, applied to the announcement once instead of
+        being left to each handler: "Illegal targets, if any, won't be affected
+        by parts of a resolving spell's effect for which they're illegal … If
+        part of the effect requires information about an illegal target, it
+        fails to determine any such information."
+        :meth:`illegal_targets_refusal` has already let the object through, so
+        at least one target is legal and what is left to decide is the rest.
+
+        The verdicts are the ones that gate read — this method asks the same
+        two readers for the same object (:meth:`_announcement_target_legality`
+        for a spell, :meth:`ability_target_verdicts` for an ability),
+        so "illegal enough to be left out" and "illegal enough to count toward
+        every target" are one opinion.
+
+        The same bounds as the gate, for the same reasons: an instant or a
+        sorcery, or an ability whose targets were chosen
+        (:func:`announced_by_a_choice`). A target a fire site stamped is not
+        judged, and an announcement the readers decline is left exactly as it
+        is.
+        """
+        from .stack_targets import (ChosenTarget, blank_illegal_targets,
+                                    names_several_targets)
+
+        # An object that named one target has nothing left to blank: the gate
+        # either removed it or found that target legal. Asked first, off the
+        # item's own fields, so the common resolution pays for one enumeration
+        # and not two.
+        #
+        # **Unless the object prints the exception** ("This ability still
+        # resolves if its target becomes illegal", Gilded Drake). The gate let
+        # it through *with* its one target illegal, so that target is exactly
+        # what is left to blank: the sentence waives the fizzle, not the
+        # target's illegality, and "if you don't or can't make an exchange,
+        # sacrifice this creature" is printed for the resolution in which the
+        # exchange cannot be made. Unblanked, the Drake swapped itself for a
+        # creature given shroud in response — or, when its target had left,
+        # for whichever creature had slid into that battlefield slot.
+        if not names_several_targets(item) and not resolves_with_illegal_targets(
+            item.card, item.ability_text
+        ):
+            return 0
+        illegal: list = []
+        if item.ability_instruction is not None:
+            if not announced_by_a_choice(item):
+                return 0
+            verdicts = self.ability_target_verdicts(item)
+            if not verdicts:
+                return 0
+            illegal = [target for target, legal in verdicts if not legal]
+        else:
+            # A spell, so the card *is* the object and its printed type is the
+            # question — the bound ``illegal_targets_refusal`` draws in the
+            # same words, for the reason it gives.
+            card = item.card
+            if card.primary_type not in ("instant", "sorcery"):
+                return 0
+            program = compile_card_oracle(card)
+            chosen_modes = tuple(getattr(item, "chosen_modes", ()) or ())
+            for spec, holder, mode_index in self._resolving_announcements(item, program):
+                addresses: list = []
+                verdict = self._announcement_target_legality(
+                    item, program, spec, holder, mode_index, addresses=addresses,
+                )
+                if verdict is None or len(addresses) != len(verdict):
+                    continue
+                mode = next(
+                    (
+                        position for position, chosen in enumerate(chosen_modes)
+                        if chosen is holder
+                    ),
+                    None,
+                )
+                for address, legal in zip(addresses, verdict):
+                    if legal or address is None:
+                        continue
+                    kind, channel, position, permanent_id = address
+                    illegal.append(ChosenTarget(
+                        kind, permanent_id=permanent_id, channel=channel,
+                        position=position, mode=mode,
+                    ))
+        if not illegal:
+            return 0
+        return blank_illegal_targets(item, illegal)
 
     # -- Target enumeration ------------------------------------------------
     def _enumerate_targets(
@@ -4479,7 +5642,21 @@ class LegalityMixin:
         # sacrifice cost keeps enumerating while the ban is up. Every cost flag
         # (``spec_is_a_cost``), not the three this once listed: an exile, a
         # discard or an untap paid under Peace Talks targets nothing either.
+        #
+        # **A spell on the stack is neither a player nor a permanent**, so the
+        # ban does not reach it — which both gates in front of this list have
+        # always said (``_UNBANNABLE_CAST_KINDS``, and the activation path's own
+        # copy of it) and this list did not: Counterspell was castable under
+        # Peace Talks and its picker offered nothing, so the engine accepted a
+        # named spell that no human seat could name. The stack half of the list
+        # stands, and only that half — "target spell or permanent" (the Laces,
+        # Illusion, Blind Seer) is offered the spells and none of the permanents.
         if self.targeting_bans and not triggered and not spec_is_a_cost(spec):
+            if spec.get("kind") in _STACK_TARGET_KINDS:
+                return self._enumerate_stack_targets(
+                    caster_index, card, spec,
+                    source=ability_source or source_permanent,
+                )
             return []
         # "…**defending player controls**" (Floral Spuzzem, Kukemssa Pirates,
         # Yare). Not relative to the seat choosing but to a combat, and which
@@ -5285,6 +6462,19 @@ class LegalityMixin:
         self, caster_index: int, spec: dict, *, source_card=None
     ) -> list[dict]:
         targets: list[dict] = []
+        # "Cards in graveyards can't be the targets of spells or abilities."
+        # (Ground Seal.) Asked **here**, in the one enumeration of graveyard
+        # targets, so every reader of the list inherits the answer: the picker
+        # offers nothing, CR 601.2c's cast gate and CR 602.2b's activation gate
+        # refuse with nothing paid, and a trigger that must target one has no
+        # legal choice (CR 603.3d). A *cost* paid out of a graveyard (Necropolis)
+        # is not a target and keeps its list — the card's ruling: "Abilities
+        # that don't target cards in graveyards … can still affect those cards."
+        if not spec_is_a_cost(spec):
+            from .target_immunity import graveyard_cards_untargetable
+
+            if graveyard_cards_untargetable(self) is not None:
+                return targets
         # Reconstruction returns an *artifact* card, Raise Dead a creature card,
         # Chandra a red instant or sorcery. One template with the type as data,
         # and one predicate shared with the cast-time re-check and the handler
@@ -5292,7 +6482,18 @@ class LegalityMixin:
         # resolution then refuses is the bug this module exists to prevent, and
         # it was live: the re-check asked only "is it a creature card?".
 
+        # A **cost**'s narrowing beyond its head type ("Exile a *black* card
+        # from your graveyard") rides the spec as ``cost_filter`` and is asked
+        # through the matcher the charger accepts by, so the two cannot
+        # disagree about a phrase the target vocabulary above has no key for.
+        cost_filter = spec.get("cost_filter") if spec.get("exile_cost") else None
+
         def eligible(card) -> bool:
+            if cost_filter:
+                from .handlers._common import _card_matches_filter
+
+                if not _card_matches_filter(card, cost_filter):
+                    return False
             return graveyard_card_matches(spec, card)
 
         for seat, player in enumerate(self.players):
@@ -5312,8 +6513,18 @@ class LegalityMixin:
             # what stops this picker offering a card resolution then declines.
             # Per pile, because a slot number means nothing without the seat.
             excluded = excluded_graveyard_slot(spec, player.graveyard, source_card)
+            # The card being cast, when the cast is out of this very pile
+            # (CR 601.2a: it is on the stack before CR 601.2c chooses anything —
+            # see ``targeting.CAST_FROM_GRAVEYARD``). The caster's own pile
+            # only: a deck repeats one immutable definition per copy and both
+            # decks may hold it, so the same object in an opponent's graveyard
+            # is a different card and a legal target.
+            leaving = (
+                _cast_from_graveyard_slot(spec, player.graveyard, source_card)
+                if seat == caster_index else None
+            )
             for idx, card in enumerate(player.graveyard):
-                if idx != excluded and eligible(card):
+                if idx != excluded and idx != leaving and eligible(card):
                     targets.append({"kind": "graveyard", "seat": seat, "index": idx, "name": card.name})
         return targets
 

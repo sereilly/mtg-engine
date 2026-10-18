@@ -25,9 +25,16 @@ import dataclasses
 from . import ast
 from .ownership import _parse_ownership_exchange_unless_paid
 from .naming import (
+    _parse_choose_color,
+    _parse_choose_creature_type,
+    _parse_choose_number,
+    _parse_choose_opponent,
+    _parse_choose_player_who_cast,
     _parse_name_and_strip,
     _parse_name_then_consult,
     _parse_name_then_random_reveal,
+    parse_choose_card_name,
+    parse_choose_card_type,
 )
 from .paragraphs import (
     _parse_exile_graveyard_until_leaves,
@@ -58,13 +65,6 @@ from .effects import (
     _parse_change_target,
     _parse_change_text,
     _parse_choose_cards_in_hand,
-    _parse_choose_color,
-    _parse_choose_creature_type,
-    _parse_choose_opponent,
-    parse_choose_card_name,
-    parse_choose_card_type,
-    _parse_choose_number,
-    _parse_choose_player_who_cast,
     _parse_copy_that_spell,
     _parse_copy_this_spell,
     _parse_counter,
@@ -88,6 +88,7 @@ from .effects import (
     _parse_life_total_becomes,
     _parse_look_at_hand,
     _parse_exile_bound_card,
+    _parse_counted_graveyard_cards,
     _parse_bin_unplayed_exiled_cards,
     _parse_put_exiled_card_into_hand,
     _parse_put_exiled_pile_top_into_hand,
@@ -435,7 +436,13 @@ def parse_imperative_verb(
         # Safe here because the quantifier is refused by default — no lowering
         # accepts "that" unless it says so — so a sentence that reaches one
         # without a binder fails **by name** rather than failing to parse.
-        subject = _parse_that_object(stream) or parse_recipient(stream)
+        subject = (
+            _parse_that_object(stream)
+            # "…exile **two cards** from your graveyard" — the untargeted
+            # count the recipient parser has no quantifier for.
+            or _parse_counted_graveyard_cards(stream)
+            or parse_recipient(stream)
+        )
         if subject is None:
             # "Create three 2/2 white Knight creature tokens. **Exile them** at
             # the beginning of the next cleanup step." (Waylay.) The plural of
@@ -552,7 +559,7 @@ def parse_imperative_verb(
     # `Scry 1.` used to die on "expected a subject" — and why every scry line
     # in the pool produced no instruction at all while its card still reported
     # supported on the strength of its other line.
-    if stream.at_word("scry"):
+    if stream.at_word("scry") or stream.at_word("surveil"):
         return _parse_scry(stream)
     if stream.at_word("reveal"):
         # "**Reveal your hand** and put all land cards from it onto the

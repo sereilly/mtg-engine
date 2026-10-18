@@ -450,8 +450,77 @@ def test_every_divided_card_in_the_pool_is_described(catalog):
         # split -- and that is carried by ``max_targets`` on the description,
         # which the side derivation does not read and should not.
         "Elven Rite",
+        # Reviewed ahead of Apocalypse's promotion, at its rehearsal. Two
+        # cards, and they are the two outcomes a review can have.
+        #
+        # Fire (of Fire // Ice) adds nothing: "Fire deals 2 damage divided as
+        # you choose among one or two targets" answers "opponent" off the
+        # `damage` category like every burn spell above it (derived:
+        # thresholded, not whole-board). What is new is where it is printed —
+        # the inventory's first division on a split card's *half*, which this
+        # test reaches only because it walks `compilation_units` rather than
+        # cards; the whole card's program has no instructions to divide.
+        "Fire",
+        # Captain's Maneuver is the finding. "The next X damage that would be
+        # dealt to target creature, planeswalker, or player this turn is dealt
+        # to another target … instead" rides the divided channel with a printed
+        # count of two, and its targets are not interchangeable: the first is
+        # spared and the second takes the damage. `side` still reads "opponent"
+        # off `damage` — true of the end the damage reaches and backwards for
+        # the end it leaves — so one side for both had the AI shield an
+        # opponent and aim the damage at another thing of theirs. The shape
+        # carries `slot_sides` ("you", "opponent") for it now, off the same
+        # per-slot table Kor Chant's several-target spelling reads, and the
+        # test below holds that it is the only division in the pool that needs
+        # one.
+        "Captain's Maneuver",
+        # Reviewed ahead of Odyssey's promotion, at its rehearsal, by running
+        # each. Three cards, two that add nothing and one that is the finding.
+        #
+        # Volley of Boulders is Arc Lightning with no ceiling on its targets:
+        # "opponent" off the `damage` category (derived: thresholded, not
+        # whole-board), and driven it sends all 6 at the opponent's face.
+        # Embolden is Remedy with a flashback: "you" off `prevention`, spread
+        # over the caster's face and creatures. For both, what is new is beside
+        # the division - a second cast from the graveyard - and changes where
+        # the AI finds the card rather than where it aims.
+        "Volley of Boulders", "Embolden",
+        # Shower of Coals is the finding. "…deals 2 damage to each of up to
+        # three targets" is the pool's first `EACH` list under a printed
+        # *ceiling* (Firestorm and Magma Burst print a count), and its side is
+        # right - "opponent" - while its play was not: the concentrate policy
+        # is for a total that is split, and it named one target of three where
+        # every target takes the whole amount. `choose_divided_targets` fills
+        # the list now; `tests/ai/test_ai_policy.py` holds it on an invented
+        # card.
+        "Shower of Coals",
     }
     assert set(described) <= reviewed, sorted(set(described) - reviewed)
+
+
+def test_only_a_division_with_two_different_ends_has_a_side_per_slot():
+    """`DividedShape.slot_sides` is empty for every division whose targets all
+    receive the same thing — which is every one but the two-ended redirect —
+    so `choose_divided_targets` takes the path it always took for the rest.
+
+    Over both manifest roles, because the one card it is not empty for is in a
+    measured set until Apocalypse ships.
+    """
+    from engine.ai_valuation import divided_shape
+    from engine.card_loader import load_cards, manifest_set_paths
+
+    per_slot, shared = {}, 0
+    for card in compilation_units(load_cards(manifest_set_paths(include_measured=True))):
+        shape = divided_shape(compile_card_oracle(card))
+        if shape is None:
+            continue
+        if shape.slot_sides:
+            per_slot[card.name] = shape.slot_sides
+        else:
+            shared += 1
+
+    assert per_slot == {"Captain's Maneuver": ("you", "opponent")}
+    assert shared >= 20, shared
 
 
 # --- Several-target removal points at the other board ----------------------

@@ -1,11 +1,16 @@
 """``Repeat this process …`` — the sentence that says the sentences before it
 happen again.
 
-Six cards print one and **no two of them are the same mechanism**, which is
+Seven cards print one and **no two of them are the same mechanism**, which is
 why they are one module rather than one production. The count in this paragraph
-has been wrong twice — it said three while the file held four — so it is worth
-stating that it is the number of *readers*, five of them below and one of them
-elsewhere, and not the number of cards a wave happened to look at:
+has been wrong three times — it said three while the file held four, and six
+while the pool held nine — so it is worth stating that it is the number of
+*readers of the words "repeat this process" as a clause*: six of them below and
+one of them elsewhere. Three more cards print a repetition a **fused
+production** reads whole and this module never sees (Mana Clash's
+``coin_flip_damage_loop``, Helm of Obedience's ``mill_until_matching``,
+Forgotten Lore's repeated graveyard pick); they are named here so the next
+count is not taken off the pool:
 
 * "Repeat this process **until no one** puts a card onto the battlefield."
   (Eureka.) A round of offers made to every seat in turn, repeated while
@@ -28,10 +33,17 @@ elsewhere, and not the number of cards a wave happened to look at:
   one bound that can end a round part-way through: four cards among three
   players is two passes, and the second stops after the first seat.
 
+* "Repeat this process **until you put a card into your hand or you exile two
+  cards with the same name, whichever comes first**." (Tainted Pact.) A loop
+  that ends on *conditions asked when the round is over* — and the round ends
+  in an offer, so "over" is after the answer. Grindstone's clause read the
+  other way round, and the one whose round may stop to ask. The newest of the
+  seven; it sits here beside the five it shares a shape with.
+
 * "…unless you pay {3} **and repeat this process**." (Crooked Scales.) A loop
   bought by a *price inside the round*, on one arm of a coin flip that may not
-  even have been taken. The sixth, and the only one whose reader is **not in
-  this module**: every clause above is its own sentence or opens one, and is
+  even have been taken. The sixth to arrive, and the only one whose reader is
+  **not in this module**: every clause above is its own sentence or opens one, and is
   read where the sentence loop has just finished a statement it can fold into,
   while this one is joined to a price by the printed "and" and is consumed by
   the toll. So its reader is ``tolls._accept_repeat_request``, two layers
@@ -321,4 +333,52 @@ def _attach_repeat_until_pile_chosen(stream: TokenStream, steps: list) -> bool:
         stream.reset(mark)
         return False
     steps[-1] = ast.RepeatUntilPileChosen(round=steps[-1])
+    return True
+
+
+def _attach_repeat_until_condition(stream: TokenStream, steps: list) -> bool:
+    """Fold "Repeat this process until you put a card into your hand or you
+    exile two cards with the same name, whichever comes first." into everything
+    before it (Tainted Pact).
+
+    The **seventh** printed "repeat this process" and the clause Grindstone's
+    is the mirror of: that one says when to go on, this one when to stop. It
+    wraps the whole step list, as Forbidden Ritual's does and for its reason —
+    "this process" is the exile *and* the offer behind it, and a loop round the
+    offer alone would ask about one card for ever.
+
+    The conditions are read by the ordinary condition parser, so "A or B" is
+    the ``SomeOf`` every other disjunction is. "**Whichever comes first**" is
+    what a disjunction of stopping clauses already means, so the words are
+    consumed and add nothing — but only behind an "or": behind one condition
+    they would be a sentence this reading has not read.
+
+    Read after Eureka's and Thieves' Auction's "until" clauses and refusing
+    without consuming, so each of those keeps its own reading: neither of their
+    tails is a condition this parser describes.
+    """
+    if not steps:
+        return False
+    mark = stream.mark()
+    if not stream.accept_phrase("repeat", "this", "process", "until"):
+        stream.reset(mark)
+        return False
+    try:
+        condition = _parse_condition(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return False
+    if stream.accept_punct(",") and not (
+        isinstance(condition, ast.SomeOf)
+        and stream.accept_phrase("whichever", "comes", "first")
+    ):
+        stream.reset(mark)
+        return False
+    # The clause must **end** its sentence, for `_attach_repeat_for_types`'
+    # stated reason; an exhausted stream ends it as surely as a full stop.
+    if not (stream.accept_punct(".") or stream.exhausted):
+        stream.reset(mark)
+        return False
+    round_ = steps[0] if len(steps) == 1 else ast.Sequence(tuple(steps))
+    steps[:] = [ast.RepeatProcessUntil(round=round_, condition=condition)]
     return True

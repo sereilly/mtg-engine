@@ -55,18 +55,60 @@ from __future__ import annotations
 from ...damage_deaths import DAMAGED_BY_SOURCE_DIED
 from ...oracle_types import (CHOSEN_COLOR_THIS_WAY, CHOSEN_NUMBER_THIS_WAY,
                              DISCARDED_THIS_WAY,
-                             MILLED_THIS_WAY, REVEALED_HAND_CARDS)
+                             MILLED_THIS_WAY, PUT_INTO_HAND_THIS_WAY,
+                             REVEALED_HAND_CARDS)
 from ...subject_filters import card_only_filter, untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
-from ._common import _filter_payload, _restrictions_beyond
+from ._common import _filter_payload, _is_source, _restrictions_beyond
 from ._events import COUNTED_NUMBER
 # The one name this file shares with the table that declares it: which key a
 # discard cost writes. Imported rather than spelled, because a producer gate and
 # the declaration it reads are exactly the pair a second spelling makes vacuous —
 # which is what these two files did to each other until Pyromancy gave the
 # channel a second reader.
-from ._cost_records import DISCARDED_FOR_COST, optional_cost_key
+from ._cost_records import (DISCARDED_FOR_COST, EXILED_SET_FOR_COST,
+                            SACRIFICED_FOR_COST, optional_cost_key)
+
+
+def targets_one_graveyard_card(instructions) -> bool:
+    """Whether the effect a clause guards targets **one card in a graveyard**
+    — what "it" names in "…if it shares a card type with the card exiled this
+    way" (Holistic Wisdom).
+
+    :func:`pronoun_target_referent`'s question for a third kind of object, and
+    asked separately rather than as a third referent word for the reason
+    :func:`announces_target_pair` is: two readers of that word pass any
+    non-None answer straight to an evaluator that knows a spell and a
+    permanent, so a new value there would be answered about the wrong object.
+
+    Read off the target derivation itself rather than off a list of kinds, so
+    what the picker offers and what this vouches for are one answer.
+    """
+    if len(instructions) != 1:
+        return False
+    from ...targeting import GRAVEYARD_TARGET_KIND, derive_instruction_spec
+
+    spec = derive_instruction_spec(instructions) or {}
+    return spec.get("kind") == GRAVEYARD_TARGET_KIND and not spec.get("count")
+
+
+#: The payment channels "the card <participle> this way" may name in a shared
+#: card type comparison: ``{participle: (key the cost seeds into `produced`,
+#: choices key the payment path records the object under)}``. The exile and
+#: the sacrifice record one object beside their set; the discard records a
+#: list. The evaluator reads all three shapes.
+_SHARED_TYPE_CHANNELS: dict[str, tuple[str, str]] = {
+    "exiled": (EXILED_SET_FOR_COST, "exiled_for_cost"),
+    "sacrificed": (SACRIFICED_FOR_COST, "sacrificed_for_cost"),
+    "discarded": (DISCARDED_FOR_COST, "discarded_for_cost"),
+}
+
+
+#: The trigger events that fire only on their controller's **own turn**
+#: ("at the beginning of *your* upkeep / end step"), which is the only time
+#: :class:`ast.CameUnderControlThisTurn`'s record can be read.
+_OWN_TURN_EVENTS = frozenset({"upkeep_self", "end_step_self"})
 
 
 def lower_record_condition(
@@ -75,6 +117,8 @@ def lower_record_condition(
     event: str | None = None,
     referent: str | None = None,
     event_subject=None,
+    *,
+    graveyard_target: bool = False,
 ) -> dict[str, object]:
     """The half of :func:`_lower_condition` that reads a record.
 
@@ -283,6 +327,29 @@ def lower_record_condition(
             "channel": f"{condition.channel}_for_cost",
             "filter": described,
         }
+    if isinstance(condition, ast.SharesCardTypeWithCostCard):
+        # "…if it shares a card type with **the card exiled this way**."
+        # (Holistic Wisdom.) Two gates, because the sentence names two things.
+        # The record: unlike ``CostObjectWas`` above this is asked of an
+        # *ability*, whose cost is in view (``lower_ability`` seeds
+        # ``produced`` off it), so an ability whose cost makes no such payment
+        # refuses rather than comparing against nothing for ever. And the
+        # pronoun: "it" is the one card in a graveyard the guarded effect
+        # targets, which only the conditional lowering can vouch for.
+        wanted = _SHARED_TYPE_CHANNELS.get(condition.channel)
+        if wanted is None or wanted[0] not in produced:
+            raise LoweringError(
+                f"'the card {condition.channel} this way' with no cost in this "
+                "ability that makes that payment",
+                node=condition,
+            )
+        if not graveyard_target:
+            raise LoweringError(
+                "'it shares a card type' needs the one graveyard card the "
+                "effect it guards targets",
+                node=condition,
+            )
+        return {"kind": "target_card_shares_type_with_cost_card", "channel": wanted[1]}
     if isinstance(condition, ast.DiscardedCardWas):
         # Same discipline as the two back-references above, with the producer
         # named in the printed words: an ability that discarded nothing has no
@@ -354,6 +421,33 @@ def lower_record_condition(
         return {
             "kind": "shared_color_milled_this_way", "count": condition.count,
         }
+    if isinstance(condition, ast.ExiledThisWayShareAName):
+        # "…it has the same name as another card exiled this way" / "you exile
+        # two cards with the same name" (Tainted Pact). A back-reference names
+        # its producer or refuses: with no exile in front of it the relation is
+        # asked of an empty pile and answers False for ever — on this card, a
+        # loop that never sees its second stopping clause.
+        if "exiled_cards" not in produced:
+            raise LoweringError(
+                "'cards exiled this way' with no exile before it in this "
+                "effect",
+                node=condition,
+            )
+        shares: dict[str, object] = {"kind": "exiled_this_way_share_a_name"}
+        if condition.of_latest:
+            shares["of_latest"] = True
+        return shares
+    if isinstance(condition, ast.PutIntoHandThisWay):
+        # "…until you put a card into your hand" (the same card). The record
+        # ``put_exiled_cards_into_zone`` writes when its destination is a hand,
+        # demanded for the reason above: unwritten, it reads as "never".
+        if PUT_INTO_HAND_THIS_WAY not in produced:
+            raise LoweringError(
+                "'you put a card into your hand' with no step in this effect "
+                "that puts one there",
+                node=condition,
+            )
+        return {"kind": "it_happened", "key": PUT_INTO_HAND_THIS_WAY}
     if isinstance(condition, ast.RevealedCardHasChosenName):
         # Both producers demanded, for the mill's reason below: without the
         # name the comparison is against nothing and answers False for ever,
@@ -492,9 +586,9 @@ def lower_record_condition(
     if isinstance(condition, ast.DiscardedThisWay) and condition.filter is not None:
         # "If you discard a **creature** card this way" (Aether Rift). What
         # went rather than whether anything did, so it reads the cards and not
-        # the count — and demands the step that records them, which today is
-        # the random discard alone: a chosen discard writes only its number,
-        # and against that producer the branch would never run.
+        # the count — and demands a step that records them. The random discard
+        # always did; the chosen discards write the list when their prompt is
+        # answered, since Gerrard's Verdict counted land cards off it.
         if DISCARDED_THIS_WAY not in produced:
             raise LoweringError(
                 "'discard a <type> card this way' with no discard before it "
@@ -667,6 +761,37 @@ def lower_record_condition(
         # the combat and no other window, and the object is the ability's own
         # source. The evaluator reads the answer the fire site froze.
         return {"kind": "attacked_or_blocked_this_combat"}
+    if isinstance(condition, ast.CameUnderControlThisTurn):
+        # "…or come under your control this turn" (Mad Dog). Two refusals, each
+        # a way the clause could otherwise be answered about something else.
+        #
+        # The object is the ability's own source: the record is read off
+        # ``context.source_permanent``, and a clause about any other object
+        # would be answered about this one.
+        #
+        # The moment is the controller's **own turn**. The record is CR 302.6's
+        # — the stamp summoning sickness reads — and it is carried across other
+        # players' turns (``Game._advance_summoning_sickness``), so on somebody
+        # else's turn it cannot tell "this turn" from "since your last turn
+        # began". Both printings ask at "the beginning of **your** end step";
+        # a card asking under any other event refuses rather than being
+        # answered wrongly for half of every round.
+        if not _is_source(condition.subject):
+            raise LoweringError(
+                "'came under your control this turn' is asked of the "
+                "ability's own permanent",
+                node=condition,
+            )
+        if event not in _OWN_TURN_EVENTS:
+            raise LoweringError(
+                "'came under your control this turn' is answerable only "
+                "during its controller's own turn",
+                node=condition,
+            )
+        return {
+            "kind": "came_under_your_control_this_turn",
+            "negated": condition.negated,
+        }
     if isinstance(condition, ast.CameUnderControlSinceLastUpkeep):
         # CR 702.30a. No payload, for the sibling below's reason exactly: the
         # sentence names no seat other than "your" — the ability's controller,

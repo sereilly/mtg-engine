@@ -29,7 +29,7 @@ from ..combat_restrictions import (declaration_company_required,
                                   restriction_condition_holds)
 from ..evasion_negation import negated_evasion_abilities
 from ..landwalk import LANDWALK, land_satisfies, landwalk_requirement
-from ..mana_payment import mana_cost_label, plan_payment, untapped_mana_lands
+from ..mana_payment import mana_cost_label, plan_payment
 from ..delayed_triggers import fire_delayed_triggers
 from ..layer_bridge import computed_abilities
 from ..subject_filters import subject_matches
@@ -1449,15 +1449,15 @@ class DeclareBlockersStepMixin:
             toll = self._block_toll_of(blocker)
             if toll and plan_payment(
                 self.players[blocker_seat].mana_pool,
-                untapped_mana_lands(self.controlled_by(blocker_seat)),
-                toll,
+                self.payment_lands(blocker_seat),
+                toll, payer=self.players[blocker_seat],
             ) is None:
                 return False
             for cost in self._block_mana_costs_of(blocker, attacker):
                 if plan_payment(
                     self.players[blocker_seat].mana_pool,
-                    untapped_mana_lands(self.controlled_by(blocker_seat)),
-                    cost,
+                    self.payment_lands(blocker_seat),
+                    cost, payer=self.players[blocker_seat],
                 ) is None:
                     return False
             # "…unless you tap an untapped creature you control not declared as
@@ -1786,8 +1786,8 @@ class DeclareBlockersStepMixin:
         defender = self.players[controller_index]
         return total, plan_payment(
             defender.mana_pool,
-            untapped_mana_lands(self.controlled_by(controller_index)),
-            total,
+            self.payment_lands(controller_index),
+            total, payer=defender,
         )
 
     def _pay_block_declaration_mana(
@@ -1804,12 +1804,28 @@ class DeclareBlockersStepMixin:
         if plan is None:
             return
         defender = self.players[controller_index]
-        for symbol, amount in plan.from_pool.items():
-            defender.mana_pool[symbol] = int(defender.mana_pool.get(symbol, 0)) - amount
-        for land in plan.tapped:
-            self.become_tapped(land)
+        # The lands the plan named, tapped **for mana** (CR 605.3a) through the
+        # one payer every effect-collected cost shares, re-planned over those
+        # same lands as the attack side does.
+        planned = list(plan.tapped)
+        paid = self._pay_planned_cost(
+            defender,
+            lambda: plan_payment(
+                defender.mana_pool,
+                [
+                    land for land in self.payment_lands(controller_index)
+                    if any(land is named for named in planned)
+                ],
+                total, payer=defender,
+            ),
+        )
+        # Said as it happened, for the attack side's reason.
         self.log.append(
             f"{defender.name} paid {mana_cost_label(total)} to declare blockers"
+            if paid else
+            f"{defender.name} could not pay {mana_cost_label(total)} in full "
+            "to declare blockers: a land the payment counted on made nothing "
+            "it could spend"
         )
 
     def _negated_evasion_abilities(self) -> frozenset[str]:
@@ -2715,6 +2731,18 @@ class DeclareBlockersStepMixin:
                 event_subject_controller=self.controller_index_of(blocker),
                 pair_announcement=False,
             )
+            # "Whenever a creature **attacks or blocks**" (Powerstone
+            # Minefield) — the block half of the board-wide union
+            # ``_fire_matching_creature_attacks_triggers`` announces the other
+            # half of. Here, in the bare announcement, because CR 509.3a is
+            # this loop's count: once for the creature that blocks, however
+            # many attackers it is blocking.
+            emit(
+                self, "matching_creature_attacks_or_blocks",
+                subject=blocker,
+                event_subject_permanent_id=blocker.permanent_id,
+                event_subject_controller=self.controller_index_of(blocker),
+            )
             for _attacker_idx, attacker in blocked:
                 found = blocked_by.setdefault(
                     attacker.permanent_id, (attacker, [])
@@ -2776,13 +2804,21 @@ class DeclareBlockersStepMixin:
             controller_index, assignments
         ):
             for _attacker_idx, attacker in blocked:
-                fire_delayed_triggers(
-                    self, "source_blocks_or_blocked_by",
-                    subject=attacker, agent=blocker,
-                    trigger_context={
-                        "blocked_permanent_ids": [blocker.permanent_id],
-                    },
-                )
+                # The joined event (Goblin Flotilla) and its attacking half on
+                # its own (Zombie Boa: "whenever this creature **becomes
+                # blocked by** a creature of that color this turn"). An entry
+                # is armed under exactly one of the two names, so announcing
+                # both wakes each ability once.
+                for event in (
+                    "source_blocks_or_blocked_by", "source_becomes_blocked_by",
+                ):
+                    fire_delayed_triggers(
+                        self, event,
+                        subject=attacker, agent=blocker,
+                        trigger_context={
+                            "blocked_permanent_ids": [blocker.permanent_id],
+                        },
+                    )
 
     # `_apply_temporary_buff` and `_apply_flanking` were here, and both are
     # gone for one reason. CR 702.25a defines flanking as a triggered ability,

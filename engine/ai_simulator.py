@@ -7,11 +7,12 @@ from typing import Sequence
 import random
 
 from .ai_combat import run_ai_combat_phase
-from .ai_policy import (cast_announcement, cast_zone_of, choose_activation_action,
+from .ai_policy import (cast_announcement, choose_activation_action,
                         choose_cast_action, choose_foreign_activation_action,
                         choose_hand_activation_action, choose_land_drop,
-                        permitted_plays,
-                        spell_being_cast, tap_planned_lands)
+                        spell_being_cast, tap_planned_lands,
+                        zone_being_cast_from)
+from .ai_valuation import permitted_casts
 from .card_loader import load_cards
 from .faces import whole_card
 from .game import Game
@@ -136,6 +137,18 @@ class SimulationReport:
     #: card was cast, it resolved, nothing was refused. A report whose only
     #: key is 0 over a pool that prints modal spells is that coming back.
     modal_casts: Counter[int] = field(default_factory=Counter)
+    #: Spells cast — and lands played — from a zone **other than the hand**
+    #: (CR 601.3), by the zone: ``"graveyard"`` (flashback, CR 702.34a;
+    #: Yawgmoth's Will), ``"exile"`` (an Elkin Bottle's card), ``"library"``
+    #: (Temporal Aperture's top card), ``"command"`` (CR 903.8). **Empty in
+    #: every run before ODY's wave 2**, and not because no deck held such a
+    #: card: `ai_policy.choose_cast_action` walked the hand and nothing else,
+    #: so the second half of every flashback card — Odyssey's headline
+    #: mechanic, 28 cards — was text no simulated game reached, and the run
+    #: read exactly as clean as it does now. Each card was cast from hand, it
+    #: resolved, nothing was refused. A report with no ``"graveyard"`` key over
+    #: a pool that prints flashback is that coming back.
+    casts_from_zones: Counter[str] = field(default_factory=Counter)
     #: How many step changes that count was taken over. A zero above means
     #: something only beside a number here: an instrument that looked at
     #: nothing reports nothing owed.
@@ -208,6 +221,13 @@ _SIMULATED_CHOICES = (
     # picking out of the pile this answer shortens, so a seat left owing it
     # would wedge the round-robin and every later resumable loop with it.
     "exiled_pile_claim",
+    # "…becomes the basic land type of your choice" (Jinx, Shimmering Mirage;
+    # Phantasmal Terrain as it enters). Appended for the reason every entry
+    # above it is. It was answered by the catch-all pass below while it only
+    # held priority; it suspends now — the step behind it (Shimmering Mirage's
+    # draw) waits for the type — so it belongs to the named pass, last, which
+    # is where the catch-all answered it when nothing else was queued.
+    "land_type_choice",
 )
 
 
@@ -772,18 +792,27 @@ def _play_land_drops(
         action = choose_land_drop(game, active)
         if action is None:
             return
-        # The pile the policy found it in: the hand, or a zone an effect
-        # opened to land plays ("You may play lands … from your graveyard").
-        land = cast_zone_of(game, active, action)[action.hand_index]
-        result = game.cast_from_hand(active, land.name, **cast_announcement(action))
+        # The land the chooser named, out of the zone it named: the hand, or a
+        # zone an effect lets the seat **play** from (CR 305.1 with CR 601.3's
+        # permission: an Elkin Bottle's exiled land, a graveyard under
+        # Yawgmoth's Will). Through `cast_announcement` like every cast — the
+        # zone is part of what is announced, and for a land in hand the rest
+        # of that dict is the defaults this call always took.
+        land = zone_being_cast_from(game, active, action)[action.hand_index]
+        result = game.cast_from_hand(
+            active, land.name, **cast_announcement(action),
+        )
         _resolve_pending_choices(game)
         report.log_lines.append(
             f"G{game_index} T{turn} {seat_name} play {land.name} -> {result.details}"
+            + _zone_named(action)
         )
         if not result.supported:
             report.refused_casts[f"{land.name}: {result.details}"] += 1
             return
         report.lands_played += 1
+        if action.from_zone != "hand":
+            report.casts_from_zones[action.from_zone] += 1
 
 
 def _play_one_cast(
@@ -800,9 +829,12 @@ def _play_one_cast(
     if cast_action is None:
         return False
     # `hand_index` indexes the zone `from_zone` names — the hand, the command
-    # zone, or a graveyard, exile zone or library an effect opened (CR 601.3),
-    # which may be another seat's. `ai_policy.cast_zone_of` is the one reader.
-    cast_zone = cast_zone_of(game, active, cast_action)
+    # zone, or a graveyard, an exile or a library an effect has opened
+    # (CR 601.3: a flashback card, a card an Elkin Bottle exiled) — through the
+    # one reader every executor shares. This read "the command zone for a
+    # commander cast, the hand otherwise", so a cast proposed from a graveyard
+    # would have been read off the hand at the graveyard's index.
+    cast_zone = zone_being_cast_from(game, active, cast_action)
     # The spell, not the zone's card: a split card is cast as the half the
     # policy scored (CR 709.3), and every line below — the cast, the log, the
     # support check, the effect audit — is about that half.
@@ -839,16 +871,14 @@ def _play_one_cast(
     named = "".join(
         f" [mode {index}: {label}]" for index, label in modes_named
     )
-    if cast_action.from_zone != "hand":
-        # Where it was cast from, when that is not the hand — the same place
-        # in the line as the mode, for the same reason.
-        named += f" [from {cast_action.from_zone}]"
     report.log_lines.append(
         f"G{game_index} T{turn} {active_player.name} cast {card_to_cast.name} "
-        f"-> {result.details}{named}"
+        f"-> {result.details}{named}{_zone_named(cast_action)}"
     )
     if result.supported:
         report.modal_casts.update(index for index, _label in modes_named)
+        if cast_action.from_zone != "hand":
+            report.casts_from_zones[cast_action.from_zone] += 1
     if not result.supported:
         # Two different things wore one message. `supported` on a cast result
         # means "the cast went through", so a spell declined for want of a
@@ -875,6 +905,15 @@ def _play_one_cast(
     if expectation_error:
         report.issues.append(InteractionIssue(game_index, turn, expectation_error))
     return True
+
+
+def _zone_named(cast_action) -> str:
+    """`` [from graveyard]`` for a cast or a land play out of a zone other
+    than the hand, and nothing for one out of it — after the outcome, like the
+    mode, so every line about a hand cast reads as it always did."""
+    if cast_action.from_zone == "hand":
+        return ""
+    return f" [from {cast_action.from_zone}]"
 
 
 def _modes_named(card: CardDefinition, cast_action) -> list[tuple[int, str]]:
@@ -927,6 +966,16 @@ def _play_casts(
         if not _play_one_cast(game, active, report, game_index, turn):
             return
         _play_land_drops(game, active, report, game_index, turn)
+
+
+def _casts_on_loan(game: Game, seat: int) -> frozenset:
+    """Which casts from outside its hand *seat* is offered right now
+    (`ai_valuation.permitted_casts`), as ``(zone, pile's seat, spell name)`` —
+    so the main loop can tell when an activation has opened a new one."""
+    return frozenset(
+        (permitted.zone, permitted.owner_seat, permitted.spell.name)
+        for permitted in permitted_casts(game, seat)
+    )
 
 
 def _play_activations(
@@ -1291,18 +1340,20 @@ def run_ai_simulation(
             # untapped. See `_play_land_drops` and `_play_casts`.
             _play_land_drops(game, active, report, game_index, turn)
             _play_casts(game, active, report, game_index, turn)
+            lent = _casts_on_loan(game, active)
             _play_activations(game, active, report, game_index, turn)
-            # **And what an activation just bought the right to cast.** "{3}{U}:
-            # … exile it. You may cast it without paying its mana cost for as
-            # long as it remains exiled. … At the beginning of the next end
-            # step, if you haven't cast it, return it" (Planeswalker's
-            # Mischief), "Until end of turn, you may play that card" (Aerial
-            # Caravan, Temporal Aperture): the permission is granted after the
-            # cast pass above has run and is gone before the next turn's, so
-            # with one pass a seat paid for it every turn and used it never.
-            # Only when such a play exists, so a turn that bought none is the
-            # turn it always was.
-            if not game.is_game_over() and permitted_plays(game, active):
+            # An activation can **lend** the seat a card: "{3}, {T}: Exile the
+            # top card of your library. Until the beginning of your next
+            # upkeep, you may play that card." (Elkin Bottle; Aerial Caravan,
+            # Temporal Aperture, Bösium Strip, Grinning Totem.) The casts were
+            # asked before the activations, so the card it bought was never
+            # played — and the permission ends before this seat's next main
+            # phase. Asked again, and only when an activation opened a cast
+            # from outside the hand that was not there before it — a card
+            # lent, or a flashback card a looter's discard just put in the
+            # graveyard — so a turn in which none did is the turn it always
+            # was.
+            if not game.is_game_over() and _casts_on_loan(game, active) - lent:
                 _play_land_drops(game, active, report, game_index, turn)
                 _play_casts(game, active, report, game_index, turn)
 

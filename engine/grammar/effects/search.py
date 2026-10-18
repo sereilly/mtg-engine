@@ -47,6 +47,7 @@ went on describing a repo that had moved. Read a recorded seam as a lead.
 import dataclasses
 from .. import ast
 from ..amounts import parse_amount
+from ..distinct import accept_one_of_each
 from ..errors import GrammarError
 from ..nouns import parse_object_filter
 from ..references import parse_player_ref, parse_target_spec
@@ -183,6 +184,15 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
     # count read without them is a search that finds three and places one.
     if stream.accept_phrase("up", "to"):
         count = parse_amount(stream)
+        if isinstance(count, ast.ThatMuch) or (
+            isinstance(count, ast.Var) and count.name == "x"
+        ):
+            # "…for up to **that many** basic land cards" (Rites of Spring) /
+            # "…for up to **X** basic land cards" (New Frontiers). The counted
+            # tail with a ceiling only the resolution knows.
+            return _parse_counted_search(
+                stream, graveyard, None, possessive, ceiling=count,
+            )
         if not isinstance(count, ast.Fixed) or count.value < 1:
             raise stream.error("expected how many cards the search may find")
         return _parse_counted_search(stream, graveyard, count.value, possessive)
@@ -232,6 +242,13 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
     exiled = _accept_counted_exile_search(stream, graveyard)
     if exiled is not None:
         return exiled
+    # "…for **a land card of each basic land type**, put those cards onto the
+    # battlefield, then shuffle." (Gaea's Balance.) The article says one and the
+    # phrase behind the noun says five, so it is read before the singular tutor
+    # below and declines without consuming.
+    each = _accept_search_one_of_each(stream, graveyard, possessive)
+    if each is not None:
+        return each
     if not stream.accept_word("a", "an"):
         raise stream.error("a search for more than one card has no representation")
     # "a card named X" is read by the noun parser, like every other restriction
@@ -279,6 +296,18 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
     # prints the word shows the found cards' faces to every player (CR 701.20),
     # and the flow records that reveal so the UI can show them. The plural is
     # the two-name spelling of the same word.
+    #
+    # "…for an enchantment card **and reveal that card. Put it** into your
+    # hand" (Wild Research). The older template's punctuation for the same two
+    # clauses: a conjunction where the modern printing has a comma, and a full
+    # stop where it has the next one. Read as the same reveal and the same
+    # destination because they are — the find is one card whichever mark sits
+    # between the words — and only ever in front of "reveal", so the "and" that
+    # joins the *destination* ("and put it into your hand", twelve lines down)
+    # is left where it was.
+    joined_reveal = stream.mark()
+    if not (stream.accept_word("and") and stream.at_word("reveal")):
+        stream.reset(joined_reveal)
     reveal = bool(stream.accept_word("reveal"))
     if reveal:
         # "reveal it" / "reveal them" / "reveal **that card**" (Merchant
@@ -290,6 +319,14 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
             stream.expect_word("that")
             stream.expect_word("card")
         stream.accept_punct(",")
+        # "…and reveal that card**. Put it** into your hand" (Wild Research):
+        # the sentence break the older template prints between the reveal and
+        # the destination. Consumed only in front of "put", so a card whose
+        # search really ends at the reveal still fails on the missing clause
+        # rather than borrowing the next sentence's verb.
+        broken = stream.mark()
+        if not (stream.accept_punct(".") and stream.at_word("put")):
+            stream.reset(broken)
     # "…, **then shuffle and put that card on top**." (Enlightened Tutor,
     # Mystical Tutor, Worldly Tutor.) The same search with its last two clauses
     # in the other order, and the order is the effect: the card is placed
@@ -360,7 +397,19 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
         stream.accept_punct(",")
         stream.expect_word("shuffle")
     elif not _accept_each_searcher_shuffle(stream):
-        stream.accept_punct(",")
+        # "…, then discard a card at random**. Then shuffle.**" (Wild
+        # Research.) The shuffle as a sentence of its own, which is the same
+        # clause — CR 701.23a makes it the search's own last step however the
+        # card punctuates it. The full stop is consumed only where "then
+        # shuffle" follows, so an ordinary sentence break behind a search that
+        # forgot its shuffle still refuses on the next line.
+        sentence = stream.mark()
+        if not (
+            stream.accept_punct(".")
+            and stream.at_word("then")
+        ):
+            stream.reset(sentence)
+            stream.accept_punct(",")
         stream.accept_word("then")
         stream.expect_word("shuffle")
     condition, counted = _parse_search_untap_rider(stream)
@@ -371,6 +420,53 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
         reveal=reveal,
         discard_after=discard_after,
         discard_after_at_random=discard_at_random,
+    )
+
+
+def _accept_search_one_of_each(
+    stream: TokenStream, graveyard: bool, possessive: str,
+) -> "ast.SearchLibrary | None":
+    """``a <filter> of each <characteristic>, put those cards <where>, then
+    shuffle`` at the cursor, or None with the cursor where it was. (Gaea's
+    Balance: "a land card of each basic land type".)
+
+    The phrase is the abbreviation ``distinct.accept_one_of_each`` reads for
+    Global Ruin's keep slots, and it is read as what it abbreviates here too: a
+    Plains card, an Island card, a Swamp card, a Mountain card and a Forest
+    card, each still a land card. One find per description, so a dual land is
+    found as one type or the other and never as both.
+
+    The destination clause is the counted production's plural ("put those
+    cards …"), one zone for every find. Each find of this search is optional
+    (CR 701.23b: the library is hidden and every description states a
+    quality), which is what ``up_to`` records.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("a", "an"):
+        return None
+    try:
+        described = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    each = accept_one_of_each(stream, described)
+    if each is None:
+        stream.reset(mark)
+        return None
+    stream.accept_punct(",")
+    stream.expect_word("put")
+    if not (stream.accept_word("them") or stream.accept_phrase("those", "cards")):
+        raise stream.error("expected 'those cards' after a search for several")
+    stream.expect_word("into", "onto")
+    destination = _parse_zone(stream, self_possessive=possessive)
+    tapped = bool(stream.accept_word("tapped"))
+    stream.accept_punct(",")
+    stream.accept_word("then")
+    stream.expect_word("shuffle")
+    return ast.SearchLibrary(
+        ast.PlayerRef("you"), described, destination, graveyard,
+        extra_destinations=(destination,) * (len(each) - 1),
+        tapped=(tapped,) * len(each), up_to=True, one_of_each=each,
     )
 
 
@@ -388,6 +484,11 @@ def _accept_search_discard_clause(stream: TokenStream) -> tuple[int, bool]:
     """
     mark = stream.mark()
     stream.accept_punct(",")
+    # "…into your hand, **then** discard a card at random." (Wild Research.)
+    # Gamble's clause with the conjunction the older template prints; the
+    # order is the printed one either way, which is the only thing the word
+    # says.
+    stream.accept_word("then")
     if not stream.accept_word("discard"):
         stream.reset(mark)
         return 0, False
@@ -619,7 +720,7 @@ def _accept_each_searcher_shuffle(stream: TokenStream) -> bool:
 
 def _parse_counted_search(
     stream: TokenStream, graveyard: bool, count: int | None,
-    possessive: str = "your",
+    possessive: str = "your", ceiling: "ast.Amount | None" = None,
 ) -> ast.Statement:
     """The tail of ``Search your library for up to <N> <filter>, reveal <them>,
     <where they go>, then shuffle.`` (Cultivate, Land Tax.)
@@ -678,6 +779,10 @@ def _parse_counted_search(
                     stream.expect_word("library")
                 stream.accept_phrase("in", "any", "order")
                 zone = ast.Zone("library_top")
+                if ceiling is not None:
+                    raise stream.error(
+                        "a search with a computed ceiling puts its finds in one zone"
+                    )
                 return ast.SearchLibrary(
                     ast.PlayerRef("you"), filt, zone, graveyard,
                     extra_destinations=() if count is None else (zone,) * (count - 1),
@@ -685,6 +790,14 @@ def _parse_counted_search(
                     up_to=True, unbounded=count is None, reveal=reveal,
                 )
     stream.reset(top_mark)
+    # "…for up to X basic land cards **and** put them onto the battlefield
+    # tapped." (New Frontiers.) The conjunction where every other counted
+    # search prints a comma — the join the singular production already reads
+    # ("…for a card and put that card into their hand"). Only in front of
+    # "put", so no other "and" is taken.
+    joined = stream.mark()
+    if not (stream.accept_word("and") and stream.at_word("put")):
+        stream.reset(joined)
     stream.expect_word("put")
     # "put **them** …" / "put **those cards** …" — one referent, two printed
     # spellings, and the same pair the reveal clause above and the shuffle-then-
@@ -709,8 +822,13 @@ def _parse_counted_search(
             ),
             tapped=(tapped,) * (0 if count is None else count),
             up_to=True,
-            unbounded=count is None,
+            # "Any number of" is the ceiling-less spelling; a computed ceiling
+            # ("that many", X) is the other reason the count is not printed,
+            # and it says so on its own field rather than borrowing this one.
+            unbounded=count is None and ceiling is None,
             reveal=reveal,
+            count_amount=ceiling,
+            all_tapped=tapped and ceiling is not None,
         )
     if count != 2:
         raise stream.error(

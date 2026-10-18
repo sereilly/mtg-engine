@@ -17,18 +17,21 @@ from ...cast_costs import (CAST_COST_DISCARD_MANA_VALUE, KICKED,
                            KICKED_WITH, buyback_paid, kicked,
                            kickers_paid)
 from ...cast_timing import CAST_AT_INSTANT_SPEED
-from ...color_changes import carry_spell_color_changes
 from ...classifier import CardClassification, classify_card
+from ...color_changes import carry_spell_color_change
+from ...destruction_events import destruction_finished
 from ...enter_effects import copy_on_enter_type
 from ...events import emit
 from ...extra_triggers import additional_triggers
 from ...faces import whole_card
+from ...flashback import leaves_stack_to_exile
 from ...game_types import OracleExecutionContext, OracleStateMachine, StackItem
 from ...handlers.control_flow import evaluate_condition
 from ...models import CardDefinition, Permanent
 from ...oracle import OracleInstruction, compile_card_oracle
 from ...modal_triggers import ENTRY_TRIGGER_CONDITIONS, modal_trigger_modes
 from ...resumption import run_resumable
+from ...state_triggers import release_latch
 # Both owned by ``engine/targeting.py``: two callers ask whether a compiled
 # program announced a target — this picker (CR 603.3d) and the ``may``
 # handler deciding whether an offer may rebind the target its own trigger
@@ -201,6 +204,11 @@ class StackResolutionMixin:
             if obj is item:
                 del self.stack[index]
                 break
+        # CR 603.8: a state-triggered ability "doesn't trigger again until the
+        # ability has resolved, **has been countered**, or has otherwise left
+        # the stack" — and then does, if its state still holds. The latch key
+        # rides the object for exactly this.
+        release_latch(item)
         if item.is_ability or item.is_copy:
             return
         emit(
@@ -210,7 +218,8 @@ class StackResolutionMixin:
 
     def _bin_spell_card(
         self, owner, card: CardDefinition, *, exile_instead: bool, verb: str,
-        hand_instead: bool = False,
+        hand_instead: bool = False, exile_is_final: bool = False,
+        chooser_index: int | None = None,
     ) -> None:
         """Where a spell's card goes as it leaves the stack (CR 608.2n): the
         owner's graveyard, unless the cast carried the "if that spell would be
@@ -231,17 +240,31 @@ class StackResolutionMixin:
         through" seam) — a commander bought back returns to the command zone if
         its owner says so.
 
-        **Order when two of these apply.** ``exile_instead`` covers two things:
-        an opponent's "exile it instead of putting it into its owner's
-        graveyard" rider, and CR 724.1b's end-the-turn exile, which is not a
-        replacement at all — it removes the object from the stack, so the
-        resolution buyback's clause is about never finishes and the exile has to
-        win. Between buyback and the *rider*, CR 616.1 makes it the affected
-        object's controller's choice, and the buyback payer is that controller
-        and has just paid for the return; taking it for them is the only reading
-        that does not make the payment pointless. The end-the-turn half reaches
-        here with ``hand_instead`` False, because the resolution never got as
-        far as asking.
+        **Order when two of these apply**, which is why ``exile_instead`` is
+        not asked alone: it is true for three different reasons and buyback
+        stands differently to each. *exile_is_final* says which.
+
+        * CR 702.34a's flashback exile is "instead of putting it **anywhere
+          else**", and CR 724.1b's end-the-turn exile is not a replacement at
+          all — it removes the object from the stack, so the resolution
+          buyback's clause is about never finishes. Against either the hand is
+          not on offer: *exile_is_final*.
+        * The rider "if that spell would be put into your graveyard, exile it
+          instead" (Bösium Strip; Chandra, Flame's Catalyst) replaces exactly
+          the event buyback replaces, and so does a board-wide "if a card would
+          be put into your graveyard from anywhere, exile that card instead"
+          (Forbidden Crypt, Yawgmoth's Will). Two replacement effects over one
+          event are CR 616.1's, and the choice is the affected object's
+          controller's — *chooser_index*, the spell's controller. Yawgmoth's
+          Will's own ruling says it in as many words: "there will be two
+          effects trying to replace where the card goes. You get to choose if
+          the Buyback returns the card to your hand or the card gets exiled."
+          See :meth:`_bin_bought_back_spell`.
+
+        This function used to answer the second case two ways and ask about
+        neither: the rider always won (a Capsize bought back off a Bösium Strip
+        was exiled, its {3} paid for nothing) and the board-wide effect always
+        lost.
         """
         # CR 709.4: the *spell* was one half of a split card and the card that
         # leaves the stack is the whole of it. ``card`` stays the half for the
@@ -249,20 +272,144 @@ class StackResolutionMixin:
         # lands in a zone. The hand and graveyard seams ask the same question
         # themselves; exile has no seam, so it is asked here.
         leaving = whole_card(card)
-        if hand_instead and not exile_instead:
-            arrived = self.put_card_into_hand(owner, leaving)
-            if arrived:
-                self.log.append(
-                    f"{card.name} {verb} and returned to its owner's hand "
-                    "(buyback) instead of going to the graveyard"
-                )
+        if hand_instead and not (exile_instead and exile_is_final):
+            self._bin_bought_back_spell(
+                owner, card, leaving, rider=exile_instead, verb=verb,
+                chooser_index=chooser_index,
+            )
             return
         if exile_instead:
             owner.exile.append(leaving)
             self.log.append(f"{card.name} {verb} and was exiled instead of going to the graveyard")
-        else:
-            self.put_card_into_graveyard(owner, leaving)
+        elif self.put_card_into_graveyard(owner, leaving):
             self.log.append(f"{card.name} {verb} and moved to graveyard")
+        else:
+            # A CR 614 replacement sent it somewhere else (Forbidden Crypt's
+            # exile, Legacy Weapon's shuffle) and has said where. The seam's
+            # False is "the card did not arrive", and this line used to
+            # announce an arrival regardless.
+            self.log.append(f"{card.name} {verb}")
+
+    #: The event a bought-back spell's last step is, for CR 616.1e's record
+    #: (``Game.effect_order_answers``) and the ``effect_order`` prompt's
+    #: ``event_kind``.
+    BOUGHT_BACK_EVENT = "bought_back_spell"
+
+    def _bin_bought_back_spell(
+        self, owner, card: CardDefinition, leaving, *, rider: bool, verb: str,
+        chooser_index: int | None,
+    ) -> None:
+        """CR 616.1 over the last step of a spell whose buyback cost was paid.
+
+        CR 608.2n puts a resolved instant or sorcery into its owner's
+        graveyard, and CR 702.27a's second static ability replaces that: "put
+        this spell into its owner's hand instead of into that player's
+        graveyard as it resolves". It is one contender. The others are whatever
+        else would replace the same move — the *rider* this cast was made under
+        ("if that spell would be put into your graveyard, exile it instead")
+        and each board-wide effect the graveyard seam would apply to this card
+        (``replacements`` kind ``put_into_graveyard``: Forbidden Crypt,
+        Yawgmoth's Will), asked through the registry's own pure predicates
+        over the event that seam would raise.
+
+        With nothing else in contention the card goes to the hand, which is
+        every bought-back spell on an ordinary board. Otherwise CR 616.1e gives
+        the choice to the spell's controller: an interactive seat is asked
+        through the ``effect_order`` prompt every other contended event uses
+        (the spell stays on the stack until it is answered — CR 608.2n is the
+        *last* part of the resolution), and every other seat takes the lowest
+        order, which is the buyback: the payer has just paid for the return.
+
+        One application ends it (CR 616.1f): once the card is headed for a
+        hand it is no longer headed for a graveyard, so nothing that replaces
+        "would be put into a graveyard" still applies, and once it is exiled
+        buyback's "instead of into that player's graveyard" has nothing to
+        replace. Declining the buyback in favour of a board-wide effect is the
+        card going where it was going — through ``put_card_into_graveyard``,
+        which is where that effect lives.
+
+        Nothing has moved when the prompt is armed, so answering re-runs this
+        step whole (``engine/effect_ordering.py``): the restart is
+        :meth:`_bin_spell_card` with the arguments it was first handed.
+        """
+        from ...effect_ordering import Candidate, apply_in_order
+        from ...replacements import order_prompt_asker, replacement_candidates
+
+        seat = chooser_index if chooser_index is not None else self._owner_seat(owner)
+        kind = self.BOUGHT_BACK_EVENT
+        # The event the graveyard seam would raise for this card, for the
+        # registry's predicates: the card as it lands (CR 709.4), bound for its
+        # owner's pile, from no zone a card names.
+        bound_for_graveyard = {
+            "player": owner, "card": leaving, "from_zone": None, "permanent": None,
+        }
+
+        def unsettled(_game, event: dict) -> bool:
+            return not event.get("settled")
+
+        def to_hand(game, event: dict) -> None:
+            event["settled"] = True
+            if game.put_card_into_hand(owner, leaving):
+                game.log.append(
+                    f"{card.name} {verb} and returned to its owner's hand "
+                    "(buyback) instead of going to the graveyard"
+                )
+
+        def to_exile(game, event: dict) -> None:
+            event["settled"] = True
+            owner.exile.append(leaving)
+            game.log.append(
+                f"{card.name} {verb} and was exiled instead of going to the graveyard"
+            )
+
+        def to_graveyard(game, event: dict) -> None:
+            event["settled"] = True
+            if game.put_card_into_graveyard(owner, leaving):
+                game.log.append(f"{card.name} {verb} and moved to graveyard")
+            else:
+                game.log.append(f"{card.name} {verb}")
+
+        contenders = [
+            Candidate(
+                key="buyback", order=0, applies=unsettled, apply=to_hand,
+                label=f"Buyback: return {card.name} to its owner's hand",
+            )
+        ]
+        if rider:
+            contenders.append(Candidate(
+                key="cast_rider_exile", order=1, applies=unsettled, apply=to_exile,
+                label=(
+                    f"Exile {card.name} instead (the effect it was cast under)"
+                ),
+            ))
+        for position, registered in enumerate(
+            replacement_candidates("put_into_graveyard")
+        ):
+            contenders.append(Candidate(
+                key=registered.key, order=2 + position,
+                applies=lambda game, event, registered=registered: (
+                    not event.get("settled")
+                    and registered.applies(game, bound_for_graveyard)
+                ),
+                apply=to_graveyard,
+                label=(
+                    f"Put {card.name} into the graveyard, as replaced there "
+                    f"({registered.label or registered.key})"
+                ),
+            ))
+
+        def restart() -> None:
+            self._bin_spell_card(
+                owner, card, exile_instead=rider, verb=verb, hand_instead=True,
+                chooser_index=chooser_index,
+            )
+
+        trace = apply_in_order(
+            self, {}, contenders, chooser_index=seat,
+            ask=order_prompt_asker(kind, restart),
+        )
+        if not trace.suspended:
+            self.effect_order_answers.pop((kind, seat), None)
 
     def _default_opposing_seat(self, caster_index: int) -> int:
         """The seat a triggered ability affects when nothing chose one.
@@ -338,6 +485,17 @@ class StackResolutionMixin:
         # trigger's source was cast as, not chosen for this object -- see
         # ``_stack_push``.
         announced_at_cast: bool = False,
+        # …and the one such announcement that is not a permanent or a player:
+        # the **spell** a permanent spell named for its entry trigger ("When
+        # this creature enters, counter target spell", Mystic Snake). By
+        # identity, as ``StackItem.target_stack_item`` always is.
+        target_stack_item: StackItem | None = None,
+        # The target fields above are a **choice** its controller made out of
+        # the ability's own list before the object existed — the upkeep step's
+        # target prompt, answered ahead of ``resolve_upkeep`` and held there to
+        # ``_upkeep_trigger_legal_targets``. See ``StackItem.targets_chosen``;
+        # False for every fire site that stamps what its event was about.
+        targets_chosen: bool = False,
     ) -> None:
         """Put a single triggered ability onto the stack as a StackItem (CR 603.3).
 
@@ -368,6 +526,8 @@ class StackResolutionMixin:
                 hook_event=hook_event,
                 x_value=x_value,
                 announced_at_cast=announced_at_cast,
+                target_stack_item=target_stack_item,
+                targets_chosen=targets_chosen,
             ))
             return
         stack_card = card if card is not None else (source_permanent.card if source_permanent is not None else None)
@@ -392,6 +552,7 @@ class StackResolutionMixin:
                     target_player_index=target_player_index,
                     target_permanent_index=target_permanent_index,
                     target_permanent_id=target_permanent_id,
+                    target_stack_item=target_stack_item,
                     x_value=x_value,
                     ability_instruction=instruction,
                     ability_effect_kind=effect_kind,
@@ -401,6 +562,7 @@ class StackResolutionMixin:
                     captured_results=dict(captured_results or {}),
                     hook_key=hook_key,
                     hook_event=hook_event,
+                    targets_chosen=targets_chosen,
                 ),
                 announced_at_cast=announced_at_cast,
             )
@@ -416,11 +578,16 @@ class StackResolutionMixin:
         which is exactly the shape of bug the rule's own wording invites: it is
         the *same* condition, asked at two moments.
         """
-        target_idx = (
-            item.target_player_index
-            if item.target_player_index is not None
-            else self._default_opposing_seat(item.caster_index)
-        )
+        # An ability whose every target is a spell on the stack is about that
+        # spell's controller, whatever seat rode beside it — see
+        # ``Game.stack_target_seat``.
+        target_idx = self.stack_target_seat(item)
+        if target_idx is None:
+            target_idx = (
+                item.target_player_index
+                if item.target_player_index is not None
+                else self._default_opposing_seat(item.caster_index)
+            )
         target_permanent_index = item.target_permanent_index
         if item.activated:
             # CR 602.2b: an activated ability's slot is re-read off the ids
@@ -606,6 +773,18 @@ class StackResolutionMixin:
         "player", "player_or_planeswalker", "any",
     })
 
+    #: ...and a **spell on the stack**. "When this creature enters, counter
+    #: target spell" (Mystic Snake) is the pool's first trigger to print one,
+    #: and the note two sets above — "a spell on the stack … reach[es] the
+    #: resolution through [its] own path" — was true of every *counterspell*
+    #: and of no trigger: this one reached the stack naming nothing, and its
+    #: handler countered whatever was on top, the Snake's own controller's
+    #: spell included. Chosen as it is put on the stack like every other
+    #: target (CR 603.3d), out of ``_enumerate_stack_targets``, the list the
+    #: cast picker and ``cast_stack_target_refusal`` read; with no spell to
+    #: name, the ability is removed.
+    _CHOOSABLE_TRIGGER_STACK_KINDS = frozenset({"stack"})
+
     def _choose_trigger_targets(self, item: StackItem) -> None:
         """Choose *item*'s target as it goes on the stack (CR 603.3d/601.2c).
 
@@ -644,6 +823,20 @@ class StackResolutionMixin:
         """
         offer = self._trigger_target_candidates(item)
         if offer is None:
+            # A target this picker does not choose — and one of those is a
+            # card in a graveyard, which a trigger's handler finds for itself
+            # as it resolves. Under "Cards in graveyards can't be the targets
+            # of spells or abilities" (Ground Seal) such a trigger has no
+            # legal target to be put on the stack with, which is CR 603.3d's
+            # removal exactly as the arm below applies it to an empty list.
+            # ``legality.sealed_graveyard_target_refusal`` is the one
+            # predicate, asked again as the ability resolves (CR 608.2b).
+            if self.sealed_graveyard_target_refusal(item) is not None:
+                self.stack = [existing for existing in self.stack if existing is not item]
+                self.log.append(
+                    f"{item.card.name}'s triggered ability was removed from the stack: "
+                    "it has no legal target (603.3d)"
+                )
             return
         spec, chooser_index, candidates = offer
         self._arm_trigger_target_choice(item, spec, chooser_index, candidates)
@@ -714,6 +907,18 @@ class StackResolutionMixin:
                 for candidate in candidates if candidate.get("kind") == "graveyard"
             }
             return None if (pile, slot) in legal else "illegal"
+        if spec.get("kind") in self._CHOOSABLE_TRIGGER_STACK_KINDS:
+            # A spell, named by identity. Still one the trigger could choose —
+            # it may have been countered, or have stopped answering the printed
+            # phrase, while the permanent spell waited above it.
+            if item.target_stack_item is None:
+                return "unnamed"
+            if any(
+                offered is item.target_stack_item
+                for offered in self._stack_objects_offered(candidates)
+            ):
+                return None
+            return "illegal"
         ids = item.target_permanent_id
         named = [
             permanent_id
@@ -772,7 +977,7 @@ class StackResolutionMixin:
         instruction = item.ability_instruction
         if instruction is None or modal_trigger_modes(instruction):
             return
-        if item.target_stack_item is not None:
+        if not announced and item.target_stack_item is not None:
             return
         # A stamped target means the event made the choice — **unless what the
         # fire site stamped is the ability's own source**. The two combat fire
@@ -807,9 +1012,11 @@ class StackResolutionMixin:
             return
         picks_a_player = spec.get("kind") in self._CHOOSABLE_TRIGGER_PLAYER_KINDS
         picks_a_card = _names_a_graveyard_target(spec, item.ability_text)
+        picks_a_spell = spec.get("kind") in self._CHOOSABLE_TRIGGER_STACK_KINDS
         if (
             not picks_a_player
             and not picks_a_card
+            and not picks_a_spell
             and spec.get("kind") not in self._CHOOSABLE_TRIGGER_TARGET_KINDS
         ):
             return
@@ -822,6 +1029,31 @@ class StackResolutionMixin:
             # make. (A graveyard target has no ``permanent_id`` for that
             # early-out to see.)
             return
+        if picks_a_spell:
+            # The printed line has to have said "target", for the player
+            # half's reason below: "Whenever a player casts a spell, counter
+            # **it**" (Nether Void) derives the same stack spec for a spell the
+            # *event* named, and that is bound, not chosen.
+            if not announces_a_target(instruction):
+                return
+            # A printed controller reaches a stack spec as ``stack_controller``
+            # ("…spell an opponent controls"); one that did not is a phrase the
+            # stack enumerator would ignore, and this declines for the reason
+            # the board half does a few lines down.
+            if (
+                _target_filter_controller(getattr(instruction, "payload", None))
+                is not None
+                and spec.get("stack_controller") is None
+            ):
+                return
+            candidates = self._enumerate_targets(
+                item.caster_index, item.card, dict(spec), for_cast=False,
+                ability_instruction=instruction,
+                source_permanent=item.source_permanent,
+                ability_source=item.source_permanent,
+                triggered=True,
+            )
+            return dict(spec), item.caster_index, candidates
         if picks_a_player:
             # The printed line has to have said "target". See
             # :func:`announces_a_target`: the spec's "player" may be a kind
@@ -910,6 +1142,9 @@ class StackResolutionMixin:
         The prompt half of :meth:`_choose_trigger_targets`.
         """
         instruction = item.ability_instruction
+        if spec.get("kind") in self._CHOOSABLE_TRIGGER_STACK_KINDS:
+            self._choose_trigger_stack_target(item, chooser_index, candidates)
+            return
         offered = []
         stamps: dict = {}
         for candidate in candidates:
@@ -1013,6 +1248,76 @@ class StackResolutionMixin:
             targets=offered,
             _trigger_item=item,
             **several,
+        )
+
+    def _stack_objects_offered(self, candidates) -> list:
+        """The stack objects a list of ``_enumerate_stack_targets`` entries
+        names. The entries count from the **top** (the picker's convention);
+        the engine's list is bottom-first."""
+        depth = len(self.stack)
+        found = []
+        for candidate in candidates or ():
+            index = candidate.get("stack_index")
+            if candidate.get("kind") != "stack" or not isinstance(index, int):
+                continue
+            position = depth - 1 - index
+            if 0 <= position < depth:
+                found.append(self.stack[position])
+        return found
+
+    def _choose_trigger_stack_target(
+        self, item: StackItem, chooser_index: int, candidates: list,
+    ) -> None:
+        """CR 603.3d for a trigger whose target is a **spell**: name one of
+        *candidates* on *item*, or take the ability off the stack when there is
+        none.
+
+        **It is the ``trigger_target`` prompt, with a third kind of candidate.**
+        Every seat took a stated default here while that prompt carried only
+        permanents and players and the client rendered nothing for a stack
+        object — a prompt a human seat could not answer is a soft-lock, the
+        failure ``ENTRY_CHOICES`` cost 28 cards. The client reads a ``stack``
+        candidate now, so an interactive seat is asked like any other trigger
+        (CR 603.3d): a Snake put onto the battlefield by an effect, a cast that
+        named nothing, a named spell that has since left. A human who *casts*
+        it still names the spell the ordinary way, as the permanent is cast
+        (the cast picker is a stack picker, and the announcement rides to
+        here without this being reached).
+
+        The candidates carry the stack objects themselves, topmost first: a
+        spell has no stable id, and its position is only true until the stack
+        next moves. The default for a seat nobody asks
+        (``_default_trigger_target``) is what it was: the topmost spell on the
+        side the effect wants (``_default_trigger_target_side``: a counter is
+        aimed at an opponent's spell), and the topmost offered when that side
+        has none — the target is mandatory, so a Snake entering over nothing
+        but its controller's own spell counters it.
+        """
+        offered = self._stack_objects_offered(candidates)
+        if not offered:
+            if _target_is_up_to(getattr(item.ability_instruction, "payload", None)):
+                return
+            self.stack = [existing for existing in self.stack if existing is not item]
+            self.log.append(
+                f"{item.card.name}'s triggered ability was removed from the stack: "
+                "it has no legal target (603.3d)"
+            )
+            return
+        order = {id(existing): position for position, existing in enumerate(self.stack)}
+        offered.sort(key=lambda existing: order[id(existing)], reverse=True)
+        self.arm_pending_choice(
+            "trigger_target", chooser_index,
+            card_name=item.card.name,
+            targets=[
+                {
+                    "kind": "stack",
+                    "stack_item": existing,
+                    "seat": existing.caster_index,
+                    "name": existing.card.name,
+                }
+                for existing in offered
+            ],
+            _trigger_item=item,
         )
 
     def _trigger_chooser_seat(self, item: StackItem, chooser: str) -> int | None:
@@ -1346,7 +1651,14 @@ class StackResolutionMixin:
         if self.choices_for_stack_item(item):
             item.resolution_held = True
             self.stack.append(item)
+            # …and what it has destroyed so far keeps waiting with it: the
+            # abilities that triggered go on the stack when the last answer
+            # arrives (`_answer_pending_choice`), not under an object that is
+            # still resolving.
             return True
+        # The resolution is over, so the abilities its destructions triggered
+        # stop waiting for it (CR 603.3b). See engine/destruction_events.py.
+        destruction_finished(self)
         # Word of Command pauses mid-resolution for the caster's card choice
         # (CR 608.2: the spell is still resolving). Keep it on the stack until
         # confirm_word_of_command finishes the resolution and removes it. The
@@ -1401,6 +1713,23 @@ class StackResolutionMixin:
         else:
             self.log.append(f"{item.card.name} ability resolved")
 
+    def _intervening_if_is_no_longer_true(self, item: StackItem) -> bool:
+        """CR 608.2a / CR 603.4: whether *item* is a triggered ability whose
+        intervening-if condition is false as it resolves.
+
+        False for everything that has none — a spell, an activated ability, a
+        hook-keyed object (which resolves through its hook and never asked),
+        and a trigger whose line prints no "if". Scoped by the payload key,
+        as :meth:`trigger_condition_holds` is at the other end of the rule.
+        """
+        instruction = item.ability_instruction
+        if instruction is None or item.hook_key is not None:
+            return False
+        gate = (instruction.payload or {}).get("intervening_if")
+        if gate is None:
+            return False
+        return not evaluate_condition(self, self._ability_execution_context(item), gate)
+
     def _run_stack_item_resolution(self, item: StackItem) -> None:
         # **An index is not an identity** (ROADMAP idiom #11) and a graveyard is
         # the zone with no identity to fall back on, so what ``_stack_push``
@@ -1434,6 +1763,25 @@ class StackResolutionMixin:
             )
             if first is not None:
                 item.target_player_index = first.seat
+        # CR 608.2a, which the rule puts **before** 608.2b ("The steps
+        # described in rules 608.2a and 608.2b are followed first"): CR 603.4's
+        # **second** check. An intervening-if is asked again as the ability
+        # resolves, and the ability is removed from the stack and does nothing
+        # if it is false. 102 supported cards compile the key; the comment that
+        # stood beside this check said no card in the shipped pool did, which
+        # was the reason the rule's *first* check went unbuilt for as long as
+        # it did.
+        #
+        # It stood *below* the target gates, which did not matter while those
+        # gates answered for spells (no spell has an intervening-if) and
+        # matters now that a trigger's chosen target is asked too: Ana
+        # Sanctuary's only blue permanent leaving is "its condition is no
+        # longer true" whether or not that permanent was also what it targeted.
+        if self._intervening_if_is_no_longer_true(item):
+            self.log.append(
+                f"{item.card.name} ability did nothing: its condition is no longer true"
+            )
+            return
         # CR 608.2b, asked once for the whole object before any of it runs.
         # This module's docstring has claimed since it was written that a
         # resolution re-checks its targets, and until now nothing did: each
@@ -1459,8 +1807,18 @@ class StackResolutionMixin:
             # handlers behind it read a vanished stamp as "nothing was
             # announced" and returned a different card.
             illegal = self.vanished_graveyard_target_refusal(item)
+        if illegal is None:
+            # …and the fourth: an ability whose one target is a card in a
+            # graveyard that its *handler* would find for itself (a trigger
+            # has no picker for one), while the board says no card in a
+            # graveyard may be targeted (Ground Seal). Inert unless such a
+            # permanent is on the battlefield.
+            illegal = self.sealed_graveyard_target_refusal(item)
         if illegal is not None:
             self.log.append(illegal)
+            # CR 603.8's "or has otherwise left the stack": an ability removed
+            # here did not resolve, so a state trigger may trigger again.
+            release_latch(item)
             if item.ability_instruction is None and not item.is_copy:
                 # CR 608.2b: removed from the stack and, if it is a spell, put
                 # into its owner's graveyard — the ordinary destination, so it
@@ -1472,6 +1830,15 @@ class StackResolutionMixin:
                     verb="was countered by the rules",
                 )
             return
+        # …and the rule's last sentences, for the object that does resolve:
+        # "Illegal targets, if any, won't be affected by parts of a resolving
+        # spell's effect for which they're illegal." Asked of the announcement,
+        # once, here — each slot the gate above judged illegal is rewritten to
+        # name nothing before any instruction runs, so every handler meets it
+        # as the departed target it already knows how to leave alone, and none
+        # of them has to re-ask whether a permanent it found can still be
+        # *targeted* (which none of them did).
+        self.blank_illegal_resolution_targets(item)
         # A triggered ability with a name-keyed resolve-time hook (Rod/Cup/Sphere,
         # Verduran Enchantress, Guardian Angel deferred onto the stack).
         if item.hook_key is not None:
@@ -1483,19 +1850,10 @@ class StackResolutionMixin:
                 self._log_ability_outcome(item, True, "")
             return
         if item.ability_instruction is not None:
+            # CR 603.4's second check was made at the top of this method (CR
+            # 608.2a); the context is built here, after the illegal slots were
+            # blanked, so the instructions read the announcement as it stands.
             context = self._ability_execution_context(item)
-            # CR 603.4's **second** check: an intervening-if is asked again as
-            # the ability resolves, and the ability is removed from the stack
-            # and does nothing if it is false. 102 supported cards compile the
-            # key; the comment that stood here said no card in the shipped pool
-            # did, which was the reason the rule's *first* check went unbuilt
-            # for as long as it did.
-            gate = (item.ability_instruction.payload or {}).get("intervening_if")
-            if gate is not None and not evaluate_condition(self, context, gate):
-                self.log.append(
-                    f"{item.card.name} ability did nothing: its condition is no longer true"
-                )
-                return
             state_machine = OracleStateMachine(self, context)
             supported, details = state_machine.run(
                 self._chosen_trigger_instruction(item)
@@ -1508,7 +1866,9 @@ class StackResolutionMixin:
         # cast, so it skips the cast/graveyard bookkeeping in _resolve_card.
         if item.is_copy and item.card.primary_type in ("instant", "sorcery"):
             caster = self.players[item.caster_index]
-            target_idx = item.target_player_index if item.target_player_index is not None else (1 - item.caster_index)
+            target_idx = self.stack_target_seat(item)
+            if target_idx is None:
+                target_idx = item.target_player_index if item.target_player_index is not None else (1 - item.caster_index)
             target = self.players[target_idx] if 0 <= target_idx < len(self.players) else caster
             self._apply_spell_text(
                 caster,
@@ -1521,17 +1881,37 @@ class StackResolutionMixin:
                 stack_target=item.target_stack_item,
                 mode_index=item.chosen_mode_index,
                 old_color=item.choices.get("old_color"),
+                # CR 707.10: a copy has the targets chosen for the original,
+                # and a spell with several of them carries them on this
+                # channel, not in the two fields above. The copy *had* the
+                # list (``_copy_of_spell`` copies ``choices``) and this arm
+                # did not pass it, so a Forked Shower of Coals aimed at two
+                # creatures resolved as a spell with no target named - at the
+                # opponent's face.
+                divided_targets=item.choices.get("divided_targets"),
                 choices=item.choices,
+                trigger_context=item.trigger_context,
             )
             self.log.append(f"{item.card.name} (copy) resolved")
             return
 
         classification = classify_card(item.card)
+        # "Counter target spell. **Its controller** loses 3 life." (Undermine.)
+        # An instant or sorcery whose every target is a spell on the stack is
+        # about that spell's controller — the seat the announcement already
+        # names (``Game.stack_target_seat``), read here rather than written
+        # onto the item so a target changed in response (CR 115.7) is followed.
+        # A permanent spell is left alone: its seat field is an Aura's board or
+        # an entry trigger's, and that trigger asks for itself
+        # (``_ability_execution_context``) — so the seat rides beside the
+        # item's own and only the instant-and-sorcery arm of ``_resolve_card``
+        # reads it.
         self._resolve_card(
             caster_index=item.caster_index,
             card=item.card,
             classification=classification,
             target_player_index=item.target_player_index,
+            stack_target_seat=self.stack_target_seat(item),
             target_permanent_index=item.target_permanent_index,
             target_permanent_id=item.target_permanent_id,
             x_value=item.x_value,
@@ -1546,6 +1926,7 @@ class StackResolutionMixin:
             choices=item.choices,
             trigger_context=item.trigger_context,
             owner_index=item.owner_index,
+            leaves_to_exile=leaves_stack_to_exile(item),
         )
         return
     def _resolve_card(
@@ -1582,6 +1963,18 @@ class StackResolutionMixin:
         # zones as it leaves the stack (CR 400.3, CR 608.2n), and a permanent
         # it becomes is this seat's card under the caster's control.
         owner_index: int | None = None,
+        # CR 702.34a: the flashback cost was paid, so this card is exiled
+        # "instead of putting it anywhere else" as it leaves the stack. Beside
+        # ``exile_instead_of_graveyard`` (which a flashback cast carries too)
+        # because the two are different sentences and one reader has to tell
+        # them apart: a paid buyback contends with the graveyard rider
+        # (CR 616.1) and loses to this (``_bin_spell_card``).
+        leaves_to_exile: bool = False,
+        # The controller of the spell(s) this one targeted, where it targeted
+        # nothing else (``Game.stack_target_seat``): the player an instant or
+        # sorcery is about, ahead of whatever seat rode in
+        # ``target_player_index``. None for every other spell.
+        stack_target_seat: int | None = None,
     ) -> None:
         caster = self.players[caster_index]
         owner_seat = caster_index if owner_index is None else owner_index
@@ -1618,6 +2011,16 @@ class StackResolutionMixin:
             # because a later card may ask either question and they are not the
             # same one: a reanimation stamps the first and not the second.
             permanent.metadata["cast_from_zone"] = cast_from_zone
+            # CR 400.7a: an effect that changed this spell's colour on the
+            # stack "continue[s] to apply to the permanent that spell
+            # becomes". The spell's record ended with the spell, so a Lace cast
+            # at a Grizzly Bears spell logged "became R" and put a green Bears
+            # onto the battlefield (the five Laces and Ersatz Gnomes). Carried
+            # here for the reason the kicked stamp below is: before the
+            # permanent enters, so whatever reads its colour as it arrives
+            # reads the colour it arrives with — and with the effect's own
+            # duration and timestamp (``color_changes``).
+            carry_spell_color_change(choices, permanent)
             # "If this creature **was kicked**, it enters with …" / "When this
             # creature enters, **if it was kicked**, …" / "…if this creature
             # **wasn't kicked**, sacrifice it" (Skizzik, turns later). CR
@@ -1690,17 +2093,6 @@ class StackResolutionMixin:
             # reads the right owner too.
             if owner_seat != caster_index:
                 permanent.metadata["owner_player_index"] = owner_seat
-            # CR 400.7a: "Effects … that change the characteristics … of a
-            # permanent spell on the stack continue to apply to the permanent
-            # that spell becomes." A Deathlaced creature spell was black on the
-            # stack and its printed colour as a permanent, because the lace
-            # was a key on the stack item and this function never read it.
-            # Handed over with the timestamp the effect was created at
-            # (CR 613.7b) and the duration it was created with — and before
-            # the entry, so the permanent's own timestamp (CR 613.7d, stamped
-            # in ``_put_permanent_onto_battlefield``) is the later of the two,
-            # which is what happened.
-            carry_spell_color_changes(choices, permanent)
             self._put_permanent_onto_battlefield(
                 caster_index, permanent, target_player_index,
                 was_cast=True, from_zone=cast_from_zone,
@@ -1757,13 +2149,18 @@ class StackResolutionMixin:
                     value is not None
                     for value in (
                         target_player_index, target_permanent_index,
-                        target_permanent_id,
+                        target_permanent_id, stack_target,
                     )
                 )
                 self._apply_self_enters_battlefield_triggers(
                     caster_index, permanent, target_player_index,
                     target_permanent_index, target_permanent_id,
                     targets_announced=announced,
+                    # "When this creature enters, counter target spell" (Mystic
+                    # Snake): the spell the cast named. It was dropped here, so
+                    # the trigger named nothing and countered the top of the
+                    # stack whichever spell the caster had picked.
+                    target_stack_item=stack_target,
                 )
             ran_entry_text = self._apply_aura_effect(
                 caster_index,
@@ -1869,7 +2266,8 @@ class StackResolutionMixin:
 
         # Sorceries and instants resolve immediately in this basic engine.
         target_idx = (
-            target_player_index if target_player_index is not None
+            stack_target_seat if stack_target_seat is not None
+            else target_player_index if target_player_index is not None
             else self._spell_default_seat(caster_index)
         )
         target = self.players[target_idx]
@@ -1988,6 +2386,12 @@ class StackResolutionMixin:
                 # the announcement this cast made, which by now survives only on
                 # the stack item's own record (CR 500.5 emptied the pool).
                 hand_instead=buyback_paid(card, choices),
+                # Which exile this is, for the one case where it matters: a
+                # flashback cast and a turn that ended take the card whatever
+                # was paid; a graveyard rider is one of two replacements over
+                # the same move, and the spell's controller chooses (CR 616.1).
+                exile_is_final=bool(leaves_to_exile or first_pass["ends_turn"]),
+                chooser_index=caster_index,
             )
 
         # CR 608.2n puts the card into the graveyard as the *last* part of
@@ -2026,6 +2430,7 @@ class StackResolutionMixin:
         target_permanent_id: int | list[int | None] | None = None,
         *,
         targets_announced: bool = True,
+        target_stack_item: StackItem | None = None,
     ) -> None:
         """Put a just-entered permanent's own "when this enters" triggered
         abilities on the stack (CR 603.6a, CR 603.3).
@@ -2136,6 +2541,7 @@ class StackResolutionMixin:
             value is not None
             for value in (
                 target_player_index, target_permanent_index, target_permanent_id,
+                target_stack_item,
             )
         )
         announcement_spent = False
@@ -2173,6 +2579,8 @@ class StackResolutionMixin:
                     target_permanent_id=target_permanent_id,
                     announced_at_cast=True,
                 )
+                if target_stack_item is not None:
+                    event["target_stack_item"] = target_stack_item
             # CR 603.4: an ability whose "if" is false as the event occurs does
             # not trigger at all. Asked here as well as at the push, because
             # only a trigger that *fired* spends the announcement: one whose
@@ -2241,8 +2649,8 @@ class StackResolutionMixin:
             return True
         return (
             kind in self._CHOOSABLE_TRIGGER_PLAYER_KINDS
-            and announces_a_target(instruction)
-        )
+            or kind in self._CHOOSABLE_TRIGGER_STACK_KINDS
+        ) and announces_a_target(instruction)
 
     def _select_executable_instruction(
         self, card: CardDefinition, mode_index: int | None = None

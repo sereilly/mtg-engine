@@ -308,7 +308,7 @@ def test_601_2d_total_damage_is_preserved_across_division():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.cr("601.2e", "601.5")
+@pytest.mark.cr("601.2e", "601.6")
 def test_601_2e_illegal_spell_card_stays_in_hand():
     """If the proposed spell is illegal, the game returns to the prior state — card stays in hand (601.2e)."""
     unsupported = _mk_card(
@@ -327,7 +327,7 @@ def test_601_2e_illegal_spell_card_stays_in_hand():
     assert len(game.stack) == 0
 
 
-@pytest.mark.cr("601.2e", "601.5")
+@pytest.mark.cr("601.2e", "601.6")
 def test_601_2e_game_state_unchanged_when_spell_proposal_fails():
     """Life totals and battlefield are unaffected when an illegal spell fails (601.2e)."""
     unsupported = _mk_card(
@@ -691,13 +691,13 @@ def test_601_3_card_not_in_hand_raises_error():
 
 
 # ---------------------------------------------------------------------------
-# Rule 601.5 — Illegal spell after proposal returns game to prior state
+# Rule 601.6 — Illegal spell after proposal returns game to prior state
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.cr("601.5")
-def test_601_5_stack_is_empty_when_spell_proposal_fails():
-    """If a spell cannot be cast, nothing is ever placed on the stack (601.5)."""
+@pytest.mark.cr("601.6")
+def test_601_6_stack_is_empty_when_spell_proposal_fails():
+    """If a spell cannot be cast, nothing is ever placed on the stack (601.6)."""
     unsupported = _mk_card(
         "Uncastable",
         "Sorcery",
@@ -712,9 +712,9 @@ def test_601_5_stack_is_empty_when_spell_proposal_fails():
     assert len(game.stack) == 0
 
 
-@pytest.mark.cr("601.5")
-def test_601_5_mana_not_spent_when_cast_fails_due_to_insufficient_mana():
-    """Mana pool is unchanged when a cast fails due to insufficient mana (601.5)."""
+@pytest.mark.cr("601.6")
+def test_601_6_mana_not_spent_when_cast_fails_due_to_insufficient_mana():
+    """Mana pool is unchanged when a cast fails due to insufficient mana (601.6)."""
     bolt = _mk_card(
         "Expensive Bolt",
         "Instant",
@@ -734,13 +734,13 @@ def test_601_5_mana_not_spent_when_cast_fails_due_to_insufficient_mana():
 
 
 # ---------------------------------------------------------------------------
-# Rule 601.7 — Altering costs does not retroactively affect spells on the stack
+# Rule 601.8 — Altering costs does not retroactively affect spells on the stack
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.cr("601.7")
-def test_601_7_new_cost_modifier_does_not_affect_already_queued_spell():
-    """An effect that alters costs has no impact on spells already on the stack (601.7).
+@pytest.mark.cr("601.8")
+def test_601_8_new_cost_modifier_does_not_affect_already_queued_spell():
+    """An effect that alters costs has no impact on spells already on the stack (601.8).
 
     A white spell is queued while no cost modifier is in play — its cost was
     already determined at that point. Gloom entering the battlefield afterward

@@ -242,7 +242,7 @@ def test_a_seat_that_can_be_asked_is_asked_and_its_answer_is_the_card_that_moves
             continue
         if game.pending_choices_of("trigger_target"):
             findings.append(f"{label}: still owed after the answer")
-        if not item.target_chosen or item.target_graveyard_card is None:
+        if not item.targets_chosen or item.target_graveyard_card is None:
             findings.append(f"{label}: the answer is not on the stack object")
         if f"targets {name} in {game.players[seat].name}'s graveyard" not in game.log[-1]:
             findings.append(f"{label}: the choice was not logged ({game.log[-1]!r})")
@@ -280,7 +280,7 @@ def test_a_seat_nobody_asks_takes_the_card_the_resolution_used_to_find(_pool, _m
             continue
         examined += 1
         stamp = item.target_graveyard_card
-        if stamp is None or not item.target_chosen:
+        if stamp is None or not item.targets_chosen:
             findings.append(f"{label}: nothing was chosen as it went on the stack")
             continue
         own_only = bool(spec.get("own_graveyard_only"))
@@ -421,7 +421,7 @@ def test_a_card_the_cast_named_stands_and_one_that_left_is_chosen_again(_pool, _
         if item is None or _prompt(game, trigger) is not None:
             findings.append(f"{label}: a card named at the cast was asked for again")
             continue
-        if not item.target_chosen or item.target_graveyard_card.card is not named:
+        if not item.targets_chosen or item.target_graveyard_card.card is not named:
             findings.append(f"{label}: the cast's card is not the trigger's chosen target")
         _drain(game)
         if _left(before, _yards(game)) != [(named.name, seat)]:
@@ -522,7 +522,7 @@ def test_a_graveyard_card_the_line_does_not_call_a_target_is_not_chosen_on_the_s
     game._put_permanent_onto_battlefield(0, source, None)
 
     assert len(game.stack) == 1 and not game.pending_choices_of("trigger_target")
-    assert not game.stack[0].target_chosen
+    assert not game.stack[0].targets_chosen
     _drain(game)
     assert not game.is_on_battlefield(source)
     assert [card.name for card in game.players[0].graveyard] == ["Harvest Wurm"]

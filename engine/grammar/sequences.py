@@ -55,6 +55,7 @@ from .effects import (
     _parse_x_spend_restriction,
     _parse_cost_x_definition,
     _parse_damage_rider_sentence,
+    _parse_pronoun_attach_rider,
     _parse_unpaid_penalty_sentence,
 )
 from .errors import GrammarError
@@ -68,6 +69,7 @@ from .pronouns import (_RIDER_FOLDED, _attach_returned_text_change,
                        _parse_its_controller_creates_rider,
                        _parse_pronoun_counter_rider,
                        _parse_plural_pronoun_pump_rider,
+                       _parse_conditional_additional_pump_rider,
                        _parse_conditional_set_pump_rider,
                        _parse_pronoun_grant_rider, _parse_pronoun_verb_rider,
                        _parse_that_controller_reveals_rider)
@@ -81,6 +83,7 @@ from .sentence_rebinding import (
 from .repeats import (_attach_repeat_for_types,
                       _attach_repeat_optional_process,
                       _attach_repeat_this_process,
+                      _attach_repeat_until_condition,
                       _attach_repeat_until_pile_chosen,
                       _attach_repeat_while_condition)
 from .riders import (_attach_destroyed_this_way, _attach_flip_stakes_to_loop,
@@ -459,6 +462,14 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             # every one of them.
             if _attach_repeat_until_pile_chosen(stream, steps):
                 continue
+            # "Repeat this process until you put a card into your hand or you
+            # exile two cards with the same name, whichever comes first."
+            # (Tainted Pact.) The seventh — a loop that ends on conditions
+            # asked once the round is over. Behind the two "until" clauses
+            # above, whose tails are not conditions, and declining without
+            # consuming like every one of them.
+            if _attach_repeat_until_condition(stream, steps):
+                continue
             # "For each blocking creature, flip a coin. **If you win the
             # flip, prevent all combat damage that would be dealt by that
             # creature this turn.**" (Fighting Chance.) The stakes of a flip
@@ -596,6 +607,14 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             if set_pump is not None:
                 steps.append(set_pump)
                 continue
+            # "…**If this spell was kicked, Zombie creatures you control get
+            # an additional +2/+2 until end of turn.**" (Strength of Night.)
+            # The same second effect with its set named rather than referred
+            # to; the pump in front is what licenses "an additional".
+            additional_pump = _parse_conditional_additional_pump_rider(stream, steps)
+            if additional_pump is not None:
+                steps.append(additional_pump)
+                continue
             # "…and put a -1/-0 counter on **it**." (Jabari's Influence.) The
             # counter's own pronoun, beside the imperative one above: parsed
             # fresh, "it" is the ability's source and the counter lands on the
@@ -603,6 +622,12 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             pronoun_counter = _parse_pronoun_counter_rider(stream, steps)
             if pronoun_counter is not None:
                 steps.append(pronoun_counter)
+                continue
+            # "…Attach **it** to another permanent it can enchant." (Aura
+            # Graft.) The attach's own pronoun, for the counter's reason.
+            pronoun_attach = _parse_pronoun_attach_rider(stream, steps)
+            if pronoun_attach is not None:
+                steps.append(pronoun_attach)
                 continue
             # "It loses "enchant creature" and gains "…"." (Takklemaggot.) The
             # quoted half, read before the keyword rider below, whose "It

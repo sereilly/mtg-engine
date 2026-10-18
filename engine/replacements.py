@@ -64,6 +64,7 @@ between the two registries raises at import.
 
 from __future__ import annotations
 
+import random
 import re
 
 from dataclasses import dataclass
@@ -86,8 +87,8 @@ from .damage_redirects import (
     live_recipient,
 )
 from .hand_locks import lock_card_in_hand
-from .next_damage import (DAMAGE_DOUBLED_NEXT, armed,
-                          spend as spend_next_damage)
+from .next_damage import (DAMAGE_DOUBLED_NEXT, armed_for_event,
+                          spend_for_event)
 from .search_filters import card_has_type
 from .models import Permanent, PlayerState
 from .replacement_choices import (
@@ -197,6 +198,28 @@ DAMAGE_BECOMES_COUNTERS = 8  # Lichenthrope
 # the whole event, so a shield spent first is spent on damage that was never
 # going to be dealt.
 DAMAGE_BECOMES_LIBRARY_EXILE = 9  # Crumbling Sanctuary
+# "If damage would be dealt to **you**, put that many delay counters on this
+# enchantment instead." (Delaying Shield.) / "…exile that many cards from your
+# graveyard instead. If you can't, you lose the game." (Nefarious Lich.) The
+# same substitution as the three at 7-9 with one difference that moves it to
+# the *other* side of the shields: what the damage becomes is a **price its
+# own controller pays** — a counter that costs {1}{W} or a life at the next
+# upkeep, a card out of a graveyard that may be the game — where a -1/-1
+# counter and a card off a symmetric library were paid whether or not a shield
+# was spent. CR 616.1e gives the choice to the affected player, and that
+# player would take every point a Circle of Protection or a prevention pool
+# stops before paying for the rest, so these sit **behind** every shield
+# (10-660) and are asked only about what the shields let through.
+#
+# Ahead of the multipliers at 700-720, for the mirror of that argument: the
+# price is "that many", and a player choosing the order pays for the printed
+# damage rather than for double it.
+#
+# The Shield before the Lich: both consume the event, so a seat holding both
+# takes one, and the default should be the one whose price can still be paid
+# off rather than the one that can end the game on the spot.
+DAMAGE_TO_YOU_BECOMES_COUNTERS = 670  # Delaying Shield
+DAMAGE_BECOMES_GRAVEYARD_EXILE = 680  # Nefarious Lich
 
 # …and multipliers go *after* the shields, at the far end of the shared space.
 # CR 616.1e gives the choice to the affected player, and this is the order they
@@ -241,6 +264,9 @@ EXILE_INSTEAD_OF_LEAVING = 10  # Dreams of the Dead
 RETURN_TO_HAND_INSTEAD_OF_DYING = 20  # Firestorm Phoenix
 LIBRARY_TOP_INSTEAD_OF_DYING = 30  # Gravebane Zombie
 DISCARD_DESTINATION = 10  # Library of Leng
+# Before the Library's offer: both replace where a discarded card goes, and
+# CR 616.1's default for a seat nobody asks is the battlefield.
+DISCARD_TO_BATTLEFIELD = 5  # Dodecapod
 # Before the two draw replacements that *consume* the event, and for the
 # player's benefit: a doubler applied first turns one draw into two, and the
 # Lamp then replaces one of them, so the player gets both effects. The other
@@ -281,6 +307,12 @@ DRAW_REVEALS_UNTIL_KIND = 21  # Abundance
 # order. Being optional, the number matters less than for its neighbours -
 # declining leaves the event for whatever is behind it.
 DRAW_BECOMES_COUNTER = 25  # Pursuit of Knowledge
+# Beside it and for its reason exactly: the second optional consuming
+# replacement, a decision its own controller makes about their own draw. After
+# Pursuit, because that one hands something back for the draw it takes and this
+# one hands back nothing — the order a player holding both would choose, which
+# CR 616.1e permits. Declining either leaves the event for whatever is behind.
+DRAW_MAY_BE_SKIPPED = 26  # Obstinate Familiar
 DRAW_DISCARD_INSTEAD = 30  # Chains of Mephistopheles
 # Beside it, and last for the same reason: this one takes the draw away too.
 # Between the two the order is arbitrary — no card in the pool prints both, and
@@ -359,6 +391,13 @@ LAND_MANA_SUBSTITUTION = 10  # Ritual of Subdual, Infernal Darkness, Deep Water
 #: graveyard and says nothing about a discard, a mill or a spell finishing on
 #: the stack.
 EXILE_INSTEAD_OF_GRAVEYARD = 10  # Forbidden Crypt
+# "If Legacy Weapon would be put into a graveyard from anywhere, reveal Legacy
+# Weapon and shuffle it into its owner's library instead." Behind the exile only
+# as CR 616.1e's default for a seat that is not asked — the two are one
+# contention set and the affected player chooses between them (the CR's own
+# example under 616.1f is this pair) — and the exile is the default because it
+# is the one a *different* permanent's controller put there on purpose.
+SHUFFLE_INSTEAD_OF_GRAVEYARD = 20  # Legacy Weapon
 
 # Set on the event once an interceptor consumes it. It lives on the payload
 # because the payload is the one piece of state the 616.1 loop threads through
@@ -1950,6 +1989,197 @@ def _damage_becomes_library_exile(game, payload: dict) -> ReplacementOutcome | N
     return ReplacementOutcome(replaced=True)
 
 
+#: "If damage would be dealt to **you**, put that many **delay** counters on
+#: this **enchantment** instead." (Delaying Shield.) Lichenthrope's sentence
+#: with the two ends moved: the damage was headed for a *player*, and the
+#: counters land on the permanent printing the line rather than on what was
+#: hit. The counter word and the noun the card calls itself are payload, the
+#: way Pursuit of Knowledge's are — a creature printing the sentence with
+#: another word is printing the same replacement.
+_DAMAGE_TO_YOU_BECOMES_COUNTERS_RE = re.compile(
+    r"^if damage would be dealt to you, put that many "
+    r"(?P<counter>[a-z][a-z'-]*) counters on this "
+    r"(?:creature|artifact|enchantment|land|permanent) instead$"
+)
+
+
+def damage_to_you_becomes_counters(line: str) -> str | None:
+    """The counter *line* turns its controller's damage into, or None.
+
+    One reader for the interceptor and for the support gate
+    (``replacement_claims_line``), so what is claimed and what fires cannot
+    drift.
+    """
+    match = _DAMAGE_TO_YOU_BECOMES_COUNTERS_RE.match(
+        " ".join((line or "").split()).strip().lower().rstrip(".")
+    )
+    return match.group("counter") if match is not None else None
+
+
+def _own_counter_substitutions(game, payload: dict) -> list:
+    """``(permanent, counter)`` for every permanent of the damaged player's
+    that turns this damage into counters on itself. Pure.
+
+    "Dealt to **you**" is the permanent's controller (CR 109.5), so the scan is
+    the recipient's own battlefield — an opponent's Shield does nothing for
+    the player being hit. Read off ``effective_card`` (CR 707.2, CR 612.1).
+    """
+    recipient = payload["recipient"]
+    if payload["amount"] <= 0 or not isinstance(recipient, PlayerState):
+        return []
+    found = []
+    for permanent in game.controlled_by(recipient):
+        for line in (permanent.effective_card.oracle_text or "").splitlines():
+            counter = damage_to_you_becomes_counters(line)
+            if counter is not None:
+                found.append((permanent, counter))
+                break
+    return found
+
+
+def _applies_damage_to_you_becomes_counters(game, payload: dict) -> bool:
+    return bool(_own_counter_substitutions(game, payload))
+
+
+@replacement_effect(
+    "damage_to_player", DAMAGE_TO_YOU_BECOMES_COUNTERS,
+    applies=_applies_damage_to_you_becomes_counters,
+)
+def _damage_to_you_becomes_counters(game, payload: dict) -> ReplacementOutcome | None:
+    """Delaying Shield: "If damage would be dealt to you, put that many delay
+    counters on this enchantment instead."
+
+    CR 614's substitution, not CR 615's prevention — the card's ruling says so
+    in as many words ("the damage is replaced and is not 'prevented'. This
+    means it can replace damage that 'can't be prevented'"), which is why this
+    is registered without ``prevents=True``: an event locked against
+    prevention still reaches it. The damage is **not dealt**: no life is lost,
+    no lifelink, nothing that watches damage being dealt to a player fires.
+
+    One permanent takes the counters — the oldest, by ``permanent_id`` — for
+    the reason Pursuit of Knowledge's offer names one source: the event is
+    consumed by the first replacement applied to it, so a second Shield has
+    nothing left to replace.
+    """
+    found = _own_counter_substitutions(game, payload)
+    if not found:  # pragma: no cover - the predicate just said otherwise
+        return None
+    from .named_counters import add_counters
+
+    permanent, counter = min(found, key=lambda entry: entry[0].permanent_id)
+    amount = int(payload["amount"])
+    total = add_counters(permanent, counter, amount)
+    game.log.append(
+        f"{permanent.card.name}: {amount} damage to {payload['recipient'].name} "
+        f"becomes {amount} {counter} counter(s) instead ({total} on it)"
+    )
+    return ReplacementOutcome(replaced=True)
+
+
+#: Nefarious Lich. One printed line, two sentences, and the constant is both
+#: because the interceptor performs both — the exile, and CR 104.3e behind a
+#: graveyard that cannot pay. A claim stopping at the first sentence would
+#: admit a card whose drawback is the second.
+DAMAGE_BECOMES_GRAVEYARD_EXILE_TEXT = (
+    "if damage would be dealt to you, exile that many cards from your "
+    "graveyard instead. if you can't, you lose the game"
+)
+
+
+def _damage_graveyard_exile_source(game, payload: dict):
+    """The damaged player's own permanent whose text substitutes this damage,
+    or None. Pure. "To **you**" is its controller (CR 109.5)."""
+    recipient = payload["recipient"]
+    if payload["amount"] <= 0 or not isinstance(recipient, PlayerState):
+        return None
+    for permanent in game.controlled_by(recipient):
+        for line in (permanent.effective_card.oracle_text or "").splitlines():
+            if (
+                " ".join(line.split()).strip().lower().rstrip(".")
+                == DAMAGE_BECOMES_GRAVEYARD_EXILE_TEXT
+            ):
+                return permanent
+    return None
+
+
+def _applies_damage_becomes_graveyard_exile(game, payload: dict) -> bool:
+    return _damage_graveyard_exile_source(game, payload) is not None
+
+
+def _graveyard_cards_already_owed(game, seat: int) -> int:
+    """How many cards of *seat*'s graveyard an unanswered exile pick has
+    already spoken for.
+
+    A pick is a prompt, so the cards it will take are still in the pile when
+    the next damage event asks whether the pile can pay — three attackers are
+    three events, and the third must not count cards the first two are about
+    to exile.
+    """
+    return sum(
+        int(choice.data.get("count", 0))
+        for choice in game.pending_choices
+        if choice.kind == "graveyard_exile_pick"
+        and int(choice.data.get("owner_index", -1)) == seat
+        and not choice.data.get("up_to")
+    )
+
+
+@replacement_effect(
+    "damage_to_player", DAMAGE_BECOMES_GRAVEYARD_EXILE,
+    applies=_applies_damage_becomes_graveyard_exile,
+)
+def _damage_becomes_graveyard_exile(game, payload: dict) -> ReplacementOutcome | None:
+    """Nefarious Lich: "If damage would be dealt to you, exile that many cards
+    from your graveyard instead. If you can't, you lose the game."
+
+    CR 614's substitution: the damage is **not dealt** — no life is lost, and
+    nothing that watches damage dealt to a player fires. What it becomes is a
+    price paid out of the graveyard, and the second sentence is this
+    replacement's own failure branch rather than a separate ability (Forbidden
+    Crypt's shape, one zone over): with fewer cards than damage the player
+    loses the game on the spot (CR 104.3e), applied here and not left to a
+    state-based action.
+
+    **Which cards go is the player's choice**, and in this block it matters —
+    a flashback card and a land are not the same card to give up. So it is
+    asked through the pick that already exists for "exile N cards from that
+    graveyard" (``arm_graveyard_exile_pick``, Rysorian Badger's prompt): an
+    interactive seat is queued and the stack object that dealt the damage
+    waits on the answer, every other seat takes the stated default — the first
+    N in pile order — where the effect stands. A pile holding exactly the
+    number owed is no choice, and is exiled without asking.
+    """
+    from types import SimpleNamespace
+
+    source = _damage_graveyard_exile_source(game, payload)
+    if source is None:  # pragma: no cover - the predicate just said otherwise
+        return None
+    recipient = payload["recipient"]
+    seat = game.players.index(recipient)
+    amount = int(payload["amount"])
+    available = len(recipient.graveyard) - _graveyard_cards_already_owed(game, seat)
+    if available < amount:
+        if not recipient.lost:
+            recipient.lost = True
+            game.log.append(
+                f"{source.card.name}: {recipient.name} could not exile {amount} "
+                f"card(s) from their graveyard and lost the game (104.3e)"
+            )
+        return ReplacementOutcome(replaced=True)
+    game.log.append(
+        f"{source.card.name}: {amount} damage to {recipient.name} becomes "
+        f"{amount} card(s) exiled from their graveyard instead"
+    )
+    game.arm_graveyard_exile_pick(
+        seat, seat, {"count": amount, "any_card": True},
+        # The pick's resolver records what was exiled on its context's
+        # scratchpad, for a sentence that reads it back. Nothing here does, so
+        # this is a context with a name to show and nowhere a result goes.
+        SimpleNamespace(card=source.card, results={}),
+    )
+    return ReplacementOutcome(replaced=True)
+
+
 #: The damage-multiplier sentence, with **two** words as payload: the factor
 #: and whether the source is narrowed to the reader's own. It replaced a
 #: ``TRIPLE_DAMAGE_TEXT`` constant, which was one card's printing of it and
@@ -2110,7 +2340,12 @@ def _applies_next_damage_doubled(game, payload: dict) -> bool:
     """
     if payload["amount"] <= 0:
         return False
-    return armed(payload.get("source"), DAMAGE_DOUBLED_NEXT) > 0
+    # "…would deal **combat** damage…" (Impulsive Maneuvers) answers only to a
+    # combat event; the unnarrowed rider (Desperate Gambit) to every one.
+    return armed_for_event(
+        payload.get("source"), DAMAGE_DOUBLED_NEXT,
+        combat=bool(payload.get("combat")),
+    ) > 0
 
 
 @replacement_effect(
@@ -2142,7 +2377,9 @@ def _double_next_damage_from_chosen_source(
     """
     source = payload.get("source")
     amount = int(payload["amount"])
-    spend_next_damage(source, DAMAGE_DOUBLED_NEXT)
+    spend_for_event(
+        source, DAMAGE_DOUBLED_NEXT, combat=bool(payload.get("combat"))
+    )
     card = getattr(source, "card", source)
     game.log.append(
         f"{amount} damage from {getattr(card, 'name', 'a chosen source')} "
@@ -3001,6 +3238,173 @@ def _resolve_leng_discard(game, choice: ReplacementChoice, option_index: int) ->
     return 0
 
 
+# ---------------------------------------------------------------------------
+# A discard that lands on the battlefield (CR 614.1a, CR 701.9a)
+# ---------------------------------------------------------------------------
+
+#: "If a spell or ability an opponent controls causes you to discard this card,
+#: put it onto the battlefield **with two +1/+1 counters on it** instead of
+#: putting it into your graveyard." (Dodecapod.) The counters are optional in
+#: the *template* — the sentence without them is a card Magic also prints
+#: (Loxodon Smiter, Wilt-Leaf Liege, Obstinate Baloth) — and what they are is
+#: read by the entry reader that already knows the phrase, so a number word or
+#: a counter kind that reader refuses leaves the whole line unclaimed.
+_DISCARD_TO_BATTLEFIELD_RE = re.compile(
+    r"^if a spell or ability an opponent controls causes you to discard this "
+    r"card, put it onto the battlefield(?: (?P<counters>with [a-z]+ "
+    r"\S+ counters? on it))? instead of putting it into your graveyard$"
+)
+
+
+def discard_to_battlefield(line: str) -> dict | None:
+    """``{"counters": {kind: count}}`` for the Dodecapod sentence, or None.
+
+    Read by the interceptor below and by ``replacement_claims_line``, so what
+    is implemented and what is claimed cannot drift.
+    """
+    match = _DISCARD_TO_BATTLEFIELD_RE.match(line.strip().lower().rstrip("."))
+    if match is None:
+        return None
+    counters: dict[str, int] = {}
+    if match.group("counters"):
+        from .enter_effects import enters_with_pt_counters
+
+        placement = enters_with_pt_counters(
+            f"this creature enters {match.group('counters')}"
+        )
+        if placement is None:
+            return None
+        counters[placement[1]] = placement[0]
+    return {"counters": counters}
+
+
+def _discard_battlefield_entry(game, player, card, cause_seat) -> dict | None:
+    """The Dodecapod reading of this discard, or None when it is an ordinary
+    one — the applicability predicate, pure.
+
+    Three questions, and each is half of the printed condition. **This card**:
+    the sentence is the discarded card's own, functioning from the hand because
+    that is the only zone its condition can be met in (the reason
+    ``_announce_discard_triggers`` gives for Psychic Purge's trigger). **A
+    spell or ability causes**: there is a causing seat at all — a cleanup-step
+    discard and a cost the player paid have none. **An opponent controls**: and
+    that seat is not the discarding player's own (CR 109.5).
+    """
+    if not isinstance(cause_seat, int) or card is None:
+        return None
+    seat = next(
+        (i for i, seated in enumerate(game.players) if seated is player), None
+    )
+    if seat is None or cause_seat == seat:
+        return None
+    if getattr(card, "primary_type", None) in ("instant", "sorcery"):
+        # CR 304.4 / 307.4: an instant or sorcery can't enter the battlefield,
+        # so the event is not replaced and the card goes where a discard goes.
+        return None
+    for line in (getattr(card, "oracle_text", "") or "").splitlines():
+        spec = discard_to_battlefield(line)
+        if spec is not None:
+            return spec
+    return None
+
+
+def discarded_onto_battlefield(game, player, card, cause_seat) -> bool:
+    """Put *card* onto the battlefield instead of into *player*'s graveyard, if
+    its own text says a discard caused by *cause_seat* does that. Returns
+    whether it did; False means the caller's default move still has to happen.
+
+    The whole effect in one place, because a card is discarded through two
+    seams and both must agree: ``Game._discard_card`` reaches this through the
+    ``discard`` event below, and the chosen-discard seam
+    (``handlers/zones._resolve_one_discard``) calls it directly, since that one
+    offers Library of Leng's destination itself and never raises the event.
+
+    The card has **still been discarded** (the card's ruling of 2022-12-08):
+    the caller announces the discard exactly as it would have, and a sentence
+    reading "the discarded card" reads this one.
+
+    The counters go on through the placement seams as the permanent arrives —
+    the arrangement ``return_self_from_graveyard`` has for Sand Golem.
+    """
+    spec = _discard_battlefield_entry(game, player, card, cause_seat)
+    if spec is None:
+        return False
+    seat = next(i for i, seated in enumerate(game.players) if seated is player)
+    arrival = Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, arrival, None, from_zone="hand")
+    game.log.append(
+        f"{player.name} discarded {card.name}, which was put onto the "
+        "battlefield instead of into their graveyard"
+    )
+    if game.is_on_battlefield(arrival):
+        for kind, count in spec["counters"].items():
+            if kind == "+1/+1":
+                game.place_plus1_counters(arrival, int(count))
+            else:
+                game.place_pt_counters(arrival, kind, int(count))
+            game.log.append(f"{card.name} enters with {count} {kind} counter(s)")
+    return True
+
+
+def _applies_discard_to_battlefield(game, payload: dict) -> bool:
+    return _discard_battlefield_entry(
+        game, payload.get("player"), payload.get("card"),
+        payload.get("cause_seat"),
+    ) is not None
+
+
+@replacement_effect(
+    "discard", DISCARD_TO_BATTLEFIELD, applies=_applies_discard_to_battlefield
+)
+def _battlefield_instead_of_graveyard(game, payload: dict) -> ReplacementOutcome | None:
+    """Dodecapod: "If a spell or ability an opponent controls causes you to
+    discard this card, put it onto the battlefield with two +1/+1 counters on
+    it instead of putting it into your graveyard."
+
+    Ordered ahead of Library of Leng's offer, which is CR 616.1's default for
+    a seat nobody asks: both replace where the card goes, and a creature on the
+    battlefield is the choice that leaves nothing on the table."""
+    discarded_onto_battlefield(
+        game, payload["player"], payload["card"], payload.get("cause_seat")
+    )
+    return ReplacementOutcome(replaced=True)
+
+
+#: The key a suspended draw's prompt carries for **the draws queued behind
+#: it**: the sources those draws are already excluded from (CR 614.5).
+#:
+#: Not the prompt's own ``exclude_sources``. That one is about the draw the
+#: prompt was asked of and includes the asker (a declined Pursuit of
+#: Knowledge is not offered the same draw twice); the draws *behind* are
+#: later draws of the same event, which the asker has not seen and whatever
+#: modified the whole event has (the doubler that made them).
+QUEUED_EXCLUDES = "queued_exclude_sources"
+
+
+def queued_excludes(payload: dict) -> tuple:
+    """What the draws behind the first of *payload*'s are excluded from: what
+    the event itself has been excluded from so far, and nothing the
+    replacement taking that first draw adds for it."""
+    return tuple(payload.get("exclude_sources") or ())
+
+
+def draws_behind(game, player, count: int, excludes=()) -> int:
+    """Make the draws queued behind one a replacement took (CR 121.2).
+
+    One spelling for every tail that makes them, because what they carry is
+    the same wherever they are made from: they are draws of the *same event*
+    as the one in front, so the replacements that event has already been
+    through stay excluded (CR 614.5) — and through the seam, which parks
+    them while the draw in front is still waiting on its player
+    (``Game._draw_prompt_open``).
+    """
+    if count <= 0:
+        return 0
+    return game._draw_with_replacements(
+        player, int(count), exclude_sources=tuple(excludes)
+    )
+
+
 def _doubled_draw_count(game, payload: dict) -> int:
     """How many cards this draw event should take, once the doublers have had
     it — the same number back when none apply.
@@ -3021,13 +3425,28 @@ def _doubled_draw_count(game, payload: dict) -> int:
     """
     count = int(payload.get("count", 0))
     exempt = 1 if payload.get("turn_based") else 0
-    doublers = sum(
-        1
-        for perm in game.controlled_by(payload["player"])
-        if DOUBLE_DRAW_TEXT in (perm.effective_card.oracle_text or "").lower()
-    )
     affected = max(0, count - exempt)
-    return exempt + affected * (2 ** doublers)
+    return exempt + affected * (2 ** len(_draw_doublers(game, payload)))
+
+
+def _draw_doublers(game, payload: dict) -> list:
+    """The doublers that have not had this event yet (CR 614.5).
+
+    "A replacement effect … gets only one opportunity to affect an event **or
+    any modified events resulting from that event**." The two draws a doubler
+    makes of one are that event modified, so it is excluded from them by the
+    key every other draw replacement here reads — and the exclusion has to
+    ride ``exclude_sources`` rather than rest on "an effect applies once per
+    event", because the draws do not stay one event: a replacement that takes
+    the first of them hands the rest back to the seam as a fresh one.
+    """
+    exclude = set(payload.get("exclude_sources") or ())
+    return [
+        perm
+        for perm in game.controlled_by(payload["player"])
+        if perm.permanent_id not in exclude
+        and DOUBLE_DRAW_TEXT in (perm.effective_card.oracle_text or "").lower()
+    ]
 
 
 def _applies_double_draw(game, payload: dict) -> bool:
@@ -3044,10 +3463,20 @@ def _draw_two_cards_instead(game, payload: dict) -> ReplacementOutcome | None:
     is consumed and the draws stay ordinary draws — a Ring of Ma'rûf or an
     Aladdin's Lamp armed alongside still gets one of them (CR 616.1f re-asks
     against the raised count).
+
+    **The doubler is then excluded from every draw of the event it made**
+    (CR 614.5). It used not to be: with an Abundance beside it, the draw
+    Abundance took left one "queued behind", the seam met that one as a new
+    event, doubled it, Abundance took the first of *those* — and one card
+    drawn was a library revealed to the bottom and a ``RecursionError``.
     """
     player = payload["player"]
     before = int(payload["count"])
+    doublers = _draw_doublers(game, payload)
     payload["count"] = _doubled_draw_count(game, payload)
+    payload["exclude_sources"] = tuple(payload.get("exclude_sources") or ()) + tuple(
+        perm.permanent_id for perm in doublers
+    )
     game.log.append(
         f"{player.name} draws {payload['count']} instead of {before} "
         "(Teferi's Ageless Insight)"
@@ -3078,8 +3507,7 @@ def _draw_from_outside_the_game(game, payload: dict) -> ReplacementOutcome | Non
         game.log.append(
             f"{player.name} has no cards outside the game to take (Ring of Ma'rûf)"
         )
-        if remaining > 0:
-            game._draw_with_replacements(player, remaining)
+        draws_behind(game, player, remaining, queued_excludes(payload))
         payload["drawn"] = 0
         return ReplacementOutcome(replaced=True)
     suspended, drawn = offer_replacement_choice(
@@ -3091,7 +3519,11 @@ def _draw_from_outside_the_game(game, payload: dict) -> ReplacementOutcome | Non
             default_option=0,
             # Sideboard positions behind each offered name, so a choice made
             # against the filtered list still pulls the right card.
-            data={"sideboard_indices": available, "remaining_draws": remaining},
+            data={
+                "sideboard_indices": available,
+                "remaining_draws": remaining,
+                QUEUED_EXCLUDES: queued_excludes(payload),
+            },
         ),
     )
     if suspended:
@@ -3106,9 +3538,11 @@ def _draw_from_outside_the_game(game, payload: dict) -> ReplacementOutcome | Non
 def _resolve_outside_game_draw(game, choice: ReplacementChoice, option_index: int) -> int:
     indices = choice.data.get("sideboard_indices") or list(range(len(choice.options)))
     game._finish_outside_game_draw(choice.player_index, indices[option_index])
-    remaining = int(choice.data.get("remaining_draws", 0))
-    if remaining > 0:
-        game._draw_with_replacements(game.players[choice.player_index], remaining)
+    draws_behind(
+        game, game.players[choice.player_index],
+        int(choice.data.get("remaining_draws", 0)),
+        choice.data.get(QUEUED_EXCLUDES) or (),
+    )
     return 0
 
 
@@ -3168,14 +3602,9 @@ def _run_armed_draw_replacement(game, payload: dict) -> ReplacementOutcome | Non
             caster=player, target=player, card=card, source_permanent=source
         ),
     )
-    drawn = 0
-    remaining = int(payload["count"]) - 1
-    if remaining > 0:
-        drawn += game._draw_with_replacements(
-            player, remaining,
-            exclude_sources=tuple(payload.get("exclude_sources") or ()),
-        )
-    payload["drawn"] = drawn
+    payload["drawn"] = draws_behind(
+        game, player, int(payload["count"]) - 1, queued_excludes(payload)
+    )
     return ReplacementOutcome(replaced=True)
 
 
@@ -3267,6 +3696,7 @@ def _reveal_until_kind_instead_of_drawing(game, payload: dict) -> ReplacementOut
             data={
                 "remaining_draws": count - 1,
                 "exclude_sources": tuple(payload.get("exclude_sources") or ()),
+                QUEUED_EXCLUDES: queued_excludes(payload),
                 "source_id": source.permanent_id,
             },
         ),
@@ -3336,16 +3766,25 @@ def _resolve_reveal_until_kind_draw(
                 f"{player.name} revealed their whole library and found no "
                 f"{'land' if wants_land else 'nonland'} card (Abundance)"
             )
-        for card in revealed:
-            game.put_card_into_library(player, card)
-    if remaining > 0:
-        # The draws queued behind this one are their own events (CR 121.2) and
-        # get their own trip through the seam - including this replacement
-        # again, which is what a two-card draw under Abundance is.
-        drawn += game._draw_with_replacements(
-            player, remaining,
-            exclude_sources=tuple(choice.data.get("exclude_sources") or ()),
+        bottomed = sum(
+            1 for card in revealed if game.put_card_into_library(player, card)
         )
+        # "…on the bottom of your library **in any order**" is the owner's
+        # order to choose (CR 401.4), asked of an interactive seat by the
+        # prompt the look-and-pick family already uses. It was the one such
+        # look left unasked, because on a two-card draw the order prompt sat
+        # beside the next draw's offer and each refused the other; the draws
+        # behind now wait for it (``Game._draw_prompt_open``), which is also
+        # what keeps "the last N cards" the pile this reveal laid down.
+        game.offer_library_bottom_order(player, bottomed)
+    # The draws queued behind this one are their own draws (CR 121.2) and get
+    # their own trip through the seam - including this replacement again,
+    # which is what a two-card draw under Abundance is. A draw the decline
+    # above remade and another replacement is now asking about is still in
+    # front of them: the seam parks these until it is answered.
+    drawn += draws_behind(
+        game, player, remaining, choice.data.get(QUEUED_EXCLUDES) or ()
+    )
     return drawn
 
 
@@ -3376,7 +3815,10 @@ def _look_at_top_cards_and_draw_one(game, payload: dict) -> ReplacementOutcome |
             player_index=player_index,
             options=tuple(card.name for card in player.library[:x]),
             default_option=0,
-            data={"remaining_draws": payload["count"] - 1},
+            data={
+                "remaining_draws": payload["count"] - 1,
+                QUEUED_EXCLUDES: queued_excludes(payload),
+            },
         ),
     )
     if suspended:
@@ -3392,9 +3834,10 @@ def _resolve_lamp_draw(game, choice: ReplacementChoice, option_index: int) -> in
     player = game.players[choice.player_index]
     looked_at = min(len(choice.options), len(player.library))
     drawn = game._finish_lamp_draw(choice.player_index, option_index, looked_at)
-    remaining = int(choice.data.get("remaining_draws", 0))
-    if remaining > 0:
-        drawn += game._draw_with_replacements(player, remaining)
+    drawn += draws_behind(
+        game, player, int(choice.data.get("remaining_draws", 0)),
+        choice.data.get(QUEUED_EXCLUDES) or (),
+    )
     return drawn
 
 
@@ -3627,15 +4070,12 @@ def _reveal_top_instead_of_drawing(game, payload: dict) -> ReplacementOutcome | 
         game.log.append(
             f"{player.name} has no card to reveal ({source.card.name})"
         )
-    # The draws queued behind this one are their own events (CR 121.2) and get
+    # The draws queued behind this one are their own draws (CR 121.2) and get
     # their own trip through the seam — including this replacement again, which
-    # is what a two-card draw under Enduring Renewal is.
-    if count > 1:
-        drawn += game._draw_with_replacements(
-            player, count - 1,
-            turn_based=False,
-            exclude_sources=tuple(payload.get("exclude_sources") or ()),
-        )
+    # is what a two-card draw under Enduring Renewal is. The seam parks them
+    # while the "otherwise, draw a card" above is waiting on another
+    # replacement's offer.
+    drawn += draws_behind(game, player, count - 1, queued_excludes(payload))
     payload["drawn"] = drawn
     return ReplacementOutcome(replaced=True)
 
@@ -3758,6 +4198,7 @@ def _counter_instead_of_drawing(game, payload: dict) -> ReplacementOutcome | Non
                 "source_id": source.permanent_id,
                 "remaining_draws": int(payload["count"]) - 1,
                 "exclude_sources": excludes,
+                QUEUED_EXCLUDES: queued_excludes(payload),
                 "turn_based": bool(payload.get("turn_based")),
             },
         ),
@@ -3818,8 +4259,143 @@ def _resolve_draw_becomes_counter(
                 f"{player.name} put a {data['counter']} counter on "
                 f"{source.card.name} instead of drawing"
             )
-    if remaining > 0:
-        drawn += game._draw_with_replacements(player, remaining)
+    # Behind this draw, and parked by the seam while the draw a decline
+    # remade is waiting on another replacement's offer (CR 121.2).
+    drawn += draws_behind(game, player, remaining, data.get(QUEUED_EXCLUDES) or ())
+    return drawn
+
+
+#: "If you would draw a card, you may skip that draw instead." (Obstinate
+#: Familiar.) Pursuit of Knowledge's sentence with nothing where the counter
+#: was: an optional replacement of one draw by **no event at all** (CR 614.10:
+#: "'Skip [something]' is the same as 'Instead of doing [something], do
+#: nothing.'").
+#:
+#: The whole line, with no payload: the sentence names the draw, the seat and
+#: the option and nothing else. A printing that added a condition or a rider
+#: would be a different rule and stays unmatched.
+SKIP_DRAW_TEXT = "if you would draw a card, you may skip that draw instead"
+
+
+def skip_draw_line(line: str) -> bool:
+    """Whether *line* is, in full, the optional skip. One reader for the
+    interceptor and for the claim (``REPLACEMENT_LINES``)."""
+    return " ".join((line or "").split()).strip().lower().rstrip(".") == SKIP_DRAW_TEXT
+
+
+def _skip_draw_sources(game, payload: dict) -> list:
+    """Every permanent offering to skip *this* draw.
+
+    "If **you** would draw a card" is CR 109.5's seat, so only the drawing
+    player's own permanents offer it. CR 614.5's exclusion is honoured through
+    the ``exclude_sources`` key every draw replacement here reads — the draw a
+    declined offer leaves is remade through the seam, and a source already
+    asked must not ask again. Read off ``effective_card`` (CR 707.2, CR 612.1),
+    and pure, like every applicability predicate in this file.
+    """
+    exclude = set(payload.get("exclude_sources") or ())
+    seat = game.players.index(payload["player"])
+    return [
+        perm
+        for perm in game.controlled_by(seat)
+        if perm.permanent_id not in exclude
+        and any(
+            skip_draw_line(line)
+            for line in (perm.effective_card.oracle_text or "").splitlines()
+        )
+    ]
+
+
+def _applies_skip_draw(game, payload: dict) -> bool:
+    return int(payload.get("count", 0)) > 0 and bool(
+        _skip_draw_sources(game, payload)
+    )
+
+
+@replacement_effect("draw", DRAW_MAY_BE_SKIPPED, applies=_applies_skip_draw)
+def _skip_instead_of_drawing(game, payload: dict) -> ReplacementOutcome | None:
+    """Obstinate Familiar: "If you would draw a card, you may skip that draw
+    instead."
+
+    One draw at a time (CR 121.2 makes a multi-card instruction that many
+    draws), and **optional**, so it is a :class:`ReplacementChoice` — the
+    shape Pursuit of Knowledge's offer above has, for its reasons: the answer
+    arrives from a human on a later request, and both answers finish through
+    one registered resolver.
+
+    The default a non-interactive seat takes is the choice a player would
+    make: draw the card — unless the library is **empty**, where the draw
+    would lose the game at the next state-based check (CR 704.5b) and skipping
+    it is the whole reason the card is played. A seat that always skipped
+    would never draw again; one that never did would deck itself beside the
+    permanent that prevents it.
+    """
+    player = payload["player"]
+    seat = game.players.index(player)
+    source = min(
+        _skip_draw_sources(game, payload), key=lambda perm: perm.permanent_id
+    )
+    excludes = tuple(payload.get("exclude_sources") or ()) + (source.permanent_id,)
+    suspended, drawn = offer_replacement_choice(
+        game,
+        ReplacementChoice(
+            kind="skip_draw",
+            player_index=seat,
+            options=("draw the card", "skip the draw"),
+            default_option=0 if player.library else 1,
+            data={
+                "source_id": source.permanent_id,
+                "remaining_draws": int(payload["count"]) - 1,
+                "exclude_sources": excludes,
+                QUEUED_EXCLUDES: queued_excludes(payload),
+                "turn_based": bool(payload.get("turn_based")),
+            },
+        ),
+    )
+    if suspended:
+        game.log.append(
+            f"{player.name} may skip that draw ({source.card.name})"
+        )
+    payload["drawn"] = drawn
+    return ReplacementOutcome(replaced=True)
+
+
+@replacement_choice("skip_draw")
+def _resolve_skip_draw(game, choice: ReplacementChoice, option_index: int) -> int:
+    """Carry out the answer to Obstinate Familiar's offer.
+
+    Option 0 declines: the draw is remade through ``_draw_with_replacements``
+    with the offering permanent excluded, so every *other* draw replacement
+    still gets its turn and this one is not asked twice (CR 614.5).
+
+    Option 1 skips: nothing happens and no card is drawn, so "whenever you
+    draw a card" sees one fewer draw and an empty library is never drawn from.
+
+    Nothing here reads the source again, so a Familiar that left the
+    battlefield while the offer was queued changes neither answer: the
+    replacement was applied when it was offered (CR 614.1), and the two
+    options are what it offered.
+    """
+    player = game.players[choice.player_index]
+    data = choice.data
+    remaining = int(data.get("remaining_draws", 0))
+    drawn = 0
+    if option_index == 0:
+        drawn += game._draw_with_replacements(
+            player, 1,
+            turn_based=bool(data.get("turn_based")),
+            exclude_sources=tuple(data.get("exclude_sources") or ()),
+        )
+    else:
+        source = game.permanent_by_id(int(data["source_id"]))
+        game.log.append(
+            f"{player.name} skipped a draw"
+            + (f" ({source.card.name})" if source is not None else "")
+        )
+    # The draws queued behind this one are their own draws (CR 121.2) and are
+    # offered on their own — including by this source again — once the draw
+    # in front of them is finished (the seam parks them until then).
+    drawn += draws_behind(game, player, remaining, data.get(QUEUED_EXCLUDES) or ())
     return drawn
 
 
@@ -3869,8 +4445,20 @@ def _discard_instead_of_drawing(game, payload: dict) -> ReplacementOutcome | Non
     if exempt:
         # Not replaced, and still a draw like any other: it goes back through
         # the seam so an Aladdin's Lamp armed for the draw step still takes it.
-        drawn += game._draw_with_replacements(player, exempt, turn_based=True)
-    remaining = count - exempt - 1
+        # The draws behind it are this event without its first draw — so they
+        # go back as one, and this replacement meets the first of *them* there.
+        # One at a time (CR 121.2): were the discard armed here, it would sit
+        # beside whatever the exempt draw is still waiting on.
+        drawn += game._draw_with_replacements(
+            player, exempt, turn_based=True,
+            exclude_sources=queued_excludes(payload),
+        )
+        drawn += draws_behind(
+            game, player, count - exempt, queued_excludes(payload)
+        )
+        payload["drawn"] = drawn
+        return ReplacementOutcome(replaced=True)
+    remaining = count - 1
     source = min(_chains_sources(game, payload), key=lambda perm: perm.permanent_id)
     # CR 614.5: the draw this effect creates is not replaced by this effect
     # again. A *second* copy is a different effect and still applies, which is
@@ -3885,6 +4473,7 @@ def _discard_instead_of_drawing(game, payload: dict) -> ReplacementOutcome | Non
             draw_that_many=True,
             draw_exclude_sources=excludes,
             queued_draws=max(0, remaining),
+            queued_exclude_sources=queued_excludes(payload),
         )
         game.log.append(
             f"{player.name} discards a card instead of drawing ({source.card.name})"
@@ -3895,8 +4484,7 @@ def _discard_instead_of_drawing(game, payload: dict) -> ReplacementOutcome | Non
             f"{player.name} had no card to discard and milled {milled} card(s) "
             f"({source.card.name})"
         )
-        if remaining > 0:
-            drawn += game._draw_with_replacements(player, remaining)
+        drawn += draws_behind(game, player, remaining, queued_excludes(payload))
     payload["drawn"] = drawn
     return ReplacementOutcome(replaced=True)
 
@@ -3925,10 +4513,23 @@ def _mill_cards(game, player, count: int) -> int:
 # ---------------------------------------------------------------------------
 
 
-def _applies_land_mana_substitution(game, payload: dict) -> bool:
-    from .land_mana_swaps import swapped_symbol
+def _land_mana_tapper(game, payload: dict) -> "int | None":
+    """The seat that tapped the event's land for mana — who the production
+    belongs to when the land itself has left (``swapped_production``)."""
+    player = payload.get("player")
+    return next(
+        (index for index, found in enumerate(game.players) if found is player),
+        None,
+    )
 
-    return swapped_symbol(game, payload["land"]) is not None
+
+def _applies_land_mana_substitution(game, payload: dict) -> bool:
+    from .land_mana_swaps import swapped_production
+
+    found = swapped_production(
+        game, payload["land"], tapper=_land_mana_tapper(game, payload),
+    )
+    return found is not None and found.produced is not None
 
 
 @replacement_effect(
@@ -3967,7 +4568,8 @@ def _substitute_land_mana(game, payload: dict) -> ReplacementOutcome | None:
     # tapper for this one event, so the colour the seam was asked for travels
     # with the event and answers it. Every fixed swap ignores it.
     substitution = swapped_production(
-        game, payload["land"], requested=payload.get("requested")
+        game, payload["land"], requested=payload.get("requested"),
+        tapper=_land_mana_tapper(game, payload),
     )
     if substitution is None:
         return None
@@ -4205,6 +4807,10 @@ def _revealed_draw_taxed(game, payload: dict) -> ReplacementOutcome | None:
             source_name=source.card.name,
             queued_draws=queued,
             queued_exclude_sources=queued_excludes,
+            # CR 109.5: the discard is this permanent's ability's doing, so
+            # its controller is who "causes" it — an opponent's Crypt puts a
+            # Dodecapod onto the battlefield and your own does not.
+            cause_seat=game.controller_index_of(source),
         )
         payload["drawn"] = drawn
         return ReplacementOutcome(replaced=True)
@@ -4280,7 +4886,10 @@ def _return_from_graveyard_instead_of_drawing(game, payload: dict) -> Replacemen
             # more is a valuation question that belongs in
             # ``engine/ai_valuation.py`` rather than in a replacement effect.
             default_option=0,
-            data={"remaining_draws": max(0, remaining)},
+            data={
+                "remaining_draws": max(0, remaining),
+                QUEUED_EXCLUDES: queued_excludes(payload),
+            },
         ),
     )
     if suspended:
@@ -4311,9 +4920,10 @@ def _resolve_return_from_graveyard_instead_of_draw(
             f"{player.name} returned {card.name} from their graveyard to their "
             f"hand instead of drawing (Forbidden Crypt)"
         )
-    remaining = int(choice.data.get("remaining_draws", 0))
-    if remaining > 0:
-        game._draw_with_replacements(player, remaining)
+    draws_behind(
+        game, player, int(choice.data.get("remaining_draws", 0)),
+        choice.data.get(QUEUED_EXCLUDES) or (),
+    )
     return 0
 
 
@@ -4435,6 +5045,100 @@ def _exile_instead_of_graveyard(game, payload: dict) -> ReplacementOutcome | Non
     return ReplacementOutcome(replaced=True)
 
 
+#: "If <this> would be put into a graveyard from anywhere, reveal <this> and
+#: shuffle it into its owner's library instead." (Legacy Weapon; Darksteel
+#: Colossus, Progenitus and Blightsteel Colossus print the sentence word for
+#: word.) Matched by shape because the subject is the card's own name or a
+#: "this <noun>", and held to **one** subject: the back-reference makes a line
+#: naming two different things refuse.
+_GRAVEYARD_TO_LIBRARY = re.compile(
+    r"^if (?P<subject>.+?) would be put into a graveyard from anywhere, "
+    r"reveal (?P=subject) and shuffle it into its owner's library instead$"
+)
+
+
+def graveyard_shuffle_subject(line: str) -> str | None:
+    """The subject of a printed "…would be put into a graveyard from anywhere,
+    reveal … and shuffle it into its owner's library instead", or None.
+
+    One matcher, asked by the interceptor below and by
+    :func:`replacement_claims_line`, so what is shuffled away and what is
+    claimed cannot drift.
+    """
+    match = _GRAVEYARD_TO_LIBRARY.match(
+        " ".join((line or "").strip().lower().rstrip(".").split())
+    )
+    return None if match is None else match.group("subject")
+
+
+def _shuffles_itself_instead_of_graveyard(game, payload: dict) -> bool:
+    """Whether the object on its way to a graveyard prints the sentence
+    **about itself**.
+
+    The object as it last existed where it was (CR 113.6: the ability modifies
+    how *that particular object* changes zones, so it works from every zone it
+    could leave). Off the battlefield that is the permanent's computed text —
+    ``effective_card``, so a copy of Legacy Weapon has the sentence and one that
+    has lost its abilities does not — and everywhere else the card's own face,
+    which is all a card in a hand, a library or on the stack has (CR 613.1).
+
+    "Itself" is the card's own name or a ``this <noun>``; a line naming some
+    other object is a different effect and is left alone. Pure, like every
+    applicability predicate here.
+    """
+    permanent = payload.get("permanent")
+    described = (
+        permanent.effective_card if permanent is not None else payload.get("card")
+    )
+    if described is None:
+        return False
+    own_name = (getattr(described, "name", "") or "").strip().lower()
+    for line in (getattr(described, "oracle_text", "") or "").splitlines():
+        subject = graveyard_shuffle_subject(line)
+        if subject is not None and (
+            subject == own_name or subject.startswith("this ")
+        ):
+            return True
+    return False
+
+
+@replacement_effect(
+    "put_into_graveyard", SHUFFLE_INSTEAD_OF_GRAVEYARD,
+    applies=_shuffles_itself_instead_of_graveyard,
+)
+def _shuffle_into_library_instead_of_graveyard(game, payload: dict) -> ReplacementOutcome | None:
+    """Legacy Weapon: "If Legacy Weapon would be put into a graveyard from
+    anywhere, reveal Legacy Weapon and shuffle it into its owner's library
+    instead."
+
+    On ``Game.put_card_into_graveyard`` — the one seam every road to a
+    graveyard passes through — because "from anywhere" is the whole sentence: a
+    destruction, a sacrifice, a discard, a mill and a countered spell are one
+    event here, and Forbidden Crypt's interceptor beside this one says why an
+    interceptor on any single road would be a card that works on Mondays.
+
+    The card never reaches the graveyard (CR 614.6), so nothing that watches an
+    arrival there sees one and — from the battlefield — nothing died. It goes
+    to its **owner's** library (CR 400.3), which is the seat the seam was
+    already handed, through ``put_card_into_library`` for CR 903.9b's reason;
+    the leave-the-battlefield replacements had their look at this move one
+    step up (``_permanent_to_graveyard``) and CR 614.5 gives them no second,
+    so the permanent is not handed on again.
+
+    The library is shuffled whether or not the card arrived (CR 701.24c).
+    """
+    player = payload["player"]
+    card = payload["card"]
+    game.record_reveal(game.players.index(player), [card.name])
+    game.put_card_into_library(player, card)
+    random.shuffle(player.library)
+    game.log.append(
+        f"{card.name} was revealed and shuffled into {player.name}'s library "
+        "instead of going to a graveyard"
+    )
+    return ReplacementOutcome(replaced=True)
+
+
 #: Each entry is ``(the phrase an interceptor above self-selects on, the
 #: trailing clause that same interceptor also performs)``. The tail is spelled
 #: out in full rather than left as an open-ended "and whatever follows" — it is
@@ -4538,6 +5242,13 @@ REPLACEMENT_LINES: tuple[tuple[str, str], ...] = (
     # stopping at the first sentence would admit the card with the clause that
     # makes it a real card doing nothing.
     (RETURN_FROM_GRAVEYARD_INSTEAD_OF_DRAW_TEXT, ""),
+    # _skip_instead_of_drawing (Obstinate Familiar): the phrase is the whole
+    # line. The offer and both of its answers are the interceptor's.
+    (SKIP_DRAW_TEXT, ""),
+    # _damage_becomes_graveyard_exile (Nefarious Lich): the constant is both
+    # printed sentences, because the interceptor performs both — the exile,
+    # and CR 104.3e behind a graveyard that cannot pay.
+    (DAMAGE_BECOMES_GRAVEYARD_EXILE_TEXT, ""),
 )
 
 
@@ -4595,6 +5306,11 @@ def replacement_claims_line(line: str) -> bool:
     # the line unclaimed rather than admitted with no counters arriving.
     if damage_becomes_counters(normalized) is not None:
         return True
+    # "If damage would be dealt to you, put that many delay counters on this
+    # enchantment instead." (Delaying Shield), the same arrangement: the
+    # counter word and the card's own noun are payload.
+    if damage_to_you_becomes_counters(normalized) is not None:
+        return True
     # "If an instant or sorcery source would deal 3 or more damage to you…"
     # (Forethought Amulet), the same arrangement for the same reason.
     if source_damage_cap(normalized) is not None:
@@ -4631,6 +5347,19 @@ def replacement_claims_line(line: str) -> bool:
     # the interceptor uses, so a scope word it cannot answer leaves the line
     # unclaimed rather than admitted with nothing exiled.
     if graveyard_exile_scope(normalized) is not None:
+        return True
+    # "If a spell or ability an opponent controls causes you to discard this
+    # card, put it onto the battlefield with two +1/+1 counters on it instead of
+    # putting it into your graveyard." (Dodecapod.) Matched by shape because
+    # the counters are payload — and absent on the cards that print the
+    # sentence without them — through the reader the interceptor itself asks.
+    if discard_to_battlefield(normalized) is not None:
+        return True
+    # "If Legacy Weapon would be put into a graveyard from anywhere, reveal
+    # Legacy Weapon and shuffle it into its owner's library instead." Matched by
+    # shape because the subject is the card's own name, asked of the reader the
+    # interceptor self-selects on.
+    if graveyard_shuffle_subject(normalized) is not None:
         return True
     from .land_mana_swaps import substitution_line
 

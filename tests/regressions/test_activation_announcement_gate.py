@@ -167,6 +167,38 @@ def _gate(game, source, ability, **named):
     return game.activation_target_refusal(0, source, ability, x_value=1, **named)
 
 
+def _announcement_naming(game, ability, offered, permanent) -> "list[int] | None":
+    """The ids of a **whole** announcement that names *permanent*, or None when
+    this board cannot make one.
+
+    One id for every ability but those whose slot prints an exact count of two
+    or more ("Untap **two** target lands", Argothian Elder): CR 601.2c asks for
+    a choice "for each target", so one named permanent is not an announcement
+    of that ability at all and the gate refuses it for its *size*
+    (``legality.exact_target_count``, the engine's own answer to how many).
+    Read as "the gate refuses a target the picker offers", that refusal was
+    this sweep asking a question about legality with an announcement that was
+    illegal for another reason — so the probe is filled out to the printed
+    size with other permanents the picker offers, and what is judged is the
+    one being asked about.
+    """
+    slot = activation_target_slot(ability)
+    required = (
+        legality.exact_target_count(slot[0], slot[1], 1) if slot is not None else None
+    )
+    if not required or required < 2:
+        return [permanent.permanent_id]
+    fillers = [
+        other.permanent_id for other in game.all_permanents()
+        if other is not permanent
+        and (game.controller_index_of(other), game.battlefield_index_of(other))
+        in offered["permanent"]
+    ][: required - 1]
+    if len(fillers) < required - 1:
+        return None
+    return [permanent.permanent_id, *fillers]
+
+
 def _unpaid(game, source) -> tuple:
     return (
         game.is_on_battlefield(source), source.tapped, len(game.stack),
@@ -243,9 +275,11 @@ def _named_sweep(catalog, by_name, only=None):
             seat = game.controller_index_of(permanent)
             slot = game.battlefield_index_of(permanent)
             is_offered = (seat, slot) in offered["permanent"]
+            named = _announcement_naming(game, ability, offered, permanent)
+            if named is None:
+                continue
             judge(
-                _gate(game, source, ability,
-                      target_permanent_ids=[permanent.permanent_id]),
+                _gate(game, source, ability, target_permanent_ids=named),
                 is_offered, f"seat {seat}: {permanent.card.name}",
             )
             if not is_offered and permanent is not source and unoffered is None:
@@ -255,7 +289,8 @@ def _named_sweep(catalog, by_name, only=None):
         before = _unpaid(game, source)
         result = game.queue_permanent_ability(
             0, card.name, permanent_index=game.battlefield_index_of(source),
-            ability_index=index, target_permanent_ids=[unoffered.permanent_id],
+            ability_index=index,
+            target_permanent_ids=_announcement_naming(game, ability, offered, unoffered),
         )
         driven += 1
         if result.supported or _unpaid(game, source) != before:
@@ -333,10 +368,16 @@ def test_no_ability_printing_a_target_is_activated_with_nothing_to_name(
 
 #: Cards the census named on the tree before this file, one per way the old
 #: walk missed a target: a kind whose row carries no ``targets`` description
-#: (a bounce, a land-type change, a control gift), "any target", an offer
-#: (``may``) around the targeting step, and a toll (``unless_player_pays``).
+#: (a bounce, a control gift), "any target", an offer (``may``) around the
+#: targeting step, and a toll (``unless_player_pays``).
+#:
+#: Gaea's Liege was the sample of a third such kind, a land-type change, while
+#: its ability was a name-keyed hook's. Odyssey retired the hook: the line
+#: compiles through the grammar now and its row carries a ``targets``
+#: description, so even the gate as it was holds it - there is no longer a
+#: defect on that card for this validation to find.
 _KNOWN = frozenset({
-    "Seal of Removal", "Gaea's Liege", "Jinxed Idol", "Prodigal Sorcerer",
+    "Seal of Removal", "Jinxed Idol", "Prodigal Sorcerer",
     "Puppet Strings", "Scarwood Bandits",
 })
 
@@ -388,8 +429,7 @@ def test_the_empty_sweep_finds_the_defect_on_the_gate_as_it_was(
     _examined, accepted = _empty_sweep(_catalog, _by_name, only=_KNOWN)
 
     assert {label for label, _kind, _details in accepted} >= {
-        "Seal of Removal[0]", "Gaea's Liege[0]", "Puppet Strings[0]",
-        "Scarwood Bandits[0]",
+        "Seal of Removal[0]", "Puppet Strings[0]", "Scarwood Bandits[0]",
     }
 
 

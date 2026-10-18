@@ -2192,14 +2192,18 @@ def test_aether_rift_one_payment_of_five_life_keeps_it_in_the_graveyard(set_pool
 
 def test_aether_rift_a_player_below_five_life_cannot_pay(set_pool):
     """CR 119.4: a player may pay 5 life only with at least 5. An opponent at
-    4 who says yes has not paid — it is a decline, and the creature returns."""
+    4 who says yes has not paid — and has not declined: the answer is refused
+    (CR 608.2d), the offer stands, and the "no" they can give returns the
+    creature."""
     game = _w2g2_rift_table(
         set_pool, ["Craw Wurm"], interactive=(0, 1), life={1: 4},
     )
     game.resolve_upkeep(0)
 
     assert game.confirm_optional_pay(0, accept=False)
-    assert game.confirm_optional_pay(1, accept=True)
+    assert game.confirm_optional_pay(1, accept=True) is False
+    assert game.pending_optional_pays
+    assert game.confirm_optional_pay(1, accept=False)
     game._settle()
 
     assert game.players[1].life == 4

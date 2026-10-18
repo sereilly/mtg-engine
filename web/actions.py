@@ -19,7 +19,7 @@ from engine.activation_permissions import card_widens_activation
 from engine.cast_permissions import permission_for
 from engine.cast_timing import casts_at_instant_speed
 from engine.faces import choose_a_face_refusal, holds_spell_named, spell_named
-from engine.mana_payment import taps_for_payment
+from engine.mana_payment import is_mana_ability, taps_for_payment
 from engine.mixins.turn_management import is_tap_alone_mana_ability
 from engine.oracle import compile_card_oracle
 from engine.targeting import usable_activated_abilities
@@ -329,6 +329,19 @@ def _action_tap(session, req, seat_type):
             permanent_index=permanent_index,
         )
     else:
+        # A payment prompt admits ``tap`` so that a land may be tapped for
+        # mana (``ChoiceSpec.also_answers``, CR 605.3a). A bare tap of
+        # anything else makes no mana and is not part of paying — and a mana
+        # rock tapped this way would be tapped for nothing — so while the
+        # seat owes one, it is refused and the mana ability is what to send.
+        if _owes_a_mana_payment(session.game, req.seat):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "only a land can be tapped for mana here — activate "
+                    "the permanent's mana ability instead"
+                ),
+            )
         tapped = session.game.tap_permanent(
             req.seat,
             permanent.card.name,
@@ -340,10 +353,11 @@ def _action_tap(session, req, seat_type):
 
 @action_handler("activate", human_only=HUMAN_ONLY)
 def _action_activate(session, req, seat_type):
-    if req.permanent_name is None and req.permanent_index is None:
+    permanent_name = req.permanent_name
+    if permanent_name is None and req.permanent_index is None:
         raise HTTPException(status_code=400, detail="permanent_name or permanent_index is required")
     controller = session.game.players[req.seat]
-    resolved = _find_controlled_permanent(controller, req.permanent_name, req.permanent_index)
+    resolved = _find_controlled_permanent(controller, permanent_name, req.permanent_index)
     # "Any player may activate this ability." (Ifh-Bíff Efreet), "Only your
     # opponents may activate this ability." (Clergy of the Holy Nimbus) — the
     # permanent may sit on another player's battlefield; the activator still
@@ -355,7 +369,7 @@ def _action_activate(session, req, seat_type):
         for other_seat, other in enumerate(session.game.players):
             if other_seat == req.seat:
                 continue
-            candidate = _find_controlled_permanent(other, req.permanent_name, req.permanent_index)
+            candidate = _find_controlled_permanent(other, permanent_name, req.permanent_index)
             if candidate is not None and card_widens_activation(
                 candidate[1].effective_card
             ):
@@ -459,7 +473,30 @@ def _action_activate(session, req, seat_type):
         if not tapped:
             raise HTTPException(status_code=400, detail="failed to tap land for mana")
     else:
-        if not session.game.has_priority(req.seat):
+        # CR 605.3a: a player may activate a mana ability "whenever a rule or
+        # effect asks for a mana payment, even if it's in the middle of …
+        # resolving a spell". A payment prompt admits ``activate`` for exactly
+        # that (``ChoiceSpec.also_answers``) — so while this seat owes one, a
+        # mana ability is activated whoever holds priority, and nothing else
+        # is: nobody has priority part-way through a resolution (CR 117.1),
+        # and an ability put on the stack there would be one the resolving
+        # object never finished under.
+        paying = _owes_a_mana_payment(session.game, req.seat)
+        if paying:
+            abilities = session.game.usable_abilities_of(
+                permanent, card=permanent.effective_card
+            )
+            named = req.ability_index if req.ability_index is not None else 0
+            chosen = abilities[named] if 0 <= named < len(abilities) else None
+            if chosen is None or not is_mana_ability(chosen):
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "only a mana ability can be activated while a payment "
+                        "is being asked of you"
+                    ),
+                )
+        elif not session.game.has_priority(req.seat):
             raise HTTPException(status_code=400, detail="you do not currently have priority")
         if req.target_seat is not None:
             target = req.target_seat
@@ -480,6 +517,23 @@ def _action_activate(session, req, seat_type):
         engine_stack_index = None
         if req.target_stack_index is not None:
             engine_stack_index = len(session.game.stack) - 1 - req.target_stack_index
+        # …and a **role** whose object is a spell on the stack, named in the
+        # role refs (the cast side's Suffocating Blast shape, should an ability
+        # print it). Translated here into the one stack channel an activation
+        # has and a slot marker the engine fills from it
+        # (``legality.named_role_objects``), so the wire's top-first index
+        # never reaches the engine.
+        role_refs = None
+        if req.target_role_refs:
+            role_refs = []
+            for ref in req.target_role_refs:
+                entry = ref.model_dump(exclude={"stack_index"})
+                if ref.stack_index is not None:
+                    engine_stack_index = (
+                        len(session.game.stack) - 1 - ref.stack_index
+                    )
+                    entry["stack"] = True
+                role_refs.append(entry)
         # "A source of your choice" (Jade Monolith): a chosen stack spell's
         # index arrives top-first; convert like target_stack_index.
         engine_source_stack_index = None
@@ -523,11 +577,7 @@ def _action_activate(session, req, seat_type):
             # Forwarded as plain dicts, which is the shape the engine's own
             # channel takes: the engine has no business importing a request
             # model, and the two names are the same words.
-            target_role_refs=(
-                [ref.model_dump() for ref in req.target_role_refs]
-                if req.target_role_refs
-                else None
-            ),
+            target_role_refs=role_refs,
             # CR 601.2d's announced division, forwarded exactly as the cast
             # path's helper forwards it and in the same shape: a two-tuple
             # where no share was announced (which is what an evenly-divided
@@ -552,6 +602,7 @@ def _action_activate(session, req, seat_type):
             cost_permanent_ids=cost_permanent_ids,
             cost_hand_index=req.cost_hand_index,
             cost_other_hand_indices=req.cost_other_hand_indices,
+            cost_graveyard_indices=req.cost_graveyard_indices,
             # Phyrexian Splicer: the ability the activation chose (CR 601.2b),
             # forwarded like every other announcement-time choice above.
             chosen_keyword=req.chosen_keyword,
@@ -570,7 +621,27 @@ def _action_activate(session, req, seat_type):
         )
         if not result.supported:
             raise HTTPException(status_code=400, detail=result.details)
-        session.game.note_priority_action_taken(req.seat)
+        if not paying:
+            # A mana ability activated to pay what an effect asked for is not
+            # an action taken with priority (CR 605.3a), so it moves none.
+            session.game.note_priority_action_taken(req.seat)
+
+
+def _owes_a_mana_payment(game, seat: int) -> bool:
+    """Whether *seat* owes an open prompt that its own mana abilities answer.
+
+    Read off the registry (``ChoiceSpec.also_answers``), which is where each
+    kind says what besides its confirm answers it — ``mana_payment`` and
+    ``optional_pay`` today, and whichever kind next says a seat pays it by
+    tapping. A list of kinds here would be the second copy.
+    """
+    return any(
+        choice.player_index == seat
+        and spec.holds_priority
+        and "activate" in spec.also_answers
+        and spec.open_for(game, choice)
+        for spec, choice in game.iter_pending_prompts()
+    )
 
 
 @action_handler("activate_hand", human_only=HUMAN_ONLY)
@@ -832,6 +903,18 @@ def do_action(session_id: str, req: GameActionRequest):
         raise HTTPException(status_code=400, detail=spec.human_only)
 
     spec.handler(session, req, seat_type)
+
+    # A human's answer can arm a prompt an AI seat now owes — "…then **that
+    # player** looks at the top three cards of your library" (Tahngarth's
+    # Glare), a pile the other seat chooses. The drain above ran *before* the
+    # handler, so that prompt used to ride out in the response with the object
+    # still on the stack and priority apparently the human's; the client's
+    # auto-pass answered it, the next request's preamble finished the spell,
+    # and the pass was then applied to the empty stack that followed — both
+    # players had passed, and the human's main phase was over. Answered here,
+    # the resolution finishes in the request that caused it and the state a
+    # client reads is one it may act on.
+    _auto_resolve_ai_pending(session)
 
     # A turn step that stopped on a decision picks up here, once nothing is
     # owed. In the tail rather than in the handler that answers the prompt,

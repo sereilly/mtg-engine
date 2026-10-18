@@ -2,9 +2,10 @@
 
 Split out of `lower.py` at the thousand-line guard. A family rather than an
 arbitrary cut, and the family is named after `engine/handlers/control_flow.py`
-— these produce exactly the instruction kinds that file dispatches, which is
-what "effects compose through these instead of getting a fused instruction
-kind" looks like on the way in.
+— the three lowerings here build the offers that file dispatches (`may`,
+`unless_player_pays`, `choose_one`) and not the `sequence`, `if_then` and
+`for_each` it dispatches beside them, which is what "effects compose through
+these instead of getting a fused instruction kind" looks like on the way in.
 
 It has shed a composer twice since, and the docstring above is what those two
 splits were cut along, so it is worth keeping current: `for_each` left as
@@ -13,7 +14,16 @@ here is the offer — who is asked, what it costs, and which of its branches
 runs. Naming `sequence` after it had gone made the seam read one clause wide of
 where the code actually parted.
 
-`lowering/_collapses` is the floor under it (Urza's Legacy's Phase 0): the
+**And the table of which kinds are wrappers left at the Phase 0 before
+Odyssey, because it was never the offer.** `WRAPPER_KINDS`, the walks that read
+into a lowered instruction (`nested_instructions`, `offer_branches`) and
+`categories_of` sat at the bottom of this file as "the kinds the four lowerings
+above emit" — a sentence written after both splits above, about `sequence`,
+`if_then` and `for_each`, when this module built none of them. No lowering here
+called that block and it called none of them, so it is in `lower.py` now, which
+every wrapper passes through and which reads the table.
+
+`lowering/_collapses` is the floor under this one (Urza's Legacy's Phase 0): the
 offers whose action carries its own ceiling, which collapse into the prompt
 behind them rather than lowering as an offer at all.
 
@@ -27,7 +37,10 @@ time: what differs between the callers is only which parser they already hold.
 
 from __future__ import annotations
 
-from ...oracle_types import OracleInstruction, REVEALED_TOP_CARDS_BY_SEAT
+from ...oracle_types import (EVENT_SPELL_MANA_COST, OracleInstruction,
+                             OTHER_THAN_EVENT_SUBJECT_PLAYER,
+                             REVEALED_TOP_CARDS_BY_SEAT,
+                             STACK_TARGET_CONTROLLER)
 from .. import ast
 from ..errors import LoweringError
 from ._amounts import count_spec
@@ -38,7 +51,8 @@ from ._collapses import (offered_seat_performs, without_restated_target,
                          _each_player_optional_tap,
                          _referent_seat_optional_draw)
 from ._common import _amount_payload, _is_source, variable_mana_payload
-from ._events import (EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER,
+from ._events import (CAST_SPELL_EVENTS, EVENT_SUBJECT_CONTROLLER,
+                      EVENT_SUBJECT_PLAYER,
                       _DEFENDING_PLAYER_EVENTS, _EVENT_SUBJECT_CONTROLLERS,
                       _EVENT_SUBJECT_PLAYERS, LOOP_BOUND_OBJECT,
                       frozen_seat_record)
@@ -165,7 +179,14 @@ _OPPONENT_PAYERS = frozenset({"target_opponent", "each_opponent", "opponent"})
 _ENUMERATED_PAYERS: dict[str, str] = {
     **{kind: "opponent" for kind in _OPPONENT_PAYERS},
     "each_player": "any_player",
+    # "**Any other player** may pay …" (Ice Cave): every seat but the one the
+    # firing event froze — admitted only under an event that froze one.
+    "any_other_player": OTHER_THAN_EVENT_SUBJECT_PLAYER,
 }
+
+#: The events whose fire site records the spell cast (``cast_card``), so "that
+#: spell's mana cost" names an object.
+_CAST_SPELL_EVENTS = CAST_SPELL_EVENTS
 
 
 def _lower_unless_player_pays(
@@ -191,6 +212,24 @@ def _lower_unless_player_pays(
       behind it is a payment charged for no reason.
     """
     payer = _ENUMERATED_PAYERS.get(node.payer.kind)
+    if (
+        payer == OTHER_THAN_EVENT_SUBJECT_PLAYER
+        and event not in _EVENT_SUBJECT_PLAYERS
+    ):
+        raise LoweringError(
+            "\"any other player\" is measured from a seat this event did not "
+            "record", node=node,
+        )
+    derived_cost = isinstance(node.cost, ast.EventSpellManaCost)
+    if derived_cost and (payer is None or event not in _CAST_SPELL_EVENTS):
+        # Read off the spell the trigger fired on, by the chain's handler.
+        # With none recorded — or one seat, the ``May`` below, which has no
+        # reader for it — the words name a cost of nothing, which every board
+        # can pay.
+        raise LoweringError(
+            "\"that spell's mana cost\" is offered to a set of seats under a "
+            "cast trigger", node=node,
+        )
     if payer is None and node.life:
         # The parser builds a life price only over a set of seats; one seat's
         # is the ``May`` whose *action* is the payment.
@@ -233,7 +272,12 @@ def _lower_unless_player_pays(
         # ``{X}`` stays variable ("…unless any player pays {X}", Soul Strings):
         # the same conversion the single-seat offer uses, so the two cannot
         # disagree about what a printed X costs.
-        "cost": variable_mana_payload(node.cost, what="a toll", node=node),
+        "cost": (
+            # "…that spell's mana cost" (Ice Cave), in the ``cost_from`` slot a
+            # derived cost has used since Flash.
+            {"cost_from": EVENT_SPELL_MANA_COST} if derived_cost
+            else variable_mana_payload(node.cost, what="a toll", node=node)
+        ),
     }
     if node.life:
         # "…unless any player pays **5 life**." (Aether Rift.) Beside the
@@ -338,6 +382,24 @@ def _if_you_do_gate(action: tuple[OracleInstruction, ...]) -> dict | None:
 #: already moves ``context.caster`` onto the offered seat for those, so a second
 #: answer would be a second chance to disagree.
 PERFORMER_CHOICE_KINDS = frozenset({"choose_one"})
+
+
+def _counters_a_chosen_spell(statement: "ast.Statement | None") -> bool:
+    """Whether *statement* is "counter **target** <spell>" and nothing else —
+    the decline branch of an offer whose "its controller" is a spell's.
+
+    Only the chosen form. "Counter **that spell**" under a cast trigger names
+    the spell the event was about, whose controller the event tables above
+    have already resolved; and a counter with a payment clause of its own is
+    the counter flow's offer, not this one.
+    """
+    return (
+        isinstance(statement, ast.CounterSpell)
+        and statement == ast.CounterSpell(statement.subject)
+        and isinstance(statement.subject, ast.TargetSpec)
+        and statement.subject.targeted
+        and statement.subject.quantifier == "target"
+    )
 
 
 def _performed_by(step: OracleInstruction, actor: str) -> OracleInstruction:
@@ -498,6 +560,27 @@ def _lower_may(
     decision per player; the actor is carried as payload and
     ``handlers/control_flow.may`` arms one prompt for each named seat.
     """
+    if node.actor.kind == "any_other_player":
+        # "…**any other player** may pay that spell's mana cost. **If a player
+        # does**, counter the spell." (Ice Cave.) CR 118.12's offer to a *set*
+        # of seats with what paying buys behind it — the ``unless_player_pays``
+        # chain with its polarity reversed (Rhystic Scrying): each seat asked in
+        # turn (CR 101.4), the first payment ending it. One prompt per seat
+        # instead would let two players both pay for one counter. A bare price
+        # and its branches only; anything else the chain does not describe.
+        if node != ast.May(
+            node.actor, cost=node.cost, then=node.then, otherwise=node.otherwise
+        ) or node.cost is None:
+            raise LoweringError(
+                "an offer to any other player is a price and what paying it "
+                "buys", node=node,
+            )
+        return _lower_unless_player_pays(
+            ast.UnlessPlayerPays(
+                node.actor, node.cost, node.otherwise, paid=node.then
+            ),
+            produced, event, event_subject, lower_statement=lower_statement,
+        )
     # "Target opponent may **draw a card**": the bare imperative's subject is
     # the seat the offer names, not the ability's controller.
     node = offered_seat_performs(node)
@@ -645,6 +728,18 @@ def _lower_may(
         # "its" is the trigger's own subject here, not a target this sentence
         # chose — see ``attached_controller`` in ``OFFERABLE_ACTORS``.
         actor = "attached_controller"
+    if actor in ("controller", "that_player") and _counters_a_chosen_spell(
+        node.otherwise
+    ):
+        # "Counter target instant or sorcery spell unless **its controller**
+        # has Molten Influence deal 4 damage to them." The possessive names
+        # the *spell* the sentence chose, and a spell is not a permanent:
+        # ``controller`` is read off the control seam through
+        # ``bound_permanent``, which finds nothing on the stack, so the offer
+        # went to nobody and the counter with it — a card that compiled and
+        # did nothing at all. Its own actor, read off the stack object the
+        # announcement named (``STACK_TARGET_CONTROLLER``).
+        actor = STACK_TARGET_CONTROLLER
     payload: dict[str, object] = {"actor": actor}
     if node.actor.kind == "target_opponent":
         # "**Target opponent** may ante the top card of their library."
@@ -833,142 +928,3 @@ def _life_cost_payload(node: ast.May) -> object:
     raise LoweringError(
         f"no offer charges life measured as {type(amount).__name__}", node=node
     )
-
-
-# ---------------------------------------------------------------------------
-# What a wrapper carries (moved here from `lowering/categories.py` at the
-# thousand-line guard)
-# ---------------------------------------------------------------------------
-#
-# `categories_of` walks a lowered sequence and has to look *inside* every
-# composer before it can say what a line touches. Which kinds are composers,
-# and under which payload keys each keeps its steps, is a fact about this
-# family — these are the kinds the four lowerings above emit — so it lives
-# here and the category table reads it. Public names rather than the
-# underscore-prefixed ones they carried as module-privates: they have a caller
-# in another module now, and a leading underscore on a name two modules share
-# is a claim that stopped being true.
-# Control-flow wrappers take the categories of whatever they wrap, so gating
-# "damage" is enough to turn on a sequence of damage instructions without
-# inventing a category nobody could reason about.
-#
-# ``may`` is deliberately NOT in here: it gets its own ungated category above,
-# because an offer is not the same switch as the effect behind it. Wrapping it
-# with the others would let "optional" be turned off under a family that is on,
-# which is a card that performs its offer's consequence without asking.
-WRAPPER_KINDS: dict[str, tuple[str, ...]] = {
-    "sequence": ("steps",),
-    "if_then": ("then", "else"),
-    "for_each": ("effect",),
-    # A round of offers repeated until nobody takes it (Eureka). A wrapper for
-    # the same reason ``for_each`` is: what the round *does* is the act it
-    # carries, and the repetition is not an effect of its own.
-    "repeat_offer_round": ("action",),
-    # A whole printed process its controller may run again (Forbidden Ritual).
-    # The same reason again: what the process *does* is the steps it carries.
-    "repeat_optional_process": ("steps",),
-    # A process repeated while a condition about the round holds (Grindstone).
-    # The third repeat that is a wrapper, and for the same reason as the two
-    # above it: what the round *does* is the steps it carries, and the stopping
-    # question is not an effect.
-    "repeat_process_while": ("steps",),
-    # A process a toll inside it may ask for again (Crooked Scales). The fourth
-    # repeat that is a wrapper, and the same reason once more: what the round
-    # *does* is the steps it carries, and asking for another is not an effect.
-    "repeat_process_on_request": ("steps",),
-}
-
-
-#: Where an **offer** keeps the instructions behind its answers — the two kinds
-#: ``WRAPPER_KINDS`` deliberately leaves out, for the reason its comment gives:
-#: an offer is a switch of its own, so ``categories_of`` must not descend into
-#: one. A reader asking what an effect *could do* has the opposite need. CR
-#: 605.1a's "could add mana to a player's mana pool when it resolves" is true
-#: of "{T}: Choose a color. Add one mana of that color unless any player pays
-#: {1}" (Rhystic Cave), whose only mana sits behind the toll.
-OFFER_BRANCH_KEYS: dict[str, tuple[str, ...]] = {
-    "may": ("action", "then", "otherwise"),
-    "unless_player_pays": ("unpaid", "paid"),
-}
-
-
-def offer_branches(instruction: OracleInstruction) -> tuple[OracleInstruction, ...] | None:
-    """The instructions behind an offer's answers, or None if it is not one.
-
-    :func:`nested_instructions`' sibling for the kinds it must not open — see
-    :data:`OFFER_BRANCH_KEYS`. Separate rather than a flag on that function so
-    no caller of the category walk can open an offer by accident.
-    """
-    keys = OFFER_BRANCH_KEYS.get(instruction.kind)
-    if keys is None:
-        return None
-    return tuple(
-        step for key in keys for step in (instruction.payload.get(key) or ())
-    )
-
-
-def nested_instructions(instruction: OracleInstruction) -> tuple[OracleInstruction, ...] | None:
-    """The instructions a wrapper carries, or None if it is not one.
-
-    ``choose_one`` is a wrapper too, and its options are ``{label, instruction}``
-    pairs rather than a bare tuple — the modal shape the pending-choice prompt
-    reads. Its categories are its options', because that is what the card can
-    actually do; giving it a category of its own would say the *choosing* is the
-    effect.
-    """
-    if instruction.kind == "create_delayed_trigger":
-        # A delayed ability's effect is one instruction rather than a list, so
-        # it cannot ride `WRAPPER_KINDS` above — but it is a wrapper all the
-        # same, and an inner effect no category gates must ungate the line that
-        # arms it. An entry with no instruction is an ability that would fire
-        # into nothing, which is the empty-wrapper refusal below.
-        inner = instruction.payload.get("instruction")
-        return (inner,) if inner is not None else ()
-    if instruction.kind == "arm_draw_replacement":
-        # "The next time you would draw a card this turn, instead <effect>."
-        # (Mangara's Tome.) A wrapper for ``create_delayed_trigger``'s reason
-        # exactly — the effect is one instruction rather than a list, and what
-        # the line touches is what the armed effect touches.
-        inner = instruction.payload.get("instruction")
-        return (inner,) if inner is not None else ()
-    if instruction.kind == "choose_one":
-        return tuple(
-            mode["instruction"] for mode in instruction.payload.get("modes") or ()
-        )
-    nested_keys = WRAPPER_KINDS.get(instruction.kind)
-    if nested_keys is None:
-        return None
-    nested: tuple[OracleInstruction, ...] = ()
-    for key in nested_keys:
-        nested += tuple(instruction.payload.get(key) or ())
-    return nested
-
-
-
-def categories_of(instructions: tuple["OracleInstruction", ...]) -> frozenset[str]:
-    """Migration categories covered by a lowered instruction sequence.
-
-    Here rather than in ``categories.py`` because that module is a *registry*
-    and this is a walk: every step of it asks :func:`nested_instructions`, which
-    lives in this file, and a wrapper whose contents it could not see would
-    report the wrapper's own kind as the whole answer. The table is imported
-    rather than the walk exported, which is the direction the layering allows.
-    """
-    from .categories import INSTRUCTION_CATEGORIES
-
-    found: set[str] = set()
-    for instruction in instructions:
-        nested_keys = nested_instructions(instruction)
-        if nested_keys is not None:
-            if not nested_keys:
-                return frozenset({"__ungated__"})
-            inner = categories_of(nested_keys)
-            if "__ungated__" in inner:
-                return frozenset({"__ungated__"})
-            found |= inner
-            continue
-        category = INSTRUCTION_CATEGORIES.get(instruction.kind)
-        if category is None:
-            return frozenset({"__ungated__"})
-        found.add(category)
-    return frozenset(found)

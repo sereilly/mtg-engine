@@ -4,8 +4,9 @@ a <filter>": CR 701.20a's reveal repeated until a card passes a test.
 A floor under ``effects/reveal.py``, pre-split out of it between the two waves
 of Invasion, when that module sat ten lines under the thousand-line guard with
 seven parallel groups about to open. A floor rather than a family for
-``_other_libraries``' reason one family over: ``reveal`` is the only module
-that asks. It could not be a family in any case — the printed verb keeps one
+``_strips``' reason one family over, which was ``_other_libraries``' too until
+a second family read that floor: ``reveal`` is the only module that asks. It
+could not be a family in any case — the printed verb keeps one
 entry point, ``_parse_reveal_top``, which has already read "Reveal" by the time
 this is tried, and a family may not be called from another one.
 
