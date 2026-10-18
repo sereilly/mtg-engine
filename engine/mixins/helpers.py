@@ -3235,9 +3235,13 @@ class GameHelpersMixin:
 
         So the seat is *derived from the choice* rather than defaulted around
         it. One query, asked wherever an announcement's seat is being settled —
-        :meth:`_stamp_stack_targets` for an item built with ids, and
+        :meth:`_stamp_stack_targets` for an item built with ids,
         ``_activate_onto_stack`` where the default is applied before the item
-        exists.
+        exists, and **again as the object resolves**
+        (``LegalityMixin.resettle_announced_target_seats``): a target that
+        changed controller while the object waited is still the target where
+        CR 608.2b's gate judged it legal, and the seat it was announced on is
+        no longer the one it stands on.
 
         None unless every live named permanent agrees, for the reason
         ``web/actions.py`` writes ``target_seat`` back only for a single-seat

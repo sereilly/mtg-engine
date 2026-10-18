@@ -2720,7 +2720,12 @@ def pick_target_permanent(
     controller, or stopped being a creature — falls through to the index
     behaviour this function has always had, rather than inventing a fizzle the
     rest of the engine is not yet written for. Those are questions about a
-    permanent that still exists, and the engine has no answer for them yet.
+    permanent that still exists, and for an announced object they are answered
+    above this function now: CR 608.2b's gate judges the target against its
+    description, and where it is still legal on another battlefield the seat
+    is settled from the id again before any handler runs
+    (``LegalityMixin.resettle_announced_target_seats``), so the *player* this
+    is handed is the one the target is on.
 
     An id that resolves to **nothing** is a different question, and it has an
     answer. The recorded id is the choice (CR 601.2c/602.2b); CR 400.7 makes a
@@ -2760,7 +2765,10 @@ def pick_target_permanent(
         # Scoped to *player* on purpose: the callers pass the battlefield the
         # target was chosen from ("a creature you control", "target artifact an
         # opponent controls"), and widening that here would be a targeting
-        # change wearing an identity change's clothes.
+        # change wearing an identity change's clothes. A target that changed
+        # hands and is still legal has had its seat re-settled before this is
+        # asked (``resettle_announced_target_seats``) — the record moved, not
+        # this scope.
         if game.controls(player, chosen) and predicate(chosen):
             return chosen
         if announced:
