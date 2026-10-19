@@ -36,7 +36,7 @@ from engine.faces import compilation_units
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.targeting import derive_cast_spec
-from tests.helpers import resolve_stack
+from tests.helpers import declare_attack, resolve_stack
 
 
 @pytest.fixture(scope="module")
@@ -118,11 +118,14 @@ def test_w2g5_hatred_does_not_pay_the_casters_whole_life(pool):
     and was at zero when its own spell resolved."""
     game = _w2g5_table(pool, [pool["Hatred"]], enforce=False)
     _w2g5_furnish(game, pool)
-    # The X is the policy's (`_pick_x_value`); the cast is made here. It was
-    # the policy's too, until a cast was measured before it was proposed: a
-    # price in life for a pump that ends with the turn is a loss on any board
-    # the measure can see, so the seat holds the card.
-    assert _cast_candidate(game, 0, pool["Hatred"], 0) is None
+    # The X is the policy's (`_pick_x_value`); the cast is made here. The
+    # policy's own proposal is weighed through the turn's fight now (a price
+    # in life for a pump that ends with the turn was a loss on any board a
+    # reading with no combat in it could see, and the seat held the card):
+    # here a Hill Giant at +10/+0 clears the other side's blockers. Whatever
+    # it proposes keeps the reserve.
+    proposed = _cast_candidate(game, 0, pool["Hatred"], 0)
+    assert proposed is not None and proposed.x_value <= 20 - X_LIFE_RESERVE
     x_value = _pick_x_value(game, game.players[0], pool["Hatred"], hand_index=0)
     mine = next(p for p in game.controlled_by(0) if p.is_creature)
     result = game.cast_from_hand(
@@ -228,6 +231,10 @@ def test_w2g5_the_ai_casts_a_divided_prevention_spell(pool, name, total):
         _w2g5_put(game, pool, 1, creature)
     for _ in range(2):
         _w2g5_put(game, pool, 0, "Plains")
+    # Under the other side's attack: a shield in its caster's own main phase
+    # is one nothing comes for unless the caster's own attack is what it
+    # saves, and a seat no longer casts one that leaves nothing behind.
+    declare_attack(game, 1)
     action = _cast_candidate(game, 0, pool[name], 0)
     assert action is not None and action.divided_targets
     assert {seat for seat, *_rest in action.divided_targets} == {0}

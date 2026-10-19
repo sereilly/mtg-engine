@@ -306,3 +306,31 @@ def test_planeswalkers_mischief_buys_the_cast_it_pays_for():
     assert game.players[1].life == 17, game.log[-6:]
     assert not any(held is bolt for held in game.players[1].exile)
     assert not report.refused_casts
+
+
+def test_a_card_mischief_took_is_cast_rather_than_handed_back():
+    """The same activation at an opposing Shriek of Dread, "target creature
+    gains fear until end of turn", with nothing on the other side to block:
+    fear does nothing — and "at the beginning of the next end step, if you
+    haven't cast it, return it to its owner's hand" makes the cast a card
+    the opponent does not get back. A rehearsal that ran its copy straight
+    to the cleanup step never saw that end step (CR 513.1), and with the
+    card's own trip out of exile taken out of what it did, held it."""
+    game = _table(mine=[
+        "Planeswalker's Mischief", "Grizzly Bears", "Island", "Island", "Island", "Island",
+    ])
+    shriek = _POOL["Shriek of Dread"]
+    game.players[1].hand = [shriek]
+    report = _report()
+    _play_activations(game, 0, report, 1, 1)
+    resolve_stack(game)
+    assert any(held is shriek for held in game.players[1].exile), game.log[-6:]
+
+    cast = choose_cast_action(game, 0)
+    assert cast is not None and cast.card_name == "Shriek of Dread", cast
+    assert (cast.from_zone, cast.zone_seat) == ("exile", 1)
+    assert _play_one_cast(game, 0, report, 1, 1), game.log[-4:]
+    resolve_stack(game)
+    game.resolve_end_step(0)
+    resolve_stack(game)
+    assert not any(held is shriek for held in game.players[1].hand), game.log[-6:]

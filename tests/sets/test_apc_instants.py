@@ -2197,13 +2197,22 @@ def test_w2g4_captains_maneuver_in_a_simulated_game_protects_its_caster():
             elif line.strip().startswith("Captain's Maneuver: the next "):
                 spared = line.split("would be dealt to ")[1].split(" this turn")[0]
                 taker = line.split("is dealt to ")[1].split(" instead")[0]
-                redirects.append((caster, spared, taker))
+                # Whose the spared creature is, when it is one: the seat
+                # that put it onto the battlefield, by the log's own line.
+                owned = spared == caster or any(
+                    entry.strip() == f"{caster} put {spared} onto battlefield"
+                    for entry in report.log_lines
+                )
+                redirects.append((caster, spared, taker, owned))
         if redirects:
             break
 
     assert redirects, "no seed cast a Captain's Maneuver"
-    for caster, spared, taker in redirects:
-        assert spared == caster and taker != caster, redirects
+    # Off the caster's side — its own face, or, now that a precombat cast's
+    # target is weighed through the turn's fight, a creature of its own — and
+    # onto somebody else's.
+    for caster, spared, taker, owned in redirects:
+        assert owned and taker != caster, redirects
 
 
 # -- item 6: a private look names nothing in the log ---------------------------

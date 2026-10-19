@@ -27,7 +27,7 @@ from engine.mixins.stack import aura_enchant_noun
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle, compiled_units
 from engine.targeting import derive_activation_spec, derive_cast_spec
-from tests.helpers import _mk_card, resolve_stack
+from tests.helpers import _mk_card, declare_attack, resolve_stack
 
 _W2G6_LANDS = ["Plains", "Island", "Swamp", "Mountain", "Forest"] * 3
 
@@ -117,6 +117,12 @@ def test_w2g6_a_chosen_source_is_an_opposing_creature_not_the_casters_land(_w2g6
             _w2g6_pool, [card], mine=["Grizzly Bears"],
             theirs=["Forest", "Grizzly Bears", "Hill Giant", "Sol Ring"],
         )
+        # With the opposing creatures attacking: every one of these is a
+        # shield for the turn, and in the seat's own main phase — where this
+        # asked — there is no damage for it to stop. A seat no longer casts a
+        # spell nothing of which outlasts the turn, so the question "which
+        # source" is put where the card is one to cast.
+        declare_attack(game, 1)
         action = _cast_candidate(game, 0, card, 0)
         assert action is not None, card.name
         assert _w2g6_named(game, action) == (1, "Hill Giant"), card.name

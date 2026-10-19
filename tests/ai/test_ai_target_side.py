@@ -30,7 +30,8 @@ from engine.game import Game
 from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
 from engine.targeting import derive_cast_spec, spec_roles
-from tests.helpers import _mk_card, _mk_creature_card, _nosick, resolve_stack
+from tests.helpers import (_mk_card, _mk_creature_card, _nosick,
+                           declare_attack, resolve_stack)
 
 
 def _duel(hand=(), mine=(), theirs=()):
@@ -237,6 +238,11 @@ def test_sivvis_valor_names_the_creature_it_spares(set_pool):
     nem = set_pool("NEM")
     mine = _mk_creature_card("Own Bear", 2, 2)
     game = _duel(hand=[nem["Sivvi's Valor"]], mine=[mine], theirs=[_mk_creature_card("Foe", 3, 3)])
+    # With the Foe attacking and the Bear in front of it: "all damage that
+    # would be dealt to target creature this turn is dealt to you instead" is
+    # a creature saved. In the caster's own main phase, where this asked, no
+    # damage is coming and the card is one to hold.
+    declare_attack(game, 1, blocks={0: 0})
 
     action = choose_cast_action(game, 0)
 

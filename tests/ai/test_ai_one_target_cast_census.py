@@ -35,6 +35,18 @@ that left were casts this sweep had been asking for and should not have — a
 power/toughness switch on the caster's own 0/4 Wall, +1/-1 on its own 1/1 —
 which the policy made until it measured a cast before proposing one.
 
+**And a pair is one the spell leaves something of** (`acts_on`, through
+``modes.weighed``): 1,217 pairs over 216 cards, 2 declined over the one card
+in ``DECLINED``, where ``e67196d6`` swept 1,596 over 254 and declined 9. The
+379 that left are a pump, a shrink, a shield or an evasion ability for the
+turn, damage a creature survives, or a tap its untap step undoes, at a lone
+creature with no fight to decide — cast, each of them, at a quarter of what
+it lent (or for the turn's record of who dealt damage), until the policy
+weighed a precombat cast through the turn's combat and read the turn's end
+as the next turn begins. Hatred left ``DECLINED`` the other way: it is cast
+now, at the size of X that does most (``ai_policy._cast_candidate_sized``),
+where the life buys damage that gets through.
+
 Run it as a module (``python -m tests.ai.test_ai_one_target_cast_census``) for
 the table.
 """
@@ -47,8 +59,8 @@ import pytest
 
 from engine import Game, PlayerState
 from engine.ai_policy import choose_cast_action
-from engine.ai_valuation import (CARD_WORTH, instruction_target_side,
-                                 standing_swing, standings, swing_worth)
+from engine.ai_valuation import (instruction_target_side, scratch_copy,
+                                 standings)
 from engine.auras import attach_aura
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units
@@ -183,6 +195,7 @@ def acts_on(card, mode, seat, key) -> bool:
     game, bait = board(card, seat, key)
     before = signature(game, card)
     before_now = standings(game)
+    before_cast = scratch_copy(game)
     x_value = 2 if "{X}" in (card.mana_cost or "").upper() else None
     try:
         result = game.queue_from_hand(
@@ -194,13 +207,15 @@ def acts_on(card, mode, seat, key) -> bool:
         modes.settle(game)
         if signature(game, card) == before:
             return False
-        spent = CARD_WORTH * (0 if any(held is card for held in game.players[ME].hand) else 1)
-        now = standing_swing(before_now, standings(game), ME) + spent
-        modes.run_out(game)
-        lasting = standing_swing(untouched(seat, key), standings(game, now=False), ME) + spent
+        # What it was worth, and whether any of it is left at the end of the
+        # turn with the turn's fight fought (`modes.weighed`): "+2/+2 until
+        # end of turn" on a creature with no fight to decide is not a pair.
+        swing, still_moved = modes.weighed(
+            card, game, before_cast, True, before_now, untouched(seat, key),
+        )
     except Exception:
         return False
-    return swing_worth(now, lasting) >= LOSS
+    return still_moved and swing >= LOSS
 
 
 def steps_side(instructions):
@@ -293,11 +308,6 @@ DECLINED = {
     # longer pairs at all: tapping or exiling the caster's own creature is a
     # loss by the engine's measure (`acts_on`), not a cast to ask for.
     "Rescue": "returns the caster's own permanent",
-    # "As an additional cost, pay X life. Target creature gets +X/+0 until
-    # end of turn." Swept at an X of nought, where it costs nothing and does
-    # nothing; the policy sizes a real X, and a price in life for a pump that
-    # ends with the turn measures as a loss at every one (`_worth_proposing`).
-    "Hatred": "pays life for a pump that is gone by the end of the turn",
 }
 
 
@@ -308,8 +318,8 @@ def rows() -> list:
 
 def test_the_sweep_examined_the_pool(rows):
     """The floor: a sweep that reaches nothing passes everything."""
-    assert len(rows) >= 1350
-    assert len({row["card"] for row in rows}) >= 220
+    assert len(rows) >= 1200
+    assert len({row["card"] for row in rows}) >= 210
     kinds = {row["kind"] for row in rows}
     assert {"destroy_target_permanent", "pump_target_creature_until_eot",
             "bounce_target_creature"} <= kinds
@@ -333,9 +343,14 @@ def test_the_spells_the_old_arms_never_cast_are_cast_at_everything_legal(rows):
     for row in rows:
         by_card.setdefault(row["card"], []).append(row)
     for name in ("Pillage", "Creeping Mold", "Fissure", "Eliminate",
-                 "Finishing Blow", "Grasp of Darkness", "Shrink"):
+                 "Finishing Blow", "Grasp of Darkness"):
         assert len(by_card[name]) >= 5, name
         assert all(row["proposed"] for row in by_card[name]), name
+    # Shrink stood in that list: "-5/-0 until end of turn" at a creature that
+    # is not fighting is nothing by the end of the turn, so it is no pair at
+    # all now — and the pump arm's defect is still read off Grasp of Darkness,
+    # whose -4/-4 kills.
+    assert "Shrink" not in by_card
     for name in ("Shatter", "Disenchant", "Crash", "Scrap", "Verdigris"):
         at_golem = [row for row in by_card[name] if row["bait"] == "artifact creature"]
         assert at_golem and all(row["proposed"] for row in at_golem), name

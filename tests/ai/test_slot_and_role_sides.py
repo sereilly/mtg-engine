@@ -46,7 +46,14 @@ from tests.helpers import resolve_stack
 _EXAMINED_FLOOR = 40
 #: …of which this many announcements have a slot the one-target reading
 #: classifies, which is the population the assertion is actually about.
-_CLASSIFIED_FLOOR = 30
+#:
+#: 29, where it was 30 of 34: five of them — Hope and Glory, Redeem, Rookie
+#: Mistake, Sick and Tired and Steal Strength — are a pump, a shrink or a
+#: shield for the turn and nothing after it, and on this board, in the
+#: caster's own main phase, none decides a fight. A seat no longer casts a
+#: spell nothing of which outlasts the turn, so there is no announcement of
+#: theirs here to read a side off.
+_CLASSIFIED_FLOOR = 29
 
 _BOARD = ("Grizzly Bears", "Hill Giant", "Serra Angel", "Wall of Wood", "Forest",
           "Mountain", "Island", "Sol Ring", "Mox Pearl", "Castle", "Crusade")

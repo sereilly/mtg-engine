@@ -941,6 +941,12 @@ def test_the_ai_shrinks_the_opponents_creature_not_its_own(set_pool):
     p2 = PlayerState(name="P2", battlefield=[theirs])
     game = Game(players=[p1, p2])
     game.enforce_mana_costs = False
+    # Under the other Pegasus's attack, where -2/-0 on it is a point of damage
+    # that does not land: in the caster's own main phase, with no fight the
+    # two slots decide, the spell leaves nothing behind and is held.
+    from tests.helpers import declare_attack
+
+    declare_attack(game, 1)
 
     action = choose_cast_action(game, 0)
 
