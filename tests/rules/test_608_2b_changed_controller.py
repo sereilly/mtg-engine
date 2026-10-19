@@ -176,6 +176,28 @@ def test_a_chosen_trigger_target_that_changed_hands_is_still_its_target(set_pool
     assert _names(game, 1) == ["Hill Giant"]
 
 
+@pytest.mark.cr("608.2b", "603.3d")
+def test_an_entry_trigger_named_as_its_creature_was_cast_follows_its_target(set_pool):
+    """The other road a trigger's target is chosen by: this engine names an
+    entry trigger's target as its permanent is cast, and the trigger takes the
+    name as its own choice when it is put on the stack (CR 603.3d). Control of
+    the named creature is taken while the creature spell waits."""
+    lea = set_pool("LEA")
+    game = _table(set_pool, hand=[set_pool("VIS")["Nekrataal"]])
+    bears = _put(game, 1, lea["Grizzly Bears"])
+    _put(game, 1, lea["Hill Giant"])
+    assert game.queue_from_hand(
+        0, "Nekrataal", target_permanent_ids=[bears.permanent_id],
+    ).supported
+
+    _take(game, bears, 0)
+    resolve_stack(game)
+
+    assert [card.name for card in game.players[1].graveyard] == ["Grizzly Bears"]
+    assert _names(game, 1) == ["Hill Giant"]
+    assert _names(game, 0) == ["Nekrataal"]
+
+
 @pytest.mark.cr("608.2b")
 def test_a_target_whose_change_of_hands_left_its_description_is_not_followed(set_pool):
     """Ray of Command: "Untap target creature **an opponent controls** and
