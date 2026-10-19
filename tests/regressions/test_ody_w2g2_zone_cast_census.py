@@ -481,8 +481,14 @@ def test_the_flashback_sweep_examined_every_flashback_card(flashback_rows):
     assert {"Firebolt", "Call of the Herd", "Roar of the Wurm", "Moment's Peace"} <= cards
     assert len(flashback_rows) == len(cards) * len(FLASHBACK_BOARDS)
     # ...and the comparison it stands on is not vacuous: nearly every one of
-    # them is a card this seat casts from its hand on this board.
-    assert sum(1 for row in flashback_rows if row["from_hand"]) >= 24 * len(FLASHBACK_BOARDS)
+    # them is a card this seat casts from its hand on this board. Not Fervent
+    # Denial, nor Skull Fracture at an empty opposing hand, and — since a
+    # precombat cast is weighed through the turn's fight — not three whose
+    # good is this turn's only and which do nothing on this board in the
+    # caster's own main phase: Moment's Peace (a Fog over its caster's own
+    # attack), Embolden (a shield with no damage coming) and Seize the Day
+    # (an added combat its creatures, tapped by the first, cannot use).
+    assert sum(1 for row in flashback_rows if row["from_hand"]) >= 23 * len(FLASHBACK_BOARDS)
 
 
 def test_a_flashback_card_in_the_graveyard_is_cast_from_it(flashback_rows):
@@ -495,7 +501,10 @@ def test_a_flashback_card_in_the_graveyard_is_cast_from_it(flashback_rows):
     ]
     assert findings == []
     proposed = {row["card"] for row in flashback_rows if row["proposed"]}
-    assert len(proposed) >= 24
+    # The five above, held from the graveyard too: Skull Fracture's cast out
+    # of it was a change only by its own trip to exile, which a rehearsal now
+    # takes out as it takes out a hand card's (`ai_valuation.same_position`).
+    assert len(proposed) >= 23
 
 
 def test_the_twin_sweep_examined_the_pool(twin_rows):

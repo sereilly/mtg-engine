@@ -1150,6 +1150,15 @@ def test_w1g1_the_ai_casts_the_plain_spell_when_it_cannot_spare_the_kick(
     held both cards until it had a land to spare; and the cast it proposes is
     one the engine accepts."""
     game = _w1g1_ai_table(set_pool, name, land, lands=4)
+    if name == "Falling Timber":
+        # "Prevent all combat damage target creature would deal this turn"
+        # is cast where there is combat damage to prevent: under the Hill
+        # Giant's attack. In its caster's own main phase, with no attack of
+        # its own the Giant could stop, it leaves nothing behind, and a seat
+        # no longer casts a spell that leaves nothing behind.
+        from tests.helpers import declare_attack as _w1g1_declare_attack
+
+        _w1g1_declare_attack(game, 1)
     action = _w1g1_choose_cast_action(game, 0)
     assert action is not None and action.card_name == name
     assert not action.optional_cost_payments

@@ -201,11 +201,16 @@ _SCENARIOS: dict[str, list[tuple]] = {
     "last_cast_color_ban": [
         ("a second green spell", AFTER_A_SPELL, "Grizzly Bears", "Mana Maze", 1, {}, None),
     ],
+    # An instant that leaves something: the AI's proposal is one of the three
+    # readers, and a Fog with no attack declared — an opponent's main phase,
+    # the caster's own declare-attackers step with nobody attacking — is a
+    # cast that leaves nothing behind, which the AI no longer proposes with
+    # or without a ban.
     "global_play_timing": [
-        ("another player's turn", OPPONENTS_TURN, "Fog", "City of Solitude", 1, {}, None),
+        ("another player's turn", OPPONENTS_TURN, "Opt", "City of Solitude", 1, {}, None),
     ],
     "combat_play_ban": [
-        ("an instant in combat", OWN_COMBAT, "Fog", "Hand to Hand", 1, {}, None),
+        ("an instant in combat", OWN_COMBAT, "Opt", "Hand to Hand", 1, {}, None),
     ],
     "targeting_ban": [
         ("a targeted spell", OWN_MAIN, "Lightning Bolt", None, 0,

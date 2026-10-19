@@ -2463,7 +2463,11 @@ def test_w2g4_mournful_zombie_in_a_simulated_game_never_heals_the_other_seat():
     from engine.card_loader import manifest_set_path
 
     gains = []
-    for seed in (7, 11, 1337):
+    # Seeds 1-3 ahead of the three it was written with: once a precombat
+    # cast was weighed through the turn's fight, those three games went
+    # another way and none of them activated a Zombie; 1, 2 and 3 do, on
+    # that tree, eleven, five and three times.
+    for seed in (1, 2, 3, 7, 11, 1337):
         report = run_ai_simulation(
             cards_path=[manifest_set_path("APC", include_measured=True)],
             games=3, seed=seed, max_turns=18, required_cards=["Mournful Zombie"],

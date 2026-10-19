@@ -216,7 +216,14 @@ def test_a_player_nothing_distinguishes_is_the_opponent_unless_the_effect_is_a_g
     assert spell_seat_side(pool["Early Harvest"]) == "you"
 
     island = pool["Island"]
+    # In the caster's own main phase the opponent's lands untap in its own
+    # untap step (CR 502.3) before they could have been used, and a cast that
+    # leaves nothing behind is held (`ai_valuation.untap_for_the_next_turn`);
+    # in the opponent's turn they stay tapped through the caster's.
+    own_turn = _table(pool, [pool["Mana Short"]], mine=[island, island], theirs=[island, island])
+    assert choose_cast_action(own_turn, ME) is None
     game = _table(pool, [pool["Mana Short"]], mine=[island, island], theirs=[island, island])
+    game.active_player_index = OPP
     action = choose_cast_action(game, ME)
     assert action is not None and action.target_player_index == OPP
     _cast(game, action)

@@ -43,9 +43,9 @@ Three legs per mode:
     that mode, and does the resolution do anything?" A seat no longer casts a
     spell that changes nothing, so a mode's board is one it has something to
     act on — and it no longer casts one **nothing of which outlasts the
-    turn**, so of the 85 modes with a board 74 are proposed and eleven are
+    turn**, so of the 85 modes with a board 73 are proposed and twelve are
     *held* (``HELD``): "target creature gains flying until end of turn" at a
-    creature with nothing to fly over. Each of those eleven is held because the
+    creature with nothing to fly over. Each of those twelve is held because the
     census's own cast of it there, the turn's fight fought, leaves nothing
     behind (``weighed``) — the engine's answer, not the policy's.
 ``measured``
@@ -81,6 +81,7 @@ from engine.ai_policy import (choose_cast_action,
 from engine.ai_valuation import (CARD_WORTH, combat_is_still_to_come,
                                  forget_damage_history,
                                  instruction_target_side, position_digest,
+                                 untap_for_the_next_turn,
                                  priced_by_the_fight, run_out_the_turn,
                                  same_position, scratch_copy,
                                  several_target_slot_sides, standing_swing,
@@ -621,9 +622,13 @@ def weighed(
 def lasting_digest(game) -> dict:
     """``ai_valuation.position_digest`` of a board whose turn has run out,
     without the record of what damage was dealt
-    (``ai_valuation.forget_damage_history``, the rehearsal's own reading):
-    the damage is gone by then, and what it did is on the table."""
+    (``ai_valuation.forget_damage_history``) and with the opponent's
+    permanents untapped as its untap step will leave them
+    (``ai_valuation.untap_for_the_next_turn``) — the rehearsal's own reading:
+    the damage and the tap are gone by then, and what they did is on the
+    table."""
     forget_damage_history(game)
+    untap_for_the_next_turn(game)
     return position_digest(game)
 
 
@@ -1298,7 +1303,7 @@ UNBUILDABLE = {
 #: the fight (``ai_policy._weighed_through_the_fight``): cast, at
 #: ``SPELL_BASE_SCORE`` and a quarter of whatever it lent, on the first main
 #: phase it was castable in. Named, because a sweep that silently drops what
-#: it does not reach reports a smaller pool as a clean one: these eleven are
+#: it does not reach reports a smaller pool as a clean one: these twelve are
 #: reached only where there is a fight for them to decide, and the fight
 #: boards are ``tests/ai/test_ai_precombat_tricks.py``'s.
 _NO_FIGHT = "for a turn, on a creature with no fight to decide"
@@ -1314,6 +1319,11 @@ HELD = {
     ("Funeral Charm", 2): "swampwalk " + _NO_FIGHT,
     ("Hearth Charm", 2): "unblockable " + _NO_FIGHT,
     ("Hope Charm", 0): "first strike " + _NO_FIGHT,
+    # "Tap target creature": on a board with no attack to clear a blocker
+    # for, the creature untaps in its controller's untap step (CR 502.3)
+    # having done nothing it would not have done untapped
+    # (``ai_valuation.untap_for_the_next_turn``).
+    ("Ivory Charm", 1): "a tap of a creature with no attack to stop, undone at its untap step",
     ("Rith's Charm", 2): "a shield against a source with no damage coming",
     ("Sapphire Charm", 1): "flying " + _NO_FIGHT,
     ("Seedling Charm", 1): "a regeneration shield with nothing to survive",
@@ -1432,8 +1442,8 @@ def test_every_mode_is_within_reach(result):
         counted["forced_cast_accepted_in_mode"]
         == counted["boards_built"] - len(HELD)
     )
-    assert counted["forced_cast_accepted_in_mode"] >= 74
-    assert counted["nonzero_modes_reached"] >= 41
+    assert counted["forced_cast_accepted_in_mode"] >= 73
+    assert counted["nonzero_modes_reached"] >= 40
 
 
 def test_the_modes_held_on_their_board_are_the_named_ones(result):

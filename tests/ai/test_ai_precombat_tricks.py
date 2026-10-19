@@ -31,7 +31,8 @@ import pytest
 
 from engine import Game, PlayerState
 from engine.ai_combat import run_ai_combat_phase
-from engine.ai_policy import (cast_announcement, choose_cast_action,
+from engine.ai_policy import (SPELL_BASE_SCORE, cast_announcement,
+                              choose_cast_action,
                               choose_combat_instant_cast_action)
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units
@@ -173,6 +174,41 @@ def test_flying_is_cast_where_something_stands_in_the_way(pool):
     assert game.players[OPP].life == 18
 
     assert choose_cast_action(_table(pool, ["Jump"], mine=[BEAR]), ME) is None
+
+
+def test_a_creature_tapped_after_the_fight_is_not_a_cast(pool):
+    """Twiddle at the opposing creature once the turn's combat is over: it
+    untaps in its controller's untap step (CR 502.3) before it could have
+    done anything tapped or untapped. It was cast there, for a quarter of
+    the body it took for the rest of the turn — the end of the turn, which
+    is where a rehearsal stops reading (``ai_valuation.
+    untap_for_the_next_turn``)."""
+    game = _table(pool, ["Twiddle"], mine=[BEAR], theirs=[_mk_creature_card("Their Rival", 2, 2)])
+    game._set_phase_and_step("postcombat_main", "postcombat_main")
+    assert choose_cast_action(game, ME) is None
+
+
+def test_a_combat_a_cast_adds_is_a_fight_it_is_weighed_through(pool):
+    """Relentless Assault after the Bear has attacked: "untap all creatures
+    that attacked this turn. After this main phase, there is an additional
+    combat phase" (CR 500.8). Nothing it does is left at the end of the turn
+    but what the second attack did, so a reading that fought only the turn's
+    first combat — from its precombat main phase — held it."""
+    game = _table(pool, ["Relentless Assault"], mine=[BEAR])
+    run_ai_combat_phase(game, ME)
+    assert game.current_turn_phase == "postcombat_main"
+    assert game.players[OPP].life == 18
+    action = choose_cast_action(game, ME)
+    assert action is not None and action.card_name == "Relentless Assault"
+    # Priced at the second attack's two damage: proposed before for the
+    # turn's plan left unspent on a copy run straight to its cleanup.
+    assert action.score - SPELL_BASE_SCORE == pytest.approx(2.0)
+    result = game.cast_from_hand(ME, action.card_name, **cast_announcement(action))
+    assert result.supported, result.details
+    resolve_stack(game)
+    assert game.enter_next_turn_phase() == "combat"
+    run_ai_combat_phase(game, ME)
+    assert game.players[OPP].life == 16
 
 
 def test_the_lone_blocker_is_tapped_before_the_attack(pool):

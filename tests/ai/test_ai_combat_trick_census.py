@@ -17,7 +17,10 @@ is gone once the turn has run out with no combat fought, or more of its good
 is than is left. A pump, a shrink, an evasion ability or a shield for the
 turn, "can't block", a tap, a Fog, a theft until end of turn, Hatred. A
 removal spell, a draw, a discard leave what they leave and are not in it; a
-ritual, whose mana is gone because it is spent, is not either.
+ritual, whose mana is gone because it is spent, is not either, nor a cast
+that opens another (Recoup, Yawgmoth's Will), for the same reason. A combat
+a cast *adds* (CR 500.8: Relentless Assault, Seize the Day) is fought like
+the turn's own, from whichever main phase the cast is made in.
 
 **The boards** are the caster's own turn with one creature each way, built
 for no card: ``open`` (nothing in front of the attacker), ``rival`` (a 2/2
@@ -55,7 +58,7 @@ Five findings, by board:
 
 **Validated backwards**, the whole pool (229 ``(card, mode)``s of 223 cards,
 seven boards each), on ``e67196d6``, where a rehearsal fought no combat:
-**716 idle, 34 losses, 514 mispriced, 9 held, 9 smaller**. A seat proposed
+**732 idle, 34 losses, 514 mispriced, 9 held, 9 smaller**. A seat proposed
 the trick on 226 of the 227 ``after`` boards and 228 of the 229 ``sick``
 ones; Fog was a loss on ``open`` and ``lethal`` (its caster's own attack
 stopped) and idle on four boards; Giant Growth was priced at 1.875, a
@@ -63,12 +66,16 @@ quarter of the +3/+3 it lends, on boards where it put three damage through
 (3.0) or won the fight (9.0, 8.4), and was cast for that quarter where the
 Bear could not attack; Hatred was held with lethal on the table. With the
 second reading as it stood when it was first built (a precombat cast read
-again through the fight, and nothing else): 76 idle (a ping at a creature
+again through the fight, and nothing else): 94 idle (a ping at a creature
 that survives it, a Fog over an attack into a Wall — each "moved" only the
-turn's record of who dealt damage), 16 held (every "prevent the next N
-damage to any target", whose target was still chosen with no fight in the
-reading; Hatred at an X of ten). Now: the fourteen pinned below, none of
-them the fight's.
+turn's record of who dealt damage — and a tap of a creature its untap step
+undoes), 16 held (every "prevent the next N damage to any target", whose
+target was still chosen with no fight in the reading; Hatred at an X of
+ten), 3 losses and 4 mispriced. Now, over 232 ``(card, mode)``s of 226
+cards: the fourteen pinned below, none of them the fight's. (Three more
+cards are in the population because the digest the census compares with,
+``ai_valuation.position_digest``, now reads exile and the standing
+permissions by name.)
 
 The whole pool takes several minutes, so the suite runs a fixed share of the
 population (``SAMPLE_EVERY``) plus every card named in a pin or in ``ALWAYS``,
@@ -94,10 +101,11 @@ from engine import Game, PlayerState
 from engine.ai_combat import run_ai_combat_phase
 from engine.ai_policy import (SPELL_BASE_SCORE, SWING_CAP, cast_announcement,
                               choose_cast_action, tap_planned_lands)
-from engine.ai_valuation import (CARD_WORTH, position_digest, same_position,
-                                 scratch_copy, standing_swing, standings,
-                                 swing_worth)
+from engine.ai_valuation import (CARD_WORTH, permitted_casts, position_digest,
+                                 same_position, scratch_copy, standing_swing,
+                                 standings, swing_worth)
 from engine.damage_events import DAMAGED_THIS_GAME
+from engine.mixins._constants import phases_after
 from engine.models import Permanent
 from tests.ai import test_ai_mode_chooser_census as modes
 from tests.ai.test_ai_idle_cast_census import only_mode
@@ -122,10 +130,6 @@ class Layout:
     #: The caster's creatures came under its control this turn (CR 302.6).
     sick: bool = False
     phase: str = "precombat_main"
-
-    @property
-    def fight_to_come(self) -> bool:
-        return self.phase == "precombat_main"
 
 
 BOARDS = {
@@ -184,15 +188,36 @@ def board(card, name: str) -> Game:
     return game
 
 
+def combat_ahead(game) -> bool:
+    """Whether *game* is in a main phase with nothing on the stack and a
+    combat phase left in its turn's plan — the turn's own, or one a cast
+    added after this main phase (CR 500.8: Relentless Assault)."""
+    if game.stack or game.pending_choices or game.is_game_over():
+        return False
+    if game.current_turn_phase not in ("precombat_main", "postcombat_main"):
+        return False
+    plan = getattr(game, "turn_phases_remaining", None)
+    if plan is None:
+        plan = phases_after(game.current_turn_phase)
+    return "combat" in plan
+
+
 def run_out(game, *, fight: bool) -> None:
-    """The turn run out: the turn's combat fought first if *fight* (the
-    attack and the blocks declared by the policies that declare them), then
-    whatever of a combat is still owed, then CR 514's cleanup."""
+    """The turn run out: every combat still to come fought first if *fight*
+    (the attack and the blocks declared by the policies that declare them),
+    then whatever of a combat is still owed, then CR 514's cleanup."""
     modes.settle(game)
-    if fight and game.current_turn_phase == "precombat_main" and not game.is_game_over():
+    for _ in range(4 if fight else 0):
+        if not combat_ahead(game):
+            break
+        before = (game.current_turn_phase, repr(game.turn_phases_remaining))
+        if game.current_turn_phase != "precombat_main" and game.enter_next_turn_phase() != "combat":
+            break
         random.seed(SEED)
         run_ai_combat_phase(game, game.active_player_index)
         modes.settle(game)
+        if (game.current_turn_phase, repr(game.turn_phases_remaining)) == before:
+            break
     for _ in range(8):
         if game.current_turn_phase != "combat" or game.is_game_over():
             break
@@ -208,15 +233,24 @@ def run_out(game, *, fight: bool) -> None:
 
 def lasting_digest(game) -> dict:
     """``position_digest`` of a board whose turn has run out, with the
-    record of what damage was dealt left out: the damage is gone by then
-    (CR 514.2), and what it did — a life lost, a creature dead — is on the
-    table. Left in, an attack into a Wall that survives it is "changed" by a
-    Fog that stopped two damage cleanup would have removed."""
+    record of what damage was dealt left out and the opponent's permanents
+    untapped: the damage is gone by then (CR 514.2), the tap is gone at its
+    controller's untap step (CR 502.3), and what either did — a life lost, a
+    creature dead — is on the table. Left in, an attack into a Wall that
+    survives it is "changed" by a Fog that stopped two damage cleanup would
+    have removed, and a creature tapped after the fight is "changed" until
+    the moment it could next have done anything.
+
+    The census's own copy of what the rehearsal reads (``ai_valuation``'s
+    ``forget_damage_history`` and ``untap_for_the_next_turn``), so that it
+    runs on a tree that has neither."""
     entries = getattr(getattr(game, "damage_ledger", None), "entries", None)
     if isinstance(entries, list):
         entries.clear()
     for permanent in game.all_permanents():
         permanent.metadata.pop(DAMAGED_THIS_GAME, None)
+    for permanent in game.controlled_by(OPP):
+        permanent.tapped = False
     return position_digest(game)
 
 
@@ -244,6 +278,23 @@ def template(card, name: str) -> dict:
     return _TEMPLATES[key]
 
 
+def casts_open(game) -> set:
+    """``(zone, spell)`` for every cast seat 0 may make from outside its
+    hand (``ai_valuation.permitted_casts``, the engine's list)."""
+    return {(permitted.zone, permitted.spell.name) for permitted in permitted_casts(game, ME)}
+
+
+def spent_on_another_cast(card, mana_before, could_cast, game) -> bool:
+    """Whether the cast just resolved on *game* made mana, or opened a cast
+    seat 0 could not make before ("you may play cards from your graveyard
+    this turn") — its own card aside. Either is gone by the end of the turn
+    because it is spent, on a cast that is not this one: a ritual, not a
+    trick."""
+    return modes.mana_made(mana_before, game) or any(
+        name != card.name for _zone, name in casts_open(game) - could_cast
+    )
+
+
 def _only_the_card(raw: float) -> bool:
     """Whether a standing swing with the spell's own card in it is that card
     and nothing else: spent (minus a card), or bought back (CR 702.27a)."""
@@ -264,7 +315,9 @@ def read(card, built: dict, layout: Layout, game, moved: bool, made_mana: bool) 
     (``ai_valuation.rehearse``), so a spell bought back is a card to the
     good; whether anything *else* changed is asked without it."""
     now = standing_swing(built["now"], standings(game), ME) + CARD_WORTH
-    fought = scratch_copy(game) if layout.fight_to_come else None
+    # A fight still to come, read off the board the cast left: the turn's
+    # own, or one the cast added.
+    fought = scratch_copy(game) if combat_ahead(game) else None
     run_out(game, fight=False)
     raw = standing_swing(built["plain"], standings(game, now=False), ME)
     lasting = raw + CARD_WORTH
@@ -329,6 +382,7 @@ def cast_by_hand(card, name: str, announcement: dict) -> "dict | None":
     game = scratch_copy(built["game"])
     before = modes.table_state(game, card)
     mana_before = modes.pools(game)
+    could_cast = casts_open(game)
     random.seed(SEED)
     try:
         result = game.queue_from_hand(ME, card.name, **announcement)
@@ -337,7 +391,7 @@ def cast_by_hand(card, name: str, announcement: dict) -> "dict | None":
         modes.settle(game)
         got = read(
             card, built, BOARDS[name], game, modes.table_state(game, card) != before,
-            modes.mana_made(mana_before, game),
+            spent_on_another_cast(card, mana_before, could_cast, game),
         )
     except Exception:
         return None
@@ -383,6 +437,7 @@ def proposal(card, mode, name: str) -> dict:
             out["score"] = action.score
             before = modes.table_state(game, card)
             mana_before = modes.pools(game)
+            could_cast = casts_open(game)
             action = tap_planned_lands(game, ME, action) or action
             random.seed(SEED)
             result = game.queue_from_hand(ME, action.card_name, **cast_announcement(action))
@@ -392,7 +447,7 @@ def proposal(card, mode, name: str) -> dict:
             modes.settle(game)
             out["own"] = read(
                 card, built, BOARDS[name], game, modes.table_state(game, card) != before,
-                modes.mana_made(mana_before, game),
+                spent_on_another_cast(card, mana_before, could_cast, game),
             )
     except Exception as exc:  # a crash is a finding, not a pass
         out["error"] = f"EXC {type(exc).__name__}: {exc}"
@@ -551,7 +606,7 @@ def test_the_population_is_the_pool_s_combat_tricks():
 #: (On the tree before the fight was weighed, every board's third number but
 #: ``rival``'s was a handful: the trick was cast there anyway.)
 FLOORS = {
-    "after": (60, 15, 40), "bare": (18, 0, 15), "lethal": (60, 20, 20),
+    "after": (60, 12, 40), "bare": (18, 0, 15), "lethal": (60, 20, 20),
     "open": (60, 20, 20), "rival": (60, 35, 12), "sick": (60, 8, 40),
     "wall": (60, 30, 22),
 }
