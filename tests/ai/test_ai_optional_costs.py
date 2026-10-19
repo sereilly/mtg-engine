@@ -37,7 +37,7 @@ from engine.card_loader import manifest_set_path
 from engine.faces import castable_faces
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
-from tests.helpers import _mk_card, resolve_stack
+from tests.helpers import _mk_card, declare_attack, resolve_stack
 
 
 def _w2g6_table(
@@ -214,11 +214,19 @@ def test_w2g6_a_buyback_paid_in_life_keeps_a_reserve(catalog_by_name):
 def test_w2g6_a_buyback_paid_in_lands_is_for_a_seat_with_lands_to_spare(catalog_by_name):
     """Constant Mists, "Buyback—Sacrifice a land": the engine's own candidate
     list is what is counted, so the land sacrificed is one the cost would take."""
-    few = _w2g6_table(catalog_by_name, ["Constant Mists"], ["Forest"] * 4)
+    # Under an attack, both times: a Fog in its caster's own main phase stops
+    # nothing but the caster's own creatures, and is no longer cast there.
+    few = _w2g6_table(
+        catalog_by_name, ["Constant Mists"], ["Forest"] * 4, theirs=["Hill Giant"],
+    )
+    declare_attack(few, 1)
     assert choose_cast_action(few, 0).optional_cost_payments is None
 
     lands = BUYBACK_PERMANENTS_KEPT + 2
-    many = _w2g6_table(catalog_by_name, ["Constant Mists"], ["Forest"] * lands)
+    many = _w2g6_table(
+        catalog_by_name, ["Constant Mists"], ["Forest"] * lands, theirs=["Hill Giant"],
+    )
+    declare_attack(many, 1)
     action = choose_cast_action(many, 0)
     assert action.optional_cost_payments == {"sacrifice a land": 1}
     assert _w2g6_cast(many, action).supported
@@ -284,7 +292,10 @@ def test_w2g6_an_offer_that_changes_the_spell_is_declined(catalog_by_name):
     stated, and counted in the census above as the pool's one such card."""
     game = _w2g6_table(
         catalog_by_name, ["Undergrowth"], ["Forest", "Mountain", "Mountain", "Mountain"],
+        theirs=["Hill Giant"],
     )
+    # Under an attack: a Fog is not cast in its caster's own main phase.
+    declare_attack(game, 1)
     action = choose_cast_action(game, 0)
     assert action is not None and action.optional_cost_payments is None
     assert len(action.land_tap_indices) == 1

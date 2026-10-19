@@ -58,8 +58,7 @@ import pytest
 from engine import Game, PlayerState
 from engine import ai_simulator
 from engine.ai_policy import choose_cast_action
-from engine.ai_valuation import (CARD_WORTH, standing_swing, standings,
-                                 swing_worth)
+from engine.ai_valuation import CARD_WORTH, scratch_copy, standings
 from engine.oracle import compile_card_oracle
 from tests.ai import test_ai_mode_chooser_census as modes
 
@@ -136,16 +135,14 @@ def untouched(layout: str) -> tuple:
     return _UNTOUCHED[layout]
 
 
-def worth(game, card, layout: str, before_now: tuple) -> float:
-    """What the cast of *card* that has just resolved on *game* was worth to
-    seat 0."""
-    # The spell's own card is not part of what the cast did — unless it is
-    # back in the hand it left (buyback), and then nothing was spent.
-    spent = CARD_WORTH * (0 if any(held is card for held in game.players[ME].hand) else 1)
-    now = standing_swing(before_now, standings(game), ME) + spent
-    modes.run_out(game)
-    lasting = standing_swing(untouched(layout), standings(game, now=False), ME) + spent
-    return round(swing_worth(now, lasting), 3)
+def worth(
+    game, card, layout: str, before_now: tuple, before_cast, moved: bool,
+) -> "tuple[float, bool]":
+    """``(swing, moved)`` for the cast of *card* that has just resolved on
+    *game*: what it was worth to seat 0, and whether what it moved is still
+    moved once the turn is over — the turn's combat fought, where the cast
+    was one made for it (``modes.weighed``, the mode census's reading)."""
+    return modes.weighed(card, game, before_cast, moved, before_now, untouched(layout))
 
 
 def own_slot(game, layout: str, action) -> "int | None":
@@ -169,6 +166,7 @@ def twin_measure(card, mode, layout: str, action, slot: int) -> "float | None":
     if twin is None or mine is None or twin.card.name != mine.card.name:
         return None
     before_now = standings(game)
+    before_cast = scratch_copy(game)
     result = game.queue_from_hand(
         ME, card.name, mode_index=mode, x_value=action.x_value,
         target_player_index=OPP, target_permanent_ids=[twin.permanent_id],
@@ -176,7 +174,7 @@ def twin_measure(card, mode, layout: str, action, slot: int) -> "float | None":
     if not result.supported:
         return None
     modes.settle(game)
-    return worth(game, card, layout, before_now)
+    return worth(game, card, layout, before_now, before_cast, True)[0]
 
 
 class only_mode:
@@ -224,6 +222,7 @@ def run(card, mode, layout: str) -> dict:
             before = modes.table_state(game, card)
             mana_before = modes.pools(game)
             before_now = standings(game)
+            before_cast = scratch_copy(game)
             report = ai_simulator.SimulationReport(
                 games_requested=1, games_completed=0, interaction_count=0,
             )
@@ -233,11 +232,14 @@ def run(card, mode, layout: str) -> dict:
                 row["error"] = "; ".join(report.refused_casts) or "refused"
                 return row
             modes.settle(game)
-            row["moved"] = (
-                modes.table_state(game, card) != before
-                or modes.mana_made(mana_before, game)
+            made_mana = modes.mana_made(mana_before, game)
+            row["swing"], still_moved = worth(
+                game, card, layout, before_now, before_cast,
+                modes.table_state(game, card) != before,
             )
-            row["swing"] = worth(game, card, layout, before_now)
+            # Mana is gone by the end of the turn because it is spent, on a
+            # cast this row is not a row of: a ritual moved something.
+            row["moved"] = still_moved or made_mana
         if slot is not None:
             row["twin"] = twin_measure(card, mode, layout, action, slot)
     except Exception as exc:  # a crash is a finding, not a pass
@@ -311,11 +313,16 @@ IDLE: dict = {}
 #: (``ai_valuation._rehearsal_seed``): it says what such a cast is *like* and
 #: must not say how the real flip will fall. Its sample won; this sweep's
 #: cast, on the seed `run` fixes, lost.
+#:
+#: Desperate Gambit is the same flip one step on: won, the chosen source's
+#: next damage this turn is doubled; lost, it is prevented. The rehearsal's
+#: attacker hit for four and this sweep's for none.
 _COIN = "a coin flip: the rehearsal's sample won it, the cast lost it"
 LOSSES: dict = {
     ("Game of Chaos", None, "empty"): _COIN,
     ("Game of Chaos", None, "own"): _COIN,
     ("Game of Chaos", None, "mirror"): _COIN,
+    ("Desperate Gambit", None, "own"): _COIN,
 }
 
 #: Casts that name the caster's own permanent with a better twin opposite.

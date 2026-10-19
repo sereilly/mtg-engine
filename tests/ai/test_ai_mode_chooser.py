@@ -63,6 +63,14 @@ def _duel(hand=(), mine=(), theirs=(), my_graveyard=(), library=()):
     return game
 
 
+def _arrived_this_turn(game, seat: int) -> None:
+    """Every creature *seat* controls came under its control this turn
+    (CR 302.6): it cannot attack unless something gives it haste."""
+    for permanent in game.controlled_by(seat):
+        if permanent.is_creature:
+            permanent.metadata["summoning_sickness_turn"] = game.turn
+
+
 def _cast(game, action):
     """Make *action*'s announcement the way every executor does, and resolve."""
     spell = spell_being_cast(game.players[0].hand, action)
@@ -234,6 +242,10 @@ def test_a_bullet_that_could_only_hurt_its_caster_loses_to_one_that_helps(catalo
     mine = _mk_creature_card("Own Bear", 2, 2)
     card = catalog_by_name["Chaos Charm"]
     game = _duel(hand=[card], mine=[mine])
+    # A creature that came in this turn (CR 302.6): the one haste is *for*.
+    # On a creature that could attack anyway it is a cast that buys nothing,
+    # and a seat no longer makes one.
+    _arrived_this_turn(game, 0)
     assert game.announceable_modes(0, card) == [1, 2]
 
     action = choose_cast_action(game, 0)
@@ -280,8 +292,11 @@ def test_the_template_needs_no_name():
     _cast(game, action)
     assert _names(game.players[1].graveyard) == ["Their Relic"]
 
-    mine = _mk_creature_card("Own Bear", 2, 2)
-    game = _duel(hand=[probe], mine=[mine], theirs=[_mk_creature_card("Their Bear", 2, 2)])
+    # A creature that came in this turn, and across the table one too small
+    # to stop it: haste is what puts three damage through.
+    mine = _mk_creature_card("Own Ogre", 3, 3)
+    game = _duel(hand=[probe], mine=[mine], theirs=[_mk_creature_card("Their Squire", 1, 1)])
+    _arrived_this_turn(game, 0)
     action = choose_cast_action(game, 0)
     assert action is not None and action.mode_index == 1
     assert game.permanent_by_id(action.target_permanent_ids[0]).card is mine

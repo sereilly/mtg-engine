@@ -40,16 +40,22 @@ Three legs per mode:
 ``forced``
     the same board with ``Game.announceable_modes`` answering only this mode:
     "were this the one mode on offer, is it proposed, is the cast accepted in
-    that mode, and does the resolution do anything?" Every mode but one has a
-    board, and all 87 pass — which is the claim that no bullet in the pool is
-    out of an AI seat's reach. A seat no longer casts a spell that changes
-    nothing, so a mode's board is one it has something to act on.
+    that mode, and does the resolution do anything?" A seat no longer casts a
+    spell that changes nothing, so a mode's board is one it has something to
+    act on — and it no longer casts one **nothing of which outlasts the
+    turn**, so of the 85 modes with a board 74 are proposed and eleven are
+    *held* (``HELD``): "target creature gains flying until end of turn" at a
+    creature with nothing to fly over. Each of those eleven is held because the
+    census's own cast of it there, the turn's fight fought, leaves nothing
+    behind (``weighed``) — the engine's answer, not the policy's.
 ``measured``
     **is the cast the larger one?** For the mode and every sibling its board
     leaves worth casting, each is cast *by hand* at every target the engine's
     picker offers, and each cast is priced with ``ai_valuation``'s one
     definition of "larger": the swing in each seat's standing, as the board
-    stood and again once the turn had run out. The policy's own cast, made
+    stood and again once the turn had run out — **with the turn's combat
+    fought**, for a cast made before it whose good is this turn's only
+    (``weighed``). The policy's own cast, made
     through the real executor and priced the same way, must measure as much
     as the best of them (``SMALLER``, empty). The policy predicts with that
     definition by rehearsing a cast on a copy of the game; this measures with
@@ -60,6 +66,7 @@ whole table.
 """
 from __future__ import annotations
 
+import random
 import sys
 from collections import Counter
 from dataclasses import replace
@@ -71,7 +78,11 @@ from engine import Game, PlayerState
 from engine import ai_simulator
 from engine.ai_policy import (choose_cast_action,
                               choose_combat_instant_cast_action)
-from engine.ai_valuation import (CARD_WORTH, instruction_target_side,
+from engine.ai_valuation import (CARD_WORTH, combat_is_still_to_come,
+                                 forget_damage_history,
+                                 instruction_target_side, position_digest,
+                                 priced_by_the_fight, run_out_the_turn,
+                                 same_position, scratch_copy,
                                  several_target_slot_sides, standing_swing,
                                  standings, swing_worth)
 from engine.auras import attach_aura
@@ -504,11 +515,17 @@ def settle(game) -> None:
 
 
 def run_out(game) -> None:
-    """CR 514 on the spot: "until end of turn" ends and marked damage goes.
-    Nothing is declared on the way, so what is read afterwards is what the
-    cast left and not what a policy then did with it."""
+    """The turn run out: a combat whose attack is declared and whose blocks
+    nobody is owed deals its damage, then CR 514 — "until end of turn" ends
+    and marked damage goes (``ai_valuation.run_out_the_turn``, the reading a
+    rehearsal takes). Nothing is declared on the way, so what is read
+    afterwards is what the cast left and not what a policy then did with it.
+
+    The damage is part of it because a response is *for* the damage: "prevent
+    the next 3 damage" cast under an attack measured nothing while this
+    stopped short of the combat it was cast in."""
     settle(game)
-    game.resolve_cleanup_step(game.active_player_index)
+    run_out_the_turn(game)
     settle(game)
 
 
@@ -531,21 +548,92 @@ def baseline(card, built) -> dict:
     return _BASELINES[key]
 
 
-def measure(card, built, game) -> float:
-    """What the cast that has just resolved on *game* — a census board built
-    from *built* — was worth to seat 0: ``ai_valuation.swing_worth`` of its
-    standing swing now and once the turn has run out, against the same board
-    with nothing cast. The spell's own card is not part of it."""
-    untouched_board = baseline(card, built)
+def weighed(
+    card, game, before_cast, moved: bool, untouched_now: tuple,
+    untouched_lasting: tuple, *, in_main: bool = True,
+) -> "tuple[float, bool]":
+    """``(swing, moved)`` for the cast that has just resolved on *game*: what
+    it was worth to seat 0, and whether what it moved is **still moved once
+    the turn is over**.
+
+    The swing is ``ai_valuation.swing_worth`` of seat 0's standing swing now
+    and once the turn has run out, against the same board with nothing cast
+    (*untouched_now*, *untouched_lasting*). The spell's own card is not part
+    of it.
+
+    **A cast made before the turn's fight is priced with the fight fought**,
+    where a reading with no combat in it cannot price it
+    (``ai_valuation.priced_by_the_fight``: everything it changed is gone by
+    the end of the turn, or more of its good is than is left). Then the
+    attack, the blocks and the damage are played on a copy of the board as
+    the cast left it and on a copy of it with nothing cast (*before_cast*,
+    taken before the cast: ``ai_valuation.scratch_copy``), each run to the
+    end of its turn (``ai_valuation.run_out_the_turn``), and the swing is
+    between those two — and a cast that has left nothing even then **moved
+    nothing**: a pump on a creature that had no fight to decide, a shield
+    nothing came for, a Fog over a turn nobody attacked in.
+
+    The fight is the engine's and the policies' that declare it, on real
+    copies of a real board; the price is ``ai_valuation``'s standing. Nothing
+    here goes through a rehearsal.
+    """
     # The spell's own card is not part of what the cast did — unless it is
     # back in the hand it left (buyback), and then nothing was spent.
-    spent = CARD_WORTH * (0 if card in game.players[ME].hand else 1)
-    now = standing_swing(untouched_board["now"], standings(game), ME) + spent
+    spent = CARD_WORTH * (0 if any(held is card for held in game.players[ME].hand) else 1)
+    to_come = in_main and combat_is_still_to_come(game, ME)
+    spares = (scratch_copy(game), scratch_copy(before_cast)) if to_come else None
+    now = standing_swing(untouched_now, standings(game), ME) + spent
     run_out(game)
-    lasting = standing_swing(
-        untouched_board["lasting"], standings(game, now=False), ME
+    lasting = standing_swing(untouched_lasting, standings(game, now=False), ME) + spent
+    swing = round(swing_worth(now, lasting), 3)
+    # Whether anything it changed is still changed: asked of the same board
+    # with nothing cast, run out the same way.
+    run_out(before_cast)
+    gone = abs(lasting) < 1e-9 and same_position(
+        lasting_digest(before_cast), lasting_digest(game),
+        spell_name=card.name, caster=ME,
+    )
+    if spares is None:
+        # No fight still to come (a response, a cast in combat): what is gone
+        # by the end of the turn moved nothing that lasted.
+        return swing, moved and not gone
+    if not priced_by_the_fight(now, lasting, gone):
+        return swing, moved
+    fought, untouched_fought = spares
+    # The fight's coin flips are its own: the row that follows this one is
+    # not to be cast on whatever randomness a combat here happened to use.
+    sequence = random.getstate()
+    try:
+        run_out_the_turn(untouched_fought, through_combat=True)
+        run_out_the_turn(fought, through_combat=True)
+    finally:
+        random.setstate(sequence)
+    left = standing_swing(
+        standings(untouched_fought, now=False), standings(fought, now=False), ME
     ) + spent
-    return round(swing_worth(now, lasting), 3)
+    still = abs(left) > 1e-9 or not same_position(
+        lasting_digest(untouched_fought), lasting_digest(fought),
+        spell_name=card.name, caster=ME,
+    )
+    return round(left, 3), moved and still
+
+
+def lasting_digest(game) -> dict:
+    """``ai_valuation.position_digest`` of a board whose turn has run out,
+    without the record of what damage was dealt
+    (``ai_valuation.forget_damage_history``, the rehearsal's own reading):
+    the damage is gone by then, and what it did is on the table."""
+    forget_damage_history(game)
+    return position_digest(game)
+
+
+def measured(card, built, game, before_cast, moved: bool) -> "tuple[float, bool]":
+    """:func:`weighed` for a cast on a census board built from *built*."""
+    untouched_board = baseline(card, built)
+    return weighed(
+        card, game, before_cast, moved, untouched_board["now"],
+        untouched_board["lasting"], in_main=built["window"] is None,
+    )
 
 
 def announcements(card, index, built, x_value) -> list:
@@ -582,6 +670,7 @@ def cast_by_hand(card, built, announcement) -> "dict | None":
     whether it moved anything — or None when the engine refuses it."""
     game, _ = fresh(card, built)
     before = table_state(game, card)
+    before_cast = scratch_copy(game)
     keywords = dict(announcement)
     if "bait" in keywords:
         seat, slot = keywords.pop("bait")
@@ -600,7 +689,8 @@ def cast_by_hand(card, built, announcement) -> "dict | None":
         zones(game, card) != untouched(card, built) if built["window"] == "stack"
         else table_state(game, card) != before
     )
-    return {"swing": measure(card, built, game), "moved": moved, "named": announcement}
+    swing, moved = measured(card, built, game, before_cast, moved)
+    return {"swing": swing, "moved": moved, "named": announcement}
 
 
 def best_announcement(card, index, built, x_value) -> "dict | None":
@@ -918,6 +1008,7 @@ def run(card, index, built, *, forced: bool) -> dict:
         game, _ = fresh()
         before = signature(game, card)
         state_before = table_state(game, card)
+        before_cast = scratch_copy(game)
         if window is None:
             report = ai_simulator.SimulationReport(
                 games_requested=1, games_completed=0, interaction_count=0,
@@ -964,11 +1055,11 @@ def run(card, index, built, *, forced: bool) -> dict:
             # ...and what the cast was worth, and whether it moved anything
             # at all — the game's own records counted (`table_state`).
             settle(game)
-            outcome["moved"] = (
+            outcome["swing"], outcome["moved"] = measured(
+                card, built, game, before_cast,
                 outcome["changed"] if window == "stack"
-                else table_state(game, card) != state_before
+                else table_state(game, card) != state_before,
             )
-            outcome["swing"] = measure(card, built, game)
     except Exception as exc:  # a crash is a finding, not a pass
         outcome["error"] = f"EXC {type(exc).__name__}: {exc}"
     finally:
@@ -1065,6 +1156,18 @@ def larger(row: dict) -> "str | None":
     return None
 
 
+def rightly_held(row: dict, leg: str) -> bool:
+    """Whether *leg* cast nothing on this row's board **and was right to**:
+    the mode, cast by hand at every target the engine's picker offers it
+    there, moves nothing that is still moved once the turn is over
+    (``weighed``) — "gains haste until end of turn" on a creature that could
+    attack anyway, a shield with no damage coming. Holding the card for a
+    board on which it does something is the play; casting it was the defect.
+    """
+    best = row["bests"].get(row["mode"])
+    return row[leg]["proposed"] is None and best is not None and not best["moved"]
+
+
 def findings(result: dict) -> dict:
     """The census read as failures, by leg."""
     out: dict = {
@@ -1086,7 +1189,7 @@ def findings(result: dict) -> dict:
                 problems.append(got["error"])
             named = got["proposed"]
             if named is None or row["mode"] not in named:
-                if exclusive:
+                if exclusive and not rightly_held(row, leg):
                     problems.append(f"proposed {named}")
             else:
                 if got["announced"] != named:
@@ -1174,6 +1277,47 @@ UNBUILDABLE = {
     # on the stack, not abilities. The mode is announceable only in response
     # to one, which is `choose_combat_instant_cast_action`'s window.
     ("Sublime Epiphany", 1): "no census spell on the stack is a legal target",
+    # "Creatures without flying can't block this turn" and "each land of the
+    # first chosen type becomes the second until end of turn": everything
+    # either does is over with the turn, and what it is *for* is a fight —
+    # an attacker with a blocker in front of it. A census board is one
+    # permanent; none of them is that fight. Each had a board while a cast
+    # was priced with the turn's combat left out, on which it "did something"
+    # that was gone by cleanup.
+    ("Destructive Tampering", 1): "it has nothing to act on on any census board",
+    ("Vision Charm", 1): "it has nothing to act on on any census board",
+}
+
+#: Modes with a board on which **nothing is cast**, each with why: the mode's
+#: whole effect is over with the turn, and on its census board — one bait, in
+#: the caster's own main phase — it decides no fight. The census's own cast of
+#: each, with the turn's combat fought, leaves nothing behind (`rightly_held`),
+#: which is what makes this a list of right answers rather than of misses.
+#:
+#: Every one was proposed until the policy weighed a precombat cast through
+#: the fight (``ai_policy._weighed_through_the_fight``): cast, at
+#: ``SPELL_BASE_SCORE`` and a quarter of whatever it lent, on the first main
+#: phase it was castable in. Named, because a sweep that silently drops what
+#: it does not reach reports a smaller pool as a clean one: these eleven are
+#: reached only where there is a fight for them to decide, and the fight
+#: boards are ``tests/ai/test_ai_precombat_tricks.py``'s.
+_NO_FIGHT = "for a turn, on a creature with no fight to decide"
+HELD = {
+    # "Chaos Charm deals 1 damage to target creature", at a creature it does
+    # not kill: the damage is gone at cleanup (CR 514.2), and was a change
+    # that lasted only while the turn's record of who dealt what was read
+    # as one (``ai_valuation.forget_damage_history``).
+    ("Chaos Charm", 1): "1 damage to a creature it does not kill, with no fight to finish it",
+    ("Chaos Charm", 2): "haste " + _NO_FIGHT + " and no summoning sickness to lift",
+    ("Ebony Charm", 2): "fear " + _NO_FIGHT,
+    ("Emerald Charm", 2): "an opposing flyer grounded for a turn it was not blocking in",
+    ("Funeral Charm", 2): "swampwalk " + _NO_FIGHT,
+    ("Hearth Charm", 2): "unblockable " + _NO_FIGHT,
+    ("Hope Charm", 0): "first strike " + _NO_FIGHT,
+    ("Rith's Charm", 2): "a shield against a source with no damage coming",
+    ("Sapphire Charm", 1): "flying " + _NO_FIGHT,
+    ("Seedling Charm", 1): "a regeneration shield with nothing to survive",
+    ("Seedling Charm", 2): "trample " + _NO_FIGHT,
 }
 
 #: Modes whose own board leaves a sibling worth casting too, and the sibling
@@ -1208,13 +1352,12 @@ SHADOWED = {
     ("Funeral Charm", 2): ([0], "a card out of the opposing hand against swampwalk for a turn"),
     ("Healing Salve", 1): ([0], "three life lasts; a shield with no damage coming measures nothing"),
     ("Hope Charm", 0): ([1], "two life against first strike for a turn"),
-    ("Ivory Charm", 0): ([1], "a tap takes the opposing creature's whole body for the turn, -2/-0 its power"),
+    ("Ivory Charm", 2): ([0], "under an attack, -2/-0 on the attacker stops two damage and the shield one"),
     ("Parch", 1): ([0], "a tie: either bullet kills the 1/1, and printed order breaks it"),
     ("Read the Tides", 1): ([0], "three cards against one creature back in a hand"),
     ("Rith's Charm", 0): ([1], "three Saprolings against one land"),
     ("Rith's Charm", 2): ([1], "three Saprolings against a shield with no damage coming"),
-    ("Seedling Charm", 1): ([2], "trample is on the creature now; a regeneration shield with nothing to survive is not"),
-    ("Vision Charm", 1): ([0], "a tie at nothing the standing counts: four cards milled, land types swapped for a turn"),
+    ("Sapphire Charm", 1): ([0], "a card next upkeep is still coming at the end of the turn; flying with nothing to fly over is not"),
 }
 
 #: Boards on which the cast the policy made measures **less** than some
@@ -1234,8 +1377,8 @@ def test_the_census_examined_the_pool(result):
     counted = counts(result)
     assert counted["cards"] >= 34
     assert counted["modes"] >= 88
-    assert counted["boards_built"] >= 87
-    assert counted["exclusive_boards"] >= 41
+    assert counted["boards_built"] >= 85
+    assert counted["exclusive_boards"] >= 40
     # ...and that the measuring leg measured: every board has a best cast to
     # compare with, and the sibling of every shadowed mode was cast by hand.
     built = [row for row in result["rows"] if "unbuildable" not in row]
@@ -1263,9 +1406,16 @@ def test_a_mode_that_is_the_only_one_worth_casting_is_the_one_cast(result):
         f"{tag}: {what}" for tag, what in found["natural"]
     )
     counted = counts(result)
-    assert (
-        counted["natural_exclusive_proposed_as_mode"] == counted["exclusive_boards"]
+    held = sum(
+        1 for row in result["rows"]
+        if "unbuildable" not in row and not row["shadowed_by"]
+        and rightly_held(row, "natural")
     )
+    assert (
+        counted["natural_exclusive_proposed_as_mode"]
+        == counted["exclusive_boards"] - held
+    )
+    assert counted["natural_exclusive_proposed_as_mode"] >= 36
 
 
 def test_every_mode_is_within_reach(result):
@@ -1278,8 +1428,25 @@ def test_every_mode_is_within_reach(result):
         f"{tag}: {what}" for tag, what in found["forced"]
     )
     counted = counts(result)
-    assert counted["forced_cast_accepted_in_mode"] == counted["boards_built"]
-    assert counted["nonzero_modes_reached"] >= 53
+    assert (
+        counted["forced_cast_accepted_in_mode"]
+        == counted["boards_built"] - len(HELD)
+    )
+    assert counted["forced_cast_accepted_in_mode"] >= 74
+    assert counted["nonzero_modes_reached"] >= 41
+
+
+def test_the_modes_held_on_their_board_are_the_named_ones(result):
+    """A mode offered alone and not proposed is in ``HELD`` — and is there
+    because its own cast, made by hand with the turn's fight fought, leaves
+    nothing behind. A new entry is a mode that stopped being reached; a
+    missing one is a pin gone stale."""
+    held = {
+        (row["card"], row["mode"]) for row in result["rows"]
+        if "unbuildable" not in row and rightly_held(row, "forced")
+    }
+    assert held == set(HELD), sorted(held ^ set(HELD))
+    assert all(HELD.values()), "a pin is a reason"
 
 
 def test_where_a_sibling_wins_it_is_the_pinned_one(result):

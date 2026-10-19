@@ -8,7 +8,10 @@ import re
 
 from .ai_valuation import (
     Rehearsal,
+    combat_is_still_to_come,
     deliberating,
+    has_a_creature_to_fight_with,
+    priced_by_the_fight,
     permanent_worth,
     rehearse,
     rehearsing,
@@ -1458,6 +1461,18 @@ _REHEARSAL_MANA = 40
 _IN_THE_ABSTRACT: ContextVar[bool] = ContextVar("ai_in_the_abstract", default=False)
 
 
+#: Set by `_cast_candidate_announcing` when the candidate it was building
+#: was dropped because nothing the cast does outlasts the turn
+#: (``Rehearsal.fleeting``) — for `_cast_candidate_offering`, which has other
+#: announcements of the same spell still to try and need not try them.
+_HELD_AS_FLEETING: ContextVar[bool] = ContextVar("ai_held_as_fleeting", default=False)
+
+#: Set by `_cast_candidate_sized` while it builds a candidate at one size of
+#: an X paid in life: the X `_pick_x_value` announces in place of the largest
+#: the seat's reserve allows.
+_LIFE_X_ASKED: ContextVar["tuple | None"] = ContextVar("ai_life_x_asked", default=None)
+
+
 def _held_as(player, card: CardDefinition) -> "CardDefinition | None":
     """The card in *player*'s hand that *card* is a spell of — itself, or the
     split card it is one half of (CR 709.3) — or None when the hand holds no
@@ -1503,7 +1518,7 @@ def _announcement(
 
 def _rehearse_announcement(
     game: Game, seat: int, card: CardDefinition, announcement: dict,
-    *, planned: "CastAction | None" = None,
+    *, planned: "CastAction | None" = None, through_combat: bool = False,
 ) -> Rehearsal | None:
     """What casting *card* with *announcement* would do, carried out on a
     scratch copy of the game (``ai_valuation.rehearse``) — or None when no
@@ -1529,6 +1544,10 @@ def _rehearse_announcement(
     out of and has it taken back the moment the spell is on the stack.
     Either way mana stays enforced for everything the resolution then asks
     anyone to pay.
+
+    *through_combat* runs the turn out with its combat fought, on the cast
+    and on the table it is compared with (``ai_valuation.rehearse``) — the
+    second reading `_weighed_through_the_fight` asks for.
     """
     if rehearsing():
         return None
@@ -1580,7 +1599,7 @@ def _rehearse_announcement(
             seat, card.name, held,
             (planned.land_tap_indices, planned.land_tap_colors)
             if planned is not None else None,
-            repr(sorted(announcement.items())),
+            repr(sorted(announcement.items())), through_combat,
         ),
         without=paid_for if taps else None,
         without_key=(
@@ -1588,6 +1607,7 @@ def _rehearse_announcement(
             if taps else None
         ),
         detach="abstract" if _IN_THE_ABSTRACT.get() else False,
+        through_combat=through_combat,
     )
 
 
@@ -1610,13 +1630,92 @@ def _names_an_unweighed_seat(
 
 def _worth_proposing(rehearsal: Rehearsal | None) -> bool:
     """Whether a rehearsed cast is one to propose: the engine took it, it
-    changed something, and it did not leave its caster plainly worse off.
+    changed something **that outlasts the turn**, and it did not leave its
+    caster plainly worse off.
+
+    A cast whose every trace is gone by the end of the turn
+    (``Rehearsal.fleeting``) changed something and bought nothing: a pump on
+    a creature that then did not fight, a shield nothing came for, a Fog in
+    its caster's own main phase with no attack to stop — each was proposed,
+    at ``SPELL_BASE_SCORE``, and cast whenever nothing scored higher. Mana is
+    the exception (``made_mana``): it is gone by the end of the turn *because
+    it is spent*, on a cast this rehearsal is not a rehearsal of.
 
     A cast nobody could rehearse (None) is proposed as it always was.
     """
     if rehearsal is None:
         return True
-    return rehearsal.accepted and rehearsal.changed and rehearsal.swing >= HARM_FLOOR
+    if not (rehearsal.accepted and rehearsal.changed):
+        return False
+    if _leaves_nothing(rehearsal):
+        return False
+    return rehearsal.swing >= HARM_FLOOR
+
+
+def _weighed_through_the_fight(
+    game: Game, seat: int, card: CardDefinition, announcement: dict,
+    rehearsal: Rehearsal | None, *, planned: "CastAction | None" = None,
+) -> Rehearsal | None:
+    """*rehearsal* — of casting *card* with *announcement* (paid for as
+    *planned*, once there is a plan), a cast made before the turn's combat —
+    read again **with that combat fought**, where the first reading cannot
+    price it; otherwise *rehearsal* as it is.
+
+    A rehearsal runs its copy to the end of the turn with nothing declared on
+    the way, so what a precombat cast does *to the fight* is not in it: a
+    Giant Growth is a quarter of a +3/+3 whether the creature then attacks
+    for three more or stays home, Hatred is the life it cost, and a Fog in
+    its caster's own main phase — which stops the caster's own attack — is a
+    cast that harmed nobody. The second reading plays the attack, the blocks
+    and the damage on both copies (``ai_valuation.rehearse``'s
+    *through_combat*) and what it measures is what is left when the turn is
+    over: the damage that got through, the creature that died or did not.
+
+    Asked only where it can change the answer, because it is a whole combat
+    on two copies: the seat's own precombat main phase
+    (``combat_is_still_to_come``), and a cast some of whose good is gone by
+    the end of the turn — all of it (``fleeting``), or more of it than is
+    left (``now`` above ``lasting``). A removal spell, a draw, a discard are
+    priced by what they leave and are not asked twice.
+
+    Asked by the cast being built and by the choosers that pick its target
+    (`_best_target`, `_better_than_the_seat`), because which creature a
+    shield or a pump goes on is a question about the fight too: "prevent the
+    next 3 damage that would be dealt to any target this turn" on the 2/2
+    about to trade is a creature saved, and on its controller is nothing.
+    """
+    if (
+        rehearsal is None
+        or not rehearsal.accepted
+        or not rehearsal.changed
+        or rehearsal.through_combat
+        or not combat_is_still_to_come(game, seat)
+    ):
+        return rehearsal
+    if not priced_by_the_fight(rehearsal.now, rehearsal.lasting, rehearsal.fleeting):
+        return rehearsal
+    if rehearsal.made_mana and not priced_by_the_fight(
+        rehearsal.now, rehearsal.lasting, False,
+    ):
+        # A ritual: what it left is mana, and no fight spends it. One that
+        # also lends something for the turn — "gain control of target
+        # creature until end of turn … add two mana" (Traitorous Greed) — is
+        # the creature it attacks with, and is read with the fight.
+        return rehearsal
+    if not has_a_creature_to_fight_with(game, seat):
+        # Nothing to attack with: the fight is the turn as already read.
+        return rehearsal
+    fought = _rehearse_announcement(
+        game, seat, card, announcement, planned=planned, through_combat=True,
+    )
+    return rehearsal if fought is None else fought
+
+
+def _leaves_nothing(rehearsal: Rehearsal) -> bool:
+    """Whether a rehearsed cast that changed something left none of it by the
+    end of the turn — mana aside, which is gone because it is spent
+    (`_worth_proposing`'s reading, for a chooser comparing targets)."""
+    return rehearsal.fleeting and not rehearsal.made_mana
 
 
 def choose_trigger_mode(game: Game, choice, stated: int) -> int:
@@ -1751,7 +1850,7 @@ def _cast_candidate_in_each_mode(
     built: list[CastAction] = []
     for mode_index in _modes_weighed(game, player_index, card):
         with considering_mode(card, mode_index), casting_under(under):
-            candidate = _cast_candidate_offering(
+            candidate = _cast_candidate_sized(
                 game, player_index, card, hand_index,
                 from_zone=from_zone, extra_generic=extra_generic,
             )
@@ -1847,6 +1946,68 @@ def _modes_weighed(
     return tuple(game.announceable_modes(player_index, card))
 
 
+def _pays_x_in_life(card: CardDefinition) -> bool:
+    """Whether *card*'s X is announced as life to pay (CR 107.3a, CR 119.4):
+    "As an additional cost to cast this spell, pay X life." """
+    return any(cost.pay_life_x for cost in additional_costs(card))
+
+
+def _life_x_sizes(bound: int) -> list[int]:
+    """The sizes of an X paid in life a cast is built at: the largest the
+    reserve allows, and each half of it down to one, smallest first."""
+    sizes: set[int] = set()
+    size = bound
+    while size >= 1:
+        sizes.add(size)
+        size //= 2
+    return sorted(sizes)
+
+
+def _cast_candidate_sized(
+    game: Game,
+    player_index: int,
+    card: CardDefinition,
+    hand_index: int,
+    *,
+    from_zone: str = "hand",
+    extra_generic: int = 0,
+) -> CastAction | None:
+    """`_cast_candidate_offering` — and, for a spell whose X is **life**, the
+    best of it built at each of a few sizes (`_life_x_sizes`), smallest first
+    so that a tie keeps the life.
+
+    The X used to be the largest the seat's reserve allows (`_pick_x_value`),
+    which is the right answer for no board but the one where every point is
+    damage that finishes the game. Hatred at ten paid ten life to put a 2/2
+    through a 0/4 Wall it needed two more power to kill, measured as the loss
+    it was, and was held; at two it kills the Wall. What each size is worth
+    is the rehearsal's answer, the turn's fight fought where the cast is made
+    before it (`_weighed_through_the_fight`), as for every other cast.
+    """
+    if not _pays_x_in_life(card):
+        return _cast_candidate_offering(
+            game, player_index, card, hand_index,
+            from_zone=from_zone, extra_generic=extra_generic,
+        )
+    bound = _pick_x_value(
+        game, game.players[player_index], card, extra_generic,
+        hand_index=hand_index if from_zone == "hand" else None,
+    )
+    best: CastAction | None = None
+    for size in _life_x_sizes(bound or 0) or [bound]:
+        token = _LIFE_X_ASKED.set((card, size))
+        try:
+            candidate = _cast_candidate_offering(
+                game, player_index, card, hand_index,
+                from_zone=from_zone, extra_generic=extra_generic,
+            )
+        finally:
+            _LIFE_X_ASKED.reset(token)
+        if candidate is not None and (best is None or candidate.score > best.score):
+            best = candidate
+    return best
+
+
 def _cast_candidate_offering(
     game: Game,
     player_index: int,
@@ -1866,15 +2027,27 @@ def _cast_candidate_offering(
         )
     for offers in announcements:
         token = _OFFERS_ANNOUNCED.set(offers)
+        held = _HELD_AS_FLEETING.set(False)
         try:
             candidate = _cast_candidate_announcing(
                 game, player_index, card, hand_index,
                 from_zone=from_zone, extra_generic=extra_generic, offers=offers,
             )
+            fleeting = _HELD_AS_FLEETING.get()
         finally:
+            _HELD_AS_FLEETING.reset(held)
             _OFFERS_ANNOUNCED.reset(token)
         if candidate is not None:
             return candidate
+        if fleeting:
+            # Held because nothing it does outlasts the turn, with everything
+            # paid for. The announcements still to try pay for less of the
+            # same spell — a part of what was just found to leave nothing —
+            # and each is a target weighed and a turn rehearsed: "Kicker {1}.
+            # Prevent the next 2 damage … if this spell was kicked, prevent
+            # the next 4 damage instead" (Orim's Touch) was read twice, every
+            # decision of every turn it sat in a hand.
+            return None
     return None
 
 
@@ -2395,7 +2568,15 @@ def _cast_candidate_announcing(
         rehearsal = _rehearse_announcement(
             game, player_index, card, cast_announcement(action), planned=action,
         )
+        # ...and, for a cast made before the fight whose good is this turn's
+        # only, what it does to the fight.
+        rehearsal = _weighed_through_the_fight(
+            game, player_index, card, cast_announcement(action), rehearsal,
+            planned=action,
+        )
         if not _worth_proposing(rehearsal):
+            if rehearsal is not None and rehearsal.accepted and rehearsal.fleeting:
+                _HELD_AS_FLEETING.set(True)
             return None
         if rehearsal is None and _names_an_unweighed_seat(game, player_index, card):
             return None
@@ -6141,17 +6322,18 @@ def _best_target(
             game._x_implied_by_target(card, seat, index, None)
             if x_value is not None else None
         )
-        rehearsal = _rehearse_announcement(
-            game, caster_index, card,
-            _announcement(
-                card, target=seat, permanent_index=index, permanent_ids=ids,
-                x_value=x_value if implied is None else implied,
-            ),
+        announcement = _announcement(
+            card, target=seat, permanent_index=index, permanent_ids=ids,
+            x_value=x_value if implied is None else implied,
+        )
+        rehearsal = _weighed_through_the_fight(
+            game, caster_index, card, announcement,
+            _rehearse_announcement(game, caster_index, card, announcement),
         )
         if rehearsal is None:
             continue
         rehearsed = True
-        if not rehearsal.accepted or not rehearsal.changed:
+        if not rehearsal.accepted or not rehearsal.changed or _leaves_nothing(rehearsal):
             continue
         if best_swing is None or rehearsal.swing > best_swing:
             best, best_swing = (seat, index, ids), rehearsal.swing
@@ -6181,23 +6363,47 @@ def _better_than_the_seat(
     candidates = _distinct_targets(game, _target_candidates(game, legal, order))
     if not candidates:
         return None
-    at_the_seat = _rehearse_announcement(
-        game, caster_index, card,
-        _announcement(card, target=preferred_seat, x_value=x_value),
+    at_seat = _announcement(card, target=preferred_seat, x_value=x_value)
+    at_the_seat = _weighed_through_the_fight(
+        game, caster_index, card, at_seat,
+        _rehearse_announcement(game, caster_index, card, at_seat),
     )
     if at_the_seat is None:
         return None
-    best = None
-    best_swing = at_the_seat.swing if at_the_seat.accepted else None
-    for seat, index, ids in candidates:
-        rehearsal = _rehearse_announcement(
-            game, caster_index, card,
-            _announcement(
-                card, target=seat, permanent_index=index, permanent_ids=ids,
-                x_value=x_value,
-            ),
+    if (
+        at_the_seat.accepted and at_the_seat.fleeting
+        and game.current_turn_phase != "combat"
+        and not (
+            combat_is_still_to_come(game, caster_index)
+            and has_a_creature_to_fight_with(game, caster_index)
         )
-        if rehearsal is None or not rehearsal.accepted or not rehearsal.changed:
+    ):
+        # Aimed at the player it is over with the turn, and with no combat
+        # still to come this reading has no damage in it for it to stop or to
+        # add to: what may name "any target" is damage, which a player keeps,
+        # or a shield — and a shield with nothing coming is as much nothing
+        # on a creature as on its controller. So the permanents are not each
+        # rehearsed to learn that, and the seat stands. Before the caster's
+        # own fight they are: the 2/2 about to trade is what a shield is for.
+        return None
+    best = None
+    best_swing = (
+        at_the_seat.swing
+        if at_the_seat.accepted and not _leaves_nothing(at_the_seat) else None
+    )
+    for seat, index, ids in candidates:
+        announcement = _announcement(
+            card, target=seat, permanent_index=index, permanent_ids=ids,
+            x_value=x_value,
+        )
+        rehearsal = _weighed_through_the_fight(
+            game, caster_index, card, announcement,
+            _rehearse_announcement(game, caster_index, card, announcement),
+        )
+        if (
+            rehearsal is None or not rehearsal.accepted or not rehearsal.changed
+            or _leaves_nothing(rehearsal)
+        ):
             continue
         if best_swing is None or rehearsal.swing > best_swing:
             best, best_swing = (seat, index, ids), rehearsal.swing
@@ -7500,8 +7706,13 @@ def _pick_x_value(
         # (CR 704.5a). The same reserve every other life price in this policy
         # keeps (`BUYBACK_LIFE_RESERVE`); with nothing above it the X is 0 and
         # the caller does not propose the cast.
-        if any(cost.pay_life_x for cost in additional_costs(card)):
+        if _pays_x_in_life(card):
             bound = min(bound, max(0, player.life - X_LIFE_RESERVE))
+            # A smaller size asked for by `_cast_candidate_sized`, which
+            # weighs each one.
+            asked = _LIFE_X_ASKED.get()
+            if asked is not None and asked[0] is card and 0 < asked[1] < bound:
+                return asked[1]
         return bound
 
     if "{X}" not in _charged_in_place_of_mana_cost(card)[0].upper():

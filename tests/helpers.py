@@ -294,3 +294,33 @@ def run_app_js(functions, body: str, payload=None, *, prelude: str = ""):
         )
     assert done.returncode == 0, done.stderr
     return json.loads(done.stdout)
+
+
+def declare_attack(game, attacker_seat: int, *, blocks: "dict | None" = None) -> list:
+    """Put *game* in *attacker_seat*'s combat with every creature that seat
+    controls attacking the other seat, and *blocks* (``{blocker slot: attacker
+    slot}``; none by default) declared: the declare-blockers step, with the
+    damage still to be dealt. Returns the attacking permanents.
+
+    The board a combat trick is *for*. A seat no longer casts a Fog, a shield
+    or a pump in a main phase where nothing it does outlasts the turn, so a
+    test of what such a spell names, or of what is paid for it, needs the
+    fight it decides to be on the table.
+    """
+    defender_seat = 1 - attacker_seat
+    game.active_player_index = attacker_seat
+    game._set_phase_and_step("combat", "declare_attackers")
+    slots = [
+        slot for slot, permanent in enumerate(game.players[attacker_seat].battlefield)
+        if permanent.is_creature and not permanent.tapped
+    ]
+    for slot in slots:
+        _nosick(game.players[attacker_seat].battlefield[slot])
+    ok, why = game.declare_attackers(attacker_seat, slots, defending_player_index=defender_seat)
+    assert ok, why
+    attackers = [game.players[attacker_seat].battlefield[slot] for slot in slots]
+    game.advance_combat_phase()
+    assert game.current_step == "declare_blockers", game.current_step
+    ok, why = game.declare_blockers(defender_seat, dict(blocks or {}))
+    assert ok, why
+    return attackers

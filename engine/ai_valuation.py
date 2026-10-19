@@ -3559,6 +3559,8 @@ _DELIBERATION: ContextVar["dict | None"] = ContextVar("ai_deliberation", default
 
 #: How many passes the rehearsal gives a stack to empty and a combat to end.
 _REHEARSAL_PASSES = 8
+#: Under this, a swing is no swing: the standings are sums of floats.
+_NO_SWING = 1e-9
 
 
 @dataclass(frozen=True)
@@ -3576,7 +3578,20 @@ class Rehearsal:
         nothing cast — as the board stood right after the resolution, and
         with the turn's temporary effects over;
     ``swing``
-        :func:`swing_worth` of the two.
+        :func:`swing_worth` of the two;
+    ``fleeting``
+        everything it changed is **gone by the end of the turn**: no standing
+        differs then and nothing on the table does (a pump that has worn off,
+        a shield nothing hit, a Fog) — where a change no standing prices and
+        that is still there (a permanent's colour, the order of a library) is
+        not;
+    ``made_mana``
+        some of what it changed is mana in a pool, which is fleeting by
+        nature and is not nothing: it is what the next cast is paid with;
+    ``through_combat``
+        the turn was run out **with its combat played** (:func:`rehearse`'s
+        *through_combat*), and ``now`` is ``lasting``: what the cast was
+        worth once the fight it was made before had been fought.
     """
 
     accepted: bool
@@ -3584,6 +3599,9 @@ class Rehearsal:
     now: float = 0.0
     lasting: float = 0.0
     refusal: str = ""
+    fleeting: bool = False
+    made_mana: bool = False
+    through_combat: bool = False
 
     @property
     def swing(self) -> float:
@@ -3760,15 +3778,85 @@ def _settle_scratch(game) -> None:
             return
 
 
-def _run_out_the_turn(game) -> None:
+def combat_is_still_to_come(game, seat: int) -> bool:
+    """Whether *seat* is in its own precombat main phase with nothing on the
+    stack — the moment a cast is made **before** the turn's fight, and the
+    only one a rehearsal can play that fight out from."""
+    return (
+        game.current_turn_phase == "precombat_main"
+        and game.active_player_index == seat
+        and not game.stack
+        and not game.pending_choices
+        and not game.is_game_over()
+    )
+
+
+def has_a_creature_to_fight_with(game, seat: int) -> bool:
+    """Whether *seat* controls a creature at all. With none there is no
+    attack to declare whatever is cast first — a spell that *makes* one has
+    left something behind and is not asked about the fight — so the second
+    reading would be the first, at the price of a combat on two copies."""
+    return any(permanent.is_creature for permanent in game.controlled_by(seat))
+
+
+def priced_by_the_fight(now: float, lasting: float, fleeting: bool) -> bool:
+    """Whether a cast made before the turn's combat is one a reading with no
+    combat in it cannot price: some of its good is gone by the end of the
+    turn — all of it (*fleeting*), or more of it than is left (*now* above
+    *lasting*). A removal spell, a draw, a discard are priced by what they
+    leave.
+
+    The policy asks it before reading a cast a second time with the fight
+    fought (``ai_policy._weighed_through_the_fight``), and the censuses ask
+    it of the casts they make for real — one definition of which casts the
+    fight is part of the price of.
+    """
+    return bool(fleeting) or now > lasting + _NO_SWING
+
+
+def run_out_the_turn(game, *, through_combat: bool = False) -> None:
+    """Take *game* — a scratch copy (:func:`scratch_copy`) — to the end of
+    its turn the way a rehearsal does: with its combat fought first if
+    *through_combat* (the active seat's attack and the blocks declared by
+    the policies that would declare them), then CR 514's cleanup. For a
+    reader that makes a cast for real and wants it priced as a rehearsal
+    would price it."""
+    _run_out_the_turn(game, through_combat=through_combat)
+
+
+def _fight_the_combat(game) -> None:
+    """Play a scratch copy's combat phase from its precombat main phase: the
+    active seat's attack, the blocks, the damage — each declared by the
+    policy that would declare it in a game nobody is asked about
+    (``ai_combat.run_ai_combat_phase``, the simulator's own driver).
+
+    The one place a rehearsal lets something be *decided* on the way to the
+    end of the turn, and it is asked for by name (:func:`rehearse`'s
+    *through_combat*) on the cast and on the table it is measured against
+    alike. What it buys is the difference a precombat cast makes to the
+    fight: three more damage from a Giant Growth, none at all under the
+    caster's own Fog.
+    """
+    from .ai_combat import run_ai_combat_phase
+
+    if game.current_turn_phase != "precombat_main" or game.stack or game.is_game_over():
+        return
+    run_ai_combat_phase(game, game.active_player_index)
+    _settle_scratch(game)
+
+
+def _run_out_the_turn(game, *, through_combat: bool = False) -> None:
     """Take a scratch copy to the end of its turn: a combat whose blocks are
     already declared deals its damage, then CR 514's cleanup ends every
     "until end of turn" effect and removes marked damage.
 
     Nothing is *decided* on the way — no attack is declared, no block made —
     so what is read afterwards is what the cast left, and not what a policy
-    then did with it.
+    then did with it. *through_combat* is the exception, asked for by name:
+    the turn's combat is fought first (:func:`_fight_the_combat`).
     """
+    if through_combat:
+        _fight_the_combat(game)
     for _ in range(_REHEARSAL_PASSES):
         if game.current_turn_phase != "combat" or game.is_game_over():
             break
@@ -3885,16 +3973,61 @@ def _same_fields(was: dict, now: dict) -> bool:
     return True
 
 
-def _measured(game) -> dict:
+def _measured(game, *, through_combat: bool = False) -> dict:
     """A scratch copy read twice: as it stands, then run out to the end of
-    its turn."""
+    its turn (with its combat fought, if *through_combat*). The copy itself
+    is kept beside the readings, for the one more that is taken only when it
+    is needed (:func:`_lasting_digest`)."""
     reading = {
         "digest": position_digest(game),
         "now": standings(game, now=True),
     }
-    _run_out_the_turn(game)
+    _run_out_the_turn(game, through_combat=through_combat)
     reading["lasting"] = standings(game, now=False)
+    reading["table"] = game
     return reading
+
+
+def _lasting_digest(reading: dict) -> dict:
+    """:func:`position_digest` of a measured copy **once its turn has run
+    out** — read on first asking and kept. Whether anything a cast changed is
+    still changed by then is a question only some casts raise (the ones no
+    standing shows a lasting difference for), and a digest is not free.
+
+    Read with the record of **what damage was dealt** left out
+    (:func:`forget_damage_history`): by the end of the turn the damage
+    itself is gone (CR 514.2), and what it did — a life lost, a creature
+    dead — is in the table already."""
+    if "lasting_digest" not in reading:
+        forget_damage_history(reading["table"])
+        reading["lasting_digest"] = position_digest(reading["table"])
+    return reading["lasting_digest"]
+
+
+def forget_damage_history(game) -> None:
+    """Drop, from a scratch copy whose turn has run out, the two records of
+    damage that outlive the damage: the turn's ledger of who dealt what
+    (``damage_ledger``, cleared at the next turn's start) and each source's
+    "who have I damaged this game" (``damage_events.DAMAGED_THIS_GAME``).
+
+    Left in, a fight that went differently by nothing anybody could point at
+    was a change that lasted: the caster's own Fog in its main phase, under
+    which its 2/2 attacked into a 0/4 Wall and dealt it nothing instead of
+    two damage that cleanup would have removed, "changed" two records and was
+    cast at the base score. The Fallen's "each opponent … it has dealt damage
+    to this game" is the one reader of the second, and is the price.
+    """
+    from .damage_events import DAMAGED_THIS_GAME
+
+    ledger = getattr(game, "damage_ledger", None)
+    entries = getattr(ledger, "entries", None)
+    if isinstance(entries, list):
+        entries.clear()
+    for permanent in [
+        *game.all_permanents(),
+        *(permanent for player in game.players for permanent in player.phased_out),
+    ]:
+        permanent.metadata.pop(DAMAGED_THIS_GAME, None)
 
 
 def _rehearsal_seed(game) -> int:
@@ -4013,7 +4146,7 @@ def _scratch(game, carried, detach, seat):
 
 def _untouched(
     game, seat: int, *, carried=None, detach: bool = False, without=None,
-    without_key=None,
+    without_key=None, through_combat: bool = False,
 ) -> dict:
     """The table with nothing cast: whatever is on the stack resolves, and
     the turn runs out. What every candidate of one decision is measured
@@ -4030,14 +4163,14 @@ def _untouched(
     cache = _DELIBERATION.get()
     # Per seat: the table with nothing cast is the table as *seat* can know
     # it, and two seats do not see the same one.
-    slot = ("untouched", seat, id(carried), detach, without_key)
+    slot = ("untouched", seat, id(carried), detach, without_key, through_combat)
     if cache is not None and slot in cache:
         return cache[slot]
     clone, carried = _scratch(game, carried, detach, seat)
     if without is not None:
         without(clone, carried)
     _settle_scratch(clone)
-    reading = _measured(clone)
+    reading = _measured(clone, through_combat=through_combat)
     if cache is not None:
         cache[slot] = reading
     return reading
@@ -4047,6 +4180,7 @@ def rehearse(
     game, seat: int, perform, *, spell_name: str | None = None,
     leaves_hand: bool = True, key=None, carried=None, detach: bool = False,
     without=None, without_key=None, label: str | None = None,
+    through_combat: bool = False,
 ) -> "Rehearsal | None":
     """Carry *perform* out on a scratch copy of *game* and report what it did
     to *seat*'s position — or None when no rehearsal could be run.
@@ -4101,10 +4235,20 @@ def rehearse(
     Asked once per *key* in a deliberation (:func:`deliberating`): a chooser
     that weighs a target and then builds the cast that names it is asking the
     same question twice, and a rehearsal costs a cast.
+
+    **No combat is fought on the way to the end of the turn** — unless
+    *through_combat* asks for it, on the cast and on the table it is compared
+    with alike (:func:`_fight_the_combat`). That is a second, dearer reading
+    for the casts the first one cannot price: one made before the fight
+    whose whole trace is over by the end of the turn (``Rehearsal.fleeting``),
+    or whose good is. A pump was worth ``TEMPORARY_SHARE`` of the body it
+    lent whether or not anything was then done with it, and a Fog cast in
+    its caster's own main phase measured as nothing and was cast.
     """
     asked = dict(
         spell_name=spell_name, leaves_hand=leaves_hand, carried=carried,
         detach=detach, without=without, without_key=without_key, label=label,
+        through_combat=through_combat,
     )
     cache = _DELIBERATION.get()
     if cache is None or key is None:
@@ -4118,7 +4262,7 @@ def rehearse(
 def _rehearse(
     game, seat: int, perform, *, spell_name: str | None = None,
     leaves_hand: bool = True, carried=None, detach: bool = False, without=None,
-    without_key=None, label: str | None = None,
+    without_key=None, label: str | None = None, through_combat: bool = False,
 ) -> "Rehearsal | None":
     """:func:`rehearse`, uncached."""
     import random
@@ -4134,7 +4278,7 @@ def _rehearse(
     try:
         untouched = _untouched(
             game, seat, carried=carried, detach=detach, without=without,
-            without_key=without_key,
+            without_key=without_key, through_combat=through_combat,
         )
         clone, copied = _scratch(game, carried, detach, seat)
         result = perform(clone) if carried is None else perform(clone, copied)
@@ -4155,16 +4299,34 @@ def _rehearse(
             for was, player in zip(pools, clone.players)
             for symbol, amount in player.mana_pool.items()
         )
-        reading = _measured(clone)
+        reading = _measured(clone, through_combat=through_combat)
         now = standing_swing(untouched["now"], reading["now"], seat)
         lasting = standing_swing(untouched["lasting"], reading["lasting"], seat)
+        returned = spell_name if leaves_hand else None
         # Whether anything changed is read off the table, with the spell's own
         # trip taken out (`same_position`) — and before the card is accounted
         # for below, or a spell bought back with nothing else done would read
         # as a change worth a card.
         changed = made_mana or not same_position(
-            untouched["digest"], reading["digest"],
-            spell_name=spell_name if leaves_hand else None, caster=seat,
+            untouched["digest"], reading["digest"], spell_name=returned, caster=seat,
+        )
+        # Whether any of it is still there once the turn is over. Asked of
+        # the table only where the standings leave it open — a lasting swing
+        # is a lasting change — because the answer costs a digest of each
+        # copy. "Leave it open" is a lasting swing of nothing but the spell's
+        # own card: the card spent and nothing else, or (a spell bought back,
+        # CR 702.27a) not even that. The table then says which it is — a
+        # card drawn in place of the one spent is a hand that differs.
+        fleeting = (
+            changed
+            and (
+                abs(lasting) < _NO_SWING
+                or (leaves_hand and abs(lasting + CARD_WORTH) < _NO_SWING)
+            )
+            and same_position(
+                _lasting_digest(untouched), _lasting_digest(reading),
+                spell_name=returned, caster=seat,
+            )
         )
         if leaves_hand:
             # The card a cast is made with is spent by every cast, so it is
@@ -4173,7 +4335,15 @@ def _rehearse(
             # card to the good, which is what its price is weighed against.
             now += CARD_WORTH
             lasting += CARD_WORTH
-        return Rehearsal(accepted=True, changed=changed, now=now, lasting=lasting)
+        if through_combat:
+            # Read once the fight is over: there is no "right after" to tell
+            # from "at the end of the turn" that the fight has not passed
+            # through, so the lasting reading is the measure.
+            now = lasting
+        return Rehearsal(
+            accepted=True, changed=changed, now=now, lasting=lasting,
+            fleeting=fleeting, made_mana=made_mana, through_combat=through_combat,
+        )
     except Exception as raised:
         _note_raised(label or spell_name, raised)
         return None
@@ -4306,6 +4476,7 @@ __all__ = [
     "chosen_creature_type_side",
     "color_most_worth_sweeping",
     "chosen_name_is_read_off_the_targets_library",
+    "combat_is_still_to_come",
     "counters_a_spell",
     "denied_graveyard_pile",
     "denies_its_target",
@@ -4317,16 +4488,20 @@ __all__ = [
     "exiled_search_pile_comes_back_one_at_a_time",
     "exiles_a_graveyard_target",
     "foreign_activation_use",
+    "forget_damage_history",
     "graveyard_denial_order",
     "hand_entry_steps",
     "hand_waiver",
     "harms_its_own_source",
     "named_counter_marks_for_harm",
+    "has_a_creature_to_fight_with",
     "hand_pick_entry_consumer",
     "instruction_target_side",
     "offer_trade",
     "offered_action_is_a_payment",
     "permanent_worth",
+    "position_digest",
+    "priced_by_the_fight",
     "rehearse",
     "rehearsing",
     "seat_standing",
@@ -4338,6 +4513,9 @@ __all__ = [
     "planned_mana_yield",
     "returns_creature_to_hand",
     "role_target_sides",
+    "run_out_the_turn",
+    "same_position",
+    "scratch_copy",
     "several_target_slot_sides",
     "source_toughness_change",
     "spell_denies_its_own_target",

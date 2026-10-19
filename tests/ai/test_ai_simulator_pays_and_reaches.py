@@ -16,7 +16,8 @@ from engine.ai_simulator import run_ai_simulation
 from engine.card_loader import manifest_set_path
 
 #: ``(set, pinned card, games, log tokens that must each appear)``. The game
-#: counts are the fewest in which seed 1337 reaches the line.
+#: counts are the fewest in which seed 1337 (or the card's ``_SEEDS``) reaches
+#: the line.
 _RUNS = [
     # "{T}, Sacrifice this artifact: Add three mana of any one color."
     ("LEA", "Black Lotus", 1, ("sacrificed Black Lotus to activate its ability",)),
@@ -32,12 +33,23 @@ _RUNS = [
     )),
 ]
 
+#: A run seeded otherwise than 1337, and why. Lone Wolf's walk past its
+#: blocker came, on seed 1337, under its own controller's Fog — cast in its
+#: precombat main phase, the one cast a precombat rehearsal now plays the
+#: fight through and holds — where the damage reached neither the player nor
+#: the blockers and the chooser had nothing to decline for. With the Fog
+#: held, that Wolf attacks into two 1/1s and kills both, which is the other
+#: answer. Seed 3 reaches the walk where it is the game: blocked, with the
+#: defending player at five.
+_SEEDS = {"Lone Wolf": 3}
+
 
 @pytest.mark.slow
 @pytest.mark.parametrize("code, pinned, games, tokens", _RUNS, ids=[run[1] for run in _RUNS])
 def test_a_seeded_game_reaches_it(code, pinned, games, tokens):
     report = run_ai_simulation(
-        manifest_set_path(code), games=games, seed=1337, required_cards=[pinned],
+        manifest_set_path(code), games=games, seed=_SEEDS.get(pinned, 1337),
+        required_cards=[pinned],
     )
 
     assert report.games_completed == games and report.interaction_count > 0
