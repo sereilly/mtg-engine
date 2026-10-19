@@ -504,16 +504,25 @@ site goes through one function (`ai_policy.cast_announcement`; there were
 five sites and a second chooser for instants, and an AST test fails a site
 that spells a cast keyword itself), and the chooser loops over
 `Game.announceable_modes`. `SimulationReport.modal_casts` is the honesty
-count. *Which* bullet wins when several are castable is still the scorer's
-text probes, and ROADMAP pins the 25 modes that lose their own board.
+count. *Which* bullet wins when several are castable is decided by a
+rehearsal (below), and the census pins the 17 modes that still lose their own
+board, each with its reason.
 
 **Planeshift found an eighth, of a different kind: mana that was never
 tapped.** The tap planner planned *lands*, so in a simulated Alpha game the
 Moxen, Sol Ring, Birds of Paradise, Mana Vault and Black Lotus were cast and
 none ever produced mana — 122 non-land permanents in the pool have a mana
 ability. A non-land source whose whole cost is {T} and whose output is readable
-off its payload is planned now, after every land (`ai_valuation.planned_mana_yield`);
-a costed or sacrifice source is still not, and ROADMAP says why.
+off its payload is planned now, after every land (`ai_valuation.planned_mana_yield`).
+So is a source that sacrifices *itself* (Black Lotus, Lotus Petal, Blood Pet),
+but only when the lands cannot pay and only for a spell worth more than the
+source. `tap_planned_lands` binds every slot to its permanent before the first
+tap, because a sacrifice renumbers the battlefield under an announcement made
+by index. Mana-for-mana sources, sacrifice-another sources and card, counter
+or life costs are still not planned, and ROADMAP says why. The plan itself is
+one exact matching (`ai_policy._PaymentPlanner`, over what each land's tap
+really yields), the same one the web's auto-tap preview asks
+(`web/payment_plan.py`).
 
 **And a ninth, of the first seven's kind.** `Game.activate_from_hand` is the
 *queue* form — the web's, which leaves the ability on the stack for the table
@@ -531,6 +540,55 @@ a permission, or played off the top of a library in a simulated game.
 `cast_permissions` opens, `CastAction.from_zone` carries it through the same
 announcement function every cast uses, and
 `SimulationReport.casts_from_zones` is the honesty count.
+
+**It rehearses a cast before it proposes one.** A table of values per effect
+family would have been the 265 instruction kinds again, one layer down. So
+`ai_valuation.rehearse` deep-copies the game, casts the candidate on the copy,
+resolves it on defaults, and reads the table right after and at the end of
+the turn. The swing is `seat_standing`: life (concave), cards in hand, and
+`permanent_worth` read through the layers. What lasts counts in full and what
+ends this turn counts a quarter. A cast that moves nothing, or leaves its
+caster plainly worse off, is not proposed. In a census of 1,073 (card, mode)s
+on three boards, 587 such proposals went to 0. Three things came with it:
+
+* **A copy sees what its seat sees** (`ai_valuation.conceal_from`, CR 400.2).
+  Every library is reshuffled and each other hand is redealt out of that hand
+  and its library pooled, before anything is cast on the copy. What the seat
+  may legitimately see stays put: a revealed hand, a public library top. A
+  rehearsed Duress used to know whether there was a card to take.
+  `tests/ai/test_ai_hidden_information_census.py` holds each proposal equal
+  across three worlds that differ only in where the hidden cards are.
+* **A rehearsal that raises is counted.** `_rehearse` catches an engine
+  exception so that the policy reads it as "cannot be weighed". Before the
+  rehearsal existed, that exception stopped a simulated run. Now it would be a
+  card silently never cast. Each one goes into
+  `ai_valuation.REHEARSALS_RAISED` (card, exception, frame).
+  `SimulationReport.rehearsals_raised` is the honesty count, each distinct one
+  is an issue, and `simulate_ai_games.py` exits 1 on any.
+* **A precombat cast is weighed through the fight it comes before.** A
+  rehearsal runs its copy to the end of the turn with nothing declared, so
+  without this a Giant Growth was a quarter of its board change whether or
+  not the creature then attacked, and a Fog in its caster's own main phase
+  (which stops its own attack) was proposed. In the seat's own precombat
+  main, a cast some of whose good is gone by the end of the turn is
+  rehearsed again with the attack, blocks and damage fought on both copies
+  (`rehearse(..., through_combat=True)`, through `run_ai_combat_phase`). A
+  cast whose every trace is gone by then is not proposed, unless what it
+  left was mana or another cast. "Gone by the end of the turn" is read as the
+  next turn begins: damage records forgotten, the end step run, the next
+  untap step and turn bookkeeping applied, and a spell's own trip out of a
+  graveyard or exile set aside.
+  `tests/ai/test_ai_combat_trick_census.py` fights every such instant and
+  sorcery on seven boards against the policy's own proposal.
+
+One decision's no-cast baseline is read once (`with deliberating():` around
+the whole hand). A class-level spy on `Game` sees rehearsal copies too, and
+those copies run the end step and the next turn's bookkeeping, so guard a
+spy with `ai_valuation.rehearsing()`. The rehearsal roughly doubled the
+simulator's cost, and fighting the combat added 1.73× on top of that. What it
+does not yet do is in ROADMAP: permanent spells are still scored by type and
+printed body, and the several-target, role, divided and Aura choosers each
+name one announcement rather than choosing among rehearsed ones.
 
 The honesty checks in the report exist because "no illegal interactions" over a
 game where nothing happened is a true statement about nothing.
@@ -844,6 +902,13 @@ adding entries, not editing dispatch**:
   Abundance's is asked too, since a draw now waits for the one in front of
   it, and what is put on **top** "in any order" is the library owner's as
   well (`Game.offer_library_top_order` — Lodestone Bauble, Reinforcements).
+  **A sentence that asks each player waits for the last answer before it
+  acts.** Cataclysm's sacrifices are "done simultaneously" (its ruling), so
+  `new_keep_batch` / `finish_keep_batch` collect the answers and apply them
+  together (Global Ruin, Planar Overlay, Limited Resources too). Each prompt
+  had performed its own seat's half as it was answered, so an anthem the
+  first seat gave up had stopped applying while the second chose. It is
+  `engine/piles.py`'s rule, for the same reason.
 - `engine/commander.py` — CR 903, the Commander variant and its Brawl option
   (CR 903.12). Opt-in like `engine/ante.py`: every seam is inert unless
   `Game.commander_variant` is `"commander"` or `"brawl"`, so an ordinary duel is
@@ -993,8 +1058,21 @@ adding entries, not editing dispatch**:
   what the castable highlight and a hand ability's button ask. They used to
   sum each land's possible colours into one pool, so a two-colour land counted
   once per colour: Craw Wurm over three Tropical Islands glowed and the cast
-  was refused — 3,543 of 14,626 land-and-cost pairs. Lands only, on purpose: a
-  creature's or artifact's mana ability is the player's to activate first.
+  was refused — 3,543 of 14,626 land-and-cost pairs. **Two questions, one
+  flag.** By default it asks what an *automatic* payment asks, which taps
+  lands. `nonland_sources=True` adds every other permanent's tap-alone mana
+  ability (`source_tap_yields`), which is the question a *player* is asked,
+  because they may activate those first (CR 601.2g). The castable highlight
+  passes it, so a card glows over a Sol Ring. Before that, 607 payable cards
+  were dark.
+  **The client does not plan the taps.** A click on a card that glows is
+  answered by `web/payment_plan.py`. What the action costs is learned by
+  rehearsing the announcement on a scratch copy whose `_pay_mana_cost` notes
+  what it could not pay, so there is no second assembly of taxes, kickers and
+  X. The taps come from the AI's planner and are made through the engine's own
+  seams. `POST …/payment_plan` previews them on a copy; `auto_tap` on the
+  action makes them. The client's own planner (lands only, one mana a land,
+  the printed summary) had paid for 92 of 194 castable pairs.
 - `engine/piles.py` — separating into piles (CR 700.3). One instruction,
   `separate_into_piles`, over three kinds of thing (revealed cards, graveyard
   cards, permanents): one seat separates (`pile_split`), another chooses
@@ -1061,6 +1139,15 @@ adding entries, not editing dispatch**:
   activation path. Two of the three told nobody until Odyssey printed
   Price of Glory. The seven such triggers that are not mana abilities
   still resolve at the tap rather than on the stack; ROADMAP has the parts.
+  **A tap is the activation of one mana ability, and asking for a symbol
+  picks it** (CR 605). `board_payment.tap_alone_ability_for` runs the
+  ability that makes the symbol asked for, and nothing asked means the
+  first one (`chosen_color=None` is no longer green). What a land can be
+  tapped for is read per ability (`tap_alone_symbols`), never off the printed
+  summary, which lists every ability's mana whatever it costs. Over 2,304
+  cases, the planner's hook had disagreed with the tap 151 times (a Tinder
+  Farm paid {R}{W} without being sacrificed), a Karplusan Forest clicked for
+  {R} made {C}, and 50 taps raised.
 - `engine/object_colors.py`, `engine/color_census.py` — colour as a relation
   and as a count. `share_a_color`, `is_multicolored`, `colors_among`,
   `of_each_color` are CR 105.2 over colour *sets*, so a sweep filter, a
@@ -1101,10 +1188,33 @@ adding entries, not editing dispatch**:
   601.2h), an activated ability whose named graveyard card has left does not
   go looking for another (`vanished_graveyard_target_refusal`, bounded by
   `StackItem.activated`), and over the wire an activation that owes a target
-  and names none is a 400. One thing is deliberately still open, by
-  measurement: a bare activation **with a legal target available** resolves
-  on the handler's pick, the headless convention 43 tests stand on; ROADMAP
-  has the parts.
+  and names none is a 400.
+  **A headless announcement that names no target is answered once, as it is
+  announced** (`engine/bare_announcements.py`). A test, a scripted duel or the
+  AI simulator may leave the target out. That used to be answered at
+  resolution by whichever handler ran, each scanning a battlefield with its
+  own predicate. A scan knows what a sentence names and nothing about what may
+  be targeted, so it reached past protection and shroud, and a two-sentence
+  card's sentences each found their own first match. Now the default is the
+  **first entry of the picker's own list** in standing order (the seat named
+  beside no object, else the opposing seat; a face before that seat's
+  permanents). It is stamped on the stack object exactly as a named target is:
+  it "becomes the target", and CR 608.2b re-checks it. `pick_target_permanent`
+  has no scan for an announced object. In the census, 961 stack objects
+  carried no target and 528 changed something the picker does not offer;
+  both went to 0. Refusing bare announcements instead would have turned
+  105 + 43 tests red. A printed count, an X, a several-role announcement, an
+  Aura's enchant target and a division are refused rather than defaulted,
+  because each already has a refusal that is the rule. A *trigger* with no
+  stamped target still resolves through the handler's pick, and ROADMAP has
+  which ones and why.
+  **"A source of your choice" is chosen, not targeted** (CR 609.7a), and
+  `legality.spec_chooses_a_source` says so to both readers. The picker applies
+  no targeting gate, so Circle of Protection: Black is offered a Black Knight
+  with protection from white. The gate compares a named source with that list
+  like any named object. The Circles' shield then binds the source that was
+  named (CR 615.8), where it had answered any source of the colour, which is
+  why nothing had noticed the other two halves were wrong.
   **A spell has both ends of the same question.** `legality.cast_target_refusal`
   is CR 601.2c at announcement — the named target must be one
   `_enumerate_targets` offers, checked beside `_validate_cast_targets` (not
@@ -1295,6 +1405,29 @@ adding entries, not editing dispatch**:
   is the door's answer and the payload's `abilities_lost` the client's — and
   the client reads that field, `taps_for_mana` and `produced_mana`, never the
   text, to decide that such a land is clicked for mana.
+  **"Loses all abilities" is layer 6 by timestamp** (CR 613.1f, 613.7):
+  `keywords.abilities_lost_at` is the stamp of the newest such effect, so a
+  grant stamped at or before it is gone and one stamped after it stays. Every
+  reader had asked "is anything taking them?" and kept every grant whatever
+  its age (Jump, then Humble, and the creature still flew): 537 older grants
+  outlived a later loss. That is not CR 305.7's loss, which keeps a grant of
+  any age. **A permanent enters as the board will make it** (CR 614.12):
+  `Game.fold_board_statics_onto_entering` runs the board-static pass with the
+  entering permanent in its list before any entry reader asks. So under
+  Humility a creature makes no "as this enters" choice and pays no entry toll,
+  and under Opalescence an enchantment is a creature as it enters. That covers
+  every board-wide static, where `fold_land_type_statics_onto_entering`
+  covers land types only. **Layer 7 is applied in sublayers, each by
+  timestamp** (CR 613.4). 7a is a derived channel (`pt.set_cda_pt`, rebuilt by
+  the pass that counts the ability, so a Nightmare under Humility has no
+  count). `pt.set_base_pt` stamps the 7b slot it writes. A board-wide static's
+  size carries its source's stamp, and a land animator's is read off the
+  record the layer-4 pass leaves. 122 of 570 contended pairs of size-setters
+  read the wrong size before. **Continuous effects are recomputed at the
+  resolution seam** (once after `_run_stack_item_resolution`, once after a
+  prompt's answer), not by each handler that changed something. A static
+  whose source a later layer strips still applies through the layers before
+  it (`Permanent.card_before_layer_6`, CR 613.6).
 - `engine/control.py` — CR 613 layer 2. A control change is a **contribution**
   (`change_control(permanent, seat, source=…)`) with a timestamp, not a move;
   ending one is `end_control_change(permanent, source=…)`, and whatever
@@ -1344,6 +1477,16 @@ adding entries, not editing dispatch**:
   on how many announcements it examined — asked of `activate_permanent_ability`,
   which settles the stack itself, it reached zero of them and passed on the
   broken engine.
+  **And the same query is asked again as the object resolves**
+  (`LegalityMixin.resettle_announced_target_seats`, just after the CR 608.2b
+  blanking). A target that changed controller while the object waited is
+  still the target where its description admits it, because CR 608.2b judges
+  the description and most descriptions say nothing of a controller. The
+  resolvers' scoping is deliberate (they say "you control" by the
+  battlefield they pass), so what moves is the record. It moves only where
+  the gate's own verdicts judged every live target legal. Before, 1,417 of
+  1,761 such casts and activations missed (Terror logged its target "gone"),
+  and chosen trigger targets hit a bystander 100 times in 141.
   **Combat is still index-keyed, but its maps follow their creatures**:
   `_renumber_combat_after_removal` runs from the removal transition below and
   drops an entry whose creature left, shifting the rest. Adding a combat map
@@ -1432,6 +1575,24 @@ adding entries, not editing dispatch**:
   assignment as one announcement, and a stored answer would have to be asked
   again for each strike. Until this was driven in a browser a human had one
   of the two answers, and which one depended on the number of blockers.
+  **Who announces is the server's answer**, `Game.combat_damage_assigner`,
+  and the client reads it off `damage_assigned_by`. It is the attacking
+  player, except where a creature with banding blocks or Defensive Formation
+  applies (CR 702.22j). Then the defending player announces the division
+  *and* the "as though unblocked" choice
+  (`assign_banding_combat_damage(..., as_though_unblocked=)`,
+  `defender_assignments_owed`). An AI on either side chooses by value
+  (`ai_combat.choose_combat_damage_assignment` /
+  `choose_defender_damage_assignment`). The defender's choice is announced
+  from `resolve_combat_damage` itself, the one line every way of dealing
+  combat damage passes through. **An assignment is checked whole by one gate
+  for both seats** (`_attacker_division_refusal`, CR 510.1c–e): all the
+  damage, only to its blockers, never more than the power, and a trample
+  remainder only past lethal. The wire had accepted a 3-power attacker
+  announcing 1 and 0. **Each damage step is its own announcement**
+  (CR 510.4): every dialog reopens for the second step, a second step is
+  restated by permanent and never replayed by slot, and an AI's double
+  striker asks a human defender again.
 - `engine/combat_restrictions.py` — text-keyed combat restrictions (CR 506):
   "can't attack unless defending player controls a <land type>", "attacks each
   combat if able", "can't be blocked by Walls". The land type is payload data,
@@ -1453,6 +1614,18 @@ adding entries, not editing dispatch**:
   ability; it is an ability that works more often than the card allows, so
   nothing crashes and nothing is missing. The **support gate reads the same
   table**, which is what stops a card being admitted with its clause ignored.
+- `engine/activation_prohibitions.py` — **may this ability be activated at
+  all** (CR 602.5), `cast_prohibitions.py` one seam over and for the same
+  reason. The activation path's ten inline refusals are now one table behind
+  `activation_prohibition`. Its readers are the activation path, the AI's
+  chooser, the castable highlight (a Cursed Totem shuts off the Llanowar
+  Elves it counts) and an ability activated from a hand or a graveyard. The
+  AI had asked three of the ten, and the wire none: the client offered 116
+  refused activations, and a card was cycled on an opponent's turn under City
+  of Solitude. Each row says what it binds, because a sentence about
+  *permanents* does not reach a card in a hand (CR 109.2). The wire carries
+  each refusal as the sentence the route refuses with (`ability_denials`), and
+  the menu shows it.
 - `engine/card_hooks.py` — name-keyed registries for truly bespoke behavior
   (spell-resolved and counterspell riders, leave-battlefield effects,
   draw-step modifiers) plus
@@ -1550,6 +1723,17 @@ adding entries, not editing dispatch**:
   destroyed it — 16 cards, protection above all.
   Held by `tests/engine/test_entry_trigger_stack_census.py`, over three roads
   with floors.
+  **The name is the trigger's, never the spell's.** A creature spell targets
+  nothing (CR 115.1), so its cast announces no "becomes the target", and every
+  reader of "what does this spell target" returns early on
+  `stack_targets.permanent_spell_targets_nothing`. Four readers had gone on
+  reading the fields: Deflection was offered a Man-o'-War spell, and Confound
+  countered a Nekrataal "that targets a creature". The trigger announces the
+  target as it goes on the stack. A graveyard-card entry trigger (Gravedigger)
+  is asked through its own picker. An "up to one" trigger that names nobody
+  says so (`oracle_types.NAMED_NO_TARGET`), so the handler does not go on to
+  scan. A CR 603.2d additional instance chooses its own target; only the first
+  instance carries the cast's.
   **So a source can now leave before its own entry trigger resolves, and a
   handler that moves something "until this leaves the battlefield" asks
   first**: `linked_exile.until_leaves_has_ended` (CR 610.3b — the object
@@ -1664,6 +1848,8 @@ form that produces no `ImportError` and so rots silently).
 | `game_flow.py` | priority, phase advancement, AI stepping |
 | `state_view.py` | the whole-state payload a client polls |
 | `debug_actions.py` | Debug-Menu board manipulation, raw-state injection |
+| `payment_plan.py` | the auto-tap: which permanents pay for an action, planned and tapped by the server |
+| `action_helpers.py`, `action_*.py` | the shared cast plumbing, then one module of registered handlers per group of `ActionKind`s |
 | `actions.py` | the one dispatch over `ActionKind` |
 
 The card pool is `CARD_PATHS`, read from `cards/manifest.json` via

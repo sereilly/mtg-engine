@@ -485,6 +485,108 @@ was made on top, and one full suite on the promoted tree covered both - two
 gates in sequence instead of three, with the rehearsals having already shown
 which guards the promotion itself could move.
 
+**The round after Seventh Edition ran fourteen agents in three waves on
+defects, with no card to implement, while Apocalypse and Odyssey shipped
+upstream. Seven things about integrating it are procedures.**
+
+*The meeting-point run includes the censuses.* In eight merges it found three
+things that no branch's suite could, and none of them conflicted on a line.
+One branch added a ratchet on compiling a permanent's printed card, and
+another had added exactly such a compile the same week, in a file the first
+never opened. One branch's census builds a table twice and compares the two,
+masking timestamps under the key it knew. Another began recording *when* a
+grant started under a new key, and the census reported `{'red': 29}` beside
+`{'red': 58}` as two different tables. And two branches each gave one census
+board the tapped permanent it needed, by two means. Stacked, the policy's cast
+was priced on a poorer board than its rivals and read as the smaller one. So
+before a link's gate, run **every new test file of every link beneath it,
+every ratchet either side lowered, and the censuses of any seam both
+touched** on the merged tree. Reconcile in the merge, with the reason in its
+message. An instrument is code that meets other code at a merge, like any
+other.
+
+*Scan for a name two branches each invented.* The duplicate-definition scan
+looks inside one module. `dup_ideas.py` (in the integration toolkit) asks the
+other question: which **new** top-level names are defined in two or more
+modules. After eight green merges it named one, `_SEAT_GIFT_KINDS`. That was a
+private set in `targeting.py` and another in `ai_valuation.py`, with
+different contents, each answering "is the player this cast names helped by
+it?" for a different reader. Being private, nothing shadowed anything and
+nothing failed, yet there were two answers to one question. Run it once the
+chain is on `main`, against the round's base.
+
+*A wire change and its client are one unit of work.* A server-side group
+changed what "castable" means on the wire (payable with what you could tap,
+a Sol Ring included), and was briefed, correctly, not to touch `web/static/`.
+Its report said so in a line headed "client follow-ups". Clicked on the
+merged tree, a card that glowed opened a dialog reading "Insufficient mana"
+with its auto-tap button disabled. Every gate was green, and the first thing a
+player would do was broken. When a brief moves what the server says, either
+give that group the client, or **put the client half in the same wave's plan
+before the first agent starts**. Until it lands, the merge message says the
+feature is not finished. A closing wave whose first group is "the client
+catches up with the wire" is the shape that worked.
+
+*Read an agent's design decision for what it lets the code know.* One group
+was asked for a table of values and delivered something better: the AI
+rehearses a candidate cast on a copy of the game and measures the result.
+Accepting it on its census numbers was right. Two things about it were found
+only by reading it as a mechanism rather than as a result. The copy held the
+real opposing hand, so the policy decided with information its seat cannot
+see. And the rehearsal swallowed any exception and reported "cannot be
+weighed", so an engine crash that the simulator used to raise became a card
+quietly never cast. Neither is a failing test. **A new mechanism gets two
+questions at the merge: what can it see that it should not, and what can now
+fail without anybody being told?** Answer the second with an honesty count,
+like every other one in the simulator's report. Both went to the closing wave
+and are built.
+
+*An upstream that ships while the round runs is merged like a branch, by
+intent.* Two sets, 275 commits and 31 conflicted files arrived between the
+round's two waves. Where both sides had done the same work (a spell's colour
+on the stack, a chosen trigger target, the AI casting from outside its hand),
+upstream's version was kept and the round's callers moved onto it. Where the
+round had replaced what upstream extended (bare announcements, the AI's
+payment planner), the round's was kept and upstream's addition ported into
+it. Each choice is named in the merge message. Then the full suite on the
+resolved tree named 42 failures, and each was the two sides meeting rather
+than either side wrong. Some were a guard finding a duplicate the merge made:
+one list sent twice on the wire, a graveyard card picked by two choosers.
+Some were one side's tests assuming what the other side had changed. **Expect
+the reds, and read each as a meeting, not a regression**; the backwards checks
+among them are the ones a second layer now satisfies.
+
+*Work outlives the agent that did it, and a merge sees only the commits.* Two
+closing groups stopped mid-item with verified work that was not on their
+branch. One had built its fix in an exported tree, because its suite was
+running on the commit it would have changed. The other left a measured,
+half-finished item in its working tree. Both branches merged cleanly at their
+last commits, and the work sat in the worktrees for eleven days, until the
+next session found it by running `git status` in every worktree before
+removing any. One of the two was a shipped defect, live on `main` (Terror at
+a creature whose control changed in response did nothing). Three rules. **An
+agent commits, or writes a patch file, before it starts a long run on a
+commit**: work done in an export is uncommitted work. **Before merging a
+branch, `git status` its worktree and list its scratch for anything newer
+than its last commit.** And **"is an ancestor of `main`" is not the test for
+removing a worktree**. It is necessary, and the dirty-tree check is what
+found both leftovers.
+
+*Tidy the chain as soon as it is on `main`, with that check.* Sixteen
+worktrees (eight branches and eight integration links) were removed the hour
+the last J gate went green. Each branch was checked to be an ancestor of
+`main` and each worktree was checked for untracked and modified files first.
+The K worktrees were not tidied the same way, and that is where the leftovers
+waited. The scratch directory stays, since the next wave's briefs cite the
+reports in it.
+
+Two agents finished the leftovers, briefed from the saved patch files and
+the stopped agents' own measurements. Both found the material a merge out of
+date: K2's 1,288 misses were 1,417 on the merged tree, and K4's INV ratio
+was 1.66× rather than 2.14×. And in both cases the residue the brief suspected
+was the sweep's own, or already fixed. **What a stopped agent measured is a
+brief, and it expires like any other.**
+
 Fallen Empires added two more, both about *how the conflict is resolved* rather
 than about what conflicted. **A whole-file `--theirs` (or `--ours`) discards the
 hunks that were never in dispute.** Resolving one conflicted file that way would
