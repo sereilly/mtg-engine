@@ -188,6 +188,18 @@ def test_a_creature_tapped_after_the_fight_is_not_a_cast(pool):
     assert choose_cast_action(game, ME) is None
 
 
+def test_a_token_for_the_turn_with_nothing_to_do_is_not_a_cast(pool):
+    """Tidal Wave, "create a 5/5 blue Wall creature token with defender.
+    Sacrifice it at the beginning of the next end step", in its caster's own
+    main phase: a Wall that cannot attack, gone at the end step (CR 513.1),
+    and nothing left of it but the turn's count of creatures that died. A
+    reading run straight to the cleanup step kept the Wall, and one that
+    stopped at the end of the turn kept the count: it was cast, for a
+    quarter of the 5/5."""
+    assert choose_cast_action(_table(pool, ["Tidal Wave"]), ME) is None
+    assert choose_cast_action(_table(pool, ["Tidal Wave"], mine=[BEAR]), ME) is None
+
+
 def test_a_combat_a_cast_adds_is_a_fight_it_is_weighed_through(pool):
     """Relentless Assault after the Bear has attacked: "untap all creatures
     that attacked this turn. After this main phase, there is an additional

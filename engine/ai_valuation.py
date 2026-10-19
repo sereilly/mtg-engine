@@ -3886,8 +3886,11 @@ def _fight_the_combat(game) -> None:
 
 def _run_out_the_turn(game, *, through_combat: bool = False) -> None:
     """Take a scratch copy to the end of its turn: a combat whose blocks are
-    already declared deals its damage, then CR 514's cleanup ends every
-    "until end of turn" effect and removes marked damage.
+    already declared deals its damage, the end step's triggers fire
+    (CR 513.1: "at the beginning of the next end step" — a card exiled
+    until then goes back to its owner's hand, a token made for the turn
+    goes), then CR 514's cleanup ends every "until end of turn" effect and
+    removes marked damage.
 
     Nothing is *decided* on the way — no attack is declared, no block made —
     so what is read afterwards is what the cast left, and not what a policy
@@ -3906,6 +3909,11 @@ def _run_out_the_turn(game, *, through_combat: bool = False) -> None:
             break
     if game.is_game_over():
         return
+    if game.current_turn_phase != "ending" and not game.stack:
+        game.resolve_end_step(game.active_player_index)
+        _settle_scratch(game)
+        if game.is_game_over():
+            return
     game.resolve_cleanup_step(game.active_player_index)
     _settle_scratch(game)
 
@@ -4111,8 +4119,10 @@ def _lasting_digest(reading: dict) -> dict:
     Read with the record of **what damage was dealt** left out
     (:func:`forget_damage_history`): by the end of the turn the damage
     itself is gone (CR 514.2), and what it did — a life lost, a creature
-    dead — is in the table already. And with the opponent's permanents as
-    its untap step will leave them (:func:`untap_for_the_next_turn`)."""
+    dead — is in the table already. And as the next turn begins: the
+    opponent's permanents as its untap step will leave them, and every
+    "this turn" record that turn's bookkeeping resets reset
+    (:func:`untap_for_the_next_turn`)."""
     if "lasting_digest" not in reading:
         forget_damage_history(reading["table"])
         untap_for_the_next_turn(reading["table"])
@@ -4137,11 +4147,22 @@ def untap_for_the_next_turn(game) -> None:
     approximation, read as untapped. With more than two seats, or an extra
     turn queued (CR 500.7), the next untap step is not this one's to guess,
     and nothing is untapped.
+
+    The same turn's **bookkeeping** is run too (``Game.begin_turn_bookkeeping``,
+    the one both drivers call as a turn begins): every "this turn" record it
+    resets — creatures that died, lands played, cards drawn — is a record of
+    a turn that is over, and a token made for the turn and sacrificed at its
+    end step "changed" how many creatures died this turn and nothing else
+    (Tidal Wave, cast in its caster's own main phase).
     """
     if len(game.players) != 2 or getattr(game, "extra_turn_queue", None):
         return
-    for permanent in game.controlled_by(1 - game.active_player_index):
+    if game.is_game_over():
+        return
+    upcoming = 1 - game.active_player_index
+    for permanent in game.controlled_by(upcoming):
         permanent.tapped = False
+    game.begin_turn_bookkeeping(upcoming)
 
 
 def forget_damage_history(game) -> None:

@@ -398,6 +398,10 @@ def test_the_simulator_plays_an_ending_phase_and_until_end_of_turn_ends(
     original_cleanup = Game.resolve_cleanup_step
 
     def begin(self, player_index):
+        # A rehearsal reads its copy as the next turn begins (its bookkeeping
+        # run), so this spy needs its cleanup sibling's guard too.
+        if rehearsing():
+            return original_begin(self, player_index)
         seen["turn_starts"] += 1
         stale.extend(f"turn {self.turn}: {what}" for what in _w2g3_until_eot_state(self))
         # CR 514.1: the seat whose cleanup just ran is at or under its maximum.
@@ -412,6 +416,11 @@ def test_the_simulator_plays_an_ending_phase_and_until_end_of_turn_ends(
         return original_begin(self, player_index)
 
     def end(self, *args, **kwargs):
+        # A rehearsal runs its copy through the end step too (CR 513.1: a
+        # card exiled "until the next end step" goes back), so this spy needs
+        # the guard its cleanup sibling below carries.
+        if rehearsing():
+            return original_end(self, *args, **kwargs)
         seen["end_steps"] += 1
         return original_end(self, *args, **kwargs)
 

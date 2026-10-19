@@ -56,26 +56,26 @@ Five findings, by board:
     (``SPELL_BASE_SCORE`` plus its swing): a pump scored at a quarter of its
     body, which puts three damage through.
 
-**Validated backwards**, the whole pool (229 ``(card, mode)``s of 223 cards,
+**Validated backwards**, the whole pool (243 ``(card, mode)``s of 237 cards,
 seven boards each), on ``e67196d6``, where a rehearsal fought no combat:
-**732 idle, 34 losses, 514 mispriced, 9 held, 9 smaller**. A seat proposed
-the trick on 226 of the 227 ``after`` boards and 228 of the 229 ``sick``
+**776 idle, 44 losses, 529 mispriced, 9 held, 17 smaller**. A seat proposed
+the trick on 240 of the 241 ``after`` boards and 242 of the 243 ``sick``
 ones; Fog was a loss on ``open`` and ``lethal`` (its caster's own attack
 stopped) and idle on four boards; Giant Growth was priced at 1.875, a
 quarter of the +3/+3 it lends, on boards where it put three damage through
 (3.0) or won the fight (9.0, 8.4), and was cast for that quarter where the
 Bear could not attack; Hatred was held with lethal on the table. With the
 second reading as it stood when it was first built (a precombat cast read
-again through the fight, and nothing else): 94 idle (a ping at a creature
+again through the fight, and nothing else): 138 idle (a ping at a creature
 that survives it, a Fog over an attack into a Wall — each "moved" only the
-turn's record of who dealt damage — and a tap of a creature its untap step
-undoes), 16 held (every "prevent the next N damage to any target", whose
-target was still chosen with no fight in the reading; Hatred at an X of
-ten), 3 losses and 4 mispriced. Now, over 232 ``(card, mode)``s of 226
-cards: the fourteen pinned below, none of them the fight's. (Three more
-cards are in the population because the digest the census compares with,
-``ai_valuation.position_digest``, now reads exile and the standing
-permissions by name.)
+turn's record of who dealt damage — a tap of a creature its untap step
+undoes, a token for the turn), 16 held (every "prevent the next N damage to
+any target", whose target was still chosen with no fight in the reading;
+Hatred at an X of ten), 13 losses, 8 smaller and 22 mispriced. Now, over
+247 ``(card, mode)``s of 241 cards: the twenty pinned below, none of them
+the fight's. (Four more are in the population because the digest the
+census compares with, ``ai_valuation.position_digest``, now reads exile and
+the standing permissions by name.)
 
 The whole pool takes several minutes, so the suite runs a fixed share of the
 population (``SAMPLE_EVERY``) plus every card named in a pin or in ``ALWAYS``,
@@ -205,7 +205,8 @@ def combat_ahead(game) -> bool:
 def run_out(game, *, fight: bool) -> None:
     """The turn run out: every combat still to come fought first if *fight*
     (the attack and the blocks declared by the policies that declare them),
-    then whatever of a combat is still owed, then CR 514's cleanup."""
+    then whatever of a combat is still owed, the end step (CR 513) and CR
+    514's cleanup."""
     modes.settle(game)
     for _ in range(4 if fight else 0):
         if not combat_ahead(game):
@@ -226,6 +227,11 @@ def run_out(game, *, fight: bool) -> None:
         game.auto_resolve_pending_choices()
         if game.current_step == step:
             break
+    if not game.is_game_over() and game.current_turn_phase != "ending" and not game.stack:
+        # CR 513.1: the end step's triggers ("at the beginning of the next
+        # end step, return it to its owner's hand") are the turn's too.
+        game.resolve_end_step(game.active_player_index)
+        modes.settle(game)
     if not game.is_game_over():
         game.resolve_cleanup_step(game.active_player_index)
     modes.settle(game)
@@ -234,9 +240,10 @@ def run_out(game, *, fight: bool) -> None:
 def lasting_digest(game) -> dict:
     """``position_digest`` of a board whose turn has run out, with the
     record of what damage was dealt left out and the opponent's permanents
-    untapped: the damage is gone by then (CR 514.2), the tap is gone at its
-    controller's untap step (CR 502.3), and what either did — a life lost, a
-    creature dead — is on the table. Left in, an attack into a Wall that
+    untapped, read as the next turn begins (its bookkeeping run): the damage
+    is gone by then (CR 514.2), the tap is gone at its controller's untap
+    step (CR 502.3), the turn's records are a turn's, and what any of it did
+    — a life lost, a creature dead — is on the table. Left in, an attack into a Wall that
     survives it is "changed" by a Fog that stopped two damage cleanup would
     have removed, and a creature tapped after the fight is "changed" until
     the moment it could next have done anything.
@@ -251,6 +258,11 @@ def lasting_digest(game) -> dict:
         permanent.metadata.pop(DAMAGED_THIS_GAME, None)
     for permanent in game.controlled_by(OPP):
         permanent.tapped = False
+    # ...and its "this turn" records reset as the next turn begins: a token
+    # made for the turn and sacrificed at its end step changed how many
+    # creatures died this turn, and nothing else.
+    if not game.is_game_over():
+        game.begin_turn_bookkeeping(OPP)
     return position_digest(game)
 
 
@@ -560,7 +572,18 @@ LOSSES: dict = {
     ("Desperate Gambit", None, "open"): _COIN,
     ("Desperate Gambit", None, "lethal"): _COIN,
 }
-SMALLER: dict = {}
+#: Soul Burn, "Spend only black and/or red mana on X. Soul Burn deals X
+#: damage to any target. You gain life equal to the damage dealt, but not
+#: more than the amount of {B} spent on X": the policy announces the X its
+#: planner affords under the spend restriction (``ai_policy._max_affordable_x``),
+#: five, from a pool of six black and six red. It is in this population because
+#: one cast of it — one damage to its own caster, one life back — leaves
+#: nothing; the fight has nothing to do with the X.
+_SPEND_X = "an X spent only in black and/or red is sized short of what the pool pays"
+SMALLER: dict = {
+    ("Soul Burn", None, board): _SPEND_X
+    for board in ("after", "bare", "open", "rival", "sick", "wall")
+}
 PRICED: dict = {
     ("Desperate Gambit", None, "open"): _COIN,
     ("Desperate Gambit", None, "lethal"): _COIN,
