@@ -1857,6 +1857,14 @@ class StackResolutionMixin:
         # of them has to re-ask whether a permanent it found can still be
         # *targeted* (which none of them did).
         self.blank_illegal_resolution_targets(item)
+        # …and what is left is found where it now is. A permanent that changed
+        # controller while this object waited is still its target where its
+        # description says so (CR 608.2b judges the description, and most say
+        # nothing of a controller), so the seat beside each surviving id is
+        # settled from the id again — the announcement's own query, asked a
+        # second time — and the resolvers below, which look an id up on that
+        # seat on purpose, find it.
+        self.resettle_announced_target_seats(item)
         # A triggered ability with a name-keyed resolve-time hook (Rod/Cup/Sphere,
         # Verduran Enchantress, Guardian Angel deferred onto the stack).
         if item.hook_key is not None:

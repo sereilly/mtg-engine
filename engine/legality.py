@@ -5432,7 +5432,9 @@ class LegalityMixin:
             f"target can't be targeted ({sealed}, 608.2b)"
         )
 
-    def ability_target_verdicts(self, item) -> "list[tuple] | None":
+    def ability_target_verdicts(
+        self, item, *, recorded_only: bool = False,
+    ) -> "list[tuple] | None":
         """Every target the **ability** *item* announced, each paired with
         whether it is still legal as the ability resolves (CR 608.2b) — or
         None where "is every target illegal?" cannot be answered for the whole
@@ -5476,6 +5478,18 @@ class LegalityMixin:
         A **graveyard** target is legal while any copy of the chosen card is
         left in that pile, the deliberately ambiguous case
         ``Game.graveyard_index_of`` documents.
+
+        *recorded_only* asks a narrower question, and the second shape above
+        can answer it: whether each target the object **records** is still
+        legal, not whether every target it has is. An ability printing a
+        second instance records the first instance's choice alone (the second
+        is its handler's pick as it resolves), and the spec in hand is that
+        first instance's — so a verdict about the recorded target is exactly
+        as good as one about a single-instance ability's. Cuombajj Witches'
+        "1 damage to any target and 1 damage to any target of an opponent's
+        choice" is the shape. :meth:`resettle_announced_target_seats` is the
+        reader: it follows a recorded target that changed controller, and has
+        no use for an "every target" it does not ask.
         """
         from .stack_targets import (_candidates, _printed_target_instances,
                                     _read, announcements)
@@ -5518,7 +5532,7 @@ class LegalityMixin:
                     )))
                 continue
             instances = _printed_target_instances(item)
-            if instances is not None and instances != 1:
+            if instances is not None and instances != 1 and not recorded_only:
                 return None
             candidates = _candidates(self, item, announcement, targets[0])
             if candidates is None:
@@ -5670,6 +5684,166 @@ class LegalityMixin:
         if not illegal:
             return 0
         return blank_illegal_targets(item, illegal)
+
+    def resettle_announced_target_seats(self, item) -> int:
+        """CR 608.2b's other direction: **a target that is still legal is
+        still the target, wherever it now is.** Write, onto each announcement
+        of *item* whose live permanent targets have changed controller, the
+        seat their ids name now; return how many announcements were rewritten.
+
+        "A target that's no longer in the zone it was in when it was targeted
+        is illegal", and a battlefield is one zone however many players control
+        what is on it. So the rule's question about a permanent that changed
+        hands while the object waited is only its description's: "target
+        creature" is still a target creature under its new controller, and
+        "target creature **an opponent controls**" is not one once its caster
+        controls it.
+
+        An announced permanent is recorded twice — by ``permanent_id``, and by
+        the seat whose battlefield it stood on (``target_player_index``, the
+        slot beside it). The id is the choice (CR 601.2c, CR 400.7); the seat
+        is *where the choice stood*, settled from the id as the object went on
+        the stack (:meth:`announced_target_seat`, through
+        ``_settle_announced_target_seat``). Every resolver looks the id up **on
+        that seat** — ``handlers/_common.pick_target_permanent``'s first step,
+        ``bare_announcements.announced_slots``, every "its controller" read off
+        ``context.target`` — and that scoping is deliberate: a resolver has no
+        description to test a permanent against, and many of them say "you
+        control" by the battlefield they pass. So nothing noticed when the seat
+        went stale. Measured on ``e67196d6`` (the census in
+        ``tests/regressions/test_target_changed_controller_census.py``): of
+        1,761 casts and activations whose description still admitted a target
+        that changed hands in response, 1,417 missed it — Boomerang "returned
+        nothing", Terror logged its target gone of a creature that had gone
+        nowhere — 195 changed a permanent nobody named, and 6 charged "that
+        creature's controller" to the seat it had left (Liquid Fire). Of 141
+        triggered abilities whose chosen target did the same, 111 missed it
+        and 100 hit a bystander: a trigger reads the slot beside the id, on
+        the old battlefield, and Nekrataal destroyed the Hill Giant that had
+        slid into the slot of the Bears it named.
+
+        So the seat is settled **from the id again as the object resolves**,
+        by the same query that settled it as the object was announced, and the
+        resolvers' scoping stands: what moved is the record, once, rather than
+        every reader's opinion of it. Under one condition, which is the rule:
+        **the gate above judged the target still legal**. The verdicts are the
+        ones :meth:`illegal_targets_refusal` and
+        :meth:`blank_illegal_resolution_targets` read
+        (:meth:`_announcement_target_legality` for a spell,
+        :meth:`ability_target_verdicts` for an ability) — the announcement's
+        own enumeration asked again, which offers a permanent on its new
+        controller's battlefield exactly where its printed description admits
+        it there. A controller word, a colour, protection gained in response:
+        whatever made it illegal has already removed the object or blanked the
+        slot, and a target the gate could not judge keeps the seat it had.
+        An ability is asked about the targets it **records**
+        (``recorded_only``): one printing a second instance of the word records
+        the first instance's choice alone, and is judged on that — the gate
+        cannot say whether *every* target is illegal there, but this does not
+        ask (Cuombajj Witches' "1 damage to any target and 1 damage to any
+        target of an opponent's choice", whose first target was missed).
+
+        The same bounds as those gates, for their reasons: an instant or a
+        sorcery (a copy included — CR 707.10 gives it the original's targets,
+        and the gate judges it), or an ability whose targets were chosen
+        (:func:`announced_by_a_choice`). A target a fire site stamped is not
+        judged, so it is not followed either. Only the plain channel — the ids
+        on the item or on a chosen mode: a division records a seat per entry
+        and a roles announcement reads its ids without one, so neither is
+        scoped by the field this rewrites. Several targets move only together,
+        all on one battlefield (:meth:`announced_target_seat` answers None for
+        two), because the field is one seat.
+        """
+        modes = tuple(getattr(item, "chosen_modes", ()) or ())
+
+        def live_ids(holder) -> list:
+            ids = getattr(holder, "target_permanent_id", None)
+            return [
+                permanent_id
+                for permanent_id in (ids if isinstance(ids, (list, tuple)) else [ids])
+                if isinstance(permanent_id, int) and not isinstance(permanent_id, bool)
+                and self.permanent_by_id(permanent_id) is not None
+            ]
+
+        # Asked first, off the fields alone, so a resolution whose targets
+        # stayed where they were pays for no enumeration: every live id is
+        # still on the seat its announcement recorded.
+        if not any(
+            any(
+                self.controller_index_of(self.permanent_by_id(permanent_id))
+                != getattr(holder, "target_player_index", None)
+                for permanent_id in live_ids(holder)
+            )
+            for holder in (item, *modes)
+        ):
+            return 0
+        judged: list[tuple] = []
+        if item.ability_instruction is not None:
+            if not announced_by_a_choice(item):
+                return 0
+            verdicts = self.ability_target_verdicts(item, recorded_only=True)
+            if not verdicts:
+                return 0
+            judged.append((item, [
+                (target.permanent_id, legal) for target, legal in verdicts
+                if target.kind == "permanent" and target.channel == "item"
+                and target.mode is None
+            ]))
+        else:
+            card = item.card
+            if card.primary_type not in ("instant", "sorcery"):
+                return 0
+            program = compile_card_oracle(card)
+            for spec, holder, mode_index in self._resolving_announcements(item, program):
+                addresses: list = []
+                verdict = self._announcement_target_legality(
+                    item, program, spec, holder, mode_index, addresses=addresses,
+                )
+                if verdict is None or len(addresses) != len(verdict):
+                    continue
+                judged.append((holder, [
+                    (address[3], legal) for address, legal in zip(addresses, verdict)
+                    if address is not None and address[0] == "permanent"
+                    and address[1] == "item"
+                ]))
+        moved = 0
+        for holder, verdicts in judged:
+            live = [
+                (permanent_id, legal) for permanent_id, legal in verdicts
+                if isinstance(permanent_id, int)
+                and self.permanent_by_id(permanent_id) is not None
+            ]
+            if not live or not all(legal for _permanent_id, legal in live):
+                continue
+            seat = self.announced_target_seat([permanent_id for permanent_id, _ in live])
+            if seat is None or seat == holder.target_player_index:
+                continue
+            holder.target_player_index = seat
+            # …and the slot beside each id, for the handlers that read the
+            # slot alone (a spell's and an activation's are re-read off the
+            # ids anyway, ``bare_announcements.resolving_slots``; a trigger's
+            # are not). A blanked or departed id keeps no slot. In the shape
+            # the slot field already had, which is the shape
+            # ``announced_slots`` keeps: a one-target announcement whose ids
+            # are a list of one still has a scalar slot, and a handler that
+            # reads only an ``int`` there (Swords to Plowshares) would read a
+            # list as no slot at all and go scanning.
+            ids = holder.target_permanent_id
+            slots = []
+            for permanent_id in (ids if isinstance(ids, (list, tuple)) else [ids]):
+                permanent = (
+                    self.permanent_by_id(permanent_id)
+                    if isinstance(permanent_id, int) else None
+                )
+                slots.append(
+                    None if permanent is None else self.battlefield_index_of(permanent)
+                )
+            listed = isinstance(holder.target_permanent_index, (list, tuple))
+            holder.target_permanent_index = (
+                slots if listed or len(slots) > 1 else slots[0]
+            )
+            moved += 1
+        return moved
 
     # -- Target enumeration ------------------------------------------------
     def _enumerate_targets(
