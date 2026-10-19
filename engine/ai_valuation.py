@@ -3523,6 +3523,11 @@ _GAME_BOOKKEEPING = frozenset({
     # (`_permission_entries`), so that the one a cast spends can be told
     # apart from what the cast did.
     "cast_permissions",
+    # "Did this seat cast a spell during its last turn" (Arboria, CR 506.3),
+    # folded out of `spells_cast_this_turn` as the next turn begins — which
+    # is where the end-of-turn reading is taken (`untap_for_the_next_turn`),
+    # so every cast would read as having changed it.
+    "last_own_turn_activity",
 })
 
 #: Rehearsals that **raised**, by what was being rehearsed and what the

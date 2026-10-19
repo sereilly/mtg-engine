@@ -105,6 +105,20 @@ def test_fog_is_not_cast_in_its_casters_own_main_phase(pool):
     assert choose_cast_action(_table(pool, ["Fog"]), ME) is None
 
 
+def test_fog_is_held_some_turns_into_a_game(pool):
+    """The same Fog with turns behind it. The end-of-turn reading is taken
+    as the next turn begins, and that turn's bookkeeping folds "did this
+    seat cast a spell during its last turn" (Arboria) out of the turn's
+    casts — a fact every cast changes, which read as one the Fog had left
+    behind once any turn had been counted (``Game.seat_turn_counts``): the
+    simulated games cast their Fogs again, and the fresh tables here did
+    not."""
+    game = _table(pool, ["Fog"])
+    game.seat_turn_counts = {ME: 3, OPP: 3}
+    game.last_own_turn_activity = {ME: False, OPP: True}
+    assert choose_cast_action(game, ME) is None
+
+
 def test_fog_is_cast_under_an_attack(pool):
     """The moment it is for: four damage coming and nothing in front of it."""
     game = _table(pool, ["Fog"], theirs=[_mk_creature_card("Their Giant", 4, 4)])
