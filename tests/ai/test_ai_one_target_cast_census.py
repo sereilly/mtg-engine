@@ -36,13 +36,14 @@ power/toughness switch on the caster's own 0/4 Wall, +1/-1 on its own 1/1 —
 which the policy made until it measured a cast before proposing one.
 
 **And a pair is one the spell leaves something of** (`acts_on`, through
-``modes.weighed``): 1,253 pairs over 220 cards, 2 declined over the one card
+``modes.weighed``): 1,217 pairs over 216 cards, 2 declined over the one card
 in ``DECLINED``, where ``e67196d6`` swept 1,596 over 254 and declined 9. The
-343 that left are a pump, a shrink, a shield or an evasion ability for the
-turn, or damage a creature survives, at a lone creature with no fight to
-decide — cast, each of them, at a quarter of what it lent (or for the turn's
-record of who dealt damage), until the policy weighed a precombat cast
-through the turn's combat. Hatred left ``DECLINED`` the other way: it is cast
+379 that left are a pump, a shrink, a shield or an evasion ability for the
+turn, damage a creature survives, or a tap its untap step undoes, at a lone
+creature with no fight to decide — cast, each of them, at a quarter of what
+it lent (or for the turn's record of who dealt damage), until the policy
+weighed a precombat cast through the turn's combat and read the turn's end
+as the next turn begins. Hatred left ``DECLINED`` the other way: it is cast
 now, at the size of X that does most (``ai_policy._cast_candidate_sized``),
 where the life buys damage that gets through.
 
