@@ -399,11 +399,15 @@ class DeclareAttackersStepMixin:
         if validated_bands:
             self.log.append(f"{controller.name} declared {len(validated_bands)} band(s)")
         if unique_indices:
-            self._fire_attack_triggers(controller_index)
-            self._fire_creature_attacks_triggers(controller_index, unique_indices)
-            self._fire_matching_creature_attacks_triggers(declared)
-            self._announce_attack_declaration(controller_index, declared)
-            self._fire_delayed_attack_triggers(controller_index, unique_indices)
+            # One window for CR 603.3b: every attack trigger the declaration
+            # sets off goes on the stack together, and its controller orders
+            # them (``putting_triggers_on_stack``).
+            with self.putting_triggers_on_stack():
+                self._fire_attack_triggers(controller_index)
+                self._fire_creature_attacks_triggers(controller_index, unique_indices)
+                self._fire_matching_creature_attacks_triggers(declared)
+                self._announce_attack_declaration(controller_index, declared)
+                self._fire_delayed_attack_triggers(controller_index, unique_indices)
         # CR 508.2: once attackers have been declared (the turn-based action of the
         # declare attackers step), the active player receives priority.
         self.start_priority_window(self.active_player_index)

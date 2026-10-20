@@ -88,6 +88,7 @@ ActionKind = Literal[
     "balance_confirm",
     "sacrifice_confirm",
     "effect_order_confirm",
+    "order_triggers_confirm",
     "resolve_optional_pay",
     "pay_life_to_save_confirm",
     "discard_unless_pay_life_confirm",
@@ -679,6 +680,10 @@ class GameActionRequest(BaseModel):
     # CR 616.1e: which of the effects contending over one event applies first,
     # as an index into the prompt's `options`. Sent with `effect_order_confirm`.
     option_index: int | None = None
+    # CR 603.3b: the order a seat puts its simultaneous triggered abilities on
+    # the stack in, as indices into the prompt's `triggers`, the first to
+    # resolve first. Sent with `order_triggers_confirm`.
+    trigger_order: list[int] | None = None
     # Raging River: map of battlefield/attacker index → "left"/"right" pile label,
     # sent with assign_defender_piles / assign_attacker_piles.
     piles: dict[int, str] | None = None

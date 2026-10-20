@@ -627,12 +627,16 @@ class DeclareBlockersStepMixin:
         # joined ("blocks **or** becomes blocked by …") is fired by both, which
         # is what let the third, Cockatrice-specific fire site here be deleted:
         # it did the same work with the "non-Wall" test written out by hand.
-        self._fire_creature_blocks_triggers(controller_index, assignments)
-        self._fire_delayed_block_triggers(controller_index, assignments)
-        self._fire_becomes_blocked_triggers(controller_index, assignments)
-        self._fire_delayed_block_pair_triggers(controller_index, assignments)
-        self._fire_delayed_becomes_blocked_triggers(controller_index, assignments)
-        self._fire_board_wide_block_triggers(controller_index, assignments)
+        # One window for CR 603.3b, as the attack declaration's is: everything
+        # the block sets off goes on the stack together, and each controller
+        # orders theirs.
+        with self.putting_triggers_on_stack():
+            self._fire_creature_blocks_triggers(controller_index, assignments)
+            self._fire_delayed_block_triggers(controller_index, assignments)
+            self._fire_becomes_blocked_triggers(controller_index, assignments)
+            self._fire_delayed_block_pair_triggers(controller_index, assignments)
+            self._fire_delayed_becomes_blocked_triggers(controller_index, assignments)
+            self._fire_board_wide_block_triggers(controller_index, assignments)
         # CR 509.2/802.4: once every defending player has declared, the active
         # player receives priority.
         if self.combat_blockers_locked:

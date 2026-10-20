@@ -1644,6 +1644,18 @@ def _action_effect_order_confirm(session, req, seat_type):
     ):
         raise HTTPException(status_code=400, detail="no effect order pending for you")
 
+@action_handler("order_triggers_confirm")
+def _action_order_triggers_confirm(session, req, seat_type):
+    # CR 603.3b: the seat orders the triggered abilities it put on the stack
+    # together. A list that is not a permutation of the offered ones is
+    # refused and the prompt stays owed.
+    if session.game.pending_choice_of("order_triggers", req.seat) is None:
+        raise HTTPException(status_code=400, detail="no trigger order pending for you")
+    if req.trigger_order is None:
+        raise HTTPException(status_code=400, detail="trigger_order is required")
+    if not session.game.confirm_order_triggers(req.seat, req.trigger_order):
+        raise HTTPException(status_code=400, detail="invalid trigger order")
+
 @action_handler("dismiss_hand_reveal")
 def _action_dismiss_hand_reveal(session, req, seat_type):
     session.game.dismiss_hand_reveal(req.seat)

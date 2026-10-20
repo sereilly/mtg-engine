@@ -100,6 +100,15 @@ END_STEP_INTERVENING_IF = "intervening_if"
 
 class EndStepMixin:
     def resolve_end_step(self, player_index: int) -> None:
+        """Begin the end step: its delayed sweeps, then everything "at the
+        beginning of the end step" sets off, as one window for CR 603.3b
+        (``putting_triggers_on_stack``) — a seat that put two or more
+        triggers on the stack here orders them.
+        """
+        with self.putting_triggers_on_stack():
+            self._begin_end_step(player_index)
+
+    def _begin_end_step(self, player_index: int) -> None:
         phase = "ending"
         step = "end"
         self._set_phase_and_step(phase, step)

@@ -272,12 +272,16 @@ def test_w1g2_603_3d_two_kicked_triggers_each_choose_their_own_target():
     assert len(game.stack) == 2 and all(item.is_ability for item in game.stack)
     assert game.is_on_battlefield(land), "its trigger is on the stack, unresolved"
     assert game.is_on_battlefield(their_relic) and game.is_on_battlefield(my_relic)
-    (asked,) = game.pending_choices
+    (asked,) = game.pending_choices_of("trigger_target")
     assert asked.kind == "trigger_target"
     assert sorted(t["permanent_id"] for t in asked.data["targets"]) == sorted(
         [their_relic.permanent_id, my_relic.permanent_id]
     )
     assert game.confirm_trigger_target(0, permanent_id=their_relic.permanent_id)
+    # The two triggers went on the stack together, so their controller is also
+    # asked their order (CR 603.3b; round 4). Kept as offered: the first
+    # printed resolves first.
+    assert game.confirm_order_triggers(0, [0, 1])
 
     assert game.resolve_top_of_stack()
     assert not game.is_on_battlefield(land)

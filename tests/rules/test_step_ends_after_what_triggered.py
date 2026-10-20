@@ -142,6 +142,14 @@ def _left_waiting_when_the_upkeep_ended(pool, card, trig, path) -> "bool | None"
     game._enqueue_triggered_batch = with_one_more
     try:
         game.resolve_upkeep(0)
+        # The census's own trigger and the card's go on the stack together,
+        # so an interactive seat is asked their order first (CR 603.3b; round
+        # 4) and nothing resolves until it answers. Answered as a seat nobody
+        # asks would — the order pushed — and the step's window run on, which
+        # is what the web layer's resume does (`_resume_paused_beginning_phase`).
+        for owed in game.pending_choices_of("order_triggers"):
+            game.auto_resolve_choice(owed)
+            game._resolve_priority_window()
     finally:
         EFFECT_HANDLERS.pop("census_make_state_true", None)
     assert made, card.name
