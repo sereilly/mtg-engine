@@ -69,10 +69,8 @@ from .land_types import DERIVED_LAND_TYPES, LAND_TYPE_EFFECTS, land_type_changes
 from .late_modules import LateModules
 from .lord_buffs import QUALIFIER_FIELDS
 from .type_changes import (
-    DERIVED_LOST_SUPERTYPES,
-    GAINED_TYPES,
     LAND_ANIMATION_ORDER,
-    LOST_TYPES,
+    LAYER_4_CHANNELS,
     derived_lost_supertypes,
     gained_types,
     lost_types,
@@ -853,12 +851,16 @@ def collect_ability_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]
 #: ``engine/fast_paths.py``'s checking mode compares every shortcut answer
 #: with the full computation.
 TYPE_EFFECT_CHANNELS: tuple[str, ...] = (
-    # Recorded on the permanent (:func:`collect_own_type_effects`).
-    GAINED_TYPES, LOST_TYPES, *_ANIMATION_RECORDS, SET_CARD_TYPES, "chosen_body",
-    "attached_auras", LAND_TYPE_EFFECTS,
-    # Said of it by the board (:func:`collect_static_type_effects`).
-    "land_animated", DERIVED_LOST_SUPERTYPES, "global_static_sources",
-    STACK_STATICS_KEY, STACK_STATIC_STAMPS_KEY, DERIVED_LAND_TYPES,
+    # ``type_changes``' own three: what an effect added and took away, and
+    # what a static is taking (its keys are that module's to spell).
+    *LAYER_4_CHANNELS,
+    # The rest of what is recorded on the permanent
+    # (:func:`collect_own_type_effects`).
+    *_ANIMATION_RECORDS, SET_CARD_TYPES, "chosen_body", "attached_auras",
+    LAND_TYPE_EFFECTS,
+    # …and what the board says of it (:func:`collect_static_type_effects`).
+    "land_animated", "global_static_sources", STACK_STATICS_KEY,
+    STACK_STATIC_STAMPS_KEY, DERIVED_LAND_TYPES,
 )
 
 

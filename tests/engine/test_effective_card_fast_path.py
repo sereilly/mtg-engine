@@ -284,11 +284,12 @@ def test_a_global_static_is_matched_once_per_text_and_built_as_it_was(by_name):
     call, as it always was, because ``_refresh_global_statics`` compares the
     statics it holds by identity. A template returned as it stands was always
     the one shared object, and still is."""
+    from engine.faces import compilation_units
     from engine.global_statics import _TEMPLATES, global_static_for
 
     templates = {id(static) for _pattern, static in _TEMPLATES}
     built = shared = 0
-    for card in by_name.values():
+    for card in compilation_units(by_name.values()):
         first = global_static_for(card.oracle_text or "")
         if first is None:
             continue

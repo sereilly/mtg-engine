@@ -411,6 +411,10 @@ _COMPUTED_ATTRIBUTE_WRITES: dict[str, str] = {
     "engine/shields.py::shields_on": (
         "the shield collection's attribute on a recipient, not a zone."
     ),
+    "engine/late_modules.py::__getattr__": (
+        "a submodule of the engine package, kept on the LateModules "
+        "instance it was read through: never a zone, a game or a player."
+    ),
 }
 
 
