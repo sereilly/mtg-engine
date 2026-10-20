@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**419 / 625 tracked rules covered (67%)** — 3114 tests, 0 unannotated.
+**419 / 625 tracked rules covered (67%)** — 3121 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -283,12 +283,12 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 117. Timing and Priority
 
-- [x] **117.1** Unless a spell or ability is instructing a player to take an action, which player can take action... *(3 tests, subrules a)*
+- [x] **117.1** Unless a spell or ability is instructing a player to take an action, which player can take action... *(4 tests, subrules a)*
 - [x] **117.2** Other kinds of abilities and actions are automatically generated or performed by the game rules, ... *(1 tests, subrules c)*
-- [x] **117.3** Which player has priority is determined by the following rules: *(22 tests, subrules abcd)*
-- [x] **117.4** If all players pass in succession (that is, if all players pass without taking any actions in bet... *(3 tests)*
+- [x] **117.3** Which player has priority is determined by the following rules: *(26 tests, subrules abcd)*
+- [x] **117.4** If all players pass in succession (that is, if all players pass without taking any actions in bet... *(7 tests)*
 - [x] **117.5** Each time a player would get priority, the game first performs all applicable state-based actions... *(3 tests)*
-- [x] **117.7** If a player with priority casts a spell or activates an activated ability while another spell or ... *(1 tests)*
+- [x] **117.7** If a player with priority casts a spell or activates an activated ability while another spell or ... *(2 tests)*
 
 ### 118. Costs
 
@@ -562,7 +562,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 500. General
 
 - [x] **500.1** A turn consists of five phases, in this order: beginning, precombat main, combat, postcombat main... *(7 tests)*
-- [x] **500.2** A phase or step in which players receive priority ends when the stack is empty and all players pa... *(4 tests)*
+- [x] **500.2** A phase or step in which players receive priority ends when the stack is empty and all players pa... *(5 tests)*
 - [x] **500.3** A step in which no players receive priority ends when all specified actions that take place durin... *(2 tests)*
 - [ ] **500.4** As a step or phase begins, if there are effects that last until that step or phase, those effects...
 - [x] **500.5** As a step or phase ends, if there are effects that last until the end of that step or phase, thos... *(2 tests)*
@@ -582,7 +582,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **502.1** First, all phased-in permanents with phasing that the active player controls phase out, and all p... *(1 tests)*
 - [x] **502.3** Third, the active player determines which permanents they control will untap. Then they untap the... *(42 tests)*
-- [x] **502.4** No player receives priority during the untap step, so no spells can be cast or resolve and no abi... *(3 tests)*
+- [x] **502.4** No player receives priority during the untap step, so no spells can be cast or resolve and no abi... *(4 tests)*
 
 ### 503. Upkeep Step
 
@@ -662,7 +662,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 514. Cleanup Step
 
 - [x] **514.1** First, if the active player’s hand contains more cards than their maximum hand size (normally sev... *(7 tests)*
-- [x] **514.2** Second, the following actions happen simultaneously: all damage marked on permanents (including p... *(19 tests)*
+- [x] **514.2** Second, the following actions happen simultaneously: all damage marked on permanents (including p... *(21 tests)*
 - [x] **514.3** Normally, no player receives priority during the cleanup step, so no spells can be cast and no ab... *(4 tests, subrules a)*
 
 ### 601. Casting Spells
@@ -898,7 +898,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.23** Rampage *(6 tests, subrules abc)*
 - [x] **702.24** Cumulative Upkeep *(33 tests, subrules ab)*
 - [x] **702.25** Flanking *(6 tests, subrules ab)*
-- [x] **702.26** Phasing *(19 tests, subrules adfgim)*
+- [x] **702.26** Phasing *(20 tests, subrules adfgim)*
 - [x] **702.27** Buyback *(15 tests, subrules a)*
 - [x] **702.28** Shadow *(6 tests, subrules abc)*
 - [x] **702.29** Cycling *(15 tests, subrules abef)*
