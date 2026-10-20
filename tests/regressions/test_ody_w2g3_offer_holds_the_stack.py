@@ -204,4 +204,7 @@ def test_one_place_builds_a_prompt_and_one_site_names_its_own_object():
     assert built == ["mixins/stack/choices.py"]
     # Phantasmal Terrain's land type, armed as the Aura enters: the game waits
     # and there is no finished object to hold (the registration says so).
-    assert own_object == ["mixins/oracle_instructions.py"]
+    # And CR 603.3b's order (round 4): triggers are put on the stack after the
+    # resolution that set them off, so the order holds the triggers it names
+    # (`_trigger_items`) and no resolving object — `_stack_item=None`.
+    assert own_object == ["mixins/oracle_instructions.py", "trigger_order.py"]

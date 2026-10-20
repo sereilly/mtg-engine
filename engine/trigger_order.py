@@ -113,16 +113,21 @@ def _targets(item) -> tuple:
 def interchangeable(items) -> bool:
     """Whether every order of *items* is the same game.
 
-    Two shapes, both of one printed ability: instances from **one source**
-    (CR 603.2c, a "whenever" that saw several events at once, or CR 603.2d's
-    additional instances), and copies of **one card** each set off by the
-    same event and aimed at the same thing. Anything else — two different
-    abilities, one of them aimed elsewhere, or one about a different event of
-    a different object — is a choice.
+    Two shapes, both of **one ability** — the same printed line, compiled to
+    the same instruction: instances from **one source** (CR 603.2c, a
+    "whenever" that saw several events at once, or CR 603.2d's additional
+    instances), and copies on several sources each set off by the same event
+    and aimed at the same thing. Anything else — two different abilities, one
+    of them aimed elsewhere, or one about a different event of a different
+    object — is a choice. Asked of the ability and never of a card's name,
+    which says nothing about what the object will do.
     """
     first = items[0]
-    printed = (first.card.name, first.ability_text or "")
-    if any((item.card.name, item.ability_text or "") != printed for item in items[1:]):
+    if any(
+        (item.ability_text or "") != (first.ability_text or "")
+        or item.ability_instruction != first.ability_instruction
+        for item in items[1:]
+    ):
         return False
     if all(item.source_permanent is first.source_permanent for item in items[1:]):
         return True
@@ -199,11 +204,20 @@ def order_groups(game: "Game", collected) -> list[tuple[int, list]]:
     return groups
 
 
+def trigger_card(item):
+    """The card a prompt shows for one triggered object: its source as it is
+    (``effective_card`` — a Clone of Marsh Crocodile shows the Crocodile whose
+    ability this is), or the stack object's own card where there is no
+    permanent behind it (an emblem, a card in a graveyard)."""
+    source = item.source_permanent
+    return source.effective_card if source is not None else item.card
+
+
 def trigger_label(item) -> dict:
     """What a prompt shows for one object: whose, and what it says."""
     source = item.source_permanent
     return {
-        "card_name": item.card.name,
+        "card_name": trigger_card(item).name,
         "text": item.ability_text or "",
         "source_id": getattr(source, "permanent_id", None),
     }

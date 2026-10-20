@@ -35,7 +35,7 @@ from engine.mana_payment import mana_cost_label
 from engine.oracle_types import CLAIMABLE_EXILED_CARDS
 from engine.pending_choices import CHOICE_SPECS, public_data
 from engine.search_filters import search_matches, search_slots, searched_seat
-from engine.trigger_order import live_trigger_indices
+from engine.trigger_order import live_trigger_indices, trigger_card
 
 
 @dataclass(frozen=True)
@@ -713,7 +713,7 @@ def _order_triggers(ctx: PromptContext, choices: list) -> dict:
             "card_name": entry.get("card_name", ""),
             "text": entry.get("text", ""),
             "source_id": entry.get("source_id"),
-            "card": ctx.serialize_card(items[index].card),
+            "card": ctx.serialize_card(trigger_card(items[index])),
         })
     return {"player_seat": choice.player_index, "triggers": triggers}
 

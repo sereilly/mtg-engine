@@ -1001,11 +1001,19 @@ def test_w3g3_dual_natures_copy_fires_the_copied_entry_trigger_for_its_controlle
 
 
 def test_w3g3_dual_natures_copy_of_nekrataal_chooses_its_own_victim(set_pool):
-    """The cast Nekrataal kills the creature its caster named; its Dual Nature
-    copy's trigger was announced by nobody, so it chooses as it goes on the
-    stack (CR 603.3d). P1 is not asked, and the stated default aims a destroy
-    at an opponent's creature: the second of P0's creatures dies too, and
-    neither trigger touches P1's own green Wall."""
+    """Nekrataal's entry trigger is the active player's (P1) and Dual
+    Nature's is P0's, set off by the same entry — so CR 603.3b puts P1's on
+    the stack first and P0's on top: the copy is made, and its own trigger
+    chooses (announced by nobody, CR 603.3d), *before* the cast Nekrataal's
+    resolves. P1 is not asked, and the stated default aims the copy's destroy
+    at the first of P0's creatures, the Lions — so the target the cast named
+    is gone when the cast's trigger resolves (608.2b), the Bears live, and
+    neither trigger touches P1's own green Wall.
+
+    Round 4 inverted this: it asserted the old order, in which the observer's
+    batch went on before the entering permanent's own trigger whoever was the
+    active player, the cast trigger resolved first and the copy then took the
+    Bears."""
     game = _w3g3_dual_nature_table(
         set_pool,
         hand1=[set_pool("VIS")["Nekrataal"]],
@@ -1027,5 +1035,6 @@ def test_w3g3_dual_natures_copy_of_nekrataal_chooses_its_own_victim(set_pool):
 
     assert len([p for p in game.controlled_by(1) if p.card.name == "Nekrataal"]) == 2
     assert not game.is_on_battlefield(lions)
-    assert not game.is_on_battlefield(bears)
+    assert game.is_on_battlefield(bears)
     assert game.is_on_battlefield(wall)
+    assert any("every target is illegal (608.2b)" in line for line in game.log)
