@@ -467,6 +467,35 @@ def test_false_orders_marks_creature_removed_from_combat(all_cards):
     assert p2.battlefield[0].metadata.get("removed_from_combat") is True
 
 
+def test_false_orders_cannot_be_aimed_at_an_attacking_creature(all_cards):
+    """"Target creature **defending player controls**": the attacker is not
+    one, so a defender with no creature of its own has no legal target and
+    the cast is refused with nothing spent (CR 601.2c). The targeting row had
+    no seat, so the spell was accepted at the attacker, marked it "removed"
+    and left it attacking — the Giant still dealt its 3."""
+    false_orders = _get(all_cards, "False Orders")
+    giant = Permanent(card=_get(all_cards, "Hill Giant"))
+    giant.metadata["summoning_sickness_turn"] = -99
+    p1 = PlayerState(name="P1", battlefield=[giant])
+    p2 = PlayerState(name="P2", hand=[false_orders])
+    game = Game(players=[p1, p2])
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(0, [0], 1)[0]
+    game._set_phase_and_step("combat", "declare_blockers")
+    assert game.declare_blockers(1, {})[0]
+    spec = game.cast_target_spec(1, false_orders)
+    assert spec["valid_targets"] == []
+
+    result = game.cast_from_hand(
+        1, "False Orders", target_permanent_ids=[giant.permanent_id],
+    )
+
+    assert not result.supported
+    assert [card.name for card in p2.hand] == ["False Orders"]
+    assert "removed_from_combat" not in giant.metadata
+    assert game.combat_attackers == {0: 1}
+
+
 def test_fork_copies_top_spell_effect(all_cards):
     fork = _get(all_cards, "Fork")
     bolt = _mk_card("Bolt Test", "Instant", "Bolt Test deals 3 damage to any target.")

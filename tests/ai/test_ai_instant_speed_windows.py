@@ -239,6 +239,68 @@ def test_a_copy_of_the_game_is_never_answered_for():
     assert report.priority_offers == 0 and report.log_lines == []
 
 
+def test_a_regeneration_shield_is_raised_in_front_of_the_burn_spell():
+    """CR 117.1b, an ability rather than a spell: AI-A Bolts AI-B's Drudge
+    Skeletons, and AI-B pays {B} to regenerate them before the Bolt resolves
+    — the ability on top resolves first, so the 3 damage destroys a creature
+    with a shield and it is tapped, healed and kept."""
+    game, report = _table(
+        hands=(("Lightning Bolt",), ()),
+        boards=(("Mountain",), ("Drudge Skeletons", "Swamp")),
+    )
+    skeletons = _on(game, 1, "Drudge Skeletons")
+    game.players[0].mana_pool["R"] = 1
+
+    result = game.cast_from_hand(0, "Lightning Bolt", target_permanent_ids=[skeletons.permanent_id])
+
+    assert result.supported, result.details
+    assert _on(game, 1, "Drudge Skeletons") is skeletons
+    assert skeletons.tapped and skeletons.damage_marked == 0
+    assert _graveyard(game, 1) == []
+    assert _on(game, 1, "Swamp").tapped
+    assert report.activations_at_instant_speed == Counter({"response": 1})
+    assert report.log_lines == [
+        "G1 T1 AI-B activate Drudge Skeletons -> queued [in response to Lightning Bolt]"
+    ]
+
+
+def test_an_untapped_pinger_is_used_in_the_opponents_end_step():
+    """A Prodigal Sorcerer its controller never tapped in its own turn is
+    tapped in the opponent's end step, before it would untap for nothing."""
+    game, report = _table(
+        boards=((), ("Prodigal Sorcerer",)),
+    )
+    game._set_phase_and_step("ending", "end")
+
+    game._resolve_priority_window()
+
+    assert _on(game, 1, "Prodigal Sorcerer").tapped
+    assert game.players[0].life == 19
+    assert report.activations_at_instant_speed == Counter({"end_step": 1})
+    assert report.log_lines == [
+        "G1 T1 AI-B activate Prodigal Sorcerer -> queued [in the end step]"
+    ]
+
+
+def test_an_ability_whose_effect_ends_with_the_turn_is_not_activated():
+    """The rehearsal is a veto as well as a reason: a Shivan Dragon's
+    "+1/+0 until end of turn" in the opponent's end step, and a regeneration
+    shield with nothing coming, each change nothing that outlasts the turn —
+    the mana stays in the lands and nothing is logged."""
+    game, report = _table(
+        boards=((), ("Shivan Dragon", "Drudge Skeletons", "Mountain", "Swamp")),
+    )
+    game._set_phase_and_step("ending", "end")
+
+    game._resolve_priority_window()
+
+    assert not _on(game, 1, "Mountain").tapped
+    assert not _on(game, 1, "Swamp").tapped
+    assert report.priority_offers >= 1
+    assert report.activations_at_instant_speed == Counter()
+    assert report.log_lines == []
+
+
 @pytest.mark.parametrize("where, seat, stack_owner, expected", [
     (("precombat_main", "precombat_main"), 1, 0, "response"),
     (("precombat_main", "precombat_main"), 0, 0, None),

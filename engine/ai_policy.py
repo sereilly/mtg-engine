@@ -2921,10 +2921,16 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
     player = game.players[player_index]
 
     best: ActivationAction | None = None
+    set_aside = _ACTIVATIONS_SET_ASIDE.get()
     for permanent_index, permanent in enumerate(player.battlefield):
         if permanent.tapped or permanent.card.primary_type == "land":
             continue
         if game._is_summoning_sick(permanent):
+            continue
+        # One the instant-speed chooser has rehearsed and turned down this
+        # time it was asked (`choose_instant_speed_activation`), so the
+        # next-best is the one proposed.
+        if permanent.permanent_id in set_aside:
             continue
 
         # A permanent an effect stripped of its abilities ("loses all
@@ -3444,6 +3450,140 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
             best = candidate
 
     return best
+
+
+#: Permanents `choose_activation_action` passes over, by ``permanent_id``:
+#: the ones `choose_instant_speed_activation` has rehearsed and turned down in
+#: the one decision it is making.
+_ACTIVATIONS_SET_ASIDE: ContextVar[frozenset] = ContextVar(
+    "ai_activations_set_aside", default=frozenset(),
+)
+
+#: How many of the main-phase chooser's proposals one instant-speed decision
+#: rehearses before it passes: each is a copy of the game run out to the end
+#: of its turn, and the engine offers priority dozens of times a turn.
+INSTANT_ACTIVATIONS_WEIGHED = 3
+
+
+def choose_instant_speed_activation(
+    game: Game, player_index: int,
+) -> ActivationAction | None:
+    """The ability this seat activates **now** — given priority in response to
+    another seat's object, in the declare-blockers step, or in the opponent's
+    end step — or None.
+
+    The main-phase chooser proposes (`choose_activation_action`: every gate
+    the engine refuses with, CR 602.5's timing among them, the cost planned,
+    the target chosen), and a rehearsal disposes: the activation carried out
+    on a copy against the same table with nothing activated — the object on
+    the stack resolving, the declared combat dealt — and made only where what
+    it does outlasts the turn, as `_combat_instant_candidate` asks of a cast.
+    That chooser prices every non-damage ability alike, so its pick is a
+    proposal and not a decision: a regeneration shield in front of a burn
+    spell is worth a creature, the same shield with nothing coming is worth
+    nothing, and only carrying it out tells the two apart. A proposal turned
+    down is set aside and the next-best asked for, up to
+    `INSTANT_ACTIVATIONS_WEIGHED` of them.
+    """
+    set_aside: set[int] = set(_ACTIVATIONS_SET_ASIDE.get())
+    with deliberating():
+        for _ in range(INSTANT_ACTIVATIONS_WEIGHED):
+            token = _ACTIVATIONS_SET_ASIDE.set(frozenset(set_aside))
+            try:
+                action = choose_activation_action(game, player_index)
+            finally:
+                _ACTIVATIONS_SET_ASIDE.reset(token)
+            if action is None:
+                return None
+            rehearsal = _rehearse_activation(game, player_index, action)
+            if (
+                rehearsal is not None
+                and _worth_proposing(rehearsal)
+                and rehearsal.lasting > 0.0
+            ):
+                return action
+            permanent = game.permanent_at(player_index, action.permanent_index)
+            if permanent is None:
+                return None
+            set_aside.add(permanent.permanent_id)
+    return None
+
+
+def _rehearse_activation(
+    game: Game, seat: int, action: ActivationAction,
+) -> Rehearsal | None:
+    """What activating *action* would do, carried out on a scratch copy of
+    the game (``ai_valuation.rehearse``) the way `activate_chosen_ability`
+    carries it out — the planned lands tapped, the ability put on the stack —
+    against the same copy with the same lands tapped and nothing activated."""
+
+    def perform(table):
+        return _queue_activation(table, seat, action)
+
+    def paid_for(table, _carried) -> None:
+        pool = table.players[seat].mana_pool
+        floating = dict(pool)
+        tap_planned_lands(table, seat, action)
+        pool.clear()
+        pool.update(floating)
+
+    taps = bool(action.land_tap_indices)
+    return rehearse(
+        game, seat, perform, spell_name=None, leaves_hand=False,
+        label=f"{action.permanent_name}'s ability",
+        key=(
+            "activation", seat, action.permanent_name, action.permanent_index,
+            action.ability_index, action.target_player_index,
+            repr(action.target_permanent_index), repr(action.target_role_refs),
+            action.land_tap_indices, action.land_tap_colors,
+        ),
+        without=paid_for if taps else None,
+        without_key=(
+            ("paid", action.land_tap_indices, action.land_tap_colors)
+            if taps else None
+        ),
+    )
+
+
+def _queue_activation(table: Game, seat: int, action: ActivationAction):
+    """*action* paid for and put on *table*'s stack — the queue form, which
+    leaves it there for the table to answer (CR 117.3c)."""
+    planned = tap_planned_lands(table, seat, action)
+    return table.queue_permanent_ability(
+        seat,
+        planned.permanent_name,
+        target_player_index=planned.target_player_index,
+        permanent_index=planned.permanent_index,
+        target_permanent_index=planned.target_permanent_index,
+        target_role_refs=planned.target_role_refs,
+        ability_index=planned.ability_index,
+    )
+
+
+def activate_chosen_ability(game: Game, seat: int, action: ActivationAction):
+    """Carry out `choose_instant_speed_activation`'s *action* on *game*: the
+    engine's result."""
+    return _queue_activation(game, seat, action)
+
+
+def holds_an_ability_it_could_activate(game: Game, player_index: int) -> bool:
+    """Whether `choose_activation_action` has anything to look at: an
+    untapped, non-land permanent *player_index* controls that is not
+    summoning sick, whose first usable ability is not a mana ability — the
+    chooser's own first gates, asked before it is."""
+    for permanent in game.controlled_by(player_index):
+        if permanent.tapped or permanent.card.primary_type == "land":
+            continue
+        if game._is_summoning_sick(permanent):
+            continue
+        ability = next(iter(game.usable_abilities_of(permanent)), None)
+        if (
+            ability is not None
+            and ability.instruction is not None
+            and not is_mana_ability(ability.instruction)
+        ):
+            return True
+    return False
 
 
 def _activation_target_side(permanent: Permanent, instruction) -> str | None:

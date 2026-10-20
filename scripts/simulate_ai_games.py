@@ -91,6 +91,18 @@ def main() -> int:
         f"(priority offered {report.priority_offers} time(s), "
         f"{report.priority_offers_weighed} holding an instant it could pay for)"
     )
+    if report.activations_at_instant_speed:
+        by_window = ", ".join(
+            f"{count} {window.replace('_', ' ')}"
+            for window, count in sorted(report.activations_at_instant_speed.items())
+        )
+        total = sum(report.activations_at_instant_speed.values())
+        print(f"Abilities activated at instant speed: {total} ({by_window})")
+    if report.refused_instant_activations:
+        total = sum(report.refused_instant_activations.values())
+        print(f"Instant-speed activations the engine declined: {total}")
+        for reason, count in report.refused_instant_activations.most_common(5):
+            print(f"  {count}x {reason}")
 
     # CR 500.7: extra turns actually taken. Only a pool printing one can move
     # it — and until INV's wave 2 nothing could, because the loop alternated

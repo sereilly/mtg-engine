@@ -8,11 +8,13 @@ import random
 
 from . import ai_valuation
 from .ai_combat import run_ai_combat_phase
-from .ai_policy import (cast_announcement, cast_chosen_instant,
-                        choose_activation_action, choose_cast_action,
-                        choose_combat_instant_cast_action,
+from .ai_policy import (activate_chosen_ability, cast_announcement,
+                        cast_chosen_instant, choose_activation_action,
+                        choose_cast_action, choose_combat_instant_cast_action,
                         choose_foreign_activation_action,
-                        choose_hand_activation_action, choose_land_drop,
+                        choose_hand_activation_action,
+                        choose_instant_speed_activation, choose_land_drop,
+                        holds_an_ability_it_could_activate,
                         holds_an_instant_it_could_pay_for, spell_being_cast,
                         tap_planned_lands, zone_being_cast_from)
 from .ai_valuation import mid_resolution, permitted_casts, rehearsing
@@ -195,6 +197,14 @@ class SimulationReport:
     #: windows did.
     priority_offers: int = 0
     priority_offers_weighed: int = 0
+    #: Abilities activated at the same moments, by window (``"response"``,
+    #: ``"combat"``, ``"end_step"`` — `_instant_speed_window`), and the
+    #: refusals among them. Empty in every run before round 4 for the casts'
+    #: reason: the only activations a simulated seat made were its own main
+    #: phase's, so a regeneration shield was never raised in front of the
+    #: spell it answers.
+    activations_at_instant_speed: Counter[str] = field(default_factory=Counter)
+    refused_instant_activations: Counter[str] = field(default_factory=Counter)
 
     @property
     def ok(self) -> bool:
@@ -1322,38 +1332,42 @@ def _answer_priority(
 ) -> bool:
     """*seat* has priority (`Game.offer_priority`): cast what
     `ai_policy.choose_combat_instant_cast_action` chooses — the chooser the
-    web AI seat answers priority with — or pass. True when a spell went on
-    the stack.
+    web AI seat answers priority with — or, with no spell worth casting,
+    activate what `ai_policy.choose_instant_speed_activation` chooses, or
+    pass. True when something went on the stack.
 
     Asked only in `_instant_speed_window`'s moments, only where no
     resolution is part-way through (a rehearsal cannot be run there, and a
     response nobody weighed is a guess — `ai_valuation.mid_resolution`), and
-    only once the cheap question has said there is an instant the seat could
-    pay for (`ai_policy.holds_an_instant_it_could_pay_for`); the chooser
-    rehearses every instant it weighs, and the engine asks this dozens of
-    times a turn.
+    only once the cheap question has said there is something the seat could
+    pay for (`ai_policy.holds_an_instant_it_could_pay_for`,
+    `holds_an_ability_it_could_activate`); both choosers rehearse what they
+    propose, and the engine asks this dozens of times a turn.
     """
     window = _instant_speed_window(game, seat)
     if window is None or mid_resolution(game):
         return False
     report.priority_offers += 1
-    if not holds_an_instant_it_could_pay_for(game, seat):
-        return False
-    report.priority_offers_weighed += 1
-    action = choose_combat_instant_cast_action(game, seat)
+    action = None
+    if holds_an_instant_it_could_pay_for(game, seat):
+        report.priority_offers_weighed += 1
+        action = choose_combat_instant_cast_action(game, seat)
     if action is None:
-        return False
+        # No spell worth casting: an ability, then (a regeneration shield in
+        # front of a burn spell, a ping in the opponent's end step), asked
+        # the same cheap question first.
+        if not holds_an_ability_it_could_activate(game, seat):
+            return False
+        activation = choose_instant_speed_activation(game, seat)
+        if activation is None:
+            return False
+        return _activate_at_priority(game, seat, activation, window, report, game_index, turn)
     answering = game.stack[-1].card.name if game.stack else None
     in_combat = game.current_turn_phase == "combat"
     off_turn = seat != game.active_player_index
     card, result = cast_chosen_instant(game, seat, action)
     report.interaction_count += 1
-    if answering is not None:
-        when = f"in response to {answering}"
-    elif in_combat:
-        when = f"in the {game.current_step.replace('_', ' ')} step"
-    else:
-        when = "in the end step"
+    when = _when_at_priority(game, answering, in_combat)
     modes_named = _modes_named(card, action)
     named = "".join(f" [mode {index}: {label}]" for index, label in modes_named)
     report.log_lines.append(
@@ -1369,6 +1383,40 @@ def _answer_priority(
     report.modal_casts.update(index for index, _label in modes_named)
     if action.from_zone != "hand":
         report.casts_from_zones[action.from_zone] += 1
+    return True
+
+
+def _when_at_priority(game: Game, answering: str | None, in_combat: bool) -> str:
+    """The bracket a priority action's log line ends with: what it answered,
+    or the step it was taken in."""
+    if answering is not None:
+        return f"in response to {answering}"
+    if in_combat:
+        return f"in the {game.current_step.replace('_', ' ')} step"
+    return "in the end step"
+
+
+def _activate_at_priority(
+    game: Game, seat: int, action, window: str, report: SimulationReport,
+    game_index: int, turn: int,
+) -> bool:
+    """Carry out `ai_policy.choose_instant_speed_activation`'s choice and
+    record it: True when the ability went on the stack."""
+    answering = game.stack[-1].card.name if game.stack else None
+    in_combat = game.current_turn_phase == "combat"
+    result = activate_chosen_ability(game, seat, action)
+    report.interaction_count += 1
+    report.log_lines.append(
+        f"G{game_index} T{turn} {game.players[seat].name} "
+        f"activate {action.permanent_name} -> {result.details} "
+        f"[{_when_at_priority(game, answering, in_combat)}]"
+    )
+    if not result.supported:
+        report.refused_instant_activations[
+            f"{action.permanent_name}: {result.details}"
+        ] += 1
+        return False
+    report.activations_at_instant_speed[window] += 1
     return True
 
 
