@@ -33,7 +33,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from engine import Game, PlayerState, fast_paths, layer_bridge, models
+from engine import Game, PlayerState, fast_paths, layer_bridge, models, target_immunity
 from engine.auras import attach_aura
 from engine.card_loader import load_catalog
 from engine.copies import become_copy
@@ -68,11 +68,12 @@ ACCESSORS = {
 #: quoted line (the derived-line channel), a type-setting static (the derived
 #: land-type channel), an Aura setting a land's type (the recorded one), a
 #: creature with the text of its graveyard's top card (the derived copy), a
-#: land animator, a supertype remover, and an "as this enters" body.
+#: land animator, a supertype remover, an "as this enters" body, and a
+#: board-wide "can't be the targets of" clause for the target checks.
 SOURCES = (
     "Hermetic Study", "Agility", "Energy Flux", "Clot Sliver",
     "Blood Moon", "Evil Presence", "Volrath's Shapeshifter", "Living Lands",
-    "Melting", "Primal Clay",
+    "Melting", "Primal Clay", "Dense Foliage",
 )
 PANEL = (
     "Grizzly Bears", "Ornithopter", "Sol Ring", "City of Brass", "Tundra",
@@ -264,6 +265,15 @@ def test_every_shortcut_answer_on_the_board_is_the_full_one(by_name, monkeypatch
 
     assert aura_granted_line_derived_lines(by_name["Agility"].oracle_text) == ("Flanking",)
 
+    # The lines a target check reads every permanent's text as, kept per
+    # text and name: every creature on the board is untargetable by spells
+    # (Dense Foliage), and every kept reading was read again.
+    game = _board(by_name)
+    for permanent in game.all_permanents():
+        classes = target_immunity.board_target_immunity_classes(game, permanent)
+        assert bool(classes) == permanent.is_creature, permanent.card.name
+    assert fast_paths.CHECKED["target_immunity._lines_of"] >= len(permanents) ** 2
+
 
 def test_the_checking_mode_names_a_channel_left_out(by_name, monkeypatch):
     """Validated backwards: with ``attached_auras`` dropped from the tuple, an
@@ -316,8 +326,8 @@ def test_no_accessor_read_runs_an_import_statement(by_name):
     allowed to fill a memo (a compile, a cached text reading), the second is
     the steady state a game lives in, and runs no import statement at all.
 
-    On the tree before this test, those 240 reads (20 permanents, twelve
-    accessors) ran 3,417 import statements.
+    On the tree before this test, those 252 reads (21 permanents, twelve
+    accessors) ran 3,513 import statements.
     """
     permanents = list(_board(by_name).all_permanents())
     for permanent in permanents:
