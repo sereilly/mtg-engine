@@ -193,6 +193,11 @@ def test_the_census_names_all_ten_with_the_windows_check_switched_off(
     monkeypatch.setattr(
         PhaseStepsMixin, "_window_may_close", lambda self, *, waits: True,
     )
+    # Round 4 added a second check, between resolutions, which catches the
+    # same late triggers first. The tree before both is the one with both off.
+    monkeypatch.setattr(
+        PhaseStepsMixin, "_check_between_resolutions", lambda self: None,
+    )
 
     waiting, cards = _census(pool)
 
