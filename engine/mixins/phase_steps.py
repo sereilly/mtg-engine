@@ -46,7 +46,11 @@ class PhaseStepsMixin:
             self._resolve_window_answering_prompts()
             return
         for _ in range(self.MAX_SETTLE_ITERS):
-            self.resolve_stack(pause_for_choices=pause_for_choices)
+            # One object at a time, with the state-based check a player would
+            # make before receiving priority between them (CR 704.3, 117.5).
+            while self.stack and self.resolve_top_of_stack(pause_for_choices=pause_for_choices):
+                if not (pause_for_choices and self.waiting_prompt() is not None):
+                    self._check_between_resolutions()
             if not self.stack:
                 if self._window_may_close(waits=pause_for_choices):
                     return
@@ -61,6 +65,23 @@ class PhaseStepsMixin:
             # shrinking, the condition never true.
             if top.resolution_held or self.announcement_choice_for(top) is not None:
                 return
+
+    def _check_between_resolutions(self) -> None:
+        """The state-based check made after an object resolves and before the
+        next one does (CR 704.3: "Whenever a player would get priority";
+        CR 117.3b gives the active player priority after every resolution).
+
+        The window drained the whole stack and checked only once it was
+        empty, on both its branches, so a creature dealt lethal damage by
+        the object on top was still on the battlefield while the object
+        beneath resolved: a Giant Growth under a Lightning Bolt at the same
+        Grizzly Bears saved the Bears. ``_settle``, the drain a main-phase
+        cast runs, always checked each time round its loop, which is why no
+        main-phase test saw it. Named so that a census of the window's other
+        check (``_window_may_close``) can switch both off to stand in for
+        the tree before either.
+        """
+        self.check_state_based_actions()
 
     def _window_may_close(self, *, waits: bool) -> bool:
         """With the stack empty: whether the step's priority window is over.
@@ -125,6 +146,8 @@ class PhaseStepsMixin:
                 self.offer_priority()
             passed = False
             resolved = bool(self.stack) and self.resolve_top_of_stack()
+            if resolved:
+                self._check_between_resolutions()
             if not answered and not resolved:
                 # An object that refuses to resolve ends the window as it
                 # always did. An *empty* stack ends it only once the check
