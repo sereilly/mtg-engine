@@ -353,6 +353,23 @@ class Game(
     # True while that driver is answering — it is not re-entered (see
     # ``drive_owed_prompts``).
     driving_prompts: bool = field(default=False, repr=False, compare=False)
+    # The same seam for **priority** (CR 117): who plays the seats of a table
+    # nobody is going to ask, at the moment the engine hands one of them
+    # priority. ``driver(game, seat) -> bool`` — True when that seat acted
+    # (cast a spell, put something on the stack), False when it passes. Asked
+    # by ``offer_priority`` from the two loops that decide what happens next
+    # on the stack (``_resolve_priority_window``, ``_settle``): before each
+    # object resolves and as each step's window closes, in the order
+    # CR 117.3b-117.3d gives priority. None for every game but the AI
+    # simulator's, so a bare headless ``Game`` still drains its stack with
+    # both players passing (the "500.2 simplified" every test is written
+    # against). Before this, a simulated seat had no priority anywhere but its
+    # own main phase: no instant was ever cast in response to anything, in
+    # combat, or on the opponent's turn.
+    priority_driver: object = field(default=None, repr=False, compare=False)
+    # True while that driver is being asked — ``offer_priority`` is not
+    # re-entered from inside its own answer.
+    driving_priority: bool = field(default=False, repr=False, compare=False)
     # Replacement effects suspended on a player's decision — the optional or
     # choose-one ones (Library of Leng's discard destination, Aladdin's Lamp's
     # look-at-the-top-X, Ring of Ma'rûf's outside-the-game card). Each entry is a

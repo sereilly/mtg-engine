@@ -7,7 +7,11 @@ class PhaseStepsMixin:
         """Drain the stack for a step nobody is holding priority through.
 
         500.2 simplified: both players pass in succession once the stack is
-        empty. CR 608.2 still applies *inside* that — a resolution that stops to
+        empty — unless the table has a ``priority_driver`` (the AI
+        simulator's), which is asked for each player in turn before each
+        object resolves and before the step ends
+        (:meth:`_resolve_window_answering_prompts`, :meth:`offer_priority`).
+        CR 608.2 still applies *inside* that — a resolution that stops to
         ask an interactive seat something is not finished, so it holds its object
         on the stack and this returns with it there rather than draining the
         step's remaining triggers into a board the answer has not shaped yet. The
@@ -33,7 +37,12 @@ class PhaseStepsMixin:
         again for whatever it put there (:meth:`_window_may_close`).
         """
         pause_for_choices = bool(self.interactive_seats)
-        if not pause_for_choices and self.prompt_driver is not None:
+        if not pause_for_choices and (
+            self.prompt_driver is not None or self.priority_driver is not None
+        ):
+            # One object at a time, which a table whose players are asked
+            # anything needs — a prompt answered, or priority given, before
+            # the next object resolves.
             self._resolve_window_answering_prompts()
             return
         for _ in range(self.MAX_SETTLE_ITERS):
@@ -95,19 +104,109 @@ class PhaseStepsMixin:
         after one. Ends when a pass neither answered nor resolved anything —
         which also covers an object that refuses to resolve and a prompt the
         driver will not answer, either of which used to be a spin.
+
+        **And the players are given priority** where a table has a
+        ``priority_driver`` (:meth:`offer_priority`): before each object
+        resolves — CR 117.4, it resolves once all players have passed in
+        succession — and once more with the stack empty before the step's
+        window closes. A seat that acts puts something on the stack, and the
+        loop resolves that first. Inert without a driver, which is every table
+        but the simulator's.
         """
+        # Whether all players have just passed in succession over the stack
+        # as it stands (a step-end offer someone acted in, which only ends
+        # once everyone passes): the top resolves without being offered again.
+        passed = False
         for _ in range(self.MAX_SETTLE_ITERS):
             answered = self.drive_owed_prompts()
             if answered:
                 self.check_state_based_actions()
+            if self.stack and not (passed and not answered):
+                self.offer_priority()
+            passed = False
             resolved = bool(self.stack) and self.resolve_top_of_stack()
             if not answered and not resolved:
                 # An object that refuses to resolve ends the window as it
                 # always did. An *empty* stack ends it only once the check
                 # the players' passes would make has put nothing there
-                # (CR 117.5; ``_window_may_close``).
-                if self.stack or self._window_may_close(waits=False):
+                # (CR 117.5; ``_window_may_close``) — and once every player
+                # has had priority with nothing on the stack and passed it
+                # (CR 117.4, CR 500.2).
+                if self.stack:
                     return
+                if not self._window_may_close(waits=False):
+                    continue
+                if self._receives_priority(self.current_step) and self.offer_priority():
+                    passed = True
+                    continue
+                return
+
+    #: How many actions one :meth:`offer_priority` may take before it hands
+    #: the stack back to its caller to resolve. Generous: a seat answering one
+    #: object casts one or two spells, and the bound is what keeps a driver that
+    #: reports an action it did not take from spinning.
+    MAX_PRIORITY_ACTIONS = 8
+
+    def offer_priority(self, first: int | None = None) -> bool:
+        """Give priority round the table, through ``priority_driver``, until
+        every player has passed in succession (CR 117.4). True when somebody
+        acted.
+
+        Priority starts with *first* — the active player unless told
+        otherwise (CR 117.3a/117.3b) — and passes to the next player in turn
+        order each time the player holding it passes (CR 117.3d). A player who
+        acts receives priority again (CR 117.3c), after the state-based
+        actions and the prompts that action owes (CR 117.5), so "in
+        succession" restarts from them. What this does **not** do is resolve
+        anything: once everyone has passed, the caller resolves the top object
+        or ends the step, which is the half of CR 117.4 that is the caller's.
+
+        The driver is asked, not walked: it receives ``(game, seat)`` and
+        either acts through the engine's own entry points (``queue_from_hand``)
+        and answers True, or passes. Inert without a driver, at a table with
+        an interactive seat (the web layer's priority exchange is that
+        table's, through ``pass_priority``), inside a driver's own answer, and
+        once the game is over.
+        """
+        driver = self.priority_driver
+        if (
+            driver is None
+            or self.interactive_seats
+            or self.driving_priority
+            or self.is_game_over()
+        ):
+            return False
+        seat_count = len(self.players)
+        if seat_count == 0:
+            return False
+        seat = self.active_player_index if first is None else first
+        acted = False
+        actions = 0
+        passes = 0
+        self.driving_priority = True
+        try:
+            for _ in range(seat_count * (self.MAX_PRIORITY_ACTIONS + 2)):
+                if self.is_game_over():
+                    break
+                living = sum(1 for player in self.players if not player.lost)
+                if passes >= living:
+                    break
+                if self.players[seat].lost:
+                    # CR 800.4h: a player who has left is skipped.
+                    seat = self._next_player_index(seat)
+                    continue
+                if actions < self.MAX_PRIORITY_ACTIONS and driver(self, seat):
+                    acted = True
+                    actions += 1
+                    passes = 0
+                    self.check_state_based_actions()
+                    self.drive_owed_prompts()
+                    continue
+                passes += 1
+                seat = self._next_player_index(seat)
+        finally:
+            self.driving_priority = False
+        return acted
 
     def _close_or_defer_step(self, phase: str, step: str, defer_priority: bool) -> None:
         """End a step, or — when defer_priority is set — leave a priority window open

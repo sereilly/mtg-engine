@@ -1534,6 +1534,13 @@ class StackResolutionMixin:
                 continue
             if not self.stack:
                 break
+            # CR 117.4: the top resolves once every player has passed in
+            # succession — asked of a table whose seats a driver plays
+            # (`Game.priority_driver`, the AI simulator), so a spell cast here
+            # can be answered before it resolves. Inert for every other game,
+            # and in the untap step, where nobody receives priority (CR 502.4).
+            if self.current_step != "untap":
+                self.offer_priority()
             if not self.resolve_top_of_stack(pause_for_choices=pause_for_choices):
                 # Top item is paused on a pending choice (Word of Command).
                 break

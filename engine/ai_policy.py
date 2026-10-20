@@ -4556,33 +4556,16 @@ def choose_combat_instant_cast_action(game: Game, player_index: int) -> CastActi
     """The instant this seat casts **now** — in response to what is on the
     stack, or in the declare-blockers step — or None.
 
-    The web AI's answer to priority (`web/game_flow`); the simulator has no
-    such window yet. **Every mode of a modal instant is weighed here as it is
-    in the main phase** (`_cast_candidate`): this is the one moment a mode
-    whose target is a spell on the stack can be announced at all, and with no
-    mode named Dromar's Charm never countered anything and Treva's Charm never
-    exiled an attacker.
+    The answer to priority of both callers that play a seat nobody asks: the
+    web AI's (`web/game_flow._ai_respond_to_priority`) and the AI
+    simulator's (`ai_simulator`'s `Game.priority_driver`), each through
+    `cast_chosen_instant`. **Every mode of a modal instant is weighed here as
+    it is in the main phase** (`_cast_candidate`): this is the one moment a
+    mode whose target is a spell on the stack can be announced at all, and
+    with no mode named Dromar's Charm never countered anything and Treva's
+    Charm never exiled an attacker.
     """
-    player = game.players[player_index]
-
-    # The hand's instants, then the instants an effect lets the seat cast from
-    # somewhere else (CR 601.3; `ai_valuation.permitted_casts`) — a flashback
-    # instant in its graveyard (Moment's Peace, Sylvan Might), which is
-    # castable in this window exactly as the hand's are. A hand card is
-    # weighed under the waiver that covers it, if one does (`hand_waiver`),
-    # as the main-phase chooser weighs it.
-    offered: "list[tuple[int, CardDefinition, PermittedCast | None]]" = [
-        (
-            hand_index, card,
-            hand_waiver(game, player_index, player.hand[hand_index], card, hand_index),
-        )
-        for hand_index, card in hand_spells(player)
-        if card.primary_type == "instant"
-    ]
-    offered += [
-        (permitted.index, permitted.spell, permitted)
-        for permitted in permitted_casts(game, player_index)
-    ]
+    offered = _instant_speed_offers(game, player_index)
     best: CastAction | None = None
     # One deliberation for the whole hand: every instant weighed here answers
     # the same stack and the same combat, so each is measured against one
@@ -4611,6 +4594,86 @@ def choose_combat_instant_cast_action(game: Game, player_index: int) -> CastActi
                 best = chosen
 
     return best
+
+
+def _instant_speed_offers(
+    game: Game, player_index: int,
+) -> "list[tuple[int, CardDefinition, PermittedCast | None]]":
+    """What `choose_combat_instant_cast_action` weighs: ``(zone index, spell,
+    the permission it is cast under)`` for each instant *player_index* may
+    cast now.
+
+    The hand's instants, then the instants an effect lets the seat cast from
+    somewhere else (CR 601.3; `ai_valuation.permitted_casts`) — a flashback
+    instant in its graveyard (Moment's Peace, Sylvan Might), which is
+    castable in this window exactly as the hand's are. A hand card is weighed
+    under the waiver that covers it, if one does (`hand_waiver`), as the
+    main-phase chooser weighs it.
+    """
+    player = game.players[player_index]
+    offered: "list[tuple[int, CardDefinition, PermittedCast | None]]" = [
+        (
+            hand_index, card,
+            hand_waiver(game, player_index, player.hand[hand_index], card, hand_index),
+        )
+        for hand_index, card in hand_spells(player)
+        if card.primary_type == "instant"
+    ]
+    offered += [
+        (permitted.index, permitted.spell, permitted)
+        for permitted in permitted_casts(game, player_index)
+        if permitted.spell.primary_type == "instant"
+    ]
+    return offered
+
+
+def holds_an_instant_it_could_pay_for(game: Game, player_index: int) -> bool:
+    """Whether `choose_combat_instant_cast_action` could propose anything at
+    all: *player_index* holds an instant (or may cast one from elsewhere)
+    whose mana its board can pay, by the chooser's own gates — the X it would
+    announce (`_pick_x_value`; an X of 0 is never proposed), the cost it
+    would be charged (`_cost_for`, under the permission being weighed) and the
+    tap plan (`_plan_land_taps`).
+
+    **The cheap question asked before the dear one.** The chooser rehearses
+    every instant it weighs on a copy of the game, and a table that gives
+    priority before every resolution and at every step's end asks it dozens
+    of times a turn; most of those asks are of a seat holding no instant, or
+    tapped out. Every candidate the chooser builds passes these same gates,
+    so a False here is a None there, never a different answer. True with
+    mana costs unenforced, where the chooser asks no plan.
+    """
+    player = game.players[player_index]
+    for _index, card, under in _instant_speed_offers(game, player_index):
+        if not game.enforce_mana_costs:
+            return True
+        with casting_under(under):
+            x_value = _pick_x_value(game, player, card)
+            if x_value == 0:
+                continue
+            required = _cost_for(game, player, card, x_value)
+            if _plan_land_taps(game, player, required) is not None:
+                return True
+    return False
+
+
+def cast_chosen_instant(
+    game: Game, seat: int, action: CastAction,
+) -> "tuple[CardDefinition, SimulationResult]":
+    """Carry out `choose_combat_instant_cast_action`'s *action*: the spell
+    out of the zone the action names (`zone_being_cast_from`: the hand, or a
+    graveyard holding a flashback instant), the planned lands tapped
+    (`tap_planned_lands`), and the whole announcement (`cast_announcement`)
+    put on the stack — the **queue** form, which leaves it there for the
+    table to answer (CR 117.3c). ``(the spell, the engine's result)``.
+
+    The executor both callers of the chooser share, as `tap_planned_lands`
+    is for every other AI action: the web AI seat's answer to priority and
+    the simulator's.
+    """
+    card = spell_being_cast(zone_being_cast_from(game, seat, action), action)
+    action = tap_planned_lands(game, seat, action)
+    return card, game.queue_from_hand(seat, card.name, **cast_announcement(action))
 
 
 def _combat_instant_candidate(
@@ -4671,6 +4734,12 @@ def _combat_instant_candidate(
         if plan is None:
             return None
         tap_indices, tap_colors = plan
+    if stack_target is None:
+        # A spell targeting a spell with no guard to choose by: which one, by
+        # rehearsal, where there is more than one (`_chosen_stack_target`).
+        stack_target = _chosen_stack_target(game, player_index, card, target)
+        if stack_target == ():
+            return None
     # A spell naming several **roles** is answered role by role, as the
     # main-phase chooser answers it (`_choose_role_targets`). This chooser asked
     # only the one-object question, which a roles spell answers "not mine" —
@@ -6600,6 +6669,67 @@ def _guarded_stack_target(game: Game, caster_index: int, card: CardDefinition):
     if reached:
         return max(reached)
     return () if whole_spell else None
+
+
+def _chosen_stack_target(
+    game: Game, caster_index: int, card: CardDefinition, target_seat: int,
+):
+    """Which spell on the stack a cast whose target **is** a spell names, where
+    `_guarded_stack_target` has no guard to choose by: its engine
+    (bottom-first) stack index, ``()`` when no candidate is worth casting at,
+    or None for a cast that targets no spell.
+
+    **Each candidate is a different cast, so each is rehearsed** and the
+    largest swing named, as `_best_target` does for a permanent. With one
+    candidate there is nothing to choose and it is named as it is. This left
+    the choice to the engine's default for a bare announcement — the first
+    entry of the picker's list, with the caster's own seat's first — which
+    was harmless while a seat answered only one spell, and became a
+    misplay the day it could answer a response: a seat whose spell was met
+    by a Confound cast Gainsay ("Counter target blue spell") at **its own**
+    blue Aura beneath it, and the Confound fizzled over a spell that was
+    gone anyway.
+    """
+    spec = _cast_spec(card, compile_card_oracle(card))
+    if not isinstance(spec, dict) or spec.get("kind") != "stack":
+        return None
+    depth = len(game.stack)
+    candidates: list[int] = []
+    for entry in game._enumerate_targets(
+        caster_index, card, spec, for_cast=True,
+        optional_cost_payments=_OFFERS_ANNOUNCED.get(),
+        mode_index=_announced_mode(card),
+    ):
+        top_first = entry.get("stack_index")
+        if entry.get("kind") != "stack" or not isinstance(top_first, int):
+            continue
+        index = depth - 1 - top_first
+        if 0 <= index < depth and index not in candidates:
+            candidates.append(index)
+    if not candidates:
+        return None
+    if len(candidates) == 1:
+        return candidates[0]
+    best = None
+    best_swing = None
+    rehearsed = False
+    # Topmost first, so a tie names the spell most recently cast.
+    for index in sorted(candidates, reverse=True):
+        announcement = {
+            **_announcement(card, target=target_seat, caster=caster_index),
+            "target_stack_index": index,
+        }
+        rehearsal = _rehearse_announcement(game, caster_index, card, announcement)
+        if rehearsal is None:
+            continue
+        rehearsed = True
+        if not rehearsal.accepted or not rehearsal.changed or _leaves_nothing(rehearsal):
+            continue
+        if best_swing is None or rehearsal.swing > best_swing:
+            best, best_swing = index, rehearsal.swing
+    if best is not None:
+        return best
+    return () if rehearsed else max(candidates)
 
 
 def _choose_damage_source(game: Game, caster_index: int, legal: list[dict]):
