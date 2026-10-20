@@ -587,6 +587,55 @@ was 1.66× rather than 2.14×. And in both cases the residue the brief suspected
 was the sweep's own, or already fixed. **What a stopped agent measured is a
 brief, and it expires like any other.**
 
+**Round 4 ran three groups on round 3's leftovers: speed, priority windows
+and trigger order. Four things about it are procedures.**
+
+*Profile before briefing a speed group, and expect the brief's frame to be
+wrong while its numbers are right.* The integrator profiled two Mirage games
+and briefed from the table. Every call count in it reproduced exactly. The
+frame did not: the brief proposed a memo keyed on a board epoch, and 94% of
+the reads it would have cached had nothing to fold at all, so a shortcut
+with no memory did the work and the dangerous memo was never needed. And
+Mirage was not representative: Planeshift's largest cost was a function the
+table did not name. Profile two sets of different shape, and brief the
+numbers, not a design.
+
+*A no-decision-change contract is checked on the tree it lands on.* The
+speed branch was byte-identical to its own base, but `main` had moved under
+it, because the trigger-order branch was merged first. Before merging,
+record `main`'s seven seeded logs. After merging, require the same bytes.
+Then run the checking mode on the merged tree, because the code merged
+beneath the speed branch never ran under it. Both took five minutes and are
+what made a 4.33× speed-up reviewable as "nothing changed".
+
+*Give a seat a decision it never had, and look for what it gets wrong first.*
+Nothing had ever been cast at instant speed in a simulated game, so nothing
+could show that a counterspell would counter its caster's own spell, that
+False Orders could be aimed at an attacker, or that cleanup missed
+phased-out permanents. Being asked showed all three on the first run. The
+same round's logs showed a game going on after a player had lost, and a
+creature dealt lethal damage surviving because the state-based check waited
+for an empty stack. The second was in no test, because no test resolved two
+objects through the window with a death between them. It was fixed in a few
+lines. The first was in sixteen tests, the wrong way round. They build a
+board the rules cannot reach (a payer at 0 life who has not lost, to test
+"pay life only if you have it"; an empty library meeting a draw step) and
+pass because the engine resolves past the loss. Its one-line fix turned all
+sixteen red, so it was measured and withdrawn, with the parts in ROADMAP.
+Read the seeded logs of a change like this for what happens *after* the
+thing that should have stopped it. And **a fixture that stands on a state
+the rules cannot reach is a test of the defect**: when a rules-correct fix
+turns many tests red at once, check whether their boards are reachable
+before reading the reds as regressions.
+
+*A background job is only waited on if the harness is tracking it.* A gate
+started with a shell `&` inside a foreground command finished without
+notifying anyone. A background suite whose command changed directory and
+then redirected to a relative path ran nothing, and reported a blank exit
+code that looked like a result. Start long jobs as tracked background tasks,
+give them absolute paths, and read the exit file before trusting the
+notification.
+
 Fallen Empires added two more, both about *how the conflict is resolved* rather
 than about what conflicted. **A whole-file `--theirs` (or `--ours`) discards the
 hunks that were never in dispute.** Resolving one conflicted file that way would

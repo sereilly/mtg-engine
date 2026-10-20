@@ -492,9 +492,7 @@ Each was fixed the way combat was — by calling the engine's own stepping
 (`Game.start_turn`, `start_next_turn`, the `prompt_driver` seam that answers
 what a step owes before the next begins) instead of a copy of it — and each
 left an honesty count behind: `lands_played`, `steps_left_owing`,
-`extra_turns_taken`. What is still not there is named in ROADMAP: the AI
-casts only in its own main phases, so no counterspell and no combat trick is
-ever cast in a simulated game.
+`extra_turns_taken`. The eleventh is below ("a seat is given priority").
 
 **It chooses a mode now.** Every modal spell an AI seat cast was announced as
 its first bullet, in the simulator and in a web game alike, long after the
@@ -541,6 +539,30 @@ a permission, or played off the top of a library in a simulated game.
 announcement function every cast uses, and
 `SimulationReport.casts_from_zones` is the honesty count.
 
+**And an eleventh: a seat is given priority.** No instant had ever been cast
+in response to anything in a simulated game, nor in combat or on the
+opponent's turn. The headless window was "500.2 simplified", so both players
+passed and nobody was asked. Over the seven seeded runs a seat would have
+received priority with another seat's object on the stack, or in a step of
+the opponent's turn, 24,248 times, and held an instant it could pay for in
+9,967 of them. `Game.priority_driver` sits beside `prompt_driver`, and
+`Game.offer_priority` gives priority in CR 117.3b–d order (a seat that acts
+receives it again, 117.3c). It is asked before each resolution, in `_settle`
+as well as the window (a main-phase spell resolves in `_settle`), and at a
+step's end on an empty stack. It is inert without a driver, at a table with
+an interactive seat, and in the untap step. The simulator answers with the
+web AI's chooser, `ai_policy.choose_combat_instant_cast_action`, and one
+executor (`cast_chosen_instant`) serves both. Its windows are an object of
+the other seat's on the stack, declare blockers for both seats, and the
+opponent's end step. Abilities are activated at instant speed in veto form
+(`choose_instant_speed_activation`). The honesty counts are
+`casts_in_response`, `casts_in_combat`, `casts_on_opponents_turn`,
+`activations_at_instant_speed` and the refusals beside them. Being asked for
+the first time found a counterspell countering its caster's own spell in a
+counter war (`_chosen_stack_target` now rehearses each candidate). The
+other steps' windows, and web `ai_vs_ai` sessions, do not use the seam yet;
+ROADMAP has the parts.
+
 **It rehearses a cast before it proposes one.** A table of values per effect
 family would have been the 265 instruction kinds again, one layer down. So
 `ai_valuation.rehearse` deep-copies the game, casts the candidate on the copy,
@@ -585,7 +607,10 @@ One decision's no-cast baseline is read once (`with deliberating():` around
 the whole hand). A class-level spy on `Game` sees rehearsal copies too, and
 those copies run the end step and the next turn's bookkeeping, so guard a
 spy with `ai_valuation.rehearsing()`. The rehearsal roughly doubled the
-simulator's cost, and fighting the combat added 1.73× on top of that. What it
+simulator's cost, and fighting the combat added 1.73× on top of that. Then
+round 4 made the seven seeded runs 4.33× faster with no decision changed
+(the layer-system entry's fast paths), and the priority windows cost 1.34×
+of that back. What it
 does not yet do is in ROADMAP: permanent spells are still scored by type and
 printed body, and the several-target, role, divided and Aura choosers each
 name one announcement rather than choosing among rehearsed ones.
@@ -1368,6 +1393,25 @@ adding entries, not editing dispatch**:
   run and was named by replaying that test's scenario after every other
   test. `tests/regressions/test_derived_card_memo_identity.py` fails any
   module-level dict under `engine/` keyed by an `id()`.
+  **Most reads have nothing to fold, and are answered without folding.**
+  `effective_card` was asked 4.5 million times in two simulated Mirage games
+  and was 59% of the run. 94% of those reads were of a permanent with every
+  fold channel empty. With every key in `models.fold_channels()` empty it
+  returns the printed card, and `layer_bridge.computed_types` does the same
+  over `TYPE_EFFECT_CHANNELS`. That is a shortcut, not a cache: nothing is
+  remembered between reads. **A channel the fold starts reading belongs in
+  that tuple**, or the permanent it is the only channel on is answered with
+  its printed card. `tests/engine/test_effective_card_fast_path.py` runs the
+  fold over metadata that records every key read, and fails on one missing
+  from the tuple. `engine/fast_paths.py`'s `CHECKING` flag recomputes every
+  shortcut answer the long way and raises on a difference: under it the full
+  suite checked 1.4 billion answers with no mismatch. Run the seeded games
+  under it after touching a fold (the integration toolkit's
+  `checked_sim.py`). And the hot accessors no longer import inside the
+  function. A module that loads after its importer is reached through
+  `engine/late_modules.LateModules`, bound on first use, so package load
+  order is unchanged. The function-level imports had cost 31 million import
+  resolutions in two games.
   **Layer 5 is ordered by timestamp (CR 613.7), and a colour is written through
   one API.** `engine/color_changes.change_color` puts the stamp inside the
   write, and `Permanent.timestamp` (CR 613.7d; re-stamped on attach, 613.7e)
@@ -1744,6 +1788,21 @@ adding entries, not editing dispatch**:
   late. `tests/engine/test_entry_trigger_source_leaves_census.py` destroys the
   source in response to every entry trigger in the pool — the census a change
   that makes something possible "in response" owes.
+- `engine/trigger_order.py` — **a controller orders the triggers they put
+  on the stack together** (CR 603.3b). Triggers are pushed one at a time from
+  fire sites spread through the engine, so the question is not asked at a
+  fire site. A re-entrant window (`Game.putting_triggers_on_stack`) wraps
+  each unit of play that sets triggers off: a batch, a resolution, a
+  state-based sweep, a turn-based action, an entry. `_stack_push` records
+  every triggered object pushed inside it. When the outermost window closes,
+  each interactive seat with two or more distinguishable triggers is offered
+  `order_triggers`. The objects are held through `announcement_choice_for`
+  until it is answered, and the answer permutes them among the slots they
+  already occupy. A seat nobody asks keeps the fire sites' order, so seeded
+  runs are untouched. Between players, `restore_apnap` puts the active
+  player's first across batches too. Several instances of one ability of
+  one source are not asked. The window does not yet join a resolution with
+  the state-based check after it; ROADMAP has the parts.
 - `engine/phases/` — one mixin per turn phase and per step within a phase
   (CR 500–514): beginning phase (untap/upkeep/draw steps), the two main phases,
   combat phase (its five steps), and the ending phase (end/cleanup steps). Each is
@@ -1759,7 +1818,15 @@ adding entries, not editing dispatch**:
   117.5). It used to drain and return, so whatever the last resolution set
   off was announced a step late — all ten state triggers that reach the
   stack, on the headless, the web's and the simulator's paths (Bomb Squad's
-  fourth counter detonated after the draw).
+  fourth counter detonated after the draw). **And the check is made between
+  resolutions, not only at the end** (CR 704.3, 117.3b: a player would
+  receive priority after each one). The window had drained the whole stack
+  first, so a Giant Growth under a Lightning Bolt at the same Grizzly Bears
+  resolved on a 2/2 with 3 damage marked, and the Bears lived. `_settle`, the
+  drain a main-phase cast runs, always checked
+  (`PhaseStepsMixin._check_between_resolutions`). The stack still resolves
+  after a player has lost (CR 104.1); ROADMAP's round-4 entry has why that
+  one-line fix was withdrawn.
 - `engine/mixins/stack/` — the stack (CR 405), one mixin per stage of an
   object's life on it: `casting` (CR 601), `activation` (CR 602), `resolution`
   (CR 603/608), and `choices` — the `pending_choices` queue every

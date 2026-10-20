@@ -493,16 +493,37 @@ one card prints this") reads as a work item long after it stopped being true.
     (2008-05-01) does not settle it, so it is measured and not called a
     defect.
 
-- **No CR 603.3b choice orders a controller's simultaneous triggers** (NEM
-  W1G1). They keep printed order, so on its own upkeep Tangle Wire's tap
-  resolves before its fade removal and taps one more permanent than its
-  controller might choose. Pinned as the current behaviour in its test.
-  PLS W2G6 measured the parts while moving entry triggers to the stack, and
-  declined: there is no trigger-ordering prompt (`effect_order` is CR 616's
-  alone) — a new prompt kind in `mixins/stack/choices.py`, armed from
-  `_enqueue_triggered_batch` and the entry site, a renderer, and the client.
-  Entry triggers now resolve first-printed first, each alone, which ended
-  Sawtooth Loon's interleaved prompts and is still not a choice.
+- **A controller orders their simultaneous triggers (CR 603.3b) — fixed
+  2026-10-19 (round 4), and what is left of it.** NEM W1G1 found it: on its
+  own upkeep Tangle Wire's tap resolved before its fade removal and tapped
+  one more permanent than its controller might choose. `engine/trigger_order.py`
+  and the `order_triggers` prompt now ask an interactive seat, browser-driven
+  on Tangle Wire and Marsh Crocodile in both orders. A seat nobody asks keeps
+  today's order. APNAP between players is enforced across batches
+  (`restore_apnap`), which fixed Dual Nature's copy resolving out of order
+  (`tests/engine/test_trigger_order_census.py`;
+  `tests/rules/test_603_3b_trigger_order.py`). In the seeded runs a human
+  would be asked about 2.7 times per Urza's Saga game and almost never
+  elsewhere. Left, with parts:
+  * *The window is narrower than "since a player last received priority".*
+    A resolution and the state-based check after it are two windows, and so
+    are the draw step's own triggers and the draw's. A combat damage pass
+    that stops for a CR 616 prompt resumes outside its window, and triggers
+    pushed while an order prompt is open join none. The parts: open the
+    window where priority is about to be given and close it after the
+    state-based loop. That means `pass_priority`'s resolved-top branch
+    (`resolve_top_of_stack(pause_for_choices=True)` → waiting-prompt check
+    → `check_state_based_actions`) and `_resolve_priority_window` /
+    `_window_may_close`. For the draw step, move `resolve_draw_step`'s body
+    before `_close_or_defer_step` into a wrapped helper (it has five early
+    returns). The windows group measured it as more than a one-liner from
+    the priority seam, because `offer_priority` is inert at the interactive
+    tables where the prompt is ever asked.
+  * *The second round* (a trigger condition that is another ability
+    triggering) has no supported card, and the census holds it at zero.
+  * *An AI that orders by value* would be a `choose_trigger_order` in
+    `ai_policy`, split from `default_at_arm` so headless play and the seeded
+    runs stay as they are.
 
 - **Entry triggers are stack objects; three Auras' are not** (PLS W2G6 — this
   entry was NEM's "some triggers never reach the stack"). 268 of the pool's 278
@@ -835,9 +856,10 @@ one card prints this") reads as a work item long after it stopped being true.
     creatures. The untap step is approximated (statics and multiplayer
     ignored). **Every rehearsal now calls `resolve_end_step` and
     `begin_turn_bookkeeping` on its copy**, so a class-level spy on `Game`
-    that counts those must guard with `ai_valuation.rehearsing()`. The AI
-    still casts only in its own main phases, so a combat trick is never cast
-    during combat or on the opponent's turn.
+    that counts those must guard with `ai_valuation.rehearsing()`. (A
+    simulated seat is given priority since round 4, so a combat trick is
+    cast in combat and a counterspell in response; the round-4 entry below
+    has what is left.)
     *Mana sources still not planned* (J3): mana-for-mana sources (ten
     permanents, three priced second abilities and ten sacrifice-and-cost
     sources such as Coal Golem, the five Attendants and Implements of
@@ -873,6 +895,104 @@ one card prints this") reads as a work item long after it stopped being true.
     active player chooses first) is not honoured, since prompts are answered
     in any order, and a seat leaving mid-batch is not handled. The hand does
     not show cost reductions or coloured taxes (J8).
+
+- **What round 4 did and left** (2026-10-19 to 10-20). Three groups took
+  three of round 3's leftovers. A closing fix took one of the two defects
+  they found; the other was measured and withdrawn (below). The branches are
+  `r4/*`, and each merge commit names what it
+  declined. The trigger-ordering group's part is in the CR 603.3b entry
+  above.
+
+  Done, and where it is held:
+
+  * *Speed, with no decision changed.* The seven seeded runs went from
+    1,578 s to 364 s, every log byte-identical. Most `effective_card` reads
+    had nothing to fold, and are answered without folding
+    (`models.fold_channels`). The hot accessors no longer import inside the
+    function (`engine/late_modules.py`). Pure text readers are keyed by their
+    text. `engine/fast_paths.py`'s checking mode recomputes every shortcut
+    answer: 1.4 billion answers over the full suite, 0 mismatches
+    (`tests/engine/test_effective_card_fast_path.py`).
+  * *A simulated seat is given priority.* `Game.priority_driver` and
+    `offer_priority`, answered by the web AI's chooser. 75 instants and 30
+    abilities were used at instant speed over the seven runs, where there
+    had been 0 (`tests/ai/test_ai_instant_speed_census.py`,
+    `tests/rules/test_priority_driver.py`). Cost: 1.34× of the faster runs.
+    Found by asking, and fixed: a counterspell countered its caster's own
+    spell in a counter war; cleanup did not reach phased-out permanents
+    (CR 514.2 / 702.26f: Giant Growth outlived Reality Ripple's phase-out);
+    False Orders was accepted at an attacking creature.
+  * *The state-based check is made between resolutions* (CR 704.3, 117.3b),
+    not only once the stack is empty. A Giant Growth under a Lightning Bolt
+    at the same Grizzly Bears had saved the Bears on both window branches
+    (`PhaseStepsMixin._check_between_resolutions`;
+    `tests/rules/test_state_check_between_resolutions.py`).
+
+  What each of them measured and left, with parts:
+
+  * *The stack resolves after a player has lost* (CR 104.1: "A game ends
+    immediately when a player wins"). In a seeded 7ED game a player logged
+    "lost the game (704.5a)" and then two Soul Net triggers from the same
+    combat's deaths resolved, and the loser paid {1} twice and went from 0
+    life to 2. The fix is one line, `resolve_top_of_stack` refusing on
+    `is_game_over()`, and it removes five post-game resolutions from the
+    seeded logs. **It was measured and withdrawn**, because it turns 16
+    tests red. Those tests build boards the rules cannot reach: a payer at 0
+    life who has not lost, to test CR 119.4's "pay life only if your life
+    total is at least the amount" (Mundungu, Lim-Dûl's Vault, the
+    life-half payers), and an empty library meeting a draw step (the draw-
+    step triggers, Mana Vault, Discordant Spirit, Mindbender Spores). Each
+    passes only because the engine resolves past the loss. `is_game_over()`
+    and the winner were already right, so what is wrong is the log and the
+    loser's life total. The parts: those fixtures need a state that is
+    reachable, a "can't lose the game" effect (Platinum Angel) for the 0-life
+    payers, or a library for the draw-step boards, and then the one line.
+    The simulator's honesty count of steps ending with something owed must
+    also skip a finished game (`ai_simulator._owed_when_leaving`), or USG
+    and M21 exit 1.
+  * *The folds that do run* (perf). About 6 s of a 47.6 s Mirage profile
+    and 31 s of 81 in Planeshift, mostly `global_static_sources` per source.
+    An epoch memo would need every input, not only the permanent's own
+    channels. Those are each source's `card_through_layer_3` text, CR 305.7
+    strike and timestamp; each attached Aura's effective text,
+    `aura_timestamp`, `permanent_id` and `ANIMATES_HOST`; and live zones
+    (`copies._derived_entries` reads the owner's graveyard on every call,
+    for Volrath's Shapeshifter). It would also need a bump at every write to
+    the 14 fold channels and 15 layer-4 channels, direct `metadata[...]`
+    writes included, and at every zone move, attach, detach and text
+    change. The checking harness exists for whoever builds it. Smaller: the
+    through-combat reading could resume from the first reading's copy
+    (about 5%). That is decision-identical only if fewer
+    `next_permanent_id` / `next_timestamp` draws never reach a log line or
+    a decision, which is unverified. And `_cast_onto_stack` enumerates
+    targets twice, each candidate scanning the whole board.
+  * *The other priority windows* (windows). These are upkeep, draw,
+    beginning of combat, declare attackers, combat damage, end of combat,
+    postcombat main and the seat's own end step, each about 1,970
+    receptions and 820 payable over the seven runs. Each is one line in
+    `ai_simulator._instant_speed_window`. What has value there (tapping or
+    killing a would-be attacker) needs the rehearsal to fight a combat that
+    is not the active seat's precombat main (`_combat_ahead`,
+    `_fight_the_combat`).
+  * *Abilities at instant speed, the rest.* A Prodigal Sorcerer is not held
+    up, because `_play_activations` taps it in its own main phase first.
+    Rescue abilities (Quicksilver Wall's bounce) are skipped by the
+    chooser's `harms_its_own_source` filter. The chooser reads only the
+    first usable ability of each permanent. Foreign (CR 602.1b) and
+    from-hand (cycling) activations are not asked at instant speed.
+  * *Web `ai_vs_ai` sessions do not use the seam*: they give nobody
+    priority. The parts are a session-level driver that is not a closure
+    over the game, so it can be re-bound after `game_history`'s undo
+    deep-copy, `web/session_store` setting it for `ai_vs_ai`, and a browser
+    pass.
+  * *What being asked showed about the rehearsal* (its internals). A random
+    effect is sampled once (Orim's Chant, Planeswalker's Mirth against a
+    random reveal). The rehearsal decides nothing on the way to the end of
+    the turn, so Siren's Call was cast though the creature attacked anyway.
+    X is sized at the most affordable (Guardian Angel at X=10 to prevent 1).
+    `position_digest` reprs the two new `Game` fields, which are identical
+    on both copies and may belong in `_GAME_BOOKKEEPING` beside
+    `prompt_driver`.
 
 - **What Invasion measured and left** (2026-10-05; each part is named in the
   commit or report that declined it, which is what makes it a brief). Wave 1's
