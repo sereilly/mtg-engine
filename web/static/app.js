@@ -7251,19 +7251,23 @@ function applyOrderTriggersPrompt(info) {
     .map((index, pos) => {
       const t = byIndex.get(index) || {};
       const label = `${t.card_name || "Ability"}: ${t.text || ""}`;
+      // Inline layout on purpose: `.prompt-choice-column` stretches every
+      // button in it to the panel's width, which is right for a list of
+      // answers and wrong for two arrows beside a line of text.
       return (
-        `<div class="prompt-choice-row" data-order-row="${pos}">` +
-        `<span>${pos + 1}.</span>` +
-        `<button type="button" class="prompt-choice-btn" data-order-up="${pos}"` +
+        `<div class="prompt-choice-row" data-order-row="${pos}" ` +
+        `style="flex-wrap:nowrap;align-items:flex-start;gap:6px">` +
+        `<span style="flex:0 0 auto;min-width:1.5em;padding-top:4px">${pos + 1}.</span>` +
+        `<button type="button" class="prompt-choice-btn" data-order-up="${pos}" style="flex:0 0 auto"` +
         `${pos === 0 ? " disabled" : ""} title="Move up (resolve earlier)">&#9650;</button>` +
-        `<button type="button" class="prompt-choice-btn" data-order-down="${pos}"` +
+        `<button type="button" class="prompt-choice-btn" data-order-down="${pos}" style="flex:0 0 auto"` +
         `${pos === order.length - 1 ? " disabled" : ""} title="Move down (resolve later)">&#9660;</button>` +
-        `<span class="order-trigger-label">${escapeHtml(label)}</span>` +
+        `<span class="order-trigger-label" style="flex:1 1 auto;line-height:1.35">${escapeHtml(label)}</span>` +
         `</div>`
       );
     })
     .join("");
-  steps.innerHTML = `<div class="prompt-choice-column">${rows}</div>`;
+  steps.innerHTML = `<div style="display:flex;flex-direction:column;gap:10px">${rows}</div>`;
   const move = (from, to) => {
     const next = [...orderTriggersDraft.order];
     [next[from], next[to]] = [next[to], next[from]];

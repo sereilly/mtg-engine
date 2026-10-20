@@ -728,8 +728,17 @@ def _w1g2_names(game, seat):
 
 def _w1g2_until_asked(game, limit=8):
     """Resolve stack objects until somebody is owed a prompt (or the stack is
-    empty): a human seat's view of a resolution."""
+    empty): a human seat's view of a resolution.
+
+    A human seat whose permanent put two triggers on the stack together is
+    first asked their order (CR 603.3b; round 4). These tests are about what
+    each trigger asks after that, so the order is kept as offered — the first
+    printed resolving first, the order they were written against."""
     for _ in range(limit):
+        for owed in game.pending_choices_of("order_triggers"):
+            assert game.confirm_order_triggers(
+                owed.player_index, list(range(len(owed.data["triggers"]))),
+            )
         if game.pending_choices or not game.stack:
             return
         game.resolve_top_of_stack()  # _w1g2_until_asked
@@ -1145,7 +1154,9 @@ def test_w1g2_a_both_kicked_battlemage_puts_two_triggers_on_the_stack(set_pool):
     # engine's stated order) — which makes it the *last* put on the stack, and
     # so the last asked.
     assert "2 damage" in game.stack[-1].ability_text
-    destroy, damage = game.pending_choices
+    # Beside the two targets, their order is asked too (CR 603.3b; round 4),
+    # and answered as offered when the stack is drained below.
+    destroy, damage = game.pending_choices_of("trigger_target")
     assert (damage.kind, destroy.kind) == ("trigger_target", "trigger_target")
     assert sorted(t["name"] for t in damage.data["targets"]) == [
         "Black Knight", "Mage", "Rival", "Thornscape Battlemage",
@@ -2396,6 +2407,11 @@ def _w1g3_cast_loon(set_pool, hand, library):
     player.library[:] = [card(name) for name in library]
     result = game.cast_from_hand(0, "Sawtooth Loon")
     assert result.supported, result.details
+    # The two triggers' order is the controller's to choose (CR 603.3b; round
+    # 4): kept as offered, the gate first, and the gate then resolved up to
+    # its question, which is where the cast used to leave it.
+    assert game.confirm_order_triggers(0, [0, 1])
+    game.resolve_top_of_stack(pause_for_choices=True)
     gating = next(c for c in game.pending_choices if c.kind == "permanent_set_choice")
     loon = next(p for p in game.controlled_by(0) if p.card.name == "Sawtooth Loon")
     assert not any(c.kind == "hand_to_library" for c in game.pending_choices)
