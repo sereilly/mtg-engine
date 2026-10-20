@@ -273,6 +273,34 @@ def test_every_shortcut_answer_on_the_board_is_the_full_one(by_name, monkeypatch
         classes = target_immunity.board_target_immunity_classes(game, permanent)
         assert bool(classes) == permanent.is_creature, permanent.card.name
     assert fast_paths.CHECKED["target_immunity._lines_of"] >= len(permanents) ** 2
+    # …and the template every recorded source's text matches (Energy Flux's,
+    # read off each artifact it reaches).
+    assert fast_paths.CHECKED["global_static_for"] >= len(permanents)
+
+
+def test_a_global_static_is_matched_once_per_text_and_built_as_it_was(by_name):
+    """``global_static_for`` keeps *which template a text matches*, never the
+    static it builds: a static built from a match is a new object on every
+    call, as it always was, because ``_refresh_global_statics`` compares the
+    statics it holds by identity. A template returned as it stands was always
+    the one shared object, and still is."""
+    from engine.global_statics import _TEMPLATES, global_static_for
+
+    templates = {id(static) for _pattern, static in _TEMPLATES}
+    built = shared = 0
+    for card in by_name.values():
+        first = global_static_for(card.oracle_text or "")
+        if first is None:
+            continue
+        again = global_static_for(card.oracle_text or "")
+        assert again == first, card.name
+        if id(first) in templates:
+            assert again is first, card.name
+            shared += 1
+        else:
+            assert again is not first, card.name
+            built += 1
+    assert built >= 3 and shared >= 3, (built, shared)
 
 
 def test_the_checking_mode_names_a_channel_left_out(by_name, monkeypatch):
@@ -292,6 +320,7 @@ def test_the_checking_mode_names_a_channel_left_out(by_name, monkeypatch):
 
     reduced = tuple(key for key in models.fold_channels() if key != "attached_auras")
     monkeypatch.setattr(models, "fold_channels", lambda: reduced)
+    monkeypatch.setattr(fast_paths, "CHECKING", False)
     assert bears.effective_card is bears.card
     monkeypatch.setattr(fast_paths, "CHECKING", True)
     with pytest.raises(RuntimeError, match="fold_channels"):
@@ -315,6 +344,7 @@ def test_the_checking_mode_names_a_layer_4_channel_left_out(by_name, monkeypatch
         key for key in layer_bridge.TYPE_EFFECT_CHANNELS if key != "land_animated"
     )
     monkeypatch.setattr(layer_bridge, "TYPE_EFFECT_CHANNELS", reduced)
+    monkeypatch.setattr(fast_paths, "CHECKING", False)
     assert not forest.is_creature
     monkeypatch.setattr(fast_paths, "CHECKING", True)
     with pytest.raises(RuntimeError, match="computed_types"):
