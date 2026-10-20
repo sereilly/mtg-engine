@@ -18,6 +18,7 @@ import re
 from functools import lru_cache
 from typing import TYPE_CHECKING
 
+from . import fast_paths
 from .oracle_types import compilation_cache
 from .banding import band_quality
 from .auras import (
@@ -40,7 +41,8 @@ from .color_changes import color_changes
 from .named_counters import counters_on
 from .control import control_changes, has_control_change
 from .enter_effects import CHOSEN_COLOR_KEY, own_chosen_color
-from .global_statics import (changes_types, global_static_sources,
+from .global_statics import (STACK_STATIC_STAMPS_KEY, STACK_STATICS_KEY,
+                             changes_types, global_static_sources,
                              removes_all_abilities, stack_statics_applying_to)
 from .land_animation import LAND_ANIMATIONS_REACHING
 from .pt import BASE_PT_TIMESTAMP_KEY, CDA_POWER_KEY, CDA_TOUGHNESS_KEY
@@ -63,10 +65,12 @@ from .continuous import (
 from .keywords import (abilities_lost_at, ability_effects, derived_grant_stamps,
                        derived_removals)
 from .landwalk import BOARD_NAMED_LANDWALKS, landwalk_requirement
-from .land_types import land_type_changes
+from .land_types import DERIVED_LAND_TYPES, LAND_TYPE_EFFECTS, land_type_changes
+from .late_modules import LateModules
 from .lord_buffs import QUALIFIER_FIELDS
 from .type_changes import (
     LAND_ANIMATION_ORDER,
+    LAYER_4_CHANNELS,
     derived_lost_supertypes,
     gained_types,
     lost_types,
@@ -75,6 +79,19 @@ from .type_changes import (
 
 if TYPE_CHECKING:
     from .models import Permanent
+
+#: The grammar's vocabulary, which a top-level import here cannot reach: it
+#: closes a cycle through the grammar package. Read through a binding made on
+#: first use rather than a function-level import, because the collectors
+#: below run on every characteristic read (``engine/late_modules.py``).
+_late_grammar = LateModules(f"{__package__}.grammar")
+
+#: The three animation records layer 4 reads, one per duration
+#: (:func:`collect_own_type_effects`).
+_ANIMATION_RECORDS = (
+    "animate_until_end_of_turn", "animate_indefinitely",
+    "animate_until_end_of_combat",
+)
 
 # Channels whose values are recomputed from the board on every pass carry no
 # timestamp of their own; they are all layer 7c, where order does not matter
@@ -819,6 +836,34 @@ def collect_ability_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]
     return effects
 
 
+#: Every metadata key the two layer-4 collectors read off a permanent. With
+#: all of them empty the collectors return nothing, so layer 4 leaves the
+#: permanent with the types its copiable values give it: :func:`computed_types`
+#: and :func:`computed_supertypes` answer that case from the printed shape of
+#: ``effective_card`` without seeding a state and applying no effects to it.
+#: Layer 4 was read 780,000 times in two simulated Mirage games, nearly always
+#: of a permanent nothing had made anything else.
+#:
+#: **A channel either collector starts reading belongs here**, or the
+#: permanent it is the only channel on keeps its printed types.
+#: ``tests/engine/test_effective_card_fast_path.py`` runs both collectors
+#: over a permanent whose metadata records every key read, and
+#: ``engine/fast_paths.py``'s checking mode compares every shortcut answer
+#: with the full computation.
+TYPE_EFFECT_CHANNELS: tuple[str, ...] = (
+    # ``type_changes``' own three: what an effect added and took away, and
+    # what a static is taking (its keys are that module's to spell).
+    *LAYER_4_CHANNELS,
+    # The rest of what is recorded on the permanent
+    # (:func:`collect_own_type_effects`).
+    *_ANIMATION_RECORDS, SET_CARD_TYPES, "chosen_body", "attached_auras",
+    LAND_TYPE_EFFECTS,
+    # …and what the board says of it (:func:`collect_static_type_effects`).
+    "land_animated", "global_static_sources", STACK_STATICS_KEY,
+    STACK_STATIC_STAMPS_KEY, DERIVED_LAND_TYPES,
+)
+
+
 def collect_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
     """Layer 4: type- and subtype-changing effects.
 
@@ -883,9 +928,7 @@ def collect_own_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect
         # same list with nothing replaced.
         replaced: frozenset[str] = frozenset()
         if gained.get("replaces_creature_types"):
-            from .grammar.vocabulary import CREATURE_TYPES
-
-            replaced = CREATURE_TYPES
+            replaced = _late_grammar.vocabulary.CREATURE_TYPES
         effects.append(add_types(
             only,
             card_types=list(gained.get("card_types") or ()),
@@ -922,10 +965,7 @@ def collect_own_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect
     # ends. This key held a bare ``True`` until Jade Statue stopped being a
     # card hook, so the Statue was a creature and not a **Golem**: a lord did
     # not pump it and "destroy target Golem" missed it.
-    for _key in (
-        "animate_until_end_of_turn", "animate_indefinitely",
-        "animate_until_end_of_combat",
-    ):
+    for _key in _ANIMATION_RECORDS:
         animation = meta.get(_key)
         if animation:
             # CR 205.1a where the sentence printed none of CR 205.1b's
@@ -1036,15 +1076,13 @@ def collect_own_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect
         set_types = aura_creature_type_sets(aura.effective_card.oracle_text)
         if not set_types:
             continue
-        # Imported here for `global_static_type_effect`'s reason below: a
+        # Read late for `global_static_type_effect`'s reason below: a
         # top-level import of the vocabulary closes a cycle through the grammar.
-        from .grammar.vocabulary import CREATURE_TYPES
-
         effects.append(
             add_types(
                 only,
                 subtypes=list(set_types),
-                replaces_subtypes_from=CREATURE_TYPES,
+                replaces_subtypes_from=_late_grammar.vocabulary.CREATURE_TYPES,
                 timestamp=int(aura.metadata.get("aura_timestamp", 0)),
                 label=f"aura sets type:{aura.card.name}",
             )
@@ -1283,11 +1321,11 @@ def global_static_type_effect(
     subtypes = list(static.adds_subtypes)
     replaced: frozenset[str] = frozenset()
     if static.sets_creature_type:
-        # Imported here rather than at module scope: this module is pulled in
+        # Read late rather than at module scope: this module is pulled in
         # by ``handlers/_common`` long before ``engine.grammar`` finishes
         # importing, and a top-level import of the vocabulary closes a cycle
         # through the grammar package.
-        from .grammar.vocabulary import CREATURE_TYPES
+        CREATURE_TYPES = _late_grammar.vocabulary.CREATURE_TYPES
 
         chosen = (
             source.metadata.get("chosen_creature_type") if source is not None else None
@@ -1322,7 +1360,7 @@ def _land_subtypes_of(perm: Permanent) -> frozenset[str]:
     one behind. On a card printed with a second type — a land creature — the
     printed words are of two sets and only the catalog can tell them apart.
     """
-    from .grammar.vocabulary import LAND_TYPES
+    LAND_TYPES = _late_grammar.vocabulary.LAND_TYPES
 
     printed_types, printed_subtypes = printed_shape(perm.effective_card)
     if printed_types == {"land"}:
@@ -1514,7 +1552,7 @@ def collect_color_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
                     )
                 )
 
-    from .grammar.vocabulary import COLOR_WORDS
+    COLOR_WORDS = _late_grammar.vocabulary.COLOR_WORDS
 
     # "Enchanted creature gets +3/-1 **and is black**." (Grave Servitude.)
     # Derived from the Aura's own text on each recompute and stamped with the
@@ -1645,8 +1683,31 @@ def displayed_type_line(perm: Permanent) -> str:
     return f"{' '.join(words)} — {' '.join(described)}"
 
 
+def _without_type_effects(perm: Permanent) -> bool:
+    """Whether no layer-4 effect can apply to *perm* (:data:`TYPE_EFFECT_CHANNELS`)."""
+    return not any(map(perm.metadata.get, TYPE_EFFECT_CHANNELS))
+
+
 def computed_types(perm: Permanent) -> tuple[set[str], set[str]]:
     """``(card_types, subtypes)`` after layer 4."""
+    if _without_type_effects(perm):
+        card = perm.effective_card
+        card_types, subtypes = _printed_shape(
+            card.type_line, card.name, card.oracle_text, card.keywords
+        )
+        answer = (set(card_types), set(subtypes))
+        if fast_paths.CHECKING:
+            full = _computed_types_in_full(perm)
+            fast_paths.checked(
+                "computed_types", answer == full,
+                lambda: f"{perm.card.name!r}: {answer} against {full}",
+            )
+        return answer
+    return _computed_types_in_full(perm)
+
+
+def _computed_types_in_full(perm: Permanent) -> tuple[set[str], set[str]]:
+    """:func:`computed_types`, through the layer system."""
     oid = id(perm)
     state: State = {oid: seed_characteristics(perm)}
     apply_layers(collect_type_effects(perm, oid), state)
@@ -1660,7 +1721,24 @@ def computed_supertypes(perm: Permanent) -> set[str]:
     line through :func:`printed_supertypes`. That was right while no card in the
     pool could change one and wrong the moment Ice Age's Arcum's Weathervane
     arrived — the ``has_type`` story again, one layer up.
+
+    Answered from the printed line where no layer-4 effect can apply, for
+    :func:`computed_types`' reason (:data:`TYPE_EFFECT_CHANNELS`).
     """
+    if _without_type_effects(perm):
+        answer = set(printed_supertypes(perm.effective_card.type_line))
+        if fast_paths.CHECKING:
+            full = _computed_supertypes_in_full(perm)
+            fast_paths.checked(
+                "computed_supertypes", answer == full,
+                lambda: f"{perm.card.name!r}: {answer} against {full}",
+            )
+        return answer
+    return _computed_supertypes_in_full(perm)
+
+
+def _computed_supertypes_in_full(perm: Permanent) -> set[str]:
+    """:func:`computed_supertypes`, through the layer system."""
     oid = id(perm)
     state: State = {oid: seed_characteristics(perm)}
     apply_layers(collect_type_effects(perm, oid), state)

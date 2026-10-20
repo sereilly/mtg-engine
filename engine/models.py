@@ -1,19 +1,88 @@
 from __future__ import annotations
 
 import dataclasses
+import functools
 import itertools
 from dataclasses import dataclass, field
 from typing import Any
 
+from . import fast_paths
 from . import shields as _shields
 # Safe at module level: copies and text_changes import only the layer system's
 # timestamp counter, nothing from here. effective_card is read on nearly every
 # rules query, so this is not a function-local import.
 from .continuous import next_timestamp
-from .copies import card_identity, copiable_card, copied_name
+from .copies import (COPY_EFFECTS, DERIVED_COPY_SOURCES, card_identity,
+                     copiable_card, copied_name)
 # …and land_types the same: the layer system's types and nothing from here.
-from .land_types import added_land_types, lost_abilities_to_type_change
-from .text_changes import apply_text_changes, has_text_changes, text_changes
+from .land_types import (DERIVED_LAND_TYPES, LAND_TYPE_EFFECTS,
+                         added_land_types, lost_abilities_to_type_change)
+from .late_modules import LateModules
+from .text_changes import (TEXT_CHANGE_EFFECTS, apply_text_changes,
+                           has_text_changes, text_changes)
+
+# …and the modules that are *not* safe here: ``keywords``, ``global_statics``,
+# ``auras``, ``layer_bridge`` and the rest load long after this one, and
+# importing them at the top would change the order the package loads in. Read
+# through ``_late``, which imports each on first use and is an attribute lookup
+# after that — a function-level import is the import machinery on every call,
+# and the accessors below are the most-called functions in the engine
+# (``engine/late_modules.py``).
+_late = LateModules(__package__)
+
+
+@functools.cache
+def fold_channels() -> tuple[str, ...]:
+    """Every metadata key ``Permanent._folded_card`` reads off the permanent.
+
+    The fold reads the permanent's own record through exactly these channels
+    and nothing else, and with every one of them empty it returns the printed
+    ``card`` unchanged: no copy and no text change (layers 1 and 3), no
+    CR 305.7 strike, no loss of all abilities, no grant from a static, a
+    spell on the stack, a resolved effect, a lord or an attached Aura, and no
+    line or keyword taken away. So ``effective_card`` answers that case
+    without running the fold — which, in two simulated Mirage games, was 94%
+    of 4.5 million reads.
+
+    **A channel the fold starts reading belongs here**, or the permanent it
+    is the only channel on is answered with its printed card.
+    ``tests/engine/test_effective_card_fast_path.py`` runs the fold over a
+    permanent whose metadata records every key read, and fails on a key
+    missing from this tuple, and ``engine/fast_paths.py``'s checking mode
+    compares every shortcut answer with the fold over whole games.
+
+    Built on first use because seven of the keys belong to modules that load
+    after this one (``engine/late_modules.py``).
+    """
+    keywords, global_statics = _late.keywords, _late.global_statics
+    return (
+        # Layer 1 (``copies.copiable_card``) and layer 3.
+        COPY_EFFECTS, DERIVED_COPY_SOURCES, TEXT_CHANGE_EFFECTS,
+        # CR 305.7 (``land_types.lost_abilities_to_type_change``).
+        LAND_TYPE_EFFECTS, DERIVED_LAND_TYPES,
+        # Layer 6: every ability lost (``keywords.abilities_lost_at``), and
+        # the grants appended after it, channel by channel.
+        keywords.ALL_ABILITIES_REMOVED, "global_static_sources",
+        global_statics.STACK_STATICS_KEY, global_statics.STACK_STATIC_STAMPS_KEY,
+        keywords.GRANTED_ABILITY_LINES, keywords.DERIVED_ABILITY_LINES,
+        "attached_auras",
+        # Layer 6's line and keyword removals.
+        keywords.REMOVED_ABILITY_LINES, keywords.REMOVED_ABILITY_KEYWORDS,
+    )
+
+
+def _check_unfolded(permanent: "Permanent") -> None:
+    """``engine/fast_paths.py``'s check of one shortcut answer: the fold,
+    run anyway, must hand back the printed card itself."""
+    folded = permanent._folded_card()
+    fast_paths.checked(
+        "effective_card", folded is permanent.card,
+        lambda: (
+            f"{permanent.card.name!r} was answered as printed, and the fold "
+            f"reads it as {folded.name!r} with text {folded.oracle_text!r}: a "
+            "channel the fold reads is missing from models.fold_channels()"
+        ),
+    )
 
 # Basic land subtype → the mana symbol it taps for. Used when a land's type has
 # been overridden (e.g. Evil Presence makes a land a Swamp).
@@ -102,15 +171,11 @@ class CardDefinition:
         a self-reference (``engine/self_reference.py``), and a token or a test
         fixture with no supertype answers no without anyone remembering to.
         """
-        return "legendary" in self.type_line.lower()
+        return _legendary_line(self.type_line)
 
     @property
     def primary_type(self) -> str:
-        lowered = self.type_line.lower()
-        for known in ("land", "creature", "artifact", "enchantment", "planeswalker", "instant", "sorcery"):
-            if known in lowered:
-                return known
-        return self.type_line.split(" ")[0].strip().lower()
+        return _primary_type_of(self.type_line)
 
     @property
     def has_flash(self) -> bool:
@@ -179,6 +244,23 @@ class CardDefinition:
         return self.printings[0] if self.printings else self.set_code
 
 
+# Both read once per distinct type line: ``compile_card_oracle`` asks each of
+# them on every call (1.9 million calls in two simulated Mirage games), and
+# each is a function of the printed line and nothing else.
+@functools.lru_cache(maxsize=None)
+def _legendary_line(type_line: str) -> bool:
+    return "legendary" in type_line.lower()
+
+
+@functools.lru_cache(maxsize=None)
+def _primary_type_of(type_line: str) -> str:
+    lowered = type_line.lower()
+    for known in ("land", "creature", "artifact", "enchantment", "planeswalker", "instant", "sorcery"):
+        if known in lowered:
+            return known
+    return type_line.split(" ")[0].strip().lower()
+
+
 def _with_granted_abilities(
     card: "CardDefinition", granted: tuple[str, ...]
 ) -> "CardDefinition":
@@ -210,11 +292,9 @@ def _abilities_stripped(permanent) -> bool:
     downstream asks "what does this permanent say?", and a reader that knew one
     channel would answer the other wrongly for whichever card it had not met.
     """
-    from .keywords import abilities_lost_at
-
     # *When* it happened is the same question with more of an answer, and the
     # readers that order a grant against the loss ask that one.
-    return abilities_lost_at(permanent) is not None
+    return _late.keywords.abilities_lost_at(permanent) is not None
 
 
 def _without_any_abilities(card: "CardDefinition") -> "CardDefinition":
@@ -251,7 +331,7 @@ def _without_ability_lines(
     ``keywords`` after losing the line still answers yes to a keyword read,
     which is the two-representations-one-reader bug this engine keeps finding.
     """
-    from .keywords import normalized_ability_line
+    normalized_ability_line = _late.keywords.normalized_ability_line
 
     key = (card_identity(card), removed)
     cached = _REMOVED_CARDS.get(key)
@@ -302,13 +382,13 @@ def _without_keyword_parts(
     flanking blocks…") is not a keyword line, and rewriting it by comma would
     be rewriting prose.
     """
-    from .keywords import keyword_ability_name
-    from .oracle import _is_supported_keyword_line, normalize_creature_line
-
     key = (card_identity(card), removed)
     cached = _REMOVED_KEYWORD_CARDS.get(key)
     if cached is not None:
         return cached
+    keyword_ability_name = _late.keywords.keyword_ability_name
+    _is_supported_keyword_line = _late.oracle._is_supported_keyword_line
+    normalize_creature_line = _late.oracle.normalize_creature_line
     lines: list[str] = []
     changed = False
     for line in (card.oracle_text or "").split(chr(10)):
@@ -551,7 +631,20 @@ class Permanent:
         on the *source* is not copied at all (CR 707.2's last sentence). Two
         text changes do not commute, so that fold is oldest-first rather than a
         merged substitution table.
+
+        **Most permanents have nothing to fold**, and are answered without
+        folding: with every channel :func:`fold_channels` names empty, the
+        fold would return ``card`` itself. Not a cache — nothing is
+        remembered, and a channel that fills is read on the very next call.
         """
+        if not any(map(self.metadata.get, fold_channels())):
+            if fast_paths.CHECKING:
+                _check_unfolded(self)
+            return self.card
+        return self._folded_card()
+
+    def _folded_card(self) -> "CardDefinition":
+        """:attr:`effective_card`, folded layer by layer."""
         base = copiable_card(self)
         if has_text_changes(self):
             base = apply_text_changes(base, text_changes(self))
@@ -586,11 +679,10 @@ class Permanent:
         # reader below orders them: "loses all abilities" (the blanket strike)
         # takes what the permanent has when it applies, and a grant is kept
         # only if it is newer. ``lost_at`` is that moment, or None.
-        from .global_statics import (global_static_sources,
-                                     stack_statics_applying_to)
-        from .keywords import abilities_lost_at
+        global_statics = _late.global_statics
+        keywords = _late.keywords
 
-        lost_at = abilities_lost_at(self)
+        lost_at = keywords.abilities_lost_at(self)
 
         def _kept(stamp: int) -> bool:
             return lost_at is None or stamp > lost_at
@@ -598,7 +690,7 @@ class Permanent:
         # A static ability's effect has its object's timestamp (CR 613.7a).
         granted = [
             static.grants_ability
-            for source, static in global_static_sources(
+            for source, static in global_statics.global_static_sources(
                 self.metadata.get("global_static_sources") or ()
             )
             if static.grants_ability and _kept(source.timestamp)
@@ -612,7 +704,7 @@ class Permanent:
         # and nothing about its source: there was no stamp to compare.
         granted.extend(
             static.grants_ability
-            for static, stamp in stack_statics_applying_to(self)
+            for static, stamp in global_statics.stack_statics_applying_to(self)
             if static.grants_ability and _kept(stamp)
         )
         # …and an ability granted to *this permanent alone* (Rapid Fire's
@@ -622,27 +714,23 @@ class Permanent:
         # Appended after the board-wide ones so the fold order matches the order
         # the two were recorded in — a static applies from the board, a grant
         # from the moment it resolved.
-        from .keywords import (derived_ability_lines, granted_ability_lines,
-                               removed_ability_lines)
-
-        granted.extend(granted_ability_lines(self, after=lost_at))
+        granted.extend(keywords.granted_ability_lines(self, after=lost_at))
         # …and an ability a **lord on the battlefield** grants its tribe in
         # quotes ('All Slivers have "{2}: Regenerate this permanent."'). Same
         # channel and the same reason as the two above; the difference is only
         # that `_recalculate_lord_buffs` clears and rebuilds it from the board
         # on every recompute, so the lord leaving takes the sentence with it
         # (CR 611.3b) with nothing here to undo.
-        granted.extend(derived_ability_lines(self, after=lost_at))
+        granted.extend(keywords.derived_ability_lines(self, after=lost_at))
         # …and an ability an **Aura attached to this permanent** grants
         # ('Enchanted land has "{T}: Counter target spell …"', Equinox). Derived
         # from the attachments on every read rather than recorded when the Aura
         # arrived, so detaching it takes the ability away with nothing to undo
         # (CR 611.3b). Read off the Aura's *effective* card, because a text
         # change rewrites what the Aura says before anything reads it.
-        from .auras import (aura_granted_ability_lines,
-                            aura_granted_line_derived_lines, auras_attached_to)
+        auras = _late.auras
 
-        for aura in auras_attached_to(self):
+        for aura in auras.auras_attached_to(self):
             # An Aura's or Equipment's effect is stamped when it became
             # attached (CR 613.7e), and one older than the loss is taken.
             if not _kept(int(aura.metadata.get("aura_timestamp", aura.timestamp))):
@@ -651,7 +739,7 @@ class Permanent:
             # Aura means the object granting it, so the name and the id of the
             # attachment go with the text.
             aura_card = aura.effective_card
-            granted.extend(aura_granted_ability_lines(
+            granted.extend(auras.aura_granted_ability_lines(
                 aura_card.oracle_text, granter_name=aura_card.name,
                 granter_id=aura.permanent_id,
             ))
@@ -661,13 +749,13 @@ class Permanent:
             # Same channel, same fold, and the same reason the quoted ones are
             # derived here rather than recorded at attach time.
             granted.extend(
-                aura_granted_line_derived_lines(aura.effective_card.oracle_text)
+                auras.aura_granted_line_derived_lines(aura.effective_card.oracle_text)
             )
         # …and layer 6's other half (CR 613.1f): an ability an effect has taken
         # away. Dropped *before* the grants are appended, so a card that loses a
         # line and is then granted one keeps the granted one — and so a grant of
         # the same words is not silently removed with the printed line.
-        removed = removed_ability_lines(self)
+        removed = keywords.removed_ability_lines(self)
         if removed:
             base = _without_ability_lines(base, removed)
         # …and layer 6's blanket removal (CR 613.1f): a board-wide static that
@@ -699,9 +787,7 @@ class Permanent:
         # the card: Agility grants flanking as a printed line, so a removal
         # folded in first would strike a line that is not there yet and leave
         # the granted one standing.
-        from .keywords import removed_ability_keywords
-
-        stripped = removed_ability_keywords(self)
+        stripped = keywords.removed_ability_keywords(self)
         if stripped:
             base = _without_keyword_parts(base, tuple(sorted(set(stripped))))
         return base
@@ -739,10 +825,9 @@ class Permanent:
         Here rather than beside its readers because layer 3 is applied in one
         place (``tests/engine/test_layer_reads.py``), and this is that place.
         """
-        from .keywords import removed_ability_lines
-
         if lost_abilities_to_type_change(self) or not (
-            _abilities_stripped(self) or removed_ability_lines(self)
+            _abilities_stripped(self)
+            or _late.keywords.removed_ability_lines(self)
         ):
             return self.effective_card
         return self.card_through_layer_3
@@ -778,10 +863,8 @@ class Permanent:
         ``primary_type`` collapses multi-type lines to one type, so type checks
         on permanents should use this instead.
         """
-        from .layer_bridge import computed_types
-
         wanted = card_type.lower()
-        card_types, subtypes = computed_types(self)
+        card_types, subtypes = _late.layer_bridge.computed_types(self)
         return wanted in card_types or wanted in subtypes
 
     @property
@@ -793,9 +876,7 @@ class Permanent:
         special case. Targeting, combat, and creature-only effects must use
         this rather than the printed ``card.primary_type``.
         """
-        from .layer_bridge import computed_types
-
-        return "creature" in computed_types(self)[0]
+        return "creature" in _late.layer_bridge.computed_types(self)[0]
 
     def has_supertype(self, supertype: str) -> bool:
         """Whether this permanent currently has a supertype (CR 205.4a).
@@ -812,16 +893,12 @@ class Permanent:
         ``printed_supertypes`` stays for the callers that hold a *card* — a
         thing in a hand or a graveyard, where CR 613 does not apply at all.
         """
-        from .layer_bridge import computed_supertypes
-
-        return supertype.lower() in computed_supertypes(self)
+        return supertype.lower() in _late.layer_bridge.computed_supertypes(self)
 
     @property
     def effective_supertypes(self) -> frozenset[str]:
         """Every supertype this permanent currently has, after layer 4."""
-        from .layer_bridge import computed_supertypes
-
-        return frozenset(computed_supertypes(self))
+        return frozenset(_late.layer_bridge.computed_supertypes(self))
 
     @property
     def basic_land_types(self) -> tuple[str, ...]:
@@ -832,9 +909,7 @@ class Permanent:
         re-derive this by checking the printed type line and the override
         separately, which meant each had to remember both.
         """
-        from .layer_bridge import computed_types
-
-        subtypes = computed_types(self)[1]
+        subtypes = _late.layer_bridge.computed_types(self)[1]
         return tuple(land_type for land_type in _LAND_TYPE_MANA if land_type in subtypes)
 
     @property
@@ -861,9 +936,7 @@ class Permanent:
     def effective_colors(self) -> set[str]:
         """The colours this permanent currently is, after layer 5 — printed,
         or replaced by a lace or a copy effect."""
-        from .layer_bridge import computed_colors
-
-        return computed_colors(self)
+        return _late.layer_bridge.computed_colors(self)
 
     def has_keyword(self, keyword: str) -> bool:
         """Whether this permanent currently has a keyword ability.
@@ -876,9 +949,7 @@ class Permanent:
         ``Game._has_keyword`` adds a fallback for keywords that only appear in a
         card's oracle text; prefer that from inside the engine.
         """
-        from .layer_bridge import computed_abilities
-
-        return keyword.lower() in computed_abilities(self)
+        return keyword.lower() in _late.layer_bridge.computed_abilities(self)
 
     @property
     def effective_power(self) -> int:
@@ -891,16 +962,12 @@ class Permanent:
         convention: written by hand it was correct only as long as nobody added
         a channel in the wrong place.
         """
-        from .layer_bridge import computed_pt
-
-        return computed_pt(self)[0]
+        return _late.layer_bridge.computed_pt(self)[0]
 
     @property
     def effective_toughness(self) -> int:
         """Toughness after every continuous effect. See effective_power."""
-        from .layer_bridge import computed_pt
-
-        return computed_pt(self)[1]
+        return _late.layer_bridge.computed_pt(self)[1]
 
 
 # CR 615's shields protect "a player or a permanent" alike, so a permanent gets

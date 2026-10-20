@@ -96,6 +96,16 @@ ANIMATES_HOST = "animates_host"
 #: land became a creature.
 LAND_ANIMATION_ORDER = "land_animation"
 
+#: This module's channels that layer 4 reads off a permanent's **own**
+#: record when it collects: what an effect added, what one took away, and
+#: what a static is taking. Named here, by the module that owns the keys,
+#: for ``layer_bridge.TYPE_EFFECT_CHANNELS`` — which asks only whether any
+#: of them holds anything (``engine/fast_paths.py``), and so is a reader of
+#: nothing and a writer of nothing.
+LAYER_4_CHANNELS: tuple[str, ...] = (
+    GAINED_TYPES, LOST_TYPES, DERIVED_LOST_SUPERTYPES,
+)
+
 
 def _record(
     perm: "Permanent", key: str, *, card_types: Iterable[str],

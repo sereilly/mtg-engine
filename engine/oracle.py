@@ -82,7 +82,7 @@ from .grammar import ast as grammar_ast, compile_line as compile_grammar_line
 from .grammar.lowering._events import OPPONENT_CHOSE_MODE
 from .grammar.postmodifiers import COST_TAPPED_REFERENT
 from .grammar.readers import _SELF_NOUNS
-from .grammar.vocabulary import (IMPLEMENTED_KEYWORDS,
+from .grammar.vocabulary import (CREATURE_TYPES, IMPLEMENTED_KEYWORDS,
                                  TYPE_LINE_SUPERTYPES as _TYPE_LINE_SUPERTYPES)
 
 #: The nouns a card uses for **itself** in a cost - "sacrifice this
@@ -4869,8 +4869,6 @@ def _collapse_self_references(normalized: str, card_name: str | None, replacemen
     card naming itself (CR 201.5), the possessive "Lhurgoyf's power" included,
     which is the form the pool's other such cards print.
     """
-    from .grammar.vocabulary import CREATURE_TYPES
-
     for form in _self_name_forms(card_name):
         if form.lower() in CREATURE_TYPES:
             normalized = re.sub(

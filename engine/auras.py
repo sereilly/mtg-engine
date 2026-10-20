@@ -31,6 +31,17 @@ from __future__ import annotations
 import re
 from functools import lru_cache
 
+from . import fast_paths
+from .late_modules import LateModules
+
+# Modules loaded after this one, read on every recompute and every
+# ``effective_card`` read of an enchanted permanent — so through a binding
+# made once rather than a function-level import run on every call, and not
+# at the top, which would change the package's load order
+# (``engine/late_modules.py``).
+_late = LateModules(__package__)
+_late_grammar = LateModules(f"{__package__}.grammar")
+
 # The nouns an Aura's effect clause can address, from its "Enchant <noun>" line.
 _NOUN = r"(?:creature|artifact|enchantment|land|wall|permanent)"
 
@@ -1369,13 +1380,13 @@ def aura_board_counted_penalty(oracle_text: str) -> dict | None:
     answer would be dropped, and a dropped narrowing here counts *every land*
     rather than the snow ones.
     """
-    from .grammar import subject_filter_payload
-    from .subject_filters import untestable_filter_keys
-
     for raw_line in (oracle_text or "").splitlines():
         match = _BOARD_COUNTED_PENALTY.match(_line_text(raw_line))
         if match is None:
             continue
+        from .grammar import subject_filter_payload
+        from .subject_filters import untestable_filter_keys
+
         phrase = match.group("attacking").strip()
         if phrase != match.group("otherwise").strip():
             return None
@@ -2093,9 +2104,10 @@ def quoted_grant_readable(quote: str, granter_name: str | None = None) -> bool:
     is compiled on the *host* and the granter's own name means nothing there
     until ``bind_granter`` has said which object it is (CR 201.5a).
     """
-    from .granted_abilities import bind_granter, granted_ability_supported
-
-    return granted_ability_supported(bind_granter(quote, granter_name))
+    granted_abilities = _late.granted_abilities
+    return granted_abilities.granted_ability_supported(
+        granted_abilities.bind_granter(quote, granter_name)
+    )
 
 
 def aura_granted_ability_lines(
@@ -2126,11 +2138,12 @@ def aura_granted_ability_lines(
     quotes = aura_quoted_grants(oracle_text or "")
     if not quotes:
         return ()
-    from .granted_abilities import GRANTER_PROBE_ID, bind_granter
-
-    bound_id = GRANTER_PROBE_ID if granter_id is None else granter_id
+    granted_abilities = _late.granted_abilities
+    bound_id = (
+        granted_abilities.GRANTER_PROBE_ID if granter_id is None else granter_id
+    )
     return tuple(
-        bind_granter(quote, granter_name, bound_id)
+        granted_abilities.bind_granter(quote, granter_name, bound_id)
         for quote in quotes
         if quoted_grant_readable(quote, granter_name)
     )
@@ -2370,13 +2383,35 @@ def aura_granted_line_derived_lines(oracle_text: str) -> tuple[str, ...]:
 
     Capitalised because it is folded into the permanent's *printed* rules text,
     which the UI shows; the compiler lowercases it again.
+
+    **Read once per text.** ``Permanent.effective_card`` asks this of every
+    Aura on every read of an enchanted permanent — 282,000 times in two
+    simulated Mirage games, nearly all for the same few texts — and the
+    answer is a function of the text and the keyword registry alone, so it
+    is kept per text. Nothing about the Aura or the board reaches it: which
+    host it is on, and whether it still is, are the caller's to ask on every
+    read, and are. Under ``engine/fast_paths.py``'s checking mode every kept
+    answer is read again and compared.
     """
-    from .keywords import LINE_DERIVED_KEYWORDS, keyword_ability_name
+    lines = _line_derived_lines_of(oracle_text)
+    if fast_paths.CHECKING:
+        fresh = _line_derived_lines_of.__wrapped__(oracle_text)
+        fast_paths.checked(
+            "aura_granted_line_derived_lines", fresh == lines,
+            lambda: f"{oracle_text!r}: kept {lines}, read {fresh}",
+        )
+    return lines
+
+
+@lru_cache(maxsize=None)
+def _line_derived_lines_of(oracle_text: str) -> tuple[str, ...]:
+    """:func:`aura_granted_line_derived_lines`, read off the text."""
+    keywords = _late.keywords
 
     return tuple(
         keyword.capitalize()
         for keyword in aura_keyword_grants(oracle_text)
-        if keyword_ability_name(keyword) in LINE_DERIVED_KEYWORDS
+        if keywords.keyword_ability_name(keyword) in keywords.LINE_DERIVED_KEYWORDS
     )
 
 
@@ -3184,12 +3219,12 @@ def aura_land_animation(oracle_text: str) -> dict | None:
     Quirion Druid's "2/2 green creature" in); a word out of place, or a word
     that is neither, answers None.
     """
-    from .grammar.vocabulary import COLOR_WORDS, CREATURE_TYPES
-
     for raw_line in (oracle_text or "").splitlines():
         match = _ATTACHED_LAND_ANIMATION.match(_line_text(raw_line))
         if match is None:
             continue
+        vocabulary = _late_grammar.vocabulary
+        COLOR_WORDS, CREATURE_TYPES = vocabulary.COLOR_WORDS, vocabulary.CREATURE_TYPES
         colors: list[str] = []
         subtypes: list[str] = []
         for word in match.group("words").split():
@@ -3554,10 +3589,9 @@ def chosen_landwalk_grants(aura) -> tuple[str, ...]:
     at the declare-blockers step — so a grant nothing would enforce is never
     made.
     """
-    from .enter_effects import CHOSEN_LAND_TYPE_KEY
-    from .landwalk import landwalk_requirement
-
-    chosen = str(aura.metadata.get(CHOSEN_LAND_TYPE_KEY) or "").strip().lower()
+    chosen = str(
+        aura.metadata.get(_late.enter_effects.CHOSEN_LAND_TYPE_KEY) or ""
+    ).strip().lower()
     if not chosen:
         return ()
     if not any(
@@ -3566,7 +3600,7 @@ def chosen_landwalk_grants(aura) -> tuple[str, ...]:
     ):
         return ()
     walk = f"{chosen}walk"
-    return (walk,) if landwalk_requirement(walk) is not None else ()
+    return (walk,) if _late.landwalk.landwalk_requirement(walk) is not None else ()
 
 
 def aura_redirects_host_damage_to_controller(line: str) -> bool:
@@ -3654,7 +3688,7 @@ def animating_auras(permanent) -> list:
     before anything recomputed — the printed type line stands in, as it always
     did.
     """
-    from .type_changes import animates_host
+    animates_host = _late.type_changes.animates_host
 
     printed_creature = "creature" in permanent.card.type_line.lower()
     found = []

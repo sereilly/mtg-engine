@@ -21,7 +21,9 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from functools import lru_cache
 
+from . import fast_paths
 from .land_types import lost_abilities_to_type_change
 
 _REMINDER = re.compile(r"\([^)]*\)")
@@ -431,102 +433,150 @@ def global_static_for(oracle_text: str) -> GlobalStatic | None:
     Whole-line matches only. A line that merely *contains* one of these phrases
     is not this ability, and claiming it would apply a board-wide effect on the
     strength of a substring.
+
+    **Which template a text matches is read once per text**
+    (:func:`_template_match`), and the static is built from that match on
+    every call exactly as it always was. Every permanent recorded as a
+    source on another is asked this on every ``effective_card`` read of that
+    other one — three million times in two simulated Planeshift games, each
+    a scan of every line against every template — and the match is a
+    function of the text alone. The *object* is deliberately not kept: one
+    built from a match is a new object each call, as it always was, and the
+    refresh compares the statics it holds by identity
+    (``mixins/permanent_state._refresh_global_statics``). Under
+    ``engine/fast_paths.py``'s checking mode every kept match is scanned
+    again and compared.
     """
+    found = _template_match(oracle_text)
+    if fast_paths.CHECKING:
+        fresh = _template_match.__wrapped__(oracle_text)
+        fast_paths.checked(
+            "global_static_for", fresh == found,
+            lambda: f"{oracle_text!r}: kept {found}, read {fresh}",
+        )
+    if found is None:
+        return None
+    index, items = found
+    static = _TEMPLATES[index][1]
+    groups = dict(items)
+    if groups.get("lingers"):
+        return GlobalStatic(
+            name=static.name,
+            applies_to=static.applies_to,
+            removes_abilities=static.removes_abilities,
+            adds_creature_type=static.adds_creature_type,
+            pt_from_mana_value=static.pt_from_mana_value,
+            grants_ability=static.grants_ability,
+            continues_until_eot=True,
+        )
+    if groups.get("tribe"):
+        # Dralnu's Crusade. The two type words singularised and held to
+        # the creature-type catalog (:func:`_tribe_words`) — which the
+        # scan has already asked: a pair outside it is not a match.
+        tribe, added = _tribe_words(groups)
+        return GlobalStatic(
+            name=static.name,
+            applies_to=static.applies_to,
+            subtypes=(tribe,),
+            adds_subtypes=(added,),
+            sets_colors=(groups["sets"],),
+        )
+    sets = groups.get("sets")
+    if sets:
+        # "All **creatures** are black" (Darkest Hour) carries its own
+        # scope; Celestial Dawn's sentence spells the scope into the
+        # template and leaves this group absent. Singularised here for
+        # the granted-ability row's reason one branch down: the plural
+        # is printed English, not a key.
+        scope = groups.get("all_scope")
+        return GlobalStatic(
+            name=static.name,
+            applies_to=(
+                scope.rstrip("s") if scope else static.applies_to
+            ),
+            # CR 105.2c: "colorless" names no colour, so the set is
+            # empty rather than holding the printed word. Read here,
+            # where the printed sentence is, so no reader of the field
+            # has to know that one of the six words it can carry is not
+            # a colour.
+            sets_colors=() if sets == "colorless" else (sets,),
+            extends_to_spells_and_cards=bool(groups.get("extends")),
+        )
+    if static.sets_creature_type:
+        # The "the same is true for …" tail, carried the way the colour
+        # row beside it carries its own: the flag says the effect
+        # reaches spells and off-battlefield cards, and the *word* it
+        # sets is never here at all -- it lives on the source permanent
+        # and is read at every recompute.
+        return GlobalStatic(
+            name=static.name,
+            applies_to=static.applies_to,
+            sets_creature_type=True,
+            extends_to_spells_and_cards=bool(groups.get("extends")),
+        )
+    granted = groups.get("ability")
+    if granted:
+        # "all creatures" names the type `creature`; the plural is
+        # printed English, not a key. Singularised here rather than in
+        # the predicate, so each type word has one spelling. "**Each**
+        # creature" prints the singular already and arrives in its own
+        # group, because one alternation cannot spell a noun two ways.
+        other_scope = groups.get("other_scope")
+        scope = (
+            groups.get("scope") or groups.get("each_scope") or other_scope
+        )
+        colour = groups.get("color")
+        return GlobalStatic(
+            name=static.name,
+            applies_to=(scope.rstrip("s") if scope else static.applies_to),
+            removes_abilities=static.removes_abilities,
+            adds_creature_type=static.adds_creature_type,
+            pt_from_mana_value=static.pt_from_mana_value,
+            grants_ability=granted,
+            colors=(colour,) if colour else (),
+            # Only the "other" arm above can have matched, so the flag
+            # is the group's own presence rather than a second reading
+            # of the printed line.
+            other_than_source=bool(other_scope),
+        )
+    return static
+
+
+def _tribe_words(groups: dict) -> tuple[str, str] | None:
+    """Dralnu's Crusade's two type words, singularised, when both are in the
+    creature-type catalog; None when either is not. Imported here rather
+    than at module scope, because this module is imported long before
+    ``engine.grammar`` finishes and stays free of engine imports at import
+    time."""
+    from .grammar.vocabulary import CREATURE_TYPES, singular
+
+    tribe = singular(groups["tribe"])
+    added = singular(groups["added"])
+    if tribe not in CREATURE_TYPES or added not in CREATURE_TYPES:
+        return None
+    return tribe, added
+
+
+@lru_cache(maxsize=None)
+def _template_match(oracle_text: str) -> tuple[int, tuple] | None:
+    """Where in :data:`_TEMPLATES` *oracle_text* first matches, and that
+    match's named groups — or None. The scan :func:`global_static_for` has
+    always made, line by line and template by template, passing over the
+    one match it always passed over: a Crusade naming a word that is no
+    creature type."""
     for raw_line in oracle_text.splitlines():
         line = _line(raw_line)
-        for pattern, static in _TEMPLATES:
+        for index, (pattern, _static) in enumerate(_TEMPLATES):
             match = pattern.match(line)
             if match is None:
                 continue
             groups = match.groupdict()
-            if groups.get("lingers"):
-                return GlobalStatic(
-                    name=static.name,
-                    applies_to=static.applies_to,
-                    removes_abilities=static.removes_abilities,
-                    adds_creature_type=static.adds_creature_type,
-                    pt_from_mana_value=static.pt_from_mana_value,
-                    grants_ability=static.grants_ability,
-                    continues_until_eot=True,
-                )
-            if groups.get("tribe"):
-                # Dralnu's Crusade. The two type words singularised and held to
-                # the creature-type catalog; imported here rather than at
-                # module scope, because this module is imported long before
-                # ``engine.grammar`` finishes and stays free of engine imports
-                # at import time.
-                from .grammar.vocabulary import CREATURE_TYPES, singular
-
-                tribe = singular(groups["tribe"])
-                added = singular(groups["added"])
-                if tribe not in CREATURE_TYPES or added not in CREATURE_TYPES:
-                    continue
-                return GlobalStatic(
-                    name=static.name,
-                    applies_to=static.applies_to,
-                    subtypes=(tribe,),
-                    adds_subtypes=(added,),
-                    sets_colors=(groups["sets"],),
-                )
-            sets = groups.get("sets")
-            if sets:
-                # "All **creatures** are black" (Darkest Hour) carries its own
-                # scope; Celestial Dawn's sentence spells the scope into the
-                # template and leaves this group absent. Singularised here for
-                # the granted-ability row's reason one branch down: the plural
-                # is printed English, not a key.
-                scope = groups.get("all_scope")
-                return GlobalStatic(
-                    name=static.name,
-                    applies_to=(
-                        scope.rstrip("s") if scope else static.applies_to
-                    ),
-                    # CR 105.2c: "colorless" names no colour, so the set is
-                    # empty rather than holding the printed word. Read here,
-                    # where the printed sentence is, so no reader of the field
-                    # has to know that one of the six words it can carry is not
-                    # a colour.
-                    sets_colors=() if sets == "colorless" else (sets,),
-                    extends_to_spells_and_cards=bool(groups.get("extends")),
-                )
-            if static.sets_creature_type:
-                # The "the same is true for …" tail, carried the way the colour
-                # row beside it carries its own: the flag says the effect
-                # reaches spells and off-battlefield cards, and the *word* it
-                # sets is never here at all -- it lives on the source permanent
-                # and is read at every recompute.
-                return GlobalStatic(
-                    name=static.name,
-                    applies_to=static.applies_to,
-                    sets_creature_type=True,
-                    extends_to_spells_and_cards=bool(groups.get("extends")),
-                )
-            granted = groups.get("ability")
-            if granted:
-                # "all creatures" names the type `creature`; the plural is
-                # printed English, not a key. Singularised here rather than in
-                # the predicate, so each type word has one spelling. "**Each**
-                # creature" prints the singular already and arrives in its own
-                # group, because one alternation cannot spell a noun two ways.
-                other_scope = groups.get("other_scope")
-                scope = (
-                    groups.get("scope") or groups.get("each_scope") or other_scope
-                )
-                colour = groups.get("color")
-                return GlobalStatic(
-                    name=static.name,
-                    applies_to=(scope.rstrip("s") if scope else static.applies_to),
-                    removes_abilities=static.removes_abilities,
-                    adds_creature_type=static.adds_creature_type,
-                    pt_from_mana_value=static.pt_from_mana_value,
-                    grants_ability=granted,
-                    colors=(colour,) if colour else (),
-                    # Only the "other" arm above can have matched, so the flag
-                    # is the group's own presence rather than a second reading
-                    # of the printed line.
-                    other_than_source=bool(other_scope),
-                )
-            return static
+            if (
+                not groups.get("lingers") and groups.get("tribe")
+                and _tribe_words(groups) is None
+            ):
+                continue
+            return index, tuple(sorted(groups.items()))
     return None
 
 

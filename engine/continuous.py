@@ -31,6 +31,13 @@ import itertools
 from dataclasses import dataclass, field
 from typing import Callable, Iterable, Sequence
 
+from .late_modules import LateModules
+
+# ``keywords`` loads long after the layer system, which ``models`` imports
+# first of all; read through a binding made on first use, since an effect's
+# ``modify`` runs on every layer-6 read (``engine/late_modules.py``).
+_late = LateModules(__package__)
+
 # 613.7: timestamps only need a total order, so a monotonic counter is enough.
 # Module-level rather than per-game so a helper can stamp an effect without
 # being handed the game; deterministic, because it advances only when game
@@ -631,10 +638,8 @@ def remove_abilities(
         # ability set existed. Removing the family name literally would take
         # nothing away and report success, which is the silent half of a
         # removal (engine/keywords.py).
-        from .keywords import expand_ability_removal
-
         char.abilities.difference_update(
-            expand_ability_removal(abilities, char.abilities)
+            _late.keywords.expand_ability_removal(abilities, char.abilities)
         )
 
     return ContinuousEffect(

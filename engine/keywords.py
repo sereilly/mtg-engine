@@ -17,8 +17,21 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Callable, Iterable
 
+# ``banding`` and ``global_statics`` are safe at module level: neither imports
+# this module, and both have finished loading before this one starts in the
+# package's order, so importing them here moves nothing. They were
+# function-local imports, run on every call — and ``abilities_lost_at`` is asked
+# on every ``effective_card`` read.
+from .banding import BANDS_WITH_OTHER, band_quality, is_bands_with_other
 from .continuous import next_timestamp
+from .global_statics import global_static_sources
+from .late_modules import LateModules
 from .oracle_types import _COLOR_WORD_TO_SYMBOL
+
+# The grammar's vocabulary and ``landwalk`` load long after this module
+# (``engine/late_modules.py``).
+_late = LateModules(__package__)
+_late_grammar = LateModules(f"{__package__}.grammar")
 
 if TYPE_CHECKING:
     from .models import Permanent
@@ -184,13 +197,10 @@ def keyword_ability_name(keyword: str) -> str:
     asks which channel to put it on. Two spellings of "strip the argument" is
     how those two come to disagree about what a card said.
 
-    Which keywords take a number is the parser's vocabulary — imported here
-    rather than restated, and imported inside the function because this module
-    sits underneath the grammar in the import order.
+    Which keywords take a number is the parser's vocabulary — read from there
+    rather than restated, and read through ``_late_grammar`` because this
+    module sits underneath the grammar in the import order.
     """
-    from .banding import BANDS_WITH_OTHER, is_bands_with_other
-    from .grammar.vocabulary import NUMERIC_ARGUMENT_KEYWORDS
-
     if keyword.startswith("protection from "):
         return "protection"
     # "Bands with other legendary creatures" is the ability *bands with other*
@@ -201,7 +211,10 @@ def keyword_ability_name(keyword: str) -> str:
     if is_bands_with_other(keyword):
         return BANDS_WITH_OTHER
     head = keyword.split(" ")[0]
-    return head if head in NUMERIC_ARGUMENT_KEYWORDS else keyword
+    return (
+        head if head in _late_grammar.vocabulary.NUMERIC_ARGUMENT_KEYWORDS
+        else keyword
+    )
 
 
 def protection_quality(word: str) -> tuple[str, str] | None:
@@ -473,12 +486,11 @@ def expand_ability_removal(names: Iterable[str], present: Iterable[str]) -> set[
 
     Each family is a *predicate* over what the permanent has, never a list.
     """
-    from .banding import BANDS_WITH_OTHER, band_quality
-    from .landwalk import LANDWALK, is_landwalk
+    landwalk = _late.landwalk
 
     families: tuple[tuple[frozenset[str], "Callable[[str], bool]"], ...] = (
         (frozenset({"banding", BANDS_WITH_OTHER}), lambda a: band_quality(a) is not None),
-        (frozenset({LANDWALK}), is_landwalk),
+        (frozenset({landwalk.LANDWALK}), landwalk.is_landwalk),
     )
     removed = {name for name in names}
     for named, belongs in families:
@@ -865,8 +877,6 @@ def abilities_lost_at(perm: Permanent) -> int | None:
     Not CR 305.7's loss, which is no layer-6 effect and keeps a granted
     ability of any age (``land_types.lost_abilities_to_type_change``).
     """
-    from .global_statics import global_static_sources
-
     newest: int | None = None
     for entry in perm.metadata.get(ALL_ABILITIES_REMOVED) or ():
         stamp = int(entry.get("timestamp", 0))
