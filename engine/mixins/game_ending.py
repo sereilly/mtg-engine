@@ -196,7 +196,16 @@ class GameEndingMixin:
                 )
 
     def check_state_based_actions(self) -> bool:
-        """Check and apply all state-based actions per CR 704. Returns True if any action fired."""
+        """Check and apply all state-based actions per CR 704. Returns True if any action fired.
+
+        One window for CR 603.3b (``putting_triggers_on_stack``): the
+        abilities one check sets off — two creatures dying to the same combat
+        damage, each with a death trigger — go on the stack together, and
+        their controller orders them."""
+        with self.putting_triggers_on_stack():
+            return self._check_state_based_actions()
+
+    def _check_state_based_actions(self) -> bool:
         any_changed = False
         changed = True
         previously_lost = {i for i, p in enumerate(self.players) if p.lost}

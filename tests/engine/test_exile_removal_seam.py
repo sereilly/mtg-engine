@@ -372,7 +372,9 @@ _COMPUTED_ATTRIBUTE_WRITES: dict[str, str] = {
         "_OWNERSHIP_ZONES — graveyard/hand/exile/library/ante. The exile branch "
         "calls take_card_from_exile; this is every other zone."
     ),
-    "engine/mixins/game_ending.py::check_state_based_actions": (
+    # The sweep's body; `check_state_based_actions` is its CR 603.3b window
+    # since round 4.
+    "engine/mixins/game_ending.py::_check_state_based_actions": (
         "CR 704.5d's token sweep over graveyard/hand/exile. The exile pass "
         "calls take_card_from_exile per token; this rebuilds the other two."
     ),

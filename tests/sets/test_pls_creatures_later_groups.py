@@ -2189,7 +2189,10 @@ def test_w2g6_sawtooth_loons_gate_finishes_before_its_loot_is_asked(set_pool):
     island, swamp = set_pool("LEA")["Island"], set_pool("LEA")["Swamp"]
     game.players[0].library[:2] = [island, swamp]
     _w2g6_cast_it(game, 0, "Sawtooth Loon")
-    assert _w2g6_everyone_passes(game) == "resolved_top"
+    # The two triggers' order is now the controller's to choose (CR 603.3b;
+    # round 4): kept as offered, the gate first, as this test was written.
+    assert _w2g6_everyone_passes(game) == "awaiting_choice"
+    assert game.confirm_order_triggers(0, [0, 1])
     assert len(game.stack) == 2 and game.pending_choices == []
 
     assert _w2g6_everyone_passes(game) == "awaiting_choice"

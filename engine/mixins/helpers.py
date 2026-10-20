@@ -37,6 +37,7 @@ from ..replacements import apply_entry_riders, apply_replacements
 from ..regeneration import regeneration_replaces_destruction
 from ..targeting import graveyard_target_spec
 from ..tokens import CREATED_WITH_PERMANENT_ID, is_token_card
+from ..trigger_order import is_triggered_object
 from ..trigger_utils import make_trigger_event, matching_triggers
 from ..turn_state import forget_controllers_upkeep
 from ._constants import _MANA_SYMBOLS, _NO_PRIORITY_STEPS
@@ -2936,6 +2937,15 @@ class GameHelpersMixin:
         """
         if not self.trigger_condition_holds(item):
             return None
+        # CR 603.3b: a triggered object pushed while a window is open is one
+        # its controller may order against the others pushed in the same
+        # window (``engine/trigger_order.py``). Recorded here, the one place an
+        # object goes on the stack, for this method's own reason: the attack
+        # and block fire sites build their objects and push them directly.
+        # Whether it is still there when the window closes is asked then — the
+        # choices below can remove it (CR 603.3c-d).
+        if self.collected_triggers is not None and is_triggered_object(item):
+            self.collected_triggers.append(item)
         fault = self.cast_announcement_fault(item) if announced_at_cast else None
         if fault is not None:
             # **The cast's announcement is a pre-answer to this trigger's own
@@ -4118,6 +4128,29 @@ class GameHelpersMixin:
         self._enqueue_triggered_batch(events)
 
     def _put_permanent_onto_battlefield(
+        self,
+        controller_index: int,
+        permanent: Permanent,
+        target_player_index: int | None,
+        *,
+        was_cast: bool = False,
+        from_zone: str | None = None,
+        played_as_land: bool = False,
+    ) -> None:
+        """One entry (:meth:`_enter_battlefield`), as one window for CR
+        603.3b (``putting_triggers_on_stack``): the entering permanent's own
+        "when this enters" and every observer's "whenever a creature
+        enters" go on the stack together, and their controller orders them.
+        Inside a resolution the resolution's window is the one that asks.
+        """
+        with self.putting_triggers_on_stack():
+            self._enter_battlefield(
+                controller_index, permanent, target_player_index,
+                was_cast=was_cast, from_zone=from_zone,
+                played_as_land=played_as_land,
+            )
+
+    def _enter_battlefield(
         self,
         controller_index: int,
         permanent: Permanent,

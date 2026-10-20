@@ -32,6 +32,7 @@ from ...oracle import OracleInstruction, compile_card_oracle
 from ...modal_triggers import ENTRY_TRIGGER_CONDITIONS, modal_trigger_modes
 from ...resumption import run_resumable
 from ...state_triggers import release_latch
+from ...trigger_order import offer_trigger_order, restore_apnap
 # Both owned by ``engine/targeting.py``: two callers ask whether a compiled
 # program announced a target — this picker (CR 603.3d) and the ``may``
 # handler deciding whether an offer may rebind the target its own trigger
@@ -1421,7 +1422,12 @@ class StackResolutionMixin:
         in APNAP order (CR 603.3b): the active player's triggers are enqueued first
         (so they resolve last), then each other player's in turn order. Each player's
         own triggers keep their collection (battlefield-scan) order. The sort key is
-        total and index-tie-broken, so enqueue order is fully seed-deterministic."""
+        total and index-tie-broken, so enqueue order is fully seed-deterministic.
+
+        That collection order is the **default** of CR 603.3b's choice, not the
+        choice: the batch is a window (:meth:`putting_triggers_on_stack`), so a
+        seat that put two or more on the stack here is asked to order them when
+        the outermost window closes."""
         if not events:
             return
         n = len(self.players)
@@ -1433,8 +1439,46 @@ class StackResolutionMixin:
             turn_distance = (controller - active) % n if n else 0
             return (turn_distance, controller, order)
 
-        for _, event in sorted(enumerate(events), key=_key):
-            self._enqueue_triggered_ability(**event)
+        with self.putting_triggers_on_stack():
+            for _, event in sorted(enumerate(events), key=_key):
+                self._enqueue_triggered_ability(**event)
+
+    @contextmanager
+    def putting_triggers_on_stack(self):
+        """A window around one unit of the game that sets triggers off
+        (CR 603.3b; ``engine/trigger_order.py``).
+
+        Every triggered object ``_stack_push`` puts on the stack while it is
+        open is collected, and when the **outermost** window closes they are
+        regrouped active player first (``restore_apnap``) and each seat
+        that put two or more distinguishable ones there is asked their order
+        (``order_triggers``; a seat nobody is asking keeps the order they were
+        pushed in, the registry's at-arm default). Re-entrant the way
+        :meth:`deferring_triggers` is: an inner window joins the outer one, so
+        a batch inside a resolution is one question with the resolution's other
+        triggers rather than a question of its own.
+
+        Opened around a batch, a permanent's own entry triggers, a resolution,
+        a state-based sweep, the turn-based actions that fire triggers and the
+        triggers a cast held back — and closed **before** anything that could
+        resolve them, so what is ordered is still on the stack to order. A
+        window that raises asks nothing.
+        """
+        if self.collected_triggers is not None:
+            yield
+            return
+        self.collected_triggers = []
+        try:
+            yield
+        except BaseException:
+            self.collected_triggers = None
+            raise
+        collected, self.collected_triggers = self.collected_triggers, None
+        if len(collected) >= 2:
+            # Between players first (APNAP), then within each player (their
+            # choice) — the rule's two halves, in its order.
+            restore_apnap(self, collected)
+            offer_trigger_order(self, collected)
 
     @contextmanager
     def deferring_triggers(self):
@@ -1470,8 +1514,12 @@ class StackResolutionMixin:
             yield
         finally:
             held, self.deferred_triggers = self.deferred_triggers, None
-            for event in held:
-                self._enqueue_triggered_ability(**event)
+            # Everything the cast set off goes on the stack together, at the
+            # moment the spell has finished being cast (CR 601.2i) — one
+            # window, so its controller orders them (CR 603.3b).
+            with self.putting_triggers_on_stack():
+                for event in held:
+                    self._enqueue_triggered_ability(**event)
     def _settle(self) -> None:
         """Run state-based actions, then resolve the stack one item at a time,
         re-checking SBAs between each resolution (CR 704.3 + 603.3). Triggers that
@@ -1637,7 +1685,11 @@ class StackResolutionMixin:
         # damage paths with a bare CardDefinition that cannot say.
         self.resolving_items.append(item)
         try:
-            self._run_stack_item_resolution(item)
+            # Everything this resolution sets off goes on the stack together
+            # once it is over (CR 603.3, CR 603.3b): one window, whichever fire
+            # sites — a sweep's deaths, an entry, a batch — put them there.
+            with self.putting_triggers_on_stack():
+                self._run_stack_item_resolution(item)
         finally:
             self.resolving_items.pop()
             self.resolving_stack_item = previous_resolving
@@ -2485,11 +2537,12 @@ class StackResolutionMixin:
         holds the invariant.
 
         **Order.** The triggers of one permanent trigger together, and CR
-        603.3b lets their controller put them on the stack in any order. This
-        engine has no prompt for that choice anywhere (every batch takes its
-        collection order), so the stated policy is the printed one: the *first
-        printed resolves first*, which is the order they ran in inline, and so
-        the last printed is pushed first. Each resolves alone — Sawtooth Loon's
+        603.3b lets their controller put them on the stack in any order. They
+        are pushed in one window (``putting_triggers_on_stack``), so a seat
+        that is asked chooses (``order_triggers``); the order a seat nobody
+        asks keeps is the printed one: the *first printed resolves first*,
+        which is the order they ran in inline, and so the last printed is
+        pushed first. Each resolves alone — Sawtooth Loon's
         gate is asked, answered and finished before its "draw two cards, then
         put two cards … on the bottom" begins, where inline the second ran into
         the first's unanswered prompt.
@@ -2618,9 +2671,11 @@ class StackResolutionMixin:
                 announcement_spent = announcement_spent or chooses
             triggered.append(event)
         # Last printed first, so the first printed is on top and resolves
-        # first (CR 603.3b's order, at the stated policy above).
-        for event in reversed(triggered):
-            self._enqueue_triggered_ability(**event)
+        # first — the order a seat nobody is asking keeps. One window, so a
+        # seat that is asked chooses its own (CR 603.3b).
+        with self.putting_triggers_on_stack():
+            for event in reversed(triggered):
+                self._enqueue_triggered_ability(**event)
 
     def _entry_trigger_triggers(self, event: dict) -> bool:
         """CR 603.4's first check for one entry trigger, before it is queued.

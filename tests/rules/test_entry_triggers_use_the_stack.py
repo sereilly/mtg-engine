@@ -261,13 +261,15 @@ def test_w2g6_603_4_a_false_condition_never_reaches_the_stack():
 @pytest.mark.cr("603.3b", "603.3")
 def test_w2g6_603_3b_two_entry_triggers_are_two_objects_the_first_printed_on_top():
     """Two triggers of one permanent trigger together and are two stack
-    objects. This engine asks nobody the order CR 603.3b lets their controller
-    choose, so the stated order is the printed one: the first printed is on
-    top and resolves first, alone."""
+    objects, each resolving alone. Their controller chooses the order
+    (CR 603.3b; round 4 — this test asserted that nobody was asked and the
+    printed order was simply kept): the seat is asked, and here keeps the
+    offered order, the first printed on top."""
     game = _w2g6_table(hand=[_W2G6_TWIN])
     game.players[0].library = [_W2G6_FILLER] * 3
     _w2g6_cast(game, 0, _W2G6_TWIN)
-    assert _w2g6_all_pass(game) == "resolved_top"
+    assert _w2g6_all_pass(game) == "awaiting_choice"
+    assert game.confirm_order_triggers(0, [0, 1])
 
     assert _w2g6_abilities(game) == [
         "When this creature enters, draw a card.",

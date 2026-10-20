@@ -35,6 +35,7 @@ from engine.mana_payment import mana_cost_label
 from engine.oracle_types import CLAIMABLE_EXILED_CARDS
 from engine.pending_choices import CHOICE_SPECS, public_data
 from engine.search_filters import search_matches, search_slots, searched_seat
+from engine.trigger_order import live_trigger_indices, trigger_card
 
 
 @dataclass(frozen=True)
@@ -686,6 +687,35 @@ def _trigger_target(ctx: PromptContext, choices: list) -> dict:
     if choice.data.get("up_to"):
         payload["up_to"] = True
     return payload
+
+
+@prompt_renderer("order_triggers")
+def _order_triggers(ctx: PromptContext, choices: list) -> dict:
+    """CR 603.3b: the triggered abilities a seat put on the stack together,
+    **top first** — the first one listed resolves first — for the seat to put
+    in the order it chooses.
+
+    Each entry keeps its ``index`` into the offered list, which is what the
+    answer (``order_triggers_confirm``'s ``trigger_order``) is written in; one
+    that has left the stack meanwhile (a target prompt answered with nothing
+    legal, CR 603.3d) is not shown and not owed. ``source_id`` is the
+    permanent the ability came from, for the board to point at; two abilities
+    of one card are told apart by their ``text``.
+    """
+    choice = choices[0]
+    offered = list(choice.data.get("triggers") or ())
+    items = tuple(choice.data.get("_trigger_items") or ())
+    triggers = []
+    for index in live_trigger_indices(ctx.game, choice):
+        entry = offered[index]
+        triggers.append({
+            "index": index,
+            "card_name": entry.get("card_name", ""),
+            "text": entry.get("text", ""),
+            "source_id": entry.get("source_id"),
+            "card": ctx.serialize_card(trigger_card(items[index])),
+        })
+    return {"player_seat": choice.player_index, "triggers": triggers}
 
 
 @prompt_renderer("reflexive_target")

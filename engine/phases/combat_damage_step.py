@@ -1134,6 +1134,28 @@ class CombatDamageStepMixin:
         blocker_damage_split: dict[int, dict[int, int]] | None = None,
         as_though_unblocked=None,
     ) -> tuple[bool, str]:
+        """One combat damage pass (:meth:`_deal_combat_damage_pass`), as one
+        window for CR 603.3b (``putting_triggers_on_stack``): what the
+        damage sets off — two creatures' "whenever this deals combat
+        damage", the deaths it causes — goes on the stack together and its
+        controller orders it. A pass that stops to ask (CR 616.1e) resumes
+        outside the window, and what the resumed half sets off goes on one
+        at a time, as everything did before.
+        """
+        with self.putting_triggers_on_stack():
+            return self._deal_combat_damage_pass(
+                controller_index, attacker_damage, blocker_damage,
+                blocker_damage_split, as_though_unblocked,
+            )
+
+    def _deal_combat_damage_pass(
+        self,
+        controller_index: int,
+        attacker_damage: dict[int, dict[int, int]] | None = None,
+        blocker_damage: dict[int, int] | None = None,
+        blocker_damage_split: dict[int, dict[int, int]] | None = None,
+        as_though_unblocked=None,
+    ) -> tuple[bool, str]:
         """One combat damage pass — the first-strike step or the regular one
         (CR 510.4). Both halves of the step are here: work out the assignment
         (which can be refused), then deal it (which cannot).

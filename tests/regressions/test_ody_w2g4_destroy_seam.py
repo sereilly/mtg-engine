@@ -538,7 +538,9 @@ _NOT_DESTRUCTIONS_BY_CALLER: dict[str, str] = {
     "sacrifice_permanents":
         "CR 701.21a — the same transition for a set that leaves in one event "
         "(Cataclysm's rest, every seat's together)",
-    "check_state_based_actions":
+    # The sweep's body; `check_state_based_actions` is its CR 603.3b window
+    # since round 4.
+    "_check_state_based_actions":
         "CR 704.5j legend rule, 704.5k world rule, 704.5m / 702.16c an Aura "
         "that may no longer be where it is, 704.5z the Role rule: each is "
         "'put into its owner's graveyard'",

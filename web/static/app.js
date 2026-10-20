@@ -3472,6 +3472,17 @@ function getTriggerTargetInfo(state = currentState) {
   return info;
 }
 
+// CR 603.3b: the triggered abilities this seat put on the stack together, top
+// first, for it to order (Tangle Wire's fade removal against its tap; two entry
+// triggers of one creature). The server sends only the ones still there.
+function getOrderTriggersInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.order_triggers;
+  if (!info || info.player_seat !== seat) return null;
+  if (!Array.isArray(info.triggers) || info.triggers.length < 2) return null;
+  return info;
+}
+
 // Tolarian Kraken: the reflexive trigger ("When you do, …") choosing its target.
 function getReflexiveTargetInfo(state = currentState) {
   if (!state || seat === null) return null;
@@ -4405,7 +4416,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getDrawBecomesCounterInfo(state) || getRevealUntilKindInfo(state) || getSkipDrawInfo(state) || getEntryDiscardTollInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getPayAnyAmountInfo(state) || getNumberChoiceInfo(state) || getSecretNumberInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getRepeatProcessInfo(state) || getExileFromHandInfo(state) || getExileHandPileInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getOpponentPicksRevealedInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getDrawBecomesCounterInfo(state) || getRevealUntilKindInfo(state) || getSkipDrawInfo(state) || getEntryDiscardTollInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getPayAnyAmountInfo(state) || getNumberChoiceInfo(state) || getSecretNumberInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getRepeatProcessInfo(state) || getExileFromHandInfo(state) || getExileHandPileInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getOpponentPicksRevealedInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getOrderTriggersInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -7198,6 +7209,93 @@ function triggerNamesSeveralTargets(info) {
 // It had no panel at all, so the glow was the only sign a decision was owed —
 // which works only while every candidate is on the board, and nothing glowed
 // for a spell.
+// The order being drafted for the open `order_triggers` prompt: `key` names the
+// prompt it belongs to (a new prompt starts from the order the server offered),
+// `order` is the offered indices, the first to resolve first.
+let orderTriggersDraft = null;
+
+function orderTriggersKey(info) {
+  return JSON.stringify([
+    info.player_seat,
+    (info.triggers || []).map((t) => [t.index, t.card_name, t.text, t.source_id]),
+  ]);
+}
+
+// CR 603.3b: "each player … puts each triggered ability they control … on the
+// stack in any order they choose." The list is top first — the first entry
+// resolves first — with a move-up and a move-down per row, and the panel's OK
+// sends the whole order (`trigger_order`). Nothing resolves until it is sent:
+// the server holds the abilities, and `waiting_on_prompt` keeps the auto-pass
+// off.
+function applyOrderTriggersPrompt(info) {
+  const panel = q("activationPanel");
+  const steps = q("promptSteps");
+  const okBtn = q("promptOkBtn");
+  panel.classList.remove("hidden");
+  q("promptCustomRow").classList.add("hidden");
+  q("promptCancelBtn").classList.add("hidden");
+  q("promptCancelBtn").disabled = true;
+  q("promptCustomOkBtn").disabled = true;
+  const triggers = info.triggers || [];
+  const key = orderTriggersKey(info);
+  if (!orderTriggersDraft || orderTriggersDraft.key !== key) {
+    orderTriggersDraft = { key, order: triggers.map((t) => Number(t.index)) };
+  }
+  const byIndex = new Map(triggers.map((t) => [Number(t.index), t]));
+  const order = orderTriggersDraft.order;
+  q("promptTitle").textContent = "Order your triggered abilities";
+  q("promptBody").textContent =
+    "These abilities triggered together, and you choose the order they go on the stack. " +
+    "The first in the list resolves first.";
+  const rows = order
+    .map((index, pos) => {
+      const t = byIndex.get(index) || {};
+      const label = `${t.card_name || "Ability"}: ${t.text || ""}`;
+      // Inline layout on purpose: `.prompt-choice-column` stretches every
+      // button in it to the panel's width, which is right for a list of
+      // answers and wrong for two arrows beside a line of text.
+      return (
+        `<div class="prompt-choice-row" data-order-row="${pos}" ` +
+        `style="flex-wrap:nowrap;align-items:flex-start;gap:6px">` +
+        `<span style="flex:0 0 auto;min-width:1.5em;padding-top:4px">${pos + 1}.</span>` +
+        `<button type="button" class="prompt-choice-btn" data-order-up="${pos}" style="flex:0 0 auto"` +
+        `${pos === 0 ? " disabled" : ""} title="Move up (resolve earlier)">&#9650;</button>` +
+        `<button type="button" class="prompt-choice-btn" data-order-down="${pos}" style="flex:0 0 auto"` +
+        `${pos === order.length - 1 ? " disabled" : ""} title="Move down (resolve later)">&#9660;</button>` +
+        `<span class="order-trigger-label" style="flex:1 1 auto;line-height:1.35">${escapeHtml(label)}</span>` +
+        `</div>`
+      );
+    })
+    .join("");
+  steps.innerHTML = `<div style="display:flex;flex-direction:column;gap:10px">${rows}</div>`;
+  const move = (from, to) => {
+    const next = [...orderTriggersDraft.order];
+    [next[from], next[to]] = [next[to], next[from]];
+    orderTriggersDraft = { key, order: next };
+    applyOrderTriggersPrompt(info);
+  };
+  steps.querySelectorAll("[data-order-up]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const pos = Number(btn.dataset.orderUp);
+      if (pos > 0) move(pos, pos - 1);
+    });
+  });
+  steps.querySelectorAll("[data-order-down]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const pos = Number(btn.dataset.orderDown);
+      if (pos < orderTriggersDraft.order.length - 1) move(pos, pos + 1);
+    });
+  });
+  okBtn.classList.remove("hidden");
+  okBtn.disabled = false;
+  okBtn.textContent = "Put on the stack";
+  okBtn.onclick = async () => {
+    const chosen = [...orderTriggersDraft.order];
+    orderTriggersDraft = null;
+    await sendAction({ seat, action: "order_triggers_confirm", trigger_order: chosen });
+  };
+}
+
 function applyTriggerTargetPrompt(info) {
   const panel = q("activationPanel");
   panel.classList.remove("hidden");
@@ -11338,6 +11436,14 @@ function renderActivationPrompt() {
   const triggerTargetPrompt = getTriggerTargetInfo();
   if (triggerTargetPrompt) {
     applyTriggerTargetPrompt(triggerTargetPrompt);
+    return;
+  }
+
+  // After the target: a trigger's target is chosen as that one ability is put
+  // on the stack (CR 603.3d), and the order is about all of them (603.3b).
+  const orderTriggersInfo = getOrderTriggersInfo();
+  if (orderTriggersInfo) {
+    applyOrderTriggersPrompt(orderTriggersInfo);
     return;
   }
 

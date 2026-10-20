@@ -449,6 +449,13 @@ class Game(
     # is a nullable buffer rather than a queue that is always drained.
     # See ``StackResolutionMixin.deferring_triggers``.
     deferred_triggers: list | None = None
+    # CR 603.3b: the triggered objects put on the stack while a window is open
+    # around one unit of the game that sets triggers off (a batch, a
+    # resolution, a state-based sweep, a turn-based action). When the
+    # outermost window closes, a seat that put two or more there is asked to
+    # order them. None means no window is open. See ``engine/trigger_order.py``
+    # and ``StackResolutionMixin.putting_triggers_on_stack``.
+    collected_triggers: list | None = None
     # CR 603.7 delayed triggered abilities created by a resolving spell or
     # ability ("Whenever one or more nontoken creatures attack this turn, …" —
     # Basri Ket's −2; "At the beginning of your next main phase, …" — Mana

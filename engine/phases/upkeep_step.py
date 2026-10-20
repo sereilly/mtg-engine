@@ -1042,7 +1042,23 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         Every answer map is keyed by ``Permanent.permanent_id``; a string key is
         the legacy shorthand for "every copy of this card"
         (:meth:`_upkeep_answers_by_permanent`).
+
+        The step's turn-based half is one window for CR 603.3b
+        (``putting_triggers_on_stack``): everything "at the beginning of the
+        upkeep" sets off — the battlefield's triggers, CR 603.7's delayed ones,
+        an Aura's — goes on the stack together and its controller orders it
+        (Tangle Wire's fade removal against its tap). Closed before the
+        priority window, which is what would resolve them.
         """
+        with self.putting_triggers_on_stack():
+            self._resolve_upkeep_actions(
+                player_index, human_choices, optional_choices,
+                mana_prevention, sacrifice_choices, trigger_targets,
+            )
+        self._close_or_defer_step("beginning", "upkeep", defer_priority)
+
+    def _resolve_upkeep_actions(self, player_index: int, human_choices: dict[int | str, bool] | None = None, optional_choices: dict[int | str, bool] | None = None, mana_prevention: dict[int | str, int] | None = None, sacrifice_choices: dict[int | str, int] | None = None, trigger_targets: dict[int | str, tuple[int, int]] | None = None) -> None:
+        """The upkeep step up to its priority window (:meth:`resolve_upkeep`)."""
         # Every prompt answer, re-keyed to the permanent it is about, before
         # anything reads one. See :meth:`_upkeep_answers_by_permanent` — this is
         # the one place a printed card name is turned into an address, so no
@@ -1616,5 +1632,3 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         # counters, the pay-or-suffer family), and this is what destroys what
         # they killed — the handlers no longer sweep for themselves.
         self.check_state_based_actions()
-
-        self._close_or_defer_step(phase, step, defer_priority)

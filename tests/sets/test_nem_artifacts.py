@@ -460,14 +460,25 @@ def test_w1g1_tangle_wire_asks_an_interactive_player_which_to_tap(set_pool):
     assert game.stack == []
 
 
-def test_w1g1_tangle_wire_counts_the_counters_left_when_it_resolves(set_pool):
+#: The Wire's two upkeep triggers as the ``order_triggers`` prompt offers them,
+#: top first: the tap was pushed last (collection order) and sits on top.
+_W1G1A_TAP_FIRST = [0, 1]
+_W1G1A_FADE_FIRST = [1, 0]
+
+
+@pytest.mark.parametrize(
+    "order, tapped",
+    [(_W1G1A_TAP_FIRST, 4), (_W1G1A_FADE_FIRST, 3)],
+    ids=["tap-first", "fade-first"],
+)
+def test_w1g1_tangle_wire_counts_the_counters_left_when_it_resolves(set_pool, order, tapped):
     """The number is read at resolution off the pile on the Wire, so on its
     controller's upkeep — two triggers — the count depends on which resolves
-    first. The engine keeps one controller's simultaneous triggers in printed
-    order (it does not yet offer CR 603.3b's choice), so the Wire's tap
-    resolves on top of the fade removal and counts four; and on the next of
-    the controller's upkeeps, three."""
-    game, wire = _w1g1a_wire_game(set_pool)
+    first, and CR 603.3b lets the controller choose. This test used to pin the
+    engine's one order (round 4 inverted it): the tap always resolved on top of
+    the fade removal and counted four. Now the controller is asked: tap first
+    counts four, fade first counts three."""
+    game, wire = _w1g1a_wire_game(set_pool, interactive=(0,))
     mine = _w1g1a_board(game, 0, set_pool, ["Forest"] * 5)
 
     game.turn += 1
@@ -479,10 +490,37 @@ def test_w1g1_tangle_wire_counts_the_counters_left_when_it_resolves(set_pool):
     for perm in game.all_permanents():
         perm.tapped = False
     game.resolve_upkeep(0)
+
+    [owed] = game.pending_choices_of("order_triggers", 0)
+    assert [entry["text"][:28] for entry in owed.data["triggers"]] == [
+        "At the beginning of each pla", "At the beginning of your upk",
+    ]
+    assert game.resolve_top_of_stack() is False, "nothing resolves before the order"
+    assert game.confirm_order_triggers(0, order)
+    # The tap's own choice (which permanents) is the interactive seat's too;
+    # the defaults tap the first ones offered.
+    _w1g1a_resolve_stack(game)
+    game.auto_resolve_pending_choices()
     _w1g1a_resolve_stack(game)
 
     tapped_now = sum(p.tapped for p in (*mine, wire))
-    assert tapped_now == 4
+    assert tapped_now == tapped
+    assert _w1g1a_counters_on(wire, "fade") == 3
+
+
+def test_w1g1_tangle_wire_a_seat_nobody_asks_keeps_the_pushed_order(set_pool):
+    """An AI or headless controller is not asked (the registry's default at
+    arm): the Wire's tap stays on top of the fade removal, as it always did,
+    and counts four."""
+    game, wire = _w1g1a_wire_game(set_pool)
+    mine = _w1g1a_board(game, 0, set_pool, ["Forest"] * 5)
+    game.turn += 1
+    game.begin_turn_bookkeeping(0)
+    game.resolve_upkeep(0)
+    _w1g1a_resolve_stack(game)
+
+    assert game.pending_choices == []
+    assert sum(p.tapped for p in (*mine, wire)) == 4
     assert _w1g1a_counters_on(wire, "fade") == 3
 
 # --- end W1G1 ---

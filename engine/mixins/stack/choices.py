@@ -65,6 +65,8 @@ from ...search_filters import (landing_seat, search_matches,
 from ...handlers.zones import FORGOTTEN_PICKS
 from ...oracle_types import OracleInstruction
 from ...subject_filters import subject_matches
+from ...trigger_order import (ORDER_TRIGGERS, apply_trigger_order,
+                              order_is_open)
 
 
 def _record_sacrificed_card(record, player_index: int, perm) -> None:
@@ -298,6 +300,16 @@ class PendingChoicesMixin:
         """
         for choice in self.pending_choices:
             if choice.data.get("_trigger_item") is item:
+                return choice
+            # …and CR 603.3b's, which is one choice about several objects:
+            # the order a seat puts its simultaneous triggers on the stack in
+            # (``engine/trigger_order.py``). Until it is made, none of them has
+            # finished being put there. Only while it is still a choice — two
+            # of them on the stack — or an object left alone by the others
+            # leaving would be held for a question nobody can answer.
+            if any(
+                member is item for member in choice.data.get("_trigger_items") or ()
+            ) and spec_for(choice.kind).open_for(self, choice):
                 return choice
         return None
 
@@ -9217,6 +9229,44 @@ class PendingChoicesMixin:
             self._announce_answered_targets(item, choice, queued)
         return True
 
+    # -- CR 603.3b: the order a seat puts its simultaneous triggers on in ----
+    #
+    # Armed by ``engine/trigger_order.offer_trigger_order`` when a window
+    # (``putting_triggers_on_stack``) closes; see that module for what a
+    # window is and why the objects are already on the stack.
+
+    def confirm_order_triggers(self, player_index: int, order: list) -> bool:
+        """Answer an ``order_triggers`` prompt: *order* lists the offered
+        triggers by index, **the first to resolve first**."""
+        return self.resolve_pending_choice(
+            ORDER_TRIGGERS, player_index, order=list(order or ()),
+        )
+
+    def _resolve_order_triggers(self, choice: PendingChoice, order) -> bool:
+        if not apply_trigger_order(self, choice, order):
+            return False
+        self.discard_pending_choice(choice)
+        offered = list(choice.data.get("triggers") or ())
+
+        def _label(entry: dict) -> str:
+            text = entry.get("text") or ""
+            if len(text) > 48:
+                text = text[:47].rstrip() + "…"
+            return f"{entry['card_name']} ({text})" if text else entry["card_name"]
+
+        chosen = [_label(offered[int(index)]) for index in order]
+        self.log.append(
+            f"{self.players[choice.player_index].name} ordered their triggered "
+            f"abilities (603.3b), first to resolve first: {'; '.join(chosen)}"
+        )
+        return True
+
+    def _default_order_triggers(self, choice: PendingChoice) -> None:
+        """The order the fire sites pushed them in, which is the order every
+        game had before anybody was asked — so a seat nobody asks plays
+        exactly as it did. Nothing moves and nothing is logged."""
+        self.discard_pending_choice(choice)
+
     def confirm_trigger_target(
         self, player_index: int, permanent_id: int | None = None,
         seat: int | None = None, permanent_ids: list[int] | None = None,
@@ -11543,6 +11593,25 @@ register_choice(
     # headless and AI play run exactly as they did.
     default_at_arm=True,
     spectator_visible=True,
+)
+
+register_choice(
+    ORDER_TRIGGERS,
+    resolve=lambda game, choice, r: game._resolve_order_triggers(choice, r["order"]),
+    default=lambda game, choice: game._default_order_triggers(choice),
+    action="order_triggers_confirm",
+    prompt_key="order_triggers",
+    blocked_detail="choose the order of your triggered abilities before other actions",
+    # CR 603.3b's choice is part of putting the abilities on the stack, like
+    # a trigger's target (CR 603.3d) above: a seat nobody asks keeps the order
+    # they were pushed in there and then, nothing queues, and a seeded run
+    # reproduces exactly.
+    default_at_arm=True,
+    spectator_visible=True,
+    # Owed while two of its objects are still on the stack to be ordered
+    # (``trigger_order.order_is_open``) — a target prompt answered meanwhile
+    # can remove one (CR 603.3d).
+    is_open=order_is_open,
 )
 
 register_choice(
