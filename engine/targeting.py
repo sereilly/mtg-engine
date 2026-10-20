@@ -831,7 +831,14 @@ _KIND_TO_SPEC: dict[str, dict] = {
     # flag, and answers it for a spell now: the seat is the live combat's.
     "grant_unlimited_blocking": {"kind": "creature", "defending_player_only": True},
     "target_gains_life": {"kind": "any"},
-    "remove_creature_from_combat": {"kind": "creature"},
+    # "Remove target creature **defending player controls** from combat."
+    # (False Orders.) Blaze of Glory's row and Blaze of Glory's defect: the
+    # seat was missing here and enforced nowhere else, so the spell could be
+    # aimed at an *attacking* creature — the handler then marked it, unblocked
+    # nothing and left it attacking, and the log said it had been removed.
+    # No seat ever did that until a simulated seat had priority in the
+    # declare-blockers step (round 4); then two of two LEA casts did.
+    "remove_creature_from_combat": {"kind": "creature", "defending_player_only": True},
     "grant_target_flying_until_eot": {"kind": "creature"},
     "simulacrum_redirect": {"kind": "creature"},
     "exile_creature_gain_life_equal_to_power": {"kind": "creature"},

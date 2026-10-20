@@ -75,6 +75,35 @@ def main() -> int:
         f"{report.cleanup_discards} card(s) discarded to hand size"
     )
 
+    # CR 117: spells cast when the engine gave a seat priority outside its own
+    # main phase — in response to the other seat's object, in combat, on the
+    # opponent's turn (three views of the same casts) — beside how often a
+    # seat was given priority in one of those windows and how often it then
+    # held an instant it could pay for. Until round 4 every run read 0 here
+    # and printed nothing: the headless window was "both players pass", so no
+    # counterspell, trick or Fog had ever been cast in a simulated game, and
+    # the run read exactly as clean as it does now. Printed always, because a
+    # zero beside a large offer count is a different finding from no offers.
+    print(
+        f"Instant speed: {report.casts_in_response} in response, "
+        f"{report.casts_in_combat} in combat, "
+        f"{report.casts_on_opponents_turn} on the opponent's turn "
+        f"(priority offered {report.priority_offers} time(s), "
+        f"{report.priority_offers_weighed} holding an instant it could pay for)"
+    )
+    if report.activations_at_instant_speed:
+        by_window = ", ".join(
+            f"{count} {window.replace('_', ' ')}"
+            for window, count in sorted(report.activations_at_instant_speed.items())
+        )
+        total = sum(report.activations_at_instant_speed.values())
+        print(f"Abilities activated at instant speed: {total} ({by_window})")
+    if report.refused_instant_activations:
+        total = sum(report.refused_instant_activations.values())
+        print(f"Instant-speed activations the engine declined: {total}")
+        for reason, count in report.refused_instant_activations.most_common(5):
+            print(f"  {count}x {reason}")
+
     # CR 500.7: extra turns actually taken. Only a pool printing one can move
     # it — and until INV's wave 2 nothing could, because the loop alternated
     # the seats itself and walked past the queue.
@@ -135,6 +164,14 @@ def main() -> int:
         total = sum(report.refused_casts.values())
         print(f"Casts the engine declined: {total} (the cast gate working, not a failure)")
         for reason, count in report.refused_casts.most_common(5):
+            print(f"  {count}x {reason}")
+
+    # The instant-speed twin: a response the engine declined, after its lands
+    # were tapped for it.
+    if report.refused_instant_casts:
+        total = sum(report.refused_instant_casts.values())
+        print(f"Instant-speed casts the engine declined: {total}")
+        for reason, count in report.refused_instant_casts.most_common(5):
             print(f"  {count}x {reason}")
 
     # The activation-side twin, which this report had no line for: a refused

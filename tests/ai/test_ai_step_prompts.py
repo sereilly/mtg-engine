@@ -139,8 +139,11 @@ def test_w2g6_the_simulator_answers_a_prompt_kind_it_does_not_name():
         _w2g6_path("LEA"), games=2, seed=11, max_turns=14,
         required_cards=["Phantasmal Terrain"],
     )
+    # The Auras that **entered**, not the casts: "cast … -> resolved" is the
+    # cast call returning, and since round 4 the other seat can answer it
+    # (this seed: a Red Elemental Blast counters the first one).
     cast = sum(
-        "cast Phantasmal Terrain -> resolved" in line for line in report.log_lines
+        "Phantasmal Terrain enchants " in line for line in report.log_lines
     )
     chosen = sum(
         "Phantasmal Terrain: enchanted land becomes" in line for line in report.log_lines

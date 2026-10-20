@@ -8,12 +8,16 @@ import random
 
 from . import ai_valuation
 from .ai_combat import run_ai_combat_phase
-from .ai_policy import (cast_announcement, choose_activation_action,
-                        choose_cast_action, choose_foreign_activation_action,
-                        choose_hand_activation_action, choose_land_drop,
-                        spell_being_cast, tap_planned_lands,
-                        zone_being_cast_from)
-from .ai_valuation import permitted_casts
+from .ai_policy import (activate_chosen_ability, cast_announcement,
+                        cast_chosen_instant, choose_activation_action,
+                        choose_cast_action, choose_combat_instant_cast_action,
+                        choose_foreign_activation_action,
+                        choose_hand_activation_action,
+                        choose_instant_speed_activation, choose_land_drop,
+                        holds_an_ability_it_could_activate,
+                        holds_an_instant_it_could_pay_for, spell_being_cast,
+                        tap_planned_lands, zone_being_cast_from)
+from .ai_valuation import mid_resolution, permitted_casts, rehearsing
 from .card_loader import load_cards
 from .faces import whole_card
 from .game import Game
@@ -168,6 +172,39 @@ class SimulationReport:
     #: ``simulate_ai_games.py`` exits 1 on any: a raised rehearsal is a crash
     #: the game was spared, not a decision.
     rehearsals_raised: Counter[str] = field(default_factory=Counter)
+    #: Spells cast **when the engine gave a seat priority** somewhere other
+    #: than its own main phase (`Game.priority_driver`, answered by
+    #: `_answer_priority`): in response to an object on the stack another seat
+    #: controls, in combat, and on the opponent's turn — three overlapping
+    #: views of the same casts (a Giant Growth answering a block on the
+    #: opponent's turn is all three). **All three read 0 in every run before
+    #: round 4**: the engine's headless window was "both players pass", so a
+    #: simulated seat cast in its own main phase and nowhere else, and no
+    #: counterspell, combat trick, Fog or end-of-turn removal had ever been
+    #: cast in a simulated game. The run read exactly as clean as it does now.
+    casts_in_response: int = 0
+    casts_in_combat: int = 0
+    casts_on_opponents_turn: int = 0
+    #: The refusals among them, by card and the engine's reason — counted like
+    #: ``refused_casts``, because a refused response costs nothing but the
+    #: mana its taps floated, and the seat proposes it again at the next window.
+    refused_instant_casts: Counter[str] = field(default_factory=Counter)
+    #: How many times a seat was given priority in one of the windows the
+    #: simulator answers (`_instant_speed_window`), and in how many of those it
+    #: held an instant it could pay for, so the chooser was asked. The zeroes
+    #: above mean something only beside these: a run whose windows were never
+    #: opened reports no response cast in exactly the way a run with no
+    #: windows did.
+    priority_offers: int = 0
+    priority_offers_weighed: int = 0
+    #: Abilities activated at the same moments, by window (``"response"``,
+    #: ``"combat"``, ``"end_step"`` — `_instant_speed_window`), and the
+    #: refusals among them. Empty in every run before round 4 for the casts'
+    #: reason: the only activations a simulated seat made were its own main
+    #: phase's, so a regeneration shield was never raised in front of the
+    #: spell it answers.
+    activations_at_instant_speed: Counter[str] = field(default_factory=Counter)
+    refused_instant_activations: Counter[str] = field(default_factory=Counter)
 
     @property
     def ok(self) -> bool:
@@ -863,6 +900,7 @@ def _play_one_cast(
     cast_action = tap_planned_lands(game, active, cast_action)
 
     before = _snap(game)
+    answered_before = report.casts_in_response
     # Forward the *whole* choice. Dropping the permanent target was invisible
     # while the decklist was eight cards that target a player or nothing: an
     # Aura reaches `cast_from_hand` with no index and is refused ("Evil
@@ -913,6 +951,15 @@ def _play_one_cast(
         # rule. Unreachable while every cast was free; one refusal for want of
         # mana made it a false exit 1 (5ED's run, once costs were enforced).
         return False
+    if report.casts_in_response != answered_before:
+        # The other seat answered the spell before it resolved (the engine
+        # gives priority before each resolution, `Game.priority_driver`): a
+        # Bolt countered, or its damage prevented by a response, dealt less
+        # than it prints and broke no rule. The oracle below is about a
+        # resolution nothing else touched — "nothing else in these pools
+        # deals damage to the Bolt's target as it is cast" — which is no
+        # longer this one.
+        return True
     expectation_error = _assert_expected(
         card_to_cast, before, after, active, cast_action.target_player_index,
         named_a_permanent=bool(cast_action.target_permanent_ids),
@@ -1202,8 +1249,10 @@ def _play_rest_of_turn(
         return
     # CR 513: `enter_turn_phase("ending")` ran `resolve_end_step`, which put the
     # "at the beginning of the end step" triggers on the stack and opened the
-    # active player's priority window. Both players pass (the simulator holds
-    # no instant-speed play), so the window is the stack draining.
+    # active player's priority window. The window gives each seat priority
+    # before each trigger resolves and once more with the stack empty
+    # (`Game.offer_priority`), which is where the opponent's end-of-turn
+    # instant is cast (`_instant_speed_window`).
     _drain_step(game)
     report.end_steps += 1
     if game.is_game_over():
@@ -1216,6 +1265,159 @@ def _play_rest_of_turn(
     _drain_step(game)
     report.cleanup_steps += 1
     report.cleanup_discards += max(0, hand_before - len(game.players[active].hand))
+
+
+def _instant_speed_window(game: Game, seat: int) -> str | None:
+    """Which of the moments a simulated seat answers priority in *seat* has
+    just been given it in, or None for one it passes in without asking.
+
+    The engine gives every seat priority before each resolution and at each
+    step's end (`Game.offer_priority`); this is the simulator's choice of
+    which of those to spend a deliberation on, in the order of what they are
+    worth:
+
+    * ``"response"`` — an object **another seat** controls is on the stack: a
+      counterspell, a shield in front of a burn spell, removal in response to
+      a pump. A seat does not answer its own object — it lets it resolve and
+      is asked again (CR 117.3c gives it priority first, and it passes).
+    * ``"combat"`` — the declare-blockers step with attackers in it, for
+      **both** seats (CR 509.2): the trick that wins a block, the removal that
+      kills an attacker, the pump on an unblocked one.
+    * ``"end_step"`` — the opponent's end step with the stack empty: removal
+      for a creature cast on that turn, a draw that was held up.
+
+    Everything else — the upkeep, the draw step, beginning of combat, the
+    declare-attackers step, the combat-damage and end-of-combat steps, a seat's
+    own end step — is passed without asking (named in ROADMAP as what is
+    left); the engine still gives priority there, so adding one is a line here.
+    """
+    if game.stack:
+        return "response" if game.stack[-1].caster_index != seat else None
+    if (
+        game.current_turn_phase == "combat"
+        and game.current_step == "declare_blockers"
+        and game.combat_attackers
+    ):
+        return "combat"
+    if game.current_step == "end" and seat != game.active_player_index:
+        return "end_step"
+    return None
+
+
+def _priority_answerer(table: Game, report: SimulationReport, game_index: int, clock: list):
+    """`Game.priority_driver` for one simulated game.
+
+    A closure rather than a bound method or a partial, for what a rehearsal
+    does with the game: it deep-copies it, and a copy carries this attribute
+    with it. A function is copied as itself, so the copy's driver is this one —
+    which answers only for *table*, the game it was made for, and only outside
+    a rehearsal (`ai_valuation.rehearsing`): a copy's priority is passed, as
+    every copy's was before there was a driver. A method or a partial would
+    have copied the report into every rehearsal.
+
+    *clock* is ``[turn]``, the round the report's lines are numbered by,
+    which the turn loop updates.
+    """
+
+    def answer(game: Game, seat: int) -> bool:
+        if game is not table or rehearsing():
+            return False
+        return _answer_priority(game, seat, report, game_index, clock[0])
+
+    return answer
+
+
+def _answer_priority(
+    game: Game, seat: int, report: SimulationReport, game_index: int, turn: int
+) -> bool:
+    """*seat* has priority (`Game.offer_priority`): cast what
+    `ai_policy.choose_combat_instant_cast_action` chooses — the chooser the
+    web AI seat answers priority with — or, with no spell worth casting,
+    activate what `ai_policy.choose_instant_speed_activation` chooses, or
+    pass. True when something went on the stack.
+
+    Asked only in `_instant_speed_window`'s moments, only where no
+    resolution is part-way through (a rehearsal cannot be run there, and a
+    response nobody weighed is a guess — `ai_valuation.mid_resolution`), and
+    only once the cheap question has said there is something the seat could
+    pay for (`ai_policy.holds_an_instant_it_could_pay_for`,
+    `holds_an_ability_it_could_activate`); both choosers rehearse what they
+    propose, and the engine asks this dozens of times a turn.
+    """
+    window = _instant_speed_window(game, seat)
+    if window is None or mid_resolution(game):
+        return False
+    report.priority_offers += 1
+    action = None
+    if holds_an_instant_it_could_pay_for(game, seat):
+        report.priority_offers_weighed += 1
+        action = choose_combat_instant_cast_action(game, seat)
+    if action is None:
+        # No spell worth casting: an ability, then (a regeneration shield in
+        # front of a burn spell, a ping in the opponent's end step), asked
+        # the same cheap question first.
+        if not holds_an_ability_it_could_activate(game, seat):
+            return False
+        activation = choose_instant_speed_activation(game, seat)
+        if activation is None:
+            return False
+        return _activate_at_priority(game, seat, activation, window, report, game_index, turn)
+    answering = game.stack[-1].card.name if game.stack else None
+    in_combat = game.current_turn_phase == "combat"
+    off_turn = seat != game.active_player_index
+    card, result = cast_chosen_instant(game, seat, action)
+    report.interaction_count += 1
+    when = _when_at_priority(game, answering, in_combat)
+    modes_named = _modes_named(card, action)
+    named = "".join(f" [mode {index}: {label}]" for index, label in modes_named)
+    report.log_lines.append(
+        f"G{game_index} T{turn} {game.players[seat].name} cast {card.name} "
+        f"-> {result.details} [{when}]{named}{_zone_named(action)}"
+    )
+    if not result.supported:
+        report.refused_instant_casts[f"{card.name}: {result.details}"] += 1
+        return False
+    report.casts_in_response += answering is not None
+    report.casts_in_combat += in_combat
+    report.casts_on_opponents_turn += off_turn
+    report.modal_casts.update(index for index, _label in modes_named)
+    if action.from_zone != "hand":
+        report.casts_from_zones[action.from_zone] += 1
+    return True
+
+
+def _when_at_priority(game: Game, answering: str | None, in_combat: bool) -> str:
+    """The bracket a priority action's log line ends with: what it answered,
+    or the step it was taken in."""
+    if answering is not None:
+        return f"in response to {answering}"
+    if in_combat:
+        return f"in the {game.current_step.replace('_', ' ')} step"
+    return "in the end step"
+
+
+def _activate_at_priority(
+    game: Game, seat: int, action, window: str, report: SimulationReport,
+    game_index: int, turn: int,
+) -> bool:
+    """Carry out `ai_policy.choose_instant_speed_activation`'s choice and
+    record it: True when the ability went on the stack."""
+    answering = game.stack[-1].card.name if game.stack else None
+    in_combat = game.current_turn_phase == "combat"
+    result = activate_chosen_ability(game, seat, action)
+    report.interaction_count += 1
+    report.log_lines.append(
+        f"G{game_index} T{turn} {game.players[seat].name} "
+        f"activate {action.permanent_name} -> {result.details} "
+        f"[{_when_at_priority(game, answering, in_combat)}]"
+    )
+    if not result.supported:
+        report.refused_instant_activations[
+            f"{action.permanent_name}: {result.details}"
+        ] += 1
+        return False
+    report.activations_at_instant_speed[window] += 1
+    return True
 
 
 def run_ai_simulation(
@@ -1279,6 +1481,14 @@ def run_ai_simulation(
             players=[p1, p2], enforce_mana_costs=True,
             prompt_driver=_resolve_pending_choices,
         )
+        # `priority_driver` is the eighth: priority given where the engine
+        # gives it (CR 117.3-117.4) — before each object resolves and as each
+        # step's window closes — and answered by the chooser the web AI seat
+        # answers with. Until it existed the window was "both players pass",
+        # so no instant had ever been cast in a simulated game anywhere but its
+        # caster's own main phase. See `SimulationReport.casts_in_response`.
+        clock = [1]
+        game.priority_driver = _priority_answerer(game, report, game_index, clock)
         starting_player = game.select_starting_player()
         game.deal_opening_hands(starting_player)
         for i in range(len(game.players)):
@@ -1301,6 +1511,7 @@ def run_ai_simulation(
         # turn is one of them, so a game with Time Walk in it still ends.
         for half_turn in range(2 * max_turns):
             turn = half_turn // 2 + 1
+            clock[0] = turn
             # **Whose turn comes next is `Game.start_next_turn`'s answer.**
             # This read ``for active in (0, 1)``, the last piece of the turn
             # structure the loop still decided for itself, and so no simulated

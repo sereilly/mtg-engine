@@ -516,8 +516,19 @@ def test_the_executors_all_make_the_whole_announcement():
     exists to stop."""
     root = Path(__file__).resolve().parents[2]
     found = 0
-    for relative in ("engine/ai_simulator.py", "web/game_flow.py"):
-        tree = ast.parse((root / relative).read_text(encoding="utf-8"))
+    # …and the instant-speed executor both of them share
+    # (`ai_policy.cast_chosen_instant`, round 4): the web AI seat's answer to
+    # priority moved there, and the simulator's has called it since it had one.
+    policy = ast.parse((root / "engine/ai_policy.py").read_text(encoding="utf-8"))
+    shared = next(
+        node for node in ast.walk(policy)
+        if isinstance(node, ast.FunctionDef) and node.name == "cast_chosen_instant"
+    )
+    trees = [
+        (relative, ast.parse((root / relative).read_text(encoding="utf-8")))
+        for relative in ("engine/ai_simulator.py", "web/game_flow.py")
+    ] + [("engine/ai_policy.py::cast_chosen_instant", shared)]
+    for relative, tree in trees:
         for node in ast.walk(tree):
             if not (
                 isinstance(node, ast.Call)

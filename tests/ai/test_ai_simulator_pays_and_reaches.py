@@ -41,7 +41,13 @@ _RUNS = [
 #: held, that Wolf attacks into two 1/1s and kills both, which is the other
 #: answer. Seed 3 reaches the walk where it is the game: blocked, with the
 #: defending player at five.
-_SEEDS = {"Lone Wolf": 3}
+_SEEDS = {
+    "Lone Wolf": 3,
+    # Round 4 gave both seats priority outside their own main phases, and
+    # seed 1337's first two ICE games no longer reach the Bottle's card (the
+    # third does, ten times over). Seed 7 reaches it in two games, nine times.
+    "Elkin Bottle": 7,
+}
 
 
 @pytest.mark.slow

@@ -225,7 +225,18 @@ class CleanupStepMixin:
             if clear_turn_mana_spending(player):
                 self._refresh_mana_spending()
             player.prevent_one_damage_emblems = []
-            for permanent in self.controlled_by(player):
+            # **Phased-out permanents too.** CR 514.2 names them — "all damage
+            # marked on permanents (including phased-out permanents) is
+            # removed and all 'until end of turn' … effects end" — and
+            # CR 702.26f says what that means for them: an effect that expires
+            # while its permanent is phased out no longer affects it once it
+            # phases in. This walked the battlefield alone, so a Giant Growth
+            # on a creature Reality Ripple then phased out came back with its
+            # +3/+3 for the whole of its controller's next turn (and the AI,
+            # rehearsing the engine faithfully, priced a trample grant in
+            # response to the Ripple as a lasting one).
+            phased_out = list(player.phased_out)
+            for permanent in [*self.controlled_by(player), *phased_out]:
                 permanent.damage_marked = 0
                 clear_shields(permanent)
                 clear_redirects(permanent)
@@ -322,7 +333,11 @@ class CleanupStepMixin:
                     # just been dropped, so control is lost exactly here. The
                     # marker is cleared with it — the ability triggers once, for
                     # the change that armed it.
-                    if permanent.metadata.pop(TAP_WHEN_CONTROL_LOST, False):
+                    if permanent.metadata.pop(TAP_WHEN_CONTROL_LOST, False) and not any(
+                        permanent is out for out in phased_out
+                    ):
+                        # …but a phased-out permanent "can't affect or be
+                        # affected by anything else in the game" (CR 702.26b).
                         self.become_tapped(permanent)
         # A control change that ended is a change to who controls what, so the
         # battlefield projection is rebuilt — and then, **whatever ended**,

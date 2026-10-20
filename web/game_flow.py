@@ -17,6 +17,7 @@ from engine.ai_combat import declare_ai_blockers
 
 from engine.ai_policy import (
     cast_announcement,
+    cast_chosen_instant,
     choose_activation_action,
     choose_foreign_activation_action,
     choose_hand_activation_action,
@@ -237,22 +238,17 @@ def _ai_respond_to_priority(session: Session, seat: int) -> str | None:
 
     instant_action = choose_combat_instant_cast_action(game, seat)
     if instant_action is not None:
-        # Out of the zone the action names (`zone_being_cast_from`): the hand,
-        # or a graveyard holding a flashback instant.
-        card_to_cast = spell_being_cast(
-            zone_being_cast_from(game, seat, instant_action), instant_action,
-        )
-        instant_action = tap_planned_lands(game, seat, instant_action)
-        # The whole announcement (`cast_announcement`, as in `_ai_step`): the
-        # chosen permanent — a spell whose handler has no board scan (Sivvi's
-        # Valor) resolved doing nothing while only the seat was forwarded —
-        # the division (CR 601.2d; dropped, the cast is refused and the seat
-        # offers the same instant every combat) and the mode (CR 601.2b: this
-        # is the one window in which a mode that counters a spell can be
-        # announced at all).
-        result = game.queue_from_hand(
-            seat, card_to_cast.name, **cast_announcement(instant_action),
-        )
+        # Through the executor the AI simulator's answer to priority shares
+        # (`engine.ai_policy.cast_chosen_instant`): out of the zone the action
+        # names (the hand, or a graveyard holding a flashback instant), paid
+        # for, and the whole announcement (`cast_announcement`, as in
+        # `_ai_step`) — the chosen permanent (a spell whose handler has no
+        # board scan, Sivvi's Valor, resolved doing nothing while only the
+        # seat was forwarded), the division (CR 601.2d; dropped, the cast is
+        # refused and the seat offers the same instant every combat) and the
+        # mode (CR 601.2b: this is the one window in which a mode that
+        # counters a spell can be announced at all) — left on the stack.
+        _card, result = cast_chosen_instant(game, seat, instant_action)
         if result.supported:
             game.note_priority_action_taken(seat)
 

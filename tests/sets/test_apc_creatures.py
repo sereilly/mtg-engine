@@ -1326,9 +1326,12 @@ def test_w1g3_the_ai_plays_recruiters_through_whole_games():
     )
     assert report.games_completed == 4
     lines = [line.strip() for line in report.log_lines]
+    # The recruiters that **entered**, not the casts: "cast … -> resolved" is
+    # the cast call returning, and since round 4 the other seat can answer it
+    # (in this seed one of the eight casts is countered, and has no sort).
     casts = [
         line for line in lines
-        if any(f" cast {name} -> resolved" in line for name in names)
+        if any(line.endswith(f" put {name} onto battlefield") for name in names)
     ]
     assert casts, "no recruiter was cast, so the run proves nothing"
     sorts = 0
