@@ -11,9 +11,10 @@ uvicorn==0.47.0
 httpx==0.28.1
 pytest==9.0.3
 
-# Local parallel runs only: `python -m pytest -n auto` for the merge-gate loop.
-# Deliberately NOT in pytest.ini's addopts — CI's timed run must stay serial or
-# the suite-time BASELINE/BUDGET readings in .github/workflows/ci.yml lose
-# their meaning.
+# Parallel runs: the local merge-gate loop (`-n 8` on the workstation), and
+# CI's timed shards, each of which runs `-n 4 --dist worksteal` on the
+# runner's four cores (.github/workflows/ci.yml). Deliberately NOT in
+# pytest.ini's addopts: the worker count is part of what a shard's
+# BASELINE/BUDGET reading means, so it is stated where that reading is taken.
 pytest-xdist==3.8.0
 execnet==2.1.2
