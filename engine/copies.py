@@ -57,9 +57,16 @@ import re
 from typing import TYPE_CHECKING, Iterable, Mapping
 
 from .continuous import next_timestamp
+from .late_modules import LateModules
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .models import CardDefinition, Permanent
+
+# ``zone_copies`` reaches the grammar's vocabulary and loads long after this
+# module, which ``models`` imports: read through a binding made on first use
+# (``engine/late_modules.py``), since ``copiable_card`` sits under every
+# ``effective_card`` read.
+_late = LateModules(__package__)
 
 # Key under which a permanent's layer-1 contributions live.
 COPY_EFFECTS = "copy_effects"
@@ -312,10 +319,8 @@ def _derived_entries(permanent: "Permanent") -> list[dict]:
     records = permanent.metadata.get(DERIVED_COPY_SOURCES)
     if not records:
         return []
-    # Imported here rather than at module scope: ``zone_copies`` reaches the
-    # grammar's vocabulary, and this module is imported by ``models``.
-    from .zone_copies import copied_card_for
-    from .zone_positions import zone_cards
+    copied_card_for = _late.zone_copies.copied_card_for
+    zone_cards = _late.zone_positions.zone_cards
 
     entries: list[dict] = []
     for record in records:

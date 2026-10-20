@@ -60,6 +60,18 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+# ``auras``, ``grammar`` and ``subject_filters`` have finished loading before
+# this module starts in the package's order and none of them imports it, so
+# these move nothing; they were function-local imports run on every target
+# check. ``oracle`` is still loading when this module is (it imports this
+# one), so it is read through ``_late`` (``engine/late_modules.py``).
+from .auras import auras_attached_to
+from .grammar import subject_filter_payload
+from .late_modules import LateModules
+from .subject_filters import subject_matches
+
+_late = LateModules(__package__)
+
 #: The subject a clause is printed about: the permanent carrying the line, or
 #: the one an Aura carrying it is attached to. Named so a caller does not have
 #: to know which kind of card it is reading.
@@ -275,8 +287,6 @@ def board_target_immunities(line: str) -> tuple[BoardTargetImmunity, ...]:
     protection would cover a strictly larger set than the card prints — which
     for an untargetability is a board nothing can ever remove.
     """
-    from .grammar import subject_filter_payload
-
     # Reduced exactly as ``_clauses`` reduces its input, so the two readers of
     # one printed line cannot disagree about what the line says.
     match = _BOARD_TARGET_IMMUNITY.match(
@@ -349,8 +359,6 @@ def board_target_immunity_classes(
     controlling the *printing* permanent (CR 109.5) and ``source`` is that
     permanent.
     """
-    from .subject_filters import subject_matches
-
     classes: set[str] = set()
     for seat, source in game.permanents_with_controller():
         for line in _lines_of(source.effective_card):
@@ -603,10 +611,9 @@ def _lines_of(card) -> list[str]:
     compiles supported and then protects nobody, which is what the first run of
     this round's probe showed.
     """
-    from .oracle import _restriction_line
-
+    restriction_line = _late.oracle._restriction_line
     return [
-        _restriction_line(line, card.name)
+        restriction_line(line, card.name)
         for line in (card.oracle_text or "").splitlines()
     ]
 
@@ -624,8 +631,6 @@ def printed_about(permanent, reader):
     asked what it says now (CR 613 layers 1 and 3), and read at the moment a
     target is chosen, so the immunity ends when the Aura does.
     """
-    from .auras import auras_attached_to
-
     for line in _lines_of(permanent.effective_card):
         for found in reader(line):
             if found.subject == SELF_SUBJECT:
@@ -742,8 +747,6 @@ def cannot_be_enchanted(permanent, *, by_aura=None) -> bool:
     is the reading a bare "can't be enchanted" would give — and the CR 704.5m
     sweep would then act on it every turn.
     """
-    from .auras import auras_attached_to
-
     if any(
         immunity.subject == SELF_SUBJECT
         for line in _lines_of(permanent.effective_card)
