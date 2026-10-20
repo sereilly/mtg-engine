@@ -256,6 +256,13 @@ def test_every_shortcut_answer_on_the_board_is_the_full_one(by_name, monkeypatch
         fast_paths.CHECKED["computed_types"] + fast_paths.CHECKED["computed_supertypes"]
         >= len(untyped) * 5
     )
+    # The line an Aura's line-derived keyword grant turns into is kept per text
+    # (Agility's flanking, on the enchanted Bears, which the board then strikes
+    # off them again), and every kept answer was read again here.
+    assert fast_paths.CHECKED["aura_granted_line_derived_lines"] >= len(ACCESSORS) - 1
+    from engine.auras import aura_granted_line_derived_lines
+
+    assert aura_granted_line_derived_lines(by_name["Agility"].oracle_text) == ("Flanking",)
 
 
 def test_the_checking_mode_names_a_channel_left_out(by_name, monkeypatch):

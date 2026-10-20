@@ -31,6 +31,7 @@ from __future__ import annotations
 import re
 from functools import lru_cache
 
+from . import fast_paths
 from .late_modules import LateModules
 
 # Modules loaded after this one, read on every recompute and every
@@ -2382,7 +2383,29 @@ def aura_granted_line_derived_lines(oracle_text: str) -> tuple[str, ...]:
 
     Capitalised because it is folded into the permanent's *printed* rules text,
     which the UI shows; the compiler lowercases it again.
+
+    **Read once per text.** ``Permanent.effective_card`` asks this of every
+    Aura on every read of an enchanted permanent — 282,000 times in two
+    simulated Mirage games, nearly all for the same few texts — and the
+    answer is a function of the text and the keyword registry alone, so it
+    is kept per text. Nothing about the Aura or the board reaches it: which
+    host it is on, and whether it still is, are the caller's to ask on every
+    read, and are. Under ``engine/fast_paths.py``'s checking mode every kept
+    answer is read again and compared.
     """
+    lines = _line_derived_lines_of(oracle_text)
+    if fast_paths.CHECKING:
+        fresh = _line_derived_lines_of.__wrapped__(oracle_text)
+        fast_paths.checked(
+            "aura_granted_line_derived_lines", fresh == lines,
+            lambda: f"{oracle_text!r}: kept {lines}, read {fresh}",
+        )
+    return lines
+
+
+@lru_cache(maxsize=None)
+def _line_derived_lines_of(oracle_text: str) -> tuple[str, ...]:
+    """:func:`aura_granted_line_derived_lines`, read off the text."""
     keywords = _late.keywords
 
     return tuple(

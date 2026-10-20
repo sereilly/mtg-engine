@@ -171,15 +171,11 @@ class CardDefinition:
         a self-reference (``engine/self_reference.py``), and a token or a test
         fixture with no supertype answers no without anyone remembering to.
         """
-        return "legendary" in self.type_line.lower()
+        return _legendary_line(self.type_line)
 
     @property
     def primary_type(self) -> str:
-        lowered = self.type_line.lower()
-        for known in ("land", "creature", "artifact", "enchantment", "planeswalker", "instant", "sorcery"):
-            if known in lowered:
-                return known
-        return self.type_line.split(" ")[0].strip().lower()
+        return _primary_type_of(self.type_line)
 
     @property
     def has_flash(self) -> bool:
@@ -246,6 +242,23 @@ class CardDefinition:
     def original_printing(self) -> str:
         """Set code of this card's earliest loaded printing."""
         return self.printings[0] if self.printings else self.set_code
+
+
+# Both read once per distinct type line: ``compile_card_oracle`` asks each of
+# them on every call (1.9 million calls in two simulated Mirage games), and
+# each is a function of the printed line and nothing else.
+@functools.lru_cache(maxsize=None)
+def _legendary_line(type_line: str) -> bool:
+    return "legendary" in type_line.lower()
+
+
+@functools.lru_cache(maxsize=None)
+def _primary_type_of(type_line: str) -> str:
+    lowered = type_line.lower()
+    for known in ("land", "creature", "artifact", "enchantment", "planeswalker", "instant", "sorcery"):
+        if known in lowered:
+            return known
+    return type_line.split(" ")[0].strip().lower()
 
 
 def _with_granted_abilities(
