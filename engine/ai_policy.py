@@ -3568,11 +3568,13 @@ def activate_chosen_ability(game: Game, seat: int, action: ActivationAction):
 
 def holds_an_ability_it_could_activate(game: Game, player_index: int) -> bool:
     """Whether `choose_activation_action` has anything to look at: an
-    untapped, non-land permanent *player_index* controls that is not
-    summoning sick, whose first usable ability is not a mana ability — the
-    chooser's own first gates, asked before it is."""
+    untapped permanent *player_index* controls that is not summoning sick,
+    whose first usable ability is not a mana ability — the chooser's own first
+    gates, asked before it is. (The chooser also passes over lands; asked
+    here, a land whose first ability is not a mana ability only sends the
+    question on to it.)"""
     for permanent in game.controlled_by(player_index):
-        if permanent.tapped or permanent.card.primary_type == "land":
+        if permanent.tapped:
             continue
         if game._is_summoning_sick(permanent):
             continue
