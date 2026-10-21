@@ -27,13 +27,17 @@ A loss keeps its amounts here. Every counted branch of ``_lower_lose_life``
 names the losing seat as it counts -- whose life is halved, whose battlefield,
 whose graveyard -- so there the seat and the size are one reading, not two.
 
-**No parse-side mirror**, and no single module to mirror: a gain and a loss are
-each one branch of the verb table in ``effects/characteristics.py``
-(``_parse_gains``, ``_parse_loses``), the exchange and the set are sentences in
-``effects/game.py``, and a payment is a price ``prices.py`` reads. Three parse
-homes for one lowering family, asymmetric for the reason ``tokens``, ``zones``,
-``types``, ``destruction`` and ``counter_removal`` already record: the guard
-fired on the lowering.
+**No parse-side family**, and no single module to mirror: the exchange and the
+set are sentences in ``effects/game.py``, a payment is a price ``prices.py``
+reads, and a gain and a loss are read by ``effects/_life.py`` — this module's
+name on the parse side, but a *floor*, pre-split out of
+``effects/characteristics.py`` at the Phase 0 before Torment. "Gains" and
+"loses" are each one production there (``_parse_gains``, ``_parse_loses``)
+whose verb is read before a life total is the question, and a family may not
+call another, so they ask the floor where their life arms used to sit. Three
+parse homes for one lowering family, asymmetric for the reason ``tokens``,
+``zones``, ``types``, ``destruction`` and ``counter_removal`` already record:
+the guard fired on the lowering first.
 """
 
 import dataclasses

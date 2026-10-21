@@ -1,39 +1,52 @@
-"""What a permanent *is*: P/T, keywords, colour, printed text, counters.
+"""What a permanent *is*: its power and toughness, and the abilities it gains,
+has and loses.
 
-The `gets`/`gains`/`loses`/`has` family (CR 613 layers 6 and 7), base-P/T
-setting, colour changes, the printed-text swaps of Sleight of Mind and Magical
-Hack, and +1/+1-style counters including the "for each creature that died"
-repetition.
+The `gets`/`gains`/`loses`/`has` verbs (CR 613 layers 6 and 7): a pump and what
+a sentence joins to it, a keyword or a quoted ability granted or taken away
+(with the choice CR 608.2d announces when the list says "or"), "loses all
+abilities", "has base power …" — which ``effects/base_pt.py`` leaves here
+because these verbs branch into it mid-sentence — and the doubling of power
+and the switching of power and toughness.
 
-Counters are here rather than with the board because what a counter does is
-change a characteristic; where it sits is incidental.
+This docstring used to list colour changes, the printed-text swaps and
+counters as well, and base-P/T setting without the qualification. Each left
+at a size guard: counters for ``effects/counters.py``, the `becomes` verb's
+types and colours for ``effects/types.py``, the text swaps for
+``effects/text_changes.py``, the imperative base-P/T rewrites for
+``effects/base_pt.py``.
+
+**A player's life total left at the Phase 0 before Torment**, 51 lines under
+the guard, for the floor ``effects/_life.py``: the gain arm of ``_parse_gains``
+and the three loss arms of ``_parse_loses``, which call it where those arms sat.
+A floor and not a family because the verb is read here first, and a family may
+not call another. It was the largest thing in this module that was not its
+subject and the arm that grew most since the last split; that docstring has the
+numbers.
+
+What stays that is not a characteristic is what shares a verb with one and
+is a single arm of it, gated on its subject or its words: a player who "gains
+control of" something, "gets a poison counter" or "loses all poison counters"
+(CR 122.1), and "loses the game" (CR 104.3e).
 """
 
 import dataclasses
 
 from .. import ast
-from ..amounts import accept_counters_on_source, accept_fraction_head, accept_rounding, expect_pt, parse_amount, parse_equal_to
-from ..bounds import accept_life_gain_cap
-from ..cost_records import accept_counters_removed_for_cost
-from ..records import (_parse_for_each_this_way,
-                       scaled_by_recorded_count,
-                      accept_plus_per_cost_paid,
-                      parse_for_each_discarded_this_way,
-                      parse_for_each_milled_this_way,
-                      parse_for_each_sacrificed_this_way)
+from ..amounts import expect_pt, parse_amount
+from ..records import _parse_for_each_this_way, parse_for_each_milled_this_way
 
 from ..errors import GrammarError
 from ..lexer import PT, PUNCT, QUOTE, SELF, tokenize
-from ..distinct import parse_counted_objects
 from ..nouns import parse_object_filter
-from ..references import parse_recipient, parse_target_spec
+from ..references import parse_recipient
 from ..stream import TokenStream
 
 from ..durations import _parse_duration
 from ..phrases import (_expect_counter_kind, _parse_can_attack_as_though,
-                       _parse_for_each, _parse_keywords,
-                       _parse_per_each_objects, parse_keyword_list)
+                       _parse_keywords, _parse_per_each_objects,
+                       parse_keyword_list)
 from ..where_x import parse_where_x_definition
+from ._life import accept_life_gain, accept_life_loss
 
 
 def _parse_gets(
@@ -258,139 +271,15 @@ def _parse_gains(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
                 return ast.GainControl(what, "indefinite", gained_by=subject)
         stream.reset(control_mark)
 
-    # "you gain 3 life" / "you gain life equal to the damage dealt"
-    mark = stream.mark()
-    if stream.at_word("life"):
-        stream.advance()
-        amount = parse_equal_to(stream)
-        if amount is None:
-            stream.reset(mark)
-        else:
-            player = subject if isinstance(subject, ast.PlayerRef) else ast.PlayerRef("you")
-            # "…, but not more life than the player's life total before the
-            # damage was dealt, …" (Drain Life, Soul Burn). Read here rather
-            # than folded as a rider by the sentence layer because it is not a
-            # separate effect: it is part of how much life this gain is, and a
-            # rider that failed to attach would leave the gain uncapped —
-            # strictly better than the printed card.
-            return ast.GainLife(player, amount, capped_by=accept_life_gain_cap(stream))
-    else:
-        try:
-            amount = parse_amount(stream)
-            if stream.accept_word("life"):
-                player = subject if isinstance(subject, ast.PlayerRef) else ast.PlayerRef("you")
-                # "…for each creature you control with flying" (Aven
-                # Gagglemaster) — recorded rather than consumed-and-dropped,
-                # mirroring the loses-life multiplier.
-                #
-                # The *history* clause is read first: "for each creature that
-                # died this turn" (Canopy Stalker) counts exactly the creatures
-                # the battlefield no longer holds, and the board reading of the
-                # same words counts the opposite set. The noun parser consumes
-                # "creature" and stops, so without this the trailing words were
-                # unconsumed and the line failed loudly — which was right, and
-                # is why the ordering matters rather than the fallback.
-                per_each: object | None = _parse_for_each(stream)
-                # "…you gain 1 life **for each card exiled this way**."
-                # (Rysorian Badger.) A *count* an earlier step of this same
-                # effect recorded, not a set the board holds — so it replaces
-                # the gain's number instead of multiplying it, exactly as the
-                # counter placement one family over treats the same clause.
-                #
-                # Read after the history clause above, which declines without
-                # consuming. The printed number is a **rate**: "gain 1 life for
-                # each card exiled this way" (Rysorian Badger) is the record
-                # itself, "**gain 2 life** for each enchantment destroyed this
-                # way" (Multani's Decree) is twice it, and so is "You gain **2**
-                # life for each card revealed this way" (Jasmine Seer, Scent of
-                # Jasmine). All three go through
-                # ``records.scaled_by_recorded_count``, the reader the counter
-                # family one file over already uses for the same clause — so the
-                # two effects cannot come to read one printed sentence as two
-                # numbers, and a printed 1 still folds away to the bare record
-                # rather than to ``Times(1, …)``.
-                #
-                # This refused a printed 2 outright until those cards, on the
-                # reading that ``ThatMuch`` cannot carry a multiplication. True
-                # of that node and beside the point: ``ast.Times`` is the node
-                # for one and the shared reader had been minting it for the
-                # counter spelling of this very clause since Mind Maggots. Two
-                # groups of one wave found it independently and wrote the same
-                # three lines of code; refusing had kept it loud rather than
-                # wrong, which is why the fix is the multiplier and not a wider
-                # gate.
-                if per_each is None:
-                    counted = _parse_for_each_this_way(stream)
-                    if counted is not None:
-                        return ast.GainLife(
-                            player, scaled_by_recorded_count(amount, counted, stream)
-                        )
-                if per_each is None:
-                    # "You gain 2 life **for each permanent sacrificed this
-                    # way**." (Renounce.) A count of what the sentence in front
-                    # of this one took off the battlefield, which no reading of
-                    # a board or of ``_THIS_WAY_COUNTS`` can answer: "any
-                    # number" prints no count, and the record holds the *cards*
-                    # rather than a number — which is exactly why that table
-                    # declines the phrase and this production owns it.
-                    #
-                    # Read **before** the plain noun-phrase fallback below for
-                    # the reason the draw one file over states: that reading
-                    # consumes "permanent" and leaves "sacrificed this way" as
-                    # unconsumed text, having already claimed the clause for a
-                    # count of the whole battlefield — a strictly larger number
-                    # than the card prints, and the failure that took this line
-                    # down.
-                    per_each = parse_for_each_sacrificed_this_way(
-                        stream, parse_object_filter
-                    )
-                if per_each is None:
-                    # "You gain 3 life **for each land card discarded this
-                    # way**." (Gerrard's Verdict.) The same shape one record
-                    # over, read here for the reason the reader above is: the
-                    # noun fallback below would take "land card" for a count of
-                    # the battlefield and strand the participle.
-                    per_each = parse_for_each_discarded_this_way(
-                        stream, parse_object_filter
-                    )
-                if per_each is None:
-                    for_each_mark = stream.mark()
-                    if stream.accept_phrase("for", "each"):
-                        # "…**for each credit counter on this creature**"
-                        # (Icatian Moneychanger). A count of the source's own
-                        # counters rather than a set of objects, so it is read
-                        # by the one production that reads that phrase
-                        # (`accept_counters_on_source`) and before the noun
-                        # parser, which refuses a counter word as an unknown
-                        # noun and would take the whole line down with it.
-                        per_each = accept_counters_on_source(stream)
-                        if per_each is None:
-                            # "You gain 2 life **for each elixir counter
-                            # removed this way**." (Essence Bottle.) The
-                            # counters the ability's own cost took off, which
-                            # after CR 601.2h is the complement of what the
-                            # reader above counts: by resolution the artifact
-                            # holds none, so "on this artifact" would answer
-                            # zero on every activation. One reader for the
-                            # phrase, shared with the damage and mana families
-                            # that print it (`records`).
-                            per_each = accept_counters_removed_for_cost(stream)
-                        if per_each is None:
-                            try:
-                                per_each = parse_counted_objects(stream)
-                            except GrammarError:
-                                stream.reset(for_each_mark)
-                if per_each is None:
-                    # "…**plus an additional 3 life for each additional {1}{G}
-                    # you paid**" (Taste of Paradise) — one gain whose amount
-                    # scales with a CR 601.2b payment.
-                    scaled = accept_plus_per_cost_paid(stream, amount, "life")
-                    if scaled is not None:
-                        return ast.GainLife(player, scaled)
-                return ast.GainLife(player, amount, per_each=per_each)
-        except GrammarError:
-            pass
-        stream.reset(mark)
+    # "you gain 3 life" / "you gain life equal to the damage dealt" — CR
+    # 119.3's gain, read by the floor beside this module
+    # (``_life.accept_life_gain``) and asked exactly where its arm used to sit.
+    # A life total is a number a player has rather than a characteristic, and
+    # the "for each …" chain a set adds a reading to is there with it.
+    # Non-consuming on refusal, so every reading below sees the same tokens.
+    gained = accept_life_gain(stream, subject)
+    if gained is not None:
+        return gained
 
     # "…gains "Remove a matrix counter from this creature: Regenerate this
     # creature."" (Life Matrix.) CR 113.3: what a card grants in quotes is a
@@ -638,8 +527,9 @@ def _parse_loses(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
     stream.expect_word("loses", "lose")
     mark = stream.mark()
     # "loses the game" (CR 104.3e) before the life reading: "the" is not an
-    # amount, so the amount branch below rejects it anyway, but checking here
-    # keeps the two spellings of "lose" visibly separate.
+    # amount, so the amount reading ``_life.accept_life_loss`` makes below
+    # rejects it anyway, but checking here keeps the two spellings of "lose"
+    # visibly separate.
     if stream.accept_phrase("the", "game"):
         player = subject if isinstance(subject, ast.PlayerRef) else ast.PlayerRef("you")
         return ast.LoseGame(player)
@@ -659,87 +549,23 @@ def _parse_loses(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
         return ast.LoseAbilityText(
             subject, abilities, _parse_duration(stream), self_name=self_name
         )
-    # "loses **half their life**" (Peer into the Abyss). Read here rather than in
-    # `parse_amount`, because the trailing "life" is the *production's* word
-    # everywhere else ("loses 3 life") and here it belongs to the quantity —
-    # "half their life" is one amount, not a half followed by a life keyword. A
-    # quantity parser that consumed it would leave every other printing of this
-    # verb without its noun.
-    half_mark = stream.mark()
-    # "half" and "a third of" are one printed idea with two spellings, so the
-    # head is read by one function (`accept_fraction_head`) and the denominator
-    # rides the node. Pox's "loses a third of their life" is this branch with a
-    # 3 in it.
-    divisor = accept_fraction_head(stream)
-    if divisor is not None and stream.accept_word("their", "your", "his"):
-        stream.accept_phrase("or", "her")
-        if stream.accept_word("life"):
-            player = subject if isinstance(subject, ast.PlayerRef) else ast.PlayerRef("you")
-            return ast.LoseLife(
-                player,
-                ast.Half(
-                    ast.BoardCount("their_life"), accept_rounding(stream), divisor
-                ),
-            )
-    stream.reset(half_mark)
-    # "loses **life equal to its power**" (Death Watch, Lich, Illicit Auction).
-    # The mirror of the gain production's own first branch, in the word order
-    # this shape prints: "life" comes *before* the quantity, so the
-    # amount-then-noun reading below cannot see it — `parse_amount` refuses on
-    # the word "life", the whole production falls through to the keyword list,
-    # and the line dies on "expected a keyword ability" naming a word the
-    # sentence does not contain.
-    #
-    # One printed idea, two verbs. A gain and a loss of the same amount are the
-    # same clause with the sign flipped (CR 119.3), and reading it for one
-    # verb only is what made "you gain life equal to its toughness" legal and
-    # "its controller loses life equal to its power" not — on the two halves of
-    # a single printed sentence.
-    equal_mark = stream.mark()
-    if stream.at_word("life"):
-        stream.advance()
-        amount = parse_equal_to(stream)
-        if amount is None:
-            stream.reset(equal_mark)
-        else:
-            player = subject if isinstance(subject, ast.PlayerRef) else ast.PlayerRef("you")
-            return ast.LoseLife(player, amount)
-    try:
-        amount = parse_amount(stream)
-        if stream.accept_word("life"):
-            player = subject if isinstance(subject, ast.PlayerRef) else ast.PlayerRef("you")
-            # "loses 2 life for each creature card in their graveyard"
-            # (Liliana, Death Mage) — a multiplier over a count of objects,
-            # recorded rather than consumed-and-dropped.
-            #
-            # The *history* spellings are read first and through
-            # ``phrases._parse_for_each``, the reader the gain-life production
-            # already uses: "for each creature that died this way" (Reign of
-            # Terror) has a relative clause the bare noun phrase below stops in
-            # front of, so it used to leave "that died this way" as unconsumed
-            # text and take the whole line down. A second inline reader here is
-            # what made one printed idiom mean two things depending on the verb
-            # in front of it.
-            per_each: object | None = _parse_for_each(stream, allow_this_way=True)
-            if per_each is None:
-                for_each_mark = stream.mark()
-                if stream.accept_phrase("for", "each"):
-                    try:
-                        per_each = parse_counted_objects(stream)
-                    except GrammarError:
-                        stream.reset(for_each_mark)
-            return ast.LoseLife(player, amount, per_each=per_each)
-    except GrammarError:
-        pass
-    stream.reset(mark)
+    # "loses **half their life**", "loses **life equal to its power**", "loses
+    # 2 life for each …" — CR 119.3's loss, read by the floor beside this
+    # module (``_life.accept_life_loss``) for the reason the gain production
+    # above gives, and asked exactly where its three arms used to sit.
+    # Non-consuming on refusal, so every reading below sees the same tokens.
+    lost = accept_life_loss(stream, subject)
+    if lost is not None:
+        return lost
     # "Target player loses **all poison counters**." (Leeches.) The same removal
     # ``effects/counters.py`` reads as "remove all poison counters from target
     # player", in the word order this card prints — one node, so what a counter
     # removal *is* has one answer however the sentence is arranged and the
     # lowering behind it does not have to learn a second shape.
     #
-    # Read after the life branch, which has already refused on the missing word
-    # "life", and before the keyword list, which fails the whole line on
+    # Read after the life readings (``_life.accept_life_loss``), which have
+    # already refused on the missing word "life", and before the keyword
+    # list, which fails the whole line on
     # "poison" — which is exactly how Leeches refused. Non-consuming, so every
     # other "loses …" keeps the reading it has: "loses all abilities" gets as
     # far as the head noun and backtracks on the missing word "counter".

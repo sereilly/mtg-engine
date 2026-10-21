@@ -225,10 +225,10 @@ def _parse_discard(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
     # "discards **a third of the cards in their hand**" (Pox). The fraction's
     # noun is this production's own, so the head is read here and the quantity
     # built from the zone rather than handed to `parse_amount` — the same
-    # arrangement `_parse_loses` makes for "half their life", and for its
-    # reason: a quantity parser that swallowed "the cards in their hand" would
-    # leave this production without the noun every other printing of the verb
-    # ends on.
+    # arrangement `_life.accept_life_loss` makes for "half their life", and
+    # for its reason: a quantity parser that swallowed "the cards in their
+    # hand" would leave this production without the noun every other printing
+    # of the verb ends on.
     fraction_mark = stream.mark()
     divisor = accept_fraction_head(stream)
     if divisor is not None and stream.accept_word("the"):
