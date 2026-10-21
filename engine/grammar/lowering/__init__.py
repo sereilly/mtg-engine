@@ -148,12 +148,12 @@ from .keywords import (
 from .counter_removal import _lower_move_counter, _lower_remove_counter
 from ._counter_stores import _lower_player_gets_counters
 from .counters import _lower_put_counter
-from .sequences import (_fused_cost_repeated_destroys,
-                        _fused_tap_any_number_then_pump,
-                        _fused_tap_enchanted_then_counters,
-                        _fused_tap_then_bite,
-                        _fused_two_target_keyword_move,
-                        _fused_two_target_pump)
+from .fusions import (_fused_cost_repeated_destroys,
+                      _fused_tap_any_number_then_pump,
+                      _fused_tap_enchanted_then_counters,
+                      _fused_tap_then_bite,
+                      _fused_two_target_keyword_move,
+                      _fused_two_target_pump)
 from .loops import (
     _PER_DEATH_COUNTERS,
     _PER_DEATH_SUBJECT,

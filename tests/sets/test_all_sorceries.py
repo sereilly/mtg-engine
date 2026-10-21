@@ -698,7 +698,7 @@ def test_primitive_justice_is_one_announcement_sized_by_the_payment(set_pool):
     ``handlers/_common._one_choice``, which reads the *first* entry of the
     target list -- the card would compile supported and destroy one artifact
     three times, which is what ``_refuse_unfused_distinctness`` refused for. So
-    the clauses fuse (``lowering/destruction._fused_cost_repeated_destroys``),
+    the clauses fuse (``lowering/fusions._fused_cost_repeated_destroys``),
     the count travels as the *arithmetic* rather than as a number, and the
     printed "another" travels as ``distinct`` -- a relation between slots that
     no per-permanent filter could test.

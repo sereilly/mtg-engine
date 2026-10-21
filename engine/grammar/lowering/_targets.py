@@ -597,7 +597,8 @@ def _targets_payload(
 #: "for each additional {1}{R} you paid, destroy another target <noun>" one.
 #:
 #: Named here rather than in either family because both read it and families do
-#: not import each other. ``lowering/sequences.py`` had already written the
+#: not import each other. ``lowering/sequences.py``, the fused reader's home
+#: until it left for ``lowering/fusions.py``, had already written the
 #: sentence 'named once because two readings of "what may a list of destroy
 #: targets be narrowed by" is one reading too many' over its own copy --
 #: while ``lowering/destruction.py`` went on spelling the same six words inline,

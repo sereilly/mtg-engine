@@ -1571,6 +1571,20 @@ LOWERING_FAMILIES = [
      # Lowering-only, like `zones`, `library`, `mana` and `redirection`: the
      # parse half is 329 lines and crossed nothing.
      "exchanges",
+     # `fusions` split off `lowering/sequences.py` at Torment's Phase 0, 19
+     # lines under the guard and owned by no group. Its six fusers were there
+     # on that module's rule — "a fuser lives with the sequence it folds, not
+     # with the verb it folds" — and the rule was right about the verb and
+     # wrong about the file: `statement_dispatch`'s `Sequence` arm asks every
+     # fuser before `_lower_steps`, which runs only when all of them decline,
+     # so the composer and the fusers were two alternative lowerings of one
+     # node that neither called nor shared a helper with the other. The
+     # composer grows (54 lines since Stronghold, every one a sentence reading
+     # what the one in front of it did) and kept the name; the fusers had grown
+     # seven. Lowering-only for `loops`' reason: the guard fired on the
+     # lowerings, and `ast.Sequence` is one node the parse side builds without
+     # knowing whether it will fuse.
+     "fusions",
      # `colors` split off `lowering/types.py` at 1,010 lines, Apocalypse's
      # second wave — the round "target **spell or permanent**" stopped being
      # read as "target permanent" (Illusion, Blind Seer) and the colour

@@ -13,8 +13,9 @@ What is actually here is the CR 613 layer-7 **modification**: a pump (7c) in
 every printed spelling the pool has, a switch (7d), a power doubling — and
 `mark_text_modified`, CR 612's layer-3 rewrite, which is the one thing left that
 is not P/T. The fusers that fold a two-clause sentence whose *payoff* is a pump
-are not here: a fuser lives with the sequence it folds, which is
-`sequences.py`'s own rule and where its twins already were.
+are not here: a fuser lives with the sequence it folds, which was
+`sequences.py`'s rule when they left for their twins there, and is
+`fusions.py`'s since that module took all six at Torment's Phase 0.
 
 A continuous effect with no duration is refused here rather than lowered, and
 `_durationless_reason` in `_common` says why per subject: the refusal names
