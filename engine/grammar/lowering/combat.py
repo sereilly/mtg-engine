@@ -7,7 +7,7 @@ lowering can check it rather than assume it.
 
 from ...combat_permissions import ATTACKS_AS_THOUGH_NO_DEFENDER
 from ...oracle_types import CHOSEN_THIS_WAY_OBJECTS, OracleInstruction
-from ...subject_filters import untestable_filter_keys
+from ...subject_filters import OBJECT_ONLY_FILTER_KEYS, untestable_filter_keys
 from ...turn_state import THAT_PLAYERS_NEXT_TURN
 from .. import ast
 from ..errors import LoweringError
@@ -578,26 +578,22 @@ def _lower_combat_restriction(
             raise LoweringError(
                 "the blanket can't-block reads a plural subject", node=node
             )
-        filt = node.subject.filter
-        leftover = _restrictions_beyond(
-            filt, frozenset({"card_types", "with_keywords", "without_keywords"})
+        # "**Green creatures and white creatures** can't block this turn."
+        # (Flash of Defiance.) The noun phrase is the filter payload
+        # ``subject_matches`` tests, as the attack twin above has it — so a
+        # colour, a type or a keyword is one reader, not a list of fields the
+        # gate spells out. The entry is a record on the game with no observer
+        # and no source (the toll reader's footing), so only what the object
+        # alone answers is admitted: "creatures you control" refuses here
+        # rather than reaching every seat's creatures.
+        described = refuse_untestable(
+            _filter_payload(node.subject.filter),
+            refusal="the blocker gate cannot test this restriction",
+            node=node,
+            allowed=OBJECT_ONLY_FILTER_KEYS,
         )
-        if leftover:
-            raise LoweringError(
-                "the blocker gate cannot test this restriction: " + ", ".join(leftover),
-                node=node,
-            )
         return (
-            OracleInstruction(
-                "cant_block_until_eot", "",
-                {
-                    "filter": {
-                        "type_filter": filt.card_types[0] if filt.card_types else "creature",
-                        "with_keywords": list(filt.with_keywords),
-                        "without_keywords": list(filt.without_keywords),
-                    }
-                },
-            ),
+            OracleInstruction("cant_block_until_eot", "", {"filter": described}),
         )
     return (OracleInstruction(node.kind, "", dict(node.payload)),)
 
