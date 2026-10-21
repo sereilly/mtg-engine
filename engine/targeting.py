@@ -1610,6 +1610,12 @@ def _counter_spec(payload: dict) -> dict:
         # handler tests at resolution, so the picker offers exactly what the
         # counter would counter.
         spec["stack_card_types"] = list(card_types)
+    mana_value = payload.get("mana_value")
+    if mana_value:
+        # "Counter target spell **with mana value 3 or less**" (Liquify): the
+        # printed bound, handed to the enumeration that is both the
+        # announcement gate (CR 601.2c) and the resolution one (CR 608.2b).
+        spec["stack_mana_value"] = dict(mana_value)
     excluded_types = payload.get("excluded_types")
     if excluded_types:
         # Null Brooch: "target **noncreature** spell" — the complement of the

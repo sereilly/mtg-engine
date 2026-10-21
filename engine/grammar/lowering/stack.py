@@ -344,13 +344,22 @@ def _lower_counter_spell(
             payload["color_filter"] = filt.colors[0]
     if filt.mana_value is not None:
         # Spell Blast: "counter target spell with mana value X". The handler
-        # compares the X chosen on the cast against the target's mana value;
-        # that equality is the only mana-value question it can ask, so a fixed
-        # number or an inequality ("mana value 3 or less") has to refuse rather
-        # than counter regardless of cost.
-        if not is_mana_value_x(filt.mana_value):
+        # compares the X chosen on the cast against the target's mana value.
+        if is_mana_value_x(filt.mana_value):
+            payload["mv_equals_x"] = True
+        elif isinstance(filt.mana_value.value, ast.Fixed):
+            # "Counter target spell **with mana value 3 or less**." (Liquify.)
+            # A printed bound, in the ``{op, value}`` form every filter payload
+            # carries it in. The picker offers only a spell inside it and
+            # CR 608.2b re-asks the same enumeration at resolution, both
+            # against the spell's mana value *on the stack* (CR 202.3b: an X
+            # in its cost is the announced value, so a Fireball for 3 is a
+            # four), through ``targeting.stack_object_mana_value``.
+            payload["mana_value"] = {
+                "op": filt.mana_value.op, "value": int(filt.mana_value.value.value),
+            }
+        else:
             raise LoweringError("no handler for this mana-value restriction", node=node)
-        payload["mv_equals_x"] = True
     if filt.controller is not None:
         # "counter target artifact spell **you control**" (Goblin Artisans).
         # Whose spell it is, checked by the handler against the caster's seat —

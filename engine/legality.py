@@ -6864,6 +6864,18 @@ class LegalityMixin:
             if stack_excluded_types:
                 if _spell_is_one_of(item_card, stack_excluded_types):
                     continue
+            # "…spell **with mana value 3 or less**" (Liquify). The spell's
+            # mana value *as it is on the stack* (CR 202.3b: an X in its cost
+            # counts at the announced value), so a spell whose X makes it
+            # bigger is not offered and, re-asked here at CR 608.2b, is not
+            # countered.
+            stack_mana_value = spec.get("stack_mana_value")
+            if stack_mana_value:
+                from .handlers._common import _comparison_holds
+                from .targeting import stack_object_mana_value
+
+                if not _comparison_holds(stack_mana_value, stack_object_mana_value(item)):
+                    continue
             # "target instant or **Aura** spell" (Avoid Fate, Ring of
             # Immortals): the same cross-axis union the handler tests, asked
             # through the same reader, so the picker offers exactly what the

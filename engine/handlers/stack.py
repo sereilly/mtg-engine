@@ -1040,6 +1040,22 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
                     f"{card.name}: X={context.x_value} does not match {target.card.name}'s mana value {target_mv}, cannot counter"
                 )
                 return True, "resolved"
+        # "…with mana value 3 or less" (Liquify): the printed bound, asked of
+        # the spell's mana value on the stack. The picker and CR 608.2b ask it
+        # through the stack enumeration first; this is the handler's own
+        # reading for the path that reaches it without that gate (a copy, a
+        # retargeted object), as every narrowing above has one.
+        bound = instruction.payload.get("mana_value")
+        if bound:
+            from ..targeting import stack_object_mana_value
+            from ._common import _comparison_holds
+
+            target_mv = stack_object_mana_value(target)
+            if not _comparison_holds(bound, target_mv):
+                game.log.append(
+                    f"{card.name}: {target.card.name}'s mana value is {target_mv}, cannot counter"
+                )
+                return True, "resolved"
         # Power Sink: "Counter target spell unless its controller pays {X}." The
         # targeted spell's controller is asked to pay {X} (X chosen by Power Sink's
         # caster) to keep their spell. Rather than auto-paying, arm a pending mana
