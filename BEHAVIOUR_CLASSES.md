@@ -29,7 +29,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 6 | Craven Giant, Goblin Raider, Hulking Cyclops, Hulking Ogre, Ogre Taskmaster, Spineless Thug |
 | 6 | Divine Transformation, Feast of the Unicorn, Giant Strength, Hero's Resolve, **Holy Strength**, **Unholy Strength** |
 | 6 | Drowned, Metathran Zombie, Phyrexian Monitor, Restless Dead, Unworthy Dead, Walking Dead |
-| 6 | Fetid Horror, **Frozen Shade**, Hoar Shade, Looming Shade, Nantuko Shade, Primeval Shambler |
+| 6 | Fetid Horror, **Frozen Shade**, Hoar Shade, Looming Shade, **Nantuko Shade**, Primeval Shambler |
 | 5 | Adventurers' Guildhouse, Cathedral of Serra, Mountain Stronghold, Seafarer's Quay, Unholy Citadel |
 | 5 | Aerathi Berserker, Frost Giant, Hunding Gjornersen, Marhault Elsdragon, Wolverine Pack |
 | 5 | Angel of Retribution, Ekundu Griffin, Sabertooth Wyvern, Sky Spirit, Thunder Spirit |
@@ -145,7 +145,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | Elven Cache, **Regrowth** |
 | 2 | Elvish Bard, Taunting Elf |
 | 2 | Ember Beast, Mogg Flunkies |
-| 2 | Ephemeron, Skywing Aven |
+| 2 | Ephemeron, **Skywing Aven** |
 | 2 | Essence Flare, **Unstable Mutation** |
 | 2 | Execute, Slay |
 | 2 | Feral Instinct, Fevered Strength |
