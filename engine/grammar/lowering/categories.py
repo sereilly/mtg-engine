@@ -811,6 +811,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # different questions, and one switch must not be able to gate half of
     # either off.
     "choose_color": "chosen_colors",
+    # "Sacrifice this Aura: Target creature gains protection from **the chosen
+    # color** until end of turn." (Floating Shield.) The colour the source
+    # chose as it entered, copied into the slot `choose_color` writes: the
+    # same value, asked of a record rather than of a player.
+    "recall_chosen_color": "chosen_colors",
     # "That player chooses artifact, creature, land, or non-Aura enchantment."
     # (Teferi's Realm.) Beside `choose_color` and in its family: a sentence that
     # produces a value and no effect of its own, read back by the next sentence

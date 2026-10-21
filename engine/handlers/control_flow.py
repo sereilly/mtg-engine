@@ -3002,6 +3002,38 @@ def choose_color(game: Game, instruction: OracleInstruction, context: OracleExec
     return True, "resolved"
 
 
+@effect_handler("recall_chosen_color")
+def recall_chosen_color(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…protection from **the chosen color**" where no sentence of the effect
+    chose one: the colour the ability's source chose as it entered
+    (CR 614.1c), copied into the slot ``choose_color`` writes so the step
+    behind reads one record whichever way the colour came.
+
+    "Sacrifice this Aura: Target creature gains protection from the chosen
+    color until end of turn." (Floating Shield.) The Aura is sacrificed to pay
+    for the ability, so by resolution it is in a graveyard and the colour is
+    read off it **as it last existed** on the battlefield (CR 608.2h, 113.7a)
+    — the ``Permanent`` the activation recorded as its source, whose entry
+    record leaving the battlefield does not erase.
+
+    Written **empty** where the source has no record (it never entered, or
+    its text asks nothing as it enters), for ``choose_color``'s reason: the
+    reader behind must not find a colour an earlier resolution of the same
+    context chose, and protection from a colour nobody named is a protection
+    the card never gave.
+    """
+    from ..enter_effects import CHOSEN_COLOR_KEY
+
+    source = context.source_permanent
+    chosen = (getattr(source, "metadata", None) or {}).get(CHOSEN_COLOR_KEY)
+    context.results[CHOSEN_COLOR_THIS_WAY] = chosen or None
+    if not chosen:
+        game.log.append(
+            f"{getattr(context.card, 'name', 'An effect')}: its source chose no color"
+        )
+    return True, "resolved"
+
+
 def _offered_colors(game: Game, among: dict, seat: int, source) -> tuple[str, ...]:
     """The colours a narrowed "choose a color of <permanents>" offers *seat*.
 

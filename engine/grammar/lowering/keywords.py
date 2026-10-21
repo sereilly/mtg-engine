@@ -172,19 +172,19 @@ def _chosen_color_prelude(
     colour, so a standing record on it would be a second, staler answer.
 
     "The chosen color" asks nothing: it reads back what a "Choose a color."
-    sentence earlier in this effect recorded, so it is admitted only where one
-    did — read under any other sentence it would grant from a colour nobody in
-    this resolution was asked.
+    sentence earlier in this effect recorded. Where no sentence of the effect
+    chose one, it is the colour the ability's **source** chose as it entered
+    (CR 614.1c) — "Sacrifice this Aura: Target creature gains protection from
+    the chosen color until end of turn." (Floating Shield) — and the step in
+    front of the grant copies that record into the same scratchpad slot, read
+    off the source as it last existed (CR 608.2h, 113.7a): the Aura has been
+    sacrificed to pay for the ability by the time it resolves. That is the
+    reading ``lowering/mana.py`` gives "add one mana of the chosen color"
+    (Sol Grail) one family over. A card that chose nothing as it entered has
+    no record, and the grant then protects from nothing and says so;
+    ``tests/engine/test_recalled_entry_color.py`` holds every card compiling
+    the step to one that asks for a colour as it enters.
     """
-    if (
-        PROTECTION_FROM_THE_CHOSEN_COLOR in node.keywords
-        and CHOSEN_COLOR_THIS_WAY not in produced
-    ):
-        raise LoweringError(
-            "'the chosen color' reads a colour an earlier sentence of this "
-            "effect chose, and none did",
-            node=node,
-        )
     if (
         PROTECTION_FROM_EACH_OF_THAT_PERMANENTS_COLORS in node.keywords
         and CHOSEN_TARGET_PERMANENTS not in produced
@@ -200,6 +200,11 @@ def _chosen_color_prelude(
             "of this effect chose, and none did",
             node=node,
         )
+    if (
+        PROTECTION_FROM_THE_CHOSEN_COLOR in node.keywords
+        and CHOSEN_COLOR_THIS_WAY not in produced
+    ):
+        return (OracleInstruction("recall_chosen_color", "", {}),)
     if PROTECTION_FROM_CHOSEN_COLOR not in node.keywords:
         return ()
     return (OracleInstruction("choose_color", "", {"chooser": "you"}),)
