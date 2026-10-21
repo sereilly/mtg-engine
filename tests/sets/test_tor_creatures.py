@@ -82,7 +82,7 @@ def test_w1g1_basking_rootwalla_enters_free_and_pumps_only_once_a_turn(set_pool)
     assert game.activate_permanent_ability(0, "Basking Rootwalla").supported
     assert (walla.effective_power, walla.effective_toughness) == (3, 3)
     again = game.activate_permanent_ability(0, "Basking Rootwalla")
-    assert not again.supported
+    assert not again.supported and "only once each turn" in again.details
     assert (walla.effective_power, walla.effective_toughness) == (3, 3)
 
 
@@ -121,6 +121,43 @@ def test_w1g1_every_creature_discard_outlet_offers_the_madness_cast(set_pool, ou
     # The card the Search drew (Skywing Aven's own ability returns it to the
     # hand beside it).
     assert "Forest" in [c.name for c in game.players[0].hand], outlet
+
+
+def test_w1g1_pitchstone_wall_finds_no_madness_card_in_the_graveyard(set_pool):
+    """The meeting point with W1G5's Pitchstone Wall ("Whenever you discard a
+    card, you may sacrifice this creature. If you do, return the discarded card
+    from your graveyard to your hand.").
+
+    A madness card is discarded **into exile**, so it is not in the graveyard
+    the Wall's ability looks in: the madness trigger goes on the stack inside
+    the discard and the Wall's when the discard is announced, so the Wall's
+    resolves first and finds nothing (CR 400.7). Whatever the Wall's
+    controller then does, the card is cast or binned by madness and never
+    returned to the hand. (Had the madness trigger resolved first and been
+    declined, CR 400.7k would let the Wall find it — which is why the order is
+    asserted, not assumed.)
+
+    Skipped while the Wall is unsupported: it lands with W1G5, and the
+    integrator merges that branch first.
+    """
+    from engine.oracle import compile_card_oracle
+
+    tor, lea = set_pool("TOR"), set_pool("LEA")
+    if not compile_card_oracle(tor["Pitchstone Wall"]).supported:
+        _w1g1_pytest.skip("Pitchstone Wall lands with W1G5")
+    game = _w1g1_seat(
+        set_pool, ["Aquamoeba", "Pitchstone Wall", "Mountain"], ["Fiery Temper"],
+    )
+    assert game.activate_permanent_ability(0, "Aquamoeba", cost_hand_index=0).supported
+    assert "Fiery Temper" not in [c.name for c in game.players[0].hand]
+    log = game.log
+    exiled = next(i for i, line in enumerate(log) if "Fiery Temper into exile" in line)
+    offered = [
+        i for i, line in enumerate(log)
+        if "for its madness cost" in line and "Fiery Temper" in line
+    ]
+    assert offered and offered[0] > exiled
+
 
 # ==== end W1G1 ======================================================
 
