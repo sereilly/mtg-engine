@@ -207,6 +207,113 @@ def test_w1g5_devastating_dreams_asks_an_interactive_seat_which_lands(set_pool):
     assert [choice.player_index for choice in owed] == [1]
     assert game.stack, "the spell resolves only once the choice is made"
 
+
+def test_w1g5_mind_sludge_discards_one_card_per_swamp_its_caster_controls(set_pool):
+    """"…a card for each Swamp **you** control": the caster's Swamps, counted
+    as the spell resolves — the target's own Swamps are not counted."""
+    lea = set_pool("LEA")
+    sludge = set_pool("TOR")["Mind Sludge"]
+    swamp = lea["Swamp"]
+    game = _w1g5_game(sludge, bf0=[swamp, swamp, swamp, lea["Forest"]], bf1=[swamp, swamp])
+    game.players[1].hand = [
+        lea["Lightning Bolt"], lea["Grizzly Bears"], lea["Island"], lea["Forest"], swamp,
+    ]
+
+    result = game.cast_from_hand(0, sludge.name, target_player_index=1)
+    _w1g5_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+
+    assert result.supported, result.details
+    assert len(game.players[1].hand) == 2
+    assert len(game.players[1].graveyard) == 3
+    assert "B must choose 3 card(s) to discard" in game.log
+
+
+def test_w1g5_mind_sludge_asks_a_person_for_as_many_cards_as_swamps(set_pool):
+    """The discarding player chooses (the standing discard prompt), sized by
+    the count — two Swamps, two cards."""
+    lea = set_pool("LEA")
+    sludge = set_pool("TOR")["Mind Sludge"]
+    game = _w1g5_game(sludge, bf0=[lea["Swamp"], lea["Swamp"]])
+    game.players[1].hand = [lea["Lightning Bolt"], lea["Grizzly Bears"], lea["Island"]]
+    game.interactive_seats = {1}
+
+    game.cast_from_hand(0, sludge.name, target_player_index=1)
+    game.resolve_top_of_stack()
+    owed = game.pending_choice_of("discard", 1)
+
+    assert owed is not None and owed.data["count"] == 2
+    assert game.resolve_pending_choice("discard", 1, hand_indices=[0, 2], to_library=False)
+    assert _w1g5_names(game.players[1].hand) == ["Grizzly Bears"]
+
+
+def test_w1g5_mind_sludge_with_no_swamp_discards_nothing(set_pool):
+    lea = set_pool("LEA")
+    sludge = set_pool("TOR")["Mind Sludge"]
+    game = _w1g5_game(sludge, bf0=[lea["Forest"]], bf1=[lea["Swamp"]])
+    game.players[1].hand = [lea["Lightning Bolt"], lea["Island"]]
+
+    game.cast_from_hand(0, sludge.name, target_player_index=1)
+    _w1g5_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+
+    assert len(game.players[1].hand) == 2
+
+
+def _w1g5_breakthrough_game(set_pool, *, interactive=False):
+    lea = set_pool("LEA")
+    library = [_w1g5_mk_card(name=f"W1G5 Card {i}", type_line="Land") for i in range(10)]
+    game = _w1g5_game(
+        set_pool("TOR")["Breakthrough"],
+        hand=[lea["Lightning Bolt"], lea["Grizzly Bears"]], library=library,
+    )
+    if interactive:
+        game.interactive_seats = {0}
+    return game
+
+
+def test_w1g5_breakthrough_at_x_zero_draws_four_and_discards_the_whole_hand(set_pool):
+    game = _w1g5_breakthrough_game(set_pool)
+
+    result = game.cast_from_hand(0, "Breakthrough", x_value=0)
+    _w1g5_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+
+    assert result.supported, result.details
+    assert game.players[0].hand == []
+    # Two held, four drawn, all six discarded, and the spell itself.
+    assert len(game.players[0].graveyard) == 7
+    assert len(game.players[0].library) == 6
+
+
+def test_w1g5_breakthrough_keeps_x_of_its_choosers_choice(set_pool):
+    """X=2: six cards in hand after the draw, so four are discarded — and the
+    person chooses which, through the standing discard prompt."""
+    game = _w1g5_breakthrough_game(set_pool, interactive=True)
+
+    game.cast_from_hand(0, "Breakthrough", x_value=2)
+    game.resolve_top_of_stack()
+    owed = game.pending_choice_of("discard", 0)
+
+    assert owed is not None and owed.data["count"] == 4
+    assert len(game.players[0].hand) == 6
+    # Keep the Bolt and the Bears: discard the four drawn cards.
+    assert game.resolve_pending_choice(
+        "discard", 0, hand_indices=[2, 3, 4, 5], to_library=False,
+    )
+    assert _w1g5_names(game.players[0].hand) == ["Lightning Bolt", "Grizzly Bears"]
+
+
+def test_w1g5_breakthrough_with_x_above_the_hand_discards_nothing(set_pool):
+    game = _w1g5_breakthrough_game(set_pool)
+
+    game.cast_from_hand(0, "Breakthrough", x_value=10)
+    _w1g5_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+
+    assert len(game.players[0].hand) == 6
+    assert _w1g5_names(game.players[0].graveyard) == ["Breakthrough"]
+
 # ==== end W1G5 ======================================================
 
 
