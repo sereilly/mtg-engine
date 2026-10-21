@@ -10395,6 +10395,13 @@ def reveal_chosen_hand_cards(game: Game, instruction: OracleInstruction, context
     return True, "resolved"
 
 
+#: CR 110.4a: "an artifact, battle, creature, enchantment, land, or
+#: planeswalker card" — a card that could be put onto the battlefield.
+_PERMANENT_CARD_TYPES = (
+    "artifact", "battle", "creature", "enchantment", "land", "planeswalker",
+)
+
+
 @effect_handler("put_chosen_hand_cards_onto_battlefield")
 def put_chosen_hand_cards_onto_battlefield(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"The owner of each creature card revealed this way with the lowest mana
@@ -10412,6 +10419,12 @@ def put_chosen_hand_cards_onto_battlefield(game: Game, instruction: OracleInstru
     """
     payload = instruction.payload
     record = context.results.get(str(payload.get("cards_from"))) or {}
+    if isinstance(record, (list, tuple)):
+        # "Reveal a card in your hand, then put that card onto the
+        # battlefield …" (Retraced Image.) A one-hand record
+        # (``reveal_cards_from_hand``'s), which is the revealing seat's — the
+        # resolving player's.
+        record = {game.players.index(context.caster): list(record)}
     described = payload.get("card_filter") or {}
     entrants = [
         (seat, card)
@@ -10439,6 +10452,16 @@ def put_chosen_hand_cards_onto_battlefield(game: Game, instruction: OracleInstru
         return True, "resolved"
     for seat, card in entrants:
         owner = game.players[seat]
+        if not any(card_has_type(card, kind) for kind in _PERMANENT_CARD_TYPES):
+            # CR 400.4a: "If an instant or sorcery card would enter the
+            # battlefield, it remains in its previous zone." A revealed instant
+            # whose name a permanent shares (a token or a copy can carry one)
+            # stays in its owner's hand.
+            game.log.append(
+                f"{card.name} can't enter the battlefield and stays in "
+                f"{owner.name}'s hand (400.4a)"
+            )
+            continue
         if not game.take_card_from_hand(owner, card):
             continue
         game._put_permanent_onto_battlefield(seat, Permanent(card=card), None)

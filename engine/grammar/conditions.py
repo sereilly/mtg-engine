@@ -190,6 +190,20 @@ def _parse_same_named_object(stream: TokenStream) -> "ast.SameNamedObject | None
     somewhere else.
     """
     mark = stream.mark()
+    # "…if **it has the same name as a permanent**." (Retraced Image.) The
+    # comparison in the other word order: "it" is the card a step of this
+    # effect turned up, and "a [nontoken] permanent" is the battlefield. Every
+    # word required, so "the same name as a card in a graveyard" (unprinted)
+    # rewinds rather than being read as the battlefield.
+    if stream.accept_phrase("it", "has", "the", "same", "name", "as"):
+        if stream.accept_word("a", "an"):
+            nontoken = bool(stream.accept_word("nontoken"))
+            if stream.accept_word("permanent"):
+                return ast.SameNamedObject(
+                    "battlefield", nontoken=nontoken, named_by="it",
+                )
+        stream.reset(mark)
+        return None
     # "**another** permanent with the same name" (Winnow) compares against the
     # object the effect targets rather than against what an event named — the
     # article is the whole difference, so it is recorded and the lowering

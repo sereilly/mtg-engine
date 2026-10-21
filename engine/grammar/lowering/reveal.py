@@ -421,6 +421,24 @@ def _lower_put_revealed_card_onto_battlefield(
     returns None rather than raising, and the ordinary battlefield lowering
     keeps its reading and its refusal.
     """
+    if (
+        "revealed_card" not in produced
+        and REVEALED_HAND_CARDS in produced
+        and isinstance(node.target, ast.TargetSpec)
+        and node.target.quantifier == "that"
+        and not _restrictions_beyond(node.target.filter, frozenset({"is_card"}))
+        and not (node.under_owners_control or node.gains or node.tapped)
+        and not node.sacrifice_when_control_lost
+    ):
+        # "Reveal a card in your hand, then put **that card** onto the
+        # battlefield …" (Retraced Image.) The hand twin: the card the reveal
+        # in front of it recorded, out of the revealing seat's hand, entering
+        # under that seat (CR 110.2a) — Stronghold Gambit's handler, over the
+        # one-hand record a ``reveal_cards_from_hand`` writes.
+        return (OracleInstruction(
+            "put_chosen_hand_cards_onto_battlefield", "",
+            {"cards_from": REVEALED_HAND_CARDS},
+        ),)
     if "revealed_card" not in produced:
         return ()
     # "…put **those cards** onto the battlefield under their owners' control."

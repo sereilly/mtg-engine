@@ -32,7 +32,7 @@ from ..named_counters import counters_on
 from ..oracle_types import (BIDDING_WINNER,
                             CHOSEN_CARD_TYPE_THIS_WAY, CHOSEN_COLOR_THIS_WAY,
                             CHOSEN_NUMBER_THIS_WAY, CLAIMABLE_EXILED_CARDS,
-                            COIN_FLIPS_MADE,
+                            COIN_FLIPS_MADE, COIN_FLIPS_WON,
                             EXILED_THIS_WAY_OBJECTS, MANA_PAID_BY_SEAT,
                             SWEPT_OWNER_SEATS,
                             REVEALED_HAND_CARDS, REVEALED_TOP_CARDS_BY_SEAT,
@@ -756,6 +756,25 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
                 and other.effective_card.name == target_name
                 and not (nontoken and other.metadata.get("is_token"))
                 for other in game.all_permanents()
+            )
+        if payload.get("same_name_as") == "record":
+            # "…put that card onto the battlefield if **it has the same name
+            # as a permanent**." (Retraced Image.) "It" is the one card the
+            # hand reveal in front of it recorded; "a permanent" is any
+            # permanent on the battlefield, either side's, tokens included
+            # unless the card says "nontoken". CR 201.2a over CR 709.4a: a
+            # split card has both halves' names, so either may be matched —
+            # ``has_name`` asks both; ``effective_card`` on the permanent's
+            # side because a copy's name is the copied one (CR 707.2).
+            recorded = context.results.get(str(payload.get("record"))) or ()
+            if not isinstance(recorded, (list, tuple)) or len(recorded) != 1:
+                return False
+            (card,) = recorded
+            nontoken = bool(payload.get("nontoken"))
+            return any(
+                has_name(card, permanent.effective_card.name)
+                and not (nontoken and permanent.metadata.get("is_token"))
+                for permanent in game.all_permanents()
             )
         cast_card = (context.trigger_context or {}).get("cast_card")
         name = getattr(cast_card, "name", None)
@@ -2503,9 +2522,18 @@ def flip_coins_until_loss(game: Game, instruction: OracleInstruction, context: O
     The loop is bounded by its own arithmetic and not by the number: a seat may
     name any number at all (CR 107.1), and the run still ends at the first
     loss.
+
+    **No** ``amount_from`` is "flip a coin **until you lose a flip**" (Crazed
+    Firecat): the first loss is the only bound. A third record says how many
+    flips were won (``COIN_FLIPS_WON``), which "for each flip you won" reads.
+    A run that has not lost by :data:`_UNBOUNDED_FLIP_GUARD` flips stops
+    there: the rules put no ceiling on it, but a coin a test or a future
+    effect rigs to always win must not hang the game.
     """
-    limit = max(
-        0, int(context.results.get(str(instruction.payload.get("amount_from")), 0) or 0)
+    bounded = instruction.payload.get("amount_from") is not None
+    limit = (
+        max(0, int(context.results.get(str(instruction.payload["amount_from"]), 0) or 0))
+        if bounded else _UNBOUNDED_FLIP_GUARD
     )
     card_name = getattr(context.card, "name", "an effect")
     made = 0
@@ -2518,11 +2546,24 @@ def flip_coins_until_loss(game: Game, instruction: OracleInstruction, context: O
         )
     context.results["coin_flip"] = clean
     context.results[COIN_FLIPS_MADE] = made
-    game.log.append(
-        f"{card_name}: {made} of {limit} flip(s) made, "
-        + ("every one won" if clean else "the last one lost")
-    )
+    context.results[COIN_FLIPS_WON] = made if clean else made - 1
+    if bounded:
+        game.log.append(
+            f"{card_name}: {made} of {limit} flip(s) made, "
+            + ("every one won" if clean else "the last one lost")
+        )
+    else:
+        game.log.append(
+            f"{card_name}: won {context.results[COIN_FLIPS_WON]} flip(s) "
+            "before losing one"
+        )
     return True, "resolved"
+
+
+#: Where an unbounded run of flips ("until you lose a flip") gives up. Not a
+#: rule — CR 705 sets no ceiling — but the probability of a fair coin reaching
+#: it is 2**-1000, so only a rigged coin ever does.
+_UNBOUNDED_FLIP_GUARD = 1000
 
 
 @effect_handler("coin_flip_stakes_loop")

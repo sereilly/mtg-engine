@@ -1863,7 +1863,19 @@ def create_copy_token(game: Game, instruction: OracleInstruction, context: Oracl
     # seat as this ability resolved, so there is no target on the stack to
     # resolve and no legality to re-check (CR 608.2b is about targets).
     recorded_key = instruction.payload.get("permanents_from")
-    if instruction.payload.get("copied") == "event_subject":
+    if instruction.payload.get("copied") == "loop_object":
+        # "For each creature token on the battlefield, its controller creates a
+        # token that's a copy of **that creature**." (Parallel Evolution.) The
+        # permanent the board loop is on (``for_each`` binds it per iteration
+        # and fixed the set before the first, so a copy made here is never
+        # itself copied). Read live: it is on the battlefield, and its copiable
+        # values (CR 707.2) are what ``create_token_copy`` takes — including
+        # the copy effect a token copy already carries.
+        source = context.iteration_target
+        if getattr(source, "permanent_id", None) is None or not game.is_on_battlefield(source):
+            game.log.append(f"{context.card.name}: the creature it names is gone")
+            return True, "resolved"
+    elif instruction.payload.get("copied") == "event_subject":
         # "Whenever a nontoken creature enters, its controller creates a token
         # that's a copy of **that creature**." (Dual Nature.) The object the
         # trigger's event was about, by the id the entry seam froze — and when
@@ -1983,7 +1995,25 @@ def token_recipient_seats(
         # still reads its own target below.
         record = payload.get("recipient_seat_record")
         iteration_record = payload.get("recipient_iteration_seat")
-        if iteration_record is not None:
+        if payload.get("recipient_loop_controller"):
+            # "For each creature token on the battlefield, **its controller**
+            # creates …" (Parallel Evolution.) The controller of the permanent
+            # the board loop is on, read live through the control seam — the
+            # loop's object is still on the battlefield (CR 108.4). Outside a
+            # loop there is no such permanent and nobody gets a token.
+            iterated = context.iteration_target
+            seat = (
+                game.controller_index_of(iterated)
+                if getattr(iterated, "permanent_id", None) is not None
+                and game.is_on_battlefield(iterated)
+                else None
+            )
+            recipients = (
+                [seat]
+                if isinstance(seat, int) and not game.players[seat].lost
+                else []
+            )
+        elif iteration_record is not None:
             # "For each creature destroyed this way, **its controller** creates
             # a 1/1 white Spirit creature token with flying." (March of Souls.)
             # The seat the sweep froze about the object *this iteration* is on

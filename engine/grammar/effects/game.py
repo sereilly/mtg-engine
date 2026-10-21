@@ -173,7 +173,14 @@ def _accept_flip_run_tail(stream: TokenStream) -> "ast.FlipCoinsUntilLoss | None
     Both sentences, for :class:`ast.FlipCoinsUntilLoss`' reason. Past the first
     clause every word is required: which bound ends the run and what a clean
     run pays are the whole card.
+
+    …or ``until you lose a flip`` alone (Crazed Firecat): one bound, and the
+    sentence behind it is an ordinary one reading the run's record ("for each
+    flip you won", ``records._parse_for_each_this_way``), so it is left to the
+    statement reader rather than folded in here.
     """
+    if stream.accept_phrase("until", "you", "lose", "a", "flip"):
+        return ast.FlipCoinsUntilLoss()
     if not stream.accept_phrase(
         "that", "many", "times", "or", "until", "you", "lose", "a", "flip"
     ):

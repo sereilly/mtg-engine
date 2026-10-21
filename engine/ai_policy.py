@@ -7785,6 +7785,24 @@ def order_hand_pick(
             player.hand[slot], consumer["card_filter"], game=game, owner=player
         )
     ]
+    guard = consumer.get("guard")
+    if guard:
+        # "…then put that card onto the battlefield **if it has the same name
+        # as a permanent**" (Retraced Image): a pick the guard refuses enters
+        # nothing, so the ones it admits go first. Asked of the engine's own
+        # evaluator with the pick as the record the guard reads — the policy
+        # and the resolution cannot disagree about what the guard means.
+        from .game_types import OracleExecutionContext
+        from .handlers.control_flow import evaluate_condition
+
+        def holds(slot: int) -> bool:
+            context = OracleExecutionContext(
+                caster=player, target=player, card=source_card,
+                results={key: [player.hand[slot]]},
+            )
+            return bool(evaluate_condition(game, context, guard))
+
+        admitted = [slot for slot in admitted if holds(slot)]
     superlative = consumer["superlative"]
     if superlative.get("characteristic") == "mana_value":
         sign = 1 if superlative.get("extreme") == "least" else -1

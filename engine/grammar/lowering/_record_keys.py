@@ -108,6 +108,15 @@ LOOP_BOUND_PLAYER = "loop_bound_player"
 #: to a per-iteration read with no iteration around it and gain nobody anything.
 LOOP_BOUND_OBJECT = "loop_bound_object"
 
+#: The narrower marker beside it for a loop over what **the board** holds —
+#: "For each creature token on the battlefield, its controller creates a token
+#: that's a copy of that creature." (Parallel Evolution.) Its object is a
+#: permanent still on the battlefield as the iteration runs, which the "this
+#: way" loops' objects are not: a sentence reading the object *live* — its
+#: copiable values (CR 707.2), its current controller — is admitted only here,
+#: where the other loops would hand it a card that has left.
+BOARD_LOOP_OBJECT = "board_loop_object"
+
 #: The per-object seat map a destroy or exile step freezes about what it took,
 #: read two ways: one entry per iteration inside an object loop ("its
 #: controller"), and as a per-seat tally outside one ("the number of artifacts

@@ -954,18 +954,42 @@ def hand_pick_entry_consumer(card: CardDefinition, result_key: str) -> dict | No
     a free permanent is a gift to the picker, and the picks that receive it are
     the ones this answer describes; the stated default took the first card in
     hand order and revealed a land or an artifact as often as a creature.
+
+    ``guard`` is the condition an ``if_then`` around that sentence asks, when
+    there is one: "…then put that card onto the battlefield **if it has the
+    same name as a permanent**" (Retraced Image). A pick the guard refuses
+    enters nothing, so the picks it admits are the gift.
     """
-    for instruction in _walk_program(compile_card_oracle(card)):
-        payload = instruction.payload or {}
-        if (
-            instruction.kind == "put_chosen_hand_cards_onto_battlefield"
-            and str(payload.get("cards_from")) == str(result_key)
-        ):
-            return {
-                "card_filter": dict(payload.get("card_filter") or {}),
-                "superlative": dict(payload.get("superlative") or {}),
-            }
-    return None
+    def visit(instructions, guard):
+        for instruction in instructions:
+            payload = instruction.payload or {}
+            if (
+                instruction.kind == "put_chosen_hand_cards_onto_battlefield"
+                and str(payload.get("cards_from")) == str(result_key)
+            ):
+                return {
+                    "card_filter": dict(payload.get("card_filter") or {}),
+                    "superlative": dict(payload.get("superlative") or {}),
+                    "guard": guard,
+                }
+            for key in ("steps", "then", "else", "action", "otherwise", "effect"):
+                nested = payload.get(key)
+                if isinstance(nested, (list, tuple)):
+                    found = visit(nested, (
+                        payload.get("condition")
+                        if instruction.kind == "if_then" and key == "then"
+                        else guard
+                    ))
+                    if found is not None:
+                        return found
+        return None
+
+    program = compile_card_oracle(card)
+    return visit([
+        *program.instructions,
+        *(a.instruction for a in program.activated_abilities if a.instruction is not None),
+        *(t.instruction for t in program.triggered_abilities if t.instruction is not None),
+    ], None)
 
 
 def spell_hand_pick_entry_filters(card: CardDefinition) -> tuple[dict, ...]:

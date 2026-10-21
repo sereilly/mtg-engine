@@ -750,9 +750,28 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             except GrammarError:
                 stream.reset(if_mark)
             else:
-                statement = _with_conditional_protections(
-                    stream, ast.Conditional(condition, statement)
-                )
+                if isinstance(statement, ast.Sequence) and len(statement.steps) > 1:
+                    # "Reveal a card in your hand, **then put that card onto
+                    # the battlefield if it has the same name as a
+                    # permanent**." (Retraced Image.) Inside one sentence a
+                    # ``Sequence`` is a ", then" join, and the trailing "if"
+                    # is part of the clause after the "then": the reveal
+                    # happens either way, and "it" is the card it turned up —
+                    # a condition wrapped round both would be asked before
+                    # there was anything for "it" to name.
+                    statement = dataclasses.replace(
+                        statement,
+                        steps=statement.steps[:-1] + (
+                            _with_conditional_protections(
+                                stream,
+                                ast.Conditional(condition, statement.steps[-1]),
+                            ),
+                        ),
+                    )
+                else:
+                    statement = _with_conditional_protections(
+                        stream, ast.Conditional(condition, statement)
+                    )
         # "…deals 2 damage to that player **unless one of their opponents was
         # dealt damage this turn**." (Antagonism.) The same trailing clause with
         # the printed word that puts the body on the *false* branch. Read here,

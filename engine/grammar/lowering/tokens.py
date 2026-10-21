@@ -26,7 +26,8 @@ from ._events import (EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER,
                       _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_OBJECTS,
                       _EVENT_SUBJECT_PLAYERS, _back_reference_payload,
                       trigger_quantity_key)
-from ._record_keys import (LOOP_BOUND_OBJECT, SWEPT_CONTROLLER_SEATS,
+from ._record_keys import (BOARD_LOOP_OBJECT, LOOP_BOUND_OBJECT,
+                           SWEPT_CONTROLLER_SEATS,
                            _RECORDED_PERMANENTS)
 from ._amounts import count_spec, printed_count_spec
 from ._common import (
@@ -99,6 +100,16 @@ def _stamp_token_recipient(
         # player" read. Under an event that froze no controller the words name
         # nobody, and the token would otherwise go to the ability's controller:
         # refused rather than defaulted.
+        if BOARD_LOOP_OBJECT in produced:
+            # "For each creature token on the battlefield, **its controller**
+            # creates a token that's a copy of that creature." (Parallel
+            # Evolution.) A loop over the board: the object the iteration is
+            # on is still a permanent, so its controller is read live off the
+            # control seam (CR 108.4) rather than out of a record a sweep froze
+            # — no sweep ran. The innermost binder, as the record branch below
+            # says of its own loop.
+            payload["recipient_loop_controller"] = True
+            return
         if LOOP_BOUND_OBJECT in produced and SWEPT_CONTROLLER_SEATS in produced:
             # "For each creature destroyed this way, **its controller** creates
             # a 1/1 white Spirit creature token with flying." (March of Souls.)
@@ -169,6 +180,27 @@ def _lower_create_copy_token(
         )
     if node.subject.quantifier == "that":
         recorded = tuple(sorted(produced & _RECORDED_PERMANENTS))
+        if not recorded and BOARD_LOOP_OBJECT in produced:
+            # "For each creature token on the battlefield, its controller
+            # creates a token that's a copy of **that creature**." (Parallel
+            # Evolution.) The permanent the board loop is on, which
+            # ``handlers/control_flow.for_each`` binds per iteration and
+            # snapshots before the first (so the copies made are not copied
+            # again). The innermost binder, and checked before the event's
+            # object below for that reason. No narrowing: the noun restates
+            # the loop's own iterator, which already admitted this permanent.
+            if _restrictions_beyond(
+                node.subject.filter, frozenset({"card_types", "subtypes"})
+            ):
+                raise LoweringError(
+                    "a copy of the loop's object copies that object and "
+                    "nothing narrower", node=node,
+                )
+            looped: dict[str, object] = {
+                "count": _amount_payload(node.count), "copied": "loop_object",
+            }
+            _stamp_token_recipient(looped, node, event, produced)
+            return (OracleInstruction("create_copy_token", "", looped),)
         if not recorded and event in _EVENT_SUBJECT_OBJECTS:
             # A bound object carries no narrowing to honour, for the reason
             # the recorded branch below gives: the noun restates the event's

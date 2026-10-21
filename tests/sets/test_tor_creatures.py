@@ -217,4 +217,57 @@ def test_w1g8_shambling_swarm_keeps_a_departed_targets_share_out(set_pool):
     assert _w1g8_body(placed["giant"]) == (2, 2)
     assert placed["giant"].metadata.get("minus_counters") == 1
 
+
+def _w1g8_cast_firecat(set_pool, monkeypatch, coins):
+    """Crazed Firecat cast and resolved with the flips scripted, entry
+    trigger and all."""
+    script = iter(coins)
+    monkeypatch.setattr(
+        "engine.handlers.control_flow.flip_coin", lambda: next(script)
+    )
+    lea = set_pool("LEA")
+    game = _W1G8Game(players=[
+        _W1G8Player("A", hand=[set_pool("TOR")["Crazed Firecat"]]),
+        _W1G8Player("B", library=[lea["Forest"]] * 5),
+    ])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    result = game.cast_from_hand(0, "Crazed Firecat")
+    assert result.supported, result.details
+    _w1g8_resolve_stack(game)
+    (firecat,) = game.controlled_by(0)
+    return game, firecat
+
+
+def test_w1g8_crazed_firecat_counts_the_flips_it_won(monkeypatch, set_pool):
+    """"When this creature enters, flip a coin until you lose a flip. Put a
+    +1/+1 counter on this creature for each flip you won." Won, won, lost:
+    two counters, and the losing flip ends the run (the scripted coin has no
+    fourth face to give)."""
+    game, firecat = _w1g8_cast_firecat(set_pool, monkeypatch, [True, True, False])
+    assert _w1g8_body(firecat) == (6, 6)
+    assert firecat.metadata.get("plus_counters") == 2
+    assert "Crazed Firecat: won 2 flip(s) before losing one" in game.log
+
+
+def test_w1g8_crazed_firecat_that_loses_the_first_flip_gets_nothing(monkeypatch, set_pool):
+    """The losing flip is not a flip won: lose the first and the Firecat is
+    its printed 4/4."""
+    game, firecat = _w1g8_cast_firecat(set_pool, monkeypatch, [False])
+    assert _w1g8_body(firecat) == (4, 4)
+    assert not firecat.metadata.get("plus_counters")
+
+
+def test_w1g8_for_each_flip_you_won_names_a_run_or_nothing():
+    """The count is the run's record, read through the producer gate every
+    back-reference passes: with no run of flips in front of it the words name
+    nothing, and the line refuses rather than placing zero counters."""
+    from engine.grammar import compile_line
+
+    lone = compile_line(
+        "When this creature enters, put a +1/+1 counter on this creature for "
+        "each flip you won."
+    )
+    assert not lone.usable and lone.lowering_error
+
 # ==== end W1G8 ======================================================

@@ -35,6 +35,7 @@ payload the evaluator would answer False to forever.
 
 from __future__ import annotations
 
+from ...oracle_types import REVEALED_HAND_CARDS
 from .. import ast
 from ..errors import LoweringError
 from ._amounts import count_filter_on_frozen_seat, count_spec
@@ -314,6 +315,25 @@ def _lower_condition(
         # the condition answer False on every board and turn Bazaar's counter
         # into an ability that never fires: a card compiling supported and doing
         # nothing, which is the failure this whole file's gates exist for.
+        if condition.named_by == "it":
+            # "…put that card onto the battlefield if **it has the same name
+            # as a permanent**." (Retraced Image.) "It" is the card the hand
+            # reveal in front of it recorded, and the name is read off that
+            # record — refused without the producer, for the reason every
+            # back-reference is: an unwritten record names no card, and the
+            # condition would answer False on every board.
+            if REVEALED_HAND_CARDS not in produced:
+                raise LoweringError(
+                    "'it has the same name as …' names a card no earlier step "
+                    "of this effect revealed", node=condition,
+                )
+            return {
+                "kind": "same_named_object",
+                "zone": condition.zone,
+                "nontoken": bool(condition.nontoken),
+                "same_name_as": "record",
+                "record": REVEALED_HAND_CARDS,
+            }
         if condition.other:
             # "Destroy target nonland permanent **if another permanent with the
             # same name is on the battlefield**." (Winnow.) "Another" than the

@@ -106,8 +106,25 @@ def _lower_for_each_matching(
     set than the phrase names — "creature **without flying**" is a layer-6
     question (CR 613.1f), and a loop that dropped it would offer Tidal Flats'
     toll to every attacker including the fliers it is printed to let through.
+
+    "For each creature token **on the battlefield**, …" (Parallel Evolution.)
+    CR 403.1's shared zone is the scope the handler already scans — every
+    seat's permanents, through ``all_permanents`` — so the phrase is honoured
+    by the loop rather than carried as a key, and lifted off here. A phrase
+    naming a seat as well would be two scopes, and refuses.
     """
-    described = _filter_payload(node.iterator)
+    if node.iterator.on_the_battlefield and (
+        node.iterator.controller is not None
+        or node.iterator.zone != "battlefield"
+        or node.iterator.zone_owner is not None
+    ):
+        raise LoweringError(
+            "a loop cannot be scoped to the battlefield and to a player",
+            node=node,
+        )
+    described = _filter_payload(
+        node.iterator, carried_separately=frozenset({"on_the_battlefield"})
+    )
     if untestable_filter_keys(described):
         raise LoweringError(
             "the loop cannot test this restriction", node=node

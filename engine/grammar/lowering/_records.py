@@ -58,7 +58,7 @@ from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                              BIDDING_WINNER,
                              CHOSEN_COLOR_THIS_WAY,
                              CHOSEN_CREATURE_TYPE_THIS_WAY,
-                             CHOSEN_NUMBER_THIS_WAY, COIN_FLIPS_MADE,
+                             CHOSEN_NUMBER_THIS_WAY, COIN_FLIPS_MADE, COIN_FLIPS_WON,
                              CHOSEN_TARGET_GRAVEYARD_SLOTS,
                              CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
                              COUNTERED_ABILITY_SOURCE,
@@ -253,8 +253,9 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # sentence flipping a coin of its own.
     "flip_coin": "coin_flip",
     # A run of them (Squee's Revenge): the same record, here meaning the run
-    # lost no flip, and how many flips the run actually made.
-    "flip_coins_until_loss": ("coin_flip", COIN_FLIPS_MADE),
+    # lost no flip, how many flips the run actually made, and how many of
+    # them were won ("for each flip you won", Crazed Firecat).
+    "flip_coins_until_loss": ("coin_flip", COIN_FLIPS_MADE, COIN_FLIPS_WON),
     # "…**If you win the bidding**, counter that spell." (Mages' Contest.) The
     # seat the high bid stood for, written when the last offer is answered.
     "bid_life": BIDDING_WINNER,
