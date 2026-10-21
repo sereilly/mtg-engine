@@ -2129,7 +2129,15 @@ def test_layers_only_import_downward(layers):
         # `_parse_reveal_top`, which has read "Reveal" before the run is tried,
         # and a family may not be called from another one. It reads the noun
         # parser one layer down and no sibling; nothing reads back.
-        ("effects", ("_strips", "_other_libraries", "_reveal_until"), ()),
+        #
+        # `_recipients` is the fourth, pre-split out of `damage` at Torment's
+        # Phase 0 with that module 42 lines under the guard: whom a damage
+        # clause deals its damage to, which `_parse_damage` reaches through
+        # three calls after "to" and "among". The name is the lowering floor's
+        # — `lowering/_recipients` left `lowering/damage` along the same line
+        # at Urza's Legacy — so one `FAMILY_SHARED` entry answers for both.
+        # `damage` is its one importer; it reads no sibling, nothing reads back.
+        ("effects", ("_strips", "_other_libraries", "_reveal_until", "_recipients"), ()),
         # `_targets` joins the lowering floors at Prophecy's wave 2, when
         # `_roles` — split out of it at Mercadian Masques — first read it back:
         # a printed "another target" is planned as two roles from the
@@ -2572,6 +2580,10 @@ FAMILY_SHARED = {
     # that family crossed the guard. It is *not* folded into `_seats`, which
     # answers a narrower question for three families and must not carry one
     # family's dispatch.
+    # `effects/_recipients` is its parse twin, pre-split out of
+    # `effects/damage.py` at Torment's Phase 0 along the same line — everything
+    # a damage clause prints after "to" — and a single-importer floor for the
+    # same reason; this entry is keyed by name, so it answers for both.
     "_recipients",
     # `_cost_records` split out of `_records` in the same wave and for the same
     # reason, along the seam that module's own docstring has drawn since it was

@@ -159,7 +159,7 @@ def parse_subject_verb(
         # its verb — so it is read here, where the subject was, rather than by
         # the production the verb dispatches into, which never sees these words.
         #
-        # Gated on the verb that follows, for the reason `effects/damage.py`
+        # Gated on the verb that follows, for the reason `effects/_recipients`
         # gives for reading "who attacked this turn" beside the one lowering
         # that honours it: a seat narrowing nothing enforces is a sentence that
         # acts on **every** player, silently and in the caster's favour. The

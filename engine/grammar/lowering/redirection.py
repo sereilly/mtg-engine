@@ -9,11 +9,11 @@ its recipient changes — which is why ``ast/damage.py`` gives it a node of its
 own, and why a redirect read as a shield would lose lifelink, the damage
 triggers and the dealt-damage records all at once.
 
-The parse side keeps redirection with damage (``effects/damage.py``), because
-the two read the same recipient, source and duration vocabulary; the lowering
-halves share nothing but the generic helpers every family here uses. That is
-the same asymmetry ``prevention`` records one module over — a lowering half
-that outgrew its parse half. See ``tests/engine/test_grammar_layering.py``.
+The parse side kept redirection with damage (``effects/damage.py``) because the
+two read the same recipient, source and duration vocabulary, until Visions gave
+it ``effects/redirection.py`` and the mirror re-formed; the lowering halves
+share nothing but the generic helpers every family here uses. See
+``tests/engine/test_grammar_layering.py``.
 
 **The module is CR 614 on a damage event, which is wider than its name**, and
 Mirage's second wave is where that showed. ``_lower_double_combat_damage``

@@ -20,6 +20,10 @@ it, for `game`'s ante and `life`'s life-total set as well as for this chain.
 The two are not one module because a floor three families read must not carry
 one family's dispatch — this chain refuses on damage riders, damage records and
 damage handlers, none of which the other two callers have.
+
+The parse half took this name at Torment's Phase 0: ``effects/_recipients.py``
+left ``effects/damage.py`` along this module's line — what a damage clause
+prints after its "to" — so the mirror re-formed rather than forking.
 """
 
 from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER,

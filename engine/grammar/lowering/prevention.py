@@ -2,15 +2,15 @@
 
 Split out of ``damage`` the round Feint's two-source shield pushed that module
 past the thousand-line guard. A family rather than an arbitrary cut, and the
-parse side's own reasoning is what says so: ``effects/damage.py`` keeps
+parse side's own reasoning is what said so: ``effects/damage.py`` kept
 prevention because the two halves *parse* the same recipient and duration
 vocabulary. Lowering shares none of that — a damage lowering asks which handler
 deals how much to whom, a prevention lowering asks which shield records what
 and for how long — and this module reads not one helper from the one it left.
 
 The same shape ``zones``, ``library`` and ``mana`` have on this side: a lowering
-half that outgrew its parse half. If ``effects/damage.py`` ever splits, reuse
-this name so the mirror re-forms instead of forking.
+half that outgrew its parse half, until ``effects/damage.py`` split too and
+reused this name (``effects/prevention.py``), so the mirror re-formed.
 
 Two floors have come off it since, both at the guard and both along a line this
 docstring's own sentence draws. ``_blankets`` took the shields with **no
