@@ -38,10 +38,11 @@ from dataclasses import dataclass
 from typing import Union
 
 from .conditions import Condition
-from .conditions import (ChosenThisWay, DiedThisTurn, DiedThisWay,
-                         CountersPlacedThisWay, CountersRemovedThisWay,
-                         EachAdditionalCostPaid,
-                         EachLifeLost, ExiledThisWay)
+from .conditions import DiedThisTurn, DiedThisWay
+from .loops import (ChosenThisWay, CountersPlacedThisWay,
+                    CountersRemovedThisWay, EachAdditionalCostPaid,
+                    EachLifeLost, EachShortOfThisWay, ExiledThisWay,
+                    TappedThisWay)
 from .costs import Cost
 from ._core import (
     ObjectFilter,
@@ -742,11 +743,14 @@ class ForEach:
     a history, which is what :class:`DiedThisTurn` names. Reading that as the
     plain filter "creature" would count the creatures still on the battlefield
     — a different number, and one that moves in the opposite direction.
+
+    Every other set read off a record is in ``ast/loops.py``, and the union
+    names each of them (held by ``test_grammar_layering``).
     """
     iterator: (ObjectFilter | PlayerRef | DiedThisTurn | DiedThisWay
-                | ExiledThisWay | ChosenThisWay | EachLifeLost
-                | EachAdditionalCostPaid | CountersPlacedThisWay
-                | CountersRemovedThisWay)
+                | ExiledThisWay | TappedThisWay | ChosenThisWay | EachLifeLost
+                | EachShortOfThisWay | EachAdditionalCostPaid
+                | CountersPlacedThisWay | CountersRemovedThisWay)
     effect: "Statement"
 
 
