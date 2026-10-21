@@ -224,6 +224,24 @@ def _referent_seat_optional_draw(
 _TARGETED_ACTORS = frozenset({"target_opponent", "target_player"})
 
 
+#: The set-of-seats actors whose offer the handler makes **performed by** the
+#: seat it is put to (``_offer_to_seat`` rebinds ``caster`` for them), so a
+#: pile the action names with "their" is that seat's own.
+_SELF_PERFORMING_SEAT_SETS = frozenset({"each_player", "each_opponent"})
+
+
+def _with_exiled_pile_of(node: ast.May, owner: ast.PlayerRef) -> ast.May:
+    """*node* with its offered exile's graveyard rewritten to *owner*."""
+    action = node.action
+    return dataclasses.replace(node, action=dataclasses.replace(
+        action, subject=dataclasses.replace(
+            action.subject, filter=dataclasses.replace(
+                action.subject.filter, zone_owner=owner,
+            ),
+        ),
+    ))
+
+
 def _is_their_own_graveyard_card(subject) -> bool:
     """Whether *subject* is "a <card> from **their** graveyard" — one chosen
     card out of a pile named by the pronoun (which the noun parser spells as
@@ -268,7 +286,22 @@ def offered_seat_performs(node: ast.May) -> ast.May:
     and no reading here; admitting it would be the controller performing an
     action the card offers somebody else, silently, which is the defect this
     function exists for.
+
+    **An offer to a set of seats names the pile the same way, and resolves it
+    differently.** "Whenever this creature attacks or blocks, **any player**
+    may exile a card from **their** graveyard." (Carrion Rats, Carrion Wurm.)
+    ``handlers/control_flow._offer_to_seat`` moves ``context.caster`` onto each
+    offered seat for these actors, so the seat that takes the offer is the
+    resolution's "you" while it performs — the pile is rewritten to that, and
+    the pick comes out of the graveyard of whoever said yes.
     """
+    if (
+        isinstance(node.actor, ast.PlayerRef)
+        and node.actor.kind in _SELF_PERFORMING_SEAT_SETS
+        and isinstance(node.action, ast.Exile)
+        and _is_their_own_graveyard_card(node.action.subject)
+    ):
+        return _with_exiled_pile_of(node, ast.PlayerRef("you"))
     if not (
         isinstance(node.actor, ast.PlayerRef)
         and node.actor.kind in _TARGETED_ACTORS
@@ -282,13 +315,7 @@ def offered_seat_performs(node: ast.May) -> ast.May:
     # the node ``tolls.accept_graveyard_exile_price`` builds for "unless that
     # player exiles a card from their graveyard".
     if isinstance(action, ast.Exile) and _is_their_own_graveyard_card(action.subject):
-        return dataclasses.replace(node, action=dataclasses.replace(
-            action, subject=dataclasses.replace(
-                action.subject, filter=dataclasses.replace(
-                    action.subject.filter, zone_owner=node.actor,
-                ),
-            ),
-        ))
+        return _with_exiled_pile_of(node, node.actor)
     performer = getattr(action, "player", None)
     if not (isinstance(performer, ast.PlayerRef) and performer.kind == "you"):
         # No action, or one that names its own seat ("…may ante the top card of

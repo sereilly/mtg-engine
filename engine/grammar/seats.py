@@ -67,6 +67,19 @@ def parse_player_ref(stream: TokenStream) -> ast.PlayerRef | None:
     # handler would have to learn it.
     if stream.accept_phrase("any", "player"):
         return ast.PlayerRef("each_player")
+    # "When this creature enters, **any opponent** may have it deal 5 damage to
+    # them. If a player does, sacrifice this creature." (Longhorn Firebeast.)
+    # The alias above narrowed to the opponents, and an alias for the same
+    # reason. The rules give the offer to every one of them in turn rather
+    # than to the first taker: "first the active player gets the option …
+    # If a player elects to sacrifice a land, Argothian Wurm is put on top of
+    # its owner's library, but then all remaining players still get the
+    # option." (Argothian Wurm ruling, 2007-02-01, on its "any player may
+    # sacrifice a land. If a player does, …") — which is the per-seat offer
+    # ``each_opponent`` already makes, in turn order, each acceptance buying
+    # its own "if a player does".
+    if stream.accept_phrase("any", "opponent"):
+        return ast.PlayerRef("each_opponent")
     # "…**any other player** may pay that spell's mana cost." (Ice Cave.) Not
     # the alias "each other player" above is: there the antecedent is "you",
     # and the set is the controller's opponents. Here the sentence in front has

@@ -175,9 +175,21 @@ def one_card_pile_pick(filt: ast.ObjectFilter, pile_owner: str, node) -> dict[st
 
     Key order is the one this payload has always had — the differential
     compares reprs, and a reordering moves every card that prints it.
+
+    "…exile a **black** creature card **other than this card** from your
+    graveyard" (Ichorid) carries two narrowings more, each on the key its
+    reader already has: the colour on ``graveyard_colors``, the union
+    ``graveyard_card_matches`` reads for "white or black creature card"
+    (Dreams of the Dead), and the exclusion on ``exclude_source_card``, the
+    one *slot* ``excluded_graveyard_slot`` takes out for Junk Diver's
+    "another". Both are added only where printed, so every payload written
+    before them is byte-identical.
     """
     leftover = _restrictions_beyond(
-        filt, frozenset({"card_types", "zone", "zone_owner", "is_card"})
+        filt, frozenset({
+            "card_types", "zone", "zone_owner", "is_card",
+            "colors", "other_than_source",
+        })
     )
     if leftover or len(filt.card_types) > 1:
         raise LoweringError(
@@ -190,6 +202,10 @@ def one_card_pile_pick(filt: ast.ObjectFilter, pile_owner: str, node) -> dict[st
         chosen["card_type"] = filt.card_types[0]
     else:
         chosen["any_card"] = True
+    if filt.colors:
+        chosen["graveyard_colors"] = list(filt.colors)
+    if filt.other_than_source:
+        chosen["exclude_source_card"] = True
     return chosen
 
 

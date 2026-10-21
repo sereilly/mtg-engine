@@ -36,9 +36,9 @@ from .phrases import (_accept_life_alternative, _parse_mana_payment,
                       _parse_pay_life, _parse_per_each_objects)
 from .readers import accept_source_reference_spec
 from .sacrifices import _parse_counted_sacrifice
-from .effects import (_parse_damage, _parse_discard, _parse_mill,
-                      _parse_put_counter, _parse_put_hand_cards_on_library,
-                      _parse_remove_counter)
+from .effects import (_parse_counted_graveyard_cards, _parse_damage,
+                      _parse_discard, _parse_mill, _parse_put_counter,
+                      _parse_put_hand_cards_on_library, _parse_remove_counter)
 
 
 def _parse_unless_player_pays(stream: TokenStream, parse_body) -> "ast.UnlessPlayerPays | None":
@@ -386,6 +386,11 @@ def _accept_price_action(
         back_on_top = _parse_put_hand_cards_on_library(stream, payer)
         if back_on_top is not None:
             return back_on_top
+        # "…unless you put two cards **from your graveyard** on the bottom of
+        # your library" (Gurzigost). See :func:`accept_graveyard_bottom_price`.
+        bottomed = accept_graveyard_bottom_price(stream, payer)
+        if bottomed is not None:
+            return bottomed
         try:
             placement = _parse_put_counter(stream)
         except GrammarError:
@@ -437,6 +442,25 @@ def accept_graveyard_exile_price(
         spec = parse_target_spec(stream)
     except GrammarError:
         spec = None
+    chosen = _payers_own_graveyard_cards(spec, payer)
+    if chosen is None or chosen.count != 1:
+        stream.reset(mark)
+        return None
+    return ast.Exile(chosen)
+
+
+def _payers_own_graveyard_cards(
+    spec: "ast.TargetSpec | None", payer: ast.PlayerRef
+) -> "ast.TargetSpec | None":
+    """*spec* as cards the payer chooses out of **their own** graveyard, its
+    pile rewritten to the payer — or None when it is anything else.
+
+    One reading for every price paid out of a graveyard, so "a card from your
+    graveyard" means the same pile whether the toll exiles it (Rotting Giant)
+    or bottoms it (Gurzigost). A *target* is not a price (CR 601.2b's cost
+    against CR 601.2c's target), and somebody else's graveyard is not a
+    resource the payer gives up — each refuses rather than being read as this.
+    """
     owner = None if spec is None else spec.filter.zone_owner
     own_pile = owner is not None and (
         owner.kind == "you" if payer.kind == "you"
@@ -445,14 +469,55 @@ def accept_graveyard_exile_price(
     )
     if (
         spec is None or spec.targeted or spec.quantifier not in ("a", "an")
-        or spec.count != 1 or spec.filter.zone != "graveyard"
+        or spec.count < 1 or spec.filter.zone != "graveyard"
         or not spec.filter.is_card or not own_pile
+    ):
+        return None
+    return dataclasses.replace(
+        spec, filter=dataclasses.replace(spec.filter, zone_owner=payer),
+    )
+
+
+def accept_graveyard_bottom_price(
+    stream: TokenStream, payer: ast.PlayerRef
+) -> "ast.PutOnLibraryBottom | None":
+    """``put[s] <a|N> card(s) from <the payer's own> graveyard on the bottom
+    of <their> library`` as a **price** — or None with the cursor unmoved.
+
+    "At the beginning of your upkeep, sacrifice this creature **unless you put
+    two cards from your graveyard on the bottom of your library**." (Gurzigost;
+    Anurid Scavenger prints it with one card.) The graveyard exile above with
+    another destination, decomposed the same way: the move is the offer's
+    *action*, so it reaches the :class:`ast.May` every "unless" already is, and
+    the takeability gate is what says a graveyard holding fewer cards than the
+    printed number cannot pay — the creature is sacrificed.
+
+    The node is :class:`ast.PutOnLibraryBottom`, Epitaph Golem's, with a chosen
+    reference where that card prints a target: what the sentence moves and
+    where it goes are the same, and *how the card is named* is exactly what a
+    ``TargetSpec``'s quantifier already says. The count is read by the counted
+    reader the exile family uses for "exile two cards from your graveyard"
+    (Bloodcurdler), so the two prices cannot read a number two ways.
+
+    No "in any order" rider is printed and none is needed: CR 401.4 gives the
+    order of two cards put on the bottom at once to their owner whatever the
+    sentence says, and the handler asks for it.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("puts", "put"):
+        return None
+    try:
+        spec = _parse_counted_graveyard_cards(stream) or parse_target_spec(stream)
+    except GrammarError:
+        spec = None
+    chosen = _payers_own_graveyard_cards(spec, payer)
+    possessive = "your" if payer.kind == "you" else "their"
+    if chosen is None or not stream.accept_phrase(
+        "on", "the", "bottom", "of", possessive, "library"
     ):
         stream.reset(mark)
         return None
-    return ast.Exile(dataclasses.replace(
-        spec, filter=dataclasses.replace(spec.filter, zone_owner=payer),
-    ))
+    return ast.PutOnLibraryBottom(chosen)
 
 
 def accept_counter_removal_price(stream: TokenStream) -> "ast.RemoveCounter | None":

@@ -2117,6 +2117,12 @@ def _graveyard_exile_pick(ctx: PromptContext, choices: list) -> dict:
     against the same rule. ``count`` is the ceiling — "up to two" out of a pile
     holding one is one (CR 608.2) — and ``up_to`` is what tells the client an
     empty answer is a legal one.
+
+    ``destination`` is where the picked cards go: ``"exile"`` for every
+    printed exile, ``"library_bottom"`` for Gurzigost's "put two cards from
+    your graveyard on the bottom of your library" — the same question with
+    another verb, which the client has to say out loud rather than calling
+    every pick an exile.
     """
     choice = choices[0]
     owner_seat = int(choice.data["owner_index"])
@@ -2124,6 +2130,7 @@ def _graveyard_exile_pick(ctx: PromptContext, choices: list) -> dict:
     return {
         "player_seat": choice.player_index,
         "card_name": choice.data.get("card_name", ""),
+        "destination": choice.data.get("destination") or "exile",
         "owner_seat": owner_seat,
         "owner_name": owner.name,
         "count": ctx.game._how_many_graveyard_cards(choice),

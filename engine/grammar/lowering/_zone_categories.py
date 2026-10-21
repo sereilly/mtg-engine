@@ -242,6 +242,10 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     "put_iterated_card_on_library": "zones",
     "put_graveyard_card_on_library_bottom": "zones",
     "put_top_of_graveyard_on_library_bottom": "zones",
+    # "…unless you put two cards from your graveyard on the bottom of your
+    # library" (Gurzigost, Anurid Scavenger). The targeted bottoming above's
+    # chosen twin: the same zone change, picked as it resolves.
+    "put_chosen_graveyard_cards_on_library_bottom": "zones",
     # Unsubstantiate: a spell unstacked to its owner's hand, or a creature bounced.
     "return_spell_or_creature_to_hand": "zones",
     "put_cards_from_hand_onto_battlefield": "zones",

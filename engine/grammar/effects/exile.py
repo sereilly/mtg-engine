@@ -66,9 +66,13 @@ def _parse_counted_graveyard_cards(stream: TokenStream) -> "ast.TargetSpec | Non
     quantifier everywhere else it is printed — so the number is read here and
     the phrase comes back as the same untargeted reference with a count on it.
 
-    Your graveyard only. Another player's pile is a choice made *against*
-    somebody, and every printing of that is a target or a seat's own action
-    (``_parse_player_exiles_pile``).
+    Your graveyard only — or **their own**: "…any player may exile three cards
+    from **their** graveyard" (Carrion Wurm) is the same pick made by the seat
+    the offer is put to, and the pronoun is read here exactly as the singular
+    "a card from their graveyard" is read by the recipient parser, leaving the
+    lowering to rewrite it to the performing seat or refuse it. Another
+    player's pile is a choice made *against* somebody, and every printing of
+    that is a target or a seat's own action (``_parse_player_exiles_pile``).
     """
     mark = stream.mark()
     count = _accept_number(stream)
@@ -84,7 +88,8 @@ def _parse_counted_graveyard_cards(stream: TokenStream) -> "ast.TargetSpec | Non
         described.zone == "graveyard"
         and described.is_card
         and described.zone_owner is not None
-        and described.zone_owner.kind == "you"
+        # "their", which the noun parser spells as the owner's.
+        and described.zone_owner.kind in ("you", "owner")
     ):
         stream.reset(mark)
         return None

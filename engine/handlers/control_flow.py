@@ -3297,6 +3297,27 @@ def _exiled_cards_still_in_exile(game: Game, context) -> list:
     ]
 
 
+def _own_pile_can_supply(player, payload: dict, context) -> bool:
+    """Whether *player*'s own graveyard holds what an unannounced pick out of
+    it owes — the **printed count** of cards the payload admits, less the one
+    slot "other than this card" takes out.
+
+    Through ``graveyard_slots_matching``, the reader the pick prompt itself
+    asks, so the offer and the prompt it leads to agree on what the pile
+    holds. The count is the point for Carrion Wurm's "exile **three** cards"
+    — a pile of two cannot take the offer — and the exclusion is the point
+    for Ichorid, whose own card is not a card it may exile. "Up to" owes one
+    card, which is what this gate asked of every pick before it counted: an
+    offer over a pile holding nothing it names is a question with one answer.
+    """
+    from ._common import graveyard_slots_matching
+
+    owed = 1 if payload.get("up_to") else max(1, int(payload.get("count", 1) or 1))
+    return len(graveyard_slots_matching(
+        payload, player.graveyard, getattr(context, "card", None)
+    )) >= owed
+
+
 def _action_is_takeable(
     game: Game, player, instruction: OracleInstruction, source, context=None,
 ) -> bool:
@@ -3503,10 +3524,14 @@ def _action_is_takeable(
             or instruction.payload.get("targets")
         ):
             return True
-        return any(
-            graveyard_card_matches(instruction.payload, card)
-            for card in player.graveyard
-        )
+        return _own_pile_can_supply(player, instruction.payload, context)
+    # "…sacrifice this creature unless you **put two cards from your
+    # graveyard on the bottom of your library**." (Gurzigost.) The exile's
+    # pick with another destination, and the same "nothing to give": a pile
+    # one card short cannot cover the price, so the offer is not made and the
+    # sacrifice stands.
+    if instruction.kind == "put_chosen_graveyard_cards_on_library_bottom":
+        return _own_pile_can_supply(player, instruction.payload, context)
     # "Target player discards a card unless they **put a card from their hand on
     # top of their library**." (Tainted Specter.) An empty hand is a real and
     # checkable "nothing to give": the handler underneath moves as many cards as
@@ -4397,6 +4422,10 @@ def _offer_to_seat(
         "_on_decline": on_decline,
         "_on_reflexive": on_reflexive,
         "_context": context,
+        # Who the card offers this to, as printed: one seat's answer is read
+        # differently when every seat is being asked the same question
+        # (``ai_policy.offer_buys_own_drawback``).
+        "_offered_actor": instruction.payload.get("actor", "you"),
     }
     # "…**If you do**, untap this land." (Forsaken City.) Where the offered
     # action is a pick the seat may still not make, the lowering names what

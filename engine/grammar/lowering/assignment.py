@@ -55,11 +55,12 @@ def _lower_assigns_combat_damage_as_unblocked(
     the mark cannot be written onto, would be a record answering a different
     question from the one the card asks.
 
-    The subject is a **chosen** one here rather than the source, which is the
-    one difference: the card is a spell that names its creatures, so the
+    The subject is usually a **chosen** one rather than the source, which is
+    the one difference: the card is a spell that names its creatures, so the
     description is carried and the handler resolves it. The count may be an
     announced X, which the several-target description already spells as the
-    string ``"x"``.
+    string ``"x"``. The ability's own source is the other subject the mark is
+    written onto (Gurzigost, ``subject: "source"``).
     """
     if node.duration.kind not in _REST_OF_TURN:
         raise LoweringError(
@@ -72,6 +73,16 @@ def _lower_assigns_combat_damage_as_unblocked(
         _describe_several_targets(payload, node.subject)
     elif _is_target(node.subject):
         _describe_targets(payload, node.subject)
+    elif _is_source(node.subject):
+        # "{G}{G}, Discard a card: You may have **this creature** assign its
+        # combat damage this turn as though it weren't blocked." (Gurzigost.)
+        # The same mark on the ability's own source. The "may" is the offer
+        # around this node and it is answered as the ability resolves — "You
+        # decide how it will assign its damage at the time the ability
+        # resolves. This will be prior to actually assigning combat damage."
+        # (Gurzigost ruling, 2008-04-01) — so what a "yes" buys is the
+        # restriction, with nothing left to decline at the damage step.
+        payload["subject"] = "source"
     else:
         raise LoweringError(
             "the assign-as-though-unblocked mark reaches the creatures the "

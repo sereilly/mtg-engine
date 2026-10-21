@@ -62,7 +62,7 @@ from ...oracle_types import DISCARDED_THIS_WAY
 from ...search_filters import (landing_seat, search_matches,
                                search_names_a_quality, search_slots,
                                searched_seat, slot_assignment)
-from ...handlers.zones import FORGOTTEN_PICKS
+from ...handlers.zones import FORGOTTEN_PICKS, GRAVEYARD_PICK_TO_LIBRARY_BOTTOM
 from ...oracle_types import OracleInstruction
 from ...subject_filters import subject_matches
 from ...trigger_order import (ORDER_TRIGGERS, apply_trigger_order,
@@ -7098,13 +7098,22 @@ class PendingChoicesMixin:
         ``arm_choose_cards_in_hand`` gives: it is the *rule* the candidates came
         from, and re-running it is what keeps the list offered and the list an
         answer is checked against from being two lists.
+
+        **The pick is not always an exile.** "…unless you put two cards from
+        your graveyard on the bottom of your library" (Gurzigost) is the same
+        question — which N cards out of this pile — with another destination,
+        so the payload's ``destination`` rides the prompt (absent for every
+        exile, whose prompt data is byte-identical to what it was) and the one
+        answer path moves the cards where it says.
         """
+        destination = payload.get("destination")
         self.arm_pending_choice(
             "graveyard_exile_pick", player_index,
             card_name=context.card.name,
             owner_index=int(owner_index),
             count=int(payload.get("count", 1)),
             up_to=bool(payload.get("up_to")),
+            **({"destination": destination} if destination else {}),
             _payload=dict(payload),
             _context=context,
         )
@@ -7116,15 +7125,22 @@ class PendingChoicesMixin:
         graveyard exile, its picker and its re-check already share (idiom 9):
         a second reading here would offer a card the resolution then refuses,
         or refuse one it would have taken.
+
+        "…a black creature card **other than this card** from your graveyard"
+        (Ichorid) takes one *slot* out, never a kind of card: CR 113.7's source
+        is the card whose ability this is, and a second copy of it in the same
+        pile is another card and a legal choice. Through
+        ``excluded_graveyard_slot``, the reader Junk Diver's "another" already
+        goes through.
         """
-        from ...handlers._common import graveyard_card_matches
+        from ...handlers._common import graveyard_slots_matching
 
         owner = self.players[int(choice.data["owner_index"])]
         spec = dict(choice.data.get("_payload") or {})
-        return [
-            index for index, card in enumerate(owner.graveyard)
-            if graveyard_card_matches(spec, card)
-        ]
+        context = choice.data.get("_context")
+        return graveyard_slots_matching(
+            spec, owner.graveyard, getattr(context, "card", None)
+        )
 
     def _how_many_graveyard_cards(self, choice: PendingChoice) -> int:
         """The **ceiling**, not the floor: "up to two" out of a pile holding one
@@ -7182,6 +7198,8 @@ class PendingChoicesMixin:
         if any(index not in live for index in picks):
             return False
         taken = [owner.graveyard[index] for index in picks]
+        if choice.data.get("destination") == GRAVEYARD_PICK_TO_LIBRARY_BOTTOM:
+            return self._bottom_graveyard_pick(choice, owner, picks)
         for index in sorted(picks, reverse=True):
             owner.exile.append(owner.graveyard.pop(index))
         # "When this creature enters, exile up to two target cards from a
@@ -7214,6 +7232,33 @@ class PendingChoicesMixin:
             + f" from {owner.name}'s graveyard "
             f"({choice.data.get('card_name', 'an effect')})"
         )
+        return True
+
+    def _bottom_graveyard_pick(
+        self, choice: PendingChoice, owner, picks: list[int]
+    ) -> bool:
+        """Put the validated *picks* on the bottom of *owner*'s library.
+
+        "…unless you put two cards from your graveyard on the bottom of your
+        library." (Gurzigost.) In the order the seat named them, through the
+        library seam (CR 903.9b rides it), and then CR 401.4's order is
+        offered to the owner when two or more went down together — the
+        ordinary ``reorder_library`` prompt pointed at the bottom, which asks
+        an interactive seat only, so a headless or AI seat keeps the order it
+        named and consumes nothing.
+        """
+        cards = [owner.graveyard[index] for index in picks]
+        for index in sorted(picks, reverse=True):
+            owner.graveyard.pop(index)
+        moved = [card for card in cards if self.put_card_into_library(owner, card)]
+        self.discard_pending_choice(choice)
+        self.log.append(
+            f"{self.players[choice.player_index].name} put "
+            + (", ".join(card.name for card in moved) or "nothing")
+            + f" from {owner.name}'s graveyard on the bottom of their library "
+            f"({choice.data.get('card_name', 'an effect')})"
+        )
+        self.offer_library_bottom_order(owner, len(moved))
         return True
 
     def _default_graveyard_exile_pick(self, choice: PendingChoice) -> None:
@@ -10396,7 +10441,7 @@ class PendingChoicesMixin:
         # One link of an "unless any player pays" chain asks the effect's own
         # controller too, and paying is only right for the seat the unpaid
         # branch hurts (`ai_policy.chained_toll_declined`).
-        from ...ai_policy import chained_toll_declined
+        from ...ai_policy import chained_toll_declined, offer_buys_own_drawback
 
         if floating is not None and chained_toll_declined(
             self, choice.player_index, entry
@@ -10404,6 +10449,16 @@ class PendingChoicesMixin:
             floating = None
             self.log.append(
                 f"{player.name} declined to pay for {entry['card_name']}"
+            )
+        # The per-seat offer's version of the same question: what taking it
+        # buys is a drawback to the seat's own permanent (Carrion Rats).
+        elif floating is not None and offer_buys_own_drawback(
+            self, choice.player_index, entry
+        ):
+            floating = None
+            self.log.append(
+                f"{player.name} declined {entry['card_name']} "
+                "(it buys a drawback to their own permanent)"
             )
         # **A trade this policy can price on both sides is weighed, not
         # refused or taken by rule** (`ai_policy.offer_trade_is_worth_taking`:
