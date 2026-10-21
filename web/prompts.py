@@ -1247,6 +1247,17 @@ def _offer_source_card(data: dict):
     return card
 
 
+def _offer_sentences(text: str) -> list[str]:
+    """The sentences of *text* that make an offer ("…unless…" / "…may…"),
+    reminder text dropped, in printed order."""
+    return [
+        sentence.strip()
+        for line in text.split("\n")
+        for sentence in _SENTENCE_END.split(_REMINDER_TEXT.sub("", line).strip())
+        if sentence.strip() and _OFFER_WORD.search(sentence)
+    ]
+
+
 def offer_wording(data: dict) -> dict:
     """What a prompt with no words of its own can say: the printed sentence
     it was armed by, and for "X unless Y" which half each answer is.
@@ -1260,7 +1271,9 @@ def offer_wording(data: dict) -> dict:
 
     * ``card_text`` - the one sentence of the source that makes an offer
       ("…unless…" / "…may…"), or the whole text when that is not exactly one
-      sentence, so nothing is guessed between two offers on one card;
+      sentence, so nothing is guessed between two offers on one card — unless
+      the printed line that armed this offer (the context's ``ability_text``)
+      holds exactly one of them, which is then this offer's;
     * ``accept_text`` / ``decline_text`` - the halves of "X unless Y", which
       is the form where "yes" is the *second* clause and so the one a bare
       Yes / No gets backwards. Absent for "you may …", where yes is the
@@ -1273,15 +1286,23 @@ def offer_wording(data: dict) -> dict:
     text = getattr(card, "oracle_text", "") or ""
     if not text:
         return {}
-    sentences = [
-        sentence.strip()
-        for line in text.split("\n")
-        for sentence in _SENTENCE_END.split(_REMINDER_TEXT.sub("", line).strip())
-        if sentence.strip()
-    ]
-    offers = [sentence for sentence in sentences if _OFFER_WORD.search(sentence)]
+    offers = _offer_sentences(text)
     if len(offers) != 1:
-        return {"card_text": text}
+        # Two offers on one card are told apart by the ability that made this
+        # one, which is not a guess: Gurzigost's upkeep toll ("…sacrifice this
+        # creature unless you put two cards from your graveyard on the bottom
+        # of your library") and its activated "You may have this creature
+        # assign its combat damage …" both read the whole two-sentence text,
+        # so a person could not tell which was being asked. The resolving
+        # context carries the printed line (``ability_text``); an offer
+        # sentence of the card that is in that line, and only one, is this
+        # offer's. Anything else — no line, a line with two offers, a line a
+        # text change has rewritten — is the whole text, as before.
+        line = getattr(data.get("_context"), "ability_text", "") or ""
+        own = [sentence for sentence in _offer_sentences(line) if sentence in offers]
+        if len(own) != 1:
+            return {"card_text": text}
+        offers = own
     sentence = offers[0]
     wording = {"card_text": sentence}
     head, found, tail = sentence.rstrip(".").partition(" unless ")

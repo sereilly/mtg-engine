@@ -30,7 +30,7 @@ import shutil
 import pytest
 from fastapi.testclient import TestClient
 
-from engine.card_loader import load_catalog
+from engine.card_loader import load_cards, load_catalog, manifest_set_paths
 from engine.models import Permanent
 from engine.named_counters import counters_on
 from tests.helpers import app_js_function_body, resolve_stack, run_app_js
@@ -155,6 +155,7 @@ let seat = 0;
 let currentState = INPUT.state;
 let modalModeTargetsSelected = new Set();
 let severalTargetsOpenFor = null;
+let severalTargetsShares = new Map();
 function escapeHtml(text) { return String(text); }
 function tile(markup) {
   const el = {
@@ -183,6 +184,28 @@ const nodes = {
     querySelectorAll() { return this.tiles; },
   },
 };
+// A divided trigger's share inputs (Shambling Swarm): one per chosen target,
+// rebuilt from the markup the renderer writes.
+function shareInput(markup) {
+  const el = {
+    dataset: { triggerShare: /data-trigger-share="(\d+)"/.exec(markup)[1] },
+    value: /value="(\d+)"/.exec(markup)[1],
+    listeners: {},
+    addEventListener(type, fn) { this.listeners[type] = fn; },
+    set(value) { this.value = String(value); this.listeners.input(); },
+  };
+  return el;
+}
+nodes.modalModeTargetsDivision = {
+  inputs: [], markup: "", dataset: {}, hidden: true,
+  classList: { toggle(name, on) { nodes.modalModeTargetsDivision.hidden = on; } },
+  set innerHTML(html) {
+    this.markup = html;
+    this.inputs = (html.match(/<input [^>]*>/g) || []).map(shareInput);
+  },
+  querySelectorAll() { return this.inputs; },
+};
+nodes.modalModeTargetsDivisionRemaining = { textContent: "" };
 const document = { getElementById: (id) => nodes[id] || null };
 const sent = [];
 const hints = [];
@@ -195,6 +218,9 @@ function chosen() { return nodes.modalModeTargetsList.tiles.map((t) => t.classLi
 _DIALOG = [
     "getTriggerTargetInfo", "getModalModeTargetsInfo", "triggerNamesSeveralTargets",
     "severalTargetsPrompt", "candidateOwnerLabel", "renderSeveralTargetsModal",
+    # A divided trigger's shares (Shambling Swarm).
+    "evenStartingDivision", "severalTargetsDivisionValid", "resplitSeveralTargetsShares",
+    "renderSeveralTargetsDivision",
 ]
 
 
@@ -425,3 +451,119 @@ def test_a_graveyard_cast_with_no_permanent_id_is_the_cast_it_names():
     assert sorted(p.card.name for p in game.controlled_by(0)) == ["Grizzly Bears", "Hill Giant"]
     assert game.is_on_battlefield(bears)
     assert game.players[0].graveyard == [_CARDS["Resurrection"]]
+
+
+# --- Torment: a division chosen with the targets, and an exact count ---------
+#
+# Two `trigger_target` fields wave 1 put on the wire with no client behind
+# them: ``division_total`` (Shambling Swarm's "distribute three -1/-1 counters
+# among one, two, or three target creatures", CR 601.2d) and
+# ``exact_targets`` (Petradon's "exile two target lands", CR 601.2c). Measured
+# cards, so they come from both manifest roles rather than the catalog.
+
+_TOR: dict = {}
+for _card in load_cards(manifest_set_paths(include_measured=True)):
+    _TOR.setdefault(_card.name, _card)
+
+
+def _put(game, seat, name):
+    permanent = Permanent(card=_TOR[name])
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    return permanent
+
+
+@needs_node
+def test_a_divided_trigger_is_answered_with_its_shares():
+    """The dialog takes a share per chosen target, starts from an even split,
+    holds its confirm while the shares do not total three, and sends
+    ``divided_targets`` — a 1 and 2 split the id list could not say."""
+    sid, game = _session()
+    swarm = _put(game, 0, "Shambling Swarm")
+    bears = _put(game, 1, "Grizzly Bears")
+    giant = _put(game, 1, "Hill Giant")
+    _put(game, 1, "Savannah Lions")
+    game.place_pt_counters(swarm, "-1/-1", 3)
+    game.check_state_based_actions()
+    state = _state(sid)
+    assert state["trigger_target"]["division_total"] == 3
+
+    out = run_app_js(
+        _DIALOG,
+        """
+        show();
+        const subtitle = nodes.modalModeTargetsSubtitle.textContent;
+        const box = nodes.modalModeTargetsDivision;
+        nodes.modalModeTargetsList.tiles[0].click();
+        nodes.modalModeTargetsList.tiles[1].click();
+        const even = box.inputs.map((input) => input.value);
+        box.inputs[0].set(1);
+        const short = nodes.modalModeTargetsConfirmBtn.disabled;
+        box.inputs[1].set(2);
+        const whole = nodes.modalModeTargetsConfirmBtn.disabled;
+        // A state arriving mid-edit keeps the inputs (and what was typed).
+        show();
+        const kept = box.inputs.map((input) => input.value);
+        await nodes.modalModeTargetsConfirmBtn.onclick();
+        return { subtitle, even, short, whole, kept, sent };
+        """,
+        {"state": state},
+        prelude=_DOM,
+    )
+
+    assert out["subtitle"] == (
+        "Shambling Swarm: its triggered ability names 1 to 3 targets. "
+        "Divide 3 among the targets you choose; each gets at least 1."
+    )
+    assert out["even"] == ["2", "1"]
+    assert (out["short"], out["whole"]) == (True, False)
+    assert out["kept"] == ["1", "2"]
+    assert out["sent"] == [{
+        "seat": 0, "action": "trigger_target_confirm",
+        "divided_targets": [
+            {"seat": 1, "id": bears.permanent_id, "amount": 1},
+            {"seat": 1, "id": giant.permanent_id, "amount": 2},
+        ],
+    }]
+    response = client.post(f"/api/sessions/{sid}/action", json=out["sent"][0])
+    assert response.status_code == 200, response.text
+    resolve_stack(game)
+    assert (counters_on(bears, "-1/-1"), counters_on(giant, "-1/-1")) == (1, 2)
+
+
+@needs_node
+def test_an_exact_trigger_count_holds_its_confirm_until_the_last_target():
+    """"Exile two target lands": one land chosen is not an answer, so the
+    confirm waits for the second — where the dialog's minimum of one offered
+    a short answer the server refused."""
+    sid, game = _session()
+    _put(game, 0, "Swamp")
+    lands = [_put(game, 1, name) for name in ("Forest", "Mountain", "Plains")]
+    _put(game, 0, "Petradon")
+    state = _state(sid)
+    assert state["trigger_target"]["exact_targets"] is True
+
+    out = run_app_js(
+        _DIALOG,
+        """
+        show();
+        const subtitle = nodes.modalModeTargetsSubtitle.textContent;
+        const tiles = nodes.modalModeTargetsList.tiles;
+        const ids = tiles.map((tile) => Number(tile.dataset.id));
+        const none = nodes.modalModeTargetsConfirmBtn.disabled;
+        tiles[ids.indexOf(INPUT.first)].click();
+        const one = nodes.modalModeTargetsConfirmBtn.disabled;
+        tiles[ids.indexOf(INPUT.second)].click();
+        const two = nodes.modalModeTargetsConfirmBtn.disabled;
+        await nodes.modalModeTargetsConfirmBtn.onclick();
+        return { subtitle, none, one, two, sent };
+        """,
+        {"state": state, "first": lands[0].permanent_id, "second": lands[2].permanent_id},
+        prelude=_DOM,
+    )
+
+    assert out["subtitle"] == "Petradon: its triggered ability names exactly 2 targets. Choose 2."
+    assert (out["none"], out["one"], out["two"]) == (True, True, False)
+    response = client.post(f"/api/sessions/{sid}/action", json=out["sent"][0])
+    assert response.status_code == 200, response.text
+    resolve_stack(game)
+    assert sorted(card.name for card in game.players[1].exile) == ["Forest", "Plains"]
