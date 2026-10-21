@@ -909,6 +909,32 @@ def grant_protection_flag(perm: Permanent, word: str) -> None:
     perm.metadata.setdefault(PROTECTION_GRANT_STAMPS, {})[word] = next_timestamp()
 
 
+def protection_removals(perm: Permanent) -> dict[tuple[str, str], int]:
+    """Each protection quality a layer-6 removal has taken from *perm*, with
+    the newest such removal's timestamp.
+
+    "Target creature **loses protection from black** until end of turn."
+    (Cephalid Snitch.) ``remove_keyword`` records the removal like any other
+    keyword's, but protection is not read off layer 6's word set: it is a
+    keyword carrying a quality (CR 702.16), gathered from every source by
+    ``mixins/permanent_state._protection_qualities``. So that reader asks
+    this, and keeps a quality only where some source granted it **after**
+    the removal (CR 613.7: the later effect wins) — which no printed line
+    ever did.
+    """
+    removed: dict[tuple[str, str], int] = {}
+    for entry in perm.metadata.get(ABILITY_EFFECTS) or ():
+        if entry.get("grant"):
+            continue
+        keyword = str(entry.get("keyword") or "")
+        if not keyword.startswith("protection from "):
+            continue
+        stamp = int(entry.get("timestamp", 0) or 0)
+        for quality in protection_qualities_named(keyword[len("protection from "):]) or ():
+            removed[quality] = max(removed.get(quality, stamp), stamp)
+    return removed
+
+
 def protection_flag_granted_after(perm: Permanent, word: str, after: int) -> bool:
     """Whether the metadata-channel protection from *word* was granted later
     than *after*. A flag with no stamp was written by hand (a fixture) and is

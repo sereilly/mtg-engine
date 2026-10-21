@@ -131,7 +131,7 @@ def arm_turn_replacement(game, record: TurnReplacement) -> TurnReplacement:
 
 
 def armed_turn_replacements(game, event: str) -> list[TurnReplacement]:
-    """Every record watching *event*, in APNAP-independent seat order and, on
+    """Every record watching *event*, seat by seat and, on
     each seat, the order they were armed. Pure.
 
     Read through ``getattr`` rather than :func:`turn_replacements_on`: every

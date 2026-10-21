@@ -137,6 +137,67 @@ def test_w1g7_cephalid_illusionist_shields_both_ends_of_a_fight(set_pool):
     assert ogre.damage_marked == 0 and giant.damage_marked == 0
     assert ogre in game.players[0].battlefield and giant in game.players[1].battlefield
 
+
+def _w1g7_snitch_board(set_pool):
+    """Seat 0: Cephalid Snitch and two Terrors. Seat 1: a White Knight
+    (protection from black)."""
+    tor, lea = set_pool("TOR"), set_pool("LEA")
+    snitch = _w1g7_nosick(_w1g7_Permanent(card=tor["Cephalid Snitch"]))
+    knight = _w1g7_nosick(_w1g7_Permanent(card=lea["White Knight"]))
+    game = _w1g7_Game(players=[
+        _w1g7_PlayerState(name="P0", battlefield=[snitch], hand=[lea["Terror"]] * 2),
+        _w1g7_PlayerState(name="P1", battlefield=[knight]),
+    ])
+    game.enforce_mana_costs = False
+    return game, snitch, knight
+
+
+def test_w1g7_cephalid_snitch_takes_protection_from_black_away(set_pool):
+    """"Sacrifice this creature: Target creature loses protection from black
+    until end of turn." The White Knight's printed protection was read off its
+    line and the removal never asked, so the log said it lost the ability and
+    a Terror still could not target it. Now it can."""
+    game, snitch, knight = _w1g7_snitch_board(set_pool)
+    refused = game.cast_from_hand(0, "Terror", target_permanent_ids=[knight.permanent_id])
+    assert not refused.supported and "illegal target" in refused.details
+    assert game.activate_permanent_ability(
+        0, "Cephalid Snitch", target_permanent_ids=[knight.permanent_id],
+    ).supported
+    _w1g7_resolve_stack(game)
+    assert snitch not in game.players[0].battlefield
+    assert game.cast_from_hand(0, "Terror", target_permanent_ids=[knight.permanent_id]).supported
+    _w1g7_resolve_stack(game)
+    assert knight not in game.players[1].battlefield
+
+
+def test_w1g7_cephalid_snitch_loss_ends_with_the_turn(set_pool):
+    """Until end of turn: after cleanup the Knight has its protection back."""
+    game, _, knight = _w1g7_snitch_board(set_pool)
+    game.activate_permanent_ability(
+        0, "Cephalid Snitch", target_permanent_ids=[knight.permanent_id],
+    )
+    _w1g7_resolve_stack(game)
+    assert ("color", "B") not in game._protection_qualities(knight)
+    game.resolve_cleanup_step(0)
+    assert ("color", "B") in game._protection_qualities(knight)
+
+
+def test_w1g7_a_protection_granted_after_the_loss_stays(set_pool):
+    """CR 613.7: the later effect wins. Protection from black granted after
+    the Snitch's removal (Floating Shield's sacrifice, black named) is kept;
+    the printed one, older than the removal, is not."""
+    from engine.keywords import grant_protection_flag
+
+    game, _, knight = _w1g7_snitch_board(set_pool)
+    game.activate_permanent_ability(
+        0, "Cephalid Snitch", target_permanent_ids=[knight.permanent_id],
+    )
+    _w1g7_resolve_stack(game)
+    assert ("color", "B") not in game._protection_qualities(knight)
+    grant_protection_flag(knight, "black")
+    assert ("color", "B") in game._protection_qualities(knight)
+
+
 # ==== end W1G7 ======================================================
 
 

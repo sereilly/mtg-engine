@@ -1645,6 +1645,18 @@ def source_bites_target(game, instruction, context):
         # nothing rather than the enchantment biting with its own zero power.
         bound = (context.trigger_context or {}).get("event_subject_permanent_id")
         source = game.permanent_by_id(bound) if isinstance(bound, int) else None
+    elif instruction.payload.get("biter") == "tapped_this_way":
+        # ``biter: "tapped_this_way"`` — "Tap target untapped creature you
+        # control. If you do, **it** deals damage …" (Spirit Flare). The
+        # creature the step in front of this one tapped, read off the record
+        # that step wrote (``tapped_permanents``) by stable id. Exactly one:
+        # the pronoun names one object, and a record of none (the tap did not
+        # happen, so "if you do" already declined) or of several is no biter.
+        tapped = context.results.get("tapped_permanents") or ()
+        source = (
+            game.permanent_by_id(tapped[0])
+            if len(tapped) == 1 and isinstance(tapped[0], int) else None
+        )
     if source is None:
         game.log.append(f"{card.name}: nothing to deal the damage")
         return True, "resolved"

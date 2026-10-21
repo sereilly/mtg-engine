@@ -3657,9 +3657,26 @@ class PermanentStateMixin:
         """
         qualities: set[tuple[str, str]] = set()
         program = compile_card_oracle(permanent.effective_card)
-        from ..keywords import EACH_OF_ITS_COLORS, protection_qualities_named
+        from ..keywords import (EACH_OF_ITS_COLORS, PROTECTION_GRANT_STAMPS,
+                                protection_qualities_named,
+                                protection_removals)
 
-        def _named(word: str) -> None:
+        # "Target creature **loses protection from black** until end of
+        # turn." (Cephalid Snitch.) A layer-6 removal takes every instance of
+        # the quality older than it and none newer (CR 613.7), so each source
+        # below adds what it grants *with its timestamp* and a removed quality
+        # is kept only where something granted it after the removal. A printed
+        # line is the oldest thing a permanent has (stamp 0). This reader asked
+        # nothing, so the Snitch logged the loss and the White Knight kept
+        # protection from black.
+        removed_at = protection_removals(permanent)
+
+        def _add(quality: tuple[str, str], stamp: int = 0) -> None:
+            removal = removed_at.get(quality)
+            if removal is None or stamp > removal:
+                qualities.add(quality)
+
+        def _named(word: str, stamp: int = 0) -> None:
             # One member of a clause, which may itself be shorthand for
             # several abilities: "each color" (CR 702.16h, Iridescent Angel)
             # is five, and "each of its colors" (CR 702.16i, Earnest
@@ -3672,9 +3689,8 @@ class PermanentStateMixin:
             held = None
             if " ".join(str(word).lower().split()) == EACH_OF_ITS_COLORS:
                 held = self._effective_colors(permanent)
-            qualities.update(
-                protection_qualities_named(word, holder_colors=held) or ()
-            )
+            for quality in protection_qualities_named(word, holder_colors=held) or ():
+                _add(quality, stamp)
 
         def _absorb(clause: str) -> None:
             # CR 702.16g/h/i: "protection from [A] and from [B]" (and comma
@@ -3703,7 +3719,7 @@ class PermanentStateMixin:
         # it then has, and nothing has to remove it when the ability goes.
         own_chosen = own_chosen_protection_color(permanent)
         if own_chosen is not None:
-            qualities.add(("color", own_chosen))
+            _add(("color", own_chosen))
         # **Every grant below is asked its age** where the permanent has lost
         # all abilities (CR 613.1f, CR 613.7): the loss takes the protection an
         # older effect gave and leaves a newer one's, which is the rule
@@ -3731,7 +3747,8 @@ class PermanentStateMixin:
                 # it doesn't remove that Aura.
                 continue
             # CR 613.7e: stamped when it became attached.
-            if not _kept(int(aura.metadata.get("aura_timestamp", aura.timestamp))):
+            aura_stamp = int(aura.metadata.get("aura_timestamp", aura.timestamp))
+            if not _kept(aura_stamp):
                 continue
             for word in aura_protection_colors(aura.effective_card.oracle_text):
                 if word == AMONG_CONTROLLED_PROTECTION_COLORS:
@@ -3755,7 +3772,7 @@ class PermanentStateMixin:
                         for symbol in colors_among(
                             self, self.controlled_by(aura_seat)
                         ):
-                            qualities.add(("color", symbol))
+                            _add(("color", symbol), aura_stamp)
                     continue
                 if word == CHOSEN_PROTECTION_COLOR:
                     # "…protection from **the chosen color**." (Ward of
@@ -3772,9 +3789,9 @@ class PermanentStateMixin:
                         # "…protection from **enchantments**" (Tattoo Ward):
                         # a quality that is not a colour, through the reader
                         # every printed clause goes through.
-                        _named(word)
+                        _named(word, aura_stamp)
                 if symbol:
-                    qualities.add(("color", symbol))
+                    _add(("color", symbol), aura_stamp)
         # A lord's grant ("Other Cats you control … have protection from Dogs",
         # Feline Sovereign). **Derived**, exactly as the Aura grant above is: a
         # lord buff is cleared and rebuilt on every recompute, so a grant stamped
@@ -3806,7 +3823,7 @@ class PermanentStateMixin:
                     # protection from each of its colors." (Earnest
                     # Fellowship) is computed per creature reached — *its*
                     # colours, not the lord's.
-                    _named(word)
+                    _named(word, lord.timestamp)
         # A **conditional** self-grant: "As long as an opponent controls a
         # creature with protection from white …, this creature has protection
         # from white." (Escaped Shapeshifter.) Derived, exactly as the Aura and
@@ -3859,7 +3876,7 @@ class PermanentStateMixin:
                         for word in words:
                             quality = self._protection_quality_of(word)
                             if quality is not None:
-                                qualities.add(quality)
+                                _add(quality, granter.timestamp)
             finally:
                 in_progress.discard(permanent.permanent_id)
         # The metadata channel, for protection granted with a lifetime of its own
@@ -3874,7 +3891,10 @@ class PermanentStateMixin:
                     permanent, word, lost_at
                 ):
                     continue
-                _named(word)
+                _named(
+                    word,
+                    int((permanent.metadata.get(PROTECTION_GRANT_STAMPS) or {}).get(word, 0)),
+                )
         # No Sleight of Mind step here: the clause above was read off
         # ``effective_card``, whose text layer 3 has already rewritten, so
         # "protection from blue" already reads "protection from red". Remapping

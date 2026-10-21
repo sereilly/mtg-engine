@@ -40,7 +40,8 @@ from ._common import (
     testable_filter_payload,
 )
 from ._events import (_DAMAGED_PERMANENTS, _EVENT_SUBJECT_CONTROLLERS,
-                      _EVENT_SUBJECT_OBJECTS, _RECORDED_PERMANENTS)
+                      _EVENT_SUBJECT_OBJECTS, _RECORDED_PERMANENTS,
+                      _TAPPED_PERMANENTS)
 
 
 def lower_bite(
@@ -374,6 +375,20 @@ def lower_bite(
         payload: dict[str, object] = {}
         _describe_targets(payload, node.recipients[0])
         payload["filter"] = _filter_payload(node.recipients[0].filter)
+        if (
+            node.source.quantifier == "it"
+            and not _is_enchanted(node.source)
+            and _TAPPED_PERMANENTS in produced
+        ):
+            # "Tap target untapped creature you control. **If you do, it**
+            # deals damage equal to its power to target attacking or blocking
+            # creature an opponent controls." (Spirit Flare.) A bare "it"
+            # behind a sentence that tapped something names what was tapped —
+            # the only prior object in the effect, Deadshot's reading of the
+            # same pronoun (``fusions._fused_tap_then_bite``). Read as the
+            # ability's source it named nothing on a spell, which has none,
+            # and the card tapped its creature and dealt no damage.
+            payload["biter"] = "tapped_this_way"
         if _is_enchanted(node.source):
             payload["biter"] = "attached"
             # "…to **another** target creature": other than the creature

@@ -212,6 +212,83 @@ def test_w1g7_plagiarize_takes_the_draw_step_draw(set_pool):
     game._draw_with_replacements(game.players[1], 1, turn_based=True)
     assert _w1g7_hands(game) == [["Forest"], []]
 
+
+def _w1g7_spirit_flare_board(set_pool, *, from_graveyard=False):
+    """Seat 1's Gray Ogre attacking seat 0, who holds Spirit Flare and an
+    untapped Hill Giant (3 power)."""
+    tor, lea = set_pool("TOR"), set_pool("LEA")
+    flare = tor["Spirit Flare"]
+    giant = _w1g7_nosick(_w1g7_Permanent(card=lea["Hill Giant"]))
+    ogre = _w1g7_nosick(_w1g7_Permanent(card=lea["Gray Ogre"]))
+    game = _w1g7_Game(players=[
+        _w1g7_PlayerState(
+            name="P0", battlefield=[giant],
+            hand=[] if from_graveyard else [flare],
+            graveyard=[flare] if from_graveyard else [],
+        ),
+        _w1g7_PlayerState(name="P1", battlefield=[ogre]),
+    ])
+    game.enforce_mana_costs = False
+    game.active_player_index = 1
+    game._set_phase_and_step("combat", "declare_attackers")
+    ok, why = game.declare_attackers(1, [0], defending_player_index=0)
+    assert ok, why
+    return game, flare, giant, ogre
+
+
+def _w1g7_flare_roles(giant, ogre):
+    return [{"permanent_id": giant.permanent_id}, {"permanent_id": ogre.permanent_id}]
+
+
+def test_w1g7_spirit_flare_bites_with_the_creature_it_tapped(set_pool):
+    """"Tap target untapped creature you control. If you do, it deals damage
+    equal to its power to target attacking or blocking creature an opponent
+    controls." "It" is the tapped Giant — a spell has no source to bite with,
+    which is what the card did before: tapped its creature and dealt nothing."""
+    game, _, giant, ogre = _w1g7_spirit_flare_board(set_pool)
+    spec = game.cast_target_spec(0, set_pool("TOR")["Spirit Flare"])
+    assert [entry["name"] for entry in spec["valid_targets"]] == ["Hill Giant"]
+    assert [entry["name"] for entry in spec["valid_targets"][0]["next"]] == ["Gray Ogre"]
+    assert game.cast_from_hand(
+        0, "Spirit Flare", target_role_refs=_w1g7_flare_roles(giant, ogre),
+    ).supported
+    _w1g7_resolve_stack(game)
+    assert giant.tapped
+    assert "Hill Giant deals 3 damage to Gray Ogre" in game.log
+    assert ogre not in game.players[1].battlefield
+
+
+def test_w1g7_spirit_flare_does_nothing_if_its_creature_is_tapped_in_response(set_pool):
+    """"If you do": the Giant tapped in response is no longer "untapped" — an
+    illegal target as the spell resolves (CR 608.2b) — so it is not tapped by
+    the spell and deals no damage (the 2004-10-04 ruling: "If either target is
+    illegal when the spell resolves, it will do no damage")."""
+    game, _, giant, ogre = _w1g7_spirit_flare_board(set_pool)
+    assert game.queue_from_hand(
+        0, "Spirit Flare", target_role_refs=_w1g7_flare_roles(giant, ogre),
+    ).supported
+    game.become_tapped(giant)
+    _w1g7_resolve_stack(game)
+    assert ogre in game.players[1].battlefield and ogre.damage_marked == 0
+    assert not any("deals 3 damage" in line for line in game.log)
+
+
+def test_w1g7_spirit_flare_flashback_pays_mana_and_three_life(set_pool):
+    """"Flashback—{1}{W}, Pay 3 life." From the graveyard for exactly that, the
+    same bite, and the card is exiled."""
+    game, flare, giant, ogre = _w1g7_spirit_flare_board(set_pool, from_graveyard=True)
+    game.enforce_mana_costs = True
+    game.players[0].mana_pool["W"] = 2
+    assert game.cast_from_hand(
+        0, "Spirit Flare", from_zone="graveyard",
+        target_role_refs=_w1g7_flare_roles(giant, ogre),
+    ).supported
+    _w1g7_resolve_stack(game)
+    assert game.players[0].life == 17
+    assert game.players[0].exile == [flare]
+    assert ogre not in game.players[1].battlefield
+
+
 # ==== end W1G7 ======================================================
 
 
