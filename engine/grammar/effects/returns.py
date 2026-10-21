@@ -260,8 +260,13 @@ def _parse_return(
         and stream.accept_phrase("from", "your", "graveyard")
     ):
         pronoun_from = ast.Zone("graveyard", ast.PlayerRef("you"))
+    # ``several_targets``: "Return target creature **and target land** to
+    # their owners' hands" (Churning Eddy) is one announcement of two targets
+    # (CR 601.2c), and the lowering describes both as ordered roles
+    # (``ReturnToZone.also_targets``) — or refuses the shape it cannot.
     further = _parse_further_subjects(
-        stream, subject, before_destination=destination_first is None
+        stream, subject, before_destination=destination_first is None,
+        several_targets=True,
     )
     if destination_first is not None:
         destination = destination_first
@@ -415,6 +420,23 @@ def _parse_return(
         )
 
     if further:
+        targeted = [
+            each for each in (subject, *further)
+            if isinstance(each, ast.TargetSpec) and each.quantifier == "target"
+        ]
+        if len(targeted) > 1:
+            # "Return target creature **and target land** to their owners'
+            # hands." (Churning Eddy.) Two targets of one spell are one
+            # announcement, so one statement — ``ast.Destroy.also_targets``'s
+            # reasoning one verb over. Every phrase must be targeted: a union
+            # mixing a target with a sweep is two things happening.
+            if len(targeted) != len(further) + 1:
+                raise stream.error(
+                    "a union naming a target and a sweep is not one announcement"
+                )
+            return dataclasses.replace(
+                _one(subject), also_targets=tuple(targeted[1:])
+            )
         return ast.Conjunction(tuple(_one(each) for each in (subject, *further)))
     return _one(subject)
 

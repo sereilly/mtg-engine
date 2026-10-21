@@ -422,6 +422,13 @@ class ReturnToZone:
     #: "return that card to the battlefield" are one move, and the parser stamps
     #: whichever the card printed.
     bound_card_from: str | None = None
+    #: "Return target creature **and target land** to their owners' hands."
+    #: (Churning Eddy.) The other targeted phrases of the one verb, beyond
+    #: ``subject`` — :attr:`Destroy.also_targets`' field one verb over, and for
+    #: its reason: two targets of one spell are one announcement (CR 601.2c),
+    #: described as ordered roles, never a conjunction whose second half no
+    #: picker asks for. Empty for every return printed before Torment.
+    also_targets: tuple[TargetSpec, ...] = ()
 
 
 @dataclass(frozen=True)

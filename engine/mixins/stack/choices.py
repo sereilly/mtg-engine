@@ -9272,6 +9272,7 @@ class PendingChoicesMixin:
         seat: int | None = None, permanent_ids: list[int] | None = None,
         graveyard_index: int | None = None,
         stack_item=None,
+        amounts: list[int] | None = None,
     ) -> bool:
         """Answer a triggered ability's target choice.
 
@@ -9295,11 +9296,19 @@ class PendingChoicesMixin:
         stack object itself, because a spell has no id and its position is only
         true until the stack next moves. The wire names it by position
         (``trigger_target_stack_item``) and this is what that resolves to.
+
+        *amounts* is CR 601.2d's division for a prompt armed with a
+        ``division_total`` ("distribute three -1/-1 counters among one, two,
+        or three target creatures", Shambling Swarm): one share per id in
+        *permanent_ids*, in the same order. It may be left out only where the
+        division is forced — one target takes the whole total, and as many
+        targets as the total take one apiece — or where the game divides
+        evenly.
         """
         return self.resolve_pending_choice(
             "trigger_target", player_index, permanent_id=permanent_id, seat=seat,
             permanent_ids=permanent_ids, graveyard_index=graveyard_index,
-            stack_item=stack_item,
+            stack_item=stack_item, amounts=amounts,
         )
 
     def trigger_target_stack_item(self, player_index: int, top_first_index: int):
@@ -9324,7 +9333,9 @@ class PendingChoicesMixin:
                 return named
         return None
 
-    def _resolve_trigger_targets(self, choice: PendingChoice, permanent_ids) -> bool:
+    def _resolve_trigger_targets(
+        self, choice: PendingChoice, permanent_ids, amounts=None,
+    ) -> bool:
         """Record **several** chosen targets on the stack object (CR 601.2c).
 
         The answer for a prompt armed with ``max_targets`` — "each of up to two
@@ -9377,18 +9388,88 @@ class PendingChoicesMixin:
         permanents = [self.permanent_by_id(permanent_id) for permanent_id in named]
         if any(permanent is None for permanent in permanents):
             return False
+        division = None
+        if choice.data.get("division_total") is not None:
+            division = self._trigger_division_entries(choice, permanents, amounts)
+            if division is None:
+                return False
         queued = self._choice_is_queued(choice)
         self.discard_pending_choice(choice)
         item.target_permanent_id = named
         item.target_permanent_index = None
         item.target_player_index = self.announced_target_seat(named)
         item.targets_chosen = self._trigger_target_was_a_choice()
+        if division is not None:
+            # On the key a divided *spell* and a divided activation carry it
+            # (``divided_damage.DIVIDED_TARGETS``), so the placement handler,
+            # ``stack_targets``' reader and CR 608.2b's blanking read a
+            # trigger's division exactly as they read Bounty of the Hunt's.
+            from ...divided_damage import DIVIDED_TARGETS
+
+            item.choices[DIVIDED_TARGETS] = division
+        labels = [permanent.card.name for permanent in permanents]
+        if division is not None:
+            labels = [
+                label if entry[2] is None else f"{label} ({entry[2]})"
+                for label, entry in zip(labels, division)
+            ]
         self.log.append(
             f"{choice.data.get('card_name', 'Ability')}: targets "
-            + ", ".join(permanent.card.name for permanent in permanents)
+            + ", ".join(labels)
         )
         self._announce_answered_targets(item, choice, queued)
         return True
+
+    def _trigger_division_entries(self, choice: PendingChoice, permanents, amounts):
+        """CR 601.2d's announcement for a divided trigger's chosen
+        *permanents*, as ``divided_targets`` entries — or None when the
+        division is not one the rules allow.
+
+        *amounts* is the announcer's division, one share per permanent. Left
+        out it is taken only where nobody had a choice to make
+        (``divided_damage.forced_division``: one target takes the total, as
+        many targets as the total take one apiece) or where the game divides
+        (``evenly``); otherwise a missing division is refused rather than
+        invented, because 2+1 and 1+2 are the announcer's to pick. The answer
+        is held to ``division_refusal``, the gate a divided spell and a
+        divided activation are held to, so a share of 0, a wrong total or a
+        repeated target is refused the same way.
+        """
+        from ...divided_damage import (CHOSEN, EVENLY, division_refusal,
+                                       forced_division, stamped_entry)
+
+        total = int(choice.data["division_total"])
+        how = choice.data.get("division", EVENLY)
+        if how != CHOSEN:
+            if amounts is not None:
+                return None
+            shares = [None] * len(permanents)
+        elif amounts is None:
+            shares = forced_division(total, len(permanents))
+            if shares is None:
+                return None
+        else:
+            shares = list(amounts)
+            if len(shares) != len(permanents) or not all(
+                isinstance(share, int) and not isinstance(share, bool)
+                for share in shares
+            ):
+                return None
+        entries = []
+        for permanent, share in zip(permanents, shares):
+            seat = self.controller_index_of(permanent)
+            if seat is None:
+                return None
+            entries.append(stamped_entry(
+                seat, self.battlefield_index_of(permanent), share,
+                permanent.permanent_id,
+            ))
+        if division_refusal(
+            total, entries, division=how,
+            max_targets=choice.data.get("max_targets"),
+        ) is not None:
+            return None
+        return entries
 
     def _resolve_trigger_graveyard_target(
         self, choice: PendingChoice, seat, graveyard_index: int,
@@ -9442,6 +9523,7 @@ class PendingChoicesMixin:
         seat: int | None = None, permanent_ids: list[int] | None = None,
         graveyard_index: int | None = None,
         stack_item=None,
+        amounts: list[int] | None = None,
     ) -> bool:
         """Record the chosen target on the stack object that asked (CR 601.2c).
 
@@ -9460,6 +9542,17 @@ class PendingChoicesMixin:
         """
         item = choice.data.get("_trigger_item")
         if item is None:
+            return False
+        if choice.data.get("division_total") is not None:
+            # A division (CR 601.2d) is a list of targets with a share each,
+            # even when the list is one long: a single id is that list, and
+            # every other shape of answer names nothing this prompt offered.
+            if permanent_ids is None and permanent_id is not None:
+                permanent_ids = [permanent_id]
+            if permanent_ids is None:
+                return False
+            return self._resolve_trigger_targets(choice, permanent_ids, amounts)
+        if amounts is not None:
             return False
         if permanent_ids is not None:
             return self._resolve_trigger_targets(choice, permanent_ids)
@@ -9624,6 +9717,8 @@ class PendingChoicesMixin:
             self.discard_pending_choice(choice)
             return True
         item = choice.data.get("_trigger_item")
+        if choice.data.get("division_total") is not None:
+            return self._default_trigger_division(choice, item)
         # "…counter target **spell**" (Mystic Snake): the topmost spell on the
         # side the effect wants — a counter is aimed at an opponent's — and the
         # topmost offered when that side has none, because the target is
@@ -9716,6 +9811,45 @@ class PendingChoicesMixin:
         if first.get("kind") == "player":
             return self._resolve_trigger_target(choice, seat=first["seat"])
         return self._resolve_trigger_target(choice, permanent_id=first["permanent_id"])
+
+    def _default_trigger_division(self, choice: PendingChoice, item) -> bool:
+        """A non-interactive seat's announcement for a **divided** trigger
+        (CR 603.3d, CR 601.2d): which targets, and each one's share.
+
+        The policy a divided *spell* is proposed with
+        (``ai_policy.choose_divided_targets``), applied to the trigger's own
+        candidates: on the side the effect wants
+        (:meth:`_default_trigger_target_side` — Shambling Swarm's ``-1/-1``
+        reads as an opponent's), **spread** as far as the ceiling allows, with
+        the total split by ``divided_damage.spread_shares``. A side with nothing
+        on it leaves the mandatory target to the other side, and there the
+        division is concentrated on one creature: an effect aimed at the
+        wrong board does least harm in one place.
+        """
+        from ...divided_damage import CHOSEN, EVENLY, spread_shares
+
+        permanents = [
+            target["permanent_id"] for target in choice.data.get("targets") or ()
+            if target.get("kind") == "permanent"
+        ]
+        wanted = (
+            self._default_trigger_target_side(item, choice.player_index)
+            if item is not None else set()
+        )
+        preferred = [
+            target["permanent_id"] for target in choice.data.get("targets") or ()
+            if target.get("kind") == "permanent"
+            and (not wanted or target.get("seat") in wanted)
+        ]
+        ceiling = max(1, int(choice.data.get("max_targets") or 1))
+        picked = preferred[:ceiling] if preferred else permanents[:1]
+        if not picked:
+            self.discard_pending_choice(choice)
+            return True
+        amounts = None
+        if choice.data.get("division", EVENLY) == CHOSEN:
+            amounts = spread_shares(int(choice.data["division_total"]), len(picked))
+        return self._resolve_trigger_targets(choice, picked, amounts)
 
     def _default_trigger_target_side(self, item, chooser: int) -> set:
         """The seats whose permanent a non-interactive *chooser* aims *item*
@@ -11583,6 +11717,7 @@ register_choice(
     resolve=lambda game, choice, r: game._resolve_trigger_target(
         choice, r.get("permanent_id"), r.get("seat"), r.get("permanent_ids"),
         graveyard_index=r.get("graveyard_index"), stack_item=r.get("stack_item"),
+        amounts=r.get("amounts"),
     ),
     default=lambda game, choice: game._default_trigger_target(choice),
     action="trigger_target_confirm",

@@ -686,6 +686,13 @@ def _trigger_target(ctx: PromptContext, choices: list) -> dict:
     # when told. Absent for an ability that owes its target, as above.
     if choice.data.get("up_to"):
         payload["up_to"] = True
+    # "Distribute three -1/-1 counters among one, two, or three target
+    # creatures" (Shambling Swarm): CR 601.2d's total and who divides it, the
+    # two fields a divided spell's picker reads (``division_total``,
+    # ``division``). Absent for every trigger that divides nothing.
+    if choice.data.get("division_total") is not None:
+        payload["division_total"] = int(choice.data["division_total"])
+        payload["division"] = choice.data.get("division")
     return payload
 
 

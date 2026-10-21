@@ -72,7 +72,7 @@ from .activation_restrictions import activation_denial, global_activation_ban
 from .cast_costs import additional_costs, cast_announces_x
 from .cast_prohibitions import cast_prohibition
 from .cast_restrictions import check_cast_timing
-from .divided_damage import EACH
+from .divided_damage import EACH, spread_shares
 from .cost_modifiers import (CostReduction, cost_reduction_for_cast,
                              keyword_cost_modifiers, reduce_cost,
                              sacrifice_taxes, spell_cost_tax, spell_symbol_tax)
@@ -5711,10 +5711,10 @@ def _even_shares(total: int, count: int) -> list[int]:
     CR 601.2d wants every target to receive at least one, so the remainder is
     spread rather than dropped — the same starting division
     ``evenStartingDivision`` offers a human in the browser, which is where this
-    arithmetic already lived.
+    arithmetic already lived. One arithmetic with a divided trigger's default
+    (``divided_damage.spread_shares``).
     """
-    base, left = divmod(total, count)
-    return [base + (1 if index < left else 0) for index in range(count)]
+    return spread_shares(total, count)
 
 
 def choose_divided_targets(

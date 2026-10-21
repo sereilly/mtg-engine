@@ -784,10 +784,8 @@ class StackResolutionMixin:
     #: only one of those; unchosen at three seats, where CR 601.2c says the
     #: ability's controller picks and the engine picked for them.
     #:
-    #: ``divided`` is deliberately not here. "Divided as you choose among any
-    #: number of targets" announces a *set* with an assignment attached
-    #: (CR 601.2d), which is the pile-division prompt rather than this one, and
-    #: no trigger in the pool prints it.
+    #: ``divided`` is not here, because it is not a player kind: see
+    #: :attr:`_CHOOSABLE_TRIGGER_DIVIDED_KINDS` below.
     _CHOOSABLE_TRIGGER_PLAYER_KINDS = frozenset({
         "player", "player_or_planeswalker", "any",
     })
@@ -803,6 +801,36 @@ class StackResolutionMixin:
     #: cast picker and ``cast_stack_target_refusal`` read; with no spell to
     #: name, the ability is removed.
     _CHOOSABLE_TRIGGER_STACK_KINDS = frozenset({"stack"})
+
+    #: ...and a **division** (CR 601.2d, which CR 603.3d applies to a
+    #: triggered ability as it is put on the stack): "When this creature dies,
+    #: distribute three -1/-1 counters among one, two, or three target
+    #: creatures" (Shambling Swarm, the pool's first trigger to print one). A
+    #: set of targets with an assignment attached, so it is this prompt with a
+    #: ``division_total`` beside the ``max_targets`` a several-target trigger
+    #: already carries, and the answer is ``permanent_ids`` with ``amounts``.
+    #:
+    #: Only what that answer can say (:meth:`_trigger_division_is_announceable`):
+    #: permanents, a printed total, and a division the announcer chooses or the
+    #: game splits evenly. A player's face, a card-dictated share or an X the
+    #: announcement would have to choose declines — and an ability that
+    #: declines announces nothing, which
+    #: ``tests/engine/test_stack_targets.py``'s census then names.
+    _CHOOSABLE_TRIGGER_DIVIDED_KINDS = frozenset({"divided"})
+
+    @staticmethod
+    def _trigger_division_is_announceable(spec: dict) -> bool:
+        """Whether a ``divided`` *spec* is one the ``trigger_target`` prompt
+        can announce (see :attr:`_CHOOSABLE_TRIGGER_DIVIDED_KINDS`)."""
+        from ...divided_damage import CHOSEN, EVENLY
+        from ...targeting import spec_offers_a_player
+
+        return (
+            spec.get("division", EVENLY) in (CHOSEN, EVENLY)
+            and not spec_offers_a_player(spec)
+            and isinstance(spec.get("division_total"), int)
+            and not isinstance(spec.get("division_total"), bool)
+        )
 
     def _choose_trigger_targets(self, item: StackItem) -> None:
         """Choose *item*'s target as it goes on the stack (CR 603.3d/601.2c).
@@ -1032,10 +1060,14 @@ class StackResolutionMixin:
         picks_a_player = spec.get("kind") in self._CHOOSABLE_TRIGGER_PLAYER_KINDS
         picks_a_card = _names_a_graveyard_target(spec, item.ability_text)
         picks_a_spell = spec.get("kind") in self._CHOOSABLE_TRIGGER_STACK_KINDS
+        picks_a_division = spec.get("kind") in self._CHOOSABLE_TRIGGER_DIVIDED_KINDS
+        if picks_a_division and not self._trigger_division_is_announceable(spec):
+            return
         if (
             not picks_a_player
             and not picks_a_card
             and not picks_a_spell
+            and not picks_a_division
             and spec.get("kind") not in self._CHOOSABLE_TRIGGER_TARGET_KINDS
         ):
             return
@@ -1216,6 +1248,19 @@ class StackResolutionMixin:
                 "name": perm.card.name,
             })
         up_to = _target_is_up_to(getattr(instruction, "payload", None))
+        division = spec.get("kind") in self._CHOOSABLE_TRIGGER_DIVIDED_KINDS
+        if division and self.departing:
+            # A dies-trigger is announced while its dying permanent is still
+            # listed (``Game.departing``), and CR 603.3d puts the ability on
+            # the stack *after* the event: Shambling Swarm cannot distribute
+            # its counters onto itself. Asked only of a division, the one shape
+            # that had no prompt before — the general decline for every other
+            # dies-trigger is ROADMAP's (a), and its fix is a different seam.
+            gone = {permanent.permanent_id for permanent in self.departing}
+            offered = [
+                entry for entry in offered
+                if entry["kind"] != "permanent" or entry["permanent_id"] not in gone
+            ]
         if not offered:
             # "Up to one" with nothing to name is an announcement of zero
             # targets (CR 601.2c), not a choice that cannot be made — the
@@ -1252,6 +1297,23 @@ class StackResolutionMixin:
                 printed,
                 sum(1 for entry in offered if entry["kind"] == "permanent"),
             )
+        if division:
+            # CR 601.2d: the total to divide and who divides it, beside the
+            # ceiling. A chosen division gives every target at least one, so a
+            # total smaller than the printed ceiling is a ceiling too ("among
+            # one, two, or three" with two counters is two targets at most);
+            # "any number of" prints no ceiling, and the board is one.
+            from ...divided_damage import CHOSEN, EVENLY
+
+            total = int(spec["division_total"]) + int(spec.get("division_x_bonus") or 0)
+            ceiling = sum(1 for entry in offered if entry["kind"] == "permanent")
+            if isinstance(printed, int):
+                ceiling = min(ceiling, printed)
+            if spec.get("division", EVENLY) == CHOSEN:
+                ceiling = min(ceiling, total)
+            several["max_targets"] = max(1, ceiling)
+            several["division_total"] = total
+            several["division"] = spec.get("division", EVENLY)
         # "Up to": naming **nobody** is one of the answers (CR 601.2c), and
         # the prompt has to say so or the seat it asks cannot give it. It did
         # not, so a player whose Barrin entered beside nothing but their own
