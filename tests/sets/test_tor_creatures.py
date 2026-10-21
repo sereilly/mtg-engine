@@ -56,7 +56,7 @@ def _w1g2_table(set_pool, *, hand0=(), hand1=(), gy0=(), bf0=(), bf1=(),
 
 
 def _w1g2_on_board(game, seat, name):
-    return next(p for p in game.controlled_by(seat) if p.card.name == name)
+    return next((p for p in game.controlled_by(seat) if p.card.name == name), None)
 
 
 def _w1g2_body(perm):
@@ -162,6 +162,166 @@ def test_a_counted_conditional_bonus_refuses_an_otherwise_arm_and_a_second_delta
         "creature gets +1/+1 for each black permanent your opponents control "
         "and has flying."
     )
+
+
+# --- The drive list: threshold cards supported on arrival, given a game ------
+
+import pytest as _w1g2_pytest  # noqa: E402
+
+_W1G2_POSSESSED = (
+    # (card, printed colour, a creature of the colour its ability names)
+    ("Possessed Aven", "U", "Prodigal Sorcerer"),
+    ("Possessed Centaur", "G", "Grizzly Bears"),
+    ("Possessed Barbarian", "R", "Hill Giant"),
+    ("Possessed Nomad", "W", "Savannah Lions"),
+)
+
+
+@_w1g2_pytest.mark.parametrize(
+    "name, printed_color, victim", _W1G2_POSSESSED, ids=[r[0] for r in _W1G2_POSSESSED]
+)
+def test_the_possessed_are_black_bigger_and_armed_only_at_threshold(
+    set_pool, name, printed_color, victim,
+):
+    """"…this creature gets +1/+1, is black, and has "{2}{B}, {T}: Destroy
+    target <colour> creature."" — three layers (7c, 5, 6) on one condition.
+    Below threshold the granted ability is not there to activate; at
+    threshold its picker offers only the colour it names."""
+    def board(graveyard_size):
+        game = _w1g2_table(
+            set_pool, gy0=["Forest"] * graveyard_size, bf0=[name],
+            bf1=[victim, "Scathe Zombies"],
+        )
+        return game, _w1g2_on_board(game, 0, name)
+
+    game, possessed = board(6)
+    assert _w1g2_body(possessed) == (3, 3)
+    assert game._effective_colors(possessed) == {printed_color}
+    target = _w1g2_on_board(game, 1, victim)
+    assert not game.activate_permanent_ability(
+        0, name, target_permanent_ids=[target.permanent_id],
+    ).supported
+    assert _w1g2_on_board(game, 1, victim) is not None
+
+    game, possessed = board(7)
+    assert _w1g2_body(possessed) == (4, 4)
+    assert game._effective_colors(possessed) == {"B"}
+    slot = game.players[0].battlefield.index(possessed)
+    assert [t["name"] for t in game.activation_target_spec(0, slot)["valid_targets"]] == [
+        victim
+    ]
+    zombies = _w1g2_on_board(game, 1, "Scathe Zombies")
+    assert not game.activate_permanent_ability(
+        0, name, target_permanent_ids=[zombies.permanent_id],
+    ).supported, "a black creature is not the colour the ability names"
+    target = _w1g2_on_board(game, 1, victim)
+    assert game.activate_permanent_ability(
+        0, name, target_permanent_ids=[target.permanent_id],
+    ).supported
+    _w1g2_resolve_stack(game)
+    assert _w1g2_on_board(game, 1, victim) is None and possessed.tapped
+
+
+@_w1g2_pytest.mark.parametrize("name, below, at", [
+    ("Seton's Scout", (2, 1), (4, 3)),
+    ("Nantuko Calmer", (2, 3), (3, 4)),
+])
+def test_a_threshold_size_bonus_follows_the_graveyard(set_pool, name, below, at):
+    game = _w1g2_table(set_pool, gy0=["Forest"] * 6, bf0=[name])
+    creature = _w1g2_on_board(game, 0, name)
+    assert _w1g2_body(creature) == below
+    _w1g2_set_graveyard(set_pool, game, 0, 7)
+    assert _w1g2_body(creature) == at
+
+
+def _w1g2_cast_at(set_pool, name, graveyard_size, *, bf1=("Grizzly Bears",)):
+    game = _w1g2_table(
+        set_pool, hand0=[name], gy0=["Forest"] * graveyard_size,
+        bf0=["Savannah Lions"], bf1=bf1,
+    )
+    assert game.cast_from_hand(0, name).supported
+    _w1g2_resolve_stack(game)
+    return game
+
+
+def test_a_granted_entry_trigger_is_there_only_if_threshold_holds_as_it_enters(set_pool):
+    """"…this creature has "When this creature enters, …"" — the static
+    applies as the creature enters (CR 614.12's moment), so with seven cards
+    already in the graveyard the trigger fires, and with six it does not
+    exist to fire. Four cards, four effects."""
+    # Centaur Chieftain: creatures you control get +1/+1 and gain trample.
+    quiet = _w1g2_cast_at(set_pool, "Centaur Chieftain", 6)
+    assert _w1g2_body(_w1g2_on_board(quiet, 0, "Savannah Lions")) == (2, 1)
+    loud = _w1g2_cast_at(set_pool, "Centaur Chieftain", 7)
+    lions = _w1g2_on_board(loud, 0, "Savannah Lions")
+    assert _w1g2_body(lions) == (3, 2) and loud._has_keyword(lions, "trample")
+    assert _w1g2_body(_w1g2_on_board(loud, 1, "Grizzly Bears")) == (2, 2)
+
+    # Pardic Arsonist: 3 damage to any target.
+    assert [p.life for p in _w1g2_cast_at(set_pool, "Pardic Arsonist", 6).players] == [20, 20]
+    assert [p.life for p in _w1g2_cast_at(set_pool, "Pardic Arsonist", 7).players] == [20, 17]
+
+    # Teroh's Vanguard: creatures you control gain protection from black.
+    quiet = _w1g2_cast_at(set_pool, "Teroh's Vanguard", 6)
+    assert quiet._protection_qualities(_w1g2_on_board(quiet, 0, "Savannah Lions")) == set()
+    loud = _w1g2_cast_at(set_pool, "Teroh's Vanguard", 7)
+    assert loud._protection_qualities(_w1g2_on_board(loud, 0, "Savannah Lions")) == {
+        ("color", "B")
+    }
+
+    # Gloomdrifter: nonblack creatures get -2/-2 — its own controller's too.
+    quiet = _w1g2_cast_at(
+        set_pool, "Gloomdrifter", 6, bf1=("Grizzly Bears", "Scathe Zombies"),
+    )
+    assert _w1g2_on_board(quiet, 0, "Savannah Lions") is not None
+    loud = _w1g2_cast_at(
+        set_pool, "Gloomdrifter", 7, bf1=("Grizzly Bears", "Scathe Zombies"),
+    )
+    assert _w1g2_on_board(loud, 0, "Savannah Lions") is None
+    assert _w1g2_on_board(loud, 1, "Grizzly Bears") is None
+    assert _w1g2_on_board(loud, 1, "Scathe Zombies") is not None
+    assert _w1g2_body(_w1g2_on_board(loud, 0, "Gloomdrifter")) == (2, 2)
+
+
+def test_boneshard_slasher_sacrifices_itself_when_targeted_at_threshold(set_pool):
+    """"…gets +2/+2 and has "When this creature becomes the target of a spell
+    or ability, sacrifice it."" — and the spell aimed at it then has no legal
+    target (CR 608.2b)."""
+    for size, survives in ((6, True), (7, False)):
+        game = _w1g2_table(
+            set_pool, hand1=["Lightning Bolt"], gy0=["Forest"] * size,
+            bf0=["Boneshard Slasher"],
+        )
+        slasher = _w1g2_on_board(game, 0, "Boneshard Slasher")
+        assert _w1g2_body(slasher) == ((1, 1) if survives else (3, 3))
+        assert game.queue_from_hand(
+            1, "Lightning Bolt", target_permanent_ids=[slasher.permanent_id],
+        ).supported
+        _w1g2_resolve_stack(game)
+        game.check_state_based_actions()
+        # A 1/1 dies to the Bolt; the 3/3 is sacrificed before the Bolt lands.
+        assert _w1g2_on_board(game, 0, "Boneshard Slasher") is None
+        assert any("was sacrificed" in line for line in game.log) is not survives
+        assert any("every target is illegal" in line for line in game.log) is not survives
+
+
+def test_reborn_hero_may_come_back_only_if_it_died_at_threshold(set_pool):
+    """CR 603.10a: a dies trigger looks back in time, so whether the Hero had
+    the granted ability is asked of the board just before it died — six cards
+    (then seven with the Hero itself) is no trigger; seven is."""
+    for size, returns in ((6, False), (7, True)):
+        game = _w1g2_table(
+            set_pool, hand1=["Terror"], gy0=["Forest"] * size,
+            bf0=["Reborn Hero", "Plains", "Plains"],
+        )
+        hero = _w1g2_on_board(game, 0, "Reborn Hero")
+        assert game.cast_from_hand(
+            1, "Terror", target_permanent_ids=[hero.permanent_id],
+        ).supported
+        _w1g2_resolve_stack(game)
+        game.auto_resolve_pending_choices()
+        _w1g2_resolve_stack(game)
+        assert (_w1g2_on_board(game, 0, "Reborn Hero") is not None) is returns
 
 # ==== end W1G2 ======================================================
 
