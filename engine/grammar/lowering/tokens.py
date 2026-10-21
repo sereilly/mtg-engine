@@ -105,7 +105,7 @@ def _stamp_token_recipient(
             # creates a token that's a copy of that creature." (Parallel
             # Evolution.) A loop over the board: the object the iteration is
             # on is still a permanent, so its controller is read live off the
-            # control seam (CR 108.4) rather than out of a record a sweep froze
+            # control seam (CR 110.2) rather than out of a record a sweep froze
             # — no sweep ran. The innermost binder, as the record branch below
             # says of its own loop.
             payload["recipient_loop_controller"] = True

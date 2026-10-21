@@ -1999,7 +1999,7 @@ def token_recipient_seats(
             # "For each creature token on the battlefield, **its controller**
             # creates …" (Parallel Evolution.) The controller of the permanent
             # the board loop is on, read live through the control seam — the
-            # loop's object is still on the battlefield (CR 108.4). Outside a
+            # loop's object is still on the battlefield (CR 110.2). Outside a
             # loop there is no such permanent and nobody gets a token.
             iterated = context.iteration_target
             seat = (
