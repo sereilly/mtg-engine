@@ -57,10 +57,12 @@ Anything that weakens these is a regression regardless of what it enables:
    shards** (2026-10-20), each `pytest -n 4 --dist worksteal` over whole
    tests/ folders with its own budget (`ci.yml`'s test matrix). tests/ai is
    two of them, split by the `slow` marker (`-m slow` / `-m "not slow"`).
-   The readings that set the baselines, all from slow-class runners:
-   **ai-sims 536s** (22 tests), **ai 711s** (664), **engine 862s**
-   (14,188), **rest 940s** (15,962: sets, rules, regressions, ui). A fast
-   runner reads about half those numbers on the same tree. Each shard's
+   Each shard's BASELINE is its slower reading so far: **ai-sims 928s**
+   (22 tests), **ai 711s** (664), **engine 862s** (14,188), **rest 940s**
+   (15,962: sets, rules, regressions, ui). **The runner is drawn per job,
+   not per run**, and a fast one reads roughly half a slow one's number
+   on the same tree, so one run's shards are not one class of reading.
+   The timed line names each job's CPU for that reason. Each shard's
    BUDGET is ~2x its BASELINE, so the 1.5x creep warning fires before the
    gate again. `tests/engine/test_ci_shards.py` fails unless every tests/
    folder is covered exactly once: by one shard with no markers, or by two
@@ -80,8 +82,8 @@ Anything that weakens these is a regression regardless of what it enables:
    tests had taken as long as the other two shards together. The `slow`
    marker already cut it almost in half (locally 1,271s in its 22 items
    against 1,098s in the other 664), so it became the partition. That took
-   the job's wall time on a slow runner from ~1,660s to ~870s, and
-   `tests/engine` is the long pole now.
+   the job's wall time on the slower runners from ~1,660s to ~950s, and
+   no single shard is the long pole now.
 
    **The sims half is bounded by one item**,
    `test_no_urzas_block_simulation_leaves_a_cycle_on_the_stack[ULG]`: 428s

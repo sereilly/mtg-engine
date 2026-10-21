@@ -32,8 +32,8 @@ jobs:
           - shard: ai-sims
             paths: tests/ai
             markers: slow
-            budget: 1080
-            baseline: 536
+            budget: 1860
+            baseline: 928
           - shard: ai
             paths: tests/ai
             markers: not slow
@@ -285,13 +285,17 @@ jobs:
       # the guard holds the two shards to exactly that. Marking a test slow
       # moves it between them, and that is the one way this balance drifts.
       #
-      # First readings, run 39525972550 on branch `ci/split-ai-shard`, all
-      # green: `[ai-sims]: 536s` (22 tests) and `[ai]: 711s` (664), beside
-      # engine 868s and rest 766s. That run's engine reading matches the two
-      # slow-runner readings above (862s, 860s), so these are slow-runner
-      # numbers like the other baselines, and each budget is ~2x. On that
-      # class of runner the job's wall time went from ~1,660s (the old ai
-      # shard) to ~870s, and tests/engine is now the long pole.
+      # Readings, all green, from runs 39525972550 and 39532394012 on branch
+      # `ci/split-ai-shard`: ai-sims 536s then 928s (22 tests), ai 711s then
+      # 497s (664), engine 868s then 870s, rest 766s then 948s. **The runner
+      # is drawn per job, not per run**: in one run the engine shard read a
+      # slow runner's 868s while ai-sims read a fast one's 536s. Each shard's
+      # BASELINE is therefore its slower reading so far, and its BUDGET ~2x.
+      # The timed line now names the CPU each job ran on, so the next
+      # reader compares like with like instead of inferring it, and
+      # `--durations=15` lists each shard's slowest items. On the slower
+      # runners the job's wall time went from ~1,660s (the old ai shard) to
+      # ~950s, and no single shard is the long pole any more.
       #
       # The sims half is bounded by its largest item,
       # test_no_urzas_block_simulation_leaves_a_cycle_on_the_stack[ULG]: 428s
@@ -313,9 +317,12 @@ jobs:
           STATUS=0
           # SHARD_PATHS is unquoted on purpose: one argument per folder. The
           # marker expression is one argument, and absent when it is empty.
-          python -m pytest -n 4 --dist worksteal ${SHARD_MARKERS:+-m "$SHARD_MARKERS"} $SHARD_PATHS || STATUS=$?
+          python -m pytest -n 4 --dist worksteal --durations=15 ${SHARD_MARKERS:+-m "$SHARD_MARKERS"} $SHARD_PATHS || STATUS=$?
           ELAPSED=$(( $(date +%s) - START ))
-          echo "suite wall time [${SHARD}]: ${ELAPSED}s (baseline ${BASELINE}s, budget ${BUDGET}s — $(( ELAPSED * 100 / BUDGET ))% of budget)"
+          # Which machine the job drew, for comparing readings; never fatal.
+          CPU=$(grep -m1 "model name" /proc/cpuinfo 2>/dev/null | cut -d: -f2 | sed "s/^ *//") || true
+          CPU=${CPU:-an unnamed CPU}
+          echo "suite wall time [${SHARD}]: ${ELAPSED}s (baseline ${BASELINE}s, budget ${BUDGET}s — $(( ELAPSED * 100 / BUDGET ))% of budget) on ${CPU}"
           if [ "$STATUS" -ne 0 ]; then
             exit "$STATUS"
           fi
