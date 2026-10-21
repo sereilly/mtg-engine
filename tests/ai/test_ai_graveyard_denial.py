@@ -244,6 +244,12 @@ _ONE_TARGET_WRONG_BEFORE = {
 _SINGLE_PILE_WRONG_BEFORE = {
     "Carrion Beetles", "Decompose", "Famished Ghoul", "Rapid Decay",
 }
+#: …and the same sentence under a **trigger** (Gravegouger, Torment: "When
+#: this creature enters, exile up to two target cards from a single
+#: graveyard"). Its pile is still the prompt's at resolution, so with the old
+#: default restored it *must* reach the AI's own pile from chair 0 — which
+#: makes it the one card on that road this backwards check can still demand.
+_TRIGGER_PILE_WRONG_BEFORE = {"Gravegouger"}
 
 
 def test_the_sweep_names_the_defect_with_the_old_defaults_restored(monkeypatch):
@@ -275,7 +281,11 @@ def test_the_sweep_names_the_defect_with_the_old_defaults_restored(monkeypatch):
 
     wrong = {r["card"] for r in old if "AI" in r["from"] and r["seat"] == 0}
     assert _ONE_TARGET_WRONG_BEFORE <= wrong, sorted(_ONE_TARGET_WRONG_BEFORE - wrong)
-    assert wrong <= _ONE_TARGET_WRONG_BEFORE | _SINGLE_PILE_WRONG_BEFORE, sorted(wrong)
+    assert _TRIGGER_PILE_WRONG_BEFORE <= wrong, sorted(_TRIGGER_PILE_WRONG_BEFORE - wrong)
+    assert wrong <= (
+        _ONE_TARGET_WRONG_BEFORE | _SINGLE_PILE_WRONG_BEFORE
+        | _TRIGGER_PILE_WRONG_BEFORE
+    ), sorted(wrong)
     assert [r["card"] for r in old if "AI" in r["from"] and r["seat"] == 1] == []
 
 
