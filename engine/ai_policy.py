@@ -5664,6 +5664,26 @@ def _aura_harms_its_host(card: CardDefinition) -> bool:
     )
 
 
+def choose_returning_aura_host(game: Game, seat: int, card: CardDefinition, legal: list):
+    """Which of *legal* an Aura card that *seat* is putting onto the
+    battlefield enchants, where the effect names no host (CR 303.4f:
+    Replenish, Cleansing Meditation).
+
+    The cast chooser's question asked of a choice that is not a target: an
+    Aura whose text works against its host (``_aura_harms_its_host``) goes on
+    a permanent somebody else controls, any other on *seat*'s own. A
+    preference, not a filter — with only the other side's permanents legal,
+    one of them is still the answer — and stable, so board order breaks every
+    tie and a seed still reproduces a run.
+    """
+    harmful = _aura_harms_its_host(card)
+    ranked = sorted(
+        legal,
+        key=lambda host: (game.controller_index_of(host) == seat) == harmful,
+    )
+    return ranked[0]
+
+
 def _choose_aura_target(game: Game, caster_index: int, card: CardDefinition) -> tuple[int, int] | None:
     """Pick (player_index, permanent_index) for an Aura's enchant target.
 
