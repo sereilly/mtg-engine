@@ -2185,6 +2185,39 @@ def test_the_condition_union_names_every_condition_node():
     assert not stale, f"ast.Condition names nodes that no longer exist: {stale}"
 
 
+def test_the_for_each_iterator_names_every_loop_node():
+    """`ForEach.iterator` is the other hand-maintained union, and `ast/loops.py` its list.
+
+    The record sets a loop walks lived in `ast/records.py` until the Phase 0
+    before Torment, so the test above held every one of them in
+    `ast.Condition` — a union none of them belongs to, while the one they do
+    belong to was checked by nothing and had drifted two behind:
+    `TappedThisWay` and `EachShortOfThisWay` were built by
+    `_parse_leading_for_each`, wrapped in a `ForEach` and lowered through its
+    arm, and named by no union but `Condition`. Moving them out of the module
+    the test above reads would have left them guarded by nothing at all, so
+    this is the same question asked of the union they are in.
+    """
+    import dataclasses
+    import typing
+
+    from engine.grammar.ast import loops
+    from engine.grammar.ast.statements import ForEach
+
+    declared = set(typing.get_args(typing.get_type_hints(ForEach)["iterator"]))
+    defined = {
+        value
+        for value in vars(loops).values()
+        if dataclasses.is_dataclass(value)
+        and getattr(value, "__module__", "") == loops.__name__
+    }
+    # A floor, for the reason every census in this repo carries one: a guard
+    # over an empty module passes.
+    assert len(defined) >= 8, sorted(cls.__name__ for cls in defined)
+    missing = sorted(cls.__name__ for cls in defined - declared)
+    assert not missing, f"loop sets missing from ForEach.iterator: {missing}"
+
+
 def test_the_ast_roof_only_reaches_downward():
     """`ast/statements.py` may name the families; nothing may name it back.
 
@@ -2198,7 +2231,9 @@ def test_the_ast_roof_only_reaches_downward():
     # `conditions` is shared with `_core` rather than a family: a condition is
     # built from every part of `_core` while nothing in `_core` is built from a
     # condition, and every family that lowers a conditional reads one.
-    allowed = {"_core", "conditions", "costs", *AST_FAMILIES}
+    # `loops` holds the record sets `ForEach.iterator` names, which is why this
+    # module and nothing else in the package imports it.
+    allowed = {"_core", "conditions", "costs", "loops", *AST_FAMILIES}
     violations = [
         f"ast/statements.py:{line} imports {target or '__init__'}"
         for line, target, _is_sibling in _imports(GRAMMAR / "ast" / "statements.py")
@@ -2876,6 +2911,20 @@ FAMILY_SHARED = {
     # `conditions` reads it — the `Condition` union is the roof over both
     # halves and has to name all of them — and it reads nothing back.
     "records",
+    # `loops` pre-split out of `ast/records.py` at the Phase 0 before Torment,
+    # eleven lines under the guard: the sets a `ForEach` walks when the set is
+    # a record ("for each creature exiled this way", "for each 1 life you
+    # lost"). They had ridden along with the record conditions since Mirage,
+    # but no `Conditional` holds one and `lowering/_record_conditions` lowers
+    # none — they were in `ast.Condition` only because the union test asks it
+    # to name everything `records` defines. The name is `lowering/loops.py`'s,
+    # whose question ("what is the set?") these nodes answer. A floor and not a
+    # family because no `effects/loops.py` exists to be one of; `statements`
+    # (the roof, where `ForEach` lives) is its one reader. It is deliberately
+    # *not* in the `ast` shared tuple of
+    # `test_families_import_only_their_package_shared_module`: no family
+    # imports it, so leaving it out keeps its own imports checked there.
+    "loops",
     # `_filters` split out of `lowering/_common.py` at Visions' Phase 0, the
     # first time that module reached the guard below — taken while nothing was
     # in flight, because `_common` is the one floor every wave branch adds to
