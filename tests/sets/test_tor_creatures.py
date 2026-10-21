@@ -234,6 +234,16 @@ def test_w1g3_petradon_asked_for_its_targets_takes_exactly_two(set_pool):
 
     (asked,) = [c for c in game.pending_choices if c.kind == "trigger_target"]
     assert asked.data["max_targets"] == 2 and asked.data.get("exact_targets")
+    # …and the web layer tells the client so (its Confirm is wave 2's).
+    from web.prompts import PromptContext, render_prompts
+
+    shown = render_prompts(PromptContext(
+        game=game, viewer_seat=0,
+        serialize_card=lambda card: {"name": getattr(card, "name", str(card))},
+        seat_type=lambda index: "human" if index in game.interactive_seats else "ai",
+    ))["trigger_target"]
+    assert shown["max_targets"] == 2 and shown["exact_targets"] is True
+    assert "up_to" not in shown
     assert not game.confirm_trigger_target(0, permanent_id=forest.permanent_id)
     assert not game.confirm_trigger_target(0, permanent_ids=[forest.permanent_id])
     assert game.confirm_trigger_target(
