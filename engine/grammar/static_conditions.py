@@ -35,7 +35,7 @@ from ..static_bonuses import RECIPIENT_SUBJECT
 from ..subject_filters import OBJECT_ONLY_FILTER_KEYS
 from . import ast
 from .errors import LoweringError
-from .lowering import _is_enchanted, _lower_condition, _signed
+from .lowering import _is_enchanted, _lower_condition, _lower_pump, _signed
 
 
 def _lower_anthem_condition_payload(payload: dict, node: ast.StaticAbilityNode) -> dict:
@@ -263,10 +263,19 @@ def _conditional_static_effect(
             continue
         if isinstance(effect, ast.Pump):
             if effect.per_each is not None:
-                raise LoweringError(
-                    "the conditional static channel carries a fixed delta",
-                    node=node,
-                )
+                # "This creature gets +1/+1 **for each black permanent your
+                # opponents control** as long as …" (Nantuko Blightcutter). A
+                # counted bonus is its own channel (``dynamic_pt_bonus``),
+                # which the caller gates on the condition — handed over only
+                # where it is the arm's whole effect, since one instruction
+                # cannot carry two deltas sized two ways.
+                if grants is None or len(effects) != 1:
+                    raise LoweringError(
+                        "the conditional static channel carries a fixed delta",
+                        node=node,
+                    )
+                grants["counted_pump"] = effect
+                continue
             power = _signed(effect.power, effect.power_negative)
             toughness = _signed(effect.toughness, effect.toughness_negative)
             if not isinstance(power, int) or not isinstance(toughness, int):
@@ -275,6 +284,19 @@ def _conditional_static_effect(
                 )
         elif isinstance(effect, ast.GainKeyword):
             for keyword in effect.keywords:
+                quality = _protection_grant(keyword)
+                if grants is not None and quality is not None:
+                    # "…this creature gets +1/+1 **and has protection from
+                    # black**" (Mystic Familiar). Protection carries a quality
+                    # (CR 702.16), which the one-word derived-grant channel
+                    # cannot — so it rides the payload key Escaped
+                    # Shapeshifter's table row already writes, read by
+                    # ``_protection_qualities`` with this static's condition
+                    # asked on every read. Only where the caller has that
+                    # reader: the "Otherwise" arm passes no *grants* and
+                    # refuses below, as it refuses a colour.
+                    grants.setdefault("protection_from", []).append(quality)
+                    continue
                 if keyword not in grantable_keywords():
                     raise LoweringError(
                         f"the derived-grant channel gives no {keyword!r} at "
@@ -288,6 +310,58 @@ def _conditional_static_effect(
                 node=node,
             )
     return power, toughness, keywords
+
+
+def _counted_conditional_bonus(
+    pump: ast.Pump, condition: dict, attached: bool, node: ast.StaticAbilityNode
+) -> tuple[OracleInstruction, ...]:
+    """"Threshold — This creature gets +1/+1 for each black permanent your
+    opponents control as long as there are seven or more cards in your
+    graveyard." (Nantuko Blightcutter.)
+
+    Two shipped halves on one line: the counted bonus Mutilate's family lowers
+    to (``dynamic_pt_bonus``, a CR 613 layer-7c contribution recounted on every
+    refresh) and the criteria Seton's Scout's threshold gates its fixed delta
+    on. The pump is lowered by the one pump lowering, so the count is the spec
+    every "for each" reads, and the condition rides beside it for
+    ``_refresh_dynamic_creatures`` to ask on every refresh — false, and the
+    bonus is simply not added that pass (CR 611.3a: nothing to undo).
+
+    Held to what that reader does: a durationless bonus on this permanent or
+    its host, no "unless" and no "Otherwise" arm (the counted channel has no
+    complement).
+    """
+    if node.unless or node.otherwise is not None or pump.duration.kind is not None:
+        raise LoweringError(
+            "a counted conditional bonus is one durationless arm", node=node
+        )
+    lowered = _lower_pump(pump)
+    if len(lowered) != 1 or lowered[0].kind != "dynamic_pt_bonus":
+        raise LoweringError(
+            "a counted conditional bonus lands on its own source or its host",
+            node=node,
+        )
+    (bonus,) = lowered
+    gate = _condition_about_the_host(condition) if attached else condition
+    return (
+        OracleInstruction(
+            bonus.kind, bonus.value, {**bonus.payload, "condition": gate}
+        ),
+    )
+
+
+def _protection_grant(keyword: str) -> str | None:
+    """The quality word of a "protection from <quality>" keyword the protection
+    reader models (``keywords.protection_quality``), or None for any other
+    keyword — and for a quality nothing reads, which then refuses as an
+    ungrantable keyword rather than riding a payload as no shield at all."""
+    from ..keywords import protection_quality
+
+    prefix = "protection from "
+    if not keyword.startswith(prefix):
+        return None
+    word = keyword[len(prefix):].strip()
+    return word if protection_quality(word) is not None else None
 
 
 def _conditional_ability_lines(
@@ -374,6 +448,7 @@ def _lower_self_conditional_static(
     power, toughness, keywords = _conditional_static_effect(
         effects, node, grants=grants
     )
+    counted_pump = grants.pop("counted_pump", None)
     attached = _is_enchanted(
         getattr(effects[0], "subject", None) if effects else None
     )
@@ -448,6 +523,8 @@ def _lower_self_conditional_static(
             "engine/static_bonuses.py",
             node=node,
         )
+    if counted_pump is not None:
+        return _counted_conditional_bonus(counted_pump, condition, attached, node)
     payload: dict[str, object] = {"condition": condition}
     if node.unless:
         # "…gets +3/+3 **unless** <condition>" (Heroic Defiance). The delta

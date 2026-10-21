@@ -2187,6 +2187,14 @@ class PermanentStateMixin:
                     recipient = attached_host(self, permanent, last_known=False)
                     if recipient is None:
                         continue
+                # "…for each black permanent your opponents control **as long
+                # as there are seven or more cards in your graveyard**"
+                # (Nantuko Blightcutter). The criteria a conditional static's
+                # fixed delta is gated on, asked by the same evaluator with the
+                # same seat — false, and the bonus is not added this pass.
+                gate = bonus.payload.get("condition")
+                if gate and not conditional_static_holds(self, seat, permanent, gate):
+                    continue
                 # The permanent being refreshed *is* the source of its own
                 # static ability, which is what lets a spec name a relation to
                 # it ("Auras attached to it") rather than only a set of
