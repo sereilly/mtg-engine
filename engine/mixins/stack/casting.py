@@ -1547,6 +1547,7 @@ class SpellCastingMixin:
             cost_hand_index=cost_hand_index,
             cost_other_hand_indices=cost_other_hand_indices,
             spell_hand_index=hand_index if from_zone == "hand" else None,
+            x_value=x_value,
         )
         if cost_denial is not None:
             self.log.append(cost_denial)
@@ -3250,6 +3251,7 @@ class SpellCastingMixin:
         cost_hand_index: int | None,
         cost_other_hand_indices: "list[int] | None" = None,
         spell_hand_index: int | None,
+        x_value: int | None = None,
     ) -> tuple["list[CardDefinition]", str | None]:
         """The cards a named ``cost_hand_index`` (and, for a cost that discards
         more than one, ``cost_other_hand_indices``) pick, or why they pick none.
@@ -3281,10 +3283,17 @@ class SpellCastingMixin:
         if not named or discarding is None:
             return [], None
         hand = self.players[caster_index].hand
-        if len(set(named)) != len(named) or len(named) > discarding.discard_cards:
+        # How many the cost takes is ``discarded_count`` -- the reader the gate
+        # and the payment share -- and not the printed ``discard_cards``, which
+        # is 1 for "discard **X** cards" (the Dreams, Firestorm): the field says
+        # *that* there is a discard, the announced X says how many. Compared
+        # with the field, an X of two could name one card and was refused for
+        # naming two, so every discard past the first rode the default.
+        owed = discarding.discarded_count(x_value)
+        if len(set(named)) != len(named) or len(named) > owed:
             return [], (
                 f"{card.name} can't be cast: its additional cost discards "
-                f"{discarding.discard_cards} card(s), each named once (CR 601.2b)"
+                f"{owed} card(s), each named once (CR 601.2b)"
             )
         chosen: "list[CardDefinition]" = []
         for position in named:
@@ -5508,7 +5517,15 @@ class SpellCastingMixin:
                 graveyard_card_matches(primary.payload, c)
                 for player in sources
                 for c in player.graveyard
-            ):
+            ) and not _may_name_nobody():
+                # "Return **X** target creature cards from your graveyard"
+                # (Restless Dreams) at an X of zero names nobody, which CR
+                # 601.2c allows -- the same question every arm above asks
+                # before refusing an unnamed cast. Its X is the number of
+                # cards discarded as its cost, so an empty graveyard is a
+                # cast that discards nothing and returns nothing, not one
+                # that cannot be made. At an X of one or more the exact count
+                # is ``cast_target_count_refusal``'s, asked once X is final.
                 return False, f"no valid target for {card.name}"
 
         elif primary.kind == "simulacrum_redirect":

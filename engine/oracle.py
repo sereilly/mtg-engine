@@ -3500,6 +3500,11 @@ def parse_activated_ability_cost(
         ) >= 2:
             discard_phrase = None
     discard_read = read_discard_clause(discard_phrase) if discard_phrase else None
+    if discard_read is not None and discard_read[3]:
+        # Counted by an X: no activation announces one (the head test above
+        # admits only an article or a printed number), so such a reading would
+        # be a quantity nothing charges.
+        discard_read = None
     discard_filters = None if discard_read is None else discard_read[0]
     discard_count = 0 if discard_read is None else discard_read[1]
     # "Discard a card **at random**" (Coral Helm). Recorded so the payment path

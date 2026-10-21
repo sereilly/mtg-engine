@@ -690,16 +690,13 @@ _COST_CLAUSES: tuple[tuple[re.Pattern[str], str], ...] = (
     # "…, discard **X** cards." (Firestorm.) CR 107.3a's X in an additional
     # cost, the same shape the return and the graveyard exile above already
     # carry -- and, as for both of those, the *only* place this card's X lives:
-    # its printed mana cost is {R}. Read **before** the singular row below,
-    # whose noun must open with an article and so cannot claim these words; the
-    # order is what keeps the two from ever being one question.
-    #
-    # Only an X, deliberately. A printed "discard two cards" is admitted
-    # nowhere, which is the note the singular row already carries: a counted
-    # discard the payment cannot collect would describe a payment that never
-    # happens. Here the count is not printed at all -- it is announced, and the
+    # its printed mana cost is {R}. It had a row of its own here, which handed
+    # the noun after the X to the filter reader whole, so "discard X cards **at
+    # random**" (Devastating Dreams) was a noun phrase called "cards at random"
+    # and the sentence went unread. It is the row below now: the X is a count
+    # and "at random" a rider, and ``read_discard_clause`` reads both where
+    # they are printed. The count is announced rather than printed, and the
     # payment collects exactly what was announced.
-    (re.compile(r"^(?:discard|discarding) x (?P<noun>.+)$"), "discard_x"),
     # "…, **discard two cards**." (Forbid, through CR 702.27a's rewrite of its
     # buyback line.) "…, **discard a card at random**." (Flowstone Flood, Sonic
     # Burst.) One catch-all row read by :func:`read_discard_clause`, which is
@@ -768,9 +765,9 @@ _COST_CLAUSES: tuple[tuple[re.Pattern[str], str], ...] = (
 
 def read_discard_clause(
     phrase: str,
-) -> tuple[tuple[dict, ...], int, bool] | None:
-    """What "discard <noun phrase>" charges — ``(filters, count, at_random)`` —
-    or None when the payment path cannot collect it.
+) -> tuple[tuple[dict, ...], int, bool, bool] | None:
+    """What "discard <noun phrase>" charges — ``(filters, count, at_random,
+    count_x)`` — or None when the payment path cannot collect it.
 
     The count splits off the front exactly as :func:`read_sacrifice_clause`
     splits one, and the ``at random`` rider comes off the **back** before the
@@ -790,6 +787,16 @@ def read_discard_clause(
     A count of zero or one falls through to the singular, which is where
     "a card" has always been read: ``_NUMBER_WORDS`` maps "a", "an" and "one" to
     1, so an article can never be mistaken for a count.
+
+    **An X is a count too** (*count_x*; CR 107.3a's additional cost with an X
+    in it): "discard **X** cards" (Firestorm, the Dreams) and "discard X cards
+    **at random**" (Devastating Dreams) are this clause with its two modifiers,
+    the count and the rider, each read where it is printed. The X had its own
+    row in ``_COST_CLAUSES`` that handed the noun after it to the filter reader
+    whole, so "cards at random" was a noun phrase nobody could read and
+    Devastating Dreams' price was charged by nothing. The count reported for an
+    X is 1 -- the field every "is there a discard?" truth test reads -- and how
+    many cards are actually charged is ``AdditionalCost.discarded_count``.
     """
     from .oracle import _chargeable_discard_filters
 
@@ -798,12 +805,15 @@ def read_discard_clause(
     if at_random:
         rest = rest[: -len(" at random")].strip()
     count, _, tail = rest.partition(" ")
+    if count == "x" and tail:
+        narrowed = _chargeable_discard_filters(tail)
+        return None if narrowed is None else (narrowed, 1, at_random, True)
     number = int(count) if count.isdigit() else _NUMBER_WORDS.get(count, 0)
     if number >= 2 and tail:
         narrowed = _chargeable_discard_filters(tail)
-        return None if narrowed is None else (narrowed, number, at_random)
+        return None if narrowed is None else (narrowed, number, at_random, False)
     narrowed = _chargeable_discard_filters(rest)
-    return None if narrowed is None else (narrowed, 1, at_random)
+    return None if narrowed is None else (narrowed, 1, at_random, False)
 
 
 def read_sacrifice_clause(phrase: str) -> tuple[dict, int] | None:
@@ -1099,9 +1109,7 @@ def _read_cost_clauses(costs: str) -> dict | None:
                 fields["pay_life_x"] = True
             elif field == "pay_life":
                 fields["pay_life"] += int(found.group(1))
-            elif field in ("discard", "discard_x"):
-                from .oracle import _chargeable_discard_filters
-
+            elif field == "discard":
                 if fields["discard_cards"]:
                     # A second discard clause would need a second alternatives
                     # list, and one field cannot hold two: folded together they
@@ -1109,28 +1117,21 @@ def _read_cost_clauses(costs: str) -> dict | None:
                     # than the two narrowings printed. Refused whole, which is
                     # this function's rule everywhere else.
                     return None
-                if field == "discard_x":
-                    narrowed = _chargeable_discard_filters(found.group("noun"))
-                    if narrowed is None:
-                        return None
-                    # ``discard_cards`` stays the printed *count* — 1 here,
-                    # because an announced X of zero is still a cost this card
-                    # prints and every "is there a discard on this cast?" reader
-                    # is a truth test on this field. How many cards are actually
-                    # charged is ``discarded_count(x_value)``, the one reader
-                    # the gate and the payment share.
-                    fields["discard_cards"] += 1
-                    fields["discard_filters"] = narrowed
-                    fields["discard_count_x"] = True
-                else:
-                    read = read_discard_clause(found.group("noun"))
-                    if read is None:
-                        return None
-                    (
-                        fields["discard_filters"],
-                        fields["discard_cards"],
-                        fields["discard_at_random"],
-                    ) = read
+                read = read_discard_clause(found.group("noun"))
+                if read is None:
+                    return None
+                # For an X, ``discard_cards`` stays the printed *count* -- 1,
+                # because an announced X of zero is still a cost this card
+                # prints and every "is there a discard on this cast?" reader is
+                # a truth test on this field. How many cards are actually
+                # charged is ``discarded_count(x_value)``, the one reader the
+                # gate and the payment share.
+                (
+                    fields["discard_filters"],
+                    fields["discard_cards"],
+                    fields["discard_at_random"],
+                    fields["discard_count_x"],
+                ) = read
             elif field == "return":
                 if fields["return_filter"] is not None:
                     # Two return clauses would need two filters and one field
