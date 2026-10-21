@@ -158,7 +158,7 @@ def test_every_granted_ability_duration_the_grammar_emits_has_a_sweep():
     must not happen is the first naming a channel the second does not have,
     which is a grant that is recorded and then never taken away.
     """
-    from engine.grammar.lowering.keywords import _GRANT_DURATIONS
+    from engine.grammar.lowering._common import _GRANT_DURATIONS
     from engine.keywords import GRANTED_ABILITY_DURATIONS
 
     assert set(_GRANT_DURATIONS.values()) <= GRANTED_ABILITY_DURATIONS
