@@ -699,6 +699,14 @@ def _trigger_target(ctx: PromptContext, choices: list) -> dict:
     # can hold its Confirm until the count is met; absent everywhere else.
     if choice.data.get("exact_targets"):
         payload["exact_targets"] = True
+    # "Exile up to two target cards **from a single graveyard**" (Gravegouger):
+    # several ``graveyard`` candidates, all of one answer in one pile. The
+    # client keeps a selection inside the pile its first card came from and
+    # sends ``target_seat`` with ``graveyard_indices`` — the flag the cast
+    # picker's spec already carries for the same sentence on a spell
+    # (``targeting.SINGLE_GRAVEYARD``). Absent everywhere else.
+    if choice.data.get("single_graveyard") and payload.get("max_targets"):
+        payload["single_graveyard"] = True
     return payload
 
 

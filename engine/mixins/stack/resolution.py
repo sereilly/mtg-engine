@@ -945,15 +945,25 @@ class StackResolutionMixin:
             # it always has" — onto a handler that reads a missing slot as
             # leave to scan, which is how Gravedigger returned the Ornithopter
             # when the Hill Giant it had named was exiled in response.
+            #
+            # …and **several** of them out of one pile (Gravegouger's "up to
+            # two target cards from a single graveyard"): a list of slots, each
+            # held to the same list, and no more of them than the trigger
+            # prints. The pile is one seat, so "a single graveyard" holds by
+            # construction.
             slot = item.target_permanent_index
-            if not isinstance(slot, int):
+            slots = slot if isinstance(slot, list) else [slot]
+            if not slots or not all(isinstance(each, int) for each in slots):
                 return "unnamed"
             pile = self.graveyard_target_seat(item, spec)
             legal = {
                 (candidate.get("seat"), candidate.get("index"))
                 for candidate in candidates if candidate.get("kind") == "graveyard"
             }
-            return None if (pile, slot) in legal else "illegal"
+            ceiling = spec.get("max_targets")
+            if isinstance(ceiling, int) and len(set(slots)) > ceiling:
+                return "illegal"
+            return None if all((pile, each) in legal for each in slots) else "illegal"
         if spec.get("kind") in self._CHOOSABLE_TRIGGER_STACK_KINDS:
             # A spell, named by identity. Still one the trigger could choose —
             # it may have been countered, or have stopped answering the printed
@@ -1305,6 +1315,26 @@ class StackResolutionMixin:
         printed = spec.get("max_targets")
         if isinstance(printed, int) and printed > 1:
             on_offer = sum(1 for entry in offered if entry["kind"] == "permanent")
+            if stamps:
+                # "…exile **up to two** target cards **from a single
+                # graveyard**" (Gravegouger). Several cards in a graveyard are
+                # one announcement too (CR 601.2c), all out of one pile where
+                # the spec says so (``targeting.SINGLE_GRAVEYARD``) — so what is
+                # on offer is the most any one pile holds, and the answer names
+                # a pile and its slots (``_resolve_trigger_graveyard_targets``).
+                from collections import Counter
+
+                from ...targeting import SINGLE_GRAVEYARD
+
+                piles = Counter(
+                    entry["seat"] for entry in offered if entry["kind"] == "graveyard"
+                )
+                on_offer = (
+                    max(piles.values(), default=0) if spec.get(SINGLE_GRAVEYARD)
+                    else sum(piles.values())
+                )
+                if spec.get(SINGLE_GRAVEYARD):
+                    several["single_graveyard"] = True
             if spec.get("exact_targets") and not up_to:
                 # "When this creature enters, exile **two** target lands."
                 # (Petradon.) A printed count with no "up to" is owed whole

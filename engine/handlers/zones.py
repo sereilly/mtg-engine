@@ -5372,6 +5372,17 @@ def _exile_announced_graveyard_slots(
     )
     if holder is not None:
         holder.exile.extend(taken)
+        # "…return **the exiled cards** to their owner's graveyard."
+        # (Gravegouger, whose entry trigger announces its cards and so resolves
+        # here.) CR 607.2a: linked to the permanent whose ability exiled them,
+        # exactly as the resolution-time pick links them
+        # (``_resolve_graveyard_exile_pick``) — inert for a permanent no other
+        # ability of which asks (Carrion Beetles), and nothing for a spell.
+        source = context.source_permanent
+        if source is not None:
+            seat = game.players.index(holder)
+            for card in taken:
+                link_exiled_card(source, card, seat)
     context.results[EXILED_THIS_WAY_OBJECTS] = list(taken)
     context.results[EXILED_THIS_WAY] = len(taken)
     # The pile is named only where a card came out of it, or where the sentence
@@ -5417,8 +5428,9 @@ def exile_cards_from_graveyard(game: Game, instruction: OracleInstruction, conte
     announced = bool(instruction.payload.get("targets"))
     # "Exile up to three **target** cards from a single graveyard." (Ebony
     # Charm, Rapid Decay, Decompose; Carrion Beetles' and Famished Ghoul's
-    # activations.) On a spell or an activated ability the cards were named as
-    # the object was put on the stack (CR 601.2c, CR 602.2b) and the pile is
+    # activations; Gravegouger's entry trigger.) On a spell, an activated
+    # ability and a triggered one the cards were named as the object was put
+    # on the stack (CR 601.2c, CR 602.2b, CR 603.3d) and the pile is
     # the one the announcement's seat names — so this resolves the announced
     # slots, exactly as the caster's own pile does below, and asks nobody
     # anything. A card that left in response is not replaced (CR 608.2b's last
@@ -5429,11 +5441,14 @@ def exile_cards_from_graveyard(game: Game, instruction: OracleInstruction, conte
             (player for player in game.players if player is context.target), None
         )
         return _exile_announced_graveyard_slots(game, instruction, context, holder)
-    # The same sentence under a **trigger**, which has no picker for a card in
-    # a graveyard: the chooser names the pile as the ability resolves, and only
-    # where there is a choice to make. One pile with a legal card in it is not
-    # a decision, and none at all is not a prompt — offering either would be a
-    # question with one answer or with none, which the seat then has to dismiss.
+    # The same pile with **no** target description: chosen as the effect
+    # resolves, and only where there is a choice to make. One pile with a
+    # legal card in it is not a decision, and none at all is not a prompt —
+    # offering either would be a question with one answer or with none, which
+    # the seat then has to dismiss. No compiled card reaches this today: the
+    # sentence prints "target" wherever it is printed, and under a trigger
+    # (Gravegouger) the cards are announced as the ability is put on the stack
+    # since Torment's second wave, so this resolves the announced branch above.
     if owner == "chosen":
         piles = game.graveyard_piles_with_a_legal_card(dict(instruction.payload))
         if not piles:
