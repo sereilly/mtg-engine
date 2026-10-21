@@ -253,6 +253,94 @@ def test_w1g6_flaming_gambit_flashes_back_for_x_r_r(set_pool, catalog_by_name):
     assert not any(game.players[0].mana_pool.values())
     assert [c.name for c in game.players[0].exile] == ["Flaming Gambit"]
 
+def _w1g6_radiate_table(set_pool, catalog_by_name, mine, theirs, their_hand):
+    """Seat 0 holds Radiate over *mine*; seat 1 holds *their_hand* over
+    *theirs*. Mana off."""
+    game = _W1G6Game(players=[
+        _W1G6PlayerState(
+            name="P1", hand=[set_pool("TOR")["Radiate"]],
+            battlefield=[_w1g6_nosick(_W1G6Permanent(card=catalog_by_name[n])) for n in mine],
+        ),
+        _W1G6PlayerState(
+            name="P2", hand=[catalog_by_name[n] for n in their_hand],
+            battlefield=[_w1g6_nosick(_W1G6Permanent(card=catalog_by_name[n])) for n in theirs],
+        ),
+    ])
+    game.enforce_mana_costs = False
+    return game
+
+
+def test_w1g6_radiate_copies_a_bolt_onto_everything_else_it_could_target(
+    set_pool, catalog_by_name,
+):
+    """"Choose target instant or sorcery spell that targets only a single
+    permanent or player. Copy that spell for each other permanent or player
+    the spell could target. Each copy targets a different one of those
+    permanents and players." An opponent's Lightning Bolt at seat 0's Grizzly
+    Bears: four copies, all seat 0's (CR 707.10a), at the Hill Giant, the
+    Serra Angel and both players — and the original still hits the Bears."""
+    game = _w1g6_radiate_table(
+        set_pool, catalog_by_name, ["Grizzly Bears", "Hill Giant"], ["Serra Angel"],
+        ["Lightning Bolt"],
+    )
+    bears = _w1g6_permanent(game, 0, "Grizzly Bears")
+    assert game.queue_from_hand(
+        1, "Lightning Bolt", target_permanent_ids=[bears.permanent_id], target_player_index=0,
+    ).supported
+    assert game.queue_from_hand(0, "Radiate", target_stack_index=0).supported
+    game.resolve_top_of_stack()
+    copies = [item for item in game.stack if item.is_copy]
+    assert len(copies) == 4 and {item.caster_index for item in copies} == {0}
+    _w1g6_resolve_stack(game)
+    game.check_state_based_actions()
+    assert (game.players[0].life, game.players[1].life) == (17, 17)
+    assert _w1g6_permanent(game, 1, "Serra Angel").damage_marked == 3
+    assert sorted(c.name for c in game.players[0].graveyard) == [
+        "Grizzly Bears", "Hill Giant", "Radiate",
+    ]
+
+
+def test_w1g6_radiate_copies_only_onto_what_the_spell_could_target(set_pool, catalog_by_name):
+    """"…each other permanent or player **the spell could target**": Terror
+    ("target nonartifact, nonblack creature") at a Grizzly Bears is copied
+    onto the Hill Giant and nothing else — not the black Knight, not the Sol
+    Ring, not a player."""
+    game = _w1g6_radiate_table(
+        set_pool, catalog_by_name, ["Grizzly Bears", "Hill Giant", "Sol Ring"],
+        ["Black Knight"], ["Terror"],
+    )
+    bears = _w1g6_permanent(game, 0, "Grizzly Bears")
+    assert game.queue_from_hand(
+        1, "Terror", target_permanent_ids=[bears.permanent_id], target_player_index=0,
+    ).supported
+    assert game.queue_from_hand(0, "Radiate", target_stack_index=0).supported
+    game.resolve_top_of_stack()
+    copies = [item for item in game.stack if item.is_copy]
+    assert [item.target_permanent_id for item in copies] == [
+        _w1g6_permanent(game, 0, "Hill Giant").permanent_id
+    ]
+    _w1g6_resolve_stack(game)
+    assert [p.card.name for p in game.controlled_by(0)] == ["Sol Ring"]
+    assert [p.card.name for p in game.controlled_by(1)] == ["Black Knight"]
+
+
+def test_w1g6_radiate_is_not_offered_a_spell_with_another_kind_of_target(
+    set_pool, catalog_by_name,
+):
+    """A Counterspell targets a spell, not a permanent or player, so it is
+    not offered, and a cast naming it is refused with Radiate still in hand
+    (CR 601.2c). A Lightning Bolt beside it is the one offered."""
+    game = _w1g6_radiate_table(
+        set_pool, catalog_by_name, ["Grizzly Bears"], [], ["Lightning Bolt", "Counterspell"],
+    )
+    assert game.queue_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+    assert game.queue_from_hand(1, "Counterspell", target_stack_index=0).supported
+    spec = game.cast_target_spec(0, set_pool("TOR")["Radiate"])
+    assert [entry["name"] for entry in spec["valid_targets"]] == ["Lightning Bolt"]
+    refused = game.cast_from_hand(0, "Radiate", target_stack_index=1)
+    assert not refused.supported
+    assert "Radiate" in [c.name for c in game.players[0].hand]
+
 # ==== end W1G6 ======================================================
 
 

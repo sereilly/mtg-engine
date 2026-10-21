@@ -509,3 +509,25 @@ class NextSpellUncounterable:
     """
 
     card_types: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class CopySpellForEachOtherTarget:
+    """"Choose target instant or sorcery spell that targets only a single
+    permanent or player. Copy that spell for each other permanent or player
+    the spell could target. Each copy targets a different one of those
+    permanents and players." (Radiate.)
+
+    One paragraph, one node, for :class:`BidLifeContest`'s reason: the
+    second and third sentences read the object the first announced, and the
+    third is the whole of how the second's copies are aimed. CR 707.10's copy
+    with CR 707.10c's new targets, made once per legal target the copied
+    spell has other than the one it chose — "could target" is the copied
+    spell's own picker asked again, from the seat that controls the copies.
+
+    ``card_types`` is the chosen spell's printed union; ``each_other`` is what
+    the copies may be aimed at ("permanent_or_player").
+    """
+
+    card_types: tuple[str, ...]
+    each_other: str = "permanent_or_player"

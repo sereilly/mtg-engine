@@ -2484,6 +2484,25 @@ def _retarget_spec(payload: dict) -> dict:
     return spec
 
 
+def _copy_for_each_other_target_spec(payload: dict) -> dict:
+    """"Choose target instant or sorcery spell **that targets only a single
+    permanent or player**." (Radiate.) The stack picker a copy raises, with
+    CR 115.9a's count — ``stack_single_target``, whose reader
+    (``single_spell_target``) answers only for a lone permanent or player
+    target, which is the restriction printed — and the type union, handed to
+    the enumeration under the keys a counterspell's are, so a spell the
+    handler could not copy around is never offered and, re-asked at
+    CR 608.2b, a spell re-aimed at two targets in response is not copied."""
+    spec = {
+        "kind": "stack",
+        "copies_spell": True,
+        "stack_single_target": True,
+    }
+    if payload.get("card_types"):
+        spec["stack_card_types"] = list(payload["card_types"])
+    return spec
+
+
 def _chosen_source_redirect_spec(payload: dict) -> dict:
     """Nova Pentacle's source picker, and General's Regalia's two announcements.
 
@@ -2543,6 +2562,7 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     ),
     "redirect_damage_from_chosen_source_until_eot": _chosen_source_redirect_spec,
     "choose_new_spell_target": _retarget_spec,
+    "copy_spell_for_each_other_target": _copy_for_each_other_target_spec,
     "change_target_spell_target": _retarget_spec,
     "put_graveyard_cards_on_library_top": _graveyard_to_library_spec,
     # "Target player shuffles up to three target cards from their graveyard

@@ -788,3 +788,43 @@ def parse_next_spell_uncounterable(
         stream.reset(mark)
         return None
     return ast.NextSpellUncounterable(card_types)
+
+
+def parse_copy_spell_for_each_other_target(
+    stream: TokenStream,
+) -> "ast.CopySpellForEachOtherTarget | None":
+    """``Choose target <type>[ or <type>] spell that targets only a single
+    permanent or player. Copy that spell for each other permanent or player
+    the spell could target. Each copy targets a different one of those
+    permanents and players.`` (Radiate.)
+
+    The whole paragraph or nothing, refused without consuming — "Choose
+    target …" opens Reincarnation's two-sentence spell too, and a production
+    that ate the opener would take those lines with it. "That targets only a
+    single permanent or player" is CR 115.9a's count with its object
+    restricted to the two things a copy can be re-aimed at, which is exactly
+    the question ``targeting.single_spell_target`` answers.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("choose", "target"):
+        return None
+    card_types = accept_spell_type_union(stream, noun="spell")
+    if (
+        card_types is None
+        or not stream.accept_phrase(
+            "that", "targets", "only", "a", "single", "permanent", "or", "player",
+        )
+        or not stream.accept_punct(".")
+        or not stream.accept_phrase(
+            "copy", "that", "spell", "for", "each", "other", "permanent", "or",
+            "player", "the", "spell", "could", "target",
+        )
+        or not stream.accept_punct(".")
+        or not stream.accept_phrase(
+            "each", "copy", "targets", "a", "different", "one", "of", "those",
+            "permanents", "and", "players",
+        )
+    ):
+        stream.reset(mark)
+        return None
+    return ast.CopySpellForEachOtherTarget(card_types)

@@ -2113,3 +2113,69 @@ def make_next_spell_uncounterable(game: Game, instruction: OracleInstruction, co
         f"this turn can't be countered ({context.card.name})"
     )
     return True, "resolved"
+
+
+@effect_handler("copy_spell_for_each_other_target")
+def copy_spell_for_each_other_target(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Copy that spell for each other permanent or player the spell could
+    target. Each copy targets a different one of those permanents and
+    players." (Radiate.)
+
+    CR 707.10: each copy is built by ``_copy_of_spell`` (every decision the
+    original made, controlled by this effect's controller, CR 707.10a) and
+    then aimed at one candidate (CR 707.10c), so it "becomes the target" as
+    any re-aimed copy does (``announce_targets_chosen``). The candidates are
+    the copied card's own picker (``cast_spec_of`` + ``_enumerate_targets``,
+    the list ``arm_copy_spell_target`` offers a Fork's controller) asked from
+    the copies' controller's seat — the seat whose copy would target them —
+    less the one target the spell already has. A permanent is named by its
+    id (CR 400.7). The original is untouched and resolves as cast.
+    """
+    from ..legality import cast_spec_of
+    from ..targeting import single_spell_target
+
+    copied = context.stack_target
+    card = context.card
+    if copied is None or not any(obj is copied for obj in game.stack):
+        game.log.append(f"{card.name}: that spell is no longer on the stack")
+        return True, "resolved"
+    current = single_spell_target(game, copied)
+    if current is None:
+        game.log.append(
+            f"{card.name}: {copied.card.name} does not target only a single "
+            "permanent or player"
+        )
+        return True, "resolved"
+    seat = game.players.index(context.caster)
+    spec = cast_spec_of(copied.card)
+    made = 0
+    for candidate in game._enumerate_targets(seat, copied.card, spec, for_cast=True):
+        kind = candidate.get("kind")
+        if kind == "player":
+            if current.get("kind") == "player" and current.get("seat") == candidate.get("seat"):
+                continue
+            copy = _copy_of_spell(copied, seat)
+            copy.target_player_index = candidate.get("seat")
+            copy.target_permanent_index = None
+            copy.target_permanent_id = None
+            label = game.players[candidate["seat"]].name
+        elif kind == "permanent":
+            perm = game.permanent_at(candidate.get("seat"), candidate.get("index"))
+            if perm is None:
+                continue
+            if current.get("kind") == "permanent" and current.get("permanent_id") == perm.permanent_id:
+                continue
+            copy = _copy_of_spell(copied, seat)
+            copy.target_player_index = game.controller_index_of(perm)
+            copy.target_permanent_index = game.battlefield_index_of(perm)
+            copy.target_permanent_id = perm.permanent_id
+            label = perm.card.name
+        else:
+            continue
+        game._stack_push(targets_already_chosen=True, item=copy)
+        game.announce_targets_chosen(copy, chooser=seat, newly_targeted=True)
+        game.log.append(f"{card.name} copied {copied.card.name} targeting {label}")
+        made += 1
+    if not made:
+        game.log.append(f"{card.name}: {copied.card.name} could target nothing else")
+    return True, "resolved"

@@ -832,3 +832,25 @@ def _lower_next_spell_uncounterable(
             {"card_types": list(node.card_types)},
         ),
     )
+
+
+def _lower_copy_spell_for_each_other_target(
+    node: ast.CopySpellForEachOtherTarget,
+) -> tuple[OracleInstruction, ...]:
+    """Radiate's paragraph: one instruction, whose handler makes the copies.
+
+    The chosen spell is the instruction's own target (a ``spell``), narrowed
+    by the printed type union and CR 115.9a's single permanent-or-player
+    target (``targeting._copy_for_each_other_target_spec``); the copies'
+    targets are the copied spell's own picker asked again at resolution."""
+    unknown = [t for t in node.card_types if t not in ("instant", "sorcery")]
+    if unknown or node.each_other != "permanent_or_player":
+        raise LoweringError(
+            "only an instant or sorcery spell copied onto each other permanent "
+            "or player is implemented", node=node,
+        )
+    return (OracleInstruction("copy_spell_for_each_other_target", "", {
+        "targets": {"quantifier": "target", "kind": "spell"},
+        "card_types": list(node.card_types),
+        "each_other": node.each_other,
+    }),)

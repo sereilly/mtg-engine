@@ -684,6 +684,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # countered." (Overmaster, Insist.) Beside the counter it answers: what
     # the promise is about is whether a spell can be countered.
     "make_next_spell_uncounterable": "counterspells",
+    # "Copy that spell for each other permanent or player the spell could
+    # target." (Radiate.) CR 707.10's copying, beside the copy kinds below.
+    "copy_spell_for_each_other_target": "counterspells",
     # An auction of life with a spell at stake (Mages' Contest). Beside the
     # counter it decides, for the reason Illicit Auction's sits beside the
     # steals: what the sentence is *about* is the spell, and the bidding is how
