@@ -2266,9 +2266,12 @@ def cast_announces_x(
     for. A cost field that later spells X is added to this one function and every
     reader gains it.
 
-    The alternative-cost arm of the rule (CR 118.9) has no card behind it in this
-    pool -- no ``AlternativeCost`` field carries an X -- so it is named here and
-    not written: a dead arm is a claim nothing tests.
+    The alternative-cost arm of the rule (CR 118.9) has one card behind it since
+    Torment -- Flaming Gambit's "Flashback {X}{R}{R}" -- and the first line
+    below already answers it, because that card's mana cost prints {X} too. A
+    flashback {X} over a mana cost with none is refused by the support gate
+    (``flashback.flashback_x_unannounced``), so the arm that would answer it is
+    still named here and not written: a dead arm is a claim nothing tests.
     """
     if "{X}" in (card.mana_cost or "").upper():
         return True
