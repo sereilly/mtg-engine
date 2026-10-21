@@ -168,6 +168,16 @@ def count_from_payload(
     # resolution is in hand, because `evaluate_count` below is also the CR 604.3
     # recompute's reader and holds no scratchpad.
     spec = count_spec_in_resolution(spec, context)
+    # "…choose **X** cards in your hand and discard the rest." (Breakthrough.)
+    # The count less the X the cast announced (CR 107.3a) — read off the
+    # context before the dispatch point substitutes this spec's own answer for
+    # it. Clamped at zero (CR 107.1b): a hand of X or fewer loses nothing.
+    if spec.get("minus_announced_x"):
+        whole = dict(spec)
+        whole.pop("minus_announced_x")
+        return max(0, count_from_payload(
+            game, context, whole, instruction, source=source,
+        ) - max(0, int(context.x_value or 0)))
     subtracted = spec.get("minus_count")
     if isinstance(subtracted, dict):
         whole = dict(spec)

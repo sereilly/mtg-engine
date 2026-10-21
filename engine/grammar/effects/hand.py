@@ -322,7 +322,12 @@ def _parse_choose_cards_in_hand(stream: TokenStream) -> "ast.ChooseCardsInHand |
     # "…**drawn this turn**". A provenance rather than a characteristic — see
     # ``ast.ChooseCardsInHand`` — so it rides the node, not the filter.
     drawn = bool(stream.accept_phrase("drawn", "this", "turn"))
-    return ast.ChooseCardsInHand(count=count, filter=filt, drawn_this_turn=drawn)
+    # "…choose X cards in your hand **and discard the rest**." (Breakthrough.)
+    # The rest is the complement of this pick, so the clause is read with it.
+    rest = bool(stream.accept_phrase("and", "discard", "the", "rest"))
+    return ast.ChooseCardsInHand(
+        count=count, filter=filt, drawn_this_turn=drawn, discard_rest=rest,
+    )
 
 
 def parse_exile_random_card_from_hand(

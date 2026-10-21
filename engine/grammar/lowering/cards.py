@@ -16,8 +16,7 @@ from ...oracle_types import (COUNTERED_SPELL_CONTROLLER, DISCARDED_BY_SEAT,
                              OracleInstruction)
 from .. import ast
 from ..errors import LoweringError
-from ._amounts import (count_filter_on_targeted_seat, count_spec,
-                       halved_count_spec)
+from ._amounts import halved_count_spec, per_card_count_spec
 # The characteristics ``count_from_payload`` reads off a cost-eaten
 # permanent. A floor, shared with the damage family that named it: a mill
 # sized by one asks the same question a damage sized by one does, and two
@@ -232,26 +231,17 @@ def _lower_draw(
         # (Peer into the Abyss). The same spec a plain count travels on, with the
         # division recorded on it — see `halved_count_spec`.
         payload: dict[str, object] = {"amount": "x", X_FROM_COUNT: halved}
-    elif isinstance(node.count, ast.ColorsAmong):
+    elif isinstance(node.count, (ast.ColorsAmong, ast.CountOf, ast.CountersOnSource)):
         # "Draw a card **for each color among** permanents you control"
-        # (Chromatic Orrery). The same spec a plain count travels on, with the
-        # aggregate that says colours rather than objects — one evaluator, so
-        # the where-clause form of this phrase and the per-each form cannot
-        # disagree about what "colour" counts.
-        payload: dict[str, object] = {
-            "amount": "x",
-            X_FROM_COUNT: count_spec(
-                node.count.filter, node, aggregate="distinct_colors"
-            ),
-        }
-    elif isinstance(node.count, ast.CountOf):
-        # "Draw cards equal to the number of …" (Frantic Inventory). The count
-        # is taken at *resolution* (CR 608.2), so it travels as the same
-        # ``x_from_count`` spec a where-clause defines and the amount is the
-        # string the single dispatch point already resolves. Stamped on this
-        # instruction alone rather than over the sentence: the count belongs to
-        # this draw, and "draw a card, then draw cards equal to …" has a
-        # literal 1 in front of it that must stay one.
+        # (Chromatic Orrery), "Draw cards equal to the number of …" (Frantic
+        # Inventory), "…draws an additional card **for each growth counter on
+        # this enchantment**" (Malignant Growth). The count is taken at
+        # *resolution* (CR 608.2), so it travels as the same ``x_from_count``
+        # spec a where-clause defines and the amount is the string the single
+        # dispatch point already resolves. Stamped on this instruction alone
+        # rather than over the sentence: the count belongs to this draw, and
+        # "draw a card, then draw cards equal to …" has a literal 1 in front of
+        # it that must stay one.
         #
         # "**Target player** draws a card for each basic land type among lands
         # **they** control." (Allied Strategies.) "They" is the drawer, and the
@@ -259,11 +249,12 @@ def _lower_draw(
         # onto the scope the resolution answers with ``context.target``, the
         # same seat `draw_target_cards` draws for. A drawer that is not a
         # chosen target leaves the filter as it was, for `count_spec` to refuse.
+        #
+        # One reader with the discard and the mill (``per_card_count_spec``):
+        # "a card for each …" is one shape over three verbs.
         payload: dict[str, object] = {
             "amount": "x",
-            X_FROM_COUNT: count_spec(
-                count_filter_on_targeted_seat(node.count.filter, node.player), node
-            ),
+            X_FROM_COUNT: per_card_count_spec(node.count, node, node.player),
         }
     elif isinstance(node.count, ast.GreatestDiscardedThisWay):
         # "…draws cards equal to **the greatest number of cards a player
@@ -358,17 +349,6 @@ def _lower_draw(
             X_FROM_COUNT: {
                 "cost_sacrifice_characteristic": node.count.characteristic
             },
-        }
-    elif isinstance(node.count, ast.CountersOnSource):
-        # "…draws an additional card **for each growth counter on this
-        # enchantment**." (Malignant Growth.) A number on the ability's own
-        # source, which only a resolution knows — so it travels as the same
-        # ``x_from_count`` spec the where-clause spelling of the identical phrase
-        # produces (`where_x._lower_where_x_counters`), resolved at the one
-        # substitution point. One evaluator, so the two printed word orders
-        # cannot count differently.
-        payload: dict[str, object] = {
-            "amount": "x", X_FROM_COUNT: {"source_counters": node.count.kind},
         }
     elif isinstance(node.count, ast.ThatMuch):
         # "Target player discards two cards, then draws **as many cards as they
@@ -527,6 +507,14 @@ def _lower_mill(
                 node=node,
             )
         payload = {"amount": "x", X_FROM_COUNT: halved}
+    elif isinstance(node.count, ast.CountersOnSource):
+        # "Then mill a card **for each shred counter on this creature**."
+        # (Cephalid Vandal.) The draw's reader of the same clause
+        # (``per_card_count_spec``): a number on the ability's own source,
+        # resolved at the one substitution point.
+        payload = {
+            "amount": "x", X_FROM_COUNT: per_card_count_spec(node.count, node),
+        }
     else:
         payload = {"amount": _amount_payload(node.count)}
     if node.player.kind == "that_player":

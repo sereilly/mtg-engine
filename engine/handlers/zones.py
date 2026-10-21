@@ -198,9 +198,18 @@ def draw_target_cards(game: Game, instruction: OracleInstruction, context: Oracl
 def draw_controller_cards(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     caster = context.caster
     card = context.card
-    drawn = game._draw_with_replacements(
-        caster, resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+    # "Discard all the cards in your hand, **then draw that many cards**."
+    # (Tolarian Winds; Nantuko Cultivator.) The lowering writes the record the
+    # number lives in as ``amount_from`` for this kind exactly as for
+    # ``draw_target_cards`` above, and this handler never read it: both cards
+    # compiled supported and drew nothing. A key nothing wrote reads as zero.
+    counted_from = instruction.payload.get("amount_from")
+    count = (
+        max(0, int(context.results.get(counted_from, 0) or 0))
+        if counted_from is not None
+        else resolve_amount(instruction.payload.get("amount", 0), context.x_value)
     )
+    drawn = game._draw_with_replacements(caster, count)
     game.log.append(f"{card.name} drew {drawn} card")
     return True, "resolved"
 
@@ -683,7 +692,12 @@ def search_library(game: Game, instruction: OracleInstruction, context: OracleEx
         if not tapped and instruction.payload.get("enters_tapped"):
             tapped = [True] * count
     computed = counted_from is not None or printed_count == "x"
-    if computed and count <= 0 and instruction.payload.get("up_to"):
+    # "…for X cards" at an X of zero (Insidious Dreams) is the same search for
+    # no cards whether or not it printed "up to": the floor it carries
+    # (CR 701.23d) is X, and X is nothing.
+    if computed and count <= 0 and (
+        instruction.payload.get("up_to") or printed_count == "x"
+    ):
         # "…for **up to** X basic land cards" with X = 0 (New Frontiers), or
         # "up to that many" after nothing was discarded (Rites of Spring). A
         # search for up to no cards is still a search: the library is looked
@@ -696,8 +710,9 @@ def search_library(game: Game, instruction: OracleInstruction, context: OracleEx
         if "library" in zones:
             random.shuffle(searched.library)
         whose = "their" if searched is caster else f"{searched.name}'s"
+        ceiling = "up to " if instruction.payload.get("up_to") else ""
         game.log.append(
-            f"{caster.name} searched {whose} library for up to 0 cards and shuffled"
+            f"{caster.name} searched {whose} library for {ceiling}0 cards and shuffled"
         )
         return True, "resolved"
     if counted_from is not None and count <= 0:
@@ -2860,7 +2875,12 @@ def return_bound_card_to_owners_hand(game: Game, instruction: OracleInstruction,
     recipient = (
         context.caster if instruction.payload.get("to_seat") == "controller" else None
     )
-    for player in game.players:
+    # "…from **your** graveyard" (Pitchstone Wall) looks in one pile only.
+    piles = (
+        [context.caster] if instruction.payload.get("from_seat") == "controller"
+        else game.players
+    )
+    for player in piles:
         for index, held in enumerate(player.graveyard):
             if held is card:
                 player.graveyard.pop(index)
@@ -4227,10 +4247,13 @@ def exile_target_permanent(game: Game, instruction: OracleInstruction, context: 
     # would exile a permanent the player never chose. A lowering that dropped
     # ``count`` would exile one of the two and report the card supported.
     targets_desc = instruction.payload.get("targets") or {}
-    if (
-        isinstance(targets_desc, dict)
-        and isinstance(targets_desc.get("count"), int)
-        and targets_desc["count"] > 1
+    # "Exile **X** target attacking creatures." (Vengeful Dreams.) The same
+    # list announced at a count the cast's X sets (CR 601.2c), so it is the
+    # several-targets branch at any X: read as the single target below, only
+    # the first of X named attackers was exiled.
+    if isinstance(targets_desc, dict) and (
+        targets_desc.get("count") == "x"
+        or (isinstance(targets_desc.get("count"), int) and targets_desc["count"] > 1)
     ):
         # The printed predicate rather than the default, which is "is it a
         # creature?" — Dust to Dust names artifacts, and a slot the resolver

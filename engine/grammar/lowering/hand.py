@@ -51,9 +51,10 @@ and is most of what is left.
 
 from __future__ import annotations
 
-from ...oracle_types import OracleInstruction
+from ...oracle_types import X_FROM_COUNT, OracleInstruction
 from .. import ast
 from ..errors import LoweringError
+from ._amounts import per_card_count_spec
 from ._common import (_amount_payload, _describe_targets, _is_you,
                       chargeable_card_filter)
 from ._discards import (controller_discard, discard_all_matching,
@@ -86,6 +87,8 @@ def _lower_choose_cards_in_hand(
     filt = node.filter
     if filt.zone_owner is None or filt.zone_owner.kind != "you":
         raise LoweringError("the hand pick reads your own hand", node=node)
+    if node.discard_rest:
+        return _lower_keep_chosen_discard_rest(node)
     leftover = _restrictions_beyond(
         filt,
         _PAYLOAD_HONOURED_FILTER_FIELDS | {"is_card", "zone", "zone_owner"},
@@ -115,6 +118,49 @@ def _lower_choose_cards_in_hand(
                 "drawn_this_turn": bool(node.drawn_this_turn),
                 "result_key": CHOSEN_HAND_CARDS_RESULT,
             },
+        ),
+    )
+
+
+def _lower_keep_chosen_discard_rest(
+    node: ast.ChooseCardsInHand,
+) -> tuple[OracleInstruction, ...]:
+    """"…, then choose X cards in your hand and discard the rest."
+    (Breakthrough.)
+
+    The pick and its complement partition one hand, so choosing the N cards
+    that stay and choosing the cards that go are one decision: the discard of
+    ``max(0, hand - N)`` cards **of the controller's choice**, through the
+    chosen controller discard every "discard N cards" already reaches — the
+    same prompt, sized at resolution (CR 608.2h) by the hand as the draw in
+    front of it left it. A hand of N or fewer keeps everything, which is what
+    "choose X cards" means when there are not X to choose; an X of zero is the
+    whole hand.
+
+    The count is the hand less the kept number: a printed one as ``offset``,
+    the cast's announced X as ``minus_announced_x`` (``count_from_payload``).
+    Every card in the hand is a candidate, so a narrowed pick ("choose two
+    creature cards … and discard the rest") would leave its non-matching cards
+    in neither half; it refuses rather than guessing which.
+    """
+    if node.drawn_this_turn or node.filter != ast.ObjectFilter(
+        is_card=True, zone="hand", zone_owner=node.filter.zone_owner,
+    ):
+        raise LoweringError(
+            "only an unnarrowed pick of your hand discards the rest", node=node
+        )
+    hand = {"zone": "hand", "owner": "you", "filter": {}}
+    if isinstance(node.count, ast.Var) and node.count.name == "x":
+        hand["minus_announced_x"] = True
+    elif isinstance(node.count, ast.Fixed) and node.count.value >= 1:
+        hand["offset"] = -node.count.value
+    else:
+        raise LoweringError(
+            "the kept number is printed or the cast's X", node=node
+        )
+    return (
+        OracleInstruction(
+            "discard_controller_cards", "", {"amount": "x", X_FROM_COUNT: hand},
         ),
     )
 
@@ -445,6 +491,26 @@ def _lower_discard(
         )
     if node.player.kind not in ("target_player", "target_opponent", "that_player"):
         raise LoweringError(f"no discard handler for {node.player.kind!r}", node=node)
+    # "Target player discards a card **for each Swamp you control**." (Mind
+    # Sludge.) The draw's multiplier on the chosen discard, counted at
+    # resolution (CR 608.2h) through the reader the draw and the mill share,
+    # and sized by the prompt's ``resolve_amount`` like a where-clause X. Only
+    # the shape printed: a sample, a ceiling, a narrowing or a frozen seat
+    # beside a count is a reading nothing here has checked, so it refuses.
+    counted = per_card_count_spec(node.count, node, node.player)
+    if counted is not None:
+        if (
+            node.at_random or node.up_to or node.filter is not None
+            or node.player.kind == "that_player"
+        ):
+            raise LoweringError(
+                "a per-each discard is a chosen, unnarrowed discard by a "
+                "targeted player",
+                node=node,
+            )
+        payload = {"amount": "x", X_FROM_COUNT: counted}
+        _describe_targets(payload, node.player)
+        return (OracleInstruction("discard_target_cards", "", payload),)
     amount = _amount_payload(node.count)
     # "…, that player discards a card at random" on a damage trigger. The
     # handler discards exactly one, at random, from the player the trigger

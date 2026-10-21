@@ -55,6 +55,13 @@ BOUND_CARD_EVENTS = frozenset({
     # this condition, since the round that stopped dropping every instruction
     # kind but two. It has stamped ``dead_card`` all along; nothing had asked.
     "creature_dies",
+    # "Whenever you discard a card, … return **the discarded card** from your
+    # graveyard to your hand." (Pitchstone Wall.) A discard puts a card into a
+    # graveyard too (CR 701.9a), and ``Game.announce_discard`` stamps the card
+    # under ``dead_card`` beside the ``discarded_card`` Necropotence reads.
+    # Where a replacement sent it elsewhere (madness, CR 702.35a), the
+    # handlers look it up by identity and find nothing (CR 400.7).
+    "discards_card",
 })
 
 #: The scratchpad key "that creature's power" falls back to when the sentence
