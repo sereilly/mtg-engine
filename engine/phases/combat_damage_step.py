@@ -699,6 +699,28 @@ class CombatDamageStepMixin:
                 )
         return True, ""
 
+    def assigns_past_its_blockers(self, attacker_idx: int) -> bool:
+        """Whether this attacker's combat damage goes past the creatures
+        blocking it **whatever is announced**: the mandatory "assign their
+        combat damage this turn as though they weren't blocked" (Outmaneuver;
+        Gurzigost's offer once answered yes, CR 510.1b).
+
+        Such a creature's division among its blockers is no decision at all:
+        :meth:`_assign_attacker_combat_damage` sends every point to the player
+        or planeswalker it is attacking and discards whatever was announced. So
+        it stops nobody (:meth:`_needs_manual_damage_assignment`), and the
+        client's damage dialog leaves it out (``assigns_past_blockers`` on the
+        combat payload). It did neither: Gurzigost blocked by four creatures
+        opened a dialog asking for a division, and the six damage the person
+        divided among the blockers went to the defending player.
+        """
+        attacker = self.permanent_at(self.active_player_index, attacker_idx)
+        return bool(
+            attacker is not None
+            and attacker_idx in self.combat_attackers
+            and attacker.metadata.get(MUST_ASSIGN_AS_UNBLOCKED)
+        )
+
     def _needs_manual_damage_assignment(self) -> bool:
         """Return True when combat damage needs a player's assignment choice.
 
@@ -721,6 +743,8 @@ class CombatDamageStepMixin:
         if self.combat_band_blocks:
             return True
         for attacker_idx in self.combat_attackers:
+            if self.assigns_past_its_blockers(attacker_idx):
+                continue  # nothing to divide: it all goes past them
             if len(self._attacker_all_blockers(attacker_idx)) >= 2:
                 return True
         for blocker_map in self.combat_blockers.values():
@@ -761,6 +785,8 @@ class CombatDamageStepMixin:
         for attacker_idx in self.combat_attackers:
             if len(self._combat_blockers_for_attacker(attacker_idx)) < 2:
                 continue
+            if self.assigns_past_its_blockers(attacker_idx):
+                continue  # no dialog has anything to ask about it
             assigner = self.combat_damage_assigner(attacker_idx)
             if assigner == self.active_player_index:
                 return True

@@ -847,6 +847,15 @@ class CombatPhaseMixin:
                 attacker_idx: self.combat_damage_assigner(attacker_idx)
                 for attacker_idx in sorted(self.combat_attackers)
             },
+            # The attackers whose combat damage goes past their blockers
+            # whatever anybody announces (Outmaneuver; Gurzigost's offer taken,
+            # CR 510.1b): the client's damage dialog has no division to ask of
+            # them (``assigns_past_its_blockers``).
+            "assigns_past_blockers": [
+                attacker_idx
+                for attacker_idx in sorted(self.combat_attackers)
+                if self.assigns_past_its_blockers(attacker_idx)
+            ],
             "damage_resolved": self.combat_damage_resolved,
             "first_strike_done": self.combat_first_strike_done,
             "attackers_locked": self.combat_attackers_locked,

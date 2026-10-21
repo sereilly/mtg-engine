@@ -3,8 +3,8 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **5388**
-- Passed: **783** (525 checked in-game, 258 auto-passed)
-- Failed: **1**
+- Passed: **784** (526 checked in-game, 258 auto-passed)
+- Failed: **0**
 - Equivalent to a passing card: **61**
 - Untested: **4543**
 
@@ -1984,7 +1984,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Guiding Spirit | ⬜ untested |  |
 | Gulf Squid | ⬜ untested |  |
 | Guma | ✅ pass | auto-pass: keywords only (protection from blue) |
-| Gurzigost | ❌ fail | TOR P5: after {G}{G}, Discard: yes, Gurzigost blocked by 2+ creatures opens the Assign Combat Damage dialog asking for a division among its blockers; the server discards the division and deals all damage to the player (MUST_ASSIGN_AS_UNBLOCKED). The dialog asks a question whose answer is ignored. Outmaneuver shares it. |
+| Gurzigost | ✅ pass |  |
 | Gush | ⬜ untested |  |
 | Gustha's Scepter | ⬜ untested |  |
 | Gwendlyn Di Corci | ⬜ untested |  |

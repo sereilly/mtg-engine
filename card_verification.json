@@ -1051,9 +1051,9 @@
       "updated_at": 1791787849.5104907
     },
     "Gurzigost": {
-      "reason": "TOR P5: after {G}{G}, Discard: yes, Gurzigost blocked by 2+ creatures opens the Assign Combat Damage dialog asking for a division among its blockers; the server discards the division and deals all damage to the player (MUST_ASSIGN_AS_UNBLOCKED). The dialog asks a question whose answer is ignored. Outmaneuver shares it.",
-      "status": "fail",
-      "updated_at": 1792616455.472768
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1792618855.84152
     },
     "Hasran Ogress": {
       "reason": "",

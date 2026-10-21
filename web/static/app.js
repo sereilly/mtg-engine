@@ -20633,9 +20633,20 @@ function openMultiblockDamageDialog(state = currentState) {
 // resolved the damage without asking, always past the blocker — and present
 // with two only as an ordinary division that had to total the attacker's power,
 // so the offer could not be taken at all.
+//
+// Never one the server lists in `combat.assigns_past_blockers`: an attacker
+// that assigns its combat damage as though it weren't blocked whatever is
+// announced (Outmaneuver; Gurzigost's "{G}{G}, Discard a card" answered yes).
+// The server discards any division of it, so the dialog asked a question
+// whose answer went nowhere: six damage divided among four blockers, all six
+// dealt to the player.
 function getAttackerAssignGroups(state = currentState) {
   const offers = getUnblockedAssignmentOffers(state);
+  const pastBlockers = new Set(
+    (getCombatState(state)?.assigns_past_blockers || []).map((idx) => Number(idx)),
+  );
   return getBlockedAttackerGroups(state, (attackerIdx) => (offers.has(attackerIdx) ? 1 : 2))
+    .filter((g) => !pastBlockers.has(g.attackerIdx))
     .filter(
       (g) => offers.has(g.attackerIdx) || !defenderAssignsAttackerDamage(state, g.attackerIdx),
     )
