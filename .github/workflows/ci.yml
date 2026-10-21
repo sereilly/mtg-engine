@@ -256,6 +256,13 @@ jobs:
       # back below the gate (the serial numbers had inverted that). The
       # matrix values are where these live; a raise is still a decision.
       #
+      # The confirming run, 39519405262 with these budgets, read ai 1663s,
+      # engine 860s and **rest 470s**: half of rest's first reading, on an
+      # identical tree. Two runs, one shard, a 2x spread. That is runner
+      # weather, and it is why the baselines were left at the first readings
+      # rather than lowered to the second. A budget sized on the fast run
+      # would have failed the slow one.
+      #
       # **tests/ai is the long pole**: under 3% of the tests, and a wall time
       # as long as the other two shards' put together. A shard cannot be cut
       # finer than a folder without giving up the guard, so the next lever is
