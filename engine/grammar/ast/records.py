@@ -747,7 +747,7 @@ class CastFrom:
     :class:`EnteredFrom`'s second half printed on its own, and the "different,
     narrower condition" that node's docstring declines to default into: a
     permanent reanimated or put onto the battlefield by an effect was never
-    cast (CR 601.1) and answers False, where the other node's first half would
+    cast (CR 701.5a) and answers False, where the other node's first half would
     ask where it *came from*. Its own node rather than a flag on that one,
     because "it entered from" is not printed here at all and a field meaning
     "ignore the half you are named after" would be a node lying about itself.

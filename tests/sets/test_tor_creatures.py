@@ -396,6 +396,71 @@ def test_w1g3_chainer_leaving_exiles_every_nightmare(set_pool):
     # Each to its owner's exile (CR 400.3).
     assert sorted(c.name for c in game.players[1].exile) == ["Gravegouger", "Grizzly Bears"]
 
+
+# --- The drive list: supported on arrival, driven -----------------------------
+
+
+def test_w1g3_slithery_stalker_gives_back_what_it_exiled(set_pool):
+    """The ingest's red census named this card, and the card was right: its
+    swampwalk reminder text says "as long as", which the census had read as a
+    duration (now stripped, CR 207.2a). Driven both ways round."""
+    game = _w1g3_game(set_pool, hand=["Slithery Stalker", "Swords to Plowshares"])
+    bears = _w1g3_put(game, set_pool, 1, "Grizzly Bears")
+    game.cast_from_hand(
+        0, "Slithery Stalker", target_player_index=1,
+        target_permanent_ids=[bears.permanent_id],
+    )
+    _w1g3_drain(game)
+    assert [c.name for c in game.players[1].exile] == ["Grizzly Bears"]
+
+    stalker = _w1g3_named(game, 0, "Slithery Stalker")
+    game.queue_from_hand(
+        0, "Swords to Plowshares", target_player_index=0,
+        target_permanent_ids=[stalker.permanent_id],
+    )
+    _w1g3_drain(game)
+    assert [p.card.name for p in game.controlled_by(1)] == ["Grizzly Bears"]
+    assert game.players[1].exile == []
+
+
+def test_w1g3_laquatus_champion_killed_in_response_gives_the_life_first(set_pool):
+    """The ruling (2018-03-16): "the player who gains 6 life is the player who
+    was the target of the first ability (or, if that ability is still on the
+    stack, the player who is its target)." So the gain resolves first and the
+    loss after it."""
+    game = _w1g3_game(set_pool, hand=["Laquatus's Champion", "Swords to Plowshares"])
+    game.queue_from_hand(0, "Laquatus's Champion", target_player_index=1)
+    game.resolve_top_of_stack()
+    champion = _w1g3_named(game, 0, "Laquatus's Champion")
+
+    _w1g3_swords_in_response(game, champion)
+
+    gained = next(i for i, line in enumerate(game.log) if "gained 6 life from Laquatus" in line)
+    lost = next(i for i, line in enumerate(game.log) if "lost 6 life" in line)
+    assert gained < lost
+    assert game.players[1].life == 20
+
+
+def test_w1g3_an_ai_aims_the_champions_life_loss_across_the_table(set_pool):
+    """"Target player loses 6 life" names a seat the cast announces, and the
+    AI's spell scorer cannot read a trigger: with no side to go on it named its
+    own seat and lost the 6 life itself (Soul Scourge the same, for 3).
+    ``ai_valuation._SEAT_DENIAL_KINDS`` now files the life loss as a denial."""
+    from engine.ai_policy import cast_announcement, choose_cast_action
+
+    for name, amount in (("Laquatus's Champion", 6), ("Soul Scourge", 3)):
+        game = _w1g3_game(set_pool, hand=[name])
+        game.interactive_seats = set()
+        game.active_player_index = 0
+        action = choose_cast_action(game, 0)
+        assert action is not None and action.card_name == name
+        announced = cast_announcement(action)
+        assert announced["target_player_index"] == 1, name
+        announced.pop("from_zone", None)
+        game.cast_from_hand(0, name, **announced)
+        _w1g3_drain(game)
+        assert [p.life for p in game.players] == [20, 20 - amount], name
+
 # ==== end W1G3 ======================================================
 
 

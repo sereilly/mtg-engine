@@ -79,6 +79,10 @@ _WRITER_USES = {
     },
     "engine/handlers/zones.py": {
         "lose_types": (1, "return_source_card_to_battlefield's 'as a non-Aura enchantment'"),
+        "gain_types": (
+            1, "_entering_characteristics: Chainer's reanimated creature enters "
+            "'a Nightmare in addition to its other creature types'",
+        ),
     },
 }
 
