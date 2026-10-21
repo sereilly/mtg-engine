@@ -38,6 +38,7 @@ from engine.ai_policy import (CHOSEN_DRAW_SHARE, CHOSEN_DRAWS_COUNTED,
                               choose_cast_action)
 from engine.ai_valuation import CARD_WORTH, library_top_setups
 from engine.card_loader import load_cards, manifest_set_paths
+from engine.faces import compilation_units
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 
@@ -91,11 +92,13 @@ def test_which_casts_set_up_the_top_is_the_program_s_answer():
     """Every instant and sorcery in the pool whose search puts its finds on
     top of its caster's library — and Doomsday, which exiles the rest of the
     library, is not a setup."""
+    # Each half of a split card is a spell of its own (CR 709.3), so the
+    # pool is read a compilation unit at a time.
     found = {
-        name for name, card in POOL.items()
-        if card.primary_type in ("instant", "sorcery")
-        and compile_card_oracle(card).supported
-        and library_top_setups(card, x_value=1)
+        unit.name for unit in compilation_units(POOL.values())
+        if unit.primary_type in ("instant", "sorcery")
+        and compile_card_oracle(unit).supported
+        and library_top_setups(unit, x_value=1)
     }
     assert {*TUTORS, "Insidious Dreams", "Scouting Trek"} <= found, sorted(found)
     assert "Doomsday" not in found
