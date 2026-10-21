@@ -106,6 +106,28 @@ def _rows(pool) -> list:
     return found
 
 
+def _stamps(item) -> list:
+    """Every graveyard card the stack object chose, as a list.
+
+    ``StackItem.target_graveyard_card`` is one stamp for a trigger that names
+    one card and a list of them for one that names several from a single
+    graveyard — Gravegouger's "up to two target cards from a single graveyard",
+    announced as its trigger goes on the stack since Torment's wave 2, the
+    shape Decompose's spell already used. This census was written when every
+    such trigger in the shipped pool named one card, and read the field as a
+    single stamp; Gravegouger reached it the day Torment shipped. Its
+    invariants hold per chosen card: each comes out of the expected pile,
+    exactly the chosen cards leave, and with every one of them gone the
+    ability does not resolve (CR 608.2b, "if all its targets ... are now
+    illegal")."""
+    stamp = item.target_graveyard_card
+    if stamp is None:
+        return []
+    if isinstance(stamp, list):
+        return [entry for entry in stamp if entry is not None]
+    return [stamp]
+
+
 def _table(pool, mercenaries, *, interactive=(), hand=()) -> Game:
     game = Game(players=[
         PlayerState(
@@ -279,17 +301,19 @@ def test_a_seat_nobody_asks_takes_the_card_the_resolution_used_to_find(_pool, _m
             findings.append(f"{label}: not on the stack")
             continue
         examined += 1
-        stamp = item.target_graveyard_card
-        if stamp is None or not item.targets_chosen:
+        stamps = _stamps(item)
+        if not stamps or not item.targets_chosen:
             findings.append(f"{label}: nothing was chosen as it went on the stack")
             continue
         own_only = bool(spec.get("own_graveyard_only"))
-        if stamp.seat != (0 if own_only else 1):
-            findings.append(f"{label}: chose from pile {stamp.seat}")
+        for stamp in stamps:
+            if stamp.seat != (0 if own_only else 1):
+                findings.append(f"{label}: chose from pile {stamp.seat}")
         _drain(game)
         gone = _left(before, _yards(game))
-        if gone != [(stamp.card.name, stamp.seat)]:
-            findings.append(f"{label}: chose {stamp.card.name}; {gone} left a graveyard")
+        chosen = sorted((stamp.card.name, stamp.seat) for stamp in stamps)
+        if sorted(gone) != chosen:
+            findings.append(f"{label}: chose {chosen}; {gone} left a graveyard")
 
     assert examined >= _MIN_TARGETED
     assert not findings, "\n".join(findings)
@@ -321,15 +345,17 @@ def test_the_named_card_exiled_in_response_is_not_replaced_by_another(
             findings.append(f"{label}: no chosen card on the stack")
             continue
         examined += 1
-        stamp = item.target_graveyard_card
-        pile = game.players[stamp.seat]
-        exiled = pile.graveyard.pop(game.graveyard_index_of(stamp))
-        pile.exile.append(exiled)
+        stamps = _stamps(item)
+        for stamp in stamps:
+            pile = game.players[stamp.seat]
+            exiled = pile.graveyard.pop(game.graveyard_index_of(stamp))
+            pile.exile.append(exiled)
+        named = [stamp.card.name for stamp in stamps]
         before = _yards(game)
         _drain(game)
         gone = _left(before, _yards(game))
         if gone:
-            findings.append(f"{label}: {stamp.card.name} was exiled and {gone} moved instead")
+            findings.append(f"{label}: {named} were exiled and {gone} moved instead")
         if game.stack or game.pending_choices:
             findings.append(f"{label}: something is still owed")
         if not any("no longer in the graveyard (608.2b)" in line for line in game.log[-4:]):
