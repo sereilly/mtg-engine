@@ -21,7 +21,12 @@ source and the pronouns that name it, this spell, this flip, this turn.
 `condition_clauses` has since been cut by subject too: the longest of its
 readers, the one over conditions answered by a **record**, is
 `record_conditions`, and what it keeps is the graveyard position and the
-counter-state questions. This dispatcher calls all three.
+counter-state questions. And `condition_counts` has been cut once more: the
+one reader in it whose subject was not a count — a colour asked of the
+effect's own target against the board's census, one chosen permanent, a
+described set or the other target, with the census itself, which shares its
+words — is `color_conditions`, asked from here at the point the counted reader
+used to ask it first. This dispatcher calls all four.
 
 Anything the table does not model raises so the line falls back rather than
 silently losing the condition — the legacy compiler dropped intervening-ifs
@@ -42,6 +47,9 @@ from .condition_clauses import (_accept_counter_condition,
 # the colour table all left with it, and so — one Phase 0 later — did the
 # blocker count it used to reach into `condition_clauses` for.
 from .condition_counts import accept_counted_condition
+# The colour clauses, which the counted reader asked first until Torment's
+# Phase 0 and which are asked from here now, at that same point.
+from .color_conditions import _accept_color_census_condition
 # The long record reader and the one short one that had sat beside it. Imported
 # from their own module rather than through `condition_clauses`, which no longer
 # reads either.
@@ -365,6 +373,24 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
                         stream.reset(after)
                 return ast.EnteredFrom(zone, or_cast=or_cast)
     stream.reset(mark)
+
+    # "…as long as **white is the most common color among all permanents** or
+    # is tied for most common" (the Invasion Djinns) / "…if **it shares a color
+    # with the most common color among all permanents** or a color tied for
+    # most common" (Tsabo's Assassin), and the same pronoun asked about one
+    # chosen permanent, a described set and the other target (Guard Dogs,
+    # Jaded Response, Dead Ringers). A colour asked of the board's census or of
+    # the effect's own target, read in ``color_conditions``.
+    #
+    # Read exactly where it stood — the first thing the counted reader below
+    # did — and for the reason it was read first there: the first form opens on
+    # a colour word, which no counted clause does, and the others on a pronoun
+    # followed by "shares", or on "either one", which nothing below reads. It
+    # consumes nothing when it refuses, so the counted reader starts where it
+    # always did.
+    colour_condition = _accept_color_census_condition(stream)
+    if colour_condition is not None:
+        return colour_condition
 
     # Every condition that is a **count** — what a seat controls, how tall a
     # pile is, a life total, what the battlefield holds, the parity of a number

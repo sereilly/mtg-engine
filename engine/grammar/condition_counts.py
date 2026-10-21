@@ -28,12 +28,13 @@ anything a board holds; "this creature's power is 1 or more" (Lesser Werewolf)
 is a bound, but on one object's characteristic. Both stay with the object half,
 because the subject is what decides the side and the bound is not.
 
-No mirror name to reuse: ``lowering/conditions.py`` lowers both halves and has
-never split, so nothing on that side is forked by taking a new one here. The
-name is ``condition_clauses``' prefix, which marks the same contract — a reader
-the dispatcher hands a sentence to, non-consuming on refusal so the next branch
-below it keeps its say. Below ``conditions``, which calls it and is never
-imported back.
+No mirror name to reuse: ``lowering/conditions.py`` lowers both halves of this
+cut, and neither of its own splits — the record clauses at Exodus, the colour
+clauses at Torment — went along it, so nothing on that side is forked by taking
+a new one here. The name is ``condition_clauses``' prefix, which marks the same
+contract — a reader the dispatcher hands a sentence to, non-consuming on
+refusal so the next branch below it keeps its say. Below ``conditions``, which
+calls it and is never imported back.
 
 The blocker count is read here as well as dispatched here, since the Phase 0
 before Nemesis. ``_parse_blockers_of_bound_creature`` had stayed in
@@ -41,6 +42,18 @@ before Nemesis. ``_parse_blockers_of_bound_creature`` had stayed in
 about a count and this module's one import from a sibling; it is a count by the
 first paragraph above and nothing else called it, so it came across and the
 edge went with it.
+
+The colour clauses left at Torment's Phase 0, for ``color_conditions``, when
+this module sat 43 lines under the thousand-line guard. The census of the board
+by colour is a count by the first paragraph, but one reader read it together
+with four clauses that are not: "it shares a color with the most common color"
+(Tsabo's Assassin), "…with that permanent" (Guard Dogs), "…with a creature you
+control" (Jaded Response) and "either one is a color the other isn't" (Dead
+Ringers) each ask a colour of the object the guarded effect targets — one
+object, which the second paragraph files with the dispatcher's half. Tsabo's
+Assassin's clause and the next two open on the same words and are one reader,
+so the five went as one block, and the dispatcher asks them at the point this
+module used to: first, before the reveal count below.
 """
 
 from __future__ import annotations
@@ -57,7 +70,7 @@ from .references import parse_player_ref
 from .seat_comparisons import accept_margin
 from .seats import accept_life_total_of
 from .stream import TokenStream
-from .vocabulary import CARD_TYPES, COLOR_WORDS
+from .vocabulary import COLOR_WORDS
 from .zones import names_each_zone_ahead
 
 
@@ -149,120 +162,6 @@ def _parse_blockers_of_bound_creature(
     return ast.BlockersOfBoundCreature(filt, comparison)
 
 
-#: The set a colour census is taken over, as printed. One phrase today — "among
-#: all permanents" is every permanent on the battlefield, either seat's, tokens
-#: and lands included — and required whole: a narrower set ("among nontoken
-#: permanents the chosen player controls", Call to Arms) is a different count
-#: with a different answer, and this reader must refuse it rather than answer
-#: it about the whole board.
-_CENSUS_SCOPE: tuple[str, ...] = ("among", "all", "permanents")
-
-#: The two tails of "<colour> is the most common color …", as ``(words, tied)``.
-#: Both required — the bare superlative says nothing about a level board, and
-#: the two tails are opposite answers there.
-_CENSUS_TIE_TAILS: tuple[tuple[tuple[str, ...], bool], ...] = (
-    (("or", "is", "tied", "for", "most", "common"), True),
-    (("but", "isn't", "tied", "for", "most", "common"), False),
-)
-
-
-def accept_target_pronoun(stream: TokenStream) -> bool:
-    """``it`` / ``that <noun>`` naming the object the guarded effect targets.
-
-    "Destroy target creature if **it** shares a color with …" (Tsabo's
-    Assassin) and "Return target permanent to its owner's hand if **that
-    permanent** shares a color with …" (Barrin's Unmaking) are one referent in
-    two spellings: the repeated noun restates what the effect in front already
-    chose, which is the arrangement ``record_conditions`` keeps for "that land
-    was nonbasic". Which object that is — a permanent, a spell — is the
-    lowering's question (``pronoun_target_referent``), asked beside the effect.
-
-    Consumes nothing unless one of the two is there.
-    """
-    if stream.accept_word("it"):
-        return True
-    mark = stream.mark()
-    if stream.accept_word("that"):
-        noun = stream.peek_word()
-        if noun == "permanent" or noun in CARD_TYPES:
-            stream.advance()
-            return True
-    stream.reset(mark)
-    return False
-
-
-def _accept_color_census_condition(stream: TokenStream) -> "ast.Condition | None":
-    """A question about **the most common color among all permanents**, or
-    None with the cursor untouched.
-
-    Two printed askers of one count (``engine/color_census.py``):
-
-    * "**white is** the most common color among all permanents **or is tied
-      for most common**" — the five Invasion Djinns. A printed colour against
-      the census.
-    * "**it shares a color with** the most common color among all permanents
-      **or a color tied for most common**" — Tsabo's Assassin, Barrin's
-      Unmaking. The effect's own target against the census.
-
-    Every word is required in both. The scope is what the count is *of*, and
-    the tail is what the card says about a level board; a reader that stopped
-    at the superlative would be picking one of those for the card.
-    """
-    # "…unless **either one is a color the other isn't**." (Dead Ringers.) The
-    # relation with a target on *both* sides — the pair the guarded effect
-    # announced — so it names neither and the lowering checks there are two.
-    # Whole or not at all: every word is the clause, and the phrase opens on a
-    # word no other condition here reads.
-    if stream.accept_phrase(
-        "either", "one", "is", "a", "color", "the", "other", "isn't",
-    ):
-        return ast.TargetsDifferInColor()
-    mark = stream.mark()
-    colour = stream.peek_word()
-    if colour in COLOR_WORDS and stream.peek_word(1) == "is":
-        stream.advance(2)
-        if stream.accept_phrase("the", "most", "common", "color", *_CENSUS_SCOPE):
-            for tail, tied in _CENSUS_TIE_TAILS:
-                if stream.accept_phrase(*tail):
-                    return ast.ColorIsMostCommon(COLOR_WORDS[colour], tied=tied)
-        stream.reset(mark)
-        return None
-    if accept_target_pronoun(stream) and stream.accept_phrase(
-        "shares", "a", "color", "with",
-    ):
-        if stream.accept_phrase(
-            "the", "most", "common", "color",
-            *_CENSUS_SCOPE, "or", "a", "color", "tied", "for", "most", "common",
-        ):
-            return ast.SharesMostCommonColor()
-        # "…if it shares a color with **that permanent**" (Guard Dogs). The
-        # same relation with one object on the far side instead of the census:
-        # the permanent an earlier sentence of this effect chose. Read here
-        # because the two clauses share every word up to this one, and a second
-        # reader of "it shares a color with" would be a second opinion about
-        # which object "it" is.
-        if stream.accept_phrase("that", "permanent"):
-            return ast.SharesColorWithChosenPermanent()
-        # "…if it shares a color with **a creature you control**" (Jaded
-        # Response). The relation once more, with a described set on the far
-        # side: any permanent the noun phrase admits. Read last, because the
-        # two clauses above open on "the" and "that", which no object phrase
-        # behind an article does — and read whole, by the noun reader, or the
-        # sentence is not this one: a phrase that left words behind it would be
-        # a narrowing consumed and dropped.
-        if stream.accept_word("a", "an"):
-            try:
-                matching = parse_object_filter(stream)
-            except GrammarError:
-                matching = None
-            if matching is not None and (
-                stream.exhausted or stream.at_punct(".", ",")
-            ):
-                return ast.SharesColorWithMatching(matching)
-    stream.reset(mark)
-    return None
-
-
 def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
     """One counted condition, or None without consuming when it is something else.
 
@@ -274,19 +173,9 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
     # The block's own entry mark. It was ``_parse_single_condition``'s, and the
     # "you control …" branch still resets to it after reading a player
     # reference the rest of the clause then refuses — the same position, since
-    # the dispatcher resets to its own mark immediately before calling here.
+    # the dispatcher resets to its own mark before calling here, and the colour
+    # reader it asks in between consumes nothing when it refuses.
     mark = stream.mark()
-
-    # "…as long as **white is the most common color among all permanents** or
-    # is tied for most common" (the Invasion Djinns) / "…if **it shares a color
-    # with the most common color among all permanents** or a color tied for
-    # most common" (Tsabo's Assassin). A count of the whole battlefield by
-    # colour. Read first: the first form opens on a colour word, which no other
-    # clause here does, and the second on a pronoun followed by "shares", which
-    # nothing below reads — and it consumes nothing when neither is there.
-    census = _accept_color_census_condition(stream)
-    if census is not None:
-        return census
 
     # "if **that opponent reveals exactly the chosen number of cards of the
     # chosen color**" (Scrying Glass). A count of a *record* rather than of a

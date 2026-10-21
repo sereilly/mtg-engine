@@ -17,6 +17,15 @@ below is answered by looking at the game *now*. The two do not overlap — see
 that module for the measurement — and this file hands a sentence down to it as
 the last thing it does, so no caller learns which side a node landed on.
 
+Less one family of the *now* half, since Torment's Phase 0: a **colour** asked
+of the effect's own target or of the board's census — Hydroblast's "if it's
+red", the Djinns, Tsabo's Assassin, Guard Dogs, Jaded Response, Dead Ringers —
+is `_color_conditions`, the mirror of the parse-side `color_conditions` cut in
+the same commit along the same four commits' growth. It is handed down where
+its six branches stood, and the two referent questions its refusals turn on
+(`pronoun_target_referent`, `announces_target_pair`) stay here, where
+`statement_dispatch` asks them.
+
 What the evaluator does with the payload is `engine/handlers/control_flow.py`'s
 ``evaluate_condition``. The pair is the usual arrangement here — a gate and a
 dispatch that must read one rule — and the refusals below are what keep it: a
@@ -31,10 +40,10 @@ from ..errors import LoweringError
 from ._amounts import count_filter_on_frozen_seat, count_spec
 from ._common import _is_enchanted, testable_filter_payload
 from ._events import (ATTACHED_PERMANENT_CONTROLLER, CAST_SPELL_EVENTS,
-                      CHOSEN_PERMANENT,
                       _EVENT_SUBJECT_OBJECTS,
                       _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER,
                       names_attached_permanent)
+from ._color_conditions import lower_color_condition
 from ._record_conditions import lower_record_condition
 
 #: What ``targets.kind`` on a guarded effect says the pronoun "it" names, and
@@ -220,147 +229,17 @@ def _lower_condition(
         # trigger would fire *and* again on resolution, and both readings want
         # the number the declaration had).
         return {"kind": "attackers_aimed_at_you", "count": condition.count}
-    if isinstance(condition, ast.ItIsColor):
-        # "Counter target spell **if it's red**." (Hydroblast, Pyroblast.) The
-        # pronoun names the object this effect targets, the same referent the
-        # keyword clause below reads — and under a trigger it names the event's
-        # subject instead, which nothing here can tell apart, so it refuses
-        # there for that clause's reason.
-        if event is not None:
-            raise LoweringError(
-                "'it' names no chosen target under this trigger", node=condition
-            )
-        if referent is None:
-            # No branch to read the referent off, or a branch that targets
-            # something this cannot ask about. Refusing is what keeps the
-            # condition from being answered about the wrong half of the
-            # resolution context — silently, and forever the same way.
-            raise LoweringError(
-                "'it' has no target to be a colour of here", node=condition
-            )
-        return {
-            "kind": "target_is_color",
-            "color": condition.color,
-            "negated": condition.negated,
-            "target": referent,
-        }
-    if isinstance(condition, ast.ColorIsMostCommon):
-        # "…as long as **white is the most common color among all permanents**
-        # or is tied for most common" (the Invasion Djinns). A census of the
-        # whole battlefield against a printed colour: no seat, no pronoun and no
-        # filter, so nothing here depends on the trigger or the effect beside
-        # it. ``tied`` is the printed tail, carried because the two spellings
-        # are opposite answers on a level board.
-        return {
-            "kind": "color_is_most_common",
-            "color": condition.color,
-            "tied": condition.tied,
-        }
-    if isinstance(condition, ast.SharesMostCommonColor):
-        # "Destroy target creature **if it shares a color with the most common
-        # color among all permanents** or a color tied for most common."
-        # (Tsabo's Assassin, Barrin's Unmaking.) The pronoun is the target of
-        # the effect this guards — :class:`ItIsColor`'s referent, refused for
-        # that clause's two reasons: under a trigger "it" most often names the
-        # event's subject, and with no single target beside it there is no
-        # object to ask.
-        #
-        # A **permanent** only. The census is of permanents and the two cards
-        # target one; a spell on the stack has colours too, but its referent is
-        # resolved from the other half of the context and no card prints the
-        # question about one, so it refuses rather than being answered about
-        # whatever permanent the resolver could reach.
-        if event is not None:
-            raise LoweringError(
-                "'it' names no chosen target under this trigger", node=condition
-            )
-        if referent != "permanent":
-            raise LoweringError(
-                "the colour census is asked of a targeted permanent, and this "
-                "effect names none",
-                node=condition,
-            )
-        return {"kind": "target_shares_most_common_color", "target": referent}
-    if isinstance(condition, ast.SharesColorWithChosenPermanent):
-        # "…**if it shares a color with that permanent**." (Guard Dogs.) Two
-        # back-references and a gate for each. "It" is the target of the effect
-        # this guards — the census clause's referent just above, refused for
-        # its two reasons. "That permanent" is the one a "Choose a permanent …"
-        # step earlier in this same effect recorded, admitted only where one
-        # did: read under any other sentence the words name an object nobody
-        # picked, and the evaluator would answer False for ever on a card
-        # reporting supported.
-        if event is not None:
-            raise LoweringError(
-                "'it' names no chosen target under this trigger", node=condition
-            )
-        if referent != "permanent":
-            raise LoweringError(
-                "a shared colour is asked of a targeted permanent, and this "
-                "effect names none",
-                node=condition,
-            )
-        if CHOSEN_PERMANENT not in produced:
-            raise LoweringError(
-                "'that permanent' names a permanent no step of this effect "
-                "chose",
-                node=condition,
-            )
-        return {
-            "kind": "target_shares_color_with_chosen",
-            "target": referent,
-            "permanent_from": CHOSEN_PERMANENT,
-        }
-    if isinstance(condition, ast.SharesColorWithMatching):
-        # "Counter target spell **if it shares a color with a creature you
-        # control**." (Jaded Response.) "It" is the target of the effect this
-        # guards — :class:`ItIsColor`'s referent, refused for that clause's two
-        # reasons — and the far side is every permanent the printed phrase
-        # admits, re-read as the instruction is followed (CR 608.2c).
-        #
-        # A **spell** only. The question about a targeted *permanent* is not
-        # one this can settle: "destroy target creature if it shares a color
-        # with a creature you control", aimed at the controller's own
-        # creature, turns on whether an object is one of the things it is
-        # compared with, and no card prints the sentence to rule on. A spell is
-        # never a permanent, so there the clause has one reading.
-        if event is not None:
-            raise LoweringError(
-                "'it' names no chosen target under this trigger", node=condition
-            )
-        if referent != "spell":
-            raise LoweringError(
-                "a colour shared with a described permanent is asked of a "
-                "targeted spell, and this effect names none",
-                node=condition,
-            )
-        return {
-            "kind": "target_shares_color_with_matching",
-            "target": referent,
-            # Every key the phrase produces must be one ``subject_matches``
-            # tests: a narrowing nothing can ask ("a creature you control" read
-            # as "a creature") widens the set the spell is compared with, and
-            # a wider set counters spells the card does not name.
-            "filter": testable_filter_payload(
-                condition.filter,
-                refusal="nothing tests the permanents this colour is shared with",
-                node=condition,
-            ),
-        }
-    if isinstance(condition, ast.TargetsDifferInColor):
-        # "…unless **either one is a color the other isn't**." (Dead Ringers.)
-        # The two targets of the effect this guards, and admitted only where
-        # that effect really announced two: beside one target, or a sweep, the
-        # words name a pair nobody chose and the evaluator would answer the
-        # same way for ever on a card reporting supported. Under a trigger the
-        # pair is refused for ``ItIsColor``'s reason one clause up.
-        if event is not None or not target_pair:
-            raise LoweringError(
-                "'either one' and 'the other' name the two targets of the "
-                "effect beside them, and this effect announces no such pair",
-                node=condition,
-            )
-        return {"kind": "targets_differ_in_color"}
+    # Every colour asked of the effect's own target or of the board's census —
+    # Hydroblast's "if it's red", the Djinns' leader, Tsabo's Assassin, Guard
+    # Dogs, Jaded Response, Dead Ringers — lowered in ``_color_conditions``.
+    # Handed down where the six branches stood, though where decides nothing:
+    # each is a bare ``isinstance`` on its own node class, like every branch
+    # here. None back means the node is not one of them.
+    colour = lower_color_condition(
+        condition, produced, event, referent, target_pair=target_pair,
+    )
+    if colour is not None:
+        return colour
     if isinstance(condition, ast.ObjectHasKeyword):
         # "If **it** doesn't have rampage" (Rapid Fire). The pronoun names the
         # object the sentence in front of it chose — which for a spell or an
