@@ -11,6 +11,7 @@ from fastapi import HTTPException
 from engine.faces import choose_a_face_refusal, spell_named
 from engine.text_changes import LAND_TYPE_WORDS
 from .action_registry import action_handler
+from .action_helpers import _queue_spell_from_request
 from .turn_steps import _begin_turn, _start_next_turn
 
 
@@ -1595,6 +1596,49 @@ def _action_cast_choice_confirm(session, req, seat_type):
         raise HTTPException(status_code=400, detail="cast_index is required")
     if not session.game.confirm_cast_choice(req.seat, req.cast_index):
         raise HTTPException(status_code=400, detail="invalid spell choice")
+
+@action_handler("madness_cast_confirm")
+def _action_madness_cast_confirm(session, req, seat_type):
+    """Madness (CR 702.35a): "its owner may cast it by paying [cost] rather
+    than paying its mana cost. If that player doesn't, they put this card into
+    their graveyard."
+
+    ``accept`` false declines. True casts the exiled card, announced on the
+    same fields an ordinary ``cast`` carries (targets, X, mode, division) and
+    forwarded through the same plumbing (``_queue_spell_from_request``), out of
+    exile and for the madness cost — so the client's cast dialog is the one it
+    already has. The cast is made **during the trigger's resolution**
+    (CR 608.2g): there is no priority to hold and no timing to check, which is
+    why this is not the ``cast`` route and asks neither. A cast the engine
+    refuses (unpaid mana, a missing target) is a 400 with the engine's own
+    reason, and the offer stays open.
+    """
+    if req.accept is None:
+        raise HTTPException(status_code=400, detail="accept is required")
+    game = session.game
+    if not req.accept:
+        if not game.confirm_madness_cast(req.seat, False):
+            raise HTTPException(status_code=400, detail="no madness cast is offered to you")
+        return
+    choice = game.pending_choice_of("madness_cast", req.seat)
+    if choice is None:
+        raise HTTPException(status_code=400, detail="no madness cast is offered to you")
+    card_name = req.card_name or choice.data.get("card_name") or ""
+    announced = req.model_copy(update={"from_zone": "exile", "alternative_cost": True})
+
+    def perform(table):
+        return _queue_spell_from_request(
+            table, req.seat, card_name, announced, x_value=req.x_value,
+        )
+
+    outcome: list = []
+    if not game.confirm_madness_cast(req.seat, True, perform=perform, outcome=outcome):
+        detail = (
+            outcome[-1].details if outcome and getattr(outcome[-1], "details", None)
+            else "the madness cast was refused"
+        )
+        raise HTTPException(status_code=400, detail=detail)
+
 
 @action_handler("retarget_choice_confirm")
 def _action_retarget_choice_confirm(session, req, seat_type):

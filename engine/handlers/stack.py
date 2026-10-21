@@ -2077,3 +2077,45 @@ def ban_targeting(game: Game, instruction: OracleInstruction, context: OracleExe
         f"abilities"
     )
     return True, "resolved"
+
+
+@effect_handler("offer_madness_cast")
+def offer_madness_cast(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"When this card is exiled this way, its owner may cast it by paying
+    [cost] rather than paying its mana cost. If that player doesn't, they put
+    this card into their graveyard." — CR 702.35a's second ability.
+
+    The cast happens **during this resolution** (CR 608.2g): it is the
+    ``madness_cast`` prompt's answer, and the prompt holds this object on the
+    stack until it is given, so the spell lands above the ability and the
+    ability then finishes. A non-interactive seat answers as the prompt is
+    armed (``default_at_arm``), which is the same moment.
+
+    The card is the one the static ability exiled (``madness_card``), asked
+    for by identity in its owner's exile: one that has left since is a new
+    object (CR 400.7), and neither the cast nor "put this card into their
+    graveyard" can find it.
+    """
+    from ..madness import offer_permission, offered_card_in_exile
+
+    card = (context.trigger_context or {}).get("madness_card") or context.card
+    seat = next(
+        (i for i, seated in enumerate(game.players) if seated is context.caster),
+        None,
+    )
+    if seat is None or card is None or not offered_card_in_exile(game, seat, card):
+        game.log.append(
+            f"{getattr(card, 'name', 'The card')} is no longer in exile, so it "
+            f"can't be cast for its madness cost"
+        )
+        return True, "resolved"
+    cost = str(instruction.payload.get("cost") or "")
+    permission = offer_permission(game, seat, card, cost)
+    game.arm_pending_choice(
+        "madness_cast", seat,
+        card_name=card.name,
+        cost=cost,
+        _card=card,
+        _permission=permission,
+    )
+    return True, "resolved"

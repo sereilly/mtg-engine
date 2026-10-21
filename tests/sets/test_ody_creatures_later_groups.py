@@ -989,16 +989,20 @@ def test_confessor_asks_its_controller_and_no_is_an_answer(set_pool):
         set_pool, bf0=["Confessor"], hand1=["Grizzly Bears"] * 8,
         interactive=(0,),
     )
-    game.resolve_cleanup_step(1)
-    _w1g7_resolve_stack(game)
+    # The cleanup step resolves what its own discard set off, in that step
+    # (CR 514.3a; Torment W1G1) — so the seat is asked *inside* the step, which
+    # reports itself unfinished while the answer is owed. This test used to
+    # drain the stack after the step, because the trigger was left there for
+    # the next turn; draining now would answer the prompt with its default.
+    assert not game.resolve_cleanup_step(1)
     offers = game.pending_choices_of("optional_pay", 0)
     assert len(offers) == 1
     assert game.resolve_pending_choice("optional_pay", 0, accept=False)
     assert game.players[0].life == 20
+    assert not game.stack
 
     game.players[1].hand.extend([game.players[1].hand[0]])
-    game.resolve_cleanup_step(1)
-    _w1g7_resolve_stack(game)
+    assert not game.resolve_cleanup_step(1)
     assert game.resolve_pending_choice("optional_pay", 0, accept=True)
     assert game.players[0].life == 21
 

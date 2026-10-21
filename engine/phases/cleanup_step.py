@@ -391,8 +391,38 @@ class CleanupStepMixin:
         # modelled: the second pass exists to re-check hand size and
         # state-based actions after the triggers resolved, and no card in the
         # pool can raise a hand over its maximum from a cleanup trigger.
-        if fire_delayed_triggers(self, "next_cleanup_step"):
+        #
+        # **And whatever else triggered during the step.** The hand-size
+        # discard above is the other way something reaches the stack here: a
+        # card with madness discarded to it is exiled and its trigger
+        # announced (CR 702.35a — the card's ruling of 2022-12-08: "You could
+        # discard it … because you have too many cards in your hand during
+        # your cleanup step"), and "whenever an opponent discards a card"
+        # (Megrim) fires off the same discard. Both waited on the stack into
+        # the next turn while only the delayed triggers were settled here.
+        fired = fire_delayed_triggers(self, "next_cleanup_step")
+        if fired or self.stack:
             self._settle()
+            if self.stack or self.waiting_prompt() is not None:
+                # A person owes the answer (the madness offer, held on the
+                # stack for them): the step is not over, and the caller must
+                # not begin the next turn around it.
+                self._on_step_or_phase_end(phase, step)
+                return False
+            # CR 514.3a: "Once those spells and abilities finish resolving,
+            # another cleanup step begins." The comment above called that
+            # second pass unreachable because no card could raise a hand over
+            # its maximum from a cleanup trigger — madness can: an Obsessive
+            # Search discarded to hand size is cast and draws a card. Taken
+            # only for the hand, which is the one thing the second pass here
+            # would change (every sweep above has already run and is
+            # idempotent); bounded by the library, as the game itself is.
+            limit = maximum_hand_size(self, player_index)
+            if limit is not None and len(active_player.hand) > limit:
+                self._on_step_or_phase_end(phase, step)
+                return self.resolve_cleanup_step(
+                    player_index, defer_discard_selection=defer_discard_selection,
+                )
         self._on_step_or_phase_end(phase, step)
         return cleanup_completed
 

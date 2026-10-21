@@ -76,6 +76,7 @@ from .modal_triggers import (MODAL_HEAD_KEY, MODAL_INSTRUCTION_KIND,
                              modal_trigger_targeting_refusal)
 from .cumulative_upkeep import cumulative_upkeep_triggers
 from .flanking import flanking_triggers
+from .madness import madness_triggers, unread_madness_line
 from .rampage import rampage_amount, rampage_triggers
 from .static_bonuses import static_bonus_for
 from .grammar import ast as grammar_ast, compile_line as compile_grammar_line
@@ -4664,6 +4665,14 @@ def _qualified_keyword_part(part: str) -> bool:
 
     if cumulative_upkeep_cost(part) is not None:
         return True
+    # Madness carries a cost too (CR 702.35a), and is admitted the same way:
+    # by the reader that charges it (`engine/madness.py`), so a cost it cannot
+    # express — an {X}, a hybrid pip — keeps the line refused instead of
+    # shipping a card whose discard is never replaced.
+    from .madness import madness_cost_text
+
+    if madness_cost_text(part) is not None:
+        return True
     # "Bands with other legendary creatures" (CR 702.22b). The quality is a
     # printed noun phrase rather than a word from a list, so what admits the
     # line is the reader that *implements* it — engine/banding.py, which turns
@@ -6295,6 +6304,11 @@ def keyword_line_triggers(normalized_line: str) -> tuple[ParsedTriggeredAbility,
         *rampage_triggers(normalized_line),
         *cumulative_upkeep_triggers(normalized_line),
         *flanking_triggers(normalized_line),
+        # CR 702.35a's second ability ("When this card is exiled this way, its
+        # owner may cast it by paying [cost] …"). Its static half is not an
+        # ability this returns: it is a CR 614 replacement, read off the
+        # printed line by `engine/replacements.py` (`engine/madness.py`).
+        *madness_triggers(normalized_line),
     )
 
 
@@ -7810,6 +7824,19 @@ def _compile_card_oracle(
             False,
             "unsupported",
             f"unimplemented flashback cost: {unread_flashback}",
+            normalized_text,
+        )
+    # …and a **madness** line `engine/madness.py` cannot read (an {X} or a
+    # hybrid cost), for flashback's reason one keyword over: the six madness
+    # instants Torment arrived with were supported off their effect line with
+    # the keyword dropped, castable from a hand and never for their madness
+    # cost.
+    unread_madness = unread_madness_line(oracle_text)
+    if unread_madness is not None:
+        return OracleProgram(
+            False,
+            "unsupported",
+            f"unimplemented madness cost: {unread_madness}",
             normalized_text,
         )
 

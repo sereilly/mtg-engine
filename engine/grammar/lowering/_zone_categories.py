@@ -204,6 +204,13 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     "look_top_exile_random": "zones",
     "search_and_exile_matching": "zones",
     "grant_cast_permission": "zones",
+    # Madness's trigger (CR 702.35a): "its owner may cast it by paying [cost]
+    # rather than paying its mana cost. If that player doesn't, they put this
+    # card into their graveyard." Beside the permission above, which it grants
+    # for the length of the offer: either way the card leaves exile, for the
+    # stack or for a graveyard. Built by `engine/madness.py` off the keyword
+    # line, never lowered from a sentence.
+    "offer_madness_cast": "zones",
     # "Play with the top card of your library revealed" granted by an effect
     # (Temporal Aperture). Beside the permission above rather than in a family
     # of its own: what it opens is a hidden zone, and CR 400.2's answer to "who

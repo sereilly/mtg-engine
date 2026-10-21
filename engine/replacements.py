@@ -267,6 +267,15 @@ DISCARD_DESTINATION = 10  # Library of Leng
 # Before the Library's offer: both replace where a discarded card goes, and
 # CR 616.1's default for a seat nobody asks is the battlefield.
 DISCARD_TO_BATTLEFIELD = 5  # Dodecapod
+# CR 702.35a's static ability: "If a player would discard this card, that
+# player discards it, but exiles it instead of putting it into their
+# graveyard." A third destination for a discarded card, between the two above.
+# Ahead of the Library's offer, which is CR 616.1e's default for a seat nobody
+# asks and the order the discarding player would choose: the exile is what
+# offers the cheap cast, and after it the Library has no graveyard move left
+# to replace. A card printing both madness and Dodecapod's sentence would meet
+# Dodecapod first; none does.
+DISCARD_INTO_EXILE = 7  # madness (Fiery Temper, Arrogant Wurm)
 # Before the two draw replacements that *consume* the event, and for the
 # player's benefit: a doubler applied first turns one draw into two, and the
 # Lamp then replaces one of them, so the player gets both effects. The other
@@ -3233,6 +3242,14 @@ def _resolve_leng_discard(game, choice: ReplacementChoice, option_index: int) ->
             f"{player.name} put discarded {card.name} on top of their library (Library of Leng)"
         )
     else:
+        # The Library applied and its "you may" was declined, so the event is
+        # still a discard into the graveyard — and CR 616.1f re-asks every
+        # replacement that has not yet applied to it. Madness has not
+        # (CR 614.5 keeps the Library itself from applying again).
+        from .madness import exile_madness_card
+
+        if exile_madness_card(game, player, card):
+            return 0
         game.put_card_into_graveyard(player, card)
         game.log.append(f"{player.name} put discarded {card.name} into their graveyard")
     return 0
@@ -3367,6 +3384,29 @@ def _battlefield_instead_of_graveyard(game, payload: dict) -> ReplacementOutcome
     discarded_onto_battlefield(
         game, payload["player"], payload["card"], payload.get("cause_seat")
     )
+    return ReplacementOutcome(replaced=True)
+
+
+def _applies_madness_discard(game, payload: dict) -> bool:
+    """Whether the discarded card prints a madness cost this engine can
+    charge — the card's own static ability, functioning from the hand
+    (CR 702.35a). Pure: asked of the printed text, which is what a card in a
+    hand is."""
+    from .madness import printed_madness_cost
+
+    card = payload.get("card")
+    return card is not None and printed_madness_cost(card) is not None
+
+
+@replacement_effect("discard", DISCARD_INTO_EXILE, applies=_applies_madness_discard)
+def _discarded_into_exile_for_madness(game, payload: dict) -> ReplacementOutcome | None:
+    """Madness: "If a player would discard this card, that player discards
+    it, but exiles it instead of putting it into their graveyard" — and the
+    trigger that exile sets off (``engine/madness.py``). The discard itself
+    stands: ``Game._discard_card`` announces it either way."""
+    from .madness import exile_madness_card
+
+    exile_madness_card(game, payload["player"], payload["card"])
     return ReplacementOutcome(replaced=True)
 
 

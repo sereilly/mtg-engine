@@ -138,6 +138,10 @@ ActionKind = Literal[
     "entry_exile_confirm",
     "player_choice_confirm",
     "cast_choice_confirm",
+    # CR 702.35a's madness trigger: cast the exiled card for its madness cost
+    # (``accept`` true, with the cast's whole announcement on the ordinary cast
+    # fields) or decline it, which puts the card into its owner's graveyard.
+    "madness_cast_confirm",
     "retarget_choice_confirm",
     "loyalty_recipient_confirm",
     "mode_choice_confirm",

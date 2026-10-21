@@ -1057,6 +1057,9 @@ def _play_activations(
             permanent_index=activation_action.permanent_index,
             target_permanent_index=activation_action.target_permanent_index,
             target_role_refs=activation_action.target_role_refs,
+            # Which card a "Discard a card" cost takes, when the policy named
+            # one (a card with madness, `ai_policy._madness_discard_index`).
+            cost_hand_index=activation_action.cost_hand_index,
         )
         _resolve_pending_choices(game)
         report.interaction_count += 1

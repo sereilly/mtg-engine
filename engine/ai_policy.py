@@ -224,6 +224,12 @@ class ActivationAction:
     # the ability worth activating on an opponent's Flailing Soldier is its
     # *second* ("-1/-1"), not its first ("+1/+1").
     ability_index: int | None = None
+    # Which card in hand pays a "Discard a card" cost (CR 602.2b's choice).
+    # None is the engine's default, the first card the cost admits. Named only
+    # to discard a card with **madness** whose madness cost the seat can pay
+    # beside the ability (`_madness_discard_index`): the discard is then a
+    # cast for less rather than a card spent (CR 702.35a).
+    cost_hand_index: int | None = None
 
 
 @dataclass(frozen=True)
@@ -1008,6 +1014,54 @@ def _choose_cast_action(game: Game, player_index: int) -> CastAction | None:
         if candidate is not None and _is_better_cast(candidate, best):
             best = candidate
 
+    return best
+
+
+def choose_madness_cast(
+    game: Game, player_index: int, held: CardDefinition, permission,
+) -> "CastAction | None":
+    """The madness cast *player_index* makes of *held* — a card its madness
+    ability has just exiled (CR 702.35a) — or None to decline it.
+
+    The offer's permission is the one ``engine/madness.py`` granted for its
+    length, requiring the madness cost (CR 118.9b), so the cast is built by
+    the same candidate builder every cast out of a zone a permission opens
+    is (`choose_cast_action`'s second loop): the same gates, target, mode
+    and division choosers, the same plan for the mana, and the same
+    rehearsal deciding whether it is worth making at all — a Psychotic Haze
+    that would kill only its caster's own creatures is declined.
+
+    **Weighed in the abstract** (`_IN_THE_ABSTRACT`), because the question is
+    asked part-way through the madness trigger's own resolution, where no
+    copy of the table can be taken as it stands
+    (``ai_valuation.mid_resolution``). The copy that is taken owes nothing,
+    and the permission travels with it because it is stored on the game.
+
+    No timing gate: CR 608.2g makes the cast during a resolution, where a
+    creature or a sorcery with madness is cast whatever the step.
+    """
+    pile = game.players[player_index].exile
+    index = next((i for i, card in enumerate(pile) if card is held), None)
+    if index is None or permission is None:
+        return None
+    best: CastAction | None = None
+    token = _IN_THE_ABSTRACT.set(True)
+    try:
+        with deliberating():
+            for spell in castable_faces(held):
+                permitted = PermittedCast(
+                    zone="exile", owner_seat=player_index, index=index,
+                    held=held, spell=spell, permission=permission,
+                    alternative_cost=True,
+                )
+                candidate = _priced_candidate(
+                    game, player_index, spell, index,
+                    from_zone="exile", under=permitted,
+                )
+                if candidate is not None and _is_better_cast(candidate, best):
+                    best = candidate
+    finally:
+        _IN_THE_ABSTRACT.reset(token)
     return best
 
 
@@ -2988,7 +3042,22 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
         # the honest floor — the alternative is an AI that eats its own board
         # every main phase for a pump that wears off. Derived from the compiled
         # cost, so it reaches every card printed this way and names none.
-        if ability.cost.sacrifice_filter is not None or ability.cost.discard_cards:
+        #
+        # **Except a discard that takes a card with madness** (CR 702.35a)
+        # whose madness cost the board can pay beside the ability: that card
+        # is not spent but offered for less (`_madness_discard_index`), so the
+        # trade is priced — by the offer's own rehearsal when it is made.
+        madness_discard = (
+            _madness_discard_index(
+                game, player_index, ability, dict(ability.cost.mana),
+                paying_for=permanent,
+            )
+            if ability.cost.discard_cards and ability.cost.sacrifice_filter is None
+            else None
+        )
+        if ability.cost.sacrifice_filter is not None or (
+            ability.cost.discard_cards and madness_discard is None
+        ):
             # A conjoined sacrifice ("a creature **and a Swamp**", Viscerid
             # Drone) is covered by the clause above rather than by a second
             # test: the charger never fills `sacrifice_also_filter` without
@@ -3446,6 +3515,7 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
             target_permanent_index=target_permanent_index,
             target_role_refs=target_role_refs,
             land_tap_colors=tap_colors,
+            cost_hand_index=madness_discard,
         )
         if best is None or candidate.score > best.score:
             best = candidate
@@ -3546,6 +3616,48 @@ def _rehearse_activation(
     )
 
 
+def _madness_discard_index(
+    game: Game, seat: int, ability, required: dict[str, int], *,
+    paying_for: "Permanent | None" = None,
+) -> int | None:
+    """The hand position a "Discard a card" cost should take: a card with
+    **madness** (CR 702.35a) whose madness cost the seat's board can pay on
+    top of the ability's own *required* mana — or None, the engine's default.
+
+    The weight the madness offer's other half needs. Discarding such a card
+    exiles it and offers it for its madness cost, so it is the card the cost
+    costs least; whether the cast is then *worth* making is the offer's own
+    rehearsed question (`choose_madness_cast`), asked when it is made. Only a
+    chosen single discard: a discard at random is nobody's choice, and a cost
+    of several cards is the engine's to fill in hand order.
+    """
+    from .madness import printed_madness_cost
+    from .mana_payment import mana_cost_from_symbols
+    from .subject_filters import card_matches_any
+
+    cost = ability.cost
+    if (
+        cost.discard_cards != 1 or cost.discard_at_random
+        or cost.discard_whole_hand
+    ):
+        return None
+    player = game.players[seat]
+    for index, card in enumerate(player.hand):
+        madness = printed_madness_cost(card)
+        if madness is None or not card_matches_any(card, cost.discard_filters):
+            continue
+        if game.enforce_mana_costs:
+            combined = dict(required)
+            for symbol, amount in (mana_cost_from_symbols(madness) or {}).items():
+                combined[symbol] = combined.get(symbol, 0) + amount
+            if any(combined.values()) and _plan_land_taps(
+                game, player, combined, paying_for=paying_for,
+            ) is None:
+                continue
+        return index
+    return None
+
+
 def _queue_activation(table: Game, seat: int, action: ActivationAction):
     """*action* paid for and put on *table*'s stack — the queue form, which
     leaves it there for the table to answer (CR 117.3c)."""
@@ -3558,6 +3670,7 @@ def _queue_activation(table: Game, seat: int, action: ActivationAction):
         target_permanent_index=planned.target_permanent_index,
         target_role_refs=planned.target_role_refs,
         ability_index=planned.ability_index,
+        cost_hand_index=planned.cost_hand_index,
     )
 
 
