@@ -347,3 +347,30 @@ def test_608_2g_a_madness_creature_is_cast_on_an_opponents_turn_after_the_spell_
     assert bin_mind_rot < cast_wurm
     assert [p.card.name for p in game.players[0].battlefield].count("Arrogant Wurm") == 1
     assert all(land.tapped for land in game.players[0].battlefield if land.card.name == "Forest")
+
+
+@pytest.mark.cr("603.3", "702.35a")
+def test_603_3_the_madness_trigger_can_be_responded_to():
+    """The trigger is an object on the stack, so the table answers it before
+    the cast is made: the opponent pumps the Grizzly Bears Fiery Temper would
+    have killed, and the seat nobody asks — choosing as the trigger resolves —
+    aims the Temper at the opponent instead."""
+    temper = _card("Fiery Temper")
+    bears = _nosick(Permanent(card=_card("Grizzly Bears")))
+    game = _two_seats(
+        {"battlefield": [Permanent(card=_card("Mountain"))], "hand": [temper]},
+        {"battlefield": [bears, Permanent(card=_card("Forest"))],
+         "hand": [_card("Giant Growth")]},
+        interactive=(),
+    )
+    _discard_from_hand(game, 0, temper)
+    assert [item.card.name for item in game.stack] == ["Fiery Temper"]
+    assert game.tap_land_for_mana(1, "Forest")
+    assert game.queue_from_hand(
+        1, "Giant Growth", target_permanent_ids=[bears.permanent_id], target_player_index=1,
+    ).supported
+    resolve_stack(game)
+    game.check_state_based_actions()
+    assert game.is_on_battlefield(bears)
+    assert game.players[1].life == 17
+    assert [c.name for c in game.players[0].graveyard] == ["Fiery Temper"]
