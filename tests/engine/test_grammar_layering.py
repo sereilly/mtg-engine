@@ -771,6 +771,16 @@ PARSE_LAYERS = [
     # what the sentence before it removed. They came here at Nemesis' Phase 0,
     # `riders` at 976, and no edge is left between the two in either direction.
     "pronouns",
+    # A second pump on the creatures the sentence in front reached: "That
+    # creature gets an additional +4/+4" (Wild Might), "If this spell was
+    # kicked, they get +1/+1" (Savage Offensive), "…Zombie creatures you
+    # control get an additional +2/+2" (Strength of Night). Pre-split out of
+    # `pronouns` at Torment's Phase 0, 38 lines under the guard below: the
+    # three riders were that module's whole growth since Nemesis, one a set,
+    # and none read the binding it is built on — the antecedent is the step
+    # in front's own subject, a sweep as often as a target. Beside `pronouns`,
+    # neither importing the other, and below `sequences`, which drives both.
+    "second_pumps",
     # The branches of an offer — "if you do", "if you can't", "when you do",
     # "otherwise". Split out of `riders` at the guard below, along the boundary
     # that module already drew: these answer which *branch* of the decision
@@ -843,9 +853,10 @@ PARSE_LAYERS = [
     #
     # Above `riders`, `repeats`, `control_flow` and `pronouns`, whose attachers
     # this loop drives: every one of them left `parser` for this same guard, and
-    # none reaches back. (And above `conditional_instead`, which left
-    # `control_flow` for it in turn.) Below `parser`, its only caller, whose import of
-    # `_statements_from_sentences` is also that name's re-export — and only that
+    # none reaches back. (And above `conditional_instead` and `second_pumps`,
+    # which left `control_flow` and `pronouns` for it in turn.) Below `parser`,
+    # its only caller, whose import of `_statements_from_sentences` is also
+    # that name's re-export — and only that
     # name, because `test_import_hygiene.py` reads a re-export nobody pulls as
     # the stale binding a move leaves behind. `riders`' docstring records that "the
     # loop that drives them stays behind in `parser.py` with the line-level
