@@ -1010,6 +1010,54 @@ def _choose_cast_action(game: Game, player_index: int) -> CastAction | None:
     return best
 
 
+def choose_madness_cast(
+    game: Game, player_index: int, held: CardDefinition, permission,
+) -> "CastAction | None":
+    """The madness cast *player_index* makes of *held* — a card its madness
+    ability has just exiled (CR 702.35a) — or None to decline it.
+
+    The offer's permission is the one ``engine/madness.py`` granted for its
+    length, requiring the madness cost (CR 118.9b), so the cast is built by
+    the same candidate builder every cast out of a zone a permission opens
+    is (`choose_cast_action`'s second loop): the same gates, target, mode
+    and division choosers, the same plan for the mana, and the same
+    rehearsal deciding whether it is worth making at all — a Psychotic Haze
+    that would kill only its caster's own creatures is declined.
+
+    **Weighed in the abstract** (`_IN_THE_ABSTRACT`), because the question is
+    asked part-way through the madness trigger's own resolution, where no
+    copy of the table can be taken as it stands
+    (``ai_valuation.mid_resolution``). The copy that is taken owes nothing,
+    and the permission travels with it because it is stored on the game.
+
+    No timing gate: CR 608.2g makes the cast during a resolution, where a
+    creature or a sorcery with madness is cast whatever the step.
+    """
+    pile = game.players[player_index].exile
+    index = next((i for i, card in enumerate(pile) if card is held), None)
+    if index is None or permission is None:
+        return None
+    best: CastAction | None = None
+    token = _IN_THE_ABSTRACT.set(True)
+    try:
+        with deliberating():
+            for spell in castable_faces(held):
+                permitted = PermittedCast(
+                    zone="exile", owner_seat=player_index, index=index,
+                    held=held, spell=spell, permission=permission,
+                    alternative_cost=True,
+                )
+                candidate = _priced_candidate(
+                    game, player_index, spell, index,
+                    from_zone="exile", under=permitted,
+                )
+                if candidate is not None and _is_better_cast(candidate, best):
+                    best = candidate
+    finally:
+        _IN_THE_ABSTRACT.reset(token)
+    return best
+
+
 def _priced_candidate(
     game: Game, seat: int, spell: CardDefinition, zone_index: int, *,
     from_zone: str = "hand", extra_generic: int = 0,

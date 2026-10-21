@@ -2741,6 +2741,36 @@ def _cast_choice(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("madness_cast")
+def _madness_cast(ctx: PromptContext, choices: list) -> dict:
+    """Madness (CR 702.35a): the card just discarded is in exile, and its
+    owner may cast it now for its madness cost or put it into their graveyard.
+
+    The cast is the client's ordinary cast dialog, sent as
+    ``madness_cast_confirm`` with ``accept: true`` and the cast's fields;
+    declining is the same action with ``accept: false``. The card's ``ways``
+    in the exile zone payload carry the price, because the offer is a stored
+    permission while it stands (``engine/madness.py``). Mana is paid by
+    tapping first: ``tap`` and ``activate`` answer this prompt too."""
+    choice = choices[0]
+    card = choice.data.get("_card")
+    exile = ctx.game.players[choice.player_index].exile
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "cost": choice.data.get("cost", ""),
+        # Where the card is, so the client can open its cast dialog on it.
+        "exile_index": next(
+            (index for index, held in enumerate(exile) if held is card), None
+        ),
+        "prompt": (
+            f"Cast {choice.data.get('card_name', 'the exiled card')} for its "
+            f"madness cost {choice.data.get('cost', '')}, or put it into your "
+            f"graveyard?"
+        ),
+    }
+
+
 @prompt_renderer("retarget_choice")
 def _retarget_choice(ctx: PromptContext, choices: list) -> dict:
     """Deflection: "Change the target of target spell with a single target."

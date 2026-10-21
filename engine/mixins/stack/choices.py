@@ -42,6 +42,7 @@ from ...oracle_types import (BIDDING_WINNER, CLAIMABLE_EXILED_CARDS,
                              EXILED_THIS_WAY_OBJECTS)
 from ...grammar.lowering._events import PUT_FROM_HAND_PERMANENTS
 from ... import land_mana_swaps
+from ... import madness as _madness
 from ... import piles
 from ...pending_choices import (CHOICE_SPECS, PendingChoice,
                                 optional_pay_options, register_choice,
@@ -5982,6 +5983,26 @@ class PendingChoicesMixin:
         options = list(choice.data.get("options") or ())
         if not options or not self._resolve_cast_choice(choice, options[0]):
             self._record_cast_choice(choice, 0)
+
+    # -- Madness's cast offer (CR 702.35a, CR 608.2g) -------------------------
+
+    def confirm_madness_cast(
+        self, player_index: int, accept: bool, *, perform=None,
+        card_name: str | None = None, outcome: list | None = None,
+        **announcement,
+    ) -> bool:
+        """Answer the ``madness_cast`` prompt: cast the exiled card for its
+        madness cost (*accept*), announced by *announcement* — the keywords
+        ``queue_from_hand`` takes — or by *perform*, a callable making that
+        call; or decline, which puts the card into its owner's graveyard.
+
+        False when there is no such prompt or the engine refused the cast; the
+        refusal's ``SimulationResult`` is appended to *outcome* when given. See
+        ``engine/madness.py``."""
+        return self.resolve_pending_choice(
+            "madness_cast", player_index, accept=bool(accept), perform=perform,
+            card_name=card_name, outcome=outcome, announcement=announcement,
+        )
 
     # -- The new target of a spell being re-aimed (CR 115.7a) ----------------
 
@@ -11948,6 +11969,28 @@ register_choice(
     # step behind it - the chain of decisions that stays one resolution.
     suspends=True,
     default_at_arm=True,
+    spectator_visible=True,
+)
+
+register_choice(
+    "madness_cast",
+    resolve=lambda game, choice, r: _madness.resolve_madness_offer(game, choice, r),
+    default=lambda game, choice: _madness.default_madness_offer(game, choice),
+    action="madness_cast_confirm",
+    prompt_key="madness_cast",
+    # CR 608.2g: the cast is made *during* the trigger's resolution, so the
+    # game waits on the answer and the trigger stays on the stack under the
+    # spell the answer casts. Paying for that cast is CR 601.2g's mana
+    # abilities, so a land's tap and a mana ability answer it as much as the
+    # confirm does — the arrangement every prompt paid in mana has.
+    blocked_detail="decide whether to cast the exiled card for its madness cost",
+    also_answers=("tap", "activate"),
+    # A seat nobody asks answers where the offer stands, inside the
+    # resolution, with the AI's rehearsed cast chooser — the same moment a
+    # person's cast would be made.
+    default_at_arm=True,
+    # The card is in exile (a public zone) and the offer is the rule's, so a
+    # seatless viewer may see the question.
     spectator_visible=True,
 )
 

@@ -1685,11 +1685,16 @@ def _resolve_one_discard(
         # does — one predicate and one body, read by both. A seat that chose
         # the library top above applied the Library's replacement first
         # (CR 616.1), after which there is no graveyard move left to replace.
+        from ..madness import exile_madness_card
         from ..replacements import discarded_onto_battlefield
 
+        # …and madness's (CR 702.35a: "…exiles it instead of putting it into
+        # their graveyard"), for the same reason and through the same body the
+        # ``discard`` event runs (`engine/madness.py`). In the event's own
+        # order: Dodecapod's battlefield first, then the exile.
         if not discarded_onto_battlefield(
             game, player, card, game.discard_cause_seat(cause_seat)
-        ):
+        ) and not exile_madness_card(game, player, card):
             game.put_card_into_graveyard(player, card)
             game.log.append(f"{player.name} discarded {card.name}")
         if took is not None:
