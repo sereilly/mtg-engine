@@ -169,6 +169,7 @@ def is_tap_alone_mana_ability(ability) -> bool:
 _LOGGED_TAP_REFUSALS = {
     "summoning_sick": " has summoning sickness",
     "activations_forbidden": "'s activated abilities can't be activated this turn",
+    "aura_activations_forbidden": "'s activated abilities can't be activated",
 }
 
 
@@ -666,12 +667,25 @@ class TurnManagementMixin:
         # activated abilities can't be activated this turn", Interdict) prints
         # no mana-ability exception. Both refused here as the activation path
         # refuses them, with nothing tapped.
+        from ..auras import aura_restriction_active
         from ..spell_prohibitions import permanent_activations_forbidden
 
         if self._is_summoning_sick(land):
             return "summoning_sick"
         if permanent_activations_forbidden(self, land):
             return "activations_forbidden"
+        # …and an Aura's clause that prints no CR 605.1a exception either:
+        # "Enchanted creature's activated abilities can't be activated."
+        # (Stupefying Touch; Volrath's Curse's second clause is the same
+        # restriction.) The card's ruling: "Unlike many similar abilities,
+        # Stupefying Touch's last ability stops mana abilities from being
+        # activated." (2016-06-08.) A land that is a creature (a Forest under
+        # Living Lands) is a legal host, and this seam is the door its mana
+        # ability is used through — the activation path's table
+        # (``activation_prohibitions._aura_all_shut_off``) asks the same
+        # predicate of every other permanent's mana ability.
+        if aura_restriction_active(land, "all_activated_abilities_shut_off"):
+            return "aura_activations_forbidden"
 
         # A land with no mana ability at all (Island of Wak-Wak, Bazaar of
         # Baghdad) can't be tapped for mana — without this, the color fallback
