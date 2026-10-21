@@ -174,8 +174,14 @@ def _action_cleanup_select(session, req, seat_type):
     session.cleanup_required_discards = required
 
     if len(selected) == required:
-        session.game.resolve_cleanup_step(session.current_turn, discard_hand_indices=selected)
-        _start_next_turn(session)
+        # False when the discard set something off that a person still owes
+        # an answer to — a madness card discarded to hand size offers its cast
+        # (CR 702.35a) — so the turn waits for it rather than beginning the
+        # next one around an open prompt.
+        if session.game.resolve_cleanup_step(
+            session.current_turn, discard_hand_indices=selected,
+        ):
+            _start_next_turn(session)
 
 @action_handler("untap_select", human_only=HUMAN_ONLY)
 def _action_untap_select(session, req, seat_type):
