@@ -2267,7 +2267,7 @@ function severalGraveyardHint() {
     ? "in any one graveyard"
     : "in a graveyard";
   if (Number.isInteger(p.exactTargets)) {
-    return `${n} of ${p.exactTargets} chosen — choose exactly ${p.exactTargets} cards ${where} for ${p.cardName} (X = ${p.exactTargets}), then confirm.`;
+    return `${n} of ${p.exactTargets} chosen — choose exactly ${p.exactTargets} card${p.exactTargets === 1 ? "" : "s"} ${where} for ${p.cardName} (X = ${p.exactTargets}), then confirm.`;
   }
   return n === 0
     ? `Choose up to ${p.maxTargets} cards ${where} for ${p.cardName} (click each), then confirm. Choosing none is legal.`
@@ -12766,7 +12766,7 @@ function renderActivationPrompt() {
         const exact = pendingCastTarget.exactTargets;
         const exactShort = Number.isInteger(exact) && pendingCastTarget.severalGraveyard.length !== exact;
         body.textContent =
-          `Click ${Number.isInteger(exact) ? "exactly" : "up to"} ${pendingCastTarget.maxTargets} glowing ${noun}s in ${where} to choose them, then confirm. ` +
+          `Click ${Number.isInteger(exact) ? "exactly" : "up to"} ${pendingCastTarget.maxTargets} glowing ${noun}${pendingCastTarget.maxTargets === 1 ? "" : "s"} in ${where} to choose ${pendingCastTarget.maxTargets === 1 ? "it" : "them"}, then confirm. ` +
           "Click a chosen one again to deselect it.";
         steps.innerHTML = [
           `<div>Card: ${escapeHtml(pendingCastTarget.cardName)}</div>`,
