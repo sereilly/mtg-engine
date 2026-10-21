@@ -40,7 +40,7 @@ from engine.mana_payment import mana_cost_from_symbols
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle, expand_card_lines
 from engine.targeting import CAST_FROM_GRAVEYARD, derive_cast_spec
-from tests.helpers import _damage_dealt, _nosick, resolve_stack
+from tests.helpers import _damage_dealt, _nosick, declare_attack, resolve_stack
 
 
 # ---------------------------------------------------------------------------
@@ -131,6 +131,73 @@ def _something_to_counter(game) -> None:
     assert game.queue_from_hand(1, "Grizzly Bears").supported
 
 
+def _something_in_combat(game) -> None:
+    """Seat 1 attacks with what it can (its Serra Angel), for a spell that
+    names "target attacking or blocking creature" (Spirit Flare).
+
+    The mirrored board is a main phase with nothing fighting, so a role that
+    only a creature in combat can fill had nothing to announce — the census
+    assumed every flashback card's targets were on the board before any
+    combat, which held until Torment printed one that is not. The fight is
+    real (``declare_attack``: seat 1's turn, declare blockers, damage still to
+    be dealt) and it is set up before the "before" snapshot, on both boards
+    alike."""
+    declare_attack(game, 1)
+
+
+#: A colour word used as a colour word, on a permanent that does nothing by
+#: itself: Black Knight's "protection from white".
+_REWRITTEN = ("Black Knight", "W", "B")
+
+
+def _something_to_rewrite(game, card, zone: str) -> dict:
+    """Seat 1 gets a Black Knight, and a colour-word text change (Alter
+    Reality) is announced at it replacing white with black.
+
+    A text change rewrites words that are on the permanent and nothing else
+    (CR 612.2), and the mirrored board prints no colour word anywhere — so
+    Alter Reality aimed at whatever its picker offered first changed nothing,
+    and this census could not tell that from a spell that does nothing. The
+    words are named the way a headless cast names them (``old_color`` /
+    ``new_color``), and the Knight is announced only once its own picker has
+    offered it."""
+    name, old, new = _REWRITTEN
+    game.players[1].battlefield.append(_nosick(Permanent(card=_pool()[name])))
+    spec = game.cast_target_spec(0, card, from_zone=zone)
+    entry = next(
+        entry for entry in spec.get("valid_targets") or ()
+        if entry.get("kind") == "permanent" and entry["seat"] == 1 and entry["name"] == name
+    )
+    knight = game.permanent_at(1, entry["index"])
+    return {
+        "target_permanent_ids": [knight.permanent_id], "target_player_index": 1,
+        "old_color": old, "new_color": new,
+    }
+
+
+def _rewrites_color_words(card) -> bool:
+    return any(
+        instruction.kind == "mark_text_modified" and instruction.payload.get("mode") == "color_word"
+        for instruction in compile_card_oracle(card).instructions
+    )
+
+
+def _role_refs(game, entries: list) -> list[dict]:
+    """The first path through a roles picker (each entry's ``next`` is the
+    list for the role after it), as ``target_role_refs``."""
+    refs = []
+    while entries:
+        entry = entries[0]
+        if entry.get("kind") == "permanent":
+            refs.append({"permanent_id": game.permanent_at(entry["seat"], entry["index"]).permanent_id})
+        elif entry.get("kind") == "player":
+            refs.append({"seat": entry["seat"]})
+        else:
+            raise AssertionError(f"a role this census cannot announce: {entry}")
+        entries = entry.get("next") or []
+    return refs
+
+
 def _announce(game, card, zone: str) -> dict:
     """The first target *card*'s own picker offers, as cast keywords.
 
@@ -140,10 +207,21 @@ def _announce(game, card, zone: str) -> dict:
     """
     if derive_cast_spec(card, compile_card_oracle(card), from_zone=zone) is None:
         return {}
+    if _rewrites_color_words(card):
+        return _something_to_rewrite(game, card, zone)
     spec = game.cast_target_spec(0, card, from_zone=zone)
     if spec.get("kind") == "stack":
         _something_to_counter(game)
         spec = game.cast_target_spec(0, card, from_zone=zone)
+    if spec.get("kind") == "roles":
+        if not spec.get("valid_targets") and any(
+            role.get("any_states") for role in spec.get("roles") or ()
+        ):
+            _something_in_combat(game)
+            spec = game.cast_target_spec(0, card, from_zone=zone)
+        refs = _role_refs(game, spec.get("valid_targets") or [])
+        if refs:
+            return {"target_role_refs": refs}
     if spec.get("kind") == "divided":
         # The whole amount at the opposing player: a lawful division of one.
         return {"divided_targets": [(1, None, int(spec["division_total"]))]}
@@ -204,7 +282,8 @@ def _snapshot(game, card) -> tuple:
     The damage probes come last and are part of the answer: a prevention
     shield (Embolden, Moment's Peace) is visible only as damage that did not
     arrive, so each seat is dealt 3 of each kind and what got through is
-    recorded.
+    recorded. So is each permanent's text as layer 3 leaves it: a text change
+    (Alter Reality) is visible nowhere else.
     """
     def names(zone) -> list[str]:
         return sorted(held.name for held in zone if held is not card)
@@ -217,6 +296,7 @@ def _snapshot(game, card) -> tuple:
                 perm.tapped, perm.damage_marked,
                 tuple(k for k in ("haste", "trample") if game._has_keyword(perm, k)),
                 bool(perm.metadata.get("cant_be_regenerated_this_turn")),
+                perm.effective_card.oracle_text,
             )
             for perm in game.controlled_by(seat)
         )
@@ -248,6 +328,39 @@ def _cast_and_settle(card, zone: str):
     result = game.cast_from_hand(0, card.name, from_zone=zone, **keywords)
     _settle(game)
     return game, result, before
+
+
+#: What an ``AlternativeCost`` charges beside its mana that this census can
+#: predict, by field. Every other field must hold its default.
+_PREDICTED_CHARGES = ("pay_life",)
+_NOT_A_CHARGE = ("phrase", "mana", "keyword")
+
+
+def _less_what_the_flashback_cost_charged(after_hand: tuple, card) -> tuple:
+    """The hand cast's snapshot, less what the flashback cost takes beyond its
+    mana: what the flashed-back cast must leave.
+
+    Torment prints "Flashback—{1}{G}, Pay 3 life." (Acorn Harvest, Crippling
+    Fatigue, Deep Analysis, Flash of Defiance, Spirit Flare). Until it was
+    measured every flashback cost in the pool was mana alone and this census
+    compared the two boards whole — so three cards that pay their 3 life
+    correctly read as 17 life where the hand cast read 20. The comparison
+    assumed less than the pool holds; the 3 life is the cost (CR 118.9,
+    CR 119.4), and seat 0 is the payer. A charge this census cannot predict
+    fails here by name rather than as a board that merely differs.
+    """
+    from dataclasses import fields
+
+    cost = printed_flashback_cost(card)
+    unpredicted = {
+        field.name: getattr(cost, field.name) for field in fields(cost)
+        if field.name not in _PREDICTED_CHARGES + _NOT_A_CHARGE
+        and getattr(cost, field.name) != field.default
+    }
+    assert not unpredicted, f"{card.name}'s flashback cost also charges {unpredicted}"
+    seats, *rest = after_hand
+    life, *zones = seats[0]
+    return ((life - cost.pay_life, *zones), *seats[1:]), *rest
 
 
 # ---------------------------------------------------------------------------
@@ -366,7 +479,9 @@ def test_702_34a_flashed_back_a_card_does_what_it_does_from_hand_and_is_exiled(n
 
     The comparison is the whole card's text, driven by whatever its own picker
     offers. It does not say what the card *should* do (the per-set files do);
-    it says the half that was missing does all of it.
+    it says the half that was missing does all of it. The one difference
+    allowed is what the flashback cost itself charges beyond mana (Torment's
+    "Pay 3 life").
     """
     card = _pool()[name]
     from_hand, cast, before = _cast_and_settle(card, "hand")
@@ -381,7 +496,7 @@ def test_702_34a_flashed_back_a_card_does_what_it_does_from_hand_and_is_exiled(n
     assert cast.supported, cast.details
     assert _where(flashed, card) == ["P1.exile"]
     assert not any(flashed.players[0].mana_pool.values()), "the flashback cost was not what was paid"
-    assert _snapshot(flashed, card) == after_hand
+    assert _snapshot(flashed, card) == _less_what_the_flashback_cost_charged(after_hand, card)
 
 
 @pytest.mark.cr("702.34a", "601.2h")
@@ -544,8 +659,9 @@ def test_118_9c_a_flashed_back_spell_keeps_its_printed_mana_cost_on_the_stack():
 
 @pytest.mark.cr("702.34a", "118.9")
 def test_702_34a_a_flashback_cost_may_be_more_than_mana():
-    """Torment prints "Flashback—{1}{G}, Pay 3 life." Nothing in the pool does
-    yet, so an invented card holds the shape: the mana is charged as mana and
+    """Torment prints "Flashback—{1}{G}, Pay 3 life." This test was written
+    before Torment was measured, so an invented card holds the shape (the
+    census above now casts the printed ones): the mana is charged as mana and
     the rest through the alternative-cost reader every other printed
     alternative cost goes through, gate and payment included."""
     card = _mk(
