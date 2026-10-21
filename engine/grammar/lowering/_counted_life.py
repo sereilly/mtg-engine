@@ -66,6 +66,7 @@ from ._events import (
     LOOP_BOUND_OBJECT,
     DAMAGE_RECIPIENT,
     EVENT_SUBJECT_PLAYER,
+    _EVENT_QUANTITIES,
     _back_reference_payload,
 )
 
@@ -448,6 +449,32 @@ def lower_per_each_gain(
                 "the death tally counts creatures and nothing narrower", node=node
             )
         payload["per_each"] = {"history": "creatures_died_this_turn"}
+        return (OracleInstruction("target_gains_life", "", payload),)
+    if isinstance(node.per_each, ast.EachLifeLost):
+        # "Whenever you lose life, you gain 2 life **for each 1 life you
+        # lost**." (Transcendence.) The printed 2 is the rate on ``amount`` and
+        # the count is the firing event's loss, frozen into the trigger's
+        # context by the sweep that announced it — one gain of the product,
+        # one life-gain event (CR 119.3), rather than a loop of gains of 2,
+        # which would be as many events as life was lost.
+        #
+        # Refused under any other trigger and over any unit but 1, for the
+        # leading form's reasons (``loops._lower_for_each_life_lost``): an
+        # unrecorded number reads as zero on a card reporting supported, and a
+        # dropped unit is a gain twice what a "for each 2" would print.
+        key = _EVENT_QUANTITIES.get(event or "") if event == "you_lose_life" else None
+        if key is None:
+            raise LoweringError(
+                f"no event named {event!r} records the life this gain counts",
+                node=node,
+            )
+        if node.per_each.per != 1:
+            raise LoweringError(
+                "this gain counts 1 life lost at a time, not "
+                f"{node.per_each.per}",
+                node=node,
+            )
+        payload["per_each"] = {"trigger_record": key}
         return (OracleInstruction("target_gains_life", "", payload),)
     if isinstance(node.per_each, ast.CountOfSacrificesThisWay):
         # "Sacrifice any number of permanents. You gain 2 life **for each

@@ -178,6 +178,77 @@ def test_w1g7_floating_shield_sacrificed_gives_its_color_to_another_creature(set
     assert game.cast_from_hand(1, "Lightning Bolt", target_permanent_ids=[lions.permanent_id]).supported
     assert lions not in game.players[0].battlefield
 
+
+def _w1g7_transcendence_at(set_pool, life):
+    """Seat 0 at *life* with Transcendence; seat 1 holds a Lightning Bolt.
+    One sweep first, so the starting totals are seen and are not a loss."""
+    game = _w1g7_Game(players=[
+        _w1g7_PlayerState(
+            name="P0", life=life,
+            battlefield=[_w1g7_Permanent(card=set_pool("TOR")["Transcendence"])],
+        ),
+        _w1g7_PlayerState(name="P1", hand=[set_pool("LEA")["Lightning Bolt"]]),
+    ])
+    game.enforce_mana_costs = False
+    game.check_state_based_actions()
+    _w1g7_resolve_stack(game)
+    return game
+
+
+def _w1g7_bolt_seat_zero(game):
+    assert game.cast_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+    _w1g7_resolve_stack(game)
+    game.check_state_based_actions()
+    _w1g7_resolve_stack(game)
+
+
+def test_w1g7_transcendence_turns_a_loss_into_twice_the_gain(set_pool):
+    """"Whenever you lose life, you gain 2 life for each 1 life you lost."
+    Bolted from 15: 12, then one gain of 6 (CR 119.3), to 18."""
+    game = _w1g7_transcendence_at(set_pool, 15)
+    _w1g7_bolt_seat_zero(game)
+    assert game.players[0].life == 18 and not game.players[0].lost
+    assert "P0 gained 6 life from Transcendence (12 -> 18)" in game.log
+
+
+def test_w1g7_transcendence_loses_the_game_at_twenty_or_more(set_pool):
+    """"When you have 20 or more life, you lose the game." Bolted from 19 the
+    gain lands on 22, and the state trigger ends it (CR 603.8)."""
+    game = _w1g7_transcendence_at(set_pool, 19)
+    assert not game.players[0].lost
+    _w1g7_bolt_seat_zero(game)
+    assert game.players[0].life == 22
+    assert game.players[0].lost and not game.players[1].lost
+
+
+def test_w1g7_transcendence_survives_zero_or_less_life(set_pool):
+    """"You don't lose the game for having 0 or less life." Bolted from 1 to
+    -2, the state-based action does not end the game (CR 704.5a), and the
+    trigger lifts it to 4."""
+    game = _w1g7_transcendence_at(set_pool, 1)
+    _w1g7_bolt_seat_zero(game)
+    # The sweep that saw -2 is the one that announced the loss.
+    assert "P0 gained 6 life from Transcendence (-2 -> 4)" in game.log
+    assert not any("704.5a" in line for line in game.log)
+    assert game.players[0].life == 4 and not game.players[0].lost
+
+
+def test_w1g7_transcendence_at_twenty_loses_as_soon_as_it_is_seen(set_pool):
+    """The state is true from the start at 20 life: the first sweep puts the
+    trigger on the stack and its controller loses."""
+    game = _w1g7_Game(players=[
+        _w1g7_PlayerState(
+            name="P0", battlefield=[_w1g7_Permanent(card=set_pool("TOR")["Transcendence"])],
+        ),
+        _w1g7_PlayerState(name="P1"),
+    ])
+    game.check_state_based_actions()
+    assert [item.ability_text for item in game.stack] == [
+        "When you have 20 or more life, you lose the game."
+    ]
+    _w1g7_resolve_stack(game)
+    assert game.players[0].lost
+
 # ==== end W1G7 ======================================================
 
 

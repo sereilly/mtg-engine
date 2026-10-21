@@ -1761,6 +1761,13 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("life_at_most",
      r"whenever (?:you have|(?P<life_seat>an opponent) has) "
      r"(?P<life_count>[a-z0-9]+) or less life"),
+    # "When **you have 20 or more life**, you lose the game." (Transcendence.)
+    # The row above crossed from below: the same seat and threshold groups, so
+    # the same payload, and its own kind because the comparison is the
+    # question the sweep asks (the arrangement `source_power_at_least` has).
+    ("life_at_least",
+     r"whenever (?:you have|(?P<life_seat>an opponent) has) "
+     r"(?P<life_count>[a-z0-9]+) or more life"),
     # "**When** a player doesn't pay this enchantment's cumulative upkeep, …"
     # (Thought Lash.) Not a state trigger: CR 702.24a's ability resolves and
     # *fails to be paid* at one identifiable moment, so this is announced from

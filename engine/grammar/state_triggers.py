@@ -101,6 +101,13 @@ def _parse_state_trigger_event(
             stream.advance()
             if stream.accept_phrase("or", "less", "life"):
                 return ast.TriggerEvent("life_at_most", word)
+            # "When **you have 20 or more life**, you lose the game."
+            # (Transcendence.) The same life total crossed from below, so
+            # its own kind beside the one above for the reason
+            # ``source_power_at_least`` is one: the comparison is what the
+            # sweep asks, and the threshold and seat stay payload either way.
+            if stream.accept_phrase("or", "more", "life"):
+                return ast.TriggerEvent("life_at_least", word)
     stream.reset(life_mark)
 
     unpaid_mark = stream.mark()

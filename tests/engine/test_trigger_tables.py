@@ -452,6 +452,12 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
         "whenever you have 10 or less life",
         "when you have 10 or less life",
     ),
+    # Transcendence: the same life total crossed from below, in the same table
+    # for the same reason.
+    "life_at_least": (
+        "whenever you have 20 or more life",
+        "when you have 20 or more life",
+    ),
     # at
     "upkeep_self": "at the beginning of your upkeep",
     "upkeep_each": "at the beginning of each upkeep",

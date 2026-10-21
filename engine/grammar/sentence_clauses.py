@@ -19,14 +19,14 @@ from ..library_top import WHILE_REVEALED_CARD_ON_TOP
 from ..oracle_types import DREW_BY_SEAT
 from . import ast
 from .errors import GrammarError
-from .lexer import NUMBER, PT, WORD
+from .lexer import PT, WORD
 from .nouns import parse_object_filter
 from .references import parse_recipient
 from .vocabulary import singular as _singular
 from .stream import TokenStream
 from .phrases import _accept_number, _accept_self_reference
 from .records import (_parse_for_each_this_way, accept_additional_cost_paid,
-                      scaled_by_recorded_count)
+                      accept_each_life_lost, scaled_by_recorded_count)
 from .effects import (_parse_gain_control,
                       _parse_linked_untap_restriction,
                       _parse_play_with_top_revealed)
@@ -110,23 +110,20 @@ def _parse_leading_for_each(
     keeps the refusal it already had rather than gaining a more confident one.
     """
     mark = stream.mark()
-    if not stream.accept_phrase("for", "each"):
-        return None
     # "For each **1 life you lost**, …" (Oath of Lim-Dûl) — an iterator that is
     # a count rather than a set. Read before the noun phrase below, which would
     # take "1 life" as a quantified object and then fail the line on a verb it
-    # has no reading for.
-    life_lost = stream.mark()
-    # A printed digit, read off the token: the pool prints "for each **1** life
-    # you lost", and `_accept_number` reads only the spelled-out words.
-    digit = stream.accept_kind(NUMBER)
-    number = int(digit.text) if digit is not None else _accept_number(stream)
-    if number is not None and stream.accept_phrase("life", "you", "lost"):
+    # has no reading for. The fragment is ``records.accept_each_life_lost``,
+    # shared with the trailing "gain 2 life for each 1 life you lost"
+    # (Transcendence).
+    life_lost = accept_each_life_lost(stream)
+    if life_lost is not None:
         if not stream.accept_punct(","):
             stream.reset(mark)
             return None
-        return ast.EachLifeLost(per=number)
-    stream.reset(life_lost)
+        return life_lost
+    if not stream.accept_phrase("for", "each"):
+        return None
     # "**For each additional {1}{R} you paid,** destroy another target artifact."
     # (Primitive Justice, Taste of Paradise.) The third count-shaped iterator,
     # and the only one whose number comes from the *cast* rather than from the

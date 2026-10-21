@@ -63,7 +63,8 @@ from ..distinct import parse_counted_objects
 from ..errors import GrammarError
 from ..nouns import parse_object_filter
 from ..phrases import _parse_for_each
-from ..records import (_parse_for_each_this_way, accept_plus_per_cost_paid,
+from ..records import (_parse_for_each_this_way, accept_each_life_lost,
+                       accept_plus_per_cost_paid,
                        parse_for_each_discarded_this_way,
                        parse_for_each_sacrificed_this_way,
                        scaled_by_recorded_count)
@@ -114,7 +115,15 @@ def accept_life_gain(
                 # "creature" and stops, so without this the trailing words were
                 # unconsumed and the line failed loudly — which was right, and
                 # is why the ordering matters rather than the fallback.
-                per_each: object | None = _parse_for_each(stream)
+                # "Whenever you lose life, you gain 2 life **for each 1 life
+                # you lost**." (Transcendence.) The firing event's loss as a
+                # count, read before ``_parse_for_each`` below — which would
+                # take "1 life" for a quantified object and strand the rest.
+                # The node is the leading form's (Oath of Lim-Dûl), and the
+                # lowering holds it to the event that records a loss.
+                per_each: object | None = accept_each_life_lost(stream)
+                if per_each is None:
+                    per_each = _parse_for_each(stream)
                 # "…you gain 1 life **for each card exiled this way**."
                 # (Rysorian Badger.) A *count* an earlier step of this same
                 # effect recorded, not a set the board holds — so it replaces

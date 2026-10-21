@@ -48,6 +48,7 @@ from tests.helpers import resolve_stack
 STATE_KINDS = frozenset({
     "counters_reach_threshold", "source_has_no_counters",
     "source_power_at_least", "source_has_keyword", "life_at_most",
+    "life_at_least",
     "player_has_no_cards_in_hand", "controls_matching_permanent",
     "controls_no_matching", "no_permanents_anywhere",
     "permanent_counters_reach_threshold",
@@ -91,7 +92,7 @@ def _make_the_state_true(game, permanent, trig, pool):
         from engine.keywords import grant_keyword
 
         grant_keyword(permanent, str(payload["keyword_name"]))
-    elif kind == "life_at_most":
+    elif kind in ("life_at_most", "life_at_least"):
         seat = 1 if payload.get("life_seat") == "an opponent" else 0
         game.players[seat].life = int(payload["life_count"])
     elif kind == "player_has_no_cards_in_hand":
