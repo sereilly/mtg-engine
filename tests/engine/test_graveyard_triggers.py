@@ -107,6 +107,35 @@ def _arm(game: Game, seat: int, card, gate: dict) -> None:
     raise AssertionError(f"{card.name}: this guard cannot arm {kind!r} yet")
 
 
+def _arm_offered_price(game: Game, seat: int, card, instruction, pool) -> None:
+    """Give the graveyard what the trigger's own offer charges, when the price
+    is cards out of it.
+
+    "…you may exile a black creature card other than this card from your
+    graveyard. If you do, return this card to the battlefield." (Ichorid.) The
+    basics above cover a *mana* price; an *action* price paid out of the same
+    graveyard is a pile with nothing it names in it, and the offer is then
+    rightly never made — so the guard would read a working card as one that
+    never fired. Read off the offer's own payload through the predicate the
+    pick asks (``graveyard_card_matches``), and never the card itself, which
+    "other than this card" would leave out anyway.
+    """
+    from engine.handlers._common import graveyard_card_matches
+
+    payload = instruction.payload or {}
+    if instruction.kind != "may":
+        return
+    for step in payload.get("action") or ():
+        price = step.payload or {}
+        if step.kind != "exile_cards_from_graveyard" or price.get("graveyard_owner") != "you":
+            continue
+        fodder = next(
+            candidate for candidate in pool.values()
+            if candidate is not card and graveyard_card_matches(price, candidate)
+        )
+        game.players[seat].graveyard[:0] = [fodder] * int(price.get("count", 1))
+
+
 def _run_step(game: Game, seat: int, condition_kind: str, card) -> None:
     """Run the step this trigger names — the announcement being tested."""
     if condition_kind in ("end_step_self", "end_step"):
@@ -155,6 +184,7 @@ def test_every_graveyard_functioning_trigger_reaches_its_zone():
         gate = (trig.instruction.payload or {}).get("intervening_if")
         if gate is not None:
             _arm(game, 0, card, gate)
+        _arm_offered_price(game, 0, card, trig.instruction, pool)
 
         _run_step(game, 0, trig.condition.kind, card)
         game._settle()
@@ -165,6 +195,10 @@ def test_every_graveyard_functioning_trigger_reaches_its_zone():
             assert game.confirm_optional_pay(0, card.name, accept=True), (
                 f"{card.name}: its own offer could not be accepted"
             )
+            # The offer's price, where it is a pick out of the graveyard
+            # (Ichorid's exile), answered by the pick's own default: which
+            # card pays is not this guard's question.
+            game.auto_resolve_pending_choices(kinds=("graveyard_exile_pick",))
             game._settle()
 
         zone = _destination(trig.instruction)
