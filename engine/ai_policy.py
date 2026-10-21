@@ -6057,6 +6057,115 @@ def _divided_announcement_total(spec: dict, x_value: int | None) -> int:
     return int(x_value or 0) + bonus
 
 
+def _counters_to_kill(game: Game, permanent, step: int) -> int:
+    """How many counters lowering toughness by *step* apiece leave *permanent*
+    with lethal damage or no toughness (CR 704.5f/g), read through the layers."""
+    left = max(1, int(permanent.effective_toughness) - int(permanent.damage_marked or 0))
+    return -(-left // step)
+
+
+def divided_shrink_shares(
+    game: Game, permanent_ids, total: int, ceiling: int, counter: str,
+) -> "list[tuple[int, int]] | None":
+    """A division of *total* counters that **lower toughness** among the
+    creatures *permanent_ids* names — the ones a share can kill first — as
+    ``(permanent_id, share)`` pairs, or None where the counter lowers no
+    toughness or no share would kill anything.
+
+    "When this creature dies, distribute three -1/-1 counters among one, two,
+    or three target creatures. For each -1/-1 counter you put on a creature
+    this way, remove a -1/-1 counter from that creature at the beginning of
+    the next end step." (Shambling Swarm). Its counters come back off, so a
+    share is worth what it kills, which is CR 601.2d's split measured against
+    a toughness — the reason a divided spell's *damage* is concentrated. The
+    spread a seat nobody asks gave it (one apiece over the first three
+    creatures the offer listed) killed a Llanowar Elves where 1 + 2 kills the
+    Elves and a Grizzly Bears, and over a Hill Giant, a Craw Wurm, the Bears
+    and the Elves — in that order — it killed nothing at all.
+
+    So: fewest counters to kill first (the one worth more, then the offer's
+    order, breaking ties), each given exactly its lethal share while the total
+    and the printed ceiling allow; what is left goes one apiece on creatures
+    not yet named while the ceiling has room — each still shrinks — and the
+    rest on the last named. Every share is at least one and the shares total
+    *total* (CR 601.2d).
+    """
+    step = _toughness_step(counter)
+    if step <= 0 or total <= 0 or ceiling <= 0:
+        return None
+    ranked = sorted(_shrink_ranking(game, permanent_ids, step))
+    shares: list[list[int]] = []
+    left = int(total)
+    for needed, _worth, _position, permanent_id in ranked:
+        if len(shares) >= ceiling:
+            break
+        if needed <= left:
+            shares.append([permanent_id, needed])
+            left -= needed
+    if not shares:
+        return None
+    named = {permanent_id for permanent_id, _share in shares}
+    for _needed, _worth, _position, permanent_id in ranked:
+        if left <= 0 or len(shares) >= ceiling:
+            break
+        if permanent_id not in named:
+            shares.append([permanent_id, 1])
+            named.add(permanent_id)
+            left -= 1
+    shares[-1][1] += left
+    return [(permanent_id, share) for permanent_id, share in shares]
+
+
+def least_harmed_permanent(
+    game: Game, permanent_ids, total: int, counter: str,
+) -> "int | None":
+    """Of *permanent_ids*, the one *total* counters of kind *counter* would
+    hurt least, or None where the counter lowers no toughness.
+
+    The other half of :func:`divided_shrink_shares`: a toughness-lowering
+    division with nothing on the side it wants still owes its target
+    (CR 603.3d), on its controller's own board, and there the whole total
+    goes on one creature. One that survives it if there is one (the
+    sturdiest); otherwise the one worth least
+    (``ai_valuation.permanent_worth``). The offer's first was a Savannah
+    Lions, killed beside a Hill Giant that would have lived through it.
+    """
+    step = _toughness_step(counter)
+    if step <= 0:
+        return None
+    ranked = list(_shrink_ranking(game, permanent_ids, step))
+    if not ranked:
+        return None
+    survivors = [entry for entry in ranked if entry[0] > total]
+    if survivors:
+        return max(survivors, key=lambda entry: (entry[0], -entry[2]))[3]
+    return min(ranked, key=lambda entry: (-entry[1], entry[2]))[3]
+
+
+def _toughness_step(counter: str) -> int:
+    """How much toughness one *counter* takes away (CR 122.1a), 0 for none."""
+    from .pt import pt_counter_deltas
+
+    deltas = pt_counter_deltas(str(counter or ""))
+    return -deltas[1] if deltas is not None else 0
+
+
+def _shrink_ranking(game: Game, permanent_ids, step: int):
+    """``(counters to kill, -worth, offer position, permanent_id)`` for each
+    of *permanent_ids* still on the battlefield."""
+    from .ai_valuation import permanent_worth
+
+    for position, permanent_id in enumerate(permanent_ids):
+        permanent = game.permanent_by_id(permanent_id)
+        if permanent is not None:
+            yield (
+                _counters_to_kill(game, permanent, step),
+                -permanent_worth(permanent, now=False),
+                position,
+                permanent_id,
+            )
+
+
 def _preferred_role_option(
     options: list[dict], caster_index: int, card: CardDefinition, game: Game
 ) -> dict:
