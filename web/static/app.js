@@ -2186,11 +2186,15 @@ function startCastGraveyardCreatureTargetPrompt(card, castAction = "cast", extra
   // stop short of. It stays *this* prompt rather than the several-permanents
   // one because the click surface is the zone-reveal panel, not the canvas —
   // and because `targetKind` is what keeps that panel auto-opened.
-  const max = severalTargetMaximum(card);
+  // "Return X target creature cards from your graveyard" (Restless Dreams,
+  // Nostalgic Dreams) with X announced by the discard picker: exactly X slots
+  // (CR 601.2c), and an X of zero names nothing and is sent as it stands.
+  const announcedX = castAction !== "activate" && cardNamesXTargets(card) ? castXAnnouncedByCost() : null;
+  const max = announcedX !== null ? announcedX : severalTargetMaximum(card);
   // An empty graveyard is not a reason to refuse the cast when the maximum may
   // be zero (CR 601.2c). The prompt opens with nothing clickable and a reachable
   // confirm, which is what announcing no targets looks like.
-  if (!max && (spec.valid_targets || []).length === 0) {
+  if (announcedX === 0 || (!max && (spec.valid_targets || []).length === 0)) {
     // Nothing to click. For an ability that is the answer. For a **cast** it
     // is the engine's to give: the spec says "a card in a graveyard" for
     // every spell that picks one, a *choice* included ("…then you may return
@@ -2227,6 +2231,9 @@ function startCastGraveyardCreatureTargetPrompt(card, castAction = "cast", extra
   pendingCastTarget = {
     card, cardName, targetKind: "graveyard_creature", castAction,
     ...(max ? { maxTargets: max, severalGraveyard: [] } : {}),
+    // Exactly this many, rather than "up to" (`severalGraveyardHint`, the
+    // confirm): the X the caster announced.
+    ...(announcedX !== null ? { exactTargets: announcedX } : {}),
     ...pendingTargetFields(card),
     // Which permanent, and which of its abilities, when this prompt was opened
     // by an activation rather than a cast. The picker is identical — the card
@@ -2259,6 +2266,9 @@ function severalGraveyardHint() {
     : spec.single_graveyard
     ? "in any one graveyard"
     : "in a graveyard";
+  if (Number.isInteger(p.exactTargets)) {
+    return `${n} of ${p.exactTargets} chosen — choose exactly ${p.exactTargets} cards ${where} for ${p.cardName} (X = ${p.exactTargets}), then confirm.`;
+  }
   return n === 0
     ? `Choose up to ${p.maxTargets} cards ${where} for ${p.cardName} (click each), then confirm. Choosing none is legal.`
     : `${n} of up to ${p.maxTargets} chosen${spec.single_graveyard ? " (all from one graveyard)" : ""}.`;
@@ -2302,6 +2312,10 @@ function confirmSeveralGraveyardTargets() {
   const p = pendingCastTarget;
   if (!p || !p.severalGraveyard) return;
   const { cardName, castAction, severalGraveyard } = p;
+  if (Number.isInteger(p.exactTargets) && severalGraveyard.length !== p.exactTargets) {
+    updateActionHint(`${cardName} names exactly ${p.exactTargets} targets (X = ${p.exactTargets}).`, true);
+    return;
+  }
   // Indices, not ids: a card in a graveyard has no `permanent_id` to send. The
   // engine re-checks every slot against the graveyard as it stands at cast time
   // and refuses one that is no longer a legal choice, which is the protection an
@@ -7027,10 +7041,18 @@ function applyMadnessCastPrompt(info) {
       `<button type="button" class="prompt-choice-btn" id="madnessDeclineBtn">Put it into your graveyard</button>` +
     `</div>`,
   ].join("");
-  if (card) {
-    const cardEl = createCardElement(card, { compact: true, showManaCost: true });
-    cardEl.classList.add("prompt-card-preview");
-    document.getElementById("madnessCardSlot")?.appendChild(cardEl);
+  // The card itself, large enough to read: the offer is about this one card,
+  // and its rules text is what the cast's prompts will ask about.
+  const imageUri = normalizeImageUri(card);
+  if (card && imageUri) {
+    const img = document.createElement("img");
+    img.src = imageUri;
+    img.alt = cardName;
+    img.title = card.oracle_text || cardName;
+    img.style.cssText = "width: 140px; border-radius: 7px; display: block; margin: 4px 0;";
+    img.addEventListener("mouseenter", () => showCardPreview(card));
+    img.addEventListener("mouseleave", () => scheduleHidePreview());
+    document.getElementById("madnessCardSlot")?.appendChild(img);
   }
 
   document.getElementById("madnessCastBtn")?.addEventListener("click", () => {
@@ -7090,7 +7112,7 @@ async function retryMadnessCast() {
   pendingAutoTap = null;
   try {
     updateActionHint(`Casting ${pending.cardName} for its madness cost...`);
-    await sendAction({ ...pending.actionBody });
+    await sendAction({ seat, ...pending.actionBody });
     updateActionHint(`Cast ${pending.cardName} for its madness cost.`);
     clearPendingHandCast();
   } catch (e) {
@@ -9495,6 +9517,9 @@ const SEARCH_DESTINATION_WORDS = {
   battlefield: { into: "onto the battlefield", button: "Put onto Battlefield" },
   graveyard: { into: "into your graveyard", button: "Put into Graveyard" },
   exile: { into: "into exile", button: "Exile It" },
+  // "…put that card on top" (Vampiric Tutor) and "put those cards on top in
+  // any order" (Insidious Dreams): a place, which "Choose a card." never said.
+  library_top: { into: "on top of your library", button: "Put on Top" },
 };
 const SEARCH_DESTINATION_FALLBACK = { into: "", button: "Confirm" };
 
@@ -9559,6 +9584,19 @@ function searchSlotAssignment(slots, keys) {
   const assigned = new Map();
   for (const [position, keyIndex] of holder) assigned.set(keys[keyIndex], position);
   return assigned;
+}
+
+// A counted search whose every find goes on top of the library ("Search your
+// library for X cards, then shuffle and put those cards on top in any order",
+// Insidious Dreams): the engine puts them there in the order the answer lists
+// them, the first on top — so the order of the clicks is part of the answer,
+// and the confirm sends it rather than sorting it away.
+function searchPicksAreOrdered(info) {
+  if (!info?.multi) return false;
+  const dests = Array.isArray(info.destinations) && info.destinations.length
+    ? info.destinations
+    : [info.destination];
+  return dests.every((dest) => dest === "library_top");
 }
 
 function renderSearchLibraryModal(info) {
@@ -9652,6 +9690,8 @@ function renderSearchLibraryModal(info) {
   // descriptions, each with its label and the cards that answer it. Empty for
   // every other search, and everything below that reads it is then inert.
   const slots = multi && Array.isArray(info.one_of_each) ? info.one_of_each : [];
+  // Whether the order of the picks is the order they land (`searchPicksAreOrdered`).
+  const ordered = multi && searchPicksAreOrdered(info);
   // CR 701.23d: how many the answer must name (0 for "up to", for a search
   // with a stated quality — which may fail to find, CR 701.23b — and for one
   // nothing can answer). The engine refuses fewer whole, so the confirm waits.
@@ -9690,9 +9730,20 @@ function renderSearchLibraryModal(info) {
         : "Choose up to one card for each description below";
       subtitle.textContent = searchSubtitle(lead, words);
     } else if (multi) {
+      // "Search your library for X cards" prints no "up to" and so must find
+      // them all (CR 701.23d): the floor is the count, and "up to" said less.
+      const lead = minPicks > 0 && minPicks >= maxPicks
+        ? `Choose ${maxPicks} cards`
+        : `Choose up to ${maxPicks} cards`;
       subtitle.textContent = oneDestination
-        ? searchSubtitle(`Choose up to ${maxPicks} cards`, words)
-        : `Choose up to ${maxPicks} cards. You'll choose where each one goes next.`;
+        ? searchSubtitle(lead, words)
+        : `${lead}. You'll choose where each one goes next.`;
+      // "…put those cards on top in any order" (Insidious Dreams): the order
+      // is the searcher's, and it is the order of the clicks.
+      if (searchPicksAreOrdered(info)) {
+        subtitle.textContent +=
+          " They go on top in the order you pick them: the first card you pick will be the top card.";
+      }
     } else if (nothingFindable) {
       // The only legal answer left is the decline, so ask for that rather than
       // for a card the player cannot pick (CR 701.19b).
@@ -9801,7 +9852,12 @@ function renderSearchLibraryModal(info) {
         const inner = card.image_uri
           ? `<img src="${escapeHtml(card.image_uri)}" alt="${escapeHtml(card.name)}" loading="lazy" />`
           : `<div class="library-card-text-placeholder">${escapeHtml(card.name)}</div>`;
-        return `<div class="${classes.join(" ")}" data-key="${escapeHtml(key)}">${inner}<div class="library-card-choice-name">${escapeHtml(card.name)}</div></div>`;
+        // Where an ordered pick will land: "1 · top", "2", … in click order.
+        const position = ordered && isSelected ? [...searchLibrarySelectedMulti].indexOf(key) + 1 : 0;
+        const badge = position
+          ? `<div class="library-card-choice-order" style="position:absolute;top:4px;left:4px;padding:1px 6px;border-radius:9px;background:#f0c040;color:#1a1a1a;font-weight:700;font-size:12px;">${position === 1 ? "1 · top" : position}</div>`
+          : "";
+        return `<div class="${classes.join(" ")}" data-key="${escapeHtml(key)}"${badge ? ' style="position:relative"' : ""}>${inner}${badge}<div class="library-card-choice-name">${escapeHtml(card.name)}</div></div>`;
       })
       .join("");
     grid.innerHTML = items || `<div class="modal-empty-note">${
@@ -9923,7 +9979,10 @@ function renderSearchLibraryModal(info) {
         if (searchLibrarySelectedMulti.size === 0) return;
         // Sorted so the picks read in zone-then-position order, which is the
         // order they were offered in; the engine validates the set as a whole.
-        const picks = [...searchLibrarySelectedMulti].sort().map((key) => {
+        // Except where the order is the answer: cards put "on top in any
+        // order" land in the order they were picked, first on top.
+        const chosenKeys = [...searchLibrarySelectedMulti];
+        const picks = (searchPicksAreOrdered(liveInfo) ? chosenKeys : chosenKeys.sort()).map((key) => {
           const [zone, index] = key.split(":");
           return { zone, index: Number(index) };
         });
@@ -11987,7 +12046,13 @@ function renderActivationPrompt() {
     const discardCount = Math.max(1, Number(pendingDiscardCost.count || 1));
     const picked = pendingDiscardCost.picked || [];
     const noun = discardCount === 1 ? "a card" : `${discardCount} cards`;
-    body.textContent = pendingDiscardCost.libraryTop
+    // "Discard X cards": the number picked is X (CR 601.2b), so the prompt
+    // says so and confirms any number up to its bound — none included.
+    const discardX = !!pendingDiscardCost.announcesX;
+    body.textContent = discardX
+      ? `Discard X cards to cast it: X is the number of cards you choose (up to ${pendingDiscardCost.maxX}). ` +
+        `Choose which, then confirm${picked.length ? "" : " (none is X = 0)"}.`
+      : pendingDiscardCost.libraryTop
       ? `Put ${noun} from your hand on top of your library to activate this ability. Choose which.`
       : pendingDiscardCost.exileFromHand
       ? `Exile ${noun} from your hand to activate this ability. Choose which.`
@@ -12002,7 +12067,10 @@ function renderActivationPrompt() {
           `${escapeHtml(option.name)}</button>`,
       )
       .join("");
-    const confirmRow = discardCount > 1
+    const confirmRow = discardX
+      ? `<button type="button" class="prompt-choice-btn" id="discardCostConfirmBtn">`
+        + `Discard ${picked.length} — X = ${picked.length}</button>`
+      : discardCount > 1
       ? `<button type="button" class="prompt-choice-btn" id="discardCostConfirmBtn"${picked.length === discardCount ? "" : " disabled"}>`
         + `Discard ${picked.length} of ${discardCount}</button>`
       : "";
@@ -12468,7 +12536,7 @@ function renderActivationPrompt() {
         ? `Each target takes the whole amount${Number.isInteger(eachAmount) ? ` (${eachAmount})` : ""}. Click creatures or a player's life pill to choose them — `
           + "up to the number the card names, and choosing none is legal. Then confirm."
         : "Click creatures to split the damage among them, or click a player's life pill to hit their face. "
-          + (hasXCost(pendingCastTarget.card) ? "Then confirm to choose X." : "Then confirm.");
+          + (hasXCost(pendingCastTarget.card) && castXAnnouncedByCost() === null ? "Then confirm to choose X." : "Then confirm.");
       const n = dividedTargetCount();
       // A Flagbearer requirement holds the confirm until a pick answers it.
       const dividedOwesRequired = !targetRequirementMet(
@@ -12552,15 +12620,19 @@ function renderActivationPrompt() {
         // "Up to N": an accumulate-and-confirm prompt, for the same reason the
         // several-permanents one is — the caster may legally stop short of the
         // maximum, and a one-click picker has nowhere to put that decision.
+        // "X target cards" with X announced names exactly X (CR 601.2c), so
+        // its confirm waits for the last one; "up to N" is never disabled.
+        const exact = pendingCastTarget.exactTargets;
+        const exactShort = Number.isInteger(exact) && pendingCastTarget.severalGraveyard.length !== exact;
         body.textContent =
-          `Click up to ${pendingCastTarget.maxTargets} glowing ${noun}s in ${where} to choose them, then confirm. ` +
+          `Click ${Number.isInteger(exact) ? "exactly" : "up to"} ${pendingCastTarget.maxTargets} glowing ${noun}s in ${where} to choose them, then confirm. ` +
           "Click a chosen one again to deselect it.";
         steps.innerHTML = [
           `<div>Card: ${escapeHtml(pendingCastTarget.cardName)}</div>`,
           `<div>${escapeHtml(severalGraveyardHint())}</div>`,
-          `<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn" id="severalGraveyardConfirmBtn">Confirm targets</button></div>`,
+          `<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn" id="severalGraveyardConfirmBtn"${exactShort ? " disabled" : ""}>Confirm targets</button></div>`,
         ].join("");
-        // Never disabled: "up to N" may legally choose none (CR 601.2c).
+        // Never disabled for "up to N", which may legally choose none (CR 601.2c).
         const graveyardBtn = document.getElementById("severalGraveyardConfirmBtn");
         if (graveyardBtn) graveyardBtn.addEventListener("click", confirmSeveralGraveyardTargets);
         cancelBtn.classList.remove("hidden");
@@ -14329,9 +14401,39 @@ function startCastDiscardCostPrompt(card, castAction = "cast") {
     // is still CR 601.2c, so the pick continues into the target cascade instead
     // of sending the cast.
     thenTarget: castCostIsSeparate(card),
+    // "As an additional cost to cast this spell, discard **X** cards" (the
+    // Dreams): any number, and the number picked is the X announced (CR
+    // 601.2b) — the cost spec's `count` is the printed 1, which sized this
+    // picker at one card whatever X was, and the engine discarded the rest by
+    // its own default.
+    ...discardXPickerFields(card),
   };
   renderActivationPrompt();
   return true;
+}
+
+// The X a "discard X cards" cost announces, as the picker needs it: whether
+// the cost is one (`announces_x` on the cost spec, the flag "Sacrifice X
+// lands" carries), and the most that may be picked — the spec's `max_x` (the
+// hand the cost can be paid from, CR 601.2h) and, for a spell that names X
+// targets (Restless Dreams' "X target creature cards"), the targets there are
+// to name (CR 601.2c: X targets is exactly X).
+function discardXPickerFields(card) {
+  const costSpec = castCostSpec(card);
+  if (!costSpec?.discard_cost || costSpec.announces_x !== true) return {};
+  const spec = targetSpecOf(card);
+  const bounds = [discardCostOptions(card).length];
+  if (Number.isInteger(spec?.max_x)) bounds.push(spec.max_x);
+  if (spec?.x_targets && castCostIsSeparate(card)) bounds.push((spec.valid_targets || []).length);
+  return { announcesX: true, maxX: Math.max(0, Math.min(...bounds)) };
+}
+
+// The X the cast in progress has already announced through its cost — the
+// number of cards a "discard X cards" picker named — or null. A cast that has
+// one asks no X prompt: the number was the player's, once.
+function castXAnnouncedByCost() {
+  const announced = pendingCastCost?.x_value;
+  return Number.isInteger(announced) ? announced : null;
 }
 
 // One click in the discard prompt. A one-card cost is answered by the click;
@@ -14342,14 +14444,19 @@ function payDiscardCost(handIndex) {
   if (!pendingDiscardCost) return;
   const choice = pendingDiscardCost;
   const count = Math.max(1, Number(choice.count || 1));
-  if (count === 1) {
+  if (count === 1 && !choice.announcesX) {
     finishDiscardCost([handIndex]);
     return;
   }
+  // A "discard X" picker takes any number up to its bound, and confirms.
+  const limit = choice.announcesX ? choice.maxX : count;
   const picked = (choice.picked || []).slice();
   const at = picked.indexOf(handIndex);
   if (at >= 0) picked.splice(at, 1);
-  else if (picked.length < count) picked.push(handIndex);
+  else if (picked.length < limit) picked.push(handIndex);
+  else if (choice.announcesX) {
+    updateActionHint(`${choice.cardName} can discard at most ${limit} here — click one to deselect it.`, true);
+  }
   choice.picked = picked;
   renderActivationPrompt();
 }
@@ -14358,7 +14465,7 @@ function confirmDiscardCost() {
   const choice = pendingDiscardCost;
   if (!choice) return;
   const count = Math.max(1, Number(choice.count || 1));
-  if ((choice.picked || []).length !== count) return;
+  if (!choice.announcesX && (choice.picked || []).length !== count) return;
   finishDiscardCost(choice.picked.slice());
 }
 
@@ -14368,11 +14475,16 @@ function confirmDiscardCost() {
 // engine resolves them against before the card leaves it.
 function finishDiscardCost(handIndices) {
   const choice = pendingDiscardCost;
-  if (!choice || !handIndices.length) return;
+  // An X of zero names no card, and is an answer (CR 107.3a; Restless Dreams
+  // may be cast for nothing).
+  if (!choice || (!handIndices.length && !choice.announcesX)) return;
   pendingDiscardCost = null;
   renderActivationPrompt();
-  const fields = { cost_hand_index: handIndices[0] };
+  const fields = {};
+  if (handIndices.length) fields.cost_hand_index = handIndices[0];
   if (handIndices.length > 1) fields.cost_other_hand_indices = handIndices.slice(1);
+  // The number of cards named is the X announced, so the two cannot disagree.
+  if (choice.announcesX) fields.x_value = handIndices.length;
   const activation = choice.activation;
   if (activation) {
     // Half an activation: the discard is announced (CR 602.2b), and whatever
@@ -14398,17 +14510,25 @@ function finishDiscardCost(handIndices) {
   }
 
   updateActionHint(`Casting ${choice.cardName}...`);
-  sendAction({
+  const castBody = {
     seat,
     action: choice.castAction || "cast",
     card_name: choice.cardName,
     ...fields,
-  })
+  };
+  sendAction(castBody)
     .then(() => {
       updateActionHint(`Cast ${choice.cardName}.`);
       clearPendingHandCast();
     })
     .catch((e) => {
+      // A pool that cannot pay opens the payment dialog with the discard kept,
+      // as every other send does; this reported the refusal and dropped it.
+      if (isManaRefusal(e.message)) {
+        pendingAutoTap = { card: choice.card, cardName: choice.cardName, actionBody: castBody };
+        renderActivationPrompt();
+        return;
+      }
       clearPendingHandCast();
       updateActionHint(e.message, true);
     });
@@ -15192,7 +15312,8 @@ function startCastTargetCascade(card, castAction = "cast", targetSeat = null) {
   if (cardRequiresTargetAny(card)) { startCastAnyTargetPrompt(card, castAction); return true; }
   if (cardRequiresTargetPlayerOrPlaneswalker(card)) { startCastAnyTargetPrompt(card, castAction); return true; }
   if (cardRequiresTargetPlayer(card)) { startCastTargetPrompt(card, castAction); return true; }
-  if (hasXCost(card)) {
+  // An X a "discard X cards" picker already announced is not asked again.
+  if (hasXCost(card) && castXAnnouncedByCost() === null) {
     startCastXPrompt(
       card,
       Number.isInteger(targetSeat) ? targetSeat : getDefaultTargetSeat(normalizeCardName(card)),
@@ -16150,6 +16271,13 @@ function confirmRoleTargets() {
 function startCastSeveralTargetsPrompt(card, castAction = "cast", validTargets = null, announced = null, extra = {}) {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
+  // "Discard X cards. Return X target nonland permanents…" (Turbulent Dreams,
+  // Vengeful Dreams): the X is already announced, by the cards the discard
+  // picker named, so the picker is sized by it and no X prompt runs.
+  if (announced === null && castAction !== "activate" && cardNamesXTargets(card)) {
+    const fromCost = castXAnnouncedByCost();
+    if (fromCost !== null) announced = fromCost;
+  }
   if (announced === null && cardNamesXTargets(card)) {
     // How many targets this names is the announced X, so the X prompt runs
     // first — it is also the prompt that recomputes the affordable maximum as
@@ -16691,10 +16819,27 @@ function confirmCastDivision() {
   if (Number.isInteger(pending.xValue)) body.x_value = pending.xValue;
   pendingCastDivision = null;
   updateActionHint(`${activating ? "Activating" : "Casting"} ${pending.cardName}...`);
+  // A pool that cannot pay opens the payment dialog every other send opens,
+  // with the body — targets and shares — kept for the retry. This confirm
+  // reported the refusal as a hint and dropped the division, and left the
+  // division dialog on the panel behind a cast that was no longer pending:
+  // Violent Eruption cast for its madness cost, and every divided spell cast
+  // from a hand with its lands still untapped.
   sendAction(body)
     .then(() => updateActionHint(`${activating ? "Activated" : "Cast"} ${pending.cardName}.`))
-    .catch((e) => updateActionHint(e.message, true))
-    .finally(() => clearPendingHandCast());
+    .catch((e) => {
+      if (isManaRefusal(e.message)) {
+        pendingAutoTap = activating
+          ? { card: pending.card, cardName: pending.cardName, cost: getActivatedAbilityCost(pending.card, pending.abilityIndex), actionBody: body }
+          : { card: pending.card, cardName: pending.cardName, actionBody: body };
+        return;
+      }
+      updateActionHint(e.message, true);
+    })
+    .finally(() => {
+      if (!pendingAutoTap) clearPendingHandCast();
+      renderActivationPrompt();
+    });
 }
 
 function startCastDividedXPrompt(
@@ -17142,7 +17287,7 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
     return;
   }
 
-  if (hasXCost(pending.card)) {
+  if (hasXCost(pending.card) && castXAnnouncedByCost() === null) {
     startCastXPrompt(pending.card, selectedTarget, selectedPermanentIndex, pending.castAction || "cast");
     return;
   }
@@ -19419,7 +19564,7 @@ function selectStackSpellTarget(arrayIndex) {
 
   // Power Sink ({X}{U}): after choosing the spell to counter, prompt for X (the
   // amount its controller must pay) before sending the cast.
-  if (hasXCost(pending.card)) {
+  if (hasXCost(pending.card) && castXAnnouncedByCost() === null) {
     startCastXPrompt(pending.card, null, null, pending.castAction || "cast", arrayIndex);
     return;
   }
