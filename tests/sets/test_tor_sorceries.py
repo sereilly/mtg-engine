@@ -185,6 +185,61 @@ def test_w1g6_a_copy_of_the_protected_spell_is_not_protected(set_pool, catalog_b
     assert game.players[1].life == 17, "the original hit, the copy was countered"
     assert any("countered Lightning Bolt (copy)" in line for line in game.log)
 
+from engine.models import Permanent as _W1G6Permanent  # noqa: E402
+
+
+def test_w1g6_chainer_s_edict_and_its_flashback(set_pool, catalog_by_name):
+    """"Target player sacrifices a creature of their choice. Flashback
+    {5}{B}{B}." Cast from hand, then flashed back: two creatures go, and the
+    card ends in exile."""
+    game = _w1g6_promise_table(set_pool, catalog_by_name, ["Chainer's Edict"], [])
+    for name in ("Grizzly Bears", "Hill Giant"):
+        game._put_permanent_onto_battlefield(
+            1, _W1G6Permanent(card=catalog_by_name[name]), None
+        )
+    assert game.cast_from_hand(0, "Chainer's Edict", target_player_index=1).supported
+    _w1g6_resolve_stack(game)
+    assert len(list(game.controlled_by(1))) == 1
+    game.enforce_mana_costs = True
+    game.players[0].mana_pool.update({"B": 2, "C": 5})
+    assert game.cast_from_hand(
+        0, "Chainer's Edict", target_player_index=1, from_zone="graveyard",
+    ).supported
+    _w1g6_resolve_stack(game)
+    assert list(game.controlled_by(1)) == []
+    assert [c.name for c in game.players[0].exile] == ["Chainer's Edict"]
+
+
+def test_w1g6_acorn_harvest_and_crippling_fatigue_flash_back_for_mana_and_life(
+    set_pool, catalog_by_name,
+):
+    """"Flashback--{1}{G}, Pay 3 life." / "Flashback--{1}{B}, Pay 3 life." The
+    life is paid with the mana: two 1/1 green Squirrels for {1}{G} and 3
+    life, and -2/-2 on a Hill Giant for {1}{B} and 3 more."""
+    game = _w1g6_promise_table(set_pool, catalog_by_name, [], [])
+    game.players[0].graveyard.extend(
+        set_pool("TOR")[name] for name in ("Acorn Harvest", "Crippling Fatigue")
+    )
+    giant = _W1G6Permanent(card=catalog_by_name["Hill Giant"])
+    game._put_permanent_onto_battlefield(1, giant, None)
+    game.enforce_mana_costs = True
+    game.players[0].mana_pool.update({"G": 1, "C": 1})
+    assert game.cast_from_hand(0, "Acorn Harvest", from_zone="graveyard").supported
+    _w1g6_resolve_stack(game)
+    squirrels = list(game.controlled_by(0))
+    assert [(p.effective_power, p.effective_toughness) for p in squirrels] == [(1, 1), (1, 1)]
+    assert all("G" in p.effective_colors for p in squirrels)
+    assert game.players[0].life == 17
+    game.players[0].mana_pool.update({"B": 1, "C": 1})
+    assert game.cast_from_hand(
+        0, "Crippling Fatigue", target_permanent_ids=[giant.permanent_id],
+        target_player_index=1, from_zone="graveyard",
+    ).supported
+    _w1g6_resolve_stack(game)
+    assert (giant.effective_power, giant.effective_toughness) == (1, 1)
+    assert game.players[0].life == 14
+    assert sorted(c.name for c in game.players[0].exile) == ["Acorn Harvest", "Crippling Fatigue"]
+
 # ==== end W1G6 ======================================================
 
 

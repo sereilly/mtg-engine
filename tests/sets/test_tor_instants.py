@@ -341,6 +341,74 @@ def test_w1g6_radiate_is_not_offered_a_spell_with_another_kind_of_target(
     assert not refused.supported
     assert "Radiate" in [c.name for c in game.players[0].hand]
 
+def test_w1g6_alter_reality_rewrites_a_permanent_s_colour_word(set_pool, catalog_by_name):
+    """"Change the text of target spell or permanent by replacing all
+    instances of one color word with another." On a Black Knight, white
+    becomes black: the Knight's text reads "protection from black", and a
+    black Terror can no longer target it while a white Swords to Plowshares
+    can. Flashed back for {1}{U}, the same, and the card is exiled.
+
+    The *spell* half ("target spell") is not offered: ROADMAP's "Text changes
+    aimed at a spell" (Sleight of Mind, Magical Hack, Crystal Spray) is this
+    card's too."""
+    alter = set_pool("TOR")["Alter Reality"]
+    for zone in ("hand", "graveyard"):
+        knight = _w1g6_nosick(_W1G6Permanent(card=catalog_by_name["Black Knight"]))
+        me = _W1G6PlayerState(name="P1")
+        getattr(me, zone).append(alter)
+        game = _W1G6Game(players=[me, _W1G6PlayerState(name="P2", battlefield=[knight])])
+        game.enforce_mana_costs = False
+        assert game.cast_from_hand(
+            0, "Alter Reality", target_permanent_ids=[knight.permanent_id],
+            target_player_index=1, old_color="W", new_color="B", from_zone=zone,
+        ).supported
+        _w1g6_resolve_stack(game)
+        assert "Protection from black" in knight.effective_card.oracle_text
+        assert "white" not in knight.effective_card.oracle_text.lower()
+        terror = game.cast_target_spec(0, catalog_by_name["Terror"])
+        assert terror["valid_targets"] == [], "black Terror vs protection from black"
+        swords = game.cast_target_spec(0, catalog_by_name["Swords to Plowshares"])
+        assert [entry["name"] for entry in swords["valid_targets"]] == ["Black Knight"]
+        where = "exile" if zone == "graveyard" else "graveyard"
+        assert "Alter Reality" in [c.name for c in getattr(game.players[0], where)]
+
+
+def test_w1g6_accelerate_gives_haste_and_draws(set_pool, catalog_by_name):
+    """"Target creature gains haste until end of turn. Draw a card." A
+    creature that came under its controller's control this turn can attack."""
+    bears = _W1G6Permanent(card=catalog_by_name["Grizzly Bears"])
+    game = _W1G6Game(players=[
+        _W1G6PlayerState(name="P1", hand=[set_pool("TOR")["Accelerate"]], battlefield=[bears],
+                         library=[catalog_by_name["Island"]] * 2),
+        _W1G6PlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+    bears.metadata["summoning_sickness_turn"] = game.turn
+    assert game._is_summoning_sick(bears)
+    assert game.cast_from_hand(
+        0, "Accelerate", target_permanent_ids=[bears.permanent_id], target_player_index=0,
+    ).supported
+    _w1g6_resolve_stack(game)
+    assert not game._is_summoning_sick(bears)
+    assert [c.name for c in game.players[0].hand] == ["Island"]
+
+
+def test_w1g6_cabal_ritual_adds_five_with_threshold(set_pool, catalog_by_name):
+    """"Add {B}{B}{B}. Threshold -- Add {B}{B}{B}{B}{B} instead if there are
+    seven or more cards in your graveyard." Paid {1}{B}, it leaves three black
+    with six cards in the graveyard and five with seven."""
+    for graveyard, black in ((6, 3), (7, 5)):
+        game = _W1G6Game(players=[
+            _W1G6PlayerState(name="P1", hand=[set_pool("TOR")["Cabal Ritual"]],
+                             graveyard=[catalog_by_name["Island"]] * graveyard),
+            _W1G6PlayerState(name="P2"),
+        ])
+        game.enforce_mana_costs = True
+        game.players[0].mana_pool.update({"B": 1, "C": 1})
+        assert game.cast_from_hand(0, "Cabal Ritual").supported
+        _w1g6_resolve_stack(game)
+        assert game.players[0].mana_pool["B"] == black, graveyard
+
 # ==== end W1G6 ======================================================
 
 

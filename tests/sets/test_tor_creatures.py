@@ -132,6 +132,56 @@ def test_w1g6_llawan_binds_whoever_is_her_controller_s_opponent(set_pool, catalo
     assert _w1g6_cast_prohibition(game, 0, merfolk) is not None
     assert _w1g6_cast_prohibition(game, 1, merfolk) is None
 
+def test_w1g6_hydromorphs_counter_only_a_spell_that_targets_their_side(
+    set_pool, catalog_by_name,
+):
+    """"{U}, Sacrifice this creature: Counter target spell that targets a
+    creature you control." (Hydromorph Guardian, Hydromorph Gull.) A Bolt at
+    its controller's face is not a legal target -- the activation is refused
+    with nothing sacrificed -- and a Bolt at its controller's Grizzly Bears is
+    countered."""
+    for name in ("Hydromorph Guardian", "Hydromorph Gull"):
+        hydromorph = _w1g6_nosick(_W1G6Permanent(card=set_pool("TOR")[name]))
+        bears = _w1g6_nosick(_W1G6Permanent(card=catalog_by_name["Grizzly Bears"]))
+        game = _W1G6Game(players=[
+            _W1G6PlayerState(name="P1", battlefield=[hydromorph, bears]),
+            _W1G6PlayerState(name="P2", hand=[catalog_by_name["Lightning Bolt"]] * 2),
+        ])
+        game.enforce_mana_costs = False
+        assert game.queue_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+        assert not game.activate_permanent_ability(0, name, target_stack_index=0).supported
+        assert hydromorph in list(game.controlled_by(0))
+        _w1g6_resolve_stack(game)
+        assert game.players[0].life == 17
+        assert game.queue_from_hand(
+            1, "Lightning Bolt", target_permanent_ids=[bears.permanent_id], target_player_index=0,
+        ).supported
+        assert game.activate_permanent_ability(0, name, target_stack_index=0).supported
+        _w1g6_resolve_stack(game)
+        assert [p.card.name for p in game.controlled_by(0)] == ["Grizzly Bears"], name
+        assert bears.damage_marked == 0
+        assert name in [c.name for c in game.players[0].graveyard]
+
+
+def test_w1g6_cephalid_aristocrat_mills_two_when_targeted(set_pool, catalog_by_name):
+    """"Whenever this creature becomes the target of a spell or ability, mill
+    two cards." A Bolt aimed at it mills two before the Bolt resolves."""
+    aristocrat = _w1g6_nosick(_W1G6Permanent(card=set_pool("TOR")["Cephalid Aristocrat"]))
+    game = _W1G6Game(players=[
+        _W1G6PlayerState(name="P1", battlefield=[aristocrat],
+                         library=[catalog_by_name["Island"]] * 5),
+        _W1G6PlayerState(name="P2", hand=[catalog_by_name["Lightning Bolt"]]),
+    ])
+    game.enforce_mana_costs = False
+    assert game.queue_from_hand(
+        1, "Lightning Bolt", target_permanent_ids=[aristocrat.permanent_id], target_player_index=0,
+    ).supported
+    game.resolve_top_of_stack()
+    assert len(game.players[0].library) == 3
+    assert [c.name for c in game.players[0].graveyard] == ["Island", "Island"]
+    _w1g6_resolve_stack(game)
+    assert aristocrat.damage_marked == 3
+
 # ==== end W1G6 ======================================================
 
 
