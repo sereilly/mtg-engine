@@ -55,11 +55,12 @@ def _lower_assigns_combat_damage_as_unblocked(
     the mark cannot be written onto, would be a record answering a different
     question from the one the card asks.
 
-    The subject is a **chosen** one here rather than the source, which is the
-    one difference: the card is a spell that names its creatures, so the
+    The subject is usually a **chosen** one rather than the source, which is
+    the one difference: the card is a spell that names its creatures, so the
     description is carried and the handler resolves it. The count may be an
     announced X, which the several-target description already spells as the
-    string ``"x"``.
+    string ``"x"``. The ability's own source is the other subject the mark is
+    written onto (Gurzigost, ``subject: "source"``).
     """
     if node.duration.kind not in _REST_OF_TURN:
         raise LoweringError(

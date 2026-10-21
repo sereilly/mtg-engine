@@ -1658,9 +1658,9 @@ def toll_branch_loss(
             # has Skullscorch deal 4 damage to them." A random discard out of
             # the offered seat's own hand (the discarder is a printed reference
             # the resolution binds, read as ``offered_action_is_a_payment``
-            # reads it), and only the cards that hand **holds**: CR 608.2d's
-            # "as much as possible" makes two random cards out of an empty
-            # hand no loss at all. Unpriced, the standing policy paid 4 life
+            # reads it), and only the cards that hand **holds**: CR 609.3's
+            # "only as much as possible" makes two random cards out of an
+            # empty hand no loss at all. Unpriced, the standing policy paid 4 life
             # to keep a hand of nothing.
             amount = payload.get("amount")
             if not isinstance(amount, int) or payload_reference(step) not in recipients:
