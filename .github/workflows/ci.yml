@@ -297,6 +297,13 @@ jobs:
       # runners the job's wall time went from ~1,660s (the old ai shard) to
       # ~950s, and no single shard is the long pole any more.
       #
+      # Run 39534117983, the first to name its CPUs, says what the spread is:
+      # engine 466s and ai-sims 474s on an AMD EPYC 9V45, rest 834s on a
+      # 9V74, ai 706s on a 7763. The 7763 is the slow draw at about twice the
+      # 9V45's time, and ai's 706s beside its 711s baseline says the
+      # baselines are 7763-class readings, which is the side to budget for.
+      # Read the CPU before reading a percentage.
+      #
       # The sims half is bounded by its largest item,
       # test_no_urzas_block_simulation_leaves_a_cycle_on_the_stack[ULG]: 428s
       # locally, where its USG and UDS twins took ~60s each. Ten seeded games
