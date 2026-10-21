@@ -1,9 +1,8 @@
 """Lowering the sentences that arrange for something **later**.
 
 A delayed triggered ability (CR 603.7) — "At the beginning of the next end
-step, sacrifice it", "When that creature dies this turn, …" — and the two
-sentences whose whole job is to record a choice a *later* one reads: "Choose
-target creature" and Autumn Willow's shroud waiver.
+step, sacrifice it", "When that creature dies this turn, …" — and, below the
+divider, the destroy that happens "at end of combat" rather than now.
 
 It split off ``lowering/stack.py`` at Visions' second wave, when the counter's
 "unless its controller pays {1} **and 1 life**" took that module past the
@@ -12,8 +11,7 @@ already drawn, and it is a real one: everything left in ``stack`` lowers a
 sentence about an object **waiting on the stack right now** — countering it,
 copying it, retargeting it, choosing a mode for it — where nothing here has a
 stack object at all. What these produce is a *record*: an ability that will
-trigger on an event that has not happened, or a target chosen now for a
-sentence that runs later. Neither module reads the other.
+trigger on an event that has not happened. Neither module reads the other.
 
 **Two wave-2 groups made this split independently, in the same round, and the
 seven functions they moved were byte-identical** — only these docstrings
@@ -26,9 +24,19 @@ merely recorded the coincidence.
 ``_lower_delayed_self_action`` — the first sentence quoted above, word for
 word — lodged in ``lowering/board.py`` until R3 J8 for want of room here.
 
+**Two sentences that were not delays left at Torment's Phase 0**, with this
+module at exactly the thousand-line guard. This docstring had carried them as
+"the two sentences whose whole job is to record a choice a *later* one reads":
+"Choose target creature" and Autumn Willow's shroud waiver. Measured, the
+reason held for 7 of the 23 shipped cards that reach the first and for no part
+of the second, which prints one sentence and no delay. The choice went to
+``choices``, the name ``grammar/choices.py`` took when it left
+``grammar/delayed.py`` along the same line, and the waiver to ``permissions``,
+whose subject it is. Nothing here read either and neither read anything here.
+
 ``effects/`` and ``ast/`` have no ``delayed`` for ``loops``' reason: the guard
-fired on the lowerings, and ``CreateDelayedTrigger`` and ``ChooseTarget`` are
-nodes that sit perfectly well beside the other statement and stack ones.
+fired on the lowerings, and ``CreateDelayedTrigger`` is a node that sits
+perfectly well beside the other statement ones.
 """
 
 import dataclasses
@@ -43,9 +51,7 @@ from ._events import (_EVENT_SUBJECT_PLAYERS, _RECORDED_PERMANENTS,
                       binds_block_pair,
                       damage_trigger_names_damaged_end)
 from ._common import (
-    _REST_OF_TURN, _describe_several_targets, _describe_targets,
-    _describe_several_card_targets,
-    _is_source, _names_several_targets, _restrictions_beyond,
+    _describe_targets, _is_source, _restrictions_beyond,
     testable_filter_payload
 )
 
@@ -68,154 +74,6 @@ def _delayed_filter_payload(filt: "ast.ObjectFilter | None", node) -> dict[str, 
         node=node,
         require_narrowing=False,
     )
-
-
-def _lower_choose_target(node: ast.ChooseTarget) -> tuple[OracleInstruction, ...]:
-    """"Choose target creature." — the targeting half of a two-sentence spell.
-
-    The instruction does nothing on resolution and that is the whole of it:
-    CR 601.2c chooses the target as the spell is cast, and the sentence prints
-    no effect. It exists so ``engine/targeting.py`` can derive what the spell
-    targets from the compiled program, which is where every other card's
-    picker comes from — the alternative is a second reading of the oracle text.
-    """
-    payload: dict[str, object] = {}
-    if isinstance(node.subject, ast.PlayerRef):
-        # "Choose target opponent." (Soldevi Sentry.) The player form, and a
-        # different instruction rather than the same one over a different noun:
-        # the object form's handler resolves a *permanent*, and it also records
-        # nothing — where this one writes the chosen seat under the one key
-        # "that player" is ever read from, because the sentence naming that seat
-        # is a delayed ability created two sentences later and by then the
-        # resolution that chose is over.
-        _describe_targets(payload, node.subject)
-        if "targets" not in payload:
-            raise LoweringError("this 'choose' names no player", node=node)
-        if node.chooser is not None:
-            # "**That player** chooses target player who…" (the Oaths). The
-            # seat the card says announces the target, carried into the same
-            # description the picker reads — CR 601.2c's default is the
-            # ability's controller, and under those cards' trigger that is a
-            # different player from the one printed. Refused rather than
-            # dropped for every other referent: a chooser the announcement
-            # cannot resolve would silently fall back to the default, which is
-            # the one player the card says does *not* pick.
-            if node.chooser.kind != "that_player":
-                raise LoweringError(
-                    f"nothing announces a target for the {node.chooser.kind}",
-                    node=node,
-                )
-            if payload["targets"].get("opponents_only"):
-                # "Target **opponent**" is a narrowing the enumerator applies
-                # against the seat that *announces* (CR 601.2c, CR 102.2), and a printed
-                # chooser is precisely a card saying that seat is somebody
-                # else. Enforced as it stands, the word would exclude the
-                # ability's controller while the card excludes the chooser —
-                # two different players. Refused rather than resolved to
-                # either, exactly as the two-seat phrases elsewhere in this
-                # package refuse.
-                raise LoweringError(
-                    "a printed chooser and \"target opponent\" name the "
-                    "opponent of two different seats",
-                    node=node,
-                )
-            payload["targets"]["chooser"] = node.chooser.kind
-        payload["result_key"] = CHOSEN_PLAYER
-        return (OracleInstruction("choose_target_player", "", payload),)
-    # "Choose **two target creature cards in your graveyard**." (Victimize.)
-    # The announcement over a *zone* rather than over a battlefield, which is
-    # why it is its own kind: everything below describes permanents through
-    # ``_filter_payload``, and that builder refuses a card and a non-battlefield
-    # zone outright — reading this phrase there would point the picker at the
-    # battlefield for a spell that names a graveyard.
-    #
-    # Like every "choose" here it does nothing on resolution. The cards travel
-    # on the stack item's own target list for the whole resolution, so the
-    # sentence that returns them reads the announcement directly; this
-    # instruction exists so `engine/targeting.py` can derive the picker from the
-    # compiled program, which is where every other card's comes from.
-    subject = node.subject
-    if (
-        isinstance(subject, ast.TargetSpec)
-        and subject.filter.is_card
-        and subject.filter.zone == "graveyard"
-    ):
-        if subject.filter.zone_owner is None or subject.filter.zone_owner.kind != "you":
-            raise LoweringError(
-                "the graveyard announcement reads the chooser's own pile",
-                node=node,
-            )
-        if _restrictions_beyond(
-            subject.filter, frozenset({"is_card", "zone", "zone_owner", "card_types"})
-        ):
-            raise LoweringError(
-                "the graveyard announcement cannot read that card phrase",
-                node=node,
-            )
-        if len(subject.filter.card_types) != 1:
-            raise LoweringError(
-                "the graveyard announcement reads one card type", node=node
-            )
-        _describe_several_card_targets(payload, subject)
-        # The narrowing on the *instruction* as well as in the description, in
-        # the key ``graveyard_card_matches`` reads — the picker, the CR 601.2c
-        # gate and the sentence behind this one all ask that one predicate, and
-        # a description carrying no filter (which is this shape's contract) has
-        # nowhere else to put it.
-        payload["any_card"] = False
-        payload["card_type"] = subject.filter.card_types[0]
-        return (OracleInstruction("choose_target_cards", "", payload),)
-    if _names_several_targets(node.subject):
-        # "Choose **X target attacking creatures**." (Winter's Chill.) A *set*,
-        # and a different instruction rather than the same one with a count:
-        # the singular handler resolves one permanent and the loop behind this
-        # sentence has to walk every one of them, so the several-target form
-        # records what it chose. Recording is the whole of what it does — the
-        # targets were chosen as the spell was cast (CR 601.2c) — but nothing
-        # else in the resolution can say which attacking creatures those were.
-        _describe_several_targets(payload, node.subject)
-        if node.subject.same_controller:
-            # "…**controlled by the same opponent**" (Retribution). A relation
-            # between the targets, so it rides the *description* the picker and
-            # the CR 601.2c gate read rather than the filter every matcher
-            # tests one permanent against — no such matcher could answer it.
-            payload["targets"]["same_controller"] = True
-        return (OracleInstruction("choose_target_permanents", "", payload),)
-    _describe_targets(payload, node.subject)
-    if "targets" not in payload:
-        raise LoweringError("this 'choose' names no target", node=node)
-    return (OracleInstruction("choose_target_permanent", "", payload),)
-
-
-def _lower_waive_shroud(node: "ast.WaiveShroud") -> tuple[OracleInstruction, ...]:
-    """"Until end of turn, Autumn Willow can be the target of spells and
-    abilities controlled by **target player** as though it didn't have shroud."
-
-    Refuses on two axes, both by name, exactly as ``_lower_attack_as_though``
-    does for the other "as though" permission. The **duration** must be this
-    turn's, because the waiver is a list of seats stamped on the permanent and
-    swept by the cleanup step — a durationless printing would be a static
-    ability nothing here ends. And the **player** must be one the activation
-    chooses: a fixed seat is chosen by nobody (CR 115.1a), so a sentence naming
-    one would arm the waiver for whoever the resolution happened to be carrying.
-    """
-    if node.duration.kind not in _REST_OF_TURN:
-        raise LoweringError(
-            "a durationless shroud exception is a static ability, which "
-            "nothing here would ever end",
-            node=node,
-        )
-    if node.player.kind not in ("target_player", "target_opponent"):
-        raise LoweringError(
-            f"the shroud exception is granted to a chosen player, not to "
-            f"{node.player.kind!r}",
-            node=node,
-        )
-    payload: dict[str, object] = {}
-    _describe_targets(payload, node.player)
-    if "targets" not in payload:
-        raise LoweringError("this shroud exception names no player", node=node)
-    return (OracleInstruction("waive_shroud_for_target_player", "", payload),)
 
 
 def _names_a_chosen_player(statement) -> bool:
@@ -324,9 +182,7 @@ def _lower_create_delayed_trigger(
     from ...delayed_triggers import (DELAYED_EVENTS,
                                      EVENTS_SEATED_BY_BOUND_PLAYER)
 
-    from ._events import (EXTRA_TURN_GRANTED, _EVENT_SUBJECT_OBJECTS,
-                          _RECORDED_PERMANENTS,
-                          _PERMANENTS_MADE_BY_THIS_EFFECT)
+    from ._events import EXTRA_TURN_GRANTED, _EVENT_SUBJECT_OBJECTS
 
     if node.event not in DELAYED_EVENTS:
         raise LoweringError(
