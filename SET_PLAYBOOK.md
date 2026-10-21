@@ -2355,9 +2355,11 @@ budgeted fast half and an unbudgeted census half, is the owner's decision and
 was not made during the set; `main` is unpushed again. **Phase 0 of the next
 set** needs that decision before a CI number means anything.
 **Taken 2026-10-20, after round 4:** split, and in parallel. CI's test job
-is three shards over whole tests/ folders, each `-n 4` on the runner with
-its own budget, and the first run was green in 27 minutes where the last
-serial one had taken 4h45m. ROADMAP's standing invariant 2 has the readings.
+is parallel shards over whole tests/ folders (tests/ai split in two by the
+`slow` marker), each `-n 4` on the runner with its own budget. The first
+run was green in 27 minutes where the last serial one had taken 4h45m, and
+splitting tests/ai took the wall time to ~15. ROADMAP's standing invariant 2
+has the readings.
 
 ## Phase 0 — Pre-flight
 

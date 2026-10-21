@@ -32,13 +32,13 @@ jobs:
           - shard: ai-sims
             paths: tests/ai
             markers: slow
-            budget: 2400
-            baseline: 1200
+            budget: 1080
+            baseline: 536
           - shard: ai
             paths: tests/ai
             markers: not slow
-            budget: 2400
-            baseline: 1200
+            budget: 1420
+            baseline: 711
           - shard: engine
             paths: tests/engine
             markers: ''
@@ -285,11 +285,22 @@ jobs:
       # the guard holds the two shards to exactly that. Marking a test slow
       # moves it between them, and that is the one way this balance drifts.
       #
+      # First readings, run 39525972550 on branch `ci/split-ai-shard`, all
+      # green: `[ai-sims]: 536s` (22 tests) and `[ai]: 711s` (664), beside
+      # engine 868s and rest 766s. That run's engine reading matches the two
+      # slow-runner readings above (862s, 860s), so these are slow-runner
+      # numbers like the other baselines, and each budget is ~2x. On that
+      # class of runner the job's wall time went from ~1,660s (the old ai
+      # shard) to ~870s, and tests/engine is now the long pole.
+      #
       # The sims half is bounded by its largest item,
       # test_no_urzas_block_simulation_leaves_a_cycle_on_the_stack[ULG]: 428s
       # locally, where its USG and UDS twins took ~60s each. Ten seeded games
       # of Urza's Legacy are costly games, not one runaway: one of them is a
       # third of the run, and nearly all of it is CR 613 layer reads.
+      # `_folded_card` derived each permanent's board-wide statics twice per
+      # fold; deriving them once made those ten games ~19% faster with every
+      # seeded log byte-identical (ROADMAP, standing invariant 2).
       - name: Run the test suite, enforcing the time budget
         env:
           SHARD: ${{ matrix.shard }}
