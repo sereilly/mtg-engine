@@ -806,8 +806,10 @@ def entry_trigger_seat_side(
     CR 702.33g) -- so the answer is about the target the cast actually names.
     Only the denial is answered: a gift aimed by this rule could contradict the
     printed phrase ("target **opponent** draws two cards", Lord of
-    Tresserhorn), and every seat-targeting entry trigger in the pool that is
-    not a denial already lands where its card prints it.
+    Tresserhorn). What the phrase itself allows is the trigger's own target
+    list, which the policy asks beside this (``ai_policy._entry_trigger_seats``)
+    — this reading said every non-denial "already lands where its card prints
+    it", and seven did not (Torment's W2G3).
     """
     from .targeting import _first_described_slot, entry_trigger_instructions
 
@@ -4717,6 +4719,118 @@ def graveyard_denial_order(game, owner_seat: int, slots) -> list:
     )
 
 
+def graveyard_price_order(game, owner_seat: int, slots) -> list:
+    """*slots* — positions in *owner_seat*'s own graveyard that seat is giving
+    up **as a price** — least valuable first.
+
+    :func:`graveyard_denial_order` read the other way round, because it is the
+    same question asked by the card's owner: a card its owner could still
+    **cast from there** (flashback, CR 702.34a — printed, or granted by
+    Recoup) is a spell that seat still holds, so it goes last. Among the rest,
+    mana value, the one ranking every card in the pool answers (the reading
+    Forgotten Lore's default gives the pile an opponent picks from): a land
+    goes before a spell and a cheap spell before a dear one. Ties keep pile
+    order, so a seed that met none of this replays as it did.
+
+    For every pick out of a seat's own pile whose cards are a payment and not
+    what the effect then reads: an offer's or a toll's price ("any player may
+    exile a card from their graveyard", Carrion Rats; Gurzigost's "unless you
+    put two cards from your graveyard on the bottom"), a replacement's (Nefarious
+    Lich), an activation cost (Grim Lavamancer) and a spell's additional cost
+    (Haunting Misery). The defaults took the pile in order, so the price was
+    whatever sat at the bottom — a flashback spell as soon as a land.
+    """
+    from .flashback import has_flashback
+
+    pile = game.players[owner_seat].graveyard
+
+    def worth(slot) -> tuple:
+        if not (isinstance(slot, int) and 0 <= slot < len(pile)):
+            return (1, 0.0)
+        card = pile[slot]
+        castable = has_flashback(card, game=game, owner_seat=owner_seat)
+        return (1 if castable else 0, float(getattr(card, "cmc", 0) or 0))
+
+    return sorted(slots, key=worth)
+
+
+#: The record keys through which an effect reads **which** cards its own cost
+#: exiled: a characteristic of the exiled card ("put X +1/+1 counters, where X
+#: is the exiled card's mana value", Necropolis) or a condition on it. The
+#: count alone (``cost_exiled_count``, Painbringer) is not on the list — any
+#: cards make the same count.
+_COST_EXILE_READERS = frozenset({
+    "cost_exile_characteristic", "exiled_for_cost", "exiled_set_for_cost",
+})
+
+
+def reads_what_its_cost_exiled(instructions) -> bool:
+    """Whether a step of *instructions* reads which cards its own cost exiled
+    — so the cards an exile cost takes are not a plain price and
+    :func:`graveyard_price_order` must not choose them (the effect wants the
+    dearest, not the cheapest)."""
+    def mentions(value) -> bool:
+        if isinstance(value, str):
+            return value in _COST_EXILE_READERS
+        if isinstance(value, dict):
+            return any(
+                key in _COST_EXILE_READERS or mentions(item)
+                for key, item in value.items()
+            )
+        if isinstance(value, (list, tuple)):
+            return any(mentions(item) for item in value)
+        payload = getattr(value, "payload", None)
+        return isinstance(payload, dict) and mentions(payload)
+
+    return mentions(tuple(instructions or ()))
+
+
+#: The search destination that puts what it finds on top of the searching
+#: player's library ("…then shuffle and put that card on top").
+LIBRARY_TOP = "library_top"
+
+
+def library_top_setups(card: CardDefinition, x_value: "int | None" = None) -> tuple:
+    """The searches a cast of *card* makes that put what they find **on top of
+    its caster's own library**, as ``(payload, count)`` — ``count`` the
+    number of cards the search puts there (X read as *x_value*), or None for
+    "any number of".
+
+    "Search your library for a card, then shuffle and put that card on top"
+    (Vampiric Tutor, Mystical Tutor, Insidious Dreams' X cards, Scouting
+    Trek's basic lands): the cards stay in the library, so a rehearsal of the
+    cast reads no standing change — a hand, a life total and a board are what
+    a standing counts, and the order of a library is none of them. What the
+    cast bought is the next draws, chosen. Derived from the compiled program
+    (``search_library`` with every destination the top of the library), so it
+    names no card. Empty for a permanent, whose cast is not rehearsed.
+    """
+    found = []
+    for instruction in _spell_instructions(card):
+        for step in _effect_steps(instruction):
+            if step.kind != "search_library":
+                continue
+            payload = step.payload or {}
+            places = list(payload.get("destinations") or ()) or [payload.get("destination")]
+            if not places or any(place != LIBRARY_TOP for place in places):
+                continue
+            if "library" not in tuple(payload.get("zones") or ("library",)):
+                continue
+            # "…and exile the rest" (Doomsday) is not a setup but a library
+            # cut down to the finds: what it changes is every draw after them.
+            if payload.get("exile_rest"):
+                continue
+            count = payload.get("count", 1)
+            if count == "x":
+                count = max(0, int(x_value or 0))
+            elif count == "any":
+                count = None
+            elif not isinstance(count, int):
+                continue
+            found.append((payload, count))
+    return tuple(found)
+
+
 def _walk_program(program):
     """Every instruction on a program, wrappers opened."""
     def walk(instructions):
@@ -4781,6 +4895,9 @@ __all__ = [
     "forget_damage_history",
     "untap_for_the_next_turn",
     "graveyard_denial_order",
+    "graveyard_price_order",
+    "library_top_setups",
+    "reads_what_its_cost_exiled",
     "hand_entry_steps",
     "hand_waiver",
     "harms_its_own_source",

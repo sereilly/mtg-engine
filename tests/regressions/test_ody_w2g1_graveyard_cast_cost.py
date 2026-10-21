@@ -48,6 +48,15 @@ client = TestClient(app)
 _CARDS = ("Haunting Misery", "Skeletal Scrying")
 #: Slots:       0                1         2               3                4           5
 _PILE = ("Grizzly Bears", "Forest", "Black Knight", "Grizzly Bears", "Mind Rot", "Black Knight")
+#: What a cast naming no set gives up for X = 2: the top of the pile down,
+#: least valuable first (``ai_valuation.graveyard_price_order``, Torment's
+#: W2G3) — the Forest before any spell for Skeletal Scrying, which takes any
+#: card; for Haunting Misery's four two-mana creature cards the top two.
+#: It was the top two whatever they were (the Mind Rot and a Black Knight).
+_UNNAMED_PAYMENT = {
+    "Haunting Misery": ["Black Knight", "Grizzly Bears"],
+    "Skeletal Scrying": ["Forest", "Black Knight"],
+}
 #: The slots each card's cost may take.
 _PAYABLE = {
     "Haunting Misery": (0, 2, 3, 5),         # creature cards
@@ -125,11 +134,10 @@ def test_the_named_graveyard_cards_are_the_ones_exiled(name):
 
 @pytest.mark.parametrize("name", _CARDS)
 def test_a_cast_that_names_no_set_takes_the_top_of_the_pile(name):
-    payable = _PAYABLE[name]
     game = _board(name)
     result = _cast(game, name, 2, None)
     assert result.supported, result.details
-    assert _exiled(game) == [_PILE[payable[-1]], _PILE[payable[-2]]]
+    assert _exiled(game) == _UNNAMED_PAYMENT[name]
     # X = 0 exiles nothing, named or not.
     for slots in (None, []):
         game = _board(name)
@@ -286,7 +294,7 @@ def test_the_cast_route_forwards_the_graveyard_set(name):
         "seat": 0, "action": "cast", "card_name": name, "x_value": 2, "target_seat": 1,
     })
     assert response.status_code == 200, response.text
-    assert _exiled(game) == [_PILE[payable[-1]], _PILE[payable[-2]]]
+    assert _exiled(game) == _UNNAMED_PAYMENT[name]
 
 
 def test_these_are_the_pools_graveyard_exile_cast_costs():

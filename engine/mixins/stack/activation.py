@@ -1196,17 +1196,9 @@ class AbilityActivationMixin:
                 # forbids only what cannot be done) -- and it is the whole
                 # difference from the branch above, where naming nothing removes
                 # every counter.
-                total = max(0, int(x_value or 0))
-                if held < total:
-                    details = (
-                        f"{permanent.card.name} has {held} {kind} counter(s), "
-                        f"fewer than the {total} announced for X"
-                    )
-                    self.log.append(details)
-                    return SimulationResult(
-                        permanent.card.name, False, "unsupported", details
-                    )
-                counters_removed_for_cost = total
+                # An X the permanent cannot cover is refused by the cost gate
+                # below (``unpayable_activation_cost``), with nothing spent.
+                counters_removed_for_cost = max(0, int(x_value or 0))
             elif wanted == "all":
                 # "Remove **all** elixir counters from this artifact" (Essence
                 # Bottle, Torture Chamber). Every one of them and no choice to
@@ -1218,10 +1210,7 @@ class AbilityActivationMixin:
                 # effect behind it reads the zero it really removed.
                 counters_removed_for_cost = held
             else:
-                if held < int(wanted):
-                    details = f"{permanent.card.name} has no {kind} counters to remove"
-                    self.log.append(details)
-                    return SimulationResult(permanent.card.name, False, "unsupported", details)
+                # Too few on the source is the cost gate's refusal below.
                 counters_removed_for_cost = int(wanted)
 
         # Per-ability timing restrictions are scoped to the *selected* ability's
@@ -1400,30 +1389,30 @@ class AbilityActivationMixin:
                 self.log.append(details)
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
 
-        # Northern Paladin: "{W}{W}, {T}: Destroy target black permanent." /
-        # Dwarven Demolition Team / Tunnel: "Destroy target Wall." / King
-        # Suleiman: "Destroy target Djinn or Efreet." The chosen target must
-        # satisfy the ability's color/type/subtype filter (601.2c) — an
-        # illegal target makes the ability impossible to activate, so it's
-        # rejected before any cost is paid rather than silently fizzling.
+        # **Can the cost be paid at all** (CR 601.2h via 602.2b; CR 118.3) —
+        # one question over every resource a cost spends that is not mana,
+        # asked of one gate (``unpayable_activation_cost``) before a single
+        # cost is collected. The blocks below used to each refuse their own
+        # shortfall as they were reached; they now pick and pay, and refuse
+        # only what a *named* payment makes illegal. The AI's chooser asks the
+        # same gate before it proposes an activation, so what it proposes and
+        # what this door accepts cannot be two answers.
+        unpayable = self.unpayable_activation_cost(
+            controller_index, permanent, ability, x_value=x_value,
+        )
+        if unpayable is not None:
+            self.log.append(unpayable)
+            return SimulationResult(permanent.card.name, False, "unsupported", unpayable)
+
         # Jandor's Ring: "Discard the last card you drew this turn" is an
-        # additional cost — unpayable (so the ability can't be activated) if no
-        # card drawn this turn is still in hand. Checked before any cost is paid;
-        # the discard itself happens below, once every cost has been cleared.
+        # additional cost — the card the gate above found still in hand,
+        # discarded below once every cost has been cleared.
         discard_cost_card = None
         if ability.cost.discard_last_drawn:
             discard_cost_card = controller.last_card_drawn_this_turn()
-            if discard_cost_card is None:
-                details = (
-                    f"{permanent.card.name}: no card drawn this turn remains in hand to discard"
-                )
-                self.log.append(details)
-                return SimulationResult(permanent.card.name, False, "unsupported", details)
 
-        # "Discard a card" (Seasoned Hallowblade). Unpayable with too few cards,
-        # and CR 602.5c makes an unpayable cost an *unactivatable* ability
-        # rather than a free one. Resolved to card objects, not indices: the
-        # indices shift as each card leaves the hand.
+        # "Discard a card" (Seasoned Hallowblade). Resolved to card objects,
+        # not indices: the indices shift as each card leaves the hand.
         discard_cost_cards: list = []
         if ability.cost.discard_cards:
             hand = controller.hand
@@ -1433,24 +1422,8 @@ class AbilityActivationMixin:
             # picker in `engine/legality.py` offers from, so what is offered and
             # what is accepted cannot disagree — and an empty filter list means
             # the unrestricted "Discard a card", where the whole hand pays.
-            payable = [
-                card for card in hand
-                if card_matches_any(card, ability.cost.discard_filters)
-            ]
-            if len(payable) < ability.cost.discard_cards:
-                # Naming the phrase when there is one. "Not enough cards in
-                # hand" is the truth for a bare "Discard a card" and a plain
-                # falsehood for Niambi's, where the hand may be full of cards
-                # that simply are not legendary — a message that sends a player
-                # looking for the wrong problem.
-                shortfall = (
-                    "no card in hand answers this cost"
-                    if ability.cost.discard_filters
-                    else "not enough cards in hand to discard"
-                )
-                details = f"{permanent.card.name}: {shortfall}"
-                self.log.append(details)
-                return SimulationResult(permanent.card.name, False, "unsupported", details)
+            # Too few of them is the gate's refusal above.
+            payable = self._discard_cost_payable(ability.cost, controller)
             # An index that names no card is an error, not a request for a
             # different one. It used to become a bare `0`, so a stale click
             # discarded the first card in hand — the same silent repointing the
@@ -1517,107 +1490,20 @@ class AbilityActivationMixin:
                     hand[i] for i in positions[:ability.cost.discard_cards]
                 ]
 
-        # "Exile the top card of your library" (Royal Herbalist), "…the top four
-        # cards…" (Seasoned Tactician). CR 118.3: a player cannot pay a cost
-        # without the resources to pay it **fully**, so a library holding fewer
-        # cards than the printed count pays nothing at all and CR 602.5c makes
-        # the ability unactivatable rather than free. Checked here with the
-        # other costs and paid below with them, so a refusal further down does
-        # not leave a library already shorter.
-        # "Exile the top creature card of your graveyard" (Necratog, Zombie
-        # Scavengers), "…the top card…" (Alms, Nature's Kiss). The same
-        # CR 118.3 reading as the library cost below, over a pile that is
-        # *scanned* rather than counted: a graveyard with no creature card in it
-        # cannot pay Necratog at all, and CR 601.2h ("unpayable costs can't be
-        # paid", reached through CR 602.2b) then makes the ability
-        # unactivatable rather than free. Checked here with the other costs and
-        # paid below with them, so a refusal further down does not leave a
-        # graveyard already shorter.
-        if ability.cost.exile_graveyard_position is not None:
-            from ...graveyard_order import positions_named
-
-            if not positions_named(
-                controller.graveyard, ability.cost.exile_graveyard_position
-            ):
-                details = (
-                    f"{permanent.card.name}: {controller.name}'s graveyard has "
-                    f"nothing its cost can exile"
-                )
-                self.log.append(details)
-                return SimulationResult(
-                    permanent.card.name, False, "unsupported", details
-                )
-
-        # "Put a card from your hand on top of your library" (Hidden Retreat).
-        # CR 118.3: a player cannot pay a cost without the resources to pay it,
-        # so an empty hand pays nothing at all and CR 602.5c makes the ability
-        # unactivatable rather than free. Checked here with the other costs and
-        # paid below with them, so a refusal further down does not leave a hand
-        # already short.
-        if ability.cost.hand_to_library_top > len(controller.hand):
-            details = (
-                f"{permanent.card.name}: {controller.name} has "
-                f"{len(controller.hand)} card(s) in hand and its cost puts "
-                f"{ability.cost.hand_to_library_top} on top of their library"
-            )
-            self.log.append(details)
-            return SimulationResult(
-                permanent.card.name, False, "unsupported", details
-            )
-
-        if ability.cost.exile_top_of_library > len(controller.library):
-            details = (
-                f"{permanent.card.name}: {controller.name} has "
-                f"{len(controller.library)} card(s) left and its cost exiles "
-                f"{ability.cost.exile_top_of_library}"
-            )
-            self.log.append(details)
-            return SimulationResult(
-                permanent.card.name, False, "unsupported", details
-            )
-
-        # "{T}, **Mill a card**: Add {C}." (Millikin.) CR 701.17b: a player
-        # can't pay a cost that includes milling more cards than their library
-        # holds — an empty library does not make the ability free. Counted with
-        # the library exile above, which shares the pile: a card printing both
-        # owes both out of it.
-        if getattr(ability.cost, "mill_cards", 0) and (
-            ability.cost.mill_cards + ability.cost.exile_top_of_library
-            > len(controller.library)
-        ):
-            details = (
-                f"{permanent.card.name}: {controller.name} has "
-                f"{len(controller.library)} card(s) left and its cost mills "
-                f"{ability.cost.mill_cards}"
-            )
-            self.log.append(details)
-            return SimulationResult(
-                permanent.card.name, False, "unsupported", details
-            )
-
-        # "Discard your hand" (Subira). Never unpayable — discarding nothing is
-        # discarding your hand — so there is no check beside the others above,
-        # only the payment below.
-        # "Pay 3 life" (Tavern Swindler). CR 119.4: a player may pay life only
-        # if their life total is at least the amount — so exactly 3 life pays a
-        # 3-life cost and 2 does not, and paying down to 0 is legal. CR 602.5c
-        # then makes an unpayable cost an *unactivatable* ability rather than a
-        # free one, which is why this refuses here instead of clamping at the
-        # payment below. Checked before anything is spent, like every other cost.
-        # CR 601.2h's choice between two printed payments, made once here and
-        # carried to both payment sites below: asked separately they could
-        # disagree, and the disagreement that costs nothing to make is paying
-        # the mana *and* the life.
+        # "Exile the top card of your library" (Royal Herbalist), "…the top
+        # creature card of your graveyard" (Necratog), "Put a card from your
+        # hand on top of your library" (Hidden Retreat), "Mill a card"
+        # (Millikin), "Pay 3 life" (Tavern Swindler): CR 118.3's shortfalls,
+        # each refused by the cost gate above with nothing spent, and each paid
+        # below with the rest. "Discard your hand" (Subira) is never unpayable.
+        #
+        # CR 601.2h's choice between two printed payments ("Pay 2 life or
+        # {2}"), made once here and carried to both payment sites below: asked
+        # separately they could disagree, and the disagreement that costs
+        # nothing to make is paying the mana *and* the life.
         life_owed, alternative_mana = activation_cost_choice(
             controller, ability.cost, permanent
         )
-        if life_owed and controller.life < life_owed:
-            details = (
-                f"{permanent.card.name}: {controller.name} cannot pay "
-                f"{life_owed} life with {controller.life} remaining"
-            )
-            self.log.append(details)
-            return SimulationResult(permanent.card.name, False, "unsupported", details)
 
         # "Sacrifice another creature" (Hobblefiend) / "Sacrifice a creature with
         # defender" (Portcullis Vine). The victim is chosen by identity and never
@@ -1643,27 +1529,15 @@ class AbilityActivationMixin:
             # creature." (Copper-Leaf Angel.) CR 107.3a's announced X sizes the
             # payment, so — as for "Remove X counters" above — an X the board
             # cannot cover is an announcement that cannot be paid (CR 601.2h)
-            # and is refused with nothing spent, never clamped to what is
-            # there. A seat that announced nothing announced zero, which is
-            # payable and sacrifices nothing. The payer's named permanents
-            # first, then the board in order, deduplicated by identity.
-            described = ability.cost.sacrifice_filter
+            # and is refused with nothing spent (the cost gate above), never
+            # clamped to what is there. A seat that announced nothing announced
+            # zero, which is payable and sacrifices nothing. The payer's named
+            # permanents first, then the board in order, deduplicated by
+            # identity.
             wanted = max(0, int(x_value or 0))
-            candidates = [
-                perm for perm in self.controlled_by(controller_index)
-                if subject_matches(
-                    self, perm, described,
-                    observer=controller_index, source=permanent,
-                )
-            ]
-            if len(candidates) < wanted:
-                details = (
-                    f"{permanent.card.name}: {len(candidates)} "
-                    f"{filter_head_noun(described)}(s) to sacrifice, fewer than "
-                    f"the {wanted} announced for X"
-                )
-                self.log.append(details)
-                return SimulationResult(permanent.card.name, False, "unsupported", details)
+            candidates = self._sacrifice_cost_candidates(
+                ability.cost, controller_index, permanent, keep_source=True,
+            )
             cost_candidates.extend(candidates)
             named = [
                 found for found in (
@@ -1714,42 +1588,17 @@ class AbilityActivationMixin:
         elif ability.cost.sacrifice_filter is not None and ability.instruction is not None and (
             ability.instruction.kind not in COST_PERFORMING_KINDS
         ):
-            described = ability.cost.sacrifice_filter
-            candidates = [
-                perm
-                for perm in self.controlled_by(controller_index)
-                if subject_matches(
-                    self, perm, described,
-                    observer=controller_index, source=permanent,
-                )
-                # "Sacrifice two lands **and this artifact**" (Sandstone
-                # Deadfall). The source is its own entry in the printed cost,
-                # so it cannot also be one of the chosen ones: a Deadfall that
-                # had become a land would otherwise pay for itself and one
-                # land, two objects for a cost that prints three.
-                and not (ability.cost.sacrifice_self and perm is permanent)
-            ]
-            if not candidates:
-                details = (
-                    f"{permanent.card.name}: no "
-                    f"{filter_head_noun(described)} available to sacrifice"
-                )
-                self.log.append(details)
-                return SimulationResult(permanent.card.name, False, "unsupported", details)
-            # "Sacrifice **two** Goblins" (Goblin Warrens). A printed count
-            # greater than one, which is a different payability question from
-            # every other sacrifice cost here: two of them must exist, and one
-            # Goblin is no more a payment than none (CR 601.2h). Checked before
-            # anything is spent, like the singular beside it.
+            # "Sacrifice two lands **and this artifact**" (Sandstone
+            # Deadfall): the source is its own entry in the printed cost, so
+            # it is not one of the chosen ones (``_sacrifice_cost_candidates``).
+            # "Sacrifice **two** Goblins" (Goblin Warrens): one Goblin is no
+            # more a payment than none (CR 601.2h) — the cost gate above
+            # refused a board short of the printed count, with nothing spent.
+            candidates = self._sacrifice_cost_candidates(
+                ability.cost, controller_index, permanent,
+            )
             wanted = ability.cost.sacrifice_count
             wanted = wanted if isinstance(wanted, int) else 1
-            if len(candidates) < wanted:
-                details = (
-                    f"{permanent.card.name}: not enough "
-                    f"{filter_head_noun(described)}s to sacrifice for its cost"
-                )
-                self.log.append(details)
-                return SimulationResult(permanent.card.name, False, "unsupported", details)
             cost_candidates.extend(candidates)
             named = [
                 found
@@ -1804,8 +1653,8 @@ class AbilityActivationMixin:
         # moment (CR 601.2h). Nothing is picked — the attachment record is the
         # whole answer, exactly as it is for the tap-the-host cost further down
         # — so the only two ways this can fail are the Aura having no host and
-        # the host having left, and both refuse the activation with nothing
-        # paid (CR 602.2b) rather than sacrificing the Aura instead.
+        # the host having left, and both are the cost gate's refusal above —
+        # nothing paid (CR 602.2b), never the Aura sacrificed instead.
         #
         # Its own variable rather than a second writer of
         # ``sacrifice_cost_permanent``: a card printing both clauses owes two
@@ -1813,17 +1662,7 @@ class AbilityActivationMixin:
         # silently.
         sacrifice_attached_permanent = None
         if ability.cost.sacrifice_attached:
-            host = permanent.metadata.get("attached_to")
-            if host is None or not self.is_on_battlefield(host):
-                details = (
-                    f"{permanent.card.name}: the permanent it is attached to "
-                    "cannot be sacrificed to pay its cost"
-                )
-                self.log.append(details)
-                return SimulationResult(
-                    permanent.card.name, False, "unsupported", details
-                )
-            sacrifice_attached_permanent = host
+            sacrifice_attached_permanent = permanent.metadata.get("attached_to")
 
         # What "**the sacrificed creature**" names once the cost is paid
         # (CR 608.2h). The permanent the payer chose, or — when the cost names
@@ -1846,16 +1685,11 @@ class AbilityActivationMixin:
         # collected.
         tap_cost_permanents: list = []
         if ability.cost.tap_count:
-            described = ability.cost.tap_filter or {}
-            candidates = [
-                perm
-                for perm in self.controlled_by(controller_index)
-                # Untapped by construction — a tap cost can only be paid with a
-                # permanent that is not already tapped — and the source is
-                # eligible only if the printed phrase names it, which "another"
-                # would have excluded.
-                if not perm.tapped and subject_matches(self, perm, described)
-            ]
+            # Untapped by construction — a tap cost can only be paid with a
+            # permanent that is not already tapped — and the source is eligible
+            # only if the printed phrase names it, which "another" would have
+            # excluded. Too few of them is the cost gate's refusal above.
+            candidates = self._tap_cost_candidates(ability.cost, controller_index)
             cost_candidates.extend(candidates)
             named = [
                 found
@@ -1875,13 +1709,6 @@ class AbilityActivationMixin:
                     break
                 if not any(perm is already for already in chosen):
                     chosen.append(perm)
-            if len(chosen) < ability.cost.tap_count:
-                details = (
-                    f"{permanent.card.name}: not enough untapped "
-                    f"{filter_head_noun(described)}s to tap for its cost"
-                )
-                self.log.append(details)
-                return SimulationResult(permanent.card.name, False, "unsupported", details)
             tap_cost_permanents = chosen[:ability.cost.tap_count]
 
         # "**Return a Forest you control to its owner's hand**: Untap target
@@ -1889,8 +1716,9 @@ class AbilityActivationMixin:
         # to their owner's hand**: …" (Flooded Shoreline). The same collection
         # the tap cost above makes, one zone over (CR 118.3): chosen by the
         # payer through `cost_permanent_ids`, defaulted deterministically for a
-        # seat that names none, and refused with nothing spent when the board
-        # cannot cover the printed count (CR 601.2h via 602.2b).
+        # seat that names none, and refused with nothing spent by the cost gate
+        # above when the board cannot cover the printed count (CR 601.2h via
+        # 602.2b).
         #
         # The printed count is indivisible, which is why the shortfall refuses
         # rather than returning what there is: returning one of Flooded
@@ -1899,12 +1727,7 @@ class AbilityActivationMixin:
         # nor goes missing.
         return_cost_permanents: list = []
         if ability.cost.return_to_hand_count:
-            described = ability.cost.return_to_hand_filter or {}
-            candidates = [
-                perm
-                for perm in self.controlled_by(controller_index)
-                if subject_matches(self, perm, described)
-            ]
+            candidates = self._return_cost_candidates(ability.cost, controller_index)
             cost_candidates.extend(candidates)
             named = [
                 found
@@ -1924,13 +1747,6 @@ class AbilityActivationMixin:
                     break
                 if not any(perm is already for already in chosen):
                     chosen.append(perm)
-            if len(chosen) < ability.cost.return_to_hand_count:
-                details = (
-                    f"{permanent.card.name}: not enough "
-                    f"{filter_head_noun(described)}s to return for its cost"
-                )
-                self.log.append(details)
-                return SimulationResult(permanent.card.name, False, "unsupported", details)
             return_cost_permanents = chosen[:ability.cost.return_to_hand_count]
 
         # "{T}, **Untap a tapped land an opponent controls**: …" (Benthic
@@ -1942,18 +1758,13 @@ class AbilityActivationMixin:
         # above, and defaulted deterministically for a seat that names none.
         untap_cost_permanent = None
         if ability.cost.untap_filter is not None:
-            described = ability.cost.untap_filter
-            candidates = [
-                perm
-                for perm in self.all_permanents()
-                # Tapped by construction: untapping an untapped permanent is no
-                # payment, and the printed phrase says so too — the filter
-                # carries `tapped_only`, and this is the belt to its braces.
-                if perm.tapped and subject_matches(
-                    self, perm, described,
-                    observer=controller_index, source=permanent,
-                )
-            ]
+            # Tapped by construction: untapping an untapped permanent is no
+            # payment, and the printed phrase says so too — the filter carries
+            # `tapped_only`, and the candidate list is the belt to its braces.
+            # None at all is the cost gate's refusal above.
+            candidates = self._untap_cost_candidates(
+                ability.cost, controller_index, permanent,
+            )
             cost_candidates.extend(candidates)
             named = next(
                 (
@@ -1964,46 +1775,23 @@ class AbilityActivationMixin:
                 ),
                 None,
             )
-            untap_cost_permanent = named or (candidates[0] if candidates else None)
-            if untap_cost_permanent is None:
-                # CR 601.2h via 602.2b: a cost that cannot be paid means the
-                # activation is refused with nothing spent, rather than an
-                # ability that costs nothing.
-                details = (
-                    f"{permanent.card.name}: no tapped "
-                    f"{filter_head_noun(described)} to untap for its cost"
-                )
-                self.log.append(details)
-                return SimulationResult(permanent.card.name, False, "unsupported", details)
+            untap_cost_permanent = named or candidates[0]
 
         # "{B}, **Put a -1/-1 counter on a creature you control**: …"
         # (Wandering Mage). The one counter-placing cost that can be *unpayable*
         # — CR 601.2h, and a payer with no creature has nowhere to put it — so
         # unlike Mazemind Tome's marker on its own source this is collected here
-        # with the other chosen costs and refuses the activation with nothing
-        # paid. Picked through `cost_permanent_ids`, the same channel the
+        # with the other chosen costs, and a board with nowhere to put it is the
+        # cost gate's refusal above. Picked through `cost_permanent_ids`, the
+        # same channel the
         # sacrifice and tap costs above arrive on, and defaulted with
         # `default_sacrifice_pick` for a seat that names none: a -1/-1 counter
         # is a shrinking, so "the one you would give up" is the same ranking.
         counter_cost_permanent = None
         if ability.cost.put_counter_filter is not None:
-            described = ability.cost.put_counter_filter
-            candidates = [
-                perm
-                for perm in self.controlled_by(controller_index)
-                if subject_matches(
-                    self, perm, described,
-                    observer=controller_index, source=permanent,
-                )
-            ]
-            if not candidates:
-                details = (
-                    f"{permanent.card.name}: no "
-                    f"{filter_head_noun(described)} to put a "
-                    f"{ability.cost.put_counter} counter on"
-                )
-                self.log.append(details)
-                return SimulationResult(permanent.card.name, False, "unsupported", details)
+            candidates = self._put_counter_cost_candidates(
+                ability.cost, controller_index, permanent,
+            )
             cost_candidates.extend(candidates)
             named = [
                 found
@@ -2036,24 +1824,10 @@ class AbilityActivationMixin:
             kind = ability.cost.remove_counter
             wanted = ability.cost.remove_counter_count
             needed = int(wanted) if isinstance(wanted, int) else 1
-            described = ability.cost.remove_counter_filter
-            candidates = [
-                perm
-                for perm in self.controlled_by(controller_index)
-                if subject_matches(
-                    self, perm, described,
-                    observer=controller_index, source=permanent,
-                )
-                and counters_on(perm, str(kind)) >= needed
-            ]
-            if not candidates:
-                details = (
-                    f"{permanent.card.name}: no "
-                    f"{filter_head_noun(described)} with a {kind} counter to "
-                    "remove"
-                )
-                self.log.append(details)
-                return SimulationResult(permanent.card.name, False, "unsupported", details)
+            # None holding them is the cost gate's refusal above.
+            candidates = self._remove_counter_cost_candidates(
+                ability.cost, controller_index, permanent,
+            )
             cost_candidates.extend(candidates)
             named = [
                 found
@@ -2081,15 +1855,12 @@ class AbilityActivationMixin:
         sacrifice_also_permanent = None
         if ability.cost.sacrifice_also_filter is not None:
             described = ability.cost.sacrifice_also_filter
-            candidates = [
-                perm
-                for perm in self.controlled_by(controller_index)
-                if subject_matches(
-                    self, perm, described,
-                    observer=controller_index, source=permanent,
-                )
-                and perm is not sacrifice_cost_permanent
-            ]
+            # The cost gate above asked this of the default first pick; a
+            # *named* first sacrifice can still be the only second one there
+            # is, which is a named payment this refusal is about.
+            candidates = self._sacrifice_also_candidates(
+                ability.cost, controller_index, permanent, sacrifice_cost_permanent,
+            )
             if not candidates:
                 details = (
                     f"{permanent.card.name}: no "
@@ -2113,20 +1884,12 @@ class AbilityActivationMixin:
         # the picked tap cost above and paid with it below — one payment moment
         # (CR 601.2h). Nothing is picked: the attachment record is the whole
         # answer, so the only way this can fail is the Aura having no host or a
-        # host already tapped, and both refuse the activation with nothing paid
-        # (CR 602.2b) rather than tapping the Aura for nothing.
+        # host already tapped, and both are the cost gate's refusal above —
+        # nothing paid (CR 602.2b), never the Aura tapped for nothing.
         if ability.cost.tap_attached:
-            host = permanent.metadata.get("attached_to")
-            if host is None or not self.is_on_battlefield(host) or host.tapped:
-                details = (
-                    f"{permanent.card.name}: the permanent it is attached to "
-                    "cannot be tapped to pay its cost"
-                )
-                self.log.append(details)
-                return SimulationResult(
-                    permanent.card.name, False, "unsupported", details
-                )
-            tap_cost_permanents = [*tap_cost_permanents, host]
+            tap_cost_permanents = [
+                *tap_cost_permanents, permanent.metadata.get("attached_to"),
+            ]
 
         # "Exile a creature you control" (City of Shadows) / "Exile a creature
         # card from your graveyard" (Necropolis) — a *chosen* object rather than
@@ -2221,6 +1984,8 @@ class AbilityActivationMixin:
                 permanent.card.name, False, "unsupported", named_cost_refusal
             )
         if ability.cost.exile_filter is not None:
+            from ...ai_valuation import reads_what_its_cost_exiled
+
             exile_cost_choice = self._choose_exile_cost(
                 ability.cost, controller, controller_index, permanent,
                 # A card from hand (Cadaverous Bloom) is named where every
@@ -2236,6 +2001,9 @@ class AbilityActivationMixin:
                     (graveyard_target_before_cost.seat, target_permanent_index)
                     if graveyard_target_before_cost is not None else None
                 ),
+                # A plain price unless the effect reads what was exiled
+                # (Necropolis' "the exiled card's mana value").
+                price=not reads_what_its_cost_exiled((ability.instruction,)),
             )
             if exile_cost_choice is None:
                 details = (
@@ -3301,10 +3069,342 @@ class AbilityActivationMixin:
             return None
         return self._normalize_mana_color(mana_color)
 
+    # -- Whether an activation's cost can be paid at all ----------------------
+
+    def unpayable_activation_cost(
+        self, controller_index: int, permanent, ability, *,
+        x_value: int | None = None,
+    ) -> str | None:
+        """Why *ability*'s cost cannot be paid from this board, or None.
+
+        CR 601.2h, reached through CR 602.2b: "Unpayable costs can't be paid"
+        — and CR 118.3 says when a cost is unpayable: the payer lacks the
+        resources to pay it **fully**. So this asks, of every part of the
+        cost that is paid in something other than mana, whether the board
+        holds enough of that something: cards in the hand, the library and the
+        graveyard, life, counters, and the permanents a chosen cost names
+        (to sacrifice, tap, return, untap, put a counter on, take one off,
+        exile), the host an attached cost names, and the sacrifices a board
+        tax adds (Drought). Mana is the payment's own question, and a named
+        payment's legality is the announcement's (``_named_cost_refusal``).
+
+        **The activation path's one gate, and its readers ask it.** The path
+        calls this once, after its {T} checks and before it collects a single
+        cost — the words it returns are the ones it logs — and the AI's
+        chooser asks it before it proposes an activation. The chooser used to
+        ask about the costs it knew one at a time and none it did not, so it
+        proposed Grim Lavamancer's "Exile two cards from your graveyard" over
+        an empty graveyard every turn, and thirty other abilities like it
+        (``tests/ai/test_ai_activation_cost_census.py``). The cast side has
+        had this shape all along (``_unpayable_additional_cost``).
+
+        Pure: it spends nothing and moves nothing, so asking it costs a scan
+        and cannot leave a half-paid cost behind. *x_value* is the announced
+        X (CR 601.2b) a cost sized by X is held to; a caller announcing none
+        announces zero, the path's stated default.
+        """
+        from ...graveyard_order import positions_named
+        from ...named_counters import counters_on
+
+        cost = ability.cost
+        controller = self.players[controller_index]
+        name = permanent.card.name
+
+        # "Remove a <kind> counter from this creature" (Scavenging Ghoul), "…X
+        # charge counters" (Kyren Toy). "Any number of" and "all" are payable
+        # with none, since zero is a number and all of zero is zero.
+        if cost.remove_counter and cost.remove_counter_filter is None:
+            kind = cost.remove_counter
+            held = counters_on(permanent, kind)
+            wanted = cost.remove_counter_count
+            if wanted == "x":
+                total = max(0, int(x_value or 0))
+                if held < total:
+                    return (
+                        f"{name} has {held} {kind} counter(s), "
+                        f"fewer than the {total} announced for X"
+                    )
+            elif wanted not in ("any", "all") and held < int(wanted):
+                return f"{name} has no {kind} counters to remove"
+        # Jandor's Ring: a card drawn this turn still in hand.
+        if cost.discard_last_drawn and controller.last_card_drawn_this_turn() is None:
+            return f"{name}: no card drawn this turn remains in hand to discard"
+        # "Discard a card" / "Discard a land card or Shrine card". Naming the
+        # phrase when there is one: "not enough cards in hand" is a falsehood
+        # for a hand full of cards that simply do not answer it.
+        if cost.discard_cards and len(
+            self._discard_cost_payable(cost, controller)
+        ) < cost.discard_cards:
+            shortfall = (
+                "no card in hand answers this cost"
+                if cost.discard_filters
+                else "not enough cards in hand to discard"
+            )
+            return f"{name}: {shortfall}"
+        # "Exile the top creature card of your graveyard" (Necratog): the pile
+        # is scanned, so a graveyard with no creature card pays nothing.
+        if cost.exile_graveyard_position is not None and not positions_named(
+            controller.graveyard, cost.exile_graveyard_position
+        ):
+            return (
+                f"{name}: {controller.name}'s graveyard has "
+                f"nothing its cost can exile"
+            )
+        if cost.hand_to_library_top > len(controller.hand):
+            return (
+                f"{name}: {controller.name} has "
+                f"{len(controller.hand)} card(s) in hand and its cost puts "
+                f"{cost.hand_to_library_top} on top of their library"
+            )
+        if cost.exile_top_of_library > len(controller.library):
+            return (
+                f"{name}: {controller.name} has "
+                f"{len(controller.library)} card(s) left and its cost exiles "
+                f"{cost.exile_top_of_library}"
+            )
+        # CR 701.17b: a mill cost owes cards out of the pile the library
+        # exile above shares.
+        if getattr(cost, "mill_cards", 0) and (
+            cost.mill_cards + cost.exile_top_of_library > len(controller.library)
+        ):
+            return (
+                f"{name}: {controller.name} has "
+                f"{len(controller.library)} card(s) left and its cost mills "
+                f"{cost.mill_cards}"
+            )
+        # CR 119.4: life is paid only up to the total. The choice between a
+        # printed "or" is the payment's own (``activation_cost_choice``).
+        life_owed, _alternative = activation_cost_choice(controller, cost, permanent)
+        if life_owed and controller.life < life_owed:
+            return (
+                f"{name}: {controller.name} cannot pay "
+                f"{life_owed} life with {controller.life} remaining"
+            )
+        # The chosen sacrifice: "Sacrifice X lands" against the announced X,
+        # "Sacrifice two Goblins" against its printed count. "Any number of"
+        # is payable with none.
+        sacrifice_victim = None
+        if cost.sacrifice_filter is not None and cost.sacrifice_count == "x":
+            wanted = max(0, int(x_value or 0))
+            found = self._sacrifice_cost_candidates(
+                cost, controller_index, permanent, keep_source=True,
+            )
+            if len(found) < wanted:
+                return (
+                    f"{name}: {len(found)} "
+                    f"{filter_head_noun(cost.sacrifice_filter)}(s) to sacrifice, "
+                    f"fewer than the {wanted} announced for X"
+                )
+        elif (
+            cost.sacrifice_filter is not None
+            and cost.sacrifice_count != "any"
+            and ability.instruction is not None
+            and ability.instruction.kind not in COST_PERFORMING_KINDS
+        ):
+            found = self._sacrifice_cost_candidates(cost, controller_index, permanent)
+            noun = filter_head_noun(cost.sacrifice_filter)
+            if not found:
+                return f"{name}: no {noun} available to sacrifice"
+            wanted = cost.sacrifice_count if isinstance(cost.sacrifice_count, int) else 1
+            if len(found) < wanted:
+                return f"{name}: not enough {noun}s to sacrifice for its cost"
+            if wanted == 1:
+                sacrifice_victim = self.default_sacrifice_pick(found)
+        if cost.sacrifice_attached:
+            host = permanent.metadata.get("attached_to")
+            if host is None or not self.is_on_battlefield(host):
+                return (
+                    f"{name}: the permanent it is attached to "
+                    "cannot be sacrificed to pay its cost"
+                )
+        if cost.tap_count and len(
+            self._tap_cost_candidates(cost, controller_index)
+        ) < cost.tap_count:
+            return (
+                f"{name}: not enough untapped "
+                f"{filter_head_noun(cost.tap_filter or {})}s to tap for its cost"
+            )
+        if cost.return_to_hand_count and len(
+            self._return_cost_candidates(cost, controller_index)
+        ) < cost.return_to_hand_count:
+            return (
+                f"{name}: not enough "
+                f"{filter_head_noun(cost.return_to_hand_filter or {})}s to "
+                "return for its cost"
+            )
+        if cost.untap_filter is not None and not self._untap_cost_candidates(
+            cost, controller_index, permanent
+        ):
+            return (
+                f"{name}: no tapped "
+                f"{filter_head_noun(cost.untap_filter)} to untap for its cost"
+            )
+        if cost.put_counter_filter is not None and not self._put_counter_cost_candidates(
+            cost, controller_index, permanent
+        ):
+            return (
+                f"{name}: no {filter_head_noun(cost.put_counter_filter)} to put "
+                f"a {cost.put_counter} counter on"
+            )
+        if (
+            cost.remove_counter_filter is not None
+            and not self._remove_counter_cost_candidates(
+                cost, controller_index, permanent
+            )
+        ):
+            return (
+                f"{name}: no {filter_head_noun(cost.remove_counter_filter)} "
+                f"with a {cost.remove_counter} counter to remove"
+            )
+        # "Sacrifice a creature **and a Swamp**": the second must be another
+        # permanent than the one the first sacrifice takes.
+        if cost.sacrifice_also_filter is not None and not self._sacrifice_also_candidates(
+            cost, controller_index, permanent, sacrifice_victim,
+        ):
+            return (
+                f"{name}: no {filter_head_noun(cost.sacrifice_also_filter)} "
+                "available to sacrifice"
+            )
+        if cost.tap_attached:
+            host = permanent.metadata.get("attached_to")
+            if host is None or not self.is_on_battlefield(host) or host.tapped:
+                return (
+                    f"{name}: the permanent it is attached to "
+                    "cannot be tapped to pay its cost"
+                )
+        if cost.exile_filter is not None and self._choose_exile_cost(
+            cost, controller, controller_index, permanent, None,
+        ) is None:
+            return f"{name}: nothing available to exile as a cost"
+        # "Pay enchanted creature's mana cost" (Merseine): a host to read, and
+        # a printed cost this engine can spend.
+        if cost.mana_from_attached:
+            host = attached_host(self, permanent, last_known=False)
+            printed = None if host is None else (
+                getattr(host.card, "mana_cost", "") or ""
+            )
+            symbols = None if host is None else mana_cost_from_symbols(printed)
+            if host is None or (symbols is None and printed.strip()):
+                return (
+                    f"{name}: the mana cost it charges is the "
+                    "attached permanent's, and there is none to read"
+                )
+        # A sacrifice a board adds to the cost (Drought, Brutal Suppression).
+        victims = self._sacrifice_tax_victims(
+            controller_index,
+            sacrifice_taxes(self, controller_index, cost.mana, "activate", source=permanent),
+        )
+        if isinstance(victims, str):
+            return f"{name}: {victims} (CR 601.2h)"
+        return None
+
+    # The candidate lists a chosen cost is paid from. One list per cost for
+    # the gate above and for the payment's own pick in
+    # ``_activate_onto_stack``, so the two cannot count different sets.
+
+    @staticmethod
+    def _discard_cost_payable(cost, controller) -> list:
+        """The cards in hand a "Discard a <phrase>" cost may take."""
+        return [
+            card for card in controller.hand
+            if card_matches_any(card, cost.discard_filters)
+        ]
+
+    def _sacrifice_cost_candidates(
+        self, cost, controller_index: int, permanent, *, keep_source: bool = False,
+    ) -> list:
+        """What a "Sacrifice <noun phrase>" cost may take. "Sacrifice two lands
+        **and this artifact**" (Sandstone Deadfall) prints the source as its
+        own entry, so it cannot also be one of the chosen ones — unless
+        *keep_source*, the "Sacrifice X <noun phrase>" reading, which has
+        never excluded it."""
+        return [
+            perm for perm in self.controlled_by(controller_index)
+            if subject_matches(
+                self, perm, cost.sacrifice_filter,
+                observer=controller_index, source=permanent,
+            )
+            and (keep_source or not (cost.sacrifice_self and perm is permanent))
+        ]
+
+    def _tap_cost_candidates(self, cost, controller_index: int) -> list:
+        """What "Tap N untapped <noun phrase> you control" may tap: untapped by
+        construction, and the source only if the phrase names it."""
+        described = cost.tap_filter or {}
+        return [
+            perm for perm in self.controlled_by(controller_index)
+            if not perm.tapped and subject_matches(self, perm, described)
+        ]
+
+    def _return_cost_candidates(self, cost, controller_index: int) -> list:
+        """What "Return N <noun phrase> you control to their owner's hand" may
+        return."""
+        described = cost.return_to_hand_filter or {}
+        return [
+            perm for perm in self.controlled_by(controller_index)
+            if subject_matches(self, perm, described)
+        ]
+
+    def _untap_cost_candidates(self, cost, controller_index: int, permanent) -> list:
+        """What "Untap a tapped <noun phrase>" may untap — off every
+        battlefield, since the printed seat clause is what narrows it."""
+        return [
+            perm for perm in self.all_permanents()
+            if perm.tapped and subject_matches(
+                self, perm, cost.untap_filter,
+                observer=controller_index, source=permanent,
+            )
+        ]
+
+    def _put_counter_cost_candidates(
+        self, cost, controller_index: int, permanent,
+    ) -> list:
+        """What "Put a <kind> counter on a <noun phrase> you control" may mark."""
+        return [
+            perm for perm in self.controlled_by(controller_index)
+            if subject_matches(
+                self, perm, cost.put_counter_filter,
+                observer=controller_index, source=permanent,
+            )
+        ]
+
+    def _remove_counter_cost_candidates(
+        self, cost, controller_index: int, permanent,
+    ) -> list:
+        """What "Remove a <kind> counter from a <noun phrase> you control" may
+        take the counters off: the permanent must match **and** hold them."""
+        from ...named_counters import counters_on
+
+        wanted = cost.remove_counter_count
+        needed = int(wanted) if isinstance(wanted, int) else 1
+        return [
+            perm for perm in self.controlled_by(controller_index)
+            if subject_matches(
+                self, perm, cost.remove_counter_filter,
+                observer=controller_index, source=permanent,
+            )
+            and counters_on(perm, str(cost.remove_counter)) >= needed
+        ]
+
+    def _sacrifice_also_candidates(
+        self, cost, controller_index: int, permanent, victim,
+    ) -> list:
+        """What the *second* object of a conjoined sacrifice may be: anything
+        the phrase names except the permanent the first sacrifice takes."""
+        return [
+            perm for perm in self.controlled_by(controller_index)
+            if subject_matches(
+                self, perm, cost.sacrifice_also_filter,
+                observer=controller_index, source=permanent,
+            )
+            and perm is not victim
+        ]
+
     def _choose_exile_cost(
         self, cost, controller, controller_index: int, permanent,
         cost_permanent_index, cost_permanent_ids=None,
         cost_graveyard_indices=None, spare_graveyard_slot=None,
+        price: bool = False,
     ) -> "tuple | None":
         """What an "Exile <noun phrase>" activation cost will eat, chosen and
         **not yet paid** — or None when nothing in the named zone could pay,
@@ -3331,7 +3431,12 @@ class AbilityActivationMixin:
 
         The named choice is honoured where it is legal and otherwise the first
         eligible object is taken, which is what every other cost payment in this
-        file does for a non-interactive seat.
+        file does for a non-interactive seat. *price* says the cards out of the
+        payer's own graveyard are a plain payment — the effect does not read
+        which they were (``ai_valuation.reads_what_its_cost_exiled``) — and then
+        "first" is the least valuable (``ai_valuation.graveyard_price_order``):
+        Grim Lavamancer gave up the bottom two cards of its pile, a flashback
+        spell as soon as a land.
         """
         described = cost.exile_filter or {}
         # "Exile **any number of** cards from your graveyard" (Painbringer):
@@ -3426,6 +3531,12 @@ class AbilityActivationMixin:
                 # lets the cost be paid with it, and the ability then has no
                 # legal target (CR 608.2b).
                 default_order = slots
+                if price and pile is controller:
+                    from ...ai_valuation import graveyard_price_order
+
+                    default_order = graveyard_price_order(
+                        self, controller_index, slots,
+                    )
                 if (
                     spare_graveyard_slot is not None
                     and pile is self.players[spare_graveyard_slot[0]]
