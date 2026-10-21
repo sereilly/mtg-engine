@@ -6148,6 +6148,14 @@ class LegalityMixin:
                     observer=caster_index, source=source_permanent,
                 ):
                     continue
+                # "…with power **less than the number of cards in your
+                # graveyard**" (Temporary Insanity). The seat-relative bound
+                # beside it, asked the same way: "your" is the seat choosing.
+                if spec.get("power_vs_count") and not subject_matches(
+                    self, perm, {"power_vs_count": spec["power_vs_count"]},
+                    observer=caster_index,
+                ):
+                    continue
                 # "…to **another** target creature" on an Aura (Farrel's
                 # Mantle): the creature excluded is the one the source is
                 # attached to, which is the one that will deal the damage.

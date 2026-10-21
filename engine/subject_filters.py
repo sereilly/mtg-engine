@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING
 
 from .handlers._common import (CHOSEN_CARD_TYPE, _comparison_holds,
                                _resolve_chosen_card_type, _resolve_chosen_color,
+                               evaluate_count,
                                _resolve_chosen_keyword,
                                _resolve_chosen_subtype,
                                permanent_matches_filter)
@@ -123,6 +124,12 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # clause nobody could read, and the lowering refuses the line before it
     # can happen on a board sweep.
     "power_greater_than_cards_in_hand",
+    # "target creature with power **less than the number of cards in your
+    # graveyard**" (Temporary Insanity). The bound above over any of the
+    # observer's piles: testable here and nowhere else, and a caller with no
+    # observer answers no — on a *target* that is a creature the spell cannot
+    # be aimed at rather than one it reaches past the printed clause.
+    "power_vs_count",
     "nontoken", "named", "supertypes",
     # "…a creature with flying **not named Escaped Shapeshifter**". Two keys
     # for one printed phrase, because the two front ends leave the name in two
@@ -1006,6 +1013,23 @@ def subject_matches(
         if seat is None or not (0 <= seat < len(game.players)):
             return False
         if int(obj.effective_power) <= len(game.players[seat].hand):
+            return False
+    # "…with power **less than the number of cards in your graveyard**"
+    # (Temporary Insanity). The hand bound above over any pile of the
+    # observer's, counted by the one evaluator every "the number of cards in
+    # your graveyard" reaches (``evaluate_count``) and compared against the
+    # computed power (CR 613 layer 7). Asked as the spell is announced and
+    # again as it resolves (CR 608.2b), so a graveyard that shrank in between
+    # makes the target illegal.
+    pile_bound = described.get("power_vs_count")
+    if pile_bound is not None:
+        described = {k: v for k, v in described.items() if k != "power_vs_count"}
+        if observer is None or not (0 <= observer < len(game.players)):
+            return False
+        count = evaluate_count(game, game.players[observer], dict(pile_bound["count"]))
+        if not _comparison_holds(
+            {"op": pile_bound["op"], "value": count}, int(obj.effective_power)
+        ):
             return False
     relative = described.get("characteristic_vs_source")
     if relative:

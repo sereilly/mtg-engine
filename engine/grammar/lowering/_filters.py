@@ -173,6 +173,11 @@ _PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
     # well: the same false refusal ``owner``, ``any_classes``, ``token_only``
     # and ``subtype_match`` above were each added to end.
     "power_greater_than_cards_in_hand",
+    # "…with power **less than the number of cards in your graveyard**"
+    # (Temporary Insanity). The hand bound above over any of the controller's
+    # piles, on its footing exactly: emitted whenever set, answered by
+    # ``subject_matches`` with the observer's seat.
+    "power_vs_count",
     # "…**except for basic lands**" / "…**other than a basic land**" (Eye of
     # Singularity's two lines). ``to_payload`` emits it as
     # ``exclude_basic_lands`` and the pure matcher tests it off the printed type

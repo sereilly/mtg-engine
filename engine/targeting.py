@@ -539,6 +539,16 @@ def _narrowing_flags(source: dict) -> dict:
     # Strike offered (and its announcement gate admitted) a blocked creature.
     if source.get("unblocked_only"):
         flags["unblocked_attacker"] = True
+    # "Untap target creature **with power less than the number of cards in your
+    # graveyard**" (Temporary Insanity). Carried by value on the spec root
+    # beside ``cast_by_you_this_turn`` and for its reason: the bound is a count
+    # of the *choosing seat's* pile, so the enumerator answers it with the
+    # observer it holds — under ``filter`` it would be asked with none and
+    # offer nothing. CR 601.2c's gate and CR 608.2b's re-check read this spec,
+    # so a graveyard that shrank in response makes the target illegal.
+    pile_bound = source.get("power_vs_count")
+    if pile_bound:
+        flags["power_vs_count"] = dict(pile_bound)
     # Carried by value, not flattened to a flag: "attacking or blocking" and
     # "tapped or blocking" are the same key with different words in it, and a
     # bare True would tell the picker a union applies without saying which one.

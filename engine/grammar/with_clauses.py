@@ -75,6 +75,7 @@ from __future__ import annotations
 
 from .bounds import (accept_cards_in_hand_bound,
                      accept_comparative_characteristic,
+                     accept_pile_count_bound,
                      accept_counters_on_it_bound, accept_source_counter_bound,
                      accept_source_relative_comparison, accept_superlative,
                      parse_comparison)
@@ -182,6 +183,16 @@ def accept_with_clause(stream: TokenStream, d, parse_filter) -> bool | None:
             hand_bound = accept_cards_in_hand_bound(stream)
             if hand_bound is not None:
                 d.power_greater_than_cards_in_hand = hand_bound
+                return True
+            # "…with power **less than the number of cards in your
+            # graveyard**" (Temporary Insanity). The hand bound above over
+            # any of the controller's piles and any comparison, read before
+            # ``parse_comparison`` for the same reason: that reader opens on a
+            # quantity and would refuse the words naming the one thing the
+            # phrase does not contain.
+            pile_bound = accept_pile_count_bound(stream)
+            if pile_bound is not None:
+                d.power_vs_count = pile_bound
                 return True
             d.power = parse_comparison(stream)
             return True

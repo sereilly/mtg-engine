@@ -782,6 +782,9 @@ _COVERED_ELSEWHERE = {
     # --- ODY W1G9 ---
     "attached_to_permanent":
         "test_ody_w1g9_attached_to_a_permanent_rejects_an_attachment_on_nothing",
+    # --- TOR W1G2 ---
+    "power_vs_count":
+        "test_tor_w1g2_a_power_bound_counts_the_observer_s_own_pile",
 }
 
 
@@ -2576,3 +2579,52 @@ def test_apc_w1g9_observer_source_filter_is_the_rung_between_the_two_gates():
     assert observer_source_filter(
         {"controller_controls": {"controller": "defending_player"}}
     ) is None, "a nested phrase is asked the same question"
+
+
+def test_tor_w1g2_a_power_bound_counts_the_observer_s_own_pile(pool):
+    """"Untap target creature with power **less than the number of cards in
+    your graveyard**…" (Temporary Insanity.)
+
+    The hand bound one test up over any of the observer's piles, counted by
+    ``evaluate_count`` — the evaluator every "the number of cards in your
+    graveyard" reaches — and compared against the computed power. "Your" is
+    the observer's pile and nobody else's, and a caller with no observer
+    narrows to nothing: on a target that is a creature the spell cannot be
+    aimed at, rather than one it reaches past the printed clause.
+    """
+    from engine.handlers._common import permanent_matches_filter
+    from engine.pt import add_pt_modifier
+
+    lions = Permanent(card=pool["Savannah Lions"])   # 2/1
+    game = Game(players=[
+        PlayerState(name="P1", graveyard=[pool["Forest"]] * 2),
+        PlayerState(
+            name="P2", battlefield=[lions], graveyard=[pool["Forest"]] * 9,
+        ),
+    ])
+    described = {
+        "type_filter": "creature",
+        "power_vs_count": {
+            "op": "lt",
+            "count": {"zone": "graveyard", "owner": "you", "filter": {}},
+        },
+    }
+
+    assert not subject_matches(game, lions, described, observer=0), (
+        "power 2 against a graveyard of 2 is not *less* than it"
+    )
+    assert subject_matches(game, lions, described, observer=1), (
+        "the other seat's nine cards are its own pile, not P1's"
+    )
+    game.players[0].graveyard.append(pool["Forest"])
+    assert subject_matches(game, lions, described, observer=0), "three cards now"
+    assert not subject_matches(game, lions, described), (
+        "with no observer there is no pile to count"
+    )
+    add_pt_modifier(lions, 1, 0)
+    assert not subject_matches(game, lions, described, observer=0), (
+        "CR 613 layer 7: pumped to 3, at the bound again"
+    )
+    assert not permanent_matches_filter(lions, described), (
+        "the pure half refuses the key rather than ignoring it"
+    )

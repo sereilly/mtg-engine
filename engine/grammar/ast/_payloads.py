@@ -333,6 +333,23 @@ def object_filter_payload(self: "ObjectFilter") -> dict[str, object]:
     if self.power_greater_than_cards_in_hand is not None:
         key = "power_greater_than_cards_in_hand"
         payload[key] = self.power_greater_than_cards_in_hand
+    # "…with power **less than the number of cards in your graveyard**"
+    # (Temporary Insanity). Always emitted when set, for the counter bounds'
+    # reason above. The count rides in the spelling every other reader of "the
+    # number of cards in your graveyard" already hands ``evaluate_count``
+    # (Ghastly Demise's ``count_from``): zone, whose, and the card phrase — the
+    # parse admits only a pile of the controller's own cards narrowed by type,
+    # so the inner payload is exactly what ``count_spec`` would write for it.
+    if self.power_vs_count is not None:
+        counted = self.power_vs_count.value.filter
+        payload["power_vs_count"] = {
+            "op": self.power_vs_count.op,
+            "count": {
+                "zone": counted.zone,
+                "owner": counted.zone_owner.kind,
+                "filter": counted.to_payload(),
+            },
+        }
     # "with power 4 or greater" (Turret Ogre's intervening-if). Same rule
     # as mana_value: a literal bound rides the payload and the matcher
     # tests it against the layer-computed stat; a variable bound stays

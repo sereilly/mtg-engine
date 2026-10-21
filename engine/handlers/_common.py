@@ -2262,6 +2262,12 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     # the combat maps and strips the key before asking here.
     if payload.get("in_combat_with_source"):
         return False
+    # "…with power **less than the number of cards in your graveyard**"
+    # (Temporary Insanity). A count of the *observer's* pile, which this pure
+    # half is handed no seat to read; ``subject_matches`` holds the observer,
+    # answers it and strips the key before asking here.
+    if payload.get("power_vs_count"):
+        return False
     # "creatures that didn't attack this turn" / "…except for creatures that
     # couldn't attack" (Season of the Witch). Both are per-turn records stamped
     # on the permanent itself — the first by the declaration, the second by the
