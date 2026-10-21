@@ -1316,6 +1316,36 @@ def offer_trade(steps) -> OfferTrade | None:
     return None
 
 
+def offer_buys_a_drawback_to_its_source(steps) -> bool:
+    """Whether everything an offer's accept branch buys, past the action the
+    seat is asked to take, acts against the ability's own source.
+
+    The drawback a card prints when it lets *anybody* buy something off it:
+    "any player may exile a card from their graveyard. If a player does,
+    **this creature assigns no combat damage this turn**" (Carrion Rats),
+    "…If a player does, **put this creature on top of its owner's library**"
+    (Argothian Wurm). Read through the two sets
+    :func:`harms_its_own_source` already reads — a removal or a hamper of the
+    source — plus the one hamper only an offer prints, the combat-damage mark,
+    and only on the source itself: on the permanent an Aura is attached to
+    (Cloak of Confusion), or one a delay bound, it carries a ``subject`` and is
+    somebody else's creature.
+
+    *steps* is the branch as ``_offer_to_seat`` builds it — the offered action
+    first, then what follows from taking it (:func:`offered_action_is_a_payment`
+    reads the same order).
+    """
+    rest = [step for step in steps if getattr(step, "kind", None)][1:]
+    drawbacks = (
+        SOURCE_REMOVAL_KINDS | SOURCE_HAMPER_KINDS
+        | {"assign_no_combat_damage_until_eot"}
+    )
+    return bool(rest) and all(
+        step.kind in drawbacks and not (step.payload or {}).get("subject")
+        for step in rest
+    )
+
+
 #: The alternatives whose whole effect is to give one permanent a keyword, or
 #: take one away, and whose recipient a resolution context names: the source
 #: itself, or the object the ability was announced with (CR 602.2b).
@@ -4702,6 +4732,7 @@ __all__ = [
     "has_a_creature_to_fight_with",
     "hand_pick_entry_consumer",
     "instruction_target_side",
+    "offer_buys_a_drawback_to_its_source",
     "offer_trade",
     "offered_action_is_a_payment",
     "permanent_worth",

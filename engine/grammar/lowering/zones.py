@@ -35,7 +35,7 @@ from ...damage_deaths import DAMAGED_BY_SOURCE_DIED
 from ._deaths import BOUND_CARD_EVENTS
 from ._described_returns import _graveyard_to_hand_payload
 from ._events import binds_block_pair
-from ._piles import _chosen_graveyard_cards
+from ._piles import _chosen_graveyard_cards, one_card_pile_pick
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS, dropped_narrowings, _describe_several_targets,
     _describe_targets, _filter_payload, _is_source, _is_target,
@@ -246,6 +246,22 @@ def _lower_put_on_library_bottom(node: ast.PutOnLibraryBottom) -> tuple[OracleIn
     spec = node.target
     if node.to_owner == "owner":
         return _lower_permanent_on_library_bottom(node)
+    if (
+        isinstance(spec, ast.TargetSpec) and not spec.targeted
+        and spec.quantifier in ("a", "an") and spec.filter.is_card
+        and spec.filter.zone == "graveyard"
+        and getattr(spec.filter.zone_owner, "kind", None) == "you"
+    ):
+        # "…unless you put **two cards from your graveyard** on the bottom of
+        # your library" (Gurzigost). Chosen as it resolves rather than
+        # targeted, so it is the graveyard exile's pick with the other
+        # destination: the same payload builder, the handler arms the same
+        # prompt and the bottom is the one thing that differs.
+        chosen = one_card_pile_pick(spec.filter, "you", node)
+        chosen["count"] = int(spec.count)
+        return (OracleInstruction(
+            "put_chosen_graveyard_cards_on_library_bottom", "", chosen,
+        ),)
     if not isinstance(spec, ast.TargetSpec) or not _is_target(spec):
         raise LoweringError("the bottoming handler reads one chosen card", node=node)
     filt = spec.filter

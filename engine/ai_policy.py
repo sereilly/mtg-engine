@@ -53,6 +53,7 @@ from .ai_valuation import (
     is_mana_ability,
     mana_ability_amount,
     mana_ability_symbols,
+    offer_buys_a_drawback_to_its_source,
     offer_trade,
     planned_mana_yield,
     role_target_sides,
@@ -7564,6 +7565,45 @@ def offer_trade_is_worth_taking(
     if (trade.price, trade.purchase) == ("card", "untap_source"):
         return False
     return None
+
+
+def offer_buys_own_drawback(game: Game, player_index: int, entry: dict) -> bool:
+    """Whether a seat nobody asks would, by taking this offer, buy the
+    drawback its **own** permanent prints.
+
+    "Whenever this creature attacks or blocks, any player may exile a card
+    from their graveyard. If a player does, this creature assigns no combat
+    damage this turn." (Carrion Rats.) The offer goes to every seat in turn
+    and what it buys is a loss for whoever controls the source — so that seat
+    declines, whatever the price, and every other seat is left to the standing
+    policy. Exiling a card from one's own graveyard reads as no payment
+    (``offered_action_is_a_payment``), so before this the attacker took the
+    offer and blanked its own Rats every combat. ``chained_toll_declined``
+    makes the same call for a *chain* link's paid branch; this is the per-seat
+    offer's twin, read off the compiled branch
+    (``ai_valuation.offer_buys_a_drawback_to_its_source``).
+
+    **Only an offer put to a set of seats.** "You may put the top creature
+    card of defending player's graveyard onto the battlefield under your
+    control. If you do, this creature assigns no combat damage this turn."
+    (Bone Dancer.) Offered to its controller alone, the same drawback is the
+    *price* of what the action takes, and that trade is the card — the
+    reading only holds where the card lets anybody buy the drawback.
+    """
+    source = entry.get("_source_permanent")
+    if (
+        source is None
+        or entry.get("_offered_actor") not in _SEAT_SET_OFFERS
+        or not offer_buys_a_drawback_to_its_source(entry.get("_on_accept") or ())
+    ):
+        return False
+    return game.controller_index_of(source) == player_index
+
+
+#: The printed actors that put one offer to every seat of a set
+#: (``handlers/control_flow._offered_seats``) — "any player may …" reaches the
+#: AST as ``each_player``.
+_SEAT_SET_OFFERS = frozenset({"each_player", "each_opponent"})
 
 
 def chained_toll_declined(game: Game, player_index: int, entry: dict) -> bool:

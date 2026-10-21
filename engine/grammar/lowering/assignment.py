@@ -72,6 +72,16 @@ def _lower_assigns_combat_damage_as_unblocked(
         _describe_several_targets(payload, node.subject)
     elif _is_target(node.subject):
         _describe_targets(payload, node.subject)
+    elif _is_source(node.subject):
+        # "{G}{G}, Discard a card: You may have **this creature** assign its
+        # combat damage this turn as though it weren't blocked." (Gurzigost.)
+        # The same mark on the ability's own source. The "may" is the offer
+        # around this node and it is answered as the ability resolves — "You
+        # decide how it will assign its damage at the time the ability
+        # resolves. This will be prior to actually assigning combat damage."
+        # (Gurzigost ruling, 2008-04-01) — so what a "yes" buys is the
+        # restriction, with nothing left to decline at the damage step.
+        payload["subject"] = "source"
     else:
         raise LoweringError(
             "the assign-as-though-unblocked mark reaches the creatures the "

@@ -9090,6 +9090,39 @@ def put_graveyard_card_on_library_bottom(game: Game, instruction: OracleInstruct
     return True, "resolved"
 
 
+#: The destination a graveyard pick moves its cards to when it is not exile:
+#: the bottom of the pile owner's library. Rides the pick's payload and its
+#: prompt (``Game.arm_graveyard_exile_pick``), so the client can say where the
+#: cards are going and the one answer path knows where to put them.
+GRAVEYARD_PICK_TO_LIBRARY_BOTTOM = "library_bottom"
+
+
+@effect_handler("put_chosen_graveyard_cards_on_library_bottom")
+def put_chosen_graveyard_cards_on_library_bottom(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """"…sacrifice this creature unless you **put two cards from your
+    graveyard on the bottom of your library**." (Gurzigost; Anurid Scavenger
+    with one.)
+
+    The targeted bottoming above with nothing announced: the seat picks the
+    cards as this resolves, out of its own pile, through the prompt the
+    graveyard exile's pick already is — the payload says which cards may be
+    picked and how many, and ``destination`` says where they go. With no
+    prompt to ask (a headless or AI seat), the pick's stated default is taken
+    where it is armed. The offer in front of this is what refuses a pile too
+    small to pay (``control_flow._action_is_takeable``), so a seat reaching
+    here holds enough.
+    """
+    seat = game.players.index(context.caster)
+    game.arm_graveyard_exile_pick(
+        seat, seat,
+        {**instruction.payload, "destination": GRAVEYARD_PICK_TO_LIBRARY_BOTTOM},
+        context,
+    )
+    return True, "resolved"
+
+
 @effect_handler("put_top_of_graveyard_on_library_bottom")
 def put_top_of_graveyard_on_library_bottom(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Put the top card of your graveyard on the bottom of your library."

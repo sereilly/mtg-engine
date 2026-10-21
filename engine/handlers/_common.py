@@ -2031,6 +2031,25 @@ def excluded_graveyard_slot(spec: dict, graveyard, source_card) -> int | None:
     )
 
 
+def graveyard_slots_matching(spec: dict, graveyard, source_card=None) -> list[int]:
+    """The slots of *graveyard* an unannounced pick described by *spec* may
+    take: every card :func:`graveyard_card_matches` admits, less the one slot
+    :func:`excluded_graveyard_slot` takes out for a printed "other than this
+    card" (Ichorid).
+
+    The pick prompt and the takeability gate in front of its offer both ask
+    this, so a pile the offer says can pay is the pile the prompt then offers
+    — the gate counting the source's own slot would offer Ichorid's exile over
+    a graveyard holding nothing but Ichorid, and the pick would then have
+    nothing to take while "if you do" returned it anyway.
+    """
+    excluded = excluded_graveyard_slot(spec, graveyard, source_card)
+    return [
+        index for index, card in enumerate(graveyard)
+        if index != excluded and graveyard_card_matches(spec, card)
+    ]
+
+
 #: What each printed state adjective asks of a permanent. One table, because
 #: the union above and the singular narrowings below it are the same words —
 #: two readers would be two answers to "is this creature blocking?".

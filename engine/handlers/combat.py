@@ -1903,6 +1903,22 @@ def assign_as_unblocked_until_eot(
     """
     from ..subject_filters import subject_matches
 
+    if instruction.payload.get("subject") == "source":
+        # "You may have **this creature** assign its combat damage this turn
+        # as though it weren't blocked." (Gurzigost, the offer answered yes.)
+        # The ability's own source, while it is still on the battlefield: a
+        # creature that left and came back is a new object (CR 400.7) and
+        # this ability is not about it.
+        source = context.source_permanent
+        if source is None or not game.is_on_battlefield(source):
+            game.log.append(f"{context.card.name}: nothing left to mark")
+            return True, "resolved"
+        source.metadata[MUST_ASSIGN_AS_UNBLOCKED] = True
+        game.log.append(
+            f"{source.card.name} assigns combat damage as though unblocked "
+            f"this turn ({context.card.name})"
+        )
+        return True, "resolved"
     filters = (instruction.payload.get("targets") or {}).get("filter") or {}
     observer = (
         game.players.index(context.caster)
