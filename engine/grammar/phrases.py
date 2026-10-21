@@ -40,13 +40,14 @@ from dataclasses import replace
 
 from ..pt import pt_counter_deltas
 from . import ast
-from .amounts import (accept_counter_kind, accept_counters_on_event_subject,
+from .amounts import (accept_counters_on_event_subject,
                       accept_counters_on_source, parse_amount)
 from .durations import _parse_duration
 from .errors import GrammarError
 from .lexer import NUMBER, GToken, tokenize
 from .distinct import parse_counted_objects
 from .nouns import parse_object_filter
+from .readers import accept_counter_kind
 # Re-exported under the name this module's callers already use — the
 # arrangement `readers` documents for the fragments it holds.
 from .readers import _identifies_one_object  # noqa: F401
@@ -650,7 +651,7 @@ def _expect_counter_kind(stream: TokenStream, suffix: str = "") -> GToken:
     them rather than being frozen into one shared list here.
 
     **What** a counter kind is spells out once, in
-    ``amounts.accept_counter_kind``; this function is that reading plus the one
+    ``readers.accept_counter_kind``; this function is that reading plus the one
     thing that made it a separate copy — the refusal. Four modules had written
     the same three-line probe, and each of them was a place the next spelling of
     a kind could be forgotten in only three of the four.

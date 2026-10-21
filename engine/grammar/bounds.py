@@ -37,6 +37,20 @@ sentence that reads it back ("…tied for least toughness") is a *bound* on the
 same quantity by the same words, and one reader for both is what stops the noun
 phrase and its tie-break sentence disagreeing about which characteristic was
 printed.
+
+**The two counter bounds came home at Torment's Phase 0.**
+:func:`accept_source_counter_bound` and :func:`accept_counters_on_it_bound`
+(Wave of Terror, Legacy's Allure, Corrosion) compare a characteristic against
+a count of counters, which is this module's subject word for word — and
+:func:`accept_cards_in_hand_bound` has called them "the two counter bounds
+beside it" since it came up here. They were not beside it. They left
+`postmodifiers` for ``amounts`` the day before Exodus cut this module out of
+``amounts``, and that cut took "those two sections whole", the comparisons and
+the caps, while the counter bounds sat in a third section beside the counter
+counts and stayed behind. The sentence had been true in `postmodifiers`, where
+it was written beside their callers. They read the source through
+``readers.accept_source_reference`` at module level: the call-time import from
+``nouns`` they carried in ``amounts`` would be an upward import from here.
 """
 
 from __future__ import annotations
@@ -44,6 +58,7 @@ from __future__ import annotations
 from . import ast
 from .amounts import parse_amount
 from .lexer import MANA, WORD
+from .readers import accept_source_reference
 from .stream import TokenStream
 from .vocabulary import NUMBER_WORDS
 
@@ -375,6 +390,82 @@ __all__ = [
     "accept_target_bound",
     "accept_source_relative_comparison", "parse_comparison",
 ]
+
+
+#: The three readers below all delimit one printed phrase — "the number of
+#: <kind> counters on <somewhere>" — and differ only in the operator in front of
+#: it and in whose pile it names. They sit together for that reason: the fork
+#: they were is what a fragment fork always is, three readers of one sentence in
+#: three modules, and the second one to be extended is the moment it shows.
+def _accept_counter_count(
+    stream: TokenStream, *, comparison: tuple[str, ...], on_source: bool,
+) -> str | None:
+    """``<comparison> the number of <kind> counters on <referent>``, as the
+    counter's printed name — or None with the cursor exactly where it was.
+
+    *on_source* picks the referent, and it is the whole difference between the
+    two bounds this serves: the ability's own **source** (Wave of Terror,
+    Legacy's Allure), read through ``accept_source_reference`` so a card naming
+    itself needs no code, against a bare "it" (Corrosion), which names the
+    object being tested. They are different piles, so a reader that admitted
+    either would answer one card's phrase with the other card's count — which
+    is why "it" is refused outright by the source form rather than falling
+    through to it.
+
+    Refuses without consuming, so "with mana value 3 or less" keeps its own
+    reading.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase(*comparison, "the", "number", "of"):
+        stream.reset(mark)
+        return None
+    kind = stream.peek_word()
+    if kind is None:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if not stream.accept_phrase("counters", "on"):
+        stream.reset(mark)
+        return None
+    if on_source:
+        if stream.at_word("it") or not accept_source_reference(stream):
+            stream.reset(mark)
+            return None
+    elif not stream.accept_word("it"):
+        stream.reset(mark)
+        return None
+    return kind
+
+
+def accept_source_counter_bound(
+    stream: TokenStream, *, comparison: tuple[str, ...] = ("equal", "to"),
+) -> str | None:
+    """``<comparison> the number of <kind> counters on <this permanent>``
+    — "with mana value **equal to** …" (Wave of Terror), "with power **less
+    than or equal to** …" (Legacy's Allure).
+
+    *comparison* is the caller's, because the caller is what knows which field
+    the answer lands in: the two operators bound different characteristics and
+    reach different matchers. Reading either here and returning only the kind
+    would let one card's operator be tested as the other's — a narrowing
+    silently widened, on a phrase whose whole job is to narrow.
+    """
+    return _accept_counter_count(stream, comparison=comparison, on_source=True)
+
+
+def accept_counters_on_it_bound(stream: TokenStream) -> str | None:
+    """``less than or equal to the number of <kind> counters on it``
+    (Corrosion).
+
+    The bound above with the pronoun in place of the source. "On **it**" is
+    required: that word is the whole difference between a count on the object
+    being tested and a count on the ability's own permanent.
+    """
+    return _accept_counter_count(
+        stream,
+        comparison=("less", "than", "or", "equal", "to"),
+        on_source=False,
+    )
 
 
 def accept_cards_in_hand_bound(stream: TokenStream) -> str | None:

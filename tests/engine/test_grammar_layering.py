@@ -145,12 +145,13 @@ PARSE_LAYERS = [
     #
     # Above `records`, which it reads for Temper's leading "for each 1 damage
     # prevented this way", and not *in* it: every production there answers
-    # "how many?" with an `Amount` where this returns a whole rider, and
-    # `amounts` imports `records` at module level, so reaching
-    # `amounts.accept_counter_kind` from inside `records` would close the very
-    # cycle that module's split removed. No mirror name to reuse — the rider
-    # rides on `ast.PreventDamage.prevented_rider` and lowers inside the shield
-    # lowering, so the lowering side has no module of its own to fork.
+    # "how many?" with an `Amount` where this returns a whole rider. (The
+    # second reason this gave — that reaching `accept_counter_kind` from inside
+    # `records` would close a cycle through `amounts` — went when that reader
+    # came down to `readers` at Torment's Phase 0.) No mirror name to reuse —
+    # the rider rides on `ast.PreventDamage.prevented_rider` and lowers inside
+    # the shield lowering, so the lowering side has no module of its own to
+    # fork.
     "prevented_riders",
     # An ability on the stack (CR 113.7a) has no card and no type line, so it
     # shares no vocabulary with the filter parser that reads one. Below

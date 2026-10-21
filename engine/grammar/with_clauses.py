@@ -73,15 +73,15 @@ draft, the filter and the payload alike.
 
 from __future__ import annotations
 
-from .amounts import (accept_counter_kind, accept_counters_on_it_bound,
-                      accept_source_counter_bound)
 from .bounds import (accept_cards_in_hand_bound,
                      accept_comparative_characteristic,
+                     accept_counters_on_it_bound, accept_source_counter_bound,
                      accept_source_relative_comparison, accept_superlative,
                      parse_comparison)
 from .lexer import PT
 from .names import accept_name_comparison, accept_original_expansion
-from .readers import _parse_keyword_list, _protection_quality
+from .readers import (_parse_keyword_list, _protection_quality,
+                      accept_counter_kind)
 from .stream import TokenStream
 
 
