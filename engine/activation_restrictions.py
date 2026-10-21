@@ -113,6 +113,16 @@ class ActivationRestriction:
     #: the activation path in ``mixins/stack/activation.py`` ask one question
     #: of one key.
     functions_from: str | None = None
+    #: Whether the clause is a fact about **the board** that can be asked at
+    #: any moment — not about timing or priority. "Activate only if you control
+    #: a Swamp" (the Tainted lands) is one; "Activate only as an instant"
+    #: (Rhystic Cave) is not, because CR 304.5 makes it "the player must have
+    #: priority". The tap-for-mana seam runs a mana ability part-way through a
+    #: payment, with nobody holding priority (CR 601.2g), and may run one only
+    #: when every clause it prints is of this kind — asking it there
+    #: (``Game.land_mana_tap_refusal``) rather than leaving it to the
+    #: activation path (:func:`restrictions_askable_mid_payment`).
+    askable_mid_payment: bool = False
 
 
 def _as_a_sorcery(game: "Game", controller_index: int, source) -> bool:
@@ -1522,6 +1532,7 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
         "that clause's board condition is not met",
         reads_payload=True,
         payload_readable=_readable_controlled_board,
+        askable_mid_payment=True,
     ),
     ActivationRestriction(
         re.compile(
@@ -2265,6 +2276,32 @@ def prints_activation_restriction(ability_text: str) -> bool:
     that gate's question, not this one's.
     """
     return bool(_clauses(ability_text))
+
+
+def restrictions_askable_mid_payment(
+    ability_text: str, card_name: str | None = None,
+) -> bool:
+    """Whether every "Activate only …" clause *ability_text* prints is a row
+    marked :attr:`ActivationRestriction.askable_mid_payment` — a board
+    condition the tap seam can ask itself (:func:`activation_denial` answers
+    it) — so the ability may be run there rather than only through the
+    activation path. False for a line printing none: that question is
+    :func:`prints_activation_restriction`'s.
+
+    "{T}: Add {W} or {B}. Activate only if you control a Swamp." (Tainted
+    Field.) The tap seam refused every ability printing a clause, so the
+    land's coloured ability was unreachable by a tap, by the payment planner
+    and by the castable highlight alike, Swamp or no Swamp: the land made
+    {C} and nothing else unless its second ability was activated by index.
+    """
+    clauses = _clauses(ability_text, card_name)
+    if not clauses:
+        return False
+    for clause in clauses:
+        found = _matching_entry(clause.rstrip("."))
+        if found is None or not found[0].askable_mid_payment:
+            return False
+    return True
 
 
 def activation_denial(game, controller_index: int, source, ability_text: str) -> str | None:

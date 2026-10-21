@@ -1002,24 +1002,38 @@ def spell_hand_pick_entry_filters(card: CardDefinition) -> tuple[dict, ...]:
     Gambit's "each player" makes it worse than nothing: the opponent's pick is
     the only one that can enter. Asked before the cast for that reason.
     """
-    filters: list[dict] = []
+    return tuple(entry["card_filter"] for entry in spell_hand_pick_entries(card))
+
+
+def spell_hand_pick_entries(card: CardDefinition) -> tuple[dict, ...]:
+    """:func:`spell_hand_pick_entry_filters` whole: each such pick's
+    :func:`hand_pick_entry_consumer` answer, with the record the pick writes
+    under (``result_key``) beside it.
+
+    The pick is a "choose a card in your hand" step **or a reveal of one**
+    ("Reveal a card in your hand, then put that card onto the battlefield if
+    it has the same name as a permanent", Retraced Image) — one prompt, two
+    printed verbs. A consumer's ``guard`` is read against the record the pick
+    writes, so a caller asks it of a held card by handing that card in under
+    ``result_key``.
+    """
+    entries: list[dict] = []
 
     def walk(instructions) -> None:
         for instruction in instructions:
             payload = instruction.payload or {}
-            if instruction.kind == "choose_cards_in_hand":
-                consumer = hand_pick_entry_consumer(
-                    card, str(payload.get("result_key") or "chosen_hand_cards")
-                )
+            if instruction.kind in ("choose_cards_in_hand", "reveal_cards_from_hand"):
+                key = str(payload.get("result_key") or "chosen_hand_cards")
+                consumer = hand_pick_entry_consumer(card, key)
                 if consumer is not None:
-                    filters.append(consumer["card_filter"])
+                    entries.append({**consumer, "result_key": key})
             for key in ("steps", "then", "else", "action", "otherwise"):
                 nested = payload.get(key)
                 if isinstance(nested, (list, tuple)):
                     walk(nested)
 
     walk(_spell_instructions(card))
-    return tuple(filters)
+    return tuple(entries)
 
 
 def _reads_chosen_creature_type(value) -> bool:
@@ -4748,6 +4762,7 @@ __all__ = [
     "several_target_slot_sides",
     "source_toughness_change",
     "spell_denies_its_own_target",
+    "spell_hand_pick_entries",
     "spell_hand_pick_entry_filters",
     "spell_target_side",
     "toll_branch_loss",

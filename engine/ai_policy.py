@@ -60,7 +60,7 @@ from .ai_valuation import (
     source_becomes_an_aura,
     source_toughness_change,
     spell_denies_its_own_target,
-    spell_hand_pick_entry_filters,
+    spell_hand_pick_entries,
     spell_seat_side,
     spell_target_side,
     TollLoss,
@@ -7055,18 +7055,39 @@ def _caster_holds_a_hand_pick_entrant(
     (``ai_valuation.spell_hand_pick_entry_filters``).
 
     Through ``_card_matches_filter``, the matcher the entering step itself asks.
-    """
-    from .handlers._common import _card_matches_filter
 
-    filters = spell_hand_pick_entry_filters(card)
-    if not filters:
+    …and through the **guard** around the entering step, where there is one
+    ("…put that card onto the battlefield if it has the same name as a
+    permanent", Retraced Image): a held card the guard refuses enters nothing,
+    so a cast whose every pick would be refused is a card spent on a reveal.
+    The guard is the engine's own evaluator, handed the card under the record
+    the pick writes.
+    """
+    from .game_types import OracleExecutionContext
+    from .handlers._common import _card_matches_filter
+    from .handlers.control_flow import evaluate_condition
+
+    entries = spell_hand_pick_entries(card)
+    if not entries:
         return True
     player = game.players[caster_index]
     held = [c for slot, c in enumerate(player.hand) if slot != hand_index]
-    return all(
-        any(_card_matches_filter(c, wanted, game=game, owner=player) for c in held)
-        for wanted in filters
-    )
+
+    def enters(entry: dict, held_card) -> bool:
+        if not _card_matches_filter(
+            held_card, entry["card_filter"], game=game, owner=player
+        ):
+            return False
+        guard = entry.get("guard")
+        if not guard:
+            return True
+        context = OracleExecutionContext(
+            caster=player, target=player, card=card,
+            results={entry["result_key"]: [held_card]},
+        )
+        return bool(evaluate_condition(game, context, guard))
+
+    return all(any(enters(entry, c) for c in held) for entry in entries)
 
 
 def _hand_entry_has_a_card(

@@ -63,6 +63,8 @@ log), not instruction kinds alone.
 # ==== W1G8 ==========================================================
 # W1G8's tests go between this line and the "end W1G8" line.
 
+import pytest as _w1g8_pytest
+
 from engine import Game as _W1G8Game, PlayerState as _W1G8Player
 from engine.models import Permanent as _W1G8Permanent
 from engine.oracle import compile_card_oracle as _w1g8_compile
@@ -313,5 +315,31 @@ def test_w1g8_retraced_image_a_seat_nobody_asks_reveals_the_namesake(set_pool):
         "Grizzly Bears", "Grizzly Bears",
     ]
     assert sorted(c.name for c in game.players[0].hand) == ["Hill Giant", "Island"]
+
+
+@_w1g8_pytest.mark.parametrize("namesake", [False, True])
+def test_w1g8_the_ai_casts_retraced_image_only_over_a_namesake(set_pool, namesake):
+    """An AI seat holding no card a permanent shares a name with would spend
+    Retraced Image on a reveal: the rehearsal reads the reveal as a change
+    worth nothing and proposed it. The hand-pick gate the AI asks before the
+    cast (Stronghold Gambit's) now reads the guard around the entering step
+    too, so the card is held until something in hand would enter."""
+    from engine.ai_policy import choose_cast_action
+
+    lea = set_pool("LEA")
+    game = _W1G8Game(players=[
+        _W1G8Player("A", hand=[set_pool("TOR")["Retraced Image"], lea["Hill Giant"]],
+                    library=[lea["Island"]] * 5),
+        _W1G8Player("B", library=[lea["Forest"]] * 5),
+    ])
+    game.enforce_mana_costs = True
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game._put_permanent_onto_battlefield(0, _W1G8Permanent(card=lea["Island"]), None)
+    if namesake:
+        game._put_permanent_onto_battlefield(1, _W1G8Permanent(card=lea["Hill Giant"]), None)
+
+    action = choose_cast_action(game, 0)
+    assert (action is not None and action.card_name == "Retraced Image") is namesake
 
 # ==== end W1G8 ======================================================
