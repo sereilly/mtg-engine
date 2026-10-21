@@ -4785,6 +4785,52 @@ def reads_what_its_cost_exiled(instructions) -> bool:
     return mentions(tuple(instructions or ()))
 
 
+#: The search destination that puts what it finds on top of the searching
+#: player's library ("…then shuffle and put that card on top").
+LIBRARY_TOP = "library_top"
+
+
+def library_top_setups(card: CardDefinition, x_value: "int | None" = None) -> tuple:
+    """The searches a cast of *card* makes that put what they find **on top of
+    its caster's own library**, as ``(payload, count)`` — ``count`` the
+    number of cards the search puts there (X read as *x_value*), or None for
+    "any number of".
+
+    "Search your library for a card, then shuffle and put that card on top"
+    (Vampiric Tutor, Mystical Tutor, Insidious Dreams' X cards, Scouting
+    Trek's basic lands): the cards stay in the library, so a rehearsal of the
+    cast reads no standing change — a hand, a life total and a board are what
+    a standing counts, and the order of a library is none of them. What the
+    cast bought is the next draws, chosen. Derived from the compiled program
+    (``search_library`` with every destination the top of the library), so it
+    names no card. Empty for a permanent, whose cast is not rehearsed.
+    """
+    found = []
+    for instruction in _spell_instructions(card):
+        for step in _effect_steps(instruction):
+            if step.kind != "search_library":
+                continue
+            payload = step.payload or {}
+            places = list(payload.get("destinations") or ()) or [payload.get("destination")]
+            if not places or any(place != LIBRARY_TOP for place in places):
+                continue
+            if "library" not in tuple(payload.get("zones") or ("library",)):
+                continue
+            # "…and exile the rest" (Doomsday) is not a setup but a library
+            # cut down to the finds: what it changes is every draw after them.
+            if payload.get("exile_rest"):
+                continue
+            count = payload.get("count", 1)
+            if count == "x":
+                count = max(0, int(x_value or 0))
+            elif count == "any":
+                count = None
+            elif not isinstance(count, int):
+                continue
+            found.append((payload, count))
+    return tuple(found)
+
+
 def _walk_program(program):
     """Every instruction on a program, wrappers opened."""
     def walk(instructions):
@@ -4850,6 +4896,7 @@ __all__ = [
     "untap_for_the_next_turn",
     "graveyard_denial_order",
     "graveyard_price_order",
+    "library_top_setups",
     "reads_what_its_cost_exiled",
     "hand_entry_steps",
     "hand_waiver",

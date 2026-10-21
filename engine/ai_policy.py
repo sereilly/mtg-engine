@@ -7,6 +7,7 @@ from dataclasses import dataclass, replace
 import re
 
 from .ai_valuation import (
+    CARD_WORTH,
     Rehearsal,
     deliberating,
     has_a_creature_to_fight_with,
@@ -51,6 +52,7 @@ from .ai_valuation import (
     named_counter_marks_for_harm,
     instruction_target_side,
     is_mana_ability,
+    library_top_setups,
     mana_ability_amount,
     mana_ability_symbols,
     offer_buys_a_drawback_to_its_source,
@@ -1500,6 +1502,18 @@ HARM_FLOOR = -0.5
 #: How many distinct targets one cast is rehearsed at. A rehearsal is a cast,
 #: and a board of forty permanents is not forty questions worth asking.
 TARGETS_WEIGHED = 8
+#: What a card a cast puts **on top of its caster's own library** is worth,
+#: as a share of how much better it is than the card the draw would otherwise
+#: have been (`_chosen_draw_worth`) — that difference held to a card either
+#: way (``CARD_WORTH``), the unit a standing counts a hand in, so a chosen
+#: draw is never worth more than a card in hand. A share, because it is a draw
+#: brought forward and not a card in hand: the turn it is drawn is a turn
+#: away, and the draw it displaces was a card too.
+CHOSEN_DRAW_SHARE = 0.5
+#: How many of the draws a library-top setup decides are counted. The first
+#: few are the ones a seat plans for; past them a stack of finds is a turn
+#: order nobody is weighing.
+CHOSEN_DRAWS_COUNTED = 2
 
 
 #: The mana of each kind a rehearsed cast is lent to pay for itself: more
@@ -1653,7 +1667,7 @@ def _rehearse_announcement(
         pool.update(floating)
 
     taps = planned is not None and bool(planned.land_tap_indices)
-    return rehearse(
+    rehearsal = rehearse(
         game, seat, perform, spell_name=zone_name,
         leaves_hand=from_hand and held,
         # Cast out of a zone a permission opens (CR 601.3): its trip out of
@@ -1684,6 +1698,72 @@ def _rehearse_announcement(
         ),
         detach="abstract" if _IN_THE_ABSTRACT.get() else False,
         through_combat=through_combat,
+    )
+    # **What a standing cannot see: the next draws, chosen.** "Search your
+    # library for a card, then shuffle and put that card on top" (Vampiric,
+    # Mystical, Enlightened and Worldly Tutor; Insidious Dreams' X cards;
+    # Scouting Trek) leaves every card where a standing counts it — the
+    # finds are still in the library — so the rehearsal read a cast that
+    # moved nothing: Vampiric Tutor was its 2 life and no more, and never
+    # proposed; Insidious Dreams was its discards. The order of a library is
+    # a change the rehearsal sees and does not price, so the price is added
+    # here, for the casts whose program sets the top up
+    # (`ai_valuation.library_top_setups`), as a change that lasts.
+    if rehearsal is not None and rehearsal.accepted and not _IN_THE_ABSTRACT.get():
+        worth = _chosen_draw_worth(game, seat, card, announcement.get("x_value"))
+        if worth:
+            rehearsal = replace(
+                rehearsal, now=rehearsal.now + worth, lasting=rehearsal.lasting + worth,
+            )
+    return rehearsal
+
+
+def _chosen_draw_worth(
+    game: Game, seat: int, card: CardDefinition, x_value: "int | None",
+) -> float:
+    """What the library-top setup a cast of *card* makes is worth to *seat*:
+    for each of the next `CHOSEN_DRAWS_COUNTED` draws it decides, a
+    `CHOSEN_DRAW_SHARE` of how much better the card it puts there is than the
+    library's average card — the draw a seat that cast nothing would make.
+
+    The cards are the ones the seat's own search would find (`search_matches`
+    over the payload, best first by `_score_tutor_choice`, the scorer the
+    search's pick asks), out of the cards its library holds — which the seat
+    knows, though not their order: it is its own deck, and the search is a
+    look through it. Signed: a setup whose finds are worse than an average
+    draw (Scouting Trek's lands with lands enough on the table) is worth less
+    than nothing. No per-card table: which casts set the top up is the
+    compiled program's (`ai_valuation.library_top_setups`).
+    """
+    setups = library_top_setups(card, x_value)
+    if not setups:
+        return 0.0
+    library = list(game.players[seat].library)
+    if not library:
+        return 0.0
+    scores = [_score_tutor_choice(game, seat, held) for held in library]
+    average = sum(scores) / len(scores)
+    taken: set[int] = set()
+    chosen: list[float] = []
+    for payload, count in setups:
+        wanted = len(library) if count is None else count
+        matching = sorted(
+            (
+                (score, index) for index, (held, score) in enumerate(zip(library, scores))
+                if index not in taken and search_matches(held, payload)
+            ),
+            key=lambda entry: (-entry[0], entry[1]),
+        )
+        for score, index in matching[:wanted]:
+            taken.add(index)
+            chosen.append(score)
+    # The finds go on top in the order the seat names, best first. Each is
+    # read against the average card and held to a card either way: the score
+    # is a cast's, and a standing counts a card in hand as `CARD_WORTH`.
+    chosen.sort(reverse=True)
+    return CHOSEN_DRAW_SHARE * sum(
+        max(-CARD_WORTH, min(CARD_WORTH, score - average))
+        for score in chosen[:CHOSEN_DRAWS_COUNTED]
     )
 
 
