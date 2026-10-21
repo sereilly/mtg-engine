@@ -215,8 +215,10 @@ _CALLERS = {
     ("engine/handlers/zones.py", "return_source_card_to_battlefield"),
     # Academy Researchers
     ("engine/handlers/zones.py", "put_from_hand_candidates"),
-    # Replenish, Cleansing Meditation
-    ("engine/handlers/zones.py", "_returning_aura_host"),
+    # Replenish, Cleansing Meditation: the hosts offered, and asked once more
+    # as each Aura enters
+    ("engine/handlers/zones.py", "_legal_returning_aura_hosts"),
+    ("engine/handlers/zones.py", "_return_planned_cards"),
 }
 
 

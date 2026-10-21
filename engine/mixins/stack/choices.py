@@ -5665,6 +5665,22 @@ class PendingChoicesMixin:
                 live,
                 key=lambda perm: self.controller_index_of(perm) == choice.player_index,
             )
+        elif prefers == "returning_aura_host" and live:
+            # "Return all enchantment cards from your graveyard to the
+            # battlefield." (Replenish.) What each returning Aura enchants is
+            # its controller's choice (CR 303.4f), and a seat nobody asks
+            # already takes ``ai_policy``'s pick without being armed — so the
+            # prompt's own default is that pick too, and an interactive seat
+            # answered for (a test's drain, a timed-out seat) lands where an AI
+            # seat would.
+            from ...ai_policy import choose_returning_aura_host
+
+            aura_card = (choice.data.get("_payload") or {}).get("legal_host_for_card")
+            if aura_card is not None:
+                pick = choose_returning_aura_host(
+                    self, choice.player_index, aura_card, live
+                )
+                live = [pick, *(perm for perm in live if perm is not pick)]
         # …and the one ordering a *later sentence* asks for: "Prevent all combat
         # damage target creature would deal this turn **if it shares a color
         # with that permanent**" (Guard Dogs). The pick decides whether the

@@ -10759,13 +10759,18 @@ def return_all_cards_from_graveyard(game: Game, instruction: OracleInstruction, 
         )
     else:
         seats = [game.players.index(context.caster)]
-    returned = 0
     # CR 303.4f's hosts are the permanents **already** on the battlefield: the
     # cards ruling for both printings (Replenish, Cleansing Meditation, 2005-08-
     # 01) is that "Auras returning to the battlefield can only enchant
     # something that was already on the battlefield", so the board is read once,
     # before anything this effect returns has arrived.
     already_there = list(game.all_permanents()) if destination == "battlefield" else []
+    # What each seat returns, as (slot, card) pairs, and each Aura card's host
+    # by (seat, slot) — decided before anything moves (CR 303.4f), because the
+    # cards enter together and an Aura enters attached.
+    plans: list[tuple[int, list]] = []
+    hosts: dict[tuple[int, int], object] = {}
+    asks: list[tuple[int, int, object, list]] = []
     for seat in seats:
         player = game.players[seat]
         taken = [
@@ -10796,28 +10801,120 @@ def return_all_cards_from_graveyard(game: Game, instruction: OracleInstruction, 
             taken = allowed
         if destroyed_only:
             taken = _destroyed_this_way_slots(player, taken, context)
-        # Each Aura card's host, chosen before anything moves (CR 303.4f), and
-        # an Aura with no legal host left where it is (CR 303.4g) rather than
-        # put onto the battlefield attached to nothing for CR 704.5m to bin.
-        hosts: dict[int, object] = {}
         if destination == "battlefield":
             for index in list(taken):
                 card = player.graveyard[index]
                 if not _is_aura_card(card):
                     continue
-                host = _returning_aura_host(game, seat, card, already_there)
-                if host is None:
+                legal = _legal_returning_aura_hosts(game, seat, card, already_there)
+                if not legal:
+                    # CR 303.4g: nothing it could enchant, so it stays where it
+                    # is rather than entering attached to nothing for CR 704.5m
+                    # to bin. Replenish's reminder text says so.
                     taken.remove(index)
                     game.log.append(
                         f"{card.name} has nothing it could enchant and stays in "
                         f"{player.name}'s graveyard"
                     )
                     continue
-                hosts[index] = host
-        cards = [(index, player.graveyard[index]) for index in taken]
-        for index in sorted(taken, reverse=True):
-            player.graveyard.pop(index)
-        for index, card in cards:
+                if len(legal) > 1 and seat in game.interactive_seats:
+                    asks.append((seat, index, card, legal))
+                    continue
+                from ..ai_policy import choose_returning_aura_host
+
+                # One legal host is no question; a seat nobody asks takes the
+                # policy's pick (``ai_policy.choose_returning_aura_host``).
+                hosts[(seat, index)] = (
+                    legal[0] if len(legal) == 1
+                    else choose_returning_aura_host(game, seat, card, legal)
+                )
+        plans.append((seat, [(index, player.graveyard[index]) for index in taken]))
+
+    card_name = getattr(context.card, "name", "") or "Effect"
+
+    def step(ask) -> None:
+        # CR 303.4f: "that player chooses what it will enchant". One prompt per
+        # Aura with a choice to make, each the general "choose a permanent as
+        # the effect resolves" (``permanent_choice``, suspending), so nothing
+        # moves until the last answer — the cards enter together, after it.
+        if ask is not None:
+            seat, index, card, legal = ask
+            game.arm_permanent_choice(
+                seat,
+                card_name=card_name,
+                prompt=(
+                    f"Choose what {card.name} enchants as it returns to the "
+                    "battlefield."
+                ),
+                result_key=_returning_aura_host_key(seat, index),
+                payload={
+                    "legal_host_for_card": card,
+                    "host_controller": seat,
+                    "default_prefers": "returning_aura_host",
+                },
+                context=context,
+                candidates=legal,
+            )
+            return
+        for seat, index, _card, _legal in asks:
+            chosen = context.results.get(_returning_aura_host_key(seat, index))
+            hosts[(seat, index)] = (
+                game.permanent_by_id(chosen) if isinstance(chosen, int) else None
+            )
+        _return_planned_cards(
+            game, plans, hosts, destination=destination, tapped=tapped,
+            card_name=card_name,
+        )
+
+    # One step per question and a last one that moves everything. The loop is
+    # the last thing this handler does, which is ``engine/resumption.py``'s rule.
+    run_resumable(game, [*asks, None], step)
+    return True, "resolved"
+
+
+def _returning_aura_host_key(seat: int, index: int) -> str:
+    """The scratchpad key one returning Aura's chosen host is written under."""
+    return f"returning_aura_host:{seat}:{index}"
+
+
+def _return_planned_cards(
+    game, plans, hosts, *, destination: str, tapped: bool, card_name: str,
+) -> None:
+    """Move every planned card at once, each Aura attached to its host.
+
+    *plans* is ``(seat, [(slot, card), ...])`` in the order the seats return;
+    *hosts* holds every Aura's host by ``(seat, slot)``, None where a seat's
+    answer named nothing. A host is asked once more as the Aura enters — the
+    choice was legal when it was made, and CR 303.4f's "must choose a legal
+    object" is about the moment of entry — and an Aura without one stays in
+    the graveyard (CR 303.4g).
+    """
+    from ..auras import attach_aura, enchant_card_refusal
+
+    returned = 0
+    for seat, entries in plans:
+        player = game.players[seat]
+        moving = []
+        for index, card in entries:
+            if (seat, index) in hosts:
+                host = hosts[(seat, index)]
+                if host is None or enchant_card_refusal(game, card, seat, host) is not None:
+                    game.log.append(
+                        f"{card.name} has nothing it could enchant and stays in "
+                        f"{player.name}'s graveyard"
+                    )
+                    continue
+            moving.append((index, card))
+        # Highest slot first, so a pop does not renumber the slots still to
+        # come — and each slot checked to still hold its card: a graveyard is a
+        # list of shared ``CardDefinition`` objects, so the slot is the
+        # identity, and a slot that no longer holds the card is a card that left.
+        for index, card in sorted(moving, key=lambda entry: entry[0], reverse=True):
+            if index < len(player.graveyard) and player.graveyard[index] is card:
+                player.graveyard.pop(index)
+            else:
+                moving.remove((index, card))
+        for index, card in moving:
             if destination == "hand":
                 # CR 903.9b's seam, never `player.hand.append` — a bounce, a
                 # tuck and a regrowth are all "would be put into its owner's
@@ -10833,13 +10930,11 @@ def return_all_cards_from_graveyard(game: Game, instruction: OracleInstruction, 
             if tapped:
                 permanent.tapped = True
             game._put_permanent_onto_battlefield(seat, permanent, None)
-            host = hosts.get(index)
+            host = hosts.get((seat, index))
             if host is not None:
                 # Attached as part of the same move, inside this resolution —
                 # the arrangement ``reanimate_aura_onto_source`` keeps, so the
                 # Aura is never an unattached one for CR 704.5m to find.
-                from ..auras import attach_aura
-
                 attach_aura(permanent, host)
                 game.log.append(
                     f"{player.name} returned {card.name} to the battlefield "
@@ -10852,8 +10947,7 @@ def return_all_cards_from_graveyard(game: Game, instruction: OracleInstruction, 
             )
             returned += 1
     if not returned:
-        game.log.append(f"{context.card.name}: no cards to return")
-    return True, "resolved"
+        game.log.append(f"{card_name}: no cards to return")
 
 
 def _is_aura_card(card) -> bool:
@@ -10868,10 +10962,10 @@ def _is_aura_card(card) -> bool:
     ) is not None
 
 
-def _returning_aura_host(game, seat: int, card, already_there):
-    """The permanent an Aura card a mass return puts onto the battlefield
-    enchants, or None when it can enchant nothing (CR 303.4g: it stays in the
-    graveyard).
+def _legal_returning_aura_hosts(game, seat: int, card, already_there) -> list:
+    """The permanents an Aura card a mass return puts onto the battlefield
+    under *seat*'s control could enchant — empty when it can enchant nothing
+    (CR 303.4g: it stays in the graveyard).
 
     CR 303.4f: an Aura put onto the battlefield by an effect that names no
     host is attached to an object its controller chooses, as it enters, and
@@ -10880,27 +10974,22 @@ def _returning_aura_host(game, seat: int, card, already_there):
     enchant ability and protection (CR 702.16c, "can't be enchanted by Auras
     that have the stated quality") are ``enchant_card_refusal``, the one
     predicate every host chooser asks. Only a permanent that was on the
-    battlefield before the return (*already_there*).
+    battlefield before the return (*already_there*), in board order.
 
-    **The choice is not asked.** Every seat takes ``ai_policy``'s pick — an
-    Aura whose text works against its host goes on an opponent's permanent,
-    any other on its controller's — the arrangement this handler already has
-    for the timestamp order of what it returns (CR 613.7m, pinned in
-    ``tests/rules/test_pt_setting_timestamp_order.py``). Asking an interactive
-    seat is a prompt kind and its client half, and both are named in the
-    round's report.
+    **Who chooses.** An interactive seat with more than one legal host is
+    asked (``permanent_choice``, armed by the handler, the candidates this
+    list). Every other seat takes ``ai_policy.choose_returning_aura_host`` —
+    an Aura whose text works against its host goes on an opponent's
+    permanent, any other on its controller's — which is also that prompt's
+    default (``default_prefers: "returning_aura_host"``).
     """
-    from ..ai_policy import choose_returning_aura_host
     from ..auras import enchant_card_refusal
 
-    legal = [
+    return [
         host for host in already_there
         if game.is_on_battlefield(host)
         and enchant_card_refusal(game, card, seat, host) is None
     ]
-    if not legal:
-        return None
-    return choose_returning_aura_host(game, seat, card, legal)
 
 
 def _destroyed_this_way_slots(player, taken, context) -> list[int]:
