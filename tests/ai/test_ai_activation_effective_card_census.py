@@ -36,8 +36,10 @@ compiled the printed card: 931 cards whose printed self the seat activated,
 **a copy of none of them** and no Aura's grant. After: 938 printed (seven
 Slivers now use the ability their own static gives them), 918 of them as a
 copy — the other twenty are ``pays_in_its_own_counters`` — and four hosts
-using what an Aura gave them. The fifteen refusals in ``REFUSED`` were there
-before, on the printed card, and are the same fifteen on a copy.
+using what an Aura gave them. The fifteen refusals it pinned were there
+before, on the printed card, and were the same fifteen on a copy; eleven of
+them were a cost the board could not pay and went with the activation cost
+gate (Torment's W2G3), so ``REFUSED`` holds the four that stand.
 
 The suite sweeps a fixed share (``SAMPLE_EVERY``) and the named cards; run it
 as a module for all of it
@@ -81,32 +83,32 @@ SAMPLE_EVERY = 8
 #: card on the tree before this sweep existed, and a copy of the card is
 #: refused for the same reason and no other.
 #:
-#: Eleven are a cost this board cannot pay. The chooser asks about the costs
-#: it knows one at a time (a sacrifice, a discard, a counter, life) and these
-#: are the ones it does not: tapping other permanents, returning them,
-#: exiling several cards from a graveyard, a card out of an empty hand. The
-#: cast side asks the engine's own gate (``_unpayable_additional_cost``); an
-#: activation has no such gate to ask — the checks are inline in
-#: ``activation._activate_onto_stack``, each one a refusal as it is reached.
 #: Four are "up to X target …, where X is the number of verse counters", with
 #: no counter yet: the chooser names one target and X is zero.
-_COST = "a cost this board cannot pay, which the chooser does not ask about"
 _VERSE = "names a target for 'up to X', and X is the verse counters it has: none"
 REFUSED: dict = {
-    "Drudge Spell": _COST, "Flooded Shoreline": _COST, "Hand of Justice": _COST,
-    "Hecatomb": _COST, "Jandor's Ring": _COST, "Karplusan Giant": _COST,
-    "Night Soil": _COST, "Penance": _COST, "Quirion Ranger": _COST,
-    "Shacklegeist": _COST, "Vodalian War Machine": _COST,
     "Recantation": _VERSE, "Rumbling Crescendo": _VERSE,
     "Serra's Liturgy": _VERSE, "Vile Requiem": _VERSE,
 }
+#: Eleven more stood here until Torment's W2G3: a cost this board cannot pay
+#: — tapping other permanents, returning them, exiling several cards from a
+#: graveyard, a card out of an empty hand. The chooser asked about the costs
+#: it knew one at a time, and an activation had no gate of the engine's to
+#: ask, the checks being inline in ``activation._activate_onto_stack``. They
+#: are one gate now (``Game.unpayable_activation_cost``), which that door
+#: refuses with and the chooser asks; swept always, so a twelfth would show.
+NO_LONGER_REFUSED = frozenset({
+    "Drudge Spell", "Flooded Shoreline", "Hand of Justice", "Hecatomb",
+    "Jandor's Ring", "Karplusan Giant", "Night Soil", "Penance",
+    "Quirion Ranger", "Shacklegeist", "Vodalian War Machine",
+})
 #: Cards the suite always sweeps: the two the defect was told with, and one
 #: of each way a permanent comes by an ability it does not print.
 ALWAYS = frozenset({
     "Prodigal Sorcerer", "Rod of Ruin", "Hermetic Study", "Fire Whip",
     "Sisay's Ingenuity", "Barbed Field", "Short Sword", "Clot Sliver",
     "Triskelion",
-}) | frozenset(REFUSED)
+}) | frozenset(REFUSED) | NO_LONGER_REFUSED
 assert ALWAYS <= set(POOL), sorted(ALWAYS - set(POOL))
 
 

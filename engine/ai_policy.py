@@ -3114,22 +3114,23 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
         # the source's own counters, which the score does read.
         if ability.cost.remove_counter_filter is not None:
             continue
-        # …and the self-referring spelling the score does price, which still
-        # has to be *payable*: "{T}, Remove a javelin counter from this
-        # creature: …" (Icatian Javelineers), Elvish Farmer's spore counters,
-        # Goblin Bomb's fuse counters. With none left the activation path
-        # refuses it with nothing paid (CR 601.2h via CR 602.2b), and this
-        # proposed it again every main phase — 43 refused activations over the
-        # default seeded runs, the "costs a board cannot pay" W2G3 left. The
-        # count the engine compares, read through the same counter reader.
-        if ability.cost.remove_counter:
-            from .named_counters import counters_on
-
-            wanted = ability.cost.remove_counter_count
-            if isinstance(wanted, int) and counters_on(
-                permanent, ability.cost.remove_counter
-            ) < wanted:
-                continue
+        # …and every cost the score does price still has to be **payable**
+        # (CR 601.2h via CR 602.2b; CR 118.3): "{T}, Remove a javelin counter
+        # from this creature" with none left (Icatian Javelineers), "Exile two
+        # cards from your graveyard" over an empty one (Grim Lavamancer),
+        # "Tap two untapped Spirits you control" with one (Shacklegeist),
+        # "Return a Forest you control" with none (Quirion Ranger). The
+        # activation path refuses each with nothing paid, and this proposed it
+        # again every main phase, the seat's one activation of the turn.
+        #
+        # **Asked of the engine's own gate** (`Game.unpayable_activation_cost`,
+        # the one the activation path refuses with), not of a reading here.
+        # This chooser asked the costs it knew one at a time — the counter
+        # above was the last it learned — and none it did not: on a board that
+        # could pay nothing, 26 abilities in the pool were proposed and
+        # refused for their cost (`tests/ai/test_ai_activation_cost_census.py`).
+        if game.unpayable_activation_cost(player_index, permanent, ability) is not None:
+            continue
 
         # "Exile the top card of your library" (Royal Herbalist, Phyrexian
         # Devourer). The same floor one zone over, and the sharper case for it:

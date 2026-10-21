@@ -98,9 +98,30 @@ def test_no_refusal_is_written_below_the_mana_payment():
         f"{hinge}: an activation refused there has already paid"
     )
     # Floor: the method refuses in dozens of places; a reader that finds none
-    # has stopped reading the method rather than found it clean.
+    # has stopped reading the method rather than found it clean. Forty-odd
+    # until Torment's W2G3 moved every "the board cannot pay this" refusal
+    # into one gate (``unpayable_activation_cost``) — which the method calls
+    # once, **above the hinge**, and which says why in each of its returns.
     early = [node for node in ast.walk(method) if _is_refusal(node)]
-    assert len(early) >= 40, len(early)
+    assert len(early) >= 25, len(early)
+    gate_calls = [
+        node.lineno for node in ast.walk(method)
+        if isinstance(node, ast.Call)
+        and _called_name(node) == "unpayable_activation_cost"
+    ]
+    assert gate_calls and max(gate_calls) < _hinge_line(method), gate_calls
+    gate = next(
+        node for node in ast.walk(
+            ast.parse(Path(activation_module.__file__).read_text(encoding="utf-8"))
+        )
+        if isinstance(node, ast.FunctionDef) and node.name == "unpayable_activation_cost"
+    )
+    reasons = [
+        node for node in ast.walk(gate)
+        if isinstance(node, ast.Return) and node.value is not None
+        and not (isinstance(node.value, ast.Constant) and node.value.value is None)
+    ]
+    assert len(reasons) >= 18, len(reasons)
 
 
 def test_no_cost_is_paid_above_the_mana_payment():
