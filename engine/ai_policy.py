@@ -7272,6 +7272,20 @@ def _choose_target_for_spell(
     # only for a cast that paid for it).
     if entry_trigger_seat_side(card, _OFFERS_ANNOUNCED.get()) == "opponent":
         return choose_attack_target(game, caster_index)
+    # …and a seat that trigger may **not** name is never announced, whatever
+    # the trigger does to it. "When this creature enters, **target opponent**
+    # gains control of it" (Sleeper Agent), "…target opponent reveals their
+    # hand" (Mesmeric Fiend, Kitesail Freebooter), "…target opponent draws
+    # two cards" (Lord of Tresserhorn): no side to read, so the seat fell to
+    # the caster below — an announcement the trigger set aside as it was put
+    # on the stack (CR 603.3d) and chose again, seven permanents in the pool
+    # each logging a refusal nobody made. The seats are the trigger's own
+    # list (`Game.entry_trigger_cast_targets`), the one the cast picker and
+    # that push both read, so the seat named is one the trigger accepts.
+    legal_seats = _entry_trigger_seats(game, caster_index, card)
+    if legal_seats and caster_index not in legal_seats:
+        wanted = choose_attack_target(game, caster_index)
+        return wanted if wanted in legal_seats else legal_seats[0]
     # No side to read: a spell that names a **player** ("target player draws
     # three cards", "…loses 4 life and you gain 4 life", "…discards a card").
     # Each seat the announcement may name is weighed (`_score_spell_target`)
@@ -7295,6 +7309,29 @@ def _choose_target_for_spell(
         if best_score is None or score > best_score:
             best_seat, best_score = seat, score
     return best_seat
+
+
+def _entry_trigger_seats(
+    game: Game, caster_index: int, card: CardDefinition
+) -> list[int]:
+    """The seats a cast of the **permanent** *card* may name for its entry
+    trigger's player target — empty for a spell, and for a permanent whose
+    cast names no trigger's player.
+
+    Asked of the engine's own list (`Game.entry_trigger_cast_targets`: the
+    targets the trigger could choose for itself, CR 603.3d), under the offers
+    this announcement takes (`_OFFERS_ANNOUNCED`, CR 702.33g), so it is the
+    seats the push accepts and not a reading of the printed words.
+    """
+    if card.primary_type in SPELL_TYPES:
+        return []
+    legal = game.entry_trigger_cast_targets(
+        caster_index, card, optional_cost_payments=_OFFERS_ANNOUNCED.get() or {},
+    )
+    return sorted({
+        int(entry["seat"]) for entry in legal or ()
+        if entry.get("kind") == "player" and isinstance(entry.get("seat"), int)
+    })
 
 
 #: Cast specs whose announcement names a **seat**: a player, or a pile of

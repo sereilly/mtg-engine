@@ -806,8 +806,10 @@ def entry_trigger_seat_side(
     CR 702.33g) -- so the answer is about the target the cast actually names.
     Only the denial is answered: a gift aimed by this rule could contradict the
     printed phrase ("target **opponent** draws two cards", Lord of
-    Tresserhorn), and every seat-targeting entry trigger in the pool that is
-    not a denial already lands where its card prints it.
+    Tresserhorn). What the phrase itself allows is the trigger's own target
+    list, which the policy asks beside this (``ai_policy._entry_trigger_seats``)
+    — this reading said every non-denial "already lands where its card prints
+    it", and seven did not (Torment's W2G3).
     """
     from .targeting import _first_described_slot, entry_trigger_instructions
 
