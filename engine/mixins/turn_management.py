@@ -184,6 +184,17 @@ _LOGGED_TAP_REFUSALS = {
     "aura_activations_forbidden": "'s activated abilities can't be activated",
 }
 
+#: The reason key `land_mana_tap_refusal` returns for a CR 602.5 prohibition,
+#: by the row of ``activation_prohibitions.ACTIVATION_PROHIBITIONS`` that
+#: answered. The three this seam asked before it asked the table keep the keys
+#: their callers and tests already read; every other row is its own kind, and
+#: `tap_land_for_mana` logs the sentence the table gives it.
+_TAP_REFUSAL_BY_ROW = {
+    "permanent_shut_off_this_turn": "activations_forbidden",
+    "aura_all_shut_off": "aura_activations_forbidden",
+    "printed_restriction": "activation_restricted",
+}
+
 
 class TurnManagementMixin:
     def select_starting_player(
@@ -686,29 +697,24 @@ class TurnManagementMixin:
         # wire. CR 302.6 (through CR 602.5a): a land that is a creature —
         # Mishra's Factory animated, a Forest under Living Lands — has the
         # summoning-sickness rule like any creature, and a {T} mana ability is
-        # a {T} ability. CR 602.5's per-permanent ban ("That permanent's
-        # activated abilities can't be activated this turn", Interdict) prints
-        # no mana-ability exception. Both refused here as the activation path
-        # refuses them, with nothing tapped.
-        from ..auras import aura_restriction_active
-        from ..spell_prohibitions import permanent_activations_forbidden
-
+        # a {T} ability.
         if self._is_summoning_sick(land):
             return "summoning_sick"
-        if permanent_activations_forbidden(self, land):
-            return "activations_forbidden"
-        # …and an Aura's clause that prints no CR 605.1a exception either:
-        # "Enchanted creature's activated abilities can't be activated."
-        # (Stupefying Touch; Volrath's Curse's second clause is the same
-        # restriction.) The card's ruling: "Unlike many similar abilities,
-        # Stupefying Touch's last ability stops mana abilities from being
-        # activated." (2016-06-08.) A land that is a creature (a Forest under
-        # Living Lands) is a legal host, and this seam is the door its mana
-        # ability is used through — the activation path's table
-        # (``activation_prohibitions._aura_all_shut_off``) asks the same
-        # predicate of every other permanent's mana ability.
-        if aura_restriction_active(land, "all_activated_abilities_shut_off"):
-            return "aura_activations_forbidden"
+        # **And CR 602.5, through the one table** (``engine/activation_
+        # prohibitions.py``). This seam used to ask two of its rows by hand —
+        # Interdict's per-permanent ban and an Aura's "its activated abilities
+        # can't be activated" (Stupefying Touch, Volrath's Curse) — and the
+        # rest of the table not at all, so a Forest tapped for mana on another
+        # player's turn under City of Solitude ("This stops players from
+        # activating mana abilities", 2009-10-01) and a Forest that Living
+        # Lands made a creature tapped under Cursed Totem ("Cursed Totem stops
+        # players from activating mana abilities of creatures", 2021-06-18).
+        # The rows that print CR 605.1a's exception (Abeyance, Hand to Hand,
+        # Faith's Fetters) answer for a mana ability by themselves, so asking
+        # the whole table is the rule and no row is listed here.
+        prohibited = self.land_tap_prohibition(land, ability_index)
+        if prohibited is not None:
+            return _TAP_REFUSAL_BY_ROW.get(prohibited.kind, prohibited.kind)
 
         # A land with no mana ability at all (Island of Wak-Wak, Bazaar of
         # Baghdad) can't be tapped for mana — without this, the color fallback
@@ -719,19 +725,10 @@ class TurnManagementMixin:
             if self._chosen_land_mana_ability(land, ability_index) is None:
                 return "no_such_mana_ability"
             # "{T}: Add {W} or {B}. **Activate only if you control a Swamp.**"
-            # (Tainted Field.) CR 602.5's clause, asked at this door as the
-            # activation path asks it at its own — the seam admits such an
-            # ability only when every clause is a board condition
-            # (``restrictions_askable_mid_payment``), and this is where it is
-            # asked.
-            from ..activation_restrictions import activation_denial
-
-            chosen = self.usable_abilities_of(land)[ability_index]
-            if activation_denial(
-                self, self.controller_index_of(land), land,
-                getattr(chosen, "source_line", "") or "",
-            ) is not None:
-                return "activation_restricted"
+            # (Tainted Field.) CR 602.5's clause is the table's
+            # ``printed_restriction`` row, asked above of the ability chosen —
+            # the seam admits such an ability only when every clause is a
+            # board condition (``restrictions_askable_mid_payment``).
             return None
         mana_ability, priced_mana_ability = self._land_mana_abilities(land)
         if mana_ability is None and not land.effective_produced_mana:
@@ -776,6 +773,43 @@ class TurnManagementMixin:
         ):
             return "priced_mana_ability"
         return None
+
+    def land_tap_prohibition(self, land, ability_index: int | None = None):
+        """The CR 602.5 prohibition that forbids tapping *land* for mana right
+        now — an ``ActivationProhibition`` — or None.
+
+        Asked of the ability the tap would activate (CR 605: each mana ability
+        is its own): the one *ability_index* names, else the land's own free
+        mana ability, else CR 305.6's intrinsic one
+        (``mana_payment.INTRINSIC_LAND_MANA_ABILITY``), which is what a basic
+        land and a land read off its summary are tapping. An index that names
+        no tap-alone mana ability has nothing to ask; the seam refuses it for
+        that reason instead. Pure, like the table.
+        """
+        from ..activation_prohibitions import activation_prohibition
+
+        ability = self._land_tap_ability(land, ability_index)
+        if ability is None:
+            return None
+        return activation_prohibition(
+            self, self.controller_index_of(land), land, ability
+        )
+
+    def _land_tap_ability(self, land, ability_index: int | None):
+        from ..mana_payment import INTRINSIC_LAND_MANA_ABILITY
+
+        if ability_index is not None:
+            usable = self.usable_abilities_of(land)
+            if not 0 <= ability_index < len(usable):
+                return None
+            chosen = usable[ability_index]
+            return chosen if is_tap_alone_mana_ability(chosen) else None
+        free, _priced = self._land_mana_abilities(land)
+        if free is not None:
+            for ability in compile_card_oracle(land.effective_card).activated_abilities:
+                if ability.instruction is free:
+                    return ability
+        return INTRINSIC_LAND_MANA_ABILITY
 
     @staticmethod
     def _gained_type_mana(land) -> tuple[str, ...]:
@@ -903,10 +937,19 @@ class TurnManagementMixin:
             ability_index = tap_alone_ability_for(self, land, asked)
         refusal = self.land_mana_tap_refusal(land, ability_index)
         if refusal is not None:
-            # The two refusals a player can see the reason for are logged, as
-            # they always were; the rest are a land that makes no mana here.
+            # The refusals a player can see the reason for are logged, as they
+            # always were; the rest are a land that makes no mana here. A CR
+            # 602.5 prohibition the seam did not ask before it asked the table
+            # is logged in the table's own sentence.
             if refusal in _LOGGED_TAP_REFUSALS:
                 self.log.append(f"{land.card.name}{_LOGGED_TAP_REFUSALS[refusal]}")
+            else:
+                from ..activation_prohibitions import ACTIVATION_PROHIBITIONS
+
+                if any(row.kind == refusal for row in ACTIVATION_PROHIBITIONS):
+                    prohibited = self.land_tap_prohibition(land, ability_index)
+                    if prohibited is not None:
+                        self.log.append(prohibited.details)
             return False
         gained_symbol = None
         if ability_index is not None:
