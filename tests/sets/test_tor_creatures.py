@@ -150,6 +150,50 @@ def test_w1g5_pitchstone_wall_ignores_an_opponents_discard(set_pool):
     assert [card.name for card in game.players[1].graveyard] == ["Lightning Bolt"]
     assert not game.stack
 
+
+def test_w1g5_nantuko_cultivator_counts_and_draws_the_lands_discarded(set_pool):
+    """Discard three lands: three +1/+1 counters and three cards. It placed
+    none and drew none — the counters read Tetravus's ``trigger_count`` and
+    the draw's handler never read ``amount_from`` — and with the counter
+    step unreadable the offer could not fold its payoffs, so both ran before
+    the discard was even answered."""
+    tor, lea = set_pool("TOR"), set_pool("LEA")
+    cultivator = tor["Nantuko Cultivator"]
+    forest, island, bolt = lea["Forest"], lea["Island"], lea["Lightning Bolt"]
+    library = [_w1g5_mk_card(name=f"W1G5 Card {i}", type_line="Instant") for i in range(10)]
+    game = _w1g5_duel(hand0=[cultivator, forest, forest, island, bolt], library0=library)
+    game.interactive_seats = {0}
+
+    game.cast_from_hand(0, cultivator.name)
+    game.resolve_top_of_stack()
+    assert game.resolve_pending_choice("optional_pay", 0, accept=True)
+    owed = game.pending_choice_of("discard", 0)
+    assert owed is not None and owed.data.get("up_to")
+    assert game.resolve_pending_choice(
+        "discard", 0, hand_indices=[0, 1, 2], to_library=False,
+    )
+    _w1g5_resolve_stack(game)
+
+    perm = next(p for p in game.controlled_by(0) if p.card.name == cultivator.name)
+    assert (perm.effective_power, perm.effective_toughness) == (5, 5)
+    assert sorted(card.name for card in game.players[0].hand) == [
+        "Lightning Bolt", "W1G5 Card 0", "W1G5 Card 1", "W1G5 Card 2",
+    ]
+
+
+def test_w1g5_nantuko_cultivator_declined_places_and_draws_nothing(set_pool):
+    tor, lea = set_pool("TOR"), set_pool("LEA")
+    cultivator = tor["Nantuko Cultivator"]
+    game = _w1g5_duel(hand0=[cultivator, lea["Forest"]])
+
+    game.cast_from_hand(0, cultivator.name)
+    _w1g5_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+
+    perm = next(p for p in game.controlled_by(0) if p.card.name == cultivator.name)
+    assert (perm.effective_power, perm.effective_toughness) == (2, 2)
+    assert [card.name for card in game.players[0].hand] == ["Forest"]
+
 # ==== end W1G5 ======================================================
 
 

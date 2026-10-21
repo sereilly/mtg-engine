@@ -32,6 +32,7 @@ from ._common import (_describe_several_targets, _describe_targets,
                       _names_several_targets)
 from ._events import (CHOSEN_PERMANENT, EVENT_SUBJECT_PLAYER,
                       _EVENT_SUBJECT_PLAYERS, trigger_quantity_key)
+from ._record_keys import _PRODUCED_QUANTITIES
 
 
 def _lower_recorded_count_placement(
@@ -96,6 +97,21 @@ def _lower_recorded_count_placement(
             ),
         )
     spec = recorded_count_spec(node.count, produced, node)
+    # "You may discard any number of land cards. Put **that many** +1/+1
+    # counters on this creature and draw that many cards." (Nantuko
+    # Cultivator.) A bare "that many" behind a step of this effect that
+    # recorded exactly one number names that number -- the nearer antecedent
+    # ``_back_reference_payload`` gives the draw beside it. It fell to
+    # Tetravus's ``trigger_count`` below, a key no discard writes, so the
+    # counters were zero while the draw was right (and the offer could not
+    # fold them, see ``sequences._fold_into_offer``).
+    within = sorted(produced & _PRODUCED_QUANTITIES)
+    if (
+        spec is None and len(within) == 1
+        and isinstance(node.count, ast.ThatMuch)
+        and node.count.source is None and not node.count.bonus
+    ):
+        spec = {"back_reference": within[0]}
     if spec is None:
         if isinstance(node.count, ast.Times):
             # A factor over something that is not a recorded count — nothing

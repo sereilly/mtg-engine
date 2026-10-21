@@ -198,9 +198,18 @@ def draw_target_cards(game: Game, instruction: OracleInstruction, context: Oracl
 def draw_controller_cards(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     caster = context.caster
     card = context.card
-    drawn = game._draw_with_replacements(
-        caster, resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+    # "Discard all the cards in your hand, **then draw that many cards**."
+    # (Tolarian Winds; Nantuko Cultivator.) The lowering writes the record the
+    # number lives in as ``amount_from`` for this kind exactly as for
+    # ``draw_target_cards`` above, and this handler never read it: both cards
+    # compiled supported and drew nothing. A key nothing wrote reads as zero.
+    counted_from = instruction.payload.get("amount_from")
+    count = (
+        max(0, int(context.results.get(counted_from, 0) or 0))
+        if counted_from is not None
+        else resolve_amount(instruction.payload.get("amount", 0), context.x_value)
     )
+    drawn = game._draw_with_replacements(caster, count)
     game.log.append(f"{card.name} drew {drawn} card")
     return True, "resolved"
 
