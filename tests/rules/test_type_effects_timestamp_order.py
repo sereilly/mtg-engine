@@ -1438,7 +1438,11 @@ def _j6_looped_entry_handlers():
 #: "several" is a row of the census above, "one" a single seat's cards — where
 #: the order is that player's own choice (see the Replenish test below).
 _J6_LOOPED_ENTRY_HANDLERS = {
-    "return_all_cards_from_graveyard": "several",       # Twilight's Call, Planar Birth
+    # Twilight's Call, Planar Birth. The handler's move is its helper's since
+    # Torment's wave 2 (W2G2): every card enters after the last returning
+    # Aura's host is chosen (CR 303.4f), so the loop runs in the continuation
+    # ``_return_planned_cards`` rather than in the handler's own body.
+    "_return_planned_cards": "several",
     "put_exiled_this_way": "several",                   # Living Death
     "put_chosen_hand_cards_onto_battlefield": "several",  # Stronghold Gambit
     "put_revealed_top_cards_onto_battlefield": "several",  # Game Preserve
@@ -1463,9 +1467,15 @@ def test_j6_every_handler_that_can_enter_several_permanents_is_accounted_for():
         _j6_looped_entry_handlers() ^ set(_J6_LOOPED_ENTRY_HANDLERS)
     )
     several = {
-        name for name, whose in _J6_LOOPED_ENTRY_HANDLERS.items() if whose == "several"
+        _J6_HELPER_KINDS.get(name, name)
+        for name, whose in _J6_LOOPED_ENTRY_HANDLERS.items() if whose == "several"
     }
     assert several == {kind for kind, _make in _J6_ENTER_TOGETHER.values()}
+
+
+#: A looped entry that lives in a handler's helper, by the instruction kind
+#: whose handler it is.
+_J6_HELPER_KINDS = {"_return_planned_cards": "return_all_cards_from_graveyard"}
 
 
 def _j6_ordered_static_sources():

@@ -551,6 +551,32 @@ def has_nonmana_activated_ability(card) -> bool:
     )
 
 
+def _intrinsic_land_mana_ability():
+    from .oracle_types import (ActivatedAbilityCost, OracleInstruction,
+                               ParsedActivatedAbility)
+
+    return ParsedActivatedAbility(
+        source_line="",
+        normalized_effect="",
+        supported=True,
+        cost=ActivatedAbilityCost(mana={}, requires_tap=True),
+        effect_kind="activated_mana",
+        instruction=OracleInstruction("add_mana_from_text", "", {}),
+    )
+
+
+#: CR 305.6's "{T}: Add [mana symbol]" — the mana ability a basic land type
+#: gives a land, which no text carries and so no compiled program holds. A
+#: question asked *of an ability* (CR 602.5's prohibitions: "can't be
+#: activated", "unless they're mana abilities", "with {T} in their costs") has
+#: to be handed one, and a Forest has nothing else to hand: this is that
+#: ability as the rules define it — a {T} cost, no other, an effect that adds
+#: mana and targets nothing, and no printed line for a clause to sit on. What
+#: it adds is not here (the land's summary and its types say that); it is the
+#: answer to what kind of ability tapping the land activates.
+INTRINSIC_LAND_MANA_ABILITY = _intrinsic_land_mana_ability()
+
+
 def is_mana_ability(ability) -> bool:
     """Whether *ability* is a mana ability (CR 605.1a).
 

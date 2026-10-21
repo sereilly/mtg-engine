@@ -174,6 +174,20 @@ def permanent_choice_candidates(game, payload: dict, context, among=None) -> lis
                 game, context.card, seat, perm
             ) is not None:
                 continue
+        aura_card = payload.get("legal_host_for_card")
+        if aura_card is not None:
+            # "…chooses what it will enchant as it enters" (CR 303.4f) for an
+            # Aura card a mass return puts onto the battlefield (Replenish):
+            # the same predicate, asked of *that* card under the seat that will
+            # control it — which is not the effect's controller when "each
+            # player returns" it. No lowering writes this key; the handler that
+            # arms the prompt does (``handlers/zones.return_all_cards_from_
+            # graveyard``), and the liveness re-check reads it back.
+            from ..auras import enchant_card_refusal
+
+            controller = payload.get("host_controller", seat)
+            if enchant_card_refusal(game, aura_card, controller, perm) is not None:
+                continue
         out.append(perm)
     superlative = payload.get("superlative")
     if superlative and out:

@@ -3658,10 +3658,12 @@ class PermanentStateMixin:
         in the first place: the keyword gate refuses it with the clause named.
 
         *ignoring_aura* leaves one attached Aura's own grant out of the
-        answer. It exists for CR 702.16n and has one caller, the state-based
+        answer. It exists for CR 702.16n, and its caller is the state-based
         sweep: "this effect doesn't remove this Aura" exempts the Aura from
         the protection **it** grants and from no other instance, so the sweep
-        asks what the creature is protected from without it.
+        asks what the creature is protected from without it. The host
+        predicate (``auras.enchant_card_refusal``) passes it too, for the one
+        host whose protection an Aura's own grant can be: the one it is on.
         """
         qualities: set[tuple[str, str]] = set()
         program = compile_card_oracle(permanent.effective_card)

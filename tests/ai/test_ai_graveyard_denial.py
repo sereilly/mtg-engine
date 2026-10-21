@@ -241,15 +241,17 @@ _ONE_TARGET_WRONG_BEFORE = {
 #: at resolution, the prompt is no longer on their road and they are not in
 #: the wrong set either way — so the backwards test below holds them to
 #: "nothing outside the eleven", not to being there.
+#:
+#: Gravegouger (Torment: "When this creature enters, exile up to two target
+#: cards from a single graveyard") joined them in Torment's second wave
+#: (W2G2). Its pile was the resolution prompt's until then, and this backwards
+#: check could demand it; its cards are announced now — by the AI as it casts
+#: the creature, through the same chooser Decompose's cast uses — so with the
+#: old defaults restored it reaches the opponent's pile from both chairs, and
+#: it is held to "nothing outside" like the four.
 _SINGLE_PILE_WRONG_BEFORE = {
-    "Carrion Beetles", "Decompose", "Famished Ghoul", "Rapid Decay",
+    "Carrion Beetles", "Decompose", "Famished Ghoul", "Gravegouger", "Rapid Decay",
 }
-#: …and the same sentence under a **trigger** (Gravegouger, Torment: "When
-#: this creature enters, exile up to two target cards from a single
-#: graveyard"). Its pile is still the prompt's at resolution, so with the old
-#: default restored it *must* reach the AI's own pile from chair 0 — which
-#: makes it the one card on that road this backwards check can still demand.
-_TRIGGER_PILE_WRONG_BEFORE = {"Gravegouger"}
 
 
 def test_the_sweep_names_the_defect_with_the_old_defaults_restored(monkeypatch):
@@ -281,11 +283,7 @@ def test_the_sweep_names_the_defect_with_the_old_defaults_restored(monkeypatch):
 
     wrong = {r["card"] for r in old if "AI" in r["from"] and r["seat"] == 0}
     assert _ONE_TARGET_WRONG_BEFORE <= wrong, sorted(_ONE_TARGET_WRONG_BEFORE - wrong)
-    assert _TRIGGER_PILE_WRONG_BEFORE <= wrong, sorted(_TRIGGER_PILE_WRONG_BEFORE - wrong)
-    assert wrong <= (
-        _ONE_TARGET_WRONG_BEFORE | _SINGLE_PILE_WRONG_BEFORE
-        | _TRIGGER_PILE_WRONG_BEFORE
-    ), sorted(wrong)
+    assert wrong <= (_ONE_TARGET_WRONG_BEFORE | _SINGLE_PILE_WRONG_BEFORE), sorted(wrong)
     assert [r["card"] for r in old if "AI" in r["from"] and r["seat"] == 1] == []
 
 

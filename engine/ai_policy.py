@@ -5789,6 +5789,10 @@ def choose_returning_aura_host(game: Game, seat: int, card: CardDefinition, lega
     preference, not a filter — with only the other side's permanents legal,
     one of them is still the answer — and stable, so board order breaks every
     tie and a seed still reproduces a run.
+
+    The answer for every seat nobody asks, and the default of the prompt an
+    interactive seat is asked (``permanent_choice`` with ``default_prefers:
+    "returning_aura_host"``), so a seat answered for lands where this would.
     """
     harmful = _aura_harms_its_host(card)
     ranked = sorted(

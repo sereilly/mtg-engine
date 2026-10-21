@@ -291,6 +291,22 @@ def _action_trigger_target_confirm(session, req, seat_type):
         ):
             raise HTTPException(status_code=400, detail="invalid target")
         return
+    # **Several cards in one graveyard** ("exile up to two target cards from a
+    # single graveyard", Gravegouger): the pile and every slot, as one
+    # announcement — the prompt carries ``max_targets`` and
+    # ``single_graveyard``. The engine holds each slot to the list it offered
+    # in that pile and the count to the printed one.
+    if req.graveyard_indices is not None and pending.data.get("max_targets"):
+        if req.target_seat is None:
+            raise HTTPException(
+                status_code=400, detail="target_seat names whose graveyard",
+            )
+        if not session.game.confirm_trigger_target(
+            req.seat, seat=req.target_seat,
+            graveyard_indices=list(req.graveyard_indices),
+        ):
+            raise HTTPException(status_code=400, detail="invalid graveyard targets")
+        return
     # A **card in a graveyard** (Gravedigger): the pile and the slot, the two
     # things the prompt listed it by. Ahead of the seat-alone branch below,
     # which would otherwise read the pile's seat as a targeted player.

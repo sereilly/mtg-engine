@@ -5665,6 +5665,22 @@ class PendingChoicesMixin:
                 live,
                 key=lambda perm: self.controller_index_of(perm) == choice.player_index,
             )
+        elif prefers == "returning_aura_host" and live:
+            # "Return all enchantment cards from your graveyard to the
+            # battlefield." (Replenish.) What each returning Aura enchants is
+            # its controller's choice (CR 303.4f), and a seat nobody asks
+            # already takes ``ai_policy``'s pick without being armed — so the
+            # prompt's own default is that pick too, and an interactive seat
+            # answered for (a test's drain, a timed-out seat) lands where an AI
+            # seat would.
+            from ...ai_policy import choose_returning_aura_host
+
+            aura_card = (choice.data.get("_payload") or {}).get("legal_host_for_card")
+            if aura_card is not None:
+                pick = choose_returning_aura_host(
+                    self, choice.player_index, aura_card, live
+                )
+                live = [pick, *(perm for perm in live if perm is not pick)]
         # …and the one ordering a *later sentence* asks for: "Prevent all combat
         # damage target creature would deal this turn **if it shares a color
         # with that permanent**" (Guard Dogs). The pick decides whether the
@@ -9400,6 +9416,7 @@ class PendingChoicesMixin:
         graveyard_index: int | None = None,
         stack_item=None,
         amounts: list[int] | None = None,
+        graveyard_indices: list[int] | None = None,
     ) -> bool:
         """Answer a triggered ability's target choice.
 
@@ -9416,7 +9433,10 @@ class PendingChoicesMixin:
 
         *graveyard_index* with *seat* is a **card in a graveyard**: which pile
         and which slot of it, as the prompt listed them. A graveyard card has
-        no id to be named by.
+        no id to be named by. *graveyard_indices* with *seat* is **several**
+        of them out of that one pile ("exile up to two target cards from a
+        single graveyard", Gravegouger) — one announcement, as
+        *permanent_ids* is for objects.
 
         *stack_item* is the answer for an ability whose target is a **spell**
         ("When this creature enters, counter target spell", Mystic Snake): the
@@ -9436,6 +9456,7 @@ class PendingChoicesMixin:
             "trigger_target", player_index, permanent_id=permanent_id, seat=seat,
             permanent_ids=permanent_ids, graveyard_index=graveyard_index,
             stack_item=stack_item, amounts=amounts,
+            graveyard_indices=graveyard_indices,
         )
 
     def trigger_target_stack_item(self, player_index: int, top_first_index: int):
@@ -9651,12 +9672,78 @@ class PendingChoicesMixin:
         self._announce_answered_targets(item, choice, queued)
         return True
 
+    def _resolve_trigger_graveyard_targets(
+        self, choice: PendingChoice, seat, graveyard_indices,
+    ) -> bool:
+        """Record **several** chosen cards in one graveyard on the stack object
+        (CR 603.3d, CR 601.2c).
+
+        "When this creature enters, exile **up to two** target cards from **a
+        single graveyard**." (Gravegouger.) The plural of
+        :meth:`_resolve_trigger_graveyard_target`, checked the way both the
+        one-card answer and the several-object answer are: every slot named is
+        one the prompt offered **in the one pile named** (*seat* — which is
+        what makes "a single graveyard" true by construction), by the stamp it
+        was offered under; each once (CR 115.3); no more than the ability
+        prints and, for a count printed without "up to", exactly that many. An
+        empty list is the "up to" answer "nobody", which the several-object
+        answer already records.
+
+        Written in the shape a spell's announcement of the same sentence is
+        (Decompose): ``target_graveyard_card`` a list of stamps, the slots
+        beside them, ``target_player_index`` the pile — so the handler's
+        announced branch (``exile_cards_from_graveyard``), CR 608.2b's
+        re-check and ``stack_targets`` read a trigger's exactly as a spell's.
+        """
+        item = choice.data.get("_trigger_item")
+        if item is None:
+            return False
+        indices = list(graveyard_indices or ())
+        if not indices:
+            return self._resolve_trigger_targets(choice, [])
+        ceiling = int(choice.data.get("max_targets") or 1)
+        if len(indices) > ceiling or len(set(indices)) != len(indices):
+            return False
+        if choice.data.get("exact_targets") and len(indices) != ceiling:
+            return False
+        offered = {
+            (target.get("seat"), target.get("graveyard_index"))
+            for target in choice.data.get("targets") or ()
+            if target.get("kind") == "graveyard"
+        }
+        stamps_offered = choice.data.get("_graveyard_stamps") or {}
+        stamps, slots = [], []
+        for index in indices:
+            stamp = stamps_offered.get((seat, index))
+            if (seat, index) not in offered or stamp is None:
+                return False
+            slot = self.graveyard_index_of(stamp)
+            if slot is None or slot in slots:
+                return False
+            stamps.append(stamp)
+            slots.append(slot)
+        queued = self._choice_is_queued(choice)
+        self.discard_pending_choice(choice)
+        item.target_graveyard_card = stamps
+        item.target_permanent_index = slots
+        item.target_player_index = seat
+        item.target_permanent_id = None
+        item.targets_chosen = self._trigger_target_was_a_choice()
+        self.log.append(
+            f"{choice.data.get('card_name', 'Ability')}: targets "
+            + ", ".join(stamp.card.name for stamp in stamps)
+            + f" in {self.players[seat].name}'s graveyard"
+        )
+        self._announce_answered_targets(item, choice, queued)
+        return True
+
     def _resolve_trigger_target(
         self, choice: PendingChoice, permanent_id: int | None = None,
         seat: int | None = None, permanent_ids: list[int] | None = None,
         graveyard_index: int | None = None,
         stack_item=None,
         amounts: list[int] | None = None,
+        graveyard_indices: list[int] | None = None,
     ) -> bool:
         """Record the chosen target on the stack object that asked (CR 601.2c).
 
@@ -9687,6 +9774,16 @@ class PendingChoicesMixin:
             return self._resolve_trigger_targets(choice, permanent_ids, amounts)
         if amounts is not None:
             return False
+        if graveyard_indices is not None:
+            return self._resolve_trigger_graveyard_targets(
+                choice, seat, graveyard_indices
+            )
+        if graveyard_index is not None and int(choice.data.get("max_targets") or 1) > 1:
+            # One card named for an ability that may name several (Gravegouger
+            # with one card chosen): the several-card answer's own check.
+            return self._resolve_trigger_graveyard_targets(
+                choice, seat, [graveyard_index]
+            )
         if permanent_ids is not None:
             return self._resolve_trigger_targets(choice, permanent_ids)
         if permanent_id is not None and choice.data.get("exact_targets"):
@@ -9894,6 +9991,30 @@ class PendingChoicesMixin:
             # offer at all, which for a pile the standing seat has nothing in
             # is a card where the old scan found none.
             cards = [target for target in targets if target.get("kind") == "graveyard"]
+            if cards and int(choice.data.get("max_targets") or 1) > 1:
+                # **Several cards out of a single graveyard** (Gravegouger):
+                # what the resolution took before the cards were announced —
+                # ``_default_graveyard_pile_choice``'s pile (another seat's
+                # first, its own only when no other is offered) and
+                # ``_default_graveyard_exile_pick``'s cards (the most the
+                # ability allows, the cards their owner could still cast from
+                # there first, else in pile order). So announcing them changes
+                # what a *player* is asked and nothing an unasked seat does.
+                from ...ai_valuation import (denied_graveyard_pile,
+                                             graveyard_denial_order)
+
+                piles = list(dict.fromkeys(target["seat"] for target in cards))
+                pile = denied_graveyard_pile(choice.player_index, piles)
+                slots = [
+                    target["graveyard_index"] for target in cards
+                    if target["seat"] == pile
+                ]
+                if pile != choice.player_index:
+                    slots = graveyard_denial_order(self, pile, slots)
+                ceiling = int(choice.data["max_targets"])
+                return self._resolve_trigger_graveyard_targets(
+                    choice, pile, slots[:ceiling]
+                )
             if cards:
                 pick = next(
                     (target for target in cards if target.get("seat") == standing),
@@ -11874,7 +11995,7 @@ register_choice(
     resolve=lambda game, choice, r: game._resolve_trigger_target(
         choice, r.get("permanent_id"), r.get("seat"), r.get("permanent_ids"),
         graveyard_index=r.get("graveyard_index"), stack_item=r.get("stack_item"),
-        amounts=r.get("amounts"),
+        amounts=r.get("amounts"), graveyard_indices=r.get("graveyard_indices"),
     ),
     default=lambda game, choice: game._default_trigger_target(choice),
     action="trigger_target_confirm",

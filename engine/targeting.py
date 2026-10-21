@@ -1897,11 +1897,16 @@ def _graveyard_exile_pile_spec(payload: dict) -> dict | None:
       (CR 601.2c), and choosing them at resolution let a caster pick after the
       opponent had passed.
 
+    The same holds of a **triggered** ability printing it (Gravegouger: "When
+    this creature enters, exile up to two target cards from a single
+    graveyard"): its cards are chosen as it is put on the stack (CR 603.3d),
+    through the ``trigger_target`` prompt over this spec's candidates.
+
     Rysorian Badger's is "defending player's", frozen into a *trigger's*
-    context by the declare-attackers fire site. A trigger has no picker for a
-    card in a graveyard, so it carries no description, answers **None** here
-    and keeps its resolution prompt: a picker the client fills for an effect
-    whose handler then prompts anyway is two questions for one decision.
+    context by the declare-attackers fire site. It carries no description,
+    answers **None** here and keeps its resolution prompt: a picker the client
+    fills for an effect whose handler then prompts anyway is two questions for
+    one decision.
 
     Everything else is handed straight over in the key names
     ``graveyard_card_matches`` reads — the arrangement every graveyard spec in

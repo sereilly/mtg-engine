@@ -35,10 +35,11 @@ Four things here:
   and nothing asked at resolution;
 * the gates, both ends, and the sweep the other way — the announcement gate
   turned off, and nothing the list did not offer is acted on;
-* what is deliberately **left**: under a *triggered* ability the same words
-  are still chosen at resolution (no trigger has a picker for a card in a
-  graveyard), pinned here with an invented card so the two prompts keep a
-  test now that no shipped spell arms them.
+* and the same words under a *triggered* ability, which were left chosen at
+  resolution until Torment's second wave (W2G2, Gravegouger) and are
+  announced as the ability is put on the stack now (CR 603.3d) — with the
+  resolution prompts kept under a test of their own, over a payload that
+  carries no target description, since no compiled card arms them any more.
 """
 
 from __future__ import annotations
@@ -489,13 +490,12 @@ def test_an_ai_seat_names_an_opponents_cards_for_the_activation(pool):
 # What is left: the same words under a trigger
 # ---------------------------------------------------------------------------
 
-def test_a_triggered_ability_still_chooses_its_single_graveyard_at_resolution(pool):
-    """No trigger has a picker for a card in a graveyard
-    (``_CHOOSABLE_TRIGGER_TARGET_KINDS``), so under one the pile and the cards
-    are still named as it resolves — ROADMAP's standing entry for every
-    trigger's graveyard target, of which this is one more. Pinned so the day
-    a trigger can announce them, this fails and says so; and so the two
-    prompts have a test, no shipped spell arming them any more."""
+def test_a_triggered_ability_announces_its_single_graveyard_too(pool):
+    """CR 603.3d: a triggered ability chooses its targets as it is put on the
+    stack, and "up to two target cards from a single graveyard" are targets
+    under a trigger as under a spell. Pinned the other way round until
+    Torment's second wave — "pinned so the day a trigger can announce them,
+    this fails and says so" — and that day was Gravegouger's (W2G2)."""
     watcher = _mk_creature_card(
         "Graveside Watcher", 2, 2,
         "When this creature enters, exile up to two target cards from a "
@@ -504,12 +504,42 @@ def test_a_triggered_ability_still_chooses_its_single_graveyard_at_resolution(po
     program = compile_card_oracle(watcher)
     assert program.supported, program.reason
     (trigger,) = program.triggered_abilities
-    assert "targets" not in trigger.instruction.payload
+    assert trigger.instruction.payload["targets"]["count"] == 2
 
     game = _duel(pool, cards=[watcher])
     assert game.queue_from_hand(0, "Graveside Watcher").supported
     game.resolve_top_of_stack(pause_for_choices=True)       # the creature
-    game.resolve_top_of_stack(pause_for_choices=True)       # its trigger
+
+    (asked,) = game.pending_choices
+    assert asked.kind == "trigger_target"
+    assert asked.data["single_graveyard"] and asked.data["max_targets"] == 2
+    assert game.confirm_trigger_target(0, seat=1, graveyard_indices=[1, 2])
+    resolve_stack(game)
+
+    assert sorted(_names(game.players[1].exile)) == ["Hill Giant", "Terror"]
+    assert game.pending_choices == [] and game.stack == []
+
+
+def test_a_pile_with_no_target_description_is_still_chosen_at_resolution(pool):
+    """The handler's resolution-time branch — which pile, then which cards —
+    for a "single graveyard" payload that carries no ``targets``
+    description. No compiled card reaches it since triggers announce theirs,
+    so it is driven over a hand-built instruction to keep the two prompts
+    (``graveyard_pile_choice``, ``graveyard_exile_pick``) under a test."""
+    from engine.game_types import OracleExecutionContext
+    from engine.oracle_types import OracleInstruction
+
+    game = _duel(pool)
+    source = Permanent(card=pool["Craw Wurm"])
+    game._put_permanent_onto_battlefield(0, source, None)
+    instruction = OracleInstruction("exile_cards_from_graveyard", "", {
+        "count": 2, "graveyard_owner": "chosen", "up_to": True, "any_card": True,
+    })
+    context = OracleExecutionContext(
+        caster=game.players[0], target=game.players[1], card=source.card,
+        source_permanent=source,
+    )
+    game._execute_oracle_instruction(instruction, context)
 
     assert [choice.kind for choice in game.pending_choices] == ["graveyard_pile_choice"]
     assert game.confirm_graveyard_pile_choice(0, 1)
@@ -517,4 +547,4 @@ def test_a_triggered_ability_still_chooses_its_single_graveyard_at_resolution(po
     assert game.confirm_graveyard_exile_pick(0, [1, 2])
 
     assert sorted(_names(game.players[1].exile)) == ["Hill Giant", "Terror"]
-    assert game.pending_choices == [] and game.stack == []
+    assert game.pending_choices == []

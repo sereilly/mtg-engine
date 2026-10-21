@@ -39,6 +39,12 @@ _MIN_SEVERAL_TARGET_TRIGGERS = 3
 #: CR 603.3d takes it off the stack before anybody is asked.
 _BYSTANDERS = ("Grizzly Bears", "Savannah Lions", "Hill Giant", "Forest", "Island")
 
+#: …and a pile in each graveyard since Torment's Gravegouger ("exile up to two
+#: target cards **from a single graveyard**"), the first several-target trigger
+#: whose targets are cards in a graveyard (W2G2): a board with empty piles
+#: offers it nothing, and an "up to" with nothing to name is not asked.
+_GRAVEYARD_BYSTANDERS = ("Lightning Bolt", "Giant Growth", "Hill Giant")
+
 
 @pytest.fixture(scope="module")
 def pool() -> dict:
@@ -98,6 +104,7 @@ def test_w2g6_every_several_target_trigger_is_asked_for_all_of_them(pool):
         for seat in (0, 1):
             for name in _BYSTANDERS:
                 _w2g6_put(game, pool, seat, name)
+            game.players[seat].graveyard = [pool[name] for name in _GRAVEYARD_BYSTANDERS]
         source = Permanent(card=card)
         # Whatever kicker the card prints was paid, so an "if it was kicked
         # with…" trigger is one this reaches (CR 702.33f).
@@ -116,6 +123,9 @@ def test_w2g6_every_several_target_trigger_is_asked_for_all_of_them(pool):
 
         (asked,) = game.pending_choices
         assert asked.kind == "trigger_target", card.name
+        if all(t.get("kind") == "graveyard" for t in asked.data["targets"]):
+            _w2g6_graveyard_row(game, asked, item, card, printed)
+            continue
         offered = [t["permanent_id"] for t in asked.data["targets"]]
         assert len(offered) >= printed, (card.name, len(offered))
         assert asked.data.get("max_targets") == printed, card.name
@@ -149,6 +159,31 @@ def test_w2g6_every_several_target_trigger_is_asked_for_all_of_them(pool):
         assert game.confirm_trigger_target(0, permanent_ids=offered[:printed]), card.name
         assert item.target_permanent_id == offered[:printed]
         assert game.pending_choices == []
+
+
+def _w2g6_graveyard_row(game, asked, item, card, printed) -> None:
+    """The census row for several **cards in a graveyard** (Gravegouger): the
+    same four refusals and one acceptance, in the graveyard's address — a pile
+    and its slots (``graveyard_indices``) — and the stack object carrying them
+    in a spell's shape."""
+    pile = asked.data["targets"][-1]["seat"]
+    slots = [t["graveyard_index"] for t in asked.data["targets"] if t["seat"] == pile]
+    assert len(slots) >= printed, (card.name, len(slots))
+    assert asked.data.get("max_targets") == printed, card.name
+    assert not game.confirm_trigger_target(
+        0, seat=pile, graveyard_indices=slots[: printed + 1]
+    ), f"{card.name}: more than it prints"
+    assert not game.confirm_trigger_target(
+        0, seat=pile, graveyard_indices=[slots[0], slots[0]]
+    ), f"{card.name}: one card twice"
+    assert not game.confirm_trigger_target(
+        0, seat=pile, graveyard_indices=[slots[0], 999]
+    ), f"{card.name}: something never offered"
+    assert game.pending_choices == [asked], "a refused answer leaves it owed"
+    assert game.confirm_trigger_target(0, seat=pile, graveyard_indices=slots[:printed])
+    assert item.target_player_index == pile
+    assert item.target_permanent_index == slots[:printed]
+    assert game.pending_choices == []
 
 
 def test_w2g6_basris_acolyte_put_onto_the_battlefield_counters_two(pool):

@@ -16,8 +16,11 @@ entered attached to nothing and CR 704.5m put it straight back. Replenish had
 shipped that way since Urza's Destiny — its reminder text names the case and
 nothing read it.
 
-The host is chosen for every seat by ``ai_policy.choose_returning_aura_host``;
-asking an interactive seat is a prompt this round did not build.
+CR 303.4f makes the host the choice of "that player" — the one the Aura
+enters under. A seat nobody asks takes ``ai_policy.choose_returning_aura_host``;
+an interactive seat with more than one legal host is asked, once per Aura,
+through the general ``permanent_choice`` prompt, and **nothing moves until the
+last answer**: the cards enter together (Torment wave 2, W2G2).
 """
 
 from __future__ import annotations
@@ -135,3 +138,131 @@ def test_cleansing_meditation_puts_its_returned_auras_back_on_creatures(pool):
     game.check_state_based_actions()
     assert _hosts(game) == [("Holy Strength", "Grizzly Bears")]
     assert strength not in list(game.all_permanents()), "a new object (CR 400.7)"
+
+
+# --- W2G2: the player putting the Aura onto the battlefield chooses ---------
+
+
+def _replenish_asked(pool, **board):
+    """Replenish cast by an interactive seat 0 and resolved as far as the
+    first question."""
+    game = _table(pool, hand0=["Replenish"], **board)
+    game.interactive_seats = {0}
+    assert game.cast_from_hand(0, "Replenish").supported
+    game.resolve_top_of_stack()
+    assert [item.card.name for item in game.stack] == ["Replenish"], (
+        "the resolution waits on a seat"
+    )
+    return game
+
+
+def _named(game, name):
+    return next(perm for perm in game.all_permanents() if perm.card.name == name)
+
+
+def test_an_interactive_seat_chooses_each_returning_auras_host(pool):
+    """CR 303.4f: "that player chooses what it will enchant". One question per
+    Aura, out of the hosts it could legally enchant, and the answer wins over
+    the policy: Holy Strength goes on the opponent's Hill Giant because the
+    player said so, where an unasked seat would have put it on its own Bears."""
+    game = _replenish_asked(
+        pool, gy0=["Holy Strength", "Unholy Strength", "Castle"],
+        bf0=["Grizzly Bears"], bf1=["Hill Giant"],
+    )
+    bears, giant = _named(game, "Grizzly Bears"), _named(game, "Hill Giant")
+
+    first = game.pending_choices_of("permanent_choice")
+    assert len(first) == 1 and first[0].player_index == 0
+    assert "Holy Strength" in first[0].data["prompt"]
+    assert [perm.card.name for perm in game.live_permanent_choices(first[0])] == [
+        "Grizzly Bears", "Hill Giant",
+    ]
+    assert game.confirm_permanent_choice(0, giant.permanent_id)
+
+    # Nothing has moved: the cards enter together, after the last answer
+    # (CR 608.2: the spell is still resolving, and on the stack).
+    second = game.pending_choices_of("permanent_choice")
+    assert len(second) == 1 and "Unholy Strength" in second[0].data["prompt"]
+    assert [card.name for card in game.players[0].graveyard] == [
+        "Holy Strength", "Unholy Strength", "Castle",
+    ]
+    assert [item.card.name for item in game.stack] == ["Replenish"]
+    assert game.confirm_permanent_choice(0, bears.permanent_id)
+
+    assert not game.pending_choices and not game.stack
+    game.check_state_based_actions()
+    assert _hosts(game) == [
+        ("Holy Strength", "Hill Giant"), ("Unholy Strength", "Grizzly Bears"),
+    ]
+    assert _named(game, "Castle") is not None
+    assert [card.name for card in game.players[0].graveyard] == ["Replenish"]
+    assert (giant.effective_power, giant.effective_toughness) == (4, 5)
+
+
+def test_a_host_the_aura_cannot_enchant_is_refused_and_the_prompt_stays(pool):
+    """The answer is checked against the same predicate the offer came from:
+    a land is no "creature", and a Black Knight is protected from a white Aura
+    (CR 702.16c). Both are refused and the question is still owed."""
+    game = _replenish_asked(
+        pool, gy0=["Holy Strength"],
+        bf0=["Grizzly Bears", "Forest", "Black Knight"], bf1=["Hill Giant"],
+    )
+    choice = game.pending_choices_of("permanent_choice")[0]
+    assert [perm.card.name for perm in game.live_permanent_choices(choice)] == [
+        "Grizzly Bears", "Hill Giant",
+    ]
+    for refused in ("Forest", "Black Knight"):
+        assert not game.confirm_permanent_choice(0, _named(game, refused).permanent_id)
+    assert game.pending_choices_of("permanent_choice") == [choice]
+    assert game.confirm_permanent_choice(0, _named(game, "Grizzly Bears").permanent_id)
+    assert _hosts(game) == [("Holy Strength", "Grizzly Bears")]
+
+
+def test_one_legal_host_is_no_question(pool):
+    """With one creature on the table the Aura's host is decided, so nobody is
+    asked and the spell resolves through."""
+    game = _table(pool, hand0=["Replenish"], gy0=["Holy Strength"], bf1=["Hill Giant"])
+    game.interactive_seats = {0}
+    assert game.cast_from_hand(0, "Replenish").supported
+    # Settled by the cast itself: nothing stopped the resolution to ask.
+    assert not game.stack and not game.pending_choices
+    assert _hosts(game) == [("Holy Strength", "Hill Giant")]
+    assert not any("awaiting a choice" in line for line in game.log), game.log
+
+
+def test_a_seat_answered_for_lands_where_an_unasked_seat_would(pool):
+    """The prompt's default is the policy's pick, not board order: drained by
+    the registry's default path, a harmful Aura (Paralyze) still goes on the
+    opponent's creature."""
+    game = _replenish_asked(
+        pool, gy0=["Paralyze"], bf0=["Grizzly Bears"], bf1=["Hill Giant"],
+    )
+    resolve_stack(game)
+    assert _hosts(game) == [("Paralyze", "Hill Giant")]
+
+
+def test_cleansing_meditation_asks_too(pool):
+    """The threshold arm is the same sweep: its returned Aura's host is asked
+    of an interactive caster, among the creatures that survived the destroy."""
+    from engine.auras import attach_aura
+
+    game = _table(
+        pool, hand0=["Cleansing Meditation"], gy0=["Forest"] * 7,
+        bf0=["Grizzly Bears"], bf1=["Hill Giant"],
+    )
+    bears, giant = _named(game, "Grizzly Bears"), _named(game, "Hill Giant")
+    strength = Permanent(card=pool["Holy Strength"])
+    game._put_permanent_onto_battlefield(0, strength, None)
+    attach_aura(strength, bears)
+    resolve_stack(game)
+    game.interactive_seats = {0}
+
+    assert game.cast_from_hand(0, "Cleansing Meditation").supported
+    game.resolve_top_of_stack()
+    choice = game.pending_choices_of("permanent_choice")[0]
+    assert [perm.card.name for perm in game.live_permanent_choices(choice)] == [
+        "Grizzly Bears", "Hill Giant",
+    ]
+    assert game.confirm_permanent_choice(0, giant.permanent_id)
+    game.check_state_based_actions()
+    assert _hosts(game) == [("Holy Strength", "Hill Giant")]

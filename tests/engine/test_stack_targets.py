@@ -750,14 +750,12 @@ _UNANNOUNCED_TRIGGER_TARGETS = frozenset({
     # no picker derived
     "The Abyss#0", "Rysorian Badger#0", "Goblin Grenadiers#0",
     "Carpet of Flowers#0", "Erithizon#0", "Ley Line#0", "Tolarian Kraken#0",
-    # Torment, W1G3. "When this creature enters, exile **up to two target
-    # cards from a single graveyard**" (Gravegouger): Rysorian Badger's
-    # deviation with the pile chosen too. Decompose's announced slot list
-    # (``targeting.SINGLE_GRAVEYARD``) exists for a spell and an activation;
-    # under a trigger the trigger-target prompt names one graveyard card, so
-    # the pile and the cards are picked as the ability resolves
-    # (``exile_cards_from_graveyard``'s "chosen" branch).
-    "Gravegouger#0",
+    # Gravegouger ("When this creature enters, exile **up to two target cards
+    # from a single graveyard**") stood here from Torment's first wave, its
+    # pile and cards picked as the ability resolved. They are announced as it
+    # is put on the stack since the second (W2G2): the trigger-target prompt
+    # names several cards in one pile (``single_graveyard``), and the default
+    # names the ones the resolution used to take.
     # Honorable Scout sat here from Planeshift's ingest to its first wave: "you
     # gain 2 life for each black and/or red creature *target opponent*
     # controls" puts the target inside the count's noun phrase
