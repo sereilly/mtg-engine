@@ -956,4 +956,4 @@ def lower_untargeted_return(
     # `_described_returns`' question and not this one. Handed down rather than
     # returned to `returns`, so the printed-specificity order stays one list in
     # one place and the caller keeps one call.
-    return lower_described_return(node, subject, event)
+    return lower_described_return(node, subject, event, produced)

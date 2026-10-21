@@ -10739,6 +10739,11 @@ def return_all_cards_from_graveyard(game: Game, instruction: OracleInstruction, 
     # nothing else (CR 613.1), so the record the game kept as the move happened
     # is the only thing that can answer.
     only_this_turn = bool(instruction.payload.get("put_there_this_turn"))
+    # "…return all cards in your graveyard **destroyed this way** to the
+    # battlefield." (Cleansing Meditation.) The pile intersected with what the
+    # destroy step in front of this one recorded — beside the filter for the
+    # history's reason above, and answered the same way, by count of entries.
+    destroyed_only = bool(instruction.payload.get("destroyed_this_way"))
     if who == "each_player":
         # CR 101.4's order, and a seat that has left the game returns nothing
         # (CR 800.4a): a lost player has no battlefield, so putting a card onto
@@ -10755,6 +10760,12 @@ def return_all_cards_from_graveyard(game: Game, instruction: OracleInstruction, 
     else:
         seats = [game.players.index(context.caster)]
     returned = 0
+    # CR 303.4f's hosts are the permanents **already** on the battlefield: the
+    # cards ruling for both printings (Replenish, Cleansing Meditation, 2005-08-
+    # 01) is that "Auras returning to the battlefield can only enchant
+    # something that was already on the battlefield", so the board is read once,
+    # before anything this effect returns has arrived.
+    already_there = list(game.all_permanents()) if destination == "battlefield" else []
     for seat in seats:
         player = game.players[seat]
         taken = [
@@ -10783,10 +10794,30 @@ def return_all_cards_from_graveyard(game: Game, instruction: OracleInstruction, 
                 arrived.pop(match)
                 allowed.append(index)
             taken = allowed
-        cards = [player.graveyard[index] for index in taken]
+        if destroyed_only:
+            taken = _destroyed_this_way_slots(player, taken, context)
+        # Each Aura card's host, chosen before anything moves (CR 303.4f), and
+        # an Aura with no legal host left where it is (CR 303.4g) rather than
+        # put onto the battlefield attached to nothing for CR 704.5m to bin.
+        hosts: dict[int, object] = {}
+        if destination == "battlefield":
+            for index in list(taken):
+                card = player.graveyard[index]
+                if not _is_aura_card(card):
+                    continue
+                host = _returning_aura_host(game, seat, card, already_there)
+                if host is None:
+                    taken.remove(index)
+                    game.log.append(
+                        f"{card.name} has nothing it could enchant and stays in "
+                        f"{player.name}'s graveyard"
+                    )
+                    continue
+                hosts[index] = host
+        cards = [(index, player.graveyard[index]) for index in taken]
         for index in sorted(taken, reverse=True):
             player.graveyard.pop(index)
-        for card in cards:
+        for index, card in cards:
             if destination == "hand":
                 # CR 903.9b's seam, never `player.hand.append` — a bounce, a
                 # tuck and a regrowth are all "would be put into its owner's
@@ -10802,6 +10833,20 @@ def return_all_cards_from_graveyard(game: Game, instruction: OracleInstruction, 
             if tapped:
                 permanent.tapped = True
             game._put_permanent_onto_battlefield(seat, permanent, None)
+            host = hosts.get(index)
+            if host is not None:
+                # Attached as part of the same move, inside this resolution —
+                # the arrangement ``reanimate_aura_onto_source`` keeps, so the
+                # Aura is never an unattached one for CR 704.5m to find.
+                from ..auras import attach_aura
+
+                attach_aura(permanent, host)
+                game.log.append(
+                    f"{player.name} returned {card.name} to the battlefield "
+                    f"from the graveyard attached to {host.card.name}"
+                )
+                returned += 1
+                continue
             game.log.append(
                 f"{player.name} returned {card.name} to the battlefield from the graveyard"
             )
@@ -10809,6 +10854,101 @@ def return_all_cards_from_graveyard(game: Game, instruction: OracleInstruction, 
     if not returned:
         game.log.append(f"{context.card.name}: no cards to return")
     return True, "resolved"
+
+
+def _is_aura_card(card) -> bool:
+    """Whether *card*, in a graveyard, is an Aura with an enchant ability —
+    the test the Aura spell's own resolution asks before CR 303.4g bins it
+    (``resolution``'s "had no legal target"), off the printed card because a
+    card in a graveyard has nothing else (CR 613.1)."""
+    from ..auras import aura_enchant_clause
+
+    return "Aura" in (card.type_line or "") and aura_enchant_clause(
+        card.oracle_text or ""
+    ) is not None
+
+
+def _returning_aura_host(game, seat: int, card, already_there):
+    """The permanent an Aura card a mass return puts onto the battlefield
+    enchants, or None when it can enchant nothing (CR 303.4g: it stays in the
+    graveyard).
+
+    CR 303.4f: an Aura put onto the battlefield by an effect that names no
+    host is attached to an object its controller chooses, as it enters, and
+    "doing this does not target the permanent" (Replenish's and Cleansing
+    Meditation's ruling, 2004-10-04) — so shroud and hexproof are no bar. The
+    enchant ability is ``enchant_card_refusal``, the one predicate the cast
+    gate, the pickers and the CR 704.5m sweep share; protection (CR 702.16c,
+    "can't be enchanted by Auras that have the stated quality") is asked
+    beside it through ``_is_protected_from`` with the card as the source,
+    because that predicate does not ask it and the CR 702.16c sweep would bin
+    the Aura the moment it arrived. Only a permanent that was on the
+    battlefield before the return (*already_there*).
+
+    **The choice is not asked.** Every seat takes ``ai_policy``'s pick — an
+    Aura whose text works against its host goes on an opponent's permanent,
+    any other on its controller's — the arrangement this handler already has
+    for the timestamp order of what it returns (CR 613.7m, pinned in
+    ``tests/rules/test_pt_setting_timestamp_order.py``). Asking an interactive
+    seat is a prompt kind and its client half, and both are named in the
+    round's report.
+    """
+    from ..ai_policy import choose_returning_aura_host
+    from ..auras import enchant_card_refusal
+
+    legal = [
+        host for host in already_there
+        if game.is_on_battlefield(host)
+        and enchant_card_refusal(game, card, seat, host) is None
+        and not game._is_protected_from(host, card, seat=seat)
+    ]
+    if not legal:
+        return None
+    return choose_returning_aura_host(game, seat, card, legal)
+
+
+def _destroyed_this_way_slots(player, taken, context) -> list[int]:
+    """The slots of *taken* (indices into *player*'s graveyard) holding a card
+    an earlier step of this resolution destroyed, newest first.
+
+    "Destroy all enchantments, then return all cards in your graveyard
+    **destroyed this way** to the battlefield." (Cleansing Meditation.) The
+    destroy step recorded the *permanents* (``destroyed_this_way_objects``);
+    what lies in the pile now is a new object with no memory of them (CR
+    400.7), and two copies of one card in a pile are one ``CardDefinition`` —
+    so a slot is admitted by **count of entries**, the way the "put there this
+    turn" history beside it is: a copy already in the graveyard before the
+    sweep is not returned because a second copy of it was destroyed.
+
+    Held to the arrival record as well: a destroyed permanent whose card a
+    replacement sent somewhere else (CR 614) never reached this pile, and its
+    name must not claim an older copy that did. A token's card never gets here
+    (CR 111.7), and the seam records the whole card (CR 709.4), so the
+    permanent's card is compared the same way.
+    """
+    from ..faces import whole_card
+
+    destroyed = [
+        whole_card(perm.card)
+        for perm in context.results.get("destroyed_this_way_objects") or ()
+        if not perm.metadata.get("is_token")
+    ]
+    arrived = list(player.cards_put_into_your_graveyard_from_battlefield_this_turn)
+    allowed: list[int] = []
+    for index in sorted(taken, reverse=True):
+        card = player.graveyard[index]
+        was_destroyed = next(
+            (i for i, held in enumerate(destroyed) if held is card), None
+        )
+        came_from_battlefield = next(
+            (i for i, held in enumerate(arrived) if held is card), None
+        )
+        if was_destroyed is None or came_from_battlefield is None:
+            continue
+        destroyed.pop(was_destroyed)
+        arrived.pop(came_from_battlefield)
+        allowed.append(index)
+    return allowed
 
 
 #: The scratchpad key the random reveal writes beside ``revealed_card``: which

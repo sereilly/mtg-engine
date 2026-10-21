@@ -214,6 +214,14 @@ class ObjectFilter:
     #: is whose hand ("you"), because that is the only part the sentence
     #: parameterizes; the operator is in the name for the field above's reason.
     power_greater_than_cards_in_hand: str | None = None
+    #: "Untap target creature **with power less than the number of cards in
+    #: your graveyard**…" (Temporary Insanity). The hand bound above over any
+    #: pile and any comparison: a ``Comparison`` whose value is a
+    #: :class:`CountOf` cards in one of the controller's own zones
+    #: (``bounds.accept_pile_count_bound`` admits nothing wider). Read at
+    #: announcement and again at resolution (CR 608.2b) by ``subject_matches``,
+    #: which holds the seat "your" names; the pure matcher refuses it.
+    power_vs_count: "Comparison | None" = None
     named: str | None = None
     #: "…a creature with flying **not named Escaped Shapeshifter**" — the
     #: negative of ``named``, when the excluded name is spelled out. A name
@@ -823,6 +831,17 @@ class ObjectFilter:
     # same reason one family over, and the handler intersects the swept pile
     # with the record.
     put_there_from_battlefield_this_turn: bool = False
+    #: "…return all cards in your graveyard **destroyed this way** to the
+    #: battlefield" (Cleansing Meditation). The cards of a pile that an earlier
+    #: step of this same effect destroyed as permanents — a record of this
+    #: resolution (``destroyed_this_way_objects``), not anything the card in
+    #: the pile shows (CR 400.7: it is a new object with no memory of having
+    #: been one). Never emitted, for ``not_chosen_this_way``'s reason: the one
+    #: lowering written for it hoists the record beside the filter and the
+    #: handler intersects the pile with it; every other lowering refuses the
+    #: phrase through ``_restrictions_beyond``, so a sweep cannot quietly widen
+    #: to the whole pile.
+    destroyed_this_way: bool = False
     # "target creature **of an opponent's choice** they control" (Preacher) —
     # who *picks* the object, which is not a property of any candidate. Never
     # emitted, so a lowering not written for it refuses the phrase instead of

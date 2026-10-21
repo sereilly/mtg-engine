@@ -136,6 +136,8 @@ class _FilterDraft:
     power_at_most_source_counters: str | None = None
     #: See ``ast.ObjectFilter.power_greater_than_cards_in_hand``.
     power_greater_than_cards_in_hand: str | None = None
+    #: See ``ast.ObjectFilter.power_vs_count``.
+    power_vs_count: ast.Comparison | None = None
     toughness: ast.Comparison | None = None
     # "…with power equal to or greater than the enchanted creature's toughness"
     # (Ironclaw Curse) — see ``ast.SourceRelativeComparison``.
@@ -252,6 +254,8 @@ class _FilterDraft:
     in_combat_with_source: bool = False
     was_dealt_damage_this_turn: bool = False
     put_there_from_battlefield_this_turn: bool = False
+    #: See ``ast.ObjectFilter.destroyed_this_way``.
+    destroyed_this_way: bool = False
     dealt_damage_to_source_this_turn: bool = False
     zone: str = "battlefield"
     #: See ``ast.ObjectFilter.also_ability`` — "target **spell or ability**"
@@ -342,6 +346,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         mana_value_equals_chosen_number=d.mana_value_equals_chosen_number,
         power_at_most_source_counters=d.power_at_most_source_counters,
         power_greater_than_cards_in_hand=d.power_greater_than_cards_in_hand,
+        power_vs_count=d.power_vs_count,
         zone=d.zone,
         also_ability=d.also_ability,
         also_spell=d.also_spell,
@@ -386,6 +391,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         in_combat_with_source=d.in_combat_with_source,
         was_dealt_damage_this_turn=d.was_dealt_damage_this_turn,
         put_there_from_battlefield_this_turn=d.put_there_from_battlefield_this_turn,
+        destroyed_this_way=d.destroyed_this_way,
         chosen_by_opponent=d.chosen_by_opponent,
         not_chosen_this_way=d.not_chosen_this_way,
         on_the_battlefield=d.on_the_battlefield,

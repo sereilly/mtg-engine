@@ -379,8 +379,20 @@ _REPLACEABLE = (
 #: A closed set for `_REPLACEABLE`'s reason, and held to effects that announce
 #: nothing: the replaced sentence is what the spell's targets were chosen for
 #: (CR 601.2c), and a continuation naming a target of its own would be an
-#: announcement only one arm could use.
-_CONTINUATIONS = (ast.CreateToken,)
+#: announcement only one arm could use. `_announces_nothing` is that test, one
+#: arm per kind.
+#:
+#: `DealDamage` and `ReturnToZone` joined it for Torment's threshold spells,
+#: whose replacing arm is the replaced sentence and then more, joined by "and"
+#: as often as by "then": "…instead destroy that land **and Rancid Earth deals
+#: 1 damage to each creature and each player**" (Rancid Earth), "…instead
+#: Kamahl's Sledge deals 4 damage to that creature **and 4 damage to that
+#: creature's controller**" (Kamahl's Sledge), "…instead destroy all
+#: enchantments, **then return all cards in your graveyard destroyed this way
+#: to the battlefield**" (Cleansing Meditation). A sweep, a seat named outright,
+#: the replaced target's own controller and a return of what the replaced
+#: sentence recorded are all chosen by nobody.
+_CONTINUATIONS = (ast.CreateToken, ast.DealDamage, ast.ReturnToZone)
 
 
 def _is_replaceable(statement) -> bool:
@@ -421,26 +433,118 @@ def _same_shape(replaced, replacement) -> bool:
 
 def _continues(replaced, replacement) -> bool:
     """Whether *replacement* is *replaced* said again **and then more**: a
-    "…, then …" sentence whose first step is the replaced sentence's kind and
-    whose every later step is one of ``_CONTINUATIONS``, made by the spell's
-    own controller.
+    "…, then …" or "… and …" sentence whose first step is the replaced
+    sentence's kind and whose every later step is one of ``_CONTINUATIONS``
+    announcing nothing (``_announces_nothing``).
 
     Only a single replaced sentence is continued. A replaced "…, then …" is
     already compared step for step, and letting it grow a tail as well would
     make "the same sentence, longer" and "a different sentence" one test.
     """
-    if isinstance(replaced, ast.Sequence) or not isinstance(replacement, ast.Sequence):
+    steps = _joined_steps(replacement)
+    if isinstance(replaced, ast.Sequence) or steps is None:
         return False
-    head, *tail = replacement.steps
+    head, *tail = steps
     return (
         type(head) is type(replaced)
         and bool(tail)
-        and all(
-            isinstance(step, _CONTINUATIONS)
-            and step.recipient is None
-            and step.recipient_players is None
-            for step in tail
+        and all(_announces_nothing(step, replaced) for step in tail)
+    )
+
+
+def _joined_steps(statement):
+    """The steps of a joined sentence — "…, then …" (:class:`ast.Sequence`)
+    or "… and …" sharing one verb (:class:`ast.Conjunction`) — or None.
+
+    Two nodes for one reading here: either way the arm does its steps in the
+    order printed, and which one the parser built is decided by whether the
+    second clause repeats the verb ("deals 4 damage to that creature **and** 4
+    damage to that creature's controller" is a conjunction; "destroy that land
+    **and** Rancid Earth deals 1 damage …" a sequence).
+    """
+    if isinstance(statement, ast.Sequence):
+        return statement.steps
+    if isinstance(statement, ast.Conjunction):
+        return statement.effects
+    return None
+
+
+def _announces_nothing(step, replaced) -> bool:
+    """Whether a continuing *step* is one of ``_CONTINUATIONS`` and chooses
+    nobody: no target, no division, no chooser — so the one announcement the
+    spell makes as it is cast (CR 601.2c) is the replaced sentence's, whichever
+    arm resolves.
+
+    * a token made for the spell's own controller (Kirtar's Wrath);
+    * damage dealt by an unannounced source to a sweep ("each creature"), to a
+      seat named outright ("each player", "you"), or to **the replaced
+      sentence's one target's controller** ("that creature's controller",
+      Kamahl's Sledge) — a seat the announcement already fixed, which the
+      damage lowering reads exactly as it reads Liquid Fire's;
+    * a return of every card a printed phrase names, with no pick
+      (Cleansing Meditation's "all cards … destroyed this way" — whether the
+      replaced sentence really recorded what that names is the lowering's
+      ``produced`` check, as it is for every "this way").
+    """
+    if not isinstance(step, _CONTINUATIONS):
+        return False
+    if isinstance(step, ast.CreateToken):
+        return step.recipient is None and step.recipient_players is None
+    if isinstance(step, ast.ReturnToZone):
+        subject = step.subject
+        return (
+            isinstance(subject, ast.TargetSpec)
+            and not subject.targeted
+            and subject.quantifier in ("all", "each")
         )
+    source = step.source
+    if isinstance(source, ast.TargetSpec) and source.targeted:
+        return False
+    if step.chooser is not None or step.riders.divided or not step.recipients:
+        return False
+    return all(
+        _unannounced_recipient(recipient, replaced) for recipient in step.recipients
+    )
+
+
+#: The seats a continuing damage clause may name outright — nobody chooses
+#: them, so they announce nothing.
+_NAMED_SEATS = ("each_player", "you", "each_opponent")
+
+
+def _unannounced_recipient(recipient, replaced) -> bool:
+    """Whether one recipient of a continuing damage clause is chosen by nobody
+    (``_announces_nothing``)."""
+    if isinstance(recipient, ast.PlayerRef):
+        if recipient.kind in _NAMED_SEATS:
+            return True
+        # "…and 4 damage to **that creature's controller**" (Kamahl's Sledge):
+        # the seat of the replaced sentence's own target, and only behind one —
+        # with nothing announced in front of it the words have no antecedent.
+        return recipient.kind == "that_player" and _one_announced_object(replaced)
+    return (
+        isinstance(recipient, ast.TargetSpec)
+        and not recipient.targeted
+        and recipient.quantifier in ("each", "all")
+    )
+
+
+def _one_announced_object(replaced) -> bool:
+    """Whether *replaced* names exactly one announced object target — the
+    antecedent "that creature's controller" needs."""
+    field = _INSTEAD_SUBJECT_FIELDS.get(type(replaced))
+    if field is None:
+        return False
+    named = getattr(replaced, field)
+    if isinstance(named, tuple):
+        if len(named) != 1:
+            return False
+        (named,) = named
+    return (
+        isinstance(named, ast.TargetSpec)
+        and named.targeted
+        and named.count == 1
+        and named.quantifier != "any_target"
     )
 
 
@@ -614,14 +718,17 @@ def _instead_inherits_subject(replaced, replacement):
         if any(step is None for step in resolved_steps):
             return None
         return ast.Sequence(resolved_steps)
-    if isinstance(replacement, ast.Sequence):
+    steps = _joined_steps(replacement)
+    if steps is not None:
         # A continued replacement (``_continues``): its first step restates
-        # *replaced* and is resolved against it; the steps behind "then" name
-        # nobody the first sentence could have.
-        head = _instead_inherits_subject(replaced, replacement.steps[0])
+        # *replaced* and is resolved against it; the steps behind "then" /
+        # "and" name nobody the first sentence could have — or, for "that
+        # creature's controller", name the seat of the target the first step
+        # has just inherited (``_announces_nothing``).
+        head = _instead_inherits_subject(replaced, steps[0])
         if head is None:
             return None
-        return ast.Sequence((head, *replacement.steps[1:]))
+        return type(replacement)((head, *steps[1:]))
     field = _INSTEAD_SUBJECT_FIELDS.get(type(replaced))
     if field is None:
         return replacement

@@ -503,6 +503,44 @@ def accept_cards_in_hand_bound(stream: TokenStream) -> str | None:
     return None
 
 
+#: The piles :func:`accept_pile_count_bound` admits. CR 400.1's own zones of a
+#: player; the battlefield is a board count with a controller in it, which is a
+#: different question this does not ask.
+_COUNTED_PILES = ("graveyard", "hand", "library")
+
+
+def accept_pile_count_bound(stream: TokenStream) -> "ast.Comparison | None":
+    """``less than the number of cards in your graveyard`` (Temporary
+    Insanity) — a characteristic's bound spelled against a **count of the
+    controller's own cards in a pile** — or None with the cursor unmoved.
+
+    :func:`accept_cards_in_hand_bound`'s question with the pile, the operator
+    and a card type left to the card, read through
+    :func:`accept_spelled_comparison` so "the number of cards in your
+    graveyard" means here what it means behind a damage amount. Admitted only
+    when the count is that and nothing wider: the bound is emitted on its own
+    payload key (``ObjectFilter.power_vs_count``) in the spec
+    ``evaluate_count`` reads, and a narrowing that spelling cannot carry, or
+    another seat's pile, must refuse rather than be counted without it.
+    """
+    mark = stream.mark()
+    comparison = accept_spelled_comparison(stream)
+    counted = getattr(comparison, "value", None)
+    if (
+        isinstance(counted, ast.CountOf)
+        and counted.filter.is_card
+        and counted.filter.zone in _COUNTED_PILES
+        and counted.filter.zone_owner == ast.PlayerRef("you")
+        and counted.filter == ast.ObjectFilter(
+            card_types=counted.filter.card_types, is_card=True,
+            zone=counted.filter.zone, zone_owner=counted.filter.zone_owner,
+        )
+    ):
+        return comparison
+    stream.reset(mark)
+    return None
+
+
 #: The two printed extremes and the three printed characteristics, as the words
 #: a card spells them. A table rather than a branch because the whole content of
 #: this reader is which two words were printed: Purging Scythe prints "least

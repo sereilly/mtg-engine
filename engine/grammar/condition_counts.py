@@ -65,13 +65,14 @@ from .amounts import parse_amount
 from .bounds import parse_comparison
 from .errors import GrammarError
 from .distinct import accept_one_of_each, parse_counted_objects
+from .filter_draft import _FilterDraft
 from .nouns import parse_object_filter
 from .references import parse_player_ref
 from .seat_comparisons import accept_margin
 from .seats import accept_life_total_of
 from .stream import TokenStream
 from .vocabulary import COLOR_WORDS
-from .zones import names_each_zone_ahead
+from .zones import accept_zone_scope, names_each_zone_ahead
 
 
 def _parse_count_bound(stream: TokenStream) -> ast.Comparison:
@@ -756,6 +757,54 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
                     )
                 return ast.CardsInZones(there_filter, there_comparison)
     stream.reset(there_mark)
+
+    # "if **twenty or more creature cards are in your graveyard**" (Mortal
+    # Combat). The pile count directly above with the noun phrase in subject
+    # position — one question, two printed word orders, the arrangement this
+    # file keeps for every clause a card spells both ways. Same node, so the
+    # evaluator, the intervening-if re-check (CR 603.4) and every reader of
+    # ``CardsInZones`` answer it unchanged.
+    #
+    # The printed number is required (the article spellings are the presence
+    # clause below, and read here "a creature card is in your graveyard" would
+    # be an exact count), and so is the pile: "two or more creatures are
+    # attacking" is a noun phrase followed by something else, and the scope
+    # reader answers None there, which rewinds the whole clause.
+    pile_mark = stream.mark()
+    if stream.peek_word() not in ("a", "an", "no", "there", "the"):
+        try:
+            pile_comparison = parse_comparison(stream)
+        except GrammarError:
+            pile_comparison = None
+        if pile_comparison is not None and isinstance(pile_comparison.value, ast.Fixed):
+            try:
+                pile_filter = parse_object_filter(stream)
+            except GrammarError:
+                pile_filter = None
+            if (
+                pile_filter is not None
+                and pile_filter.is_card
+                and pile_filter.zone == "battlefield"
+                and not pile_filter.on_the_battlefield
+                and stream.accept_word("are", "is")
+            ):
+                if names_each_zone_ahead(stream):
+                    # "…in each graveyard": the threshold the "there are"
+                    # spelling refuses for the same reason — asked of each pile
+                    # separately, not of their sum.
+                    raise stream.error(
+                        "a threshold over each zone separately is not a count "
+                        "over all of them"
+                    )
+                scope = _FilterDraft()
+                if accept_zone_scope(stream, scope) and scope.zone != "battlefield":
+                    return ast.CardsInZones(
+                        dataclasses.replace(
+                            pile_filter, zone=scope.zone, zone_owner=scope.zone_owner
+                        ),
+                        pile_comparison,
+                    )
+    stream.reset(pile_mark)
 
     # "if **no creatures are on the battlefield**" (Pestilence, Withering
     # Wisps). The board's own count, with no seat in it — read here, beside the
