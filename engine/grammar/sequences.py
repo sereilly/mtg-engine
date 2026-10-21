@@ -45,15 +45,15 @@ lowering twins.
 import dataclasses
 
 from . import ast
+from .activation_instructions import (_parse_activation_restriction,
+                                      _parse_cost_x_definition,
+                                      _parse_x_spend_restriction)
 from .conditional_instead import _parse_conditional_instead_rider
 from .control_flow import (_attach_if_that_card_was_returned, _attach_if_you_cant,
                           _attach_if_you_do, _attach_otherwise, _attach_when_you_do,
                           _attach_tied_for_fewest,
                           _attach_tied_life_draw, _parse_who_cant_rider)
 from .effects import (
-    _parse_activation_restriction,
-    _parse_x_spend_restriction,
-    _parse_cost_x_definition,
     _parse_damage_rider_sentence,
     _parse_pronoun_attach_rider,
     _parse_unpaid_penalty_sentence,

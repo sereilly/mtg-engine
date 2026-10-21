@@ -26,9 +26,10 @@ spell whose second sentence is the delayed half". The Willow prints one
 sentence and no delay. What it prints is this module's question: target player
 *may* target the creature, which the rules alone (CR 702.18a) would not allow,
 and the creature stays where it is with its shroud intact (CR 609.4's "as
-though"). The parse side has called it a permission all along —
-``effects/stack.py`` reads it as "the twin of ``_parse_can_attack_as_though``
-… both are permissions that lift a restriction and change nothing else".
+though"). The parse side has called it a permission all along — its reader
+calls itself "the twin of ``phrases._parse_can_attack_as_though``
+… both are permissions that lift a restriction and change nothing else" — and
+followed into ``effects/permissions.py`` in the same Phase 0's second round.
 """
 
 from __future__ import annotations

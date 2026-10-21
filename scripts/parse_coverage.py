@@ -844,7 +844,7 @@ HANDLER_CLAIMS: dict[str, tuple[str, ...]] = {
     # runs the ON_SPELL_COUNTERED hook, which is what taps the lands and empties
     # the pool. One resolution, so the second sentence is the same handler's
     # work rather than a step of its own — the grammar reads it as a rider on
-    # the counter (engine/grammar/parser.py _UNPAID_PENALTIES) and lowering
+    # the counter (engine/grammar/effects/stack.py _UNPAID_PENALTIES) and lowering
     # refuses any penalty this flow does not perform.
     "counter_top_stack_spell": (
         "they tap all lands with mana abilities they control and lose all unspent mana",
