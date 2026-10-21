@@ -28,16 +28,16 @@ jobs:
         include:
           - shard: ai
             paths: tests/ai
-            budget: 2400
-            baseline: 1200
+            budget: 3260
+            baseline: 1629
           - shard: engine
             paths: tests/engine
-            budget: 2400
-            baseline: 1200
+            budget: 1720
+            baseline: 862
           - shard: rest
             paths: tests/sets tests/rules tests/regressions tests/ui
-            budget: 2400
-            baseline: 1200
+            budget: 1880
+            baseline: 940
     steps:
       - uses: actions/checkout@v4
 
@@ -246,9 +246,22 @@ jobs:
       # fixtures are never set up in two jobs. tests/ai is its own shard
       # because it holds 664 tests and over a third of the suite's time.
       #
-      # **The budgets below are provisional**, set only so the first run
-      # reports its readings rather than failing on a guess. They are replaced
-      # by readings from this workflow's own runs before the branch merges.
+      # The first readings, run 39516321557 on branch `ci/parallel-suite`
+      # (main's round-4 close plus this change, 30,835 tests), all green:
+      #   ai      686 tests  `suite wall time [ai]: 1629s`
+      #   engine  14,187     `suite wall time [engine]: 862s`
+      #   rest    15,962     `suite wall time [rest]: 940s`
+      # BASELINE is each reading. BUDGET is ~2x it, the headroom this gate has
+      # always been documented to want, which also puts the 1.5x creep warning
+      # back below the gate (the serial numbers had inverted that). The
+      # matrix values are where these live; a raise is still a decision.
+      #
+      # **tests/ai is the long pole**: under 3% of the tests, and a wall time
+      # as long as the other two shards' put together. A shard cannot be cut
+      # finer than a folder without giving up the guard, so the next lever is
+      # the time itself. The largest single item is
+      # test_no_urzas_block_simulation_leaves_a_cycle_on_the_stack[ULG], which
+      # took 428s locally where its USG and UDS twins took ~63s between them.
       - name: Run the test suite, enforcing the time budget
         env:
           SHARD: ${{ matrix.shard }}

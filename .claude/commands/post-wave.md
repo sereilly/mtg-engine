@@ -11,7 +11,8 @@ After the last branch of a wave is merged (SET_PLAYBOOK.md "Integration"):
    supported count must equal the wave's claims, and `--hollow-lines` must be
    clean for every card a group called done.
 3. `./.venv/Scripts/python.exe scripts/check_all.py --freshness` on the clean
-   tree, plus `python -m pytest` (serial once, for a CI-comparable number).
+   tree, plus the full suite. CI's numbers are per shard and come only from
+   a pushed run (`gh run view <id> --log | grep "suite wall time"`).
 4. Line-cap check: two groups' additions can sum past the 1,000-line grammar
    cap or the per-set test cap with neither at fault — split now, not mid-round.
 5. Update ROADMAP.md's live sections with what the wave changed.

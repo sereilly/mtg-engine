@@ -53,25 +53,31 @@ Anything that weakens these is a regression regardless of what it enables:
 
 1. **No silent wrongness.** A card may fail loudly as unsupported with a
    reason; it may never resolve as something other than what it says.
-2. **The suite stays fast.** **27,624 tests** (Apocalypse's Phase 6 reading,
-   2026-10-12; 26,310 at its Phase 0), CI budget **940s**, CI-measured
-   baseline **677s** (`ci.yml`), read from run 34296564407: `suite wall time:
-   677s`, **72% of budget** - *at 21,127 tests*. The baseline is unchanged
-   and now predates **nine** sets and six thousand tests, so it is the
-   stalest number in this file and no longer a statement about this suite:
-   locally, alone on a 12-core, 16 GB machine, the suite takes 34 minutes at
-   `-n 8` and 41 at `-n 6`. `main` is 79 commits ahead of anything
-   pushed (the rule below about an unpushed branch), so no runner number
-   exists for it. The next Phase 0 owes CI a fresh one, and should expect
-   the reading to be over budget rather than near it.
+2. **The suite stays fast.** **30,835 tests**, run by CI as **three parallel
+   shards** (2026-10-20), each `pytest -n 4 --dist worksteal` over whole
+   tests/ folders with its own budget (`ci.yml`'s test matrix). The first
+   readings, run 39516321557: **ai 1,629s** (686 tests), **engine 862s**
+   (14,187), **rest 940s** (15,962: sets, rules, regressions, ui). Each
+   shard's BUDGET is ~2x its BASELINE, so the 1.5x creep warning fires
+   before the gate again. `tests/engine/test_ci_shards.py` fails if a tests/
+   folder is in no shard or in two, because a folder no shard names is one
+   CI never runs, and every job stays green while that happens.
 
-   **The creep warning no longer fires first**, and that is the live cost of the
-   refresh rather than a thing to fix by raising the budget. At BASELINE 677 the
-   1.5x warning is 1,016s, above the 940s gate — so until the next raise the
-   percentage line is the only creep signal. It is also the one this project has
-   always said matters. BUDGET stays at 940 because 72% is not pressing against
-   it; the next raise takes it to ~1,140, owed on the earlier of a ~750s reading
-   or the ordering staying inverted for another set.
+   **Why it stopped being one serial run.** The serial budget was 940s at a
+   677s baseline, read at 21,127 tests. The gate fired at Invasion's close,
+   which is what it is for: the last green run took 9 minutes for the whole
+   job, and every push after it was red on the budget alone, with the suite
+   passing. The readings were 2,791s, 4,698s, 4,253s, 6,312s, then **17,103s**
+   (run 39354486029, 30,751 tests). That last one is 79% of GitHub's six-hour
+   job limit. The decision SET_PLAYBOOK recorded as owed (raise BUDGET, or
+   split the job) was taken by the owner as a split, in parallel.
+
+   **`tests/ai` is the long pole**: under 3% of the tests, and a wall time as
+   long as the other two shards' put together. A shard cannot be cut finer
+   than a folder without giving up the guard, so the next lever is the time
+   itself. Its largest item, `test_no_urzas_block_simulation_leaves_a_cycle_
+   on_the_stack[ULG]`, took 428s locally where its USG and UDS twins took ~63s
+   between them, which is a lead nobody has read yet.
 
    The rules that number lives by, each learned at a cost:
 
@@ -86,24 +92,26 @@ Anything that weakens these is a regression regardless of what it enables:
    * **A baseline cannot be read from a branch nobody pushed.** The number went
      stale for two sets because 215 commits sat unpushed, not because anyone
      declined to look.
-   * **Raising `BUDGET` is a decision, not maintenance.** It has been raised
-     five times, each against the gate (HML's at 90% of the old budget, VIS's
-     at 94%), and it is deliberately *not* raised at 60%. The next raise takes
-     it to ~1,140, on the reading that crosses ~750s, not on a set boundary.
-     Today BUDGET is 1.65x BASELINE rather than the ~2x this gate wants, so the
-     creep warning sits 9% below the gate instead of ~22% — it still fires
-     first.
+   * **Raising `BUDGET` is a decision, not maintenance.** The serial budget
+     was raised five times, each against the gate (HML's at 90% of the old
+     budget, VIS's at 94%), and deliberately *not* at 60%. The same holds for
+     each shard. A shard's numbers are a parallel wall time and are **not
+     comparable** with any serial reading before 2026-10-20.
    * **One reading is not the suite's cost.** Three adjacent main runs measured
      540s, 625s and 677s — a 25% spread across days, mostly runner weather.
      That is the argument for keeping headroom, and against reading any single
      number as the truth; BASELINE takes the latest per the method note, which
      is the conservative direction for a gate and the wrong one for a warning.
-   * Growth is real and mild: +16.4% tests took +18.6% runner wall time, the
-     same super-linearity ICE measured. `--durations` shows no single culprit
-     (a 27s parse-coverage setup, one 17s AI simulation, then a long tail of
-     pool-wide guards at 2–6s each); the sweeps that walk every card scale
-     with the pool, and that is what grew. The `slow` marker exists if the
-     AI-batch tests are ever the growth.
+   * Growth was mild until Invasion: +16.4% tests took +18.6% runner wall
+     time at 6ED, the same super-linearity ICE measured. Then it was not. The
+     pool-wide censuses and the AI's whole-game simulations became the growth
+     (SET_PLAYBOOK counts sixty tests as ~41% of worker time at APC), and
+     round 3's through-combat rehearsal made every AI decision dearer. At
+     round 4's close, locally at `-n 8`, the slowest items were all of that
+     kind: the ULG simulation above, the batch over every set's casts (418s
+     across its parameters), and the player-target census (312s across its
+     file). The `slow` marker
+     exists, and today it marks only some of them.
 3. **Determinism.** A given seed reproduces a run exactly. Parsing and lowering
    are pure functions of card text.
 4. **Ratchets only tighten.** Coverage floors, probe baselines, and accepted-diff
