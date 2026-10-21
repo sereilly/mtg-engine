@@ -682,7 +682,13 @@ class Permanent:
         global_statics = _late.global_statics
         keywords = _late.keywords
 
-        lost_at = keywords.abilities_lost_at(self)
+        # The board-wide statics recorded on this permanent, derived once:
+        # the loss below and the grants after it both read them, and each had
+        # derived the same list for itself on every fold.
+        board_statics = global_statics.global_static_sources(
+            self.metadata.get("global_static_sources") or ()
+        )
+        lost_at = keywords.abilities_lost_at(self, board_statics=board_statics)
 
         def _kept(stamp: int) -> bool:
             return lost_at is None or stamp > lost_at
@@ -690,9 +696,7 @@ class Permanent:
         # A static ability's effect has its object's timestamp (CR 613.7a).
         granted = [
             static.grants_ability
-            for source, static in global_statics.global_static_sources(
-                self.metadata.get("global_static_sources") or ()
-            )
+            for source, static in board_statics
             if static.grants_ability and _kept(source.timestamp)
         ]
         # …and the same statics from a spell on the stack (CR 113.6b, Torrent

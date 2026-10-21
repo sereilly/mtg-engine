@@ -850,7 +850,7 @@ def all_abilities_removed(perm: Permanent) -> bool:
     return bool(perm.metadata.get(ALL_ABILITIES_REMOVED))
 
 
-def abilities_lost_at(perm: Permanent) -> int | None:
+def abilities_lost_at(perm: Permanent, *, board_statics=None) -> int | None:
     """The timestamp of the newest effect taking **every** ability from
     *perm* (CR 613.1f), or None when nothing is.
 
@@ -876,17 +876,23 @@ def abilities_lost_at(perm: Permanent) -> int | None:
 
     Not CR 305.7's loss, which is no layer-6 effect and keeps a granted
     ability of any age (``land_types.lost_abilities_to_type_change``).
+
+    *board_statics* is ``global_static_sources`` over *perm*'s recorded
+    sources, for a caller that has already derived it
+    (``Permanent._folded_card``, on every fold); without it the list is
+    derived here.
     """
     newest: int | None = None
     for entry in perm.metadata.get(ALL_ABILITIES_REMOVED) or ():
         stamp = int(entry.get("timestamp", 0))
         newest = stamp if newest is None else max(newest, stamp)
-    sources = perm.metadata.get("global_static_sources")
-    if sources:
-        for source, static in global_static_sources(sources):
-            if static.removes_abilities:
-                stamp = int(source.timestamp)
-                newest = stamp if newest is None else max(newest, stamp)
+    if board_statics is None:
+        sources = perm.metadata.get("global_static_sources")
+        board_statics = global_static_sources(sources) if sources else ()
+    for source, static in board_statics:
+        if static.removes_abilities:
+            stamp = int(source.timestamp)
+            newest = stamp if newest is None else max(newest, stamp)
     return newest
 
 

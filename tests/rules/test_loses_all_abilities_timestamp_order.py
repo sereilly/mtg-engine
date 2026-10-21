@@ -343,8 +343,11 @@ def test_the_census_names_a_loss_that_has_no_place_in_the_order(_by_name, monkey
 
     real = engine.keywords.abilities_lost_at
 
-    def unordered(permanent):
-        return None if real(permanent) is None else -1
+    def unordered(permanent, **known):
+        # `known` is what a caller already derived (`board_statics`, from
+        # `Permanent._folded_card`), passed through so the stub answers the
+        # same question the real function was asked.
+        return None if real(permanent, **known) is None else -1
 
     for module in (
         engine.keywords, engine.layer_bridge, engine.mixins.permanent_state
