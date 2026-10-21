@@ -1394,17 +1394,35 @@ def test_counter_with_mana_value_x_becomes_the_handlers_gate():
 
 
 @pytest.mark.parametrize(
-    "line",
+    "line, bound",
     [
-        "Counter target spell with mana value 3.",
-        "Counter target spell with mana value 3 or less.",
+        ("Counter target spell with mana value 3.", {"op": "eq", "value": 3}),
+        ("Counter target spell with mana value 3 or less.", {"op": "le", "value": 3}),
     ],
 )
-def test_a_mana_value_gate_the_handler_cannot_ask_is_refused(line):
-    """"Equals the X I chose" is the only mana-value question the handler can
-    ask. A fixed number or an inequality lowered to the same flag would counter
-    a spell of the wrong cost — worse than the card being unsupported."""
+def test_a_printed_mana_value_bound_on_a_counter_rides_the_payload(line, bound):
+    """A printed bound is carried as ``{op, value}`` — never folded into
+    Spell Blast's ``mv_equals_x``, which would counter a spell of the wrong
+    cost. This test used to assert the line was refused, because "equals the
+    X I chose" was the only mana-value question the handler could ask; since
+    Torment's Liquify ("…with mana value 3 or less") the stack picker
+    (``stack_mana_value``), CR 608.2b's re-check through the same enumeration
+    and the handler all ask the printed bound."""
     result = compile_line(line, card_name="Test")
+
+    assert result.parsed and result.lowered, result.failure_reason
+    payload = result.instructions[0].payload
+    assert payload["mana_value"] == bound
+    assert "mv_equals_x" not in payload
+
+
+def test_a_variable_mana_value_inequality_on_a_counter_is_refused():
+    """"…with mana value X or less" is a bound the announcement supplies and
+    no counter reader compares against an inequality: refused, not admitted
+    as either of the two bounds that are read."""
+    result = compile_line(
+        "Counter target spell with mana value X or less.", card_name="Test"
+    )
 
     assert result.parsed and not result.lowered
 

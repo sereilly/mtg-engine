@@ -109,6 +109,7 @@ from .fighting import (
     _lower_fight,
 )
 from .redirection import (
+    _lower_damage_redirect_offer,
     _lower_damage_becomes_counter_removal,
     _lower_double_combat_damage,
     _lower_redirect_damage,
@@ -369,6 +370,8 @@ from .stack import (
     _lower_counter_ability,
     _lower_counter_spell,
     _lower_bid_life_contest,
+    _lower_next_spell_uncounterable,
+    _lower_copy_spell_for_each_other_target,
     _lower_destroy_countered_ability_source,
     _lower_modal_head,
     _lower_put_exiled_card_on_stack_as_copy,
@@ -509,6 +512,7 @@ __all__ = [
     "_lower_prevent_half",
     "_lower_double_combat_damage",
     "_lower_redirect_damage",
+    "_lower_damage_redirect_offer",
     "_lower_prevent_all",
     "_fused_tap_any_number_then_pump",
     "_fused_two_target_keyword_move",
@@ -704,6 +708,8 @@ __all__ = [
     "_lower_waive_shroud",
     "_lower_counter_spell",
     "_lower_bid_life_contest",
+    "_lower_next_spell_uncounterable",
+    "_lower_copy_spell_for_each_other_target",
     "_lower_put_exiled_card_on_stack_as_copy",
     "_lower_create_delayed_trigger",
     "_lower_modal_head",

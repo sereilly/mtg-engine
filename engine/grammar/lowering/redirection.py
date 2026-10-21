@@ -885,3 +885,73 @@ def _lower_damage_becomes_counter_removal(
             "arm_damage_to_counter_removal", "", {"counter": node.counter},
         ),
     )
+
+
+#: The damage targets an offer to the damaged seat may follow: one player, or
+#: one player or planeswalker (whose controller then answers).
+_REDIRECT_OFFER_DAMAGE_TARGETS = frozenset({"player", "player_or_planeswalker"})
+
+
+def _lower_damage_redirect_offer(
+    node: ast.DamageRedirectOffer,
+    damage: tuple[OracleInstruction, ...],
+) -> tuple[OracleInstruction, ...]:
+    """``<source> deals X damage to target player or planeswalker. That player
+    or that planeswalker's controller may choose a creature they control and
+    have <source> deal that damage to it instead.`` (Flaming Gambit.)
+
+    *damage* is the first sentence, already lowered (``statement_dispatch``
+    lowers it, for ``NextDrawReplacement``'s arrangement — this family does not
+    import the damage one). It must be exactly one ``deal_damage`` at one
+    announced player-or-planeswalker target, which keeps CR 601.2c's one
+    target on the spell whichever way the offer goes.
+
+    Composed, not fused: the damaged seat's optional pick
+    (``choose_permanent``, ``chooser: damaged_target`` — the target player, or
+    the targeted planeswalker's controller, which is the seat the announcement
+    recorded beside it), then one ``if_then`` on whether they picked. Picked,
+    the damage goes to the creature through the reader every recorded
+    recipient goes through (``deal_damage_to_recorded_permanents``, amount and
+    source unchanged: "that damage", dealt by this spell). Declined, the first
+    sentence runs as printed. The picker's default declines unless the damage
+    would be lethal (``default_prefers``), so a seat nobody asks does not hand
+    over a creature for nothing.
+    """
+    if len(damage) != 1 or damage[0].kind != "deal_damage":
+        raise LoweringError(
+            "the redirect offer follows one damage step at one target", node=node
+        )
+    dealt = damage[0]
+    targets = dealt.payload.get("targets") or {}
+    if targets.get("kind") not in _REDIRECT_OFFER_DAMAGE_TARGETS or set(dealt.payload) - {
+        "amount", "targets",
+    }:
+        raise LoweringError(
+            "the redirect offer reads a plain damage step at a player or "
+            "planeswalker target", node=node,
+        )
+    pick = OracleInstruction("choose_permanent", "", {
+        "result_key": _REDIRECT_RECIPIENT_KEY,
+        "chooser": "damaged_target",
+        "controlled_by": "chooser",
+        "filter": {"type_filter": node.card_type},
+        "optional": True,
+        "default_prefers": "decline_unless_lethal",
+        "amount": dealt.payload.get("amount"),
+        "prompt": (
+            f"Choose a {node.card_type} you control to be dealt the damage "
+            "instead, or decline."
+        ),
+    })
+    redirected = OracleInstruction("deal_damage_to_recorded_permanents", "", {
+        "amount": dealt.payload.get("amount"),
+        "permanents_from": _REDIRECT_RECIPIENT_KEY,
+    })
+    return (OracleInstruction("sequence", "", {"steps": (
+        pick,
+        OracleInstruction("if_then", "", {
+            "condition": {"kind": "it_happened", "key": _REDIRECT_RECIPIENT_KEY},
+            "then": (redirected,),
+            "else": (dealt,),
+        }),
+    )}),)

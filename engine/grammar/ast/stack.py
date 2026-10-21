@@ -488,3 +488,46 @@ class BidLifeContest:
 
     bidders: tuple[PlayerRef, ...]
     starting_bid: int = 1
+
+
+@dataclass(frozen=True)
+class NextSpellUncounterable:
+    """"The next instant or sorcery spell you cast this turn can't be
+    countered." (Overmaster; Insist names creature spells.)
+
+    A one-shot effect of a resolving spell that reaches a spell **not yet
+    cast**: the next one of *card_types* its controller casts this turn, and
+    only that one. It is not a trigger (nothing is put on the stack when the
+    spell is cast) and not a static (no permanent prints it), so it is its own
+    node: a record the resolution leaves for the cast path to spend, and the
+    same "can't be countered" (CR 101.2, CR 701.6a) every counter asks of a
+    spell that prints it about itself.
+
+    ``card_types`` is the printed union, in the words the line prints it
+    ("instant", "sorcery"); a spell answers when it has any of them
+    (CR 205.2).
+    """
+
+    card_types: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class CopySpellForEachOtherTarget:
+    """"Choose target instant or sorcery spell that targets only a single
+    permanent or player. Copy that spell for each other permanent or player
+    the spell could target. Each copy targets a different one of those
+    permanents and players." (Radiate.)
+
+    One paragraph, one node, for :class:`BidLifeContest`'s reason: the
+    second and third sentences read the object the first announced, and the
+    third is the whole of how the second's copies are aimed. CR 707.10's copy
+    with CR 707.10c's new targets, made once per legal target the copied
+    spell has other than the one it chose — "could target" is the copied
+    spell's own picker asked again, from the seat that controls the copies.
+
+    ``card_types`` is the chosen spell's printed union; ``each_other`` is what
+    the copies may be aimed at ("permanent_or_player").
+    """
+
+    card_types: tuple[str, ...]
+    each_other: str = "permanent_or_player"

@@ -142,6 +142,8 @@ def _controller_cast_ban(game, seat, card, from_zone):
 def _own_cast_ban(game, seat, card, from_zone):
     # "**You** can't cast creature spells." (Steel Golem.) The caster's own
     # battlefield alone — an opponent's Golem says nothing about your spells.
+    # "**Your opponents** can't cast blue creature spells." (Llawan.) The same
+    # reader with the other scope: every battlefield but the caster's.
     permanent = own_cast_ban(game, seat, card)
     if permanent is None:
         return None

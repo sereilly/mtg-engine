@@ -349,6 +349,16 @@ def _chooser_seat(game, payload: dict, context) -> int | None:
         # player. Payload, like every other chooser, so the picking seat and
         # the picked-from seat stay one decision.
         return _controlled_by_seat(game, "target", context, payload)
+    if chooser == "damaged_target":
+        # "**That player or that planeswalker's controller** may choose a
+        # creature they control…" (Flaming Gambit.) The seat the spell's own
+        # damage target names — the player, or the targeted planeswalker's
+        # controller, which is the seat the announcement recorded beside it —
+        # read exactly as "target" is. Its own word because "target" also
+        # tells the picker to announce a player (``targeting.
+        # _chooser_announcement_spec``), and this target is the damage's,
+        # already announced by the step it modifies.
+        return _controlled_by_seat(game, "target", context, payload)
     if chooser != "opponent":
         return caster_seat
     return next(

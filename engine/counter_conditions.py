@@ -288,13 +288,95 @@ def spells_made_uncounterable_by(game: "Game", card) -> str | None:
     return None
 
 
-def cant_be_countered(game: "Game", card) -> str | None:
+# --- The promised half: a resolved spell about the next spell cast ----------
+#
+# "The next instant or sorcery spell you cast this turn can't be countered."
+# (Overmaster; Insist names creature spells.) The third direction the same
+# immunity arrives from: not the spell's own line and not a permanent's static,
+# but a one-shot effect of a spell that has already resolved, reaching a spell
+# its controller has not cast yet. So it is a **record** with one writer and
+# one spender — the ``make_next_spell_uncounterable`` handler promises, the
+# cast path spends the promise on the first matching spell as CR 601.2i makes
+# it cast and marks that stack object (``StackItem.uncounterable_by``) — and
+# the counter path asks the mark through :func:`cant_be_countered`, the same
+# question it asks Scragnoth's line.
+#
+# **"The next" is one spell, and every promise names the same one.** Two
+# Overmasters resolved this turn both describe the next instant or sorcery
+# spell their controller casts, so that spell spends both; a creature spell
+# cast in between spends neither (it is not what either names). A copy is not
+# cast (CR 707.10) and spends nothing.
+
+
+class NextSpellPromise:
+    """One "the next <types> spell <seat> casts this turn can't be countered"."""
+
+    __slots__ = ("seat", "card_types", "source_name")
+
+    def __init__(self, seat: int, card_types, source_name: str) -> None:
+        self.seat = int(seat)
+        self.card_types = tuple(str(t).lower() for t in card_types)
+        self.source_name = str(source_name)
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging aid
+        return (
+            f"NextSpellPromise(seat={self.seat}, card_types={self.card_types}, "
+            f"source_name={self.source_name!r})"
+        )
+
+
+def promise_next_spell_uncounterable(
+    game: "Game", seat: int, card_types, source_name: str
+) -> None:
+    """Record that the next spell of *card_types* *seat* casts this turn can't
+    be countered (the effect of *source_name* resolving)."""
+    game.next_spells_uncounterable.append(
+        NextSpellPromise(seat, card_types, source_name)
+    )
+
+
+def spend_next_spell_promises(game: "Game", item: "StackItem") -> None:
+    """Spend every promise the just-cast spell *item* answers, marking it.
+
+    Called once, from the single site that puts a cast spell on the stack
+    (``mixins/stack/casting.py``, beside ``record_cast``), so a copy — which is
+    put on the stack without being cast — never reaches it. The type test is
+    ``search_filters.card_has_type`` (CR 205.2: a card has every type its line
+    names), so an artifact creature spell is a creature spell.
+    """
+    promises = list(getattr(game, "next_spells_uncounterable", None) or ())
+    if not promises or getattr(item, "is_copy", False):
+        return
+    from .search_filters import card_has_type
+
+    spent = [
+        promise for promise in promises
+        if promise.seat == item.caster_index
+        and any(card_has_type(item.card, card_type) for card_type in promise.card_types)
+    ]
+    if not spent:
+        return
+    item.uncounterable_by = spent[0].source_name
+    game.next_spells_uncounterable = [p for p in promises if p not in spent]
+    game.log.append(
+        f"{item.card.name} can't be countered ({', '.join(p.source_name for p in spent)})"
+    )
+
+
+def clear_next_spell_promises(game: "Game") -> None:
+    """Drop every unspent promise at the turn boundary ("this turn")."""
+    game.next_spells_uncounterable = []
+
+
+def cant_be_countered(game: "Game", card, item: "StackItem | None" = None) -> str | None:
     """Why the spell *card* can't be countered right now, or None if it can.
 
-    **The one question the counter path asks**, with both halves behind it: the
-    spell's own printed line (CR 113.6g) and a permanent's static about its
-    class. The return value is the reason as the log prints it, so a caller
-    cannot tell the two apart by accident and has nothing to format.
+    **The one question the counter path asks**, with every half behind it: the
+    spell's own printed line (CR 113.6g), a permanent's static about its class,
+    and — where the caller has the stack object *item* — an effect that made
+    that object uncounterable as it was cast (Overmaster). The return value is
+    the reason as the log prints it, so a caller cannot tell them apart by
+    accident and has nothing to format.
     """
     if spell_cant_be_countered(card):
         return f"{getattr(card, 'name', 'that spell')} can't be countered"
@@ -303,19 +385,28 @@ def cant_be_countered(game: "Game", card) -> str | None:
         return (
             f"{getattr(card, 'name', 'that spell')} can't be countered ({source})"
         )
+    promised_by = getattr(item, "uncounterable_by", None)
+    if promised_by:
+        return (
+            f"{getattr(card, 'name', 'that spell')} can't be countered ({promised_by})"
+        )
     return None
 
 
 __all__ = [
     "CLASS_UNCOUNTERABLE_CLAIM",
     "COUNTER_CONDITIONS",
+    "NextSpellPromise",
     "UNCOUNTERABLE_CLAIM",
     "cant_be_countered",
+    "clear_next_spell_promises",
     "counter_condition_holds",
     "counter_condition_key",
     "counter_condition_readable",
+    "promise_next_spell_uncounterable",
     "spell_cant_be_countered",
     "spells_made_uncounterable_by",
+    "spend_next_spell_promises",
     "uncounterable_class_line",
     "uncounterable_line",
 ]

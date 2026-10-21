@@ -5634,6 +5634,25 @@ class PendingChoicesMixin:
         """
         live = self.live_permanent_choices(choice)
         prefers = (choice.data.get("_payload") or {}).get("default_prefers")
+        if prefers == "decline_unless_lethal" and choice.data.get("optional"):
+            # "That player … may choose a creature they control and have
+            # Flaming Gambit deal that damage to it instead." The offer is the
+            # damaged seat's, and giving up a creature to spare life is worth
+            # it only when the life is all there is: a seat nobody asks keeps
+            # its creatures unless the damage would be lethal to it. A
+            # planeswalker target is not that question, and is declined.
+            from ...handlers._common import resolve_amount
+
+            context = choice.data.get("_context")
+            amount = resolve_amount(
+                (choice.data.get("_payload") or {}).get("amount", 0),
+                getattr(context, "x_value", None),
+            )
+            at_a_permanent = getattr(context, "target_permanent_id", None) is not None
+            life = self.players[choice.player_index].life
+            if not live or at_a_permanent or amount < life:
+                self._resolve_permanent_choice(choice, None)
+                return
         if prefers == "tapped":
             live = sorted(live, key=lambda perm: not perm.tapped)
         elif prefers == "not_the_choosers":

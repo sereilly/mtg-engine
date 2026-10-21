@@ -60,7 +60,9 @@ from .effects import (_parse_damage_becomes_counter_removal,
                       _parse_delayed_self_action, _parse_shuffle_graveyard_into_library,
                       _parse_shuffle_hand_into_library, _parse_shuffle_library,
                       _parse_bound_permanent_activation_ban,
-                      _parse_targeting_ban)
+                      _parse_targeting_ban,
+                      parse_copy_spell_for_each_other_target,
+                      parse_next_spell_uncounterable)
 from .sacrifices import _parse_counted_sacrifice
 from .effects.game import parse_extra_phases
 from .effects.permissions import (_parse_cast_from_exiled_with,
@@ -291,6 +293,12 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
             if stream.accept_word("instead"):
                 return ast.NextDrawReplacement(_parse_statement_body(stream))
         stream.reset(next_time)
+        # "**The next instant or sorcery spell you cast this turn can't be
+        # countered.**" (Overmaster, Insist.) The other "The next …" opener,
+        # and the whole sentence or nothing (see the production).
+        next_spell = parse_next_spell_uncounterable(stream)
+        if next_spell is not None:
+            return next_spell
     # "Create a black Spirit creature token. **Its power is equal to that
     # creature's power** …" (Broken Visage.) Two sentences and one effect, so
     # it is read here rather than by the token production the sentence loop
@@ -352,6 +360,13 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     reassigned_blocks = _parse_reassign_blockers_between_attackers(stream)
     if reassigned_blocks is not None:
         return reassigned_blocks
+    # "Choose target instant or sorcery spell that targets only a single
+    # permanent or player. Copy that spell for each other …" (Radiate.) A
+    # whole paragraph for the same reason, read before the single-slot
+    # readers below, which would take its opener.
+    radiated = parse_copy_spell_for_each_other_target(stream)
+    if radiated is not None:
+        return radiated
     # "Choose target artifact a player controls and target artifact card in
     # that player's graveyard. … that player simultaneously sacrifices the
     # artifact and returns the artifact card to the battlefield." (Goblin

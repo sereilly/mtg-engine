@@ -39,6 +39,7 @@ from ..stream import TokenStream
 from ..phrases import (_accept_conjoined_life_cost, _accept_mana_alternatives,
                        _parse_mana_payment, _parse_per_each_objects,
                        _parse_zone, accept_bidding_procedure)
+from ..readers import accept_spell_type_union
 from ..records import _parse_for_each_this_way
 from ..sacrifices import _parse_counted_sacrifice
 from ..vocabulary import NUMBER_WORDS
@@ -759,3 +760,71 @@ def _parse_bid_life_contest(stream: TokenStream) -> ast.Statement | None:
     return ast.BidLifeContest(
         (ast.PlayerRef("you"), rival), starting_bid=starting_bid
     )
+
+
+def parse_next_spell_uncounterable(
+    stream: TokenStream,
+) -> "ast.NextSpellUncounterable | None":
+    """``The next <type>[ or <type>] spell you cast this turn can't be
+    countered.`` (Overmaster, Insist.)
+
+    The whole sentence or nothing: refused without consuming where any word
+    of it differs, so a sentence that opens "The next …" and goes on to say
+    something else (Mangara's Tome's "The next time you would draw …") keeps
+    its own reader. The type union is the one the permission sentences read
+    (``readers.accept_spell_type_union``) with the singular noun, and the
+    window must be "this turn" — a "next spell" effect that outlived its turn
+    is not this card.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("the", "next"):
+        return None
+    card_types = accept_spell_type_union(stream, noun="spell")
+    if (
+        card_types is None
+        or not stream.accept_phrase("you", "cast", "this", "turn")
+        or not stream.accept_phrase("can't", "be", "countered")
+    ):
+        stream.reset(mark)
+        return None
+    return ast.NextSpellUncounterable(card_types)
+
+
+def parse_copy_spell_for_each_other_target(
+    stream: TokenStream,
+) -> "ast.CopySpellForEachOtherTarget | None":
+    """``Choose target <type>[ or <type>] spell that targets only a single
+    permanent or player. Copy that spell for each other permanent or player
+    the spell could target. Each copy targets a different one of those
+    permanents and players.`` (Radiate.)
+
+    The whole paragraph or nothing, refused without consuming — "Choose
+    target …" opens Reincarnation's two-sentence spell too, and a production
+    that ate the opener would take those lines with it. "That targets only a
+    single permanent or player" is CR 115.9a's count with its object
+    restricted to the two things a copy can be re-aimed at, which is exactly
+    the question ``targeting.single_spell_target`` answers.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("choose", "target"):
+        return None
+    card_types = accept_spell_type_union(stream, noun="spell")
+    if (
+        card_types is None
+        or not stream.accept_phrase(
+            "that", "targets", "only", "a", "single", "permanent", "or", "player",
+        )
+        or not stream.accept_punct(".")
+        or not stream.accept_phrase(
+            "copy", "that", "spell", "for", "each", "other", "permanent", "or",
+            "player", "the", "spell", "could", "target",
+        )
+        or not stream.accept_punct(".")
+        or not stream.accept_phrase(
+            "each", "copy", "targets", "a", "different", "one", "of", "those",
+            "permanents", "and", "players",
+        )
+    ):
+        stream.reset(mark)
+        return None
+    return ast.CopySpellForEachOtherTarget(card_types)

@@ -299,6 +299,13 @@ class StackItem:
     # through ``flashback.leaves_stack_to_exile`` by the sites that send a
     # card somewhere else. Never set on a copy: CR 707.10, a copy is not cast.
     flashback: bool = False
+    # "The next instant or sorcery spell you cast this turn can't be countered."
+    # (Overmaster.) The name of the effect that made **this** spell
+    # uncounterable as it was cast (``counter_conditions.spend_next_spell_
+    # promises``), read by ``counter_conditions.cant_be_countered``. An effect
+    # on the object, not a choice: never carried to a copy (CR 707.2 copies
+    # printed values and decisions, and "other effects … are not copied").
+    uncounterable_by: str | None = None
     # For a triggered ability on the stack: event data captured at fire time that the
     # effect handler reads at resolution (e.g. the dead creature's name, the damage
     # amount, the player who was dealt damage, an optional-pay cost).

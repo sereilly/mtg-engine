@@ -4,7 +4,8 @@ from typing import TYPE_CHECKING
 
 from ..card_hooks import ON_SPELL_COUNTERED
 from ..color_changes import forget_spell_color_change, recolor_spell
-from ..counter_conditions import cant_be_countered
+from ..counter_conditions import (cant_be_countered,
+                                  promise_next_spell_uncounterable)
 from ..divided_damage import DIVIDED_TARGETS, divided_entry, stamped_entry
 from ..exiled_records import (EXILE_RECORD_KEY, EXILED_SPELL_CONTROLLER_KEY,
                               StackAnnouncement, is_live, record_exiled_card,
@@ -899,7 +900,7 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
         # same question asked of the battlefield instead of the spell — one
         # predicate with both halves behind it, so no counter path can come to
         # ask only one of them.
-        uncounterable = cant_be_countered(game, target.card)
+        uncounterable = cant_be_countered(game, target.card, target)
         if uncounterable is not None:
             game.log.append(f"{card.name}: {uncounterable}")
             return True, "resolved"
@@ -1038,6 +1039,22 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
             if int(context.x_value) != target_mv:
                 game.log.append(
                     f"{card.name}: X={context.x_value} does not match {target.card.name}'s mana value {target_mv}, cannot counter"
+                )
+                return True, "resolved"
+        # "…with mana value 3 or less" (Liquify): the printed bound, asked of
+        # the spell's mana value on the stack. The picker and CR 608.2b ask it
+        # through the stack enumeration first; this is the handler's own
+        # reading for the path that reaches it without that gate (a copy, a
+        # retargeted object), as every narrowing above has one.
+        bound = instruction.payload.get("mana_value")
+        if bound:
+            from ..targeting import stack_object_mana_value
+            from ._common import _comparison_holds
+
+            target_mv = stack_object_mana_value(target)
+            if not _comparison_holds(bound, target_mv):
+                game.log.append(
+                    f"{card.name}: {target.card.name}'s mana value is {target_mv}, cannot counter"
                 )
                 return True, "resolved"
         # Power Sink: "Counter target spell unless its controller pays {X}." The
@@ -2118,4 +2135,89 @@ def offer_madness_cast(game: Game, instruction: OracleInstruction, context: Orac
         _card=card,
         _permission=permission,
     )
+    return True, "resolved"
+
+
+@effect_handler("make_next_spell_uncounterable")
+def make_next_spell_uncounterable(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"The next instant or sorcery spell you cast this turn can't be
+    countered." (Overmaster, Insist.)
+
+    Records the promise for the resolving spell's controller (CR 109.5's
+    "you"); the cast path spends it on that seat's next matching spell and
+    every counter asks it through ``counter_conditions.cant_be_countered``.
+    """
+    seat = game.players.index(context.caster)
+    card_types = tuple(instruction.payload.get("card_types") or ())
+    promise_next_spell_uncounterable(game, seat, card_types, context.card.name)
+    game.log.append(
+        f"The next {' or '.join(card_types)} spell {context.caster.name} casts "
+        f"this turn can't be countered ({context.card.name})"
+    )
+    return True, "resolved"
+
+
+@effect_handler("copy_spell_for_each_other_target")
+def copy_spell_for_each_other_target(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Copy that spell for each other permanent or player the spell could
+    target. Each copy targets a different one of those permanents and
+    players." (Radiate.)
+
+    CR 707.10: each copy is built by ``_copy_of_spell`` (every decision the
+    original made, controlled by this effect's controller, CR 707.10a) and
+    then aimed at one candidate (CR 707.10c), so it "becomes the target" as
+    any re-aimed copy does (``announce_targets_chosen``). The candidates are
+    the copied card's own picker (``cast_spec_of`` + ``_enumerate_targets``,
+    the list ``arm_copy_spell_target`` offers a Fork's controller) asked from
+    the copies' controller's seat — the seat whose copy would target them —
+    less the one target the spell already has. A permanent is named by its
+    id (CR 400.7). The original is untouched and resolves as cast.
+    """
+    from ..legality import cast_spec_of
+    from ..targeting import single_spell_target
+
+    copied = context.stack_target
+    card = context.card
+    if copied is None or not any(obj is copied for obj in game.stack):
+        game.log.append(f"{card.name}: that spell is no longer on the stack")
+        return True, "resolved"
+    current = single_spell_target(game, copied)
+    if current is None:
+        game.log.append(
+            f"{card.name}: {copied.card.name} does not target only a single "
+            "permanent or player"
+        )
+        return True, "resolved"
+    seat = game.players.index(context.caster)
+    spec = cast_spec_of(copied.card)
+    made = 0
+    for candidate in game._enumerate_targets(seat, copied.card, spec, for_cast=True):
+        kind = candidate.get("kind")
+        if kind == "player":
+            if current.get("kind") == "player" and current.get("seat") == candidate.get("seat"):
+                continue
+            copy = _copy_of_spell(copied, seat)
+            copy.target_player_index = candidate.get("seat")
+            copy.target_permanent_index = None
+            copy.target_permanent_id = None
+            label = game.players[candidate["seat"]].name
+        elif kind == "permanent":
+            perm = game.permanent_at(candidate.get("seat"), candidate.get("index"))
+            if perm is None:
+                continue
+            if current.get("kind") == "permanent" and current.get("permanent_id") == perm.permanent_id:
+                continue
+            copy = _copy_of_spell(copied, seat)
+            copy.target_player_index = game.controller_index_of(perm)
+            copy.target_permanent_index = game.battlefield_index_of(perm)
+            copy.target_permanent_id = perm.permanent_id
+            label = perm.card.name
+        else:
+            continue
+        game._stack_push(targets_already_chosen=True, item=copy)
+        game.announce_targets_chosen(copy, chooser=seat, newly_targeted=True)
+        game.log.append(f"{card.name} copied {copied.card.name} targeting {label}")
+        made += 1
+    if not made:
+        game.log.append(f"{card.name}: {copied.card.name} could target nothing else")
     return True, "resolved"

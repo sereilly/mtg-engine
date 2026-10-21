@@ -54,6 +54,7 @@ from .prevention import (
     _parse_bound_targeting_prevention,
 )
 from .redirection import (
+    _attach_damage_redirect_offer,
     _parse_damage_becomes_counter_removal,
     _parse_damage_redirect,
     _parse_double_combat_damage,
@@ -246,6 +247,8 @@ from .stack import (
     _parse_modal_head,
     _UNPAID_PENALTIES,
     _parse_unpaid_penalty_sentence,
+    parse_next_spell_uncounterable,
+    parse_copy_spell_for_each_other_target,
 )
 from .requirements import (
     _parse_attacks_this_turn_if_able,
@@ -326,6 +329,7 @@ __all__ = [
     "_parse_damage_redirect",
     "_parse_double_combat_damage",
     "_parse_optional_damage_redirect",
+    "_attach_damage_redirect_offer",
     "_parse_damage_cant_be_prevented",
     "parse_source_damage_lock",
     "_parse_bound_targeting_prevention",
@@ -456,6 +460,8 @@ __all__ = [
     "_parse_modal_head",
     "_UNPAID_PENALTIES",
     "_parse_unpaid_penalty_sentence",
+    "parse_next_spell_uncounterable",
+    "parse_copy_spell_for_each_other_target",
     "_parse_cant_attack_or_block",
     "parse_block_count_grant",
     "parse_simultaneous_phasing",

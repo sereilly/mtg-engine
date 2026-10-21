@@ -947,8 +947,19 @@ def global_cast_ban_line(line: str) -> str | None:
 #: The card type is payload for the reason every printed word in this table is
 #: one: "…can't cast artifact spells" is the same sentence and must need no
 #: second row.
+#:
+#: **Whom it binds is payload too, and so is a colour.** "**Your opponents**
+#: can't cast **blue** creature spells." (Llawan, Cephalid Empress.) The seat is
+#: still read off the sentence's own subject — the half this reader exists to
+#: get right — and it is still the permanent's controller the word is relative
+#: to (CR 109.5: "you" is that player; CR 102.3: "your opponents" is every other
+#: player in the game), so one reader serves both and a scope cannot be taken
+#: from the wrong half of a sentence. The colour narrows the spell (CR 105.2:
+#: a gold spell is blue if blue is one of its colours).
 _OWN_CAST_BAN = re.compile(
-    rf"^you can't cast (?P<type>{_BANNABLE_SPELL_TYPES}) spells$"
+    r"^(?P<who>you|your opponents) can't cast "
+    r"(?:(?P<color>white|blue|black|red|green) )?"
+    rf"(?P<type>{_BANNABLE_SPELL_TYPES}) spells$"
 )
 
 #: The claim name the support gate and ``engine/grammar/registries.py`` use for
@@ -958,9 +969,21 @@ _OWN_CAST_BAN = re.compile(
 OWN_CAST_BAN_CLAIM = "own_cast_ban"
 
 
+@dataclass(frozen=True)
+class SeatedCastBan:
+    """What a "<you / your opponents> can't cast [<colour>] <type> spells"
+    line forbids: whom it binds relative to the permanent's controller
+    (``"controller"`` / ``"opponents"``), the card type, and the colour symbol
+    the spell must have to be stopped (None: any colour)."""
+
+    binds: str
+    card_type: str
+    color: str | None = None
+
+
 @lru_cache(maxsize=None)
-def own_cast_ban_line(line: str) -> str | None:
-    """The card type *line* forbids its own controller from casting, or None.
+def own_cast_ban_line(line: str) -> SeatedCastBan | None:
+    """What *line* forbids a seat relative to its controller from casting, or None.
 
     One reader, three callers, exactly as :func:`global_cast_ban_line` has:
     ``engine/grammar/registries.py`` asks it so the printed line is *claimed*,
@@ -972,32 +995,55 @@ def own_cast_ban_line(line: str) -> str | None:
     whole of what pays for a 3/3 for {3}, that is not a card doing less but a
     card doing something else.
     """
+    from .grammar.vocabulary import COLOR_WORDS
+
     match = _OWN_CAST_BAN.match(line.strip().lower().rstrip("."))
-    return match.group("type") if match is not None else None
+    if match is None:
+        return None
+    return SeatedCastBan(
+        binds="controller" if match.group("who") == "you" else "opponents",
+        card_type=match.group("type"),
+        color=COLOR_WORDS[match.group("color")] if match.group("color") else None,
+    )
 
 
 def own_cast_ban(game: "Game", caster_index: int, card) -> str | None:
-    """The name of a permanent *caster_index* controls forbidding *card*, or None.
+    """The name of a permanent forbidding *caster_index* to cast *card* because
+    of who controls it, or None.
 
-    Only that seat's own battlefield is asked, which is the whole difference
-    from :func:`global_cast_ban` beside it — an opponent's Steel Golem says
-    nothing about your creature spells.
+    "You can't cast …" asks only the caster's own battlefield, which is the
+    whole difference from :func:`global_cast_ban` beside it — an opponent's
+    Steel Golem says nothing about your creature spells. "Your opponents can't
+    cast …" asks every *other* seat's (Llawan's controller casts its own blue
+    creatures; CR 102.3).
 
     ``effective_card`` rather than the printed face, for that function's reason:
     what a permanent says is what layer 1 and layer 3 have made of it (CR 707.2,
     CR 612.1). The type test is :func:`search_filters.card_has_type` for its
     reason too — a card has **every** type its line names (CR 205.2), so an
-    artifact creature is stopped by a ban on either word.
+    artifact creature is stopped by a ban on either word. The colour is the
+    spell's as its caster would cast it (``object_colors.card_colors``, the
+    reading :func:`last_cast_color_ban` takes), so a gold card with blue in it
+    is a blue spell (CR 105.2b) and a card a Celestial Dawn has made white is
+    not one.
     """
+    from .object_colors import card_colors
     from .search_filters import card_has_type
 
     for seat, permanent in game.permanents_with_controller():
-        if seat != caster_index:
-            continue
         for raw_line in (permanent.effective_card.oracle_text or "").splitlines():
-            banned = own_cast_ban_line(raw_line)
-            if banned is not None and card_has_type(card, banned):
-                return permanent.card.name
+            ban = own_cast_ban_line(raw_line)
+            if ban is None:
+                continue
+            binds_caster = (
+                seat == caster_index if ban.binds == "controller"
+                else caster_index in game.opponents_of(seat)
+            )
+            if not binds_caster or not card_has_type(card, ban.card_type):
+                continue
+            if ban.color is not None and ban.color not in card_colors(game, card, caster_index):
+                continue
+            return permanent.card.name
     return None
 
 

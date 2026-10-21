@@ -52,6 +52,7 @@ from ._core import (
 )
 from .damage import (
     DamageCantBePreventedOrRedirected,
+    DamageRedirectOffer,
     DamageReducedByPaidMana,
     DamageRidersUntilEndOfTurn,
     DamageUnlessPay,
@@ -246,7 +247,9 @@ from .stack import (
     CounterAbility,
     CounterSpell,
     DestroyCounteredAbilitySource,
+    CopySpellForEachOtherTarget,
     ModalNode,
+    NextSpellUncounterable,
     PutExiledCardOnStackAsCopy,
     WaiveShroud,
 )
@@ -313,7 +316,7 @@ Effect = Union[
     CoinFlipStakesLoop,
     DamageThoseDamagedThisGame,
     DamageRidersUntilEndOfTurn,
-    DealDamage, Pump, SetBasePT, ChangeBasePT, GainAbilityText, GainKeyword, GainType, BecomeAura, ChangeSupertype, ChangeLandType, BecomeThatType, LandTypeSwap, LoseAbilityText, LoseKeyword, MoveCounter, PlayerGetsCounters, PutCounter, RemoveCounter,
+    DealDamage, DamageRedirectOffer, Pump, SetBasePT, ChangeBasePT, GainAbilityText, GainKeyword, GainType, BecomeAura, ChangeSupertype, ChangeLandType, BecomeThatType, LandTypeSwap, LoseAbilityText, LoseKeyword, MoveCounter, PlayerGetsCounters, PutCounter, RemoveCounter,
     DoublePower, SwitchPT,
     GainLife, LoseLife, PayLife, SetLifeTotal, ExchangeLifeTotals, Ante, Draw, Discard, LookTopCycleForLife, SeparateLibraryTopIntoPiles, SeparateIntoPiles, Mill, MillUntil, PutMilledCardOntoBattlefield, PutHandCardsOnLibrary, Scry, Surveil, Destroy, Sacrifice, SacrificeAndReturnTargets,
     SacrificeExpansionPermanents, ShuffleGraveyardIntoLibrary, ShuffleHandIntoLibrary,
@@ -331,7 +334,7 @@ Effect = Union[
     MutualControlOfSets,
     PayOrSacrificeGreatestManaValue,
     PayAnyAmountOfMana,
-    Regenerate, ReanimateEnchantedCard, ChangeTarget, ChangeEventTargets, ChooseTarget, WaiveShroud, CopySpell, CopyThatSpell, CounterAbility, CounterSpell, BidLifeContest, DestroyCounteredAbilitySource, ModalNode, PutExiledCardOnStackAsCopy, ReturnToZone, ChoosePermanent, CreateToken, CreateCopyToken, AddMana,
+    Regenerate, ReanimateEnchantedCard, ChangeTarget, ChangeEventTargets, ChooseTarget, WaiveShroud, CopySpell, CopyThatSpell, CounterAbility, CounterSpell, NextSpellUncounterable, CopySpellForEachOtherTarget, BidLifeContest, DestroyCounteredAbilitySource, ModalNode, PutExiledCardOnStackAsCopy, ReturnToZone, ChoosePermanent, CreateToken, CreateCopyToken, AddMana,
     PutOnLibraryTop, PutOnLibraryBottom, PutGraveyardTopOnLibraryBottom,
     PutOntoBattlefield, PutGraveyardPositionOntoBattlefield,
     RevealTopToHandOrBottom, CreateEmblem, SkipPhase, SkipStep,

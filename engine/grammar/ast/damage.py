@@ -286,6 +286,27 @@ class ChosenSourceNextDamage:
 
 
 @dataclass(frozen=True)
+class DamageRedirectOffer:
+    """``<source> deals N damage to target player [or planeswalker]. That
+    player [or that planeswalker's controller] may choose a <type> they
+    control and have <source> deal that damage to it instead.`` (Flaming
+    Gambit.)
+
+    Not CR 614.9's redirection: nothing here waits for an event. The second
+    sentence modifies the first as the spell resolves (CR 608.2c's "later
+    text on the card may modify the meaning of earlier text"), so the damaged
+    seat answers first and the damage is then dealt once, to whichever object
+    it named. The damage keeps its own node — its source, amount and the one
+    target the spell announced (CR 601.2c) — and this one records the offer:
+    whose it is is the damage's own recipient, and *card_type* is what they
+    may choose among what they control.
+    """
+
+    damage: "DealDamage"
+    card_type: str
+
+
+@dataclass(frozen=True)
 class RedirectDamage:
     """"All damage that would be dealt to you this turn by <source> is dealt to
     <recipient> instead." (Shimian Night Stalker, Nova Pentacle — CR 614.9.)

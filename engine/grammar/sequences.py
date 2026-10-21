@@ -55,6 +55,7 @@ from .control_flow import (_attach_if_that_card_was_returned, _attach_if_you_can
                           _attach_tied_for_fewest,
                           _attach_tied_life_draw, _parse_who_cant_rider)
 from .effects import (
+    _attach_damage_redirect_offer,
     _parse_damage_rider_sentence,
     _parse_pronoun_attach_rider,
     _parse_unpaid_penalty_sentence,
@@ -699,6 +700,12 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             # in front of it deals, so it folds into that sentence's riders.
             if _attach_source_damage_lock(stream, steps):
                 stream.accept_punct(".")
+                continue
+            # "That player or that planeswalker's controller may choose a
+            # creature they control and have <this spell> deal that damage
+            # to it instead." (Flaming Gambit.) The same kind of sentence
+            # about the damage in front of it, folded the same way.
+            if _attach_damage_redirect_offer(stream, steps):
                 continue
             reveals = _parse_that_controller_reveals_rider(stream, steps)
             if reveals is not None:

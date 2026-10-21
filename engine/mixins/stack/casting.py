@@ -36,6 +36,7 @@ from ...cast_timing import (CAST_AT_INSTANT_SPEED, a_sorcery_could_be_cast,
 from ...cost_x_definitions import (caps_cast_x, cast_x_ceiling, cast_x_floor,
                                    cast_x_value, defines_cast_x, floors_cast_x)
 from ...damage_ledger import record_cast
+from ...counter_conditions import spend_next_spell_promises
 from ...divided_damage import (
     CARD_DIVIDED, EACH, EVENLY, FIXED, card_shares, divided_description,
     divided_entry, division_refusal, stamp_card_shares, stamped_entry,
@@ -2706,6 +2707,11 @@ class SpellCastingMixin:
             # casts of one sorcery are one entry there and two here. Backdraft's
             # "one of those sorcery spells" is a choice **between** them.
             record_cast(self, spell_item)
+            # "The next instant or sorcery spell you cast this turn can't be
+            # countered." (Overmaster.) Spent here, where CR 601.2i makes the
+            # spell cast — the next matching spell is this one, before any
+            # counter can be announced at it.
+            spend_next_spell_promises(self, spell_item)
             self._apply_spell_cast_any_triggers(
                 caster_index, card, from_zone, item=spell_item
             )

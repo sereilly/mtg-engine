@@ -40,6 +40,7 @@ import pytest
 from engine.faces import compilation_units
 from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_paths
+from engine.cast_prohibitions import cast_prohibition
 from engine.modal_triggers import ENTRY_TRIGGER_CONDITIONS
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
@@ -234,6 +235,14 @@ def _sweep_clones() -> tuple[int, int, list[str]]:
             continue
         slot = game.battlefield_index_of(original)
         seat = game.controller_index_of(original)
+        if cast_prohibition(game, 0, clone_card) is not None:
+            # The original forbids the Clone being cast at all: "Your
+            # opponents can't cast blue creature spells." (Llawan, Cephalid
+            # Empress, Torment.) Clone is a blue creature spell and seat 0 is
+            # the original's controller's opponent, so CR 601.3 refuses the
+            # cast and nothing enters to be compared. Not a copy that failed
+            # to fire, and not counted as a comparison.
+            continue
         game.cast_from_hand(0, "Clone", target_player_index=seat, target_permanent_index=slot)
         resolve_stack(game)
         clone = next(

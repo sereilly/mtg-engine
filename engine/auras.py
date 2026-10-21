@@ -2582,6 +2582,27 @@ _RESTRICTIONS: tuple[tuple[re.Pattern[str], str], ...] = (
         ),
         "all_activated_abilities_shut_off",
     ),
+    (
+        # "Enchanted creature's activated abilities can't be activated."
+        # (Stupefying Touch.) The Curse's second clause alone, in the
+        # possessive, and the same restriction by name — no CR 605.1a
+        # exception is printed, and the card's ruling says what that means:
+        # "Unlike many similar abilities, Stupefying Touch's last ability stops
+        # mana abilities from being activated." (2016-06-08.) Anchored on the
+        # whole line: the clause with "unless they're mana abilities" behind
+        # it is the row below, and a creature that also can't attack is the
+        # Curse's row above.
+        re.compile(rf"^{_ATTACHED} {_NOUN}'s activated abilities can't be activated$"),
+        "all_activated_abilities_shut_off",
+    ),
+    (
+        # …and the same possessive with Faith's Fetters' exception printed.
+        re.compile(
+            rf"^{_ATTACHED} {_NOUN}'s activated abilities can't be activated "
+            r"unless they're mana abilities$"
+        ),
+        "activated_abilities_shut_off",
+    ),
 )
 
 # A "doesn't untap" restriction that holds only while a counter is present —

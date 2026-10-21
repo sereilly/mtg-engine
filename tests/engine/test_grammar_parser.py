@@ -961,6 +961,15 @@ def _instead_pair_disagreement(line: str, card_name: str | None = None) -> str |
     # CR 614 replacement inside one arm (Soul Echo) — another production's.
     if "instead" not in lowered or "otherwise" in lowered:
         return None
+    # …and an "instead" with no "if" at all is not the pair this census is
+    # about. "That player … may choose a creature they control and have
+    # Flaming Gambit deal that damage to it instead" (Torment) folds into an
+    # if_then too, but its arms are *meant* to act on two objects — the one
+    # target the spell announced, or the creature the damaged player names
+    # as it resolves — so "one announcement, whichever arm resolves" is not
+    # its invariant. Its own test is in tests/sets/test_tor_instants.py.
+    if not re.search(r"\bif\b", lowered):
+        return None
     compiled = compile_line(text, card_name=card_name)
     if not compiled.usable:
         return None

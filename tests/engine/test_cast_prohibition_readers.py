@@ -184,6 +184,10 @@ _SCENARIOS: dict[str, list[tuple]] = {
     ],
     "own_cast_ban": [
         ("its own controller", OWN_MAIN, "Grizzly Bears", "Steel Golem", 0, {}, None),
+        # "Your opponents can't cast blue creature spells." The same reader
+        # with the other scope and a colour (Torment).
+        ("its controller's opponents, by colour", OWN_MAIN,
+         "Merfolk of the Pearl Trident", "Llawan, Cephalid Empress", 1, {}, None),
     ],
     "casting_forbidden_this_turn": [
         ("a recorded effect", OWN_MAIN, "Grizzly Bears", None, 0, {}, _forbid_creatures),
@@ -296,11 +300,12 @@ _PROHIBITION = re.compile(
 )
 
 #: One card of each type a ban names, none needing a target; a nonbasic land
-#: for Cornered Market's second line; and two cards first printed in Arabian
-#: Nights for City in a Bottle.
+#: for Cornered Market's second line; two cards first printed in Arabian
+#: Nights for City in a Bottle; and a blue creature, for a ban that names a
+#: colour (Llawan).
 _HAND = [
     "Grizzly Bears", "Fog", "Wrath of God", "Sol Ring", "Castle", "Forest",
-    "Taiga", "Moorish Cavalry", "Desert",
+    "Taiga", "Moorish Cavalry", "Desert", "Merfolk of the Pearl Trident",
 ]
 
 #: Candidates the matrix cannot make refuse, each with why. Named rather than

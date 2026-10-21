@@ -344,13 +344,22 @@ def _lower_counter_spell(
             payload["color_filter"] = filt.colors[0]
     if filt.mana_value is not None:
         # Spell Blast: "counter target spell with mana value X". The handler
-        # compares the X chosen on the cast against the target's mana value;
-        # that equality is the only mana-value question it can ask, so a fixed
-        # number or an inequality ("mana value 3 or less") has to refuse rather
-        # than counter regardless of cost.
-        if not is_mana_value_x(filt.mana_value):
+        # compares the X chosen on the cast against the target's mana value.
+        if is_mana_value_x(filt.mana_value):
+            payload["mv_equals_x"] = True
+        elif isinstance(filt.mana_value.value, ast.Fixed):
+            # "Counter target spell **with mana value 3 or less**." (Liquify.)
+            # A printed bound, in the ``{op, value}`` form every filter payload
+            # carries it in. The picker offers only a spell inside it and
+            # CR 608.2b re-asks the same enumeration at resolution, both
+            # against the spell's mana value *on the stack* (CR 202.3b: an X
+            # in its cost is the announced value, so a Fireball for 3 is a
+            # four), through ``targeting.stack_object_mana_value``.
+            payload["mana_value"] = {
+                "op": filt.mana_value.op, "value": int(filt.mana_value.value.value),
+            }
+        else:
             raise LoweringError("no handler for this mana-value restriction", node=node)
-        payload["mv_equals_x"] = True
     if filt.controller is not None:
         # "counter target artifact spell **you control**" (Goblin Artisans).
         # Whose spell it is, checked by the handler against the caster's seat —
@@ -795,3 +804,53 @@ def _lower_bid_life_contest(
         "else": (),
     })
     return (OracleInstruction("sequence", "", {"steps": (auction, won)}),)
+
+
+#: The card types "the next <type> spell" may name: each one the cast path's
+#: type test (``search_filters.card_has_type``) can answer for a spell.
+_NEXT_SPELL_TYPES = frozenset({
+    "artifact", "creature", "enchantment", "instant", "sorcery",
+    "planeswalker", "battle",
+})
+
+
+def _lower_next_spell_uncounterable(
+    node: ast.NextSpellUncounterable,
+) -> tuple[OracleInstruction, ...]:
+    """``The next instant or sorcery spell you cast this turn can't be
+    countered.`` (Overmaster, Insist.) One instruction: the promise the
+    handler records, which the cast path spends and every counter asks
+    (``engine/counter_conditions.py``)."""
+    unknown = [t for t in node.card_types if t not in _NEXT_SPELL_TYPES]
+    if not node.card_types or unknown:
+        raise LoweringError(
+            f"no spell type the cast path can test: {unknown or 'none'}", node=node
+        )
+    return (
+        OracleInstruction(
+            "make_next_spell_uncounterable", "",
+            {"card_types": list(node.card_types)},
+        ),
+    )
+
+
+def _lower_copy_spell_for_each_other_target(
+    node: ast.CopySpellForEachOtherTarget,
+) -> tuple[OracleInstruction, ...]:
+    """Radiate's paragraph: one instruction, whose handler makes the copies.
+
+    The chosen spell is the instruction's own target (a ``spell``), narrowed
+    by the printed type union and CR 115.9a's single permanent-or-player
+    target (``targeting._copy_for_each_other_target_spec``); the copies'
+    targets are the copied spell's own picker asked again at resolution."""
+    unknown = [t for t in node.card_types if t not in ("instant", "sorcery")]
+    if unknown or node.each_other != "permanent_or_player":
+        raise LoweringError(
+            "only an instant or sorcery spell copied onto each other permanent "
+            "or player is implemented", node=node,
+        )
+    return (OracleInstruction("copy_spell_for_each_other_target", "", {
+        "targets": {"quantifier": "target", "kind": "spell"},
+        "card_types": list(node.card_types),
+        "each_other": node.each_other,
+    }),)
