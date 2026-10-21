@@ -1195,6 +1195,18 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             source.metadata.get("cast_from_zone") == wanted
         )
 
+    if kind == "cast_from":
+        # "When this creature enters, if you cast it from your hand, …"
+        # (Hypnox, CR 603.4.) The cast record alone: stamped only by the entry
+        # road that resolves a permanent *spell*, so a reanimated or blinked
+        # permanent has none and answers False. "You" needs no seat check of
+        # its own: the stamp is the source's, and the trigger's controller is
+        # the player who controlled the permanent the spell became.
+        source = context.source_permanent
+        if source is None:
+            return False
+        return source.metadata.get("cast_from_zone") == payload.get("zone")
+
     if kind == "sacrificed_this_way_matches":
         # "If you sacrifice a **snow** Forest this way, …" (Gargantuan Gorilla),
         # "…an **Island** this way, …" (Serendib Djinn). The narrowed reading of

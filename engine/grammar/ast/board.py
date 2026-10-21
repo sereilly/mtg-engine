@@ -618,6 +618,17 @@ class PutOntoBattlefield:
     #: here is the ability's own source. A card naming somebody else's creature
     #: would want the referent, and would say so.
     attached_to_source: bool = False
+    #: "…onto the battlefield under your control. **That creature is black and
+    #: is a Nightmare in addition to its other creature types.**" (Chainer,
+    #: Dementia Master.) What the permanent *enters as*, folded onto the entry
+    #: for ``gains``' reason — the permanent does not exist until this step
+    #: runs — and for the card's ruling (2022-12-08): "As it enters the
+    #: battlefield, it is already a black Nightmare … it doesn't enter and then
+    #: become a black Nightmare." ``entering_colors`` *replaces* the colour
+    #: (CR 105.3, layer 5: "black only, not black in addition to its other
+    #: colors"); ``entering_subtypes`` is an addition (CR 205.1b, layer 4).
+    entering_colors: tuple[str, ...] = ()
+    entering_subtypes: tuple[str, ...] = ()
     #: "**Each player** puts a creature card from their graveyard onto the
     #: battlefield." (Exhume.) The seat that performs the move, printed in
     #: front of the verb — the same field ``ReturnToZone`` carries for the same

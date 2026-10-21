@@ -58,7 +58,7 @@ from .rebinding import (statement_bound_several_targets
                         as _statement_bound_several_targets)
 from .statements import _parse_condition
 from .stream import TokenStream
-from .vocabulary import CARD_TYPES
+from .vocabulary import CARD_TYPES, COLOR_WORDS, CREATURE_TYPES
 
 
 _RIDER_FOLDED = ast.RawEffect("rider-folded")
@@ -641,6 +641,99 @@ def _parse_exile_instead_of_leaving_rider(
         stream.reset(mark)
         return None
     steps[index] = replace(steps[index], exile_on_leave=True)
+    return _RIDER_FOLDED
+
+
+def _parse_entering_characteristics_rider(
+    stream: TokenStream, steps: list[ast.Statement]
+) -> ast.Statement | None:
+    """``That creature is black and is a Nightmare in addition to its other
+    creature types.`` after a reanimation (Chainer, Dementia Master).
+
+    A pronoun rider that **folds into the move** in front of it, for
+    :func:`_parse_exile_instead_of_leaving_rider`'s reason — "that creature" is
+    the permanent the reanimation is about to make, which does not exist when
+    the ability is announced — and for one of the card's own: its ruling
+    (2022-12-08) says "As it enters the battlefield, it is already a black
+    Nightmare … it doesn't enter and then become a black Nightmare." So what
+    is read here rides the entry, not a step after it.
+
+    Two predicates, either or both, each read whole:
+
+    * "is <colour>" — a colour *set* (CR 105.3, layer 5). The ruling again:
+      "black only, not black in addition to its other colors". A printed
+      "in addition to its other colors" is a different effect and is left on
+      the stream, which fails the line.
+    * "is a <creature type> in addition to its other creature types" — an
+      addition (CR 205.1b, layer 4). The tail is required: without it the type
+      would *replace* the creature types (CR 205.1a), which is what "becomes
+      that type" does and not what this sentence says.
+
+    Only behind a graveyard reanimation (:class:`ast.PutOntoBattlefield` out
+    of a graveyard), the one move whose lowering writes these fields; the
+    lowering refuses them on every other branch. Returns None with the cursor
+    untouched on anything else.
+    """
+    if not steps:
+        return None
+    step = steps[-1]
+    if not (
+        isinstance(step, ast.PutOntoBattlefield)
+        and isinstance(step.target, ast.TargetSpec)
+        and step.target.filter.zone == "graveyard"
+    ):
+        return None
+    mark = stream.mark()
+    if not stream.accept_word("that"):
+        return None
+    noun = stream.peek_word()
+    if noun is None or noun not in CARD_TYPES or not stream.accept_word(noun):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("is"):
+        stream.reset(mark)
+        return None
+    colors: tuple[str, ...] = ()
+    subtypes: tuple[str, ...] = ()
+    word = stream.peek_word()
+    if word in COLOR_WORDS:
+        stream.advance()
+        colors = (COLOR_WORDS[word],)
+        if not stream.accept_phrase("and", "is"):
+            return _fold_entering_characteristics(stream, steps, mark, colors, ())
+    if stream.accept_word("a", "an"):
+        subtype = stream.peek_word()
+        if subtype is None or subtype not in CREATURE_TYPES:
+            stream.reset(mark)
+            return None
+        stream.advance()
+        if not stream.accept_phrase(
+            "in", "addition", "to", "its", "other", "creature", "types"
+        ):
+            stream.reset(mark)
+            return None
+        subtypes = (subtype,)
+    if not colors and not subtypes:
+        stream.reset(mark)
+        return None
+    return _fold_entering_characteristics(stream, steps, mark, colors, subtypes)
+
+
+def _fold_entering_characteristics(
+    stream: TokenStream, steps: list[ast.Statement], mark,
+    colors: tuple[str, ...], subtypes: tuple[str, ...],
+) -> ast.Statement | None:
+    """Fold what the reanimated permanent enters as onto the move, provided
+    the sentence ends here — a predicate this rider did not read ("…and has
+    flying") rewinds the whole sentence rather than being dropped."""
+    if not (stream.exhausted or stream.at_punct(".")):
+        stream.reset(mark)
+        return None
+    steps[-1] = replace(
+        steps[-1],
+        entering_colors=steps[-1].entering_colors + colors,
+        entering_subtypes=steps[-1].entering_subtypes + subtypes,
+    )
     return _RIDER_FOLDED
 
 

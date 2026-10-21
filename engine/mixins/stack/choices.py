@@ -3109,6 +3109,25 @@ class PendingChoicesMixin:
             record = choice.data.get("record")
             if record is not None:
                 record["exiled_cards"] = [card]
+            # "When this creature enters, target opponent reveals their hand
+            # and you choose a nonland card from it. Exile that card. When this
+            # creature leaves the battlefield, return the exiled card to its
+            # owner's hand." (Mesmeric Fiend.) CR 607.2a links the two, so the
+            # card is recorded as exiled *with* the permanent whose ability
+            # exiled it — Kitesail Freebooter's record below, minus the
+            # ``ends_on``: nothing about the exile itself ends it, and the
+            # second ability is what moves it. A spell (Psychic Theft) has no
+            # source and links nothing.
+            #
+            # Looked up by id like Freebooter's, and **not** linked once the
+            # source has really left: by then its leaves-the-battlefield
+            # trigger has already found an empty pile, and the card is exiled
+            # for good — Mesmeric Fiend's ruling (2018-03-16): "Then its first
+            # ability will resolve and exile a nonland card from the target
+            # opponent's hand indefinitely."
+            source = until_leaves_source(self, choice.data.get("source_id"))
+            if source is not None:
+                link_exiled_card(source, card, victim_index)
             self.log.append(f"{card.name} was exiled from {victim.name}'s hand")
             return True
         if fate != "exile_until_source_leaves":
@@ -7165,6 +7184,29 @@ class PendingChoicesMixin:
         taken = [owner.graveyard[index] for index in picks]
         for index in sorted(picks, reverse=True):
             owner.exile.append(owner.graveyard.pop(index))
+        # "When this creature enters, exile up to two target cards from a
+        # single graveyard. When this creature leaves the battlefield, return
+        # **the exiled cards** to their owner's graveyard." (Gravegouger.)
+        # CR 607.2a links the two abilities, so the cards are recorded as
+        # exiled *with* the permanent whose ability exiled them — the record
+        # the second ability drains (`put_exiled_with_source`). Linked whenever
+        # a permanent did the exiling, for the reason every other exile-with-
+        # a-source handler gives: nothing ends the link on its own (no
+        # ``ends_on``), so it is inert for Rysorian Badger, which never asks,
+        # and everything for a card whose other ability does. A spell has no
+        # permanent and links nothing.
+        #
+        # **The object, not its id.** A source that left the battlefield
+        # before this resolved has already had its leaves-the-battlefield
+        # trigger find an empty pile, so these cards are exiled for good —
+        # the old-style Oblivion Ring reading (Mesmeric Fiend's ruling,
+        # 2018-03-16, of the same two triggers). The record lands on an
+        # object nothing reads again, which is that outcome.
+        context = choice.data.get("_context")
+        source = getattr(context, "source_permanent", None)
+        if source is not None:
+            for card in taken:
+                link_exiled_card(source, card, int(choice.data["owner_index"]))
         self._record_graveyard_exile(choice, taken)
         self.log.append(
             f"{self.players[choice.player_index].name} exiled "

@@ -157,8 +157,21 @@ def _lower_exile_hand_pile(
     # player, and there is no such card.
     actor = node.actor.kind if node.actor is not None else None
     owner = filt.zone_owner.kind if filt.zone_owner is not None else None
+    # Whose hand is named by the noun phrase on the imperative spelling and
+    # by the subject on the "target player exiles" one; the picker is
+    # described from whichever of the two printed the target.
+    chosen_seat: "ast.PlayerRef | None" = node.actor
     if actor is None and owner == "you":
         who = "you"
+    elif actor is None and owner in ("target_player", "target_opponent"):
+        # "…exile all cards from **target opponent's hand**." (Hypnox.)
+        # Suppress's act with the target in the possessive rather than in the
+        # subject: the controller of the ability exiles, the hand is the
+        # chosen seat's, and nobody picks — so it is the same instruction,
+        # recorded on the exiling permanent exactly as Suppress's would be
+        # (CR 607.2a: "return the exiled cards" is the linked ability).
+        who = "target_player"
+        chosen_seat = filt.zone_owner
     elif actor == "each_player" and owner in ("owner", "each_player"):
         who = "each_player"
     elif actor in ("target_player", "target_opponent") and owner == "owner":
@@ -206,7 +219,7 @@ def _lower_exile_hand_pile(
         # moves.
         payload["who"] = who
         if who == "target_player":
-            _describe_targets(payload, node.actor)
+            _describe_targets(payload, chosen_seat)
     if described:
         payload["card_filter"] = described
     if node.face_down:

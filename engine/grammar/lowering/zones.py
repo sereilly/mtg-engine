@@ -431,6 +431,18 @@ def _lower_put_onto_battlefield(
     if not isinstance(target, ast.TargetSpec):
         raise LoweringError("no handler puts that onto the battlefield", node=node)
     filt = target.filter
+    if (node.entering_colors or node.entering_subtypes) and not (
+        filt.zone == "graveyard" and _is_target(target) and filt.is_card
+        and (node.actor is None or node.actor.kind == "you")
+    ):
+        # "That creature is black and is a Nightmare …" (Chainer). Only the
+        # targeted reanimation at the foot of this function carries what the
+        # permanent enters as to its resolver; every other branch would put
+        # the card in as it is printed, which is a different card.
+        raise LoweringError(
+            "only the targeted reanimation says what its permanent enters as",
+            node=node,
+        )
     if node.tapped and not (
         filt.zone == "hand" and target.quantifier in ("a", "an") and filt.is_card
     ):
@@ -706,6 +718,16 @@ def _lower_put_onto_battlefield(
             # 303.4f, which is the rule for an effect that names **no** host and
             # leaves the choice to the player; both of these name one.)
             payload["attach_to"] = "source"
+        # "That creature is black and is a Nightmare in addition to its other
+        # creature types." (Chainer, Dementia Master.) What the permanent
+        # enters as (the card's ruling: "it doesn't enter and then become a
+        # black Nightmare"), written by the resolver before the entry. Emitted
+        # only when printed, so every reanimation compiled before this keeps a
+        # byte-identical payload.
+        if node.entering_colors:
+            payload["entering_colors"] = list(node.entering_colors)
+        if node.entering_subtypes:
+            payload["entering_subtypes"] = list(node.entering_subtypes)
         return (OracleInstruction("reanimate_creature", "", payload),)
     # "…put **those cards** onto the battlefield **under their owners'
     # control**." (Game Preserve.) The cards an earlier step of this same

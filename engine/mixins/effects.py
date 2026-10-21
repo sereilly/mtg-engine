@@ -1924,6 +1924,7 @@ class EffectsMixin:
         target_permanent_index: int | None = None,
         card_filter=None,
         card_type: str = "creature",
+        entering_as=None,
     ) -> "Permanent | None":
         """Put one permanent card from a graveyard onto *caster*'s battlefield.
 
@@ -1951,6 +1952,14 @@ class EffectsMixin:
         it. The Aura printing of the same effect (Animate Dead, in
         ``mixins/oracle_instructions.py``) has recorded it all along; this is
         the same line for the spell printing.
+
+        *entering_as* is called with the arriving permanent **before** it
+        enters, for what the effect says it enters as: "That creature is black
+        and is a Nightmare in addition to its other creature types" (Chainer,
+        Dementia Master), whose ruling says "it doesn't enter and then become a
+        black Nightmare". Written before the entry, so the board's statics
+        folded onto an entering permanent (CR 614.12) and every watcher of the
+        entry see it as what it is.
         """
         controller_index = self.players.index(caster)
 
@@ -1974,6 +1983,8 @@ class EffectsMixin:
             # control. Here the two differ by construction.
             if owner_index != controller_index:
                 arrival.metadata["owner_player_index"] = owner_index
+            if entering_as is not None:
+                entering_as(arrival)
             self._put_permanent_onto_battlefield(controller_index, arrival, None)
             return arrival
 

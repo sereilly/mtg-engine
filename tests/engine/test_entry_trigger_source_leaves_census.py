@@ -51,6 +51,20 @@ _NON_TURN_DURATION = re.compile(
     r"\b(?:as long as|until (?!end of turn|your next turn))", re.I
 )
 
+#: Reminder text (CR 207.2a: italicized, in parentheses, "summarizes a rule")
+#: is not the card's rules text, so it is no evidence of a duration. Slithery
+#: Stalker's swampwalk reminder reads "can't be blocked **as long as**
+#: defending player controls a Swamp", and the census read that as its exile
+#: lasting "as long as" something — on the day Torment was ingested it named
+#: the Stalker's Grizzly Bears, exiled for good, which is exactly what the
+#: card's two triggers do when the creature leaves before the first resolves
+#: (Faceless Butcher, the same two lines with no reminder text, passed).
+_REMINDER_TEXT = re.compile(r"\([^)]*\)")
+
+
+def _rules_text(card) -> str:
+    return _REMINDER_TEXT.sub("", card.oracle_text or "")
+
 
 def _cards_in_game(game) -> int:
     """Every card in a zone. A trigger on the stack is not a card and tokens
@@ -109,7 +123,7 @@ def test_no_entry_trigger_strands_anything_when_its_source_is_destroyed_in_respo
             if phased:
                 findings.append(f"{where}: {phased} left phased out")
             exiled = [c.name for player in game.players for c in player.exile]
-            if exiled and _NON_TURN_DURATION.search(card.oracle_text or ""):
+            if exiled and _NON_TURN_DURATION.search(_rules_text(card)):
                 findings.append(f"{where}: {exiled} exiled with nothing left to end it")
 
     assert examined >= _MIN_PAIRS, f"the census reached only {examined} entries"

@@ -708,6 +708,17 @@ def _parse_reveal_hand_and_choose(stream: TokenStream) -> ast.Statement | None:
     # sentences' business, which read the `exiled_cards` record it leaves.
     if stream.accept_phrase("and", "exile", "that", "card"):
         return ast.RevealHandAndChoose(player, chosen.filter, fate="exile")
+    # "…you choose a nonland card from it. **Exile that card.**" (Mesmeric
+    # Fiend.) Psychic Theft's plain exile as a sentence of its own, read after
+    # Kitesail Freebooter's ending above so a printed duration is never shed:
+    # "exile that card until …" is taken whole there, and any other window
+    # stays on the stream as unconsumed text that fails the line. Without a
+    # duration the exile is permanent (CR 610.3 needs an "until"), and what
+    # gives the card back is the Fiend's *second* ability — CR 607.2a's linked
+    # "return the exiled card", which reads the record the fate leaves on the
+    # exiling permanent.
+    if stream.accept_phrase("exile", "that", "card"):
+        return ast.RevealHandAndChoose(player, chosen.filter, fate="exile")
     # **No ending at all** (Lobotomy): the sentence stops at "from it" and what
     # the pick was *for* is the next printed sentence, which reads the name this
     # one recorded. So the production stops too, and the sequence parser reads
