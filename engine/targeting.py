@@ -1130,6 +1130,13 @@ def _cost_picker_specs(cost, *, announced: dict | None = None) -> list[dict]:
             "discard_cost": True,
             "count": cost.discard_cards,
         }
+        # "…, discard **X** cards" (Firestorm, the Dreams): how many is the X
+        # the caster announces (CR 601.2b), so the spec says an X is owed —
+        # the flag "Sacrifice X lands" carries below — rather than the printed
+        # 1 ``count`` holds. Emitted only for an X, so every other discard
+        # spec is unchanged.
+        if getattr(cost, "discard_count_x", False):
+            spec["announces_x"] = True
         # "Discard a **land card or Shrine card**" (Sanctum of Shattered
         # Heights) — the printed alternatives ride along so the enumerator
         # narrows the offered hand with the same reader the charger accepts by.

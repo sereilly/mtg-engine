@@ -51,6 +51,8 @@ from engine import Game as _w1g5_Game
 from engine import PlayerState as _w1g5_PlayerState
 from engine.cast_costs import cast_announces_x as _w1g5_cast_announces_x
 from engine.models import Permanent as _w1g5_Permanent
+from engine.oracle import compile_card_oracle as _w1g5_compile
+from engine.targeting import derive_cast_spec as _w1g5_derive_cast_spec
 from tests.helpers import _mk_card as _w1g5_mk_card
 from tests.helpers import _nosick as _w1g5_nosick
 from tests.helpers import resolve_stack as _w1g5_resolve_stack
@@ -122,6 +124,25 @@ def test_w1g5_restless_dreams_at_x_two_discards_the_two_named_and_returns_two(se
     ]
     assert "A discarded Lightning Bolt to cast Restless Dreams" in game.log
     assert "A discarded Island to cast Restless Dreams" in game.log
+
+
+def test_w1g5_restless_dreams_at_x_zero_charges_no_card_the_picker_named(set_pool):
+    """The browser's discard picker is sized by the printed count (one card)
+    whatever X is, so an X of zero arrives naming a card: accepted, and not
+    charged — the payment discards X. The cost spec says an X is owed
+    (``announces_x``) for the client that sizes the picker by it."""
+    lea = set_pool("LEA")
+    dreams = set_pool("TOR")["Restless Dreams"]
+    assert _w1g5_derive_cast_spec(dreams, _w1g5_compile(dreams))["cost_spec"][
+        "announces_x"
+    ]
+    game = _w1g5_game(dreams, hand=[lea["Forest"]])
+
+    result = game.cast_from_hand(0, dreams.name, x_value=0, cost_hand_index=1)
+    _w1g5_resolve_stack(game)
+
+    assert result.supported, result.details
+    assert _w1g5_names(game.players[0].hand) == ["Forest"]
 
 
 def test_w1g5_restless_dreams_at_x_two_needs_two_creature_cards(set_pool):

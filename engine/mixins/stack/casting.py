@@ -3287,10 +3287,16 @@ class SpellCastingMixin:
         # and the payment share -- and not the printed ``discard_cards``, which
         # is 1 for "discard **X** cards" (the Dreams, Firestorm): the field says
         # *that* there is a discard, the announced X says how many. Compared
-        # with the field, an X of two could name one card and was refused for
-        # naming two, so every discard past the first rode the default.
+        # with the field alone, an X of two could name one card and was refused
+        # for naming two, so every discard past the first rode the default.
+        #
+        # The field stays a floor on what may be *named*: the browser's discard
+        # picker is sized by it (one card) whatever X is, and a card named at an
+        # X of zero is simply not charged — the payment loops ``owed`` times.
         owed = discarding.discarded_count(x_value)
-        if len(set(named)) != len(named) or len(named) > owed:
+        if len(set(named)) != len(named) or len(named) > max(
+            owed, discarding.discard_cards
+        ):
             return [], (
                 f"{card.name} can't be cast: its additional cost discards "
                 f"{owed} card(s), each named once (CR 601.2b)"
