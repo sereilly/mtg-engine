@@ -782,6 +782,16 @@ ACTIVATED_LABELS: dict[str, str] = {
     # restriction word wherever the thing denied happens to be -- a block, a
     # phasing, here a land play.
     "forbid_land_plays_this_turn": "activated_restriction",
+    # Major Teroh (TOR): "{3}{W}{W}, Sacrifice Major Teroh: Exile all black
+    # creatures." Named at Torment's promotion rehearsal, where it was the
+    # first *activated* ability the grammar reads to produce this kind (every
+    # shipped one is a trigger, `triggered_exile` below) and so took the
+    # category default, `activated_zones`. Driven: the activation sacrifices
+    # Teroh and exiles every black creature on both sides. It removes
+    # permanents, which is ``exile_target_permanent``'s and ``exile_self``'s
+    # bucket above — how many, and by which description, is not the question
+    # the bucket answers.
+    "exile_all_matching": "activated_destruction",
 }
 
 # Instruction kind -> label, for an ability the grammar reads in the **triggered**
