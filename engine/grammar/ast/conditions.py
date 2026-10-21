@@ -216,6 +216,12 @@ class SameNamedObject:
     #: there"; only where the name comes from differs, and the lowering refuses
     #: each spelling wherever its referent is not in view.
     other: bool = False
+    #: "…put that card onto the battlefield **if it has the same name as a
+    #: permanent**." (Retraced Image.) The other word order: the object whose
+    #: name is compared is the sentence's subject, "it" — the card a step of
+    #: this same effect turned up (a reveal out of a hand) — and the zone is
+    #: what "a permanent" names. None for the two spellings above.
+    named_by: str | None = None
 
 
 @dataclass(frozen=True)

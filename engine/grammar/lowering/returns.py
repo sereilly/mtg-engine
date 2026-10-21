@@ -27,7 +27,8 @@ from ._described_returns import (_graveyard_to_hand_payload,
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS, _describe_targets, _is_target,
     _restrictions_beyond, _describe_several_card_targets,
-    _describe_several_targets, _names_several_targets, testable_filter_payload
+    _describe_several_targets, _names_several_targets, testable_filter_payload,
+    describe_independent_target_roles,
 )
 
 #: The printed noun phrases a graveyard-to-battlefield return may name.
@@ -197,6 +198,68 @@ def _lower_put_source_into_zone(
     return (OracleInstruction("put_self_into_zone", "", {"zone": "graveyard"}),)
 
 
+def _lower_several_role_bounce(
+    node: ast.ReturnToZone,
+) -> tuple[OracleInstruction, ...]:
+    """"Return target creature **and target land** to their owners' hands."
+    (Churning Eddy.)
+
+    Several targeted phrases of one verb, described as ordered roles
+    (``describe_independent_target_roles``, the description Fumarole's
+    destroy carries) on the bounce every single-target "to its owner's hand"
+    already lowers to — the handler resolves each slot by its role and
+    re-asks that role's filter (CR 608.2b). Only that shape: every rider a
+    return can carry is a rider on *one* move, and is refused here rather than
+    applied to the first role and dropped from the rest.
+    """
+    specs = (node.subject, *node.also_targets)
+    if not (
+        node.from_zone is None
+        and node.to.name == "hand"
+        and node.to.owner is not None
+        and node.to.owner.kind == "owner"
+        and not node.entering_tapped
+        and not node.entering_counters
+        and node.under_control_of is None
+        and node.repetitions is None
+        and node.actor is None
+        and node.attached_to is None
+        and not node.exile_on_leave
+        and not node.losing_subtypes
+        and not node.losing_abilities
+        and not node.gaining_abilities
+        and node.bound_card_from is None
+    ):
+        raise LoweringError(
+            "several targets of one return go to their owners' hands and "
+            "nowhere else",
+            node=node,
+        )
+    for spec in specs:
+        if not isinstance(spec, ast.TargetSpec) or spec.filter.is_card or (
+            spec.filter.zone != "battlefield"
+        ):
+            raise LoweringError(
+                "a role of a several-target bounce names a permanent", node=node
+            )
+        unread = _restrictions_beyond(spec.filter, _PAYLOAD_HONOURED_FILTER_FIELDS)
+        if unread:
+            raise LoweringError(
+                "the bounce handler cannot read " + ", ".join(sorted(unread)),
+                node=node,
+            )
+        # The handler re-asks each role's filter through ``subject_matches``,
+        # so a narrowing it cannot test is refused here, where a role would
+        # otherwise be admitted with the narrowing silently dropped.
+        testable_filter_payload(
+            spec.filter, refusal="the bounce handler cannot test",
+            node=node, require_narrowing=False,
+        )
+    payload: dict[str, object] = {}
+    describe_independent_target_roles(payload, specs)
+    return (OracleInstruction("bounce_target_creature", "", payload),)
+
+
 def _lower_return_to_zone(
     node: ast.ReturnToZone,
     event: str | None = None,
@@ -226,6 +289,8 @@ def _lower_return_to_zone(
     # of object was chosen.
     if node.also_stack:
         return (OracleInstruction("return_spell_or_creature_to_hand", "", {}),)
+    if node.also_targets:
+        return _lower_several_role_bounce(node)
     subject = node.subject
     # "Their controller chooses and sacrifices one of them. Return **the
     # other** to its owner's hand." (Barrin's Spite.) The member of the chosen

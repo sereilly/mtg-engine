@@ -204,7 +204,19 @@ def _lower_flip_coins_until_loss(
     "That many" names its producer or refuses. With no number chosen in front
     of it the words bound nothing, and a run that read zero would compile
     supported and never flip.
+
+    "Flip a coin **until you lose a flip**." (Crazed Firecat.) The run with no
+    ceiling and no folded reward: the instruction alone, with no
+    ``amount_from`` — which is what tells the handler the first loss is the
+    only bound — and the sentence behind it reads the record the run writes.
     """
+    if node.times is None and node.draw_per_flip is None:
+        return (OracleInstruction("flip_coins_until_loss", "", {}),)
+    if node.times is None or node.draw_per_flip is None:
+        raise LoweringError(
+            "a flip run bounded by a number pays what its own sentence prints",
+            node=node,
+        )
     if (
         not isinstance(node.times, ast.ThatMuch)
         or node.times.source is not None

@@ -63,6 +63,7 @@ from ..oracle_types import OracleInstruction
 from . import ast
 from .errors import LoweringError
 from .lowering._events import LOOP_BOUND_OBJECT, LOOP_BOUND_PLAYER
+from .lowering._record_keys import BOARD_LOOP_OBJECT
 from .lowering._prevented_riders import _guard_is_the_arms_own_precondition
 from .lowering._roles import (plan_another_target_roles,
                               stamp_another_target_roles)
@@ -656,7 +657,11 @@ def lower_statement(
             # sacrifices a permanent of their choice unless **they** pay {1}"
             # (Fade Away) is the sentence that needs it, and the seat it names
             # is one ``_offered_seats`` and ``bound_permanent`` already resolve.
-            return _lower_for_each_matching(statement, repeated(object_loop))
+            # ``BOARD_LOOP_OBJECT`` beside it says the object is still *on the
+            # battlefield* (Parallel Evolution copies it).
+            return _lower_for_each_matching(
+                statement, repeated(object_loop | {BOARD_LOOP_OBJECT})
+            )
         return _lower_for_each(statement)
 
     # Both repeat clauses take the recursion back as an argument: their

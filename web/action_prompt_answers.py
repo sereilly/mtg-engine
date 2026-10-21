@@ -240,6 +240,33 @@ def _action_trigger_target_confirm(session, req, seat_type):
     # it always was — and the engine takes it only from a prompt it armed as
     # an "up to", so an ability that owes its target cannot be skipped by
     # sending one.
+    #
+    # A **division** ("distribute three -1/-1 counters among one, two, or
+    # three target creatures", Shambling Swarm — the prompt carries
+    # ``division_total``) arrives the way a divided *spell's* announcement
+    # does: ``divided_targets``, one entry per creature with its ``amount``
+    # (CR 601.2d). ``target_permanent_ids`` is still accepted for a division
+    # nobody had to choose (one target, or one counter apiece); the engine
+    # refuses it where the split is the announcer's to make.
+    if pending.data.get("division_total") is not None and req.divided_targets:
+        ids = []
+        for entry in req.divided_targets:
+            permanent_id = entry.id
+            if permanent_id is None and entry.index is not None:
+                permanent = session.game.permanent_at(entry.seat, entry.index)
+                permanent_id = None if permanent is None else permanent.permanent_id
+            if permanent_id is None:
+                raise HTTPException(
+                    status_code=400, detail="a division names creatures, not players",
+                )
+            ids.append(permanent_id)
+        amounts = [entry.amount for entry in req.divided_targets]
+        if not session.game.confirm_trigger_target(
+            req.seat, permanent_ids=ids,
+            amounts=None if all(amount is None for amount in amounts) else amounts,
+        ):
+            raise HTTPException(status_code=400, detail="invalid division")
+        return
     if req.target_permanent_ids is not None and (
         req.target_permanent_ids or pending.data.get("up_to")
     ):

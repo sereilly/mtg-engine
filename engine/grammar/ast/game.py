@@ -327,10 +327,14 @@ class FlipCoinsUntilLoss:
     """
     #: How many flips at most. "That many" is a back-reference to the number
     #: the sentence in front chose, which the lowering resolves or refuses.
-    times: "Amount"
+    #: None is "**flip a coin until you lose a flip**" (Crazed Firecat): the
+    #: first loss is the only bound the sentence prints.
+    times: "Amount | None" = None
     #: "…draw **two** cards for each flip" — what winning every flip pays, per
-    #: flip made.
-    draw_per_flip: "Amount"
+    #: flip made. None where the run's reward is a sentence of its own ("Put a
+    #: +1/+1 counter on this creature for each flip you won", which reads the
+    #: run's ``COIN_FLIPS_WON`` record like any back-reference).
+    draw_per_flip: "Amount | None" = None
 
 
 @dataclass(frozen=True)

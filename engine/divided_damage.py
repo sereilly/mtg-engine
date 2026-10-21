@@ -356,6 +356,38 @@ def division_refusal(
     return None
 
 
+def spread_shares(total: int, count: int) -> list[int]:
+    """*total* split *count* ways, remainder to the earliest.
+
+    CR 601.2d wants every target to receive at least one, so the remainder is
+    spread rather than dropped — the starting division the browser offers a
+    person (``evenStartingDivision``), the AI's proposal for a divided spell
+    (``ai_policy._even_shares``) and a seat nobody asks for a divided trigger's
+    announcement (``Game._default_trigger_division``) all start from this one.
+    """
+    if count <= 0:
+        return []
+    base, left = divmod(int(total), int(count))
+    return [base + (1 if index < left else 0) for index in range(count)]
+
+
+def forced_division(total: int, count: int) -> list[int] | None:
+    """The one lawful CR 601.2d division of *total* over *count* targets, or
+    None when the announcer has a choice to make.
+
+    "Distribute three -1/-1 counters among one, two, or three target
+    creatures" (Shambling Swarm): one target takes all three, and three
+    targets take one apiece (each must be assigned at least one), so an answer
+    naming either needs no division beside it — two targets is 2+1 or 1+2, and
+    that is a choice nobody may make for the announcer.
+    """
+    if count == 1:
+        return [int(total)]
+    if count > 0 and count == total:
+        return [1] * count
+    return None
+
+
 def divide(total: int, entries, *, division: str) -> list[tuple[int, int | None, int]]:
     """*entries* with each one's share of *total*.
 

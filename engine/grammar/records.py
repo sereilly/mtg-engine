@@ -28,7 +28,8 @@ the guard too.
 
 from __future__ import annotations
 
-from ..oracle_types import EXILED_THIS_WAY, MILLED_THIS_WAY, REVEALED_THIS_WAY
+from ..oracle_types import (COIN_FLIPS_WON, EXILED_THIS_WAY, MILLED_THIS_WAY,
+                           REVEALED_THIS_WAY)
 from .errors import GrammarError
 from . import ast
 from .lexer import MANA, NUMBER, SELF, WORD
@@ -264,6 +265,14 @@ def _parse_for_each_this_way(stream: TokenStream) -> ast.ThatMuch | None:
     mark = stream.mark()
     if not stream.accept_phrase("for", "each"):
         return None
+    # "…for each **flip you won**." (Crazed Firecat.) The other spelling of a
+    # count one earlier step of this effect recorded: the run of flips in
+    # front of it (``flip_coins_until_loss``) writes how many it won, and the
+    # clause names that record rather than saying "this way" — "you won" is
+    # the participle and the flipper (CR 705.2) at once. The producer gate in
+    # the lowering is the same one, so with no run in front the words refuse.
+    if stream.accept_phrase("flip", "you", "won"):
+        return ast.ThatMuch(COIN_FLIPS_WON)
     # "for each **1** damage prevented this way" (Sacred Boon) — the printed
     # unit. Only one, because the clause is a rate and the count beside it is
     # what is placed per unit: "for each 2 damage" would be a division this

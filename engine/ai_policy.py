@@ -60,7 +60,7 @@ from .ai_valuation import (
     source_becomes_an_aura,
     source_toughness_change,
     spell_denies_its_own_target,
-    spell_hand_pick_entry_filters,
+    spell_hand_pick_entries,
     spell_seat_side,
     spell_target_side,
     TollLoss,
@@ -72,7 +72,7 @@ from .activation_restrictions import activation_denial, global_activation_ban
 from .cast_costs import additional_costs, cast_announces_x
 from .cast_prohibitions import cast_prohibition
 from .cast_restrictions import check_cast_timing
-from .divided_damage import EACH
+from .divided_damage import EACH, spread_shares
 from .cost_modifiers import (CostReduction, cost_reduction_for_cast,
                              keyword_cost_modifiers, reduce_cost,
                              sacrifice_taxes, spell_cost_tax, spell_symbol_tax)
@@ -5711,10 +5711,10 @@ def _even_shares(total: int, count: int) -> list[int]:
     CR 601.2d wants every target to receive at least one, so the remainder is
     spread rather than dropped — the same starting division
     ``evenStartingDivision`` offers a human in the browser, which is where this
-    arithmetic already lived.
+    arithmetic already lived. One arithmetic with a divided trigger's default
+    (``divided_damage.spread_shares``).
     """
-    base, left = divmod(total, count)
-    return [base + (1 if index < left else 0) for index in range(count)]
+    return spread_shares(total, count)
 
 
 def choose_divided_targets(
@@ -7055,18 +7055,39 @@ def _caster_holds_a_hand_pick_entrant(
     (``ai_valuation.spell_hand_pick_entry_filters``).
 
     Through ``_card_matches_filter``, the matcher the entering step itself asks.
-    """
-    from .handlers._common import _card_matches_filter
 
-    filters = spell_hand_pick_entry_filters(card)
-    if not filters:
+    …and through the **guard** around the entering step, where there is one
+    ("…put that card onto the battlefield if it has the same name as a
+    permanent", Retraced Image): a held card the guard refuses enters nothing,
+    so a cast whose every pick would be refused is a card spent on a reveal.
+    The guard is the engine's own evaluator, handed the card under the record
+    the pick writes.
+    """
+    from .game_types import OracleExecutionContext
+    from .handlers._common import _card_matches_filter
+    from .handlers.control_flow import evaluate_condition
+
+    entries = spell_hand_pick_entries(card)
+    if not entries:
         return True
     player = game.players[caster_index]
     held = [c for slot, c in enumerate(player.hand) if slot != hand_index]
-    return all(
-        any(_card_matches_filter(c, wanted, game=game, owner=player) for c in held)
-        for wanted in filters
-    )
+
+    def enters(entry: dict, held_card) -> bool:
+        if not _card_matches_filter(
+            held_card, entry["card_filter"], game=game, owner=player
+        ):
+            return False
+        guard = entry.get("guard")
+        if not guard:
+            return True
+        context = OracleExecutionContext(
+            caster=player, target=player, card=card,
+            results={entry["result_key"]: [held_card]},
+        )
+        return bool(evaluate_condition(game, context, guard))
+
+    return all(any(enters(entry, c) for c in held) for entry in entries)
 
 
 def _hand_entry_has_a_card(
@@ -7785,6 +7806,24 @@ def order_hand_pick(
             player.hand[slot], consumer["card_filter"], game=game, owner=player
         )
     ]
+    guard = consumer.get("guard")
+    if guard:
+        # "…then put that card onto the battlefield **if it has the same name
+        # as a permanent**" (Retraced Image): a pick the guard refuses enters
+        # nothing, so the ones it admits go first. Asked of the engine's own
+        # evaluator with the pick as the record the guard reads — the policy
+        # and the resolution cannot disagree about what the guard means.
+        from .game_types import OracleExecutionContext
+        from .handlers.control_flow import evaluate_condition
+
+        def holds(slot: int) -> bool:
+            context = OracleExecutionContext(
+                caster=player, target=player, card=source_card,
+                results={key: [player.hand[slot]]},
+            )
+            return bool(evaluate_condition(game, context, guard))
+
+        admitted = [slot for slot in admitted if holds(slot)]
     superlative = consumer["superlative"]
     if superlative.get("characteristic") == "mana_value":
         sign = 1 if superlative.get("extreme") == "least" else -1

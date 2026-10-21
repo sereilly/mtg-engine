@@ -137,7 +137,8 @@ def is_tap_alone_mana_ability(ability) -> bool:
     while the seam asked CR 605.1a, and a land's coloured second ability went
     down the path that skips every swap and trigger the seam announces.
     """
-    from ..activation_restrictions import prints_activation_restriction
+    from ..activation_restrictions import (prints_activation_restriction,
+                                           restrictions_askable_mid_payment)
     from ..mana_payment import carries_an_offer, is_mana_ability
 
     instruction = getattr(ability, "instruction", None)
@@ -158,8 +159,18 @@ def is_tap_alone_mana_ability(ability) -> bool:
     # an instant." (Rhystic Cave) is both. Such an ability is the activation
     # path's, which gates it and runs it inline all the same (CR 605.3b); the
     # seam reports it priced, which is the answer it already refuses.
+    #
+    # **Unless every clause is a board condition** the seam asks itself
+    # ("{T}: Add {W} or {B}. Activate only if you control a Swamp.", the
+    # Tainted lands): ``Game.land_mana_tap_refusal`` asks it of the ability
+    # by index, so the clause is enforced at this door too, and the land's
+    # coloured mana is reachable by a tap, the planner and the highlight.
+    line = getattr(ability, "source_line", "") or ""
     return not (
-        prints_activation_restriction(getattr(ability, "source_line", "") or "")
+        (
+            prints_activation_restriction(line)
+            and not restrictions_askable_mid_payment(line)
+        )
         or carries_an_offer(instruction)
     )
 
@@ -537,6 +548,7 @@ class TurnManagementMixin:
         two mana of any one color.'", Overlaid Terrain), which the arm that
         stood here returned in front of.
         """
+        from ..activation_restrictions import prints_activation_restriction
         from ..mana_payment import is_mana_ability, land_text_is_run
 
         if not land_text_is_run(land):
@@ -552,8 +564,15 @@ class TurnManagementMixin:
                 continue
             if not (is_mana_ability(ability) or instruction.kind == "if_then"):
                 continue
-            if is_tap_alone_mana_ability(ability):
+            if is_tap_alone_mana_ability(ability) and not prints_activation_restriction(
+                ability.source_line or ""
+            ):
                 return instruction, priced
+            # A tap-alone ability that prints a board condition ("Activate
+            # only if you control a Swamp", the Tainted lands) is reachable by
+            # index and asked its clause there (``land_mana_tap_refusal``), but
+            # it is never the default a bare tap runs: a default that could be
+            # refused would refuse the land's free mana with it.
             priced = True
         return None, priced
 
@@ -681,6 +700,20 @@ class TurnManagementMixin:
         if ability_index is not None:
             if self._chosen_land_mana_ability(land, ability_index) is None:
                 return "no_such_mana_ability"
+            # "{T}: Add {W} or {B}. **Activate only if you control a Swamp.**"
+            # (Tainted Field.) CR 602.5's clause, asked at this door as the
+            # activation path asks it at its own — the seam admits such an
+            # ability only when every clause is a board condition
+            # (``restrictions_askable_mid_payment``), and this is where it is
+            # asked.
+            from ..activation_restrictions import activation_denial
+
+            chosen = self.usable_abilities_of(land)[ability_index]
+            if activation_denial(
+                self, self.controller_index_of(land), land,
+                getattr(chosen, "source_line", "") or "",
+            ) is not None:
+                return "activation_restricted"
             return None
         mana_ability, priced_mana_ability = self._land_mana_abilities(land)
         if mana_ability is None and not land.effective_produced_mana:

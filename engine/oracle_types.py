@@ -1364,6 +1364,14 @@ CHOSEN_NUMBER_THIS_WAY = "chosen_number_this_way"
 #: loss cut short is shorter than the number that was chosen.
 COIN_FLIPS_MADE = "coin_flips_made"
 
+#: How many flips of that run were **won**: "Flip a coin until you lose a
+#: flip. Put a +1/+1 counter on this creature **for each flip you won**."
+#: (Crazed Firecat.) Beside ``COIN_FLIPS_MADE`` rather than derived from it by
+#: each reader, because the two differ by the losing flip only when there was
+#: one — a run a ceiling stopped (Squee's Revenge) lost nothing — and a reader
+#: subtracting one would be right for one card and wrong for the other.
+COIN_FLIPS_WON = "coin_flips_won"
+
 #: ``{seat: number}`` for a number **every player names at once, in secret**:
 #: "Each player hides at least one item, then all players reveal them
 #: simultaneously. Each player loses life equal to **the number of items they
