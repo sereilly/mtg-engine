@@ -85,6 +85,11 @@
       "status": "pass",
       "updated_at": 1782105248.329876
     },
+    "Aquamoeba": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1792615106.792661
+    },
     "Armageddon": {
       "reason": "",
       "status": "pass",
@@ -94,6 +99,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1784515412.0878656
+    },
+    "Arrogant Wurm": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1792615142.945347
     },
     "Ashnod's Altar": {
       "reason": "",
@@ -300,6 +310,11 @@
       "status": "pass",
       "updated_at": 1791884558.5084772
     },
+    "Carrion Rats": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1792617765.397758
+    },
     "Castle": {
       "reason": "",
       "status": "pass",
@@ -319,6 +334,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1791787822.96348
+    },
+    "Chainer's Edict": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1792617779.7282307
     },
     "Channel": {
       "reason": "",
@@ -374,6 +394,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1791884634.2909925
+    },
+    "City of Solitude": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1792617750.381066
     },
     "Clockwork Beast": {
       "reason": "",
@@ -534,6 +559,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1791884619.1295793
+    },
+    "Deep Analysis": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1792615182.399777
     },
     "Degavolver": {
       "reason": "",
@@ -710,6 +740,11 @@
       "status": "pass",
       "updated_at": 1791900824.53482
     },
+    "Equal Treatment": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1792615800.2201014
+    },
     "Erg Raiders": {
       "reason": "",
       "status": "pass",
@@ -735,6 +770,11 @@
       "status": "pass",
       "updated_at": 1786234435.9540532
     },
+    "Faceless Butcher": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1792615604.041074
+    },
     "False Orders": {
       "reason": "",
       "status": "pass",
@@ -759,6 +799,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782191393.570935
+    },
+    "Fiery Temper": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1792615130.3126905
     },
     "Fire // Ice": {
       "reason": "",
@@ -799,6 +844,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1791884543.264552
+    },
+    "Flaming Gambit": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1792616798.9974139
     },
     "Flashfires": {
       "reason": "",
@@ -895,6 +945,11 @@
       "status": "pass",
       "updated_at": 1784609334.3188765
     },
+    "Ghostly Wings": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1792617927.0736644
+    },
     "Giant Growth": {
       "reason": "",
       "status": "pass",
@@ -955,6 +1010,11 @@
       "status": "pass",
       "updated_at": 1791884624.1303585
     },
+    "Gravegouger": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1792616691.587828
+    },
     "Gray Ogre": {
       "reason": "",
       "status": "pass",
@@ -964,6 +1024,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781761314.0411894
+    },
+    "Grim Lavamancer": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1792615195.6480482
     },
     "Grizzly Bears": {
       "reason": "",
@@ -984,6 +1049,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1791787849.5104907
+    },
+    "Gurzigost": {
+      "reason": "TOR P5: after {G}{G}, Discard: yes, Gurzigost blocked by 2+ creatures opens the Assign Combat Damage dialog asking for a division among its blockers; the server discards the division and deals all damage to the player (MUST_ASSIGN_AS_UNBLOCKED). The dialog asks a question whose answer is ignored. Outmaneuver shares it.",
+      "status": "fail",
+      "updated_at": 1792616455.472768
     },
     "Hasran Ogress": {
       "reason": "",
@@ -1045,6 +1115,11 @@
       "status": "pass",
       "updated_at": 1782971934.9362025
     },
+    "Hypnox": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1792615619.7605395
+    },
     "Ice Storm": {
       "reason": "",
       "status": "pass",
@@ -1074,6 +1149,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1791787844.5205953
+    },
+    "Insidious Dreams": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1792617052.073211
     },
     "Inspiration": {
       "reason": "",
@@ -1330,6 +1410,11 @@
       "status": "pass",
       "updated_at": 1791900810.2259123
     },
+    "Longhorn Firebeast": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1792618318.5289342
+    },
     "Lord of Atlantis": {
       "reason": "",
       "status": "pass",
@@ -1394,6 +1479,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782586064.367578
+    },
+    "Megrim": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1792617229.60249
     },
     "Merchant Ship": {
       "reason": "",
@@ -1484,6 +1574,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782540531.3900843
+    },
+    "Mystic Familiar": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1792615169.112193
     },
     "Mystic Snake": {
       "reason": "",
@@ -1610,6 +1705,11 @@
       "status": "pass",
       "updated_at": 1781757064.6528566
     },
+    "Petradon": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1792618026.4957345
+    },
     "Phantasmal Forces": {
       "reason": "",
       "status": "pass",
@@ -1649,6 +1749,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781931114.369114
+    },
+    "Possessed Aven": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1792615156.5290596
     },
     "Power Leak": {
       "reason": "",
@@ -1759,6 +1864,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1783294368.2300212
+    },
+    "Replenish": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1792617910.7887022
     },
     "Resurrection": {
       "reason": "",
@@ -1940,6 +2050,11 @@
       "status": "pass",
       "updated_at": 1786225347.741989
     },
+    "Shambling Swarm": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1792615976.3060842
+    },
     "Shanodin Dryads": {
       "reason": "",
       "status": "pass",
@@ -2014,6 +2129,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1788819768.6212142
+    },
+    "Skywing Aven": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1792615208.3655868
     },
     "Sleight of Hand": {
       "reason": "",
@@ -2105,6 +2225,11 @@
       "status": "pass",
       "updated_at": 1782018447.4809692
     },
+    "Stupefying Touch": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1792617521.2469294
+    },
     "Suffocating Blast": {
       "reason": "",
       "status": "pass",
@@ -2145,10 +2270,20 @@
       "status": "pass",
       "updated_at": 1782592454.1705534
     },
+    "Tainted Isle": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1792617399.857628
+    },
     "Tainted Pact": {
       "reason": "",
       "status": "pass",
       "updated_at": 1791884576.274099
+    },
+    "Tainted Wood": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1792617415.1244235
     },
     "Teferi's Ageless Insight": {
       "reason": "",
@@ -2240,6 +2375,11 @@
       "status": "pass",
       "updated_at": 1781577230.9356234
     },
+    "Turbulent Dreams": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1792616902.5829136
+    },
     "Twiddle": {
       "reason": "",
       "status": "pass",
@@ -2294,6 +2434,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782972661.1497924
+    },
+    "Violent Eruption": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1792615222.0364017
     },
     "Voice of All": {
       "reason": "",
