@@ -3,10 +3,10 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **5388**
-- Passed: **797** (539 checked in-game, 258 auto-passed)
+- Passed: **812** (554 checked in-game, 258 auto-passed)
 - Failed: **0**
 - Equivalent to a passing card: **60**
-- Untested: **4531**
+- Untested: **4516**
 
 An *auto-pass* is derived, never recorded: the card has no abilities, or nothing but keywords the engine implements, so its behaviour is the generic combat and keyword code plus its printed numbers, and there is no card-specific path for a manual check to exercise. The note names which. A result recorded in-game always takes precedence over it.
 
@@ -38,14 +38,14 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Abyssal Specter | ⬜ untested |  |
 | Academy Rector | ⬜ untested |  |
 | Academy Researchers | ⬜ untested |  |
-| Accelerate | ⬜ untested |  |
+| Accelerate | ✅ pass |  |
 | Acceptable Losses | ⬜ untested |  |
 | Accumulated Knowledge | ⬜ untested |  |
 | Acid Rain | ⬜ untested |  |
 | Acidic Dagger | ⬜ untested |  |
 | Acidic Sliver | ⬜ untested |  |
 | Acidic Soil | ⬜ untested |  |
-| Acorn Harvest | ⬜ untested |  |
+| Acorn Harvest | ✅ pass |  |
 | Acridian | ⬜ untested |  |
 | Active Volcano | ⬜ untested |  |
 | Adarkar Sentinel | ⬜ untested |  |
@@ -554,7 +554,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Brawl | ⬜ untested |  |
 | Breach | ⬜ untested |  |
 | Breaking Wave | ⬜ untested |  |
-| Breakthrough | ⬜ untested |  |
+| Breakthrough | ✅ pass |  |
 | Breath of Darigaaz | ⬜ untested |  |
 | Breath of Dreams | ⬜ untested |  |
 | Breath of Life | ≡ equivalent | same behaviour as Resurrection |
@@ -607,7 +607,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Cabal Inquisitor | ⬜ untested |  |
 | Cabal Patriarch | ⬜ untested |  |
 | Cabal Pit | ✅ pass |  |
-| Cabal Ritual | ⬜ untested |  |
+| Cabal Ritual | ✅ pass |  |
 | Cabal Shrine | ⬜ untested |  |
 | Cabal Surgeon | ⬜ untested |  |
 | Cabal Torturer | ⬜ untested |  |
@@ -785,7 +785,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Chromium | ⬜ untested |  |
 | Chronatog | ⬜ untested |  |
 | Chub Toad | ⬜ untested |  |
-| Churning Eddy | ⬜ untested |  |
+| Churning Eddy | ✅ pass |  |
 | Cinder Cloud | ⬜ untested |  |
 | Cinder Crawler | ⬜ untested |  |
 | Cinder Elemental | ⬜ untested |  |
@@ -955,7 +955,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Crimson Kobolds | ✅ pass | auto-pass: no abilities |
 | Crimson Manticore | ⬜ untested |  |
 | Crimson Roc | ⬜ untested |  |
-| Crippling Fatigue | ⬜ untested |  |
+| Crippling Fatigue | ✅ pass |  |
 | Cromat | ⬜ untested |  |
 | Crooked Scales | ⬜ untested |  |
 | Crookshank Kobolds | ✅ pass | auto-pass: no abilities |
@@ -1308,7 +1308,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Dwarven Vigilantes | ⬜ untested |  |
 | Dwarven Warriors | ✅ pass |  |
 | Dwarven Weaponsmith | ⬜ untested |  |
-| Dwell on the Past | ⬜ untested |  |
+| Dwell on the Past | ✅ pass |  |
 | Dying Wail | ⬜ untested |  |
 | Dystopia | ⬜ untested |  |
 | Eager Cadet | ✅ pass | auto-pass: no abilities |
@@ -1523,7 +1523,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Fanatical Devotion | ⬜ untested |  |
 | Fanatical Fever | ⬜ untested |  |
 | Fanning the Flames | ⬜ untested |  |
-| Far Wanderings | ⬜ untested |  |
+| Far Wanderings | ✅ pass |  |
 | Farmstead | ✅ pass |  |
 | Farrel's Mantle | ⬜ untested |  |
 | Farrel's Zealot | ⬜ untested |  |
@@ -2269,7 +2269,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Intuition | ⬜ untested |  |
 | Invasion Plans | ⬜ untested |  |
 | Invigorate | ⬜ untested |  |
-| Invigorating Falls | ⬜ untested |  |
+| Invigorating Falls | ✅ pass |  |
 | Invigorating Surge | ⬜ untested |  |
 | Inviolability | ⬜ untested |  |
 | Invisibility | ✅ pass |  |
@@ -2373,7 +2373,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Kaervek's Torch | ⬜ untested |  |
 | Kaervek, the Spiteful | ✅ pass |  |
 | Kamahl's Desire | ⬜ untested |  |
-| Kamahl's Sledge | ⬜ untested |  |
+| Kamahl's Sledge | ✅ pass |  |
 | Kamahl, Pit Fighter | ⬜ untested |  |
 | Kangee, Aerie Keeper | ⬜ untested |  |
 | Karakas | ⬜ untested |  |
@@ -2849,7 +2849,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Mind Ravel | ⬜ untested |  |
 | Mind Rot | ⬜ untested |  |
 | Mind Slash | ⬜ untested |  |
-| Mind Sludge | ⬜ untested |  |
+| Mind Sludge | ✅ pass |  |
 | Mind Stone | ⬜ untested |  |
 | Mind Swords | ⬜ untested |  |
 | Mind Twist | ✅ pass |  |
@@ -3196,7 +3196,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Overgrowth | ⬜ untested |  |
 | Overlaid Terrain | ⬜ untested |  |
 | Overload | ⬜ untested |  |
-| Overmaster | ⬜ untested |  |
+| Overmaster | ✅ pass |  |
 | Overrun | ⬜ untested |  |
 | Overtaker | ⬜ untested |  |
 | Ovinomancer | ⬜ untested |  |
@@ -4303,7 +4303,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Songs of the Damned | ⬜ untested |  |
 | Songstitcher | ⬜ untested |  |
 | Sonic Burst | ⬜ untested |  |
-| Sonic Seizure | ⬜ untested |  |
+| Sonic Seizure | ✅ pass |  |
 | Soothing Balm | ⬜ untested |  |
 | Soothsaying | ⬜ untested |  |
 | Soraya the Falconer | ⬜ untested |  |
@@ -4949,7 +4949,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Unearth | ⬜ untested |  |
 | Unerring Sling | ⬜ untested |  |
 | Unfulfilled Desires | ⬜ untested |  |
-| Unhinge | ⬜ untested |  |
+| Unhinge | ✅ pass |  |
 | Unholy Citadel | ⬜ untested |  |
 | Unholy Strength | ✅ pass |  |
 | Unifying Theory | ⬜ untested |  |
@@ -5210,7 +5210,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Warrior's Honor | ⬜ untested |  |
 | Warthog | ✅ pass | auto-pass: keywords only (swampwalk) |
 | Wash Out | ⬜ untested |  |
-| Waste Away | ⬜ untested |  |
+| Waste Away | ✅ pass |  |
 | Wasteland | ⬜ untested |  |
 | Watchdog | ⬜ untested |  |
 | Watcher of the Spheres | ⬜ untested |  |
