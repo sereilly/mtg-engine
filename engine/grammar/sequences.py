@@ -66,6 +66,7 @@ from .pronouns import (_RIDER_FOLDED, _attach_returned_text_change,
                        _attach_sacrifice_when_control_lost,
                        _parse_conditional_pronoun_grant_rider,
                        _parse_conditional_quoted_grant_rider,
+                       _parse_entering_characteristics_rider,
                        _parse_exile_instead_of_leaving_rider,
                        _parse_its_controller_creates_rider,
                        _parse_pronoun_counter_rider,
@@ -646,6 +647,13 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             # loses …" reading is about a keyword and would refuse a quote.
             if _attach_returned_text_change(stream, steps):
                 stream.accept_punct(".")
+                continue
+            # "That creature is black and is a Nightmare in addition to its
+            # other creature types." (Chainer, Dementia Master.) What a
+            # reanimated permanent enters as, folded onto the move in front:
+            # the grant rider below claims "that creature" only before a grant
+            # verb, so the two cannot take each other's sentence.
+            if _parse_entering_characteristics_rider(stream, steps) is not None:
                 continue
             pronoun_grant = _parse_pronoun_grant_rider(stream, steps)
             if pronoun_grant is not None:

@@ -1207,15 +1207,32 @@ def test_a_hand_with_nothing_choosable_queues_no_prompt(set_pool):
 def test_a_bare_exile_ending_is_not_this_card(set_pool):
     """The whole ending is expected, the duration included: "exile that card"
     with no duration is a permanent exile and a different card, and letting the
-    clause be absent would let it be deleted with no change to the parse."""
+    clause be absent would let it be deleted with no change to the parse.
+
+    Torment printed that different card (Mesmeric Fiend: "…from it. Exile that
+    card."), so the bare ending now *reads* — as the permanent exile it is, a
+    different fate from this card's. What this test holds is the part that
+    was always the point: deleting the duration changes the program, so the
+    clause cannot be shed without the parse noticing."""
     from engine.grammar import compile_line
 
-    result = compile_line(
+    bare = compile_line(
         "Target opponent reveals their hand. You choose a noncreature, nonland "
         "card from it. Exile that card."
     )
+    printed = compile_line(
+        "Target opponent reveals their hand. You choose a noncreature, nonland "
+        "card from it. Exile that card until this creature leaves the "
+        "battlefield."
+    )
 
-    assert not result.lowered
+    assert bare.instructions[0].payload["fate"] == "exile"
+    assert printed.instructions[0].payload["fate"] == "exile_until_source_leaves"
+    # A window this production does not read is still refused whole.
+    assert not compile_line(
+        "Target opponent reveals their hand. You choose a noncreature, nonland "
+        "card from it. Exile that card until end of turn."
+    ).lowered
 
 
 # --- Round 105: a lord that grants protection, and a batched trigger --------

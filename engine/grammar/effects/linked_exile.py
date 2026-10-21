@@ -365,6 +365,17 @@ def _parse_put_exiled_with_source(stream: TokenStream) -> ast.Statement | None:
         # there is no wording of this spelling that could name another pile.
         preposition = "to"
         names_source = False
+    elif stream.accept_phrase("return", "the", "exiled", "cards"):
+        # "…return **the exiled cards** to their owner's graveyard."
+        # (Gravegouger; Hypnox to a hand, Petradon to the battlefield.) The
+        # plural of the branch above, and CR 607.2a names it in so many words:
+        # an ability that refers to "the exiled cards" is linked to the one
+        # that exiled them, and refers only to what *that* ability put there.
+        # One pile however many cards it holds, so it is the same sweep — "the
+        # exiled card" was never a pick out of a pile of one — and the plural
+        # noun is the whole difference.
+        preposition = "to"
+        names_source = False
     else:
         stream.reset(mark)
         return None

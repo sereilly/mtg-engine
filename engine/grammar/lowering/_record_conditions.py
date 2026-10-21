@@ -148,6 +148,12 @@ def lower_record_condition(
             "zone": condition.zone,
             "or_cast": condition.or_cast,
         }
+    if isinstance(condition, ast.CastFrom):
+        # "…if you cast it from your hand" (Hypnox): the second record above
+        # asked alone. Its own kind rather than ``entered_from`` with the
+        # first half switched off, because the evaluator would then be asked a
+        # question about a zone the card never printed.
+        return {"kind": "cast_from", "zone": condition.zone}
     if isinstance(condition, ast.RevealedCardIs):
         # The pronoun's referent again, and the same discipline: a reveal
         # earlier in this same effect has to have recorded what it showed, or

@@ -727,7 +727,12 @@ def entry_trigger_target_side(card: CardDefinition) -> str | None:
 #: Kinds whose effect on the **player** they target is a denial and whose
 #: category cannot say so: a discard is filed under ``zones`` beside every
 #: other card movement, where "damage" and "tapping" already answer for theirs.
-_SEAT_DENIAL_KINDS = frozenset({"discard_target_cards"})
+#:
+#: A life *loss* is the second (Torment): "When this creature enters, target
+#: player loses 6 life" (Laquatus's Champion, Soul Scourge) has no family that
+#: says whose, so an AI casting either named its own seat and lost the life
+#: itself. Only "loses" — the gain beside it is a gift (``_SEAT_GIFT_KINDS``).
+_SEAT_DENIAL_KINDS = frozenset({"discard_target_cards", "target_loses_life"})
 
 #: The spec kinds whose candidates include a player's face
 #: (``resolution._CHOOSABLE_TRIGGER_PLAYER_KINDS``, the picker's own set).

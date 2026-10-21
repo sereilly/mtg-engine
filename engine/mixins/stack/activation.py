@@ -10,6 +10,7 @@ ability or (for a mana ability, CR 605.1a) performs it without using the stack.
 from __future__ import annotations
 
 import random
+from types import SimpleNamespace
 
 from ...activation_prohibitions import activation_prohibition
 from ...activation_permissions import card_widens_activation
@@ -37,6 +38,7 @@ from ...oracle_types import x_spend_colors_from_text
 from ...activation_restrictions import x_zero_restriction_line
 from ...activation_zones import GRAVEYARD, HAND, ability_functions_from
 from ...targeting import (GRAVEYARD_TARGET_KIND, ROLE_SEATS, derive_activation_spec, spec_is_a_cost,
+                          graveyard_target_spec,
                           usable_activated_abilities)
 from ...mana_payment import (answer_color_choices, is_mana_ability,
                              mana_cost_from_symbols)
@@ -2148,6 +2150,39 @@ class AbilityActivationMixin:
         exiled_for_cost = None
         exiled_set_for_cost: list = []
         exile_cost_choice = None
+        # **A graveyard target is a slot, and a graveyard cost renumbers it.**
+        # "{2}{B}{B}, {T}, Exile two cards from your graveyard: Return target
+        # creature card from your graveyard to your hand." (Cabal Surgeon.)
+        # CR 601.2c names the target before CR 601.2h pays the cost, but the
+        # stack object's graveyard stamp (``_stamp_stack_targets``) is taken
+        # as it is pushed — after this cost has taken cards out of the very
+        # pile the slot counts into. Exiling the two cards above the target
+        # moved it two slots, and the ability returned whatever card slid into
+        # the slot it had named (a Hill Giant for a Grizzly Bears). So the card
+        # is named here, while the slot still means what the activator chose,
+        # and re-located below once the cost is paid.
+        graveyard_target_before_cost = None
+        graveyard_target_stamp_after_cost = None
+        if (
+            ability.cost.exile_filter is not None
+            and ability.cost.exile_zone == "graveyard"
+            and not target_role_refs
+            and isinstance(target_permanent_index, int)
+        ):
+            target_spec = graveyard_target_spec(
+                permanent.card, None, instruction=ability.instruction,
+            )
+            if target_spec is not None:
+                graveyard_target_before_cost = self.graveyard_target_at(
+                    self.graveyard_target_seat(
+                        SimpleNamespace(
+                            caster_index=controller_index,
+                            target_player_index=announced_target_idx,
+                        ),
+                        target_spec,
+                    ),
+                    target_permanent_index,
+                )
         # Which list ``cost_permanent_index`` counts into. A battlefield slot
         # for every cost above; a slot in a hand or a graveyard for an exile
         # cost paid out of one, which the check below must not read as a
@@ -2197,6 +2232,10 @@ class AbilityActivationMixin:
                 else cost_permanent_index,
                 cost_permanent_ids=cost_permanent_ids,
                 cost_graveyard_indices=cost_graveyard_indices,
+                spare_graveyard_slot=(
+                    (graveyard_target_before_cost.seat, target_permanent_index)
+                    if graveyard_target_before_cost is not None else None
+                ),
             )
             if exile_cost_choice is None:
                 details = (
@@ -2442,6 +2481,16 @@ class AbilityActivationMixin:
             # Absent when "any number of" named none: the cost was paid and ate
             # nothing, and "the exiled card" then names nothing.
             exiled_for_cost = exiled_set_for_cost[0] if exiled_set_for_cost else None
+            if graveyard_target_before_cost is not None:
+                # The named card, found again in the pile the cost just
+                # renumbered. Gone (the payer chose to exile it) is carried as
+                # the stamp itself, which ``_stamp_stack_targets`` keeps when
+                # the item names no slot — so CR 608.2b removes the ability as
+                # it resolves rather than a handler scanning for a stand-in.
+                relocated = self.graveyard_index_of(graveyard_target_before_cost)
+                target_permanent_index = relocated
+                if relocated is None:
+                    graveyard_target_stamp_after_cost = graveyard_target_before_cost
 
         # The counter-removal cost, charged here rather than where it was
         # counted: every gate between the two can still refuse the activation,
@@ -3057,7 +3106,7 @@ class AbilityActivationMixin:
         # still means what the activator chose (CR 601.2c): the cost above this
         # line may have put a card into the very pile the second slot counts
         # into.
-        graveyard_stamps = None
+        graveyard_stamps = graveyard_target_stamp_after_cost
         # Every seat the announcement named, where it named more than one
         # (``targeting.ROLE_SEATS``); None for every roles ability the pool
         # holds today, each of which names at most one.
@@ -3255,7 +3304,7 @@ class AbilityActivationMixin:
     def _choose_exile_cost(
         self, cost, controller, controller_index: int, permanent,
         cost_permanent_index, cost_permanent_ids=None,
-        cost_graveyard_indices=None,
+        cost_graveyard_indices=None, spare_graveyard_slot=None,
     ) -> "tuple | None":
         """What an "Exile <noun phrase>" activation cost will eat, chosen and
         **not yet paid** — or None when nothing in the named zone could pay,
@@ -3366,8 +3415,28 @@ class AbilityActivationMixin:
                     )
                     if isinstance(slot, int) and slot in slots
                 ]
+                # The default fills from the pile in order, **the ability's own
+                # target last** (``spare_graveyard_slot``, a ``(seat, slot)``):
+                # "Exile two cards from your graveyard: Return target creature
+                # card from your graveyard to your hand" (Cabal Surgeon) named
+                # its target first (CR 601.2c), and a payer who names no cards
+                # is not choosing to exile it — the first two in pile order
+                # ate the Grizzly Bears the ability was aimed at whenever it
+                # sat on top. Still taken when nothing else can pay: CR 601.2h
+                # lets the cost be paid with it, and the ability then has no
+                # legal target (CR 608.2b).
+                default_order = slots
+                if (
+                    spare_graveyard_slot is not None
+                    and pile is self.players[spare_graveyard_slot[0]]
+                ):
+                    spared = spare_graveyard_slot[1]
+                    default_order = [
+                        *(slot for slot in slots if slot != spared),
+                        *(slot for slot in slots if slot == spared),
+                    ]
                 chosen_slots: list[int] = []
-                for slot in named if any_number else [*named, *slots]:
+                for slot in named if any_number else [*named, *default_order]:
                     if not any_number and len(chosen_slots) >= wanted:
                         break
                     if slot not in chosen_slots:

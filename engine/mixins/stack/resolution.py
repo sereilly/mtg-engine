@@ -972,6 +972,17 @@ class StackResolutionMixin:
             for permanent_id in (ids if isinstance(ids, (list, tuple)) else [ids])
             if isinstance(permanent_id, int)
         ]
+        # "…exile **two** target lands" (Petradon) named with one land: a
+        # printed count the trigger could not have announced short (CR 601.2c),
+        # so it chooses again — and is removed there if the board cannot meet
+        # the count (CR 603.3d).
+        if (
+            named and spec.get("exact_targets")
+            and isinstance(spec.get("max_targets"), int)
+            and len(set(named)) != spec["max_targets"]
+            and not _target_is_up_to(getattr(item.ability_instruction, "payload", None))
+        ):
+            return "illegal"
         # A spec that is a player and nothing else never reads an id
         # (``stack_targets._read``): the seat is the announcement.
         if named and spec.get("kind") != "player":
@@ -1293,10 +1304,27 @@ class StackResolutionMixin:
         several = {}
         printed = spec.get("max_targets")
         if isinstance(printed, int) and printed > 1:
-            several["max_targets"] = min(
-                printed,
-                sum(1 for entry in offered if entry["kind"] == "permanent"),
-            )
+            on_offer = sum(1 for entry in offered if entry["kind"] == "permanent")
+            if spec.get("exact_targets") and not up_to:
+                # "When this creature enters, exile **two** target lands."
+                # (Petradon.) A printed count with no "up to" is owed whole
+                # (CR 601.2c: two different targets for two instances of
+                # "target"), so a board with one land offers no legal
+                # announcement and CR 603.3d takes the ability off the stack —
+                # it is not asked for the one it can have. Where the count can
+                # be met the prompt says the answer must meet it.
+                if on_offer < printed:
+                    self.stack = [
+                        existing for existing in self.stack if existing is not item
+                    ]
+                    self.log.append(
+                        f"{item.card.name}'s triggered ability was removed from "
+                        f"the stack: it needs {printed} targets and has "
+                        f"{on_offer} (603.3d)"
+                    )
+                    return
+                several["exact_targets"] = True
+            several["max_targets"] = min(printed, on_offer)
         if division:
             # CR 601.2d: the total to divide and who divides it, beside the
             # ceiling. A chosen division gives every target at least one, so a

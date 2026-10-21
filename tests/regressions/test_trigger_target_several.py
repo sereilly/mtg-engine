@@ -34,7 +34,10 @@ from tests.helpers import _nosick, resolve_stack
 #: Basri's Acolyte, Cho-Arrim Bruiser, Nightscape Battlemage (October 2026).
 _MIN_SEVERAL_TARGET_TRIGGERS = 3
 
-_BYSTANDERS = ("Grizzly Bears", "Savannah Lions", "Hill Giant")
+#: Two lands among them since Torment's Petradon ("exile **two** target
+#: lands"): a board of creatures alone offers that trigger no legal target, and
+#: CR 603.3d takes it off the stack before anybody is asked.
+_BYSTANDERS = ("Grizzly Bears", "Savannah Lions", "Hill Giant", "Forest", "Island")
 
 
 @pytest.fixture(scope="module")
@@ -135,6 +138,12 @@ def test_w2g6_every_several_target_trigger_is_asked_for_all_of_them(pool):
         # accepted answer would end the prompt this test goes on to use.
         if not asked.data.get("up_to"):
             assert not game.confirm_trigger_target(0, permanent_ids=[]), card.name
+        # A printed count with no "up to" (Petradon's "two target lands") is
+        # owed whole (CR 601.2c): a short answer is refused like an empty one.
+        if asked.data.get("exact_targets"):
+            assert not game.confirm_trigger_target(
+                0, permanent_ids=offered[: printed - 1]
+            ), f"{card.name}: fewer than it prints"
         assert game.pending_choices == [asked], "a refused answer leaves it owed"
 
         assert game.confirm_trigger_target(0, permanent_ids=offered[:printed]), card.name

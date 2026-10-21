@@ -192,8 +192,27 @@ def _sweep_token_copies() -> tuple[int, int, list[str]]:
     return examined, compared, wrong
 
 
+def _cast_from_hand_gate(instruction) -> bool:
+    """Whether *instruction* is gated "if you cast it from your hand" (Hypnox,
+    CR 603.4) — the one entry trigger whose firing depends on the **road**
+    rather than on the text. The sweep puts the original onto the battlefield
+    and *casts* the Clone, so for this gate the two are not supposed to agree:
+    Hypnox's ruling (2013-09-20) is that a Clone copying it "will still
+    trigger as long as you cast that creature spell from your hand"."""
+    gate = (getattr(instruction, "payload", None) or {}).get("intervening_if")
+    return (
+        isinstance(gate, dict)
+        and gate.get("kind") == "cast_from"
+        and gate.get("zone") == "hand"
+    )
+
+
 def _sweep_clones() -> tuple[int, int, list[str]]:
-    """``(examined, compared, wrong)``, as :func:`_sweep_token_copies`."""
+    """``(examined, compared, wrong)``, as :func:`_sweep_token_copies`.
+
+    A trigger gated on being cast from a hand is held to its ruling instead:
+    never by the original (it was put, not cast) and always by the Clone (it
+    was cast from a hand)."""
     clone_card = next(
         card
         for path in manifest_set_paths()
@@ -232,7 +251,8 @@ def _sweep_clones() -> tuple[int, int, list[str]]:
             )
         copied = 0 if clone is None else _fired_from(fired, clone, instructions)
         compared += own > 0
-        if copied != own:
+        cast_gated = sum(1 for instruction in instructions if _cast_from_hand_gate(instruction))
+        if copied != own + cast_gated:
             wrong.append(f"{card.name}: original fired {own}, Clone copying it fired {copied}")
     return examined, compared, wrong
 

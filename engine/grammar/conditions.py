@@ -350,6 +350,16 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
             return ast.CoinFlipResult(won=True)
         if stream.accept_phrase("lose", "the", "flip"):
             return ast.CoinFlipResult(won=False)
+        # "if **you cast it from your hand**" (Hypnox). The cast half of
+        # Archfiend's Vessel's pair below, printed alone — so it is its own
+        # node, not that one with a half missing. The zone word is required
+        # and checked against the zones a spell is cast from; anything else
+        # resets, and "it" is the permanent that fired the trigger.
+        if stream.accept_phrase("cast", "it", "from", "your"):
+            zone = stream.peek_word()
+            if zone in ("hand", "graveyard", "exile", "library"):
+                stream.advance()
+                return ast.CastFrom(zone)
     stream.reset(mark)
 
     # "it entered from your graveyard or you cast it from your graveyard"

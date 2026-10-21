@@ -2532,6 +2532,41 @@ def _reanimable_slot(player, card_filter, card_type="creature"):
             return
 
 
+def _entering_characteristics(payload: dict, context: OracleExecutionContext):
+    """What a reanimated permanent enters as, as a function of the arrival —
+    or None when the sentence says nothing about it.
+
+    "That creature is black and is a Nightmare in addition to its other
+    creature types." (Chainer, Dementia Master.) Its ruling (2022-12-08):
+    "black only, not black in addition to its other colors … a Nightmare in
+    addition to its other creature types … As it enters the battlefield, it is
+    already a black Nightmare." So the colour is a layer-5 *set* through the
+    colour seam and the type a layer-4 *addition* through the type seam, both
+    indefinite (no duration is printed, CR 611.2a), both written before the
+    permanent enters. Each write stamps its own timestamp (CR 613.7b), so a
+    later colour or type effect still applies over it.
+    """
+    colors = tuple(payload.get("entering_colors") or ())
+    subtypes = tuple(payload.get("entering_subtypes") or ())
+    if not colors and not subtypes:
+        return None
+    from ..color_changes import change_color
+    from ..type_changes import gain_types
+
+    source_name = context.card.name if context.card is not None else "effect"
+
+    def write(permanent) -> None:
+        if colors:
+            change_color(permanent, colors[0] if len(colors) == 1 else colors)
+        if subtypes:
+            gain_types(
+                permanent, subtypes=subtypes, source=source_name,
+                duration="permanent",
+            )
+
+    return write
+
+
 @effect_handler("reanimate_creature")
 def reanimate_creature(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     caster = context.caster
@@ -2688,7 +2723,8 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
             # been enough here.
             source_player, idx = found
     reanimated = game._reanimate_creature_to_battlefield(
-        caster, source_player, idx, card_filter=card_filter, card_type=card_type
+        caster, source_player, idx, card_filter=card_filter, card_type=card_type,
+        entering_as=_entering_characteristics(instruction.payload, context),
     )
     # "enchant creature **put onto the battlefield with Necromancy**" — the
     # relation that clause is about, stamped by the step that performs it
@@ -4315,6 +4351,18 @@ def exile_target_permanent(game: Game, instruction: OracleInstruction, context: 
             if owner_index is None:
                 owner_index = controller_index if controller_index is not None else 0
             game.players[owner_index].exile.append(perm.card)
+            # "When this creature enters, exile two target lands. When this
+            # creature leaves the battlefield, return **the exiled cards** to
+            # the battlefield under their owners' control." (Petradon.) The
+            # one-target branch below has always recorded its card as exiled
+            # *with* the ability's source (CR 607.2a); the several-target one
+            # did not, so a second linked ability had an empty pile to read.
+            # A token is not recorded: CR 111.8 ends its existence as it
+            # leaves, and there is no card for "the exiled cards" to name.
+            if context.source_permanent is not None and not perm.metadata.get(
+                "is_token"
+            ):
+                link_exiled_card(context.source_permanent, perm.card, owner_index)
             game.log.append(f"{card.name} exiled {perm.card.name}")
         # No `last_target_controller`: the key names *the* controller, and
         # a several-target exile has one per permanent. A later step reading it

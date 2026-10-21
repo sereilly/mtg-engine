@@ -3180,9 +3180,17 @@ class GameHelpersMixin:
             instruction=item.ability_instruction,
         )
         if spec is not None:
-            item.target_graveyard_card = self.stamp_graveyard_targets(
+            stamped = self.stamp_graveyard_targets(
                 self.graveyard_target_seat(item, spec), item.target_permanent_index
             )
+            # A stamp the builder already took is kept where the slot names
+            # nothing now: an activation whose own cost exiled the card it
+            # targets (Cabal Surgeon, CR 601.2h after 601.2c) hands over the
+            # card it named and no slot, so CR 608.2b finds the target gone —
+            # where re-stamping from no slot would leave no target at all and a
+            # handler free to scan for a stand-in.
+            if stamped is not None or item.target_graveyard_card is None:
+                item.target_graveyard_card = stamped
             return
         if item.target_permanent_id is not None:
             # The caller already knows the identities. The web layer does: it

@@ -693,6 +693,12 @@ def _trigger_target(ctx: PromptContext, choices: list) -> dict:
     if choice.data.get("division_total") is not None:
         payload["division_total"] = int(choice.data["division_total"])
         payload["division"] = choice.data.get("division")
+    # "Exile **two** target lands" (Petradon): a printed count with no "up to"
+    # is owed whole (CR 601.2c), so the answer must name exactly
+    # ``max_targets`` and the engine refuses a shorter one. Sent so the client
+    # can hold its Confirm until the count is met; absent everywhere else.
+    if choice.data.get("exact_targets"):
+        payload["exact_targets"] = True
     return payload
 
 
