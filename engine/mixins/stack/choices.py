@@ -9414,6 +9414,12 @@ class PendingChoicesMixin:
             return True
         if len(named) > ceiling or len(set(named)) != len(named):
             return False
+        # "…exile **two** target lands" (Petradon): a printed count with no
+        # "up to" is owed whole (CR 601.2c), so a short answer is refused and
+        # the prompt stays owed. The arming side removed the ability where the
+        # board could not meet the count, so the ceiling here is the count.
+        if choice.data.get("exact_targets") and len(named) != ceiling:
+            return False
         if any(permanent_id not in offered for permanent_id in named):
             return False
         permanents = [self.permanent_by_id(permanent_id) for permanent_id in named]
@@ -9505,6 +9511,10 @@ class PendingChoicesMixin:
             return False
         if permanent_ids is not None:
             return self._resolve_trigger_targets(choice, permanent_ids)
+        if permanent_id is not None and choice.data.get("exact_targets"):
+            # One object named for an ability that owes several (Petradon):
+            # the several-target answer's own check, which refuses it.
+            return self._resolve_trigger_targets(choice, [permanent_id])
         if graveyard_index is not None:
             return self._resolve_trigger_graveyard_target(choice, seat, graveyard_index)
         targets = choice.data.get("targets") or ()
@@ -9747,6 +9757,16 @@ class PendingChoicesMixin:
                     if target.get("kind") == "permanent"
                     and target.get("seat") in wanted
                 ][:ceiling]
+                if choice.data.get("exact_targets"):
+                    # "…exile **two** target lands" (Petradon) owes both, so a
+                    # side the effect wants that holds one is topped up from
+                    # the rest of the offer, in the offer's order — a short
+                    # answer is not one this prompt accepts.
+                    several += [
+                        target["permanent_id"] for target in targets
+                        if target.get("kind") == "permanent"
+                        and target["permanent_id"] not in several
+                    ][: ceiling - len(several)]
                 if several:
                     return self._resolve_trigger_targets(choice, several)
             for target in targets:

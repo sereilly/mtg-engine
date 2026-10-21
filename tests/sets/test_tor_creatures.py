@@ -205,6 +205,46 @@ def test_w1g3_petradon_killed_in_response_keeps_the_lands_exiled(set_pool):
     assert sorted(c.name for c in game.players[1].exile) == ["Forest", "Mountain"]
 
 
+def test_w1g3_petradon_owes_two_targets_or_none(set_pool):
+    """"Exile **two** target lands": a printed count with no "up to" is owed
+    whole (CR 601.2c). A one-land board offers no legal announcement, so
+    CR 603.3d takes the trigger off the stack — it does not exile the one land
+    it could reach. A cast naming one land is set aside the same way."""
+    game = _w1g3_game(set_pool, hand=["Petradon"])
+    forest = _w1g3_put(game, set_pool, 1, "Forest")
+    game.cast_from_hand(
+        0, "Petradon", target_player_index=1, target_permanent_ids=[forest.permanent_id],
+    )
+    _w1g3_drain(game)
+
+    assert [p.card.name for p in game.controlled_by(1)] == ["Forest"]
+    assert game.players[1].exile == []
+    assert any("needs 2 targets" in line for line in game.log), game.log[-4:]
+
+
+def test_w1g3_petradon_asked_for_its_targets_takes_exactly_two(set_pool):
+    """Put onto the battlefield (nothing announced), a human controller is
+    asked: one land is refused, two are the announcement."""
+    game = _w1g3_game(set_pool)
+    game.interactive_seats = {0}
+    forest = _w1g3_put(game, set_pool, 1, "Forest")
+    island = _w1g3_put(game, set_pool, 1, "Island")
+    permanent = _W1G3Permanent(card=_w1g3_card(set_pool, "Petradon"))
+    game._put_permanent_onto_battlefield(0, permanent, None)
+
+    (asked,) = [c for c in game.pending_choices if c.kind == "trigger_target"]
+    assert asked.data["max_targets"] == 2 and asked.data.get("exact_targets")
+    assert not game.confirm_trigger_target(0, permanent_id=forest.permanent_id)
+    assert not game.confirm_trigger_target(0, permanent_ids=[forest.permanent_id])
+    assert game.confirm_trigger_target(
+        0, permanent_ids=[forest.permanent_id, island.permanent_id]
+    )
+    game.interactive_seats = set()
+    _w1g3_drain(game)
+
+    assert sorted(c.name for c in game.players[1].exile) == ["Forest", "Island"]
+
+
 # --- Hypnox: "if you cast it from your hand" and the whole hand --------------
 
 

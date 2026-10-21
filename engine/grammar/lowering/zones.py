@@ -435,10 +435,7 @@ def _lower_put_onto_battlefield(
         filt.zone == "graveyard" and _is_target(target) and filt.is_card
         and (node.actor is None or node.actor.kind == "you")
     ):
-        # "That creature is black and is a Nightmare …" (Chainer). Only the
-        # targeted reanimation at the foot of this function carries what the
-        # permanent enters as to its resolver; every other branch would put
-        # the card in as it is printed, which is a different card.
+        # Chainer's rider: only the targeted reanimation below carries it.
         raise LoweringError(
             "only the targeted reanimation says what its permanent enters as",
             node=node,
@@ -718,12 +715,9 @@ def _lower_put_onto_battlefield(
             # 303.4f, which is the rule for an effect that names **no** host and
             # leaves the choice to the player; both of these name one.)
             payload["attach_to"] = "source"
-        # "That creature is black and is a Nightmare in addition to its other
-        # creature types." (Chainer, Dementia Master.) What the permanent
-        # enters as (the card's ruling: "it doesn't enter and then become a
-        # black Nightmare"), written by the resolver before the entry. Emitted
-        # only when printed, so every reanimation compiled before this keeps a
-        # byte-identical payload.
+        # "That creature is black and is a Nightmare …" (Chainer): what the
+        # permanent enters as, written by the resolver before the entry.
+        # Emitted only when printed, so older payloads stay byte-identical.
         if node.entering_colors:
             payload["entering_colors"] = list(node.entering_colors)
         if node.entering_subtypes:
