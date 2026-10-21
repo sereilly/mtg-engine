@@ -4247,10 +4247,13 @@ def exile_target_permanent(game: Game, instruction: OracleInstruction, context: 
     # would exile a permanent the player never chose. A lowering that dropped
     # ``count`` would exile one of the two and report the card supported.
     targets_desc = instruction.payload.get("targets") or {}
-    if (
-        isinstance(targets_desc, dict)
-        and isinstance(targets_desc.get("count"), int)
-        and targets_desc["count"] > 1
+    # "Exile **X** target attacking creatures." (Vengeful Dreams.) The same
+    # list announced at a count the cast's X sets (CR 601.2c), so it is the
+    # several-targets branch at any X: read as the single target below, only
+    # the first of X named attackers was exiled.
+    if isinstance(targets_desc, dict) and (
+        targets_desc.get("count") == "x"
+        or (isinstance(targets_desc.get("count"), int) and targets_desc["count"] > 1)
     ):
         # The printed predicate rather than the default, which is "is it a
         # creature?" — Dust to Dust names artifacts, and a slot the resolver

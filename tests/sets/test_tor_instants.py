@@ -47,7 +47,9 @@ log), not instruction kinds alone.
 
 from engine import Game as _w1g5_Game
 from engine import PlayerState as _w1g5_PlayerState
+from engine.models import Permanent as _w1g5_Permanent
 from tests.helpers import _mk_card as _w1g5_mk_card
+from tests.helpers import _nosick as _w1g5_nosick
 from tests.helpers import resolve_stack as _w1g5_resolve_stack
 
 
@@ -126,6 +128,62 @@ def test_w1g5_insidious_dreams_at_x_zero_shuffles_and_finds_nothing(set_pool):
     assert len(game.players[0].hand) == 3
     assert len(game.players[0].library) == 8
     assert "A searched their library for 0 cards and shuffled" in game.log
+
+
+def _w1g5_vengeful_game(set_pool):
+    lea = set_pool("LEA")
+    dreams = set_pool("TOR")["Vengeful Dreams"]
+    filler = _w1g5_mk_card(name="W1G5 Filler", type_line="Land")
+    game = _w1g5_Game(players=[
+        _w1g5_PlayerState(
+            "A", library=[filler] * 5,
+            hand=[dreams, lea["Forest"], lea["Island"], lea["Swamp"]],
+        ),
+        _w1g5_PlayerState(
+            "B", library=[filler] * 5,
+            battlefield=[
+                _w1g5_nosick(_w1g5_Permanent(card=lea[name]))
+                for name in ("Grizzly Bears", "Hill Giant", "Serra Angel")
+            ],
+        ),
+    ])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    bears, giant, angel = game.controlled_by(1)
+    bears.attacking = giant.attacking = True
+    return game, (bears, giant, angel)
+
+
+def test_w1g5_vengeful_dreams_exiles_every_one_of_its_x_attackers(set_pool):
+    """X=2 at two attackers: both go. The exile handler read a count of "x" as
+    the single target and exiled only the first one named."""
+    game, (bears, giant, _angel) = _w1g5_vengeful_game(set_pool)
+
+    result = game.cast_from_hand(
+        0, "Vengeful Dreams", x_value=2, target_player_index=1,
+        target_permanent_ids=[bears.permanent_id, giant.permanent_id],
+    )
+    _w1g5_resolve_stack(game)
+
+    assert result.supported, result.details
+    assert sorted(card.name for card in game.players[1].exile) == [
+        "Grizzly Bears", "Hill Giant",
+    ]
+    assert [p.card.name for p in game.controlled_by(1)] == ["Serra Angel"]
+    assert [card.name for card in game.players[0].hand] == ["Swamp"]
+
+
+def test_w1g5_vengeful_dreams_cannot_name_a_creature_that_is_not_attacking(set_pool):
+    game, (bears, _giant, angel) = _w1g5_vengeful_game(set_pool)
+
+    result = game.cast_from_hand(
+        0, "Vengeful Dreams", x_value=2, target_player_index=1,
+        target_permanent_ids=[bears.permanent_id, angel.permanent_id],
+    )
+
+    assert not result.supported
+    assert len(list(game.controlled_by(1))) == 3
+    assert len(game.players[0].hand) == 4
 
 # ==== end W1G5 ======================================================
 
