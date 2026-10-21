@@ -1278,9 +1278,10 @@ one card prints this") reads as a work item long after it stopped being true.
     entry on `LIBRARY_SAFE_ZONE_KINDS` is added by reading a card. Unprobed:
     a permanent tapped for one of these abilities is no longer "tapped for
     mana" (CR 106.12) for a watcher that asks.
-  * *State triggers.* Twenty-four are carried out inside the state-based
-    sweep and never become stack objects (17 `controls_no_matching`, 3
-    `no_permanents_anywhere`, Goblins of the Flarg, Endangered Armodon,
+  * *State triggers.* Twenty-five are carried out inside the state-based
+    sweep and never become stack objects (17 `controls_no_matching`, 4
+    `no_permanents_anywhere` - Torment's Last Laugh made four - Goblins of
+    the Flarg, Endangered Armodon,
     Phyrexian Devourer, Floodgate - the inline sacrifice blocks of
     `check_state_based_actions`). A state trigger refused at the push for a
     false intervening "if" still sets its latch. A state trigger that
@@ -1291,9 +1292,11 @@ one card prints this") reads as a work item long after it stopped being true.
     *between* two objects of one step - an ability the first of two upkeep
     triggers set off resolves after the second, not above it. Parts: a
     settle loop in `_resolve_priority_window`, then the seeded simulations.
-  * *Costs.* A flashback cost with {X} is refused (Torment's Flaming Gambit
-    prints "Flashback {X}{R}{R}"; Judgment's Flash of Insight exiles X
-    cards): an alternative cost has no X channel. A waiver is priced at the
+  * *Costs.* A flashback cost with {X} in its mana is read since Torment
+    (Flaming Gambit's "Flashback {X}{R}{R}"; `flashback_x_unannounced` still
+    refuses one whose mana cost has no X), and a zone cast prices its X from
+    its own way. Judgment's Flash of Insight, whose flashback cost exiles X
+    cards, is the X that still has no channel. A waiver is priced at the
     full cost by the castable highlight and the AI
     (`web/state_view._card_castable_now` and
     `ai_policy._cast_candidate_announcing` should ask
@@ -1398,6 +1401,66 @@ one card prints this") reads as a work item long after it stopped being true.
     the canvas. Not driven: Kirtar's Wrath, Rites of Initiation, an "unless
     you pay" upkeep, a true "up to" `graveyard_exile_pick`, Horn of Plenty
     through a real cast.
+
+- **What Torment measured and left** (2026-10-21; eight wave-1 groups and
+  four in wave 2, each with a census against its base first; `git log --grep
+  "tor/"` has every part in the merge that declined it):
+
+  * *An Aura put onto the battlefield with no host.* Wave 2 made a
+    *returned* Aura choose its host and ask protection (CR 303.4f, 702.16c:
+    Replenish, Cleansing Meditation). Eureka, Charmed Griffin, Retraced Image
+    and Ugin's -10 still put an Aura card with no named host onto the
+    battlefield attached to nothing, and it stays there doing nothing: the
+    CR 704.5m sweep skips an Aura with no `attached_to` key ("manually placed
+    without tracking"). Parts: in `put_chosen_card_from_hand_onto_battlefield`
+    (and `_resolve_put_from_hand_choice`),
+    `put_cards_from_hand_onto_battlefield` and
+    `put_chosen_hand_cards_onto_battlefield`, choose a host through
+    `zones._legal_returning_aura_hosts` and ask an interactive seat through
+    `permanent_choice` with the `legal_host_for_card` / `host_controller`
+    keys, or leave the card where it is (CR 303.4g); then measure who relies
+    on the sweep's "manually placed" exemption before narrowing it.
+    Reproduction: `.worktrees/scratch/tor/w2g2/drive_single_auras.py`.
+  * *Library of Leng and madness on a forced discard.* Both replace one
+    discard's destination (CR 616.1). On a discard its player chooses they
+    are asked; on a forced one (at random, or a cost) `Game._discard_card`
+    passes no `restart` to `apply_replacements`, so madness applies first by
+    default. Parts: a restart closure in `_discard_card` that re-runs the
+    discard, the discard announcements deferred until it, and its twenty-odd
+    callers tolerating a suspended discard.
+  * *The AI's default target for a graveyard-card trigger is the pile's
+    first match*: Dawn of the Dead reanimated Llanowar Elves over a Hill
+    Giant. Twenty-three cards (Gravedigger, Animate Dead, Necromancy ...). A
+    weight, read through `ai_valuation` the way `graveyard_price_order` reads
+    a price.
+  * *A library-top setup printed on a permanent* (Goblin Recruiter, Dwarven
+    Recruiter, Sterling Grove) is scored by type and body, not rehearsed, so
+    the chosen-draw premium Vampiric Tutor now earns does not reach it. And
+    four "up to X" spells (Recantation, Rumbling Crescendo, Serra's Liturgy,
+    Vile Requiem) stay pinned as refused in the AI activation census: a
+    target-count defect, not a cost one.
+  * *State triggers*: Last Laugh is the fourth inline `no_permanents_anywhere`
+    (counted in the Odyssey entry above), and Transcendence beside a "can't
+    lose the game" effect does not loop the way its ruling describes, because
+    a resolved state trigger is not re-armed while its state holds.
+  * *Seen and not investigated*: in a human-vs-human browser game the client
+    auto-passed a seat's priority with the opponent's Flaming Gambit on the
+    stack; the redirect prompt carries no amount; and two log lines are wrong
+    while the play is right - a flashback spell's `derived_static_rule` marker
+    logs "Resolved supported pattern ... without state mutation", and an
+    Aura's protection grant logs "gains protection from aura".
+  * *Seen at Phase 5, in the client, each measured and harmless so far*: the
+    `.hidden`-out-ranked-by-a-later-rule CSS pattern that left a dead button
+    on Mesmeric Fiend's pick also sits under `joinRejoinPanel`,
+    `editorPreviewScryfallLink`, `oppManaHeader`, `combatActions` and
+    `combatDamagePanel` (`.worktrees/scratch/tor/p5/hidden_scan.py`); an
+    opponent's tapped Tainted land sends `produced_mana` `["C"]` only
+    (`tap_alone_symbols` refuses a tapped land); a flashback card's short
+    caption omits a non-mana cost ("Pay 3 life" is in its tooltip); a
+    divided trigger's tiles carry names and no images.
+  * *Rysorian Badger* stays in `test_stack_targets._UNANNOUNCED_TRIGGER_TARGETS`:
+    its pile is fixed by combat inside a "may", a different shape from
+    Gravegouger's, which wave 2 announced as the trigger goes on the stack.
 
 - **Ten flat spellings of the testable-keys check remain in `lowering/`**
   (down from 39 at VIS), each a set difference over the outer payload's keys
@@ -1836,20 +1899,27 @@ expire:
 > what is already there); `test_the_shipped_sets_are_in_printing_order` is the
 > assertion that can.
 
-Run against `set_progress.json` on 2026-10-13, with Odyssey shipped, it
-answers **Torment** (TOR, 2002-02-04, 142 new by the release line's count -
-re-measure against this pool) and then Judgment (JUD, 2002-05-27, 141 new)
-and Onslaught (ONS, 2002-10-07, 320 new).
+Run against `set_progress.json` on 2026-10-21, with Torment shipped, it
+answers **Judgment** (JUD, 2002-05-27, 141 new by the release line's count -
+re-measure against this pool) and then Onslaught (ONS, 2002-10-07, 320 new).
 (FBB, SUM and 4BB are earlier and unshipped; they are alternate printings of
 the Revised and Fourth Edition card lists, which this pool already carries,
-and every answer this section has recorded passed over them.) **Torment is
-Odyssey's block-mate, so read it the way Planeshift and Apocalypse taught**:
-it inherits flashback and threshold, which exist now, and not the templates
-around them - and it brings one keyword the engine lacks, **madness**
-(CR 702.35, ten cards: a discard replaced by an exile and a cast from exile
-for an alternative cost, so probe it against the discard seam,
-`cast_permissions` and `alternative_costs` before sizing it), plus the
-flashback cost with {X} this set measured and left (Flaming Gambit).
+and every answer this section has recorded passed over them.) **Judgment
+is the block's third set and brings no keyword the engine lacks** (read off
+its card data on 2026-10-21, not yet ingested), but three shapes worth
+probing before sizing: five **Wishes** that reach **outside the game**
+("from outside the game", CR 400.11 - a zone this engine has never
+modelled, so a Phase 2 question first); eight cards whose abilities work
+**while the card is in a graveyard** (the Incarnations - Anger, Brawn,
+Filth, Genesis, Glory, Valor, Wonder - and Riftstone Portal); and flashback
+costs that are **not mana** (Battle Screech and Prismatic Strands tap
+creatures, Lava Dart and Firecat Blitz sacrifice Mountains, Flash of Insight
+exiles X cards - the X the Odyssey entry names). **Torment arrived at
+70.6%**, the first work set since Mercadian Masques above two-thirds, with
+its one new keyword, madness, *dropped* on six supported cards: madness was
+machinery (a keyword line compiled to a trigger, a third discard
+destination, a cast during resolution, CR 608.2g), not a rewrite like
+flashback. Torment was the answer on 2026-10-13 and shipped on 2026-10-21.
 Odyssey arrived at 65.4%, the fourth work set running within a point of
 66% (Invasion, Planeshift, Apocalypse), with its headline
 keyword *dropped* on 27 cards that read supported: run
@@ -1992,6 +2062,7 @@ a wave is five parallel worktree groups integrated serially.
 | 7ED | 335 | 99.4% | 1 group (17 new cards, two productions) |
 | APC | 143 | 65.7% | 2 waves (nine groups, then four: one on the last card and three on the pile) |
 | ODY | 335 | 65.4% | 2 waves (nine groups, then eight: four on the last five cards and four on the pile) + 2 closers |
+| TOR | 143 | 70.6% | 2 waves (eight groups landed every card; then four: the client, two on the pile, one answering the promotion rehearsal) |
 
 Three data points shape an estimate. **Legends** is the warning: the lowest
 starting coverage and the flattest ranking — after eight rounds, 113 of its 135
@@ -2007,20 +2078,20 @@ mis-playing along the way, which every set since Ice Age has repeated and which
 is the argument for the Rock Hydra step.
 
 **Where the pool stands** (regenerate rather than trust these; read
-2026-10-13, at Odyssey's close): 5,246 unique cards over 33 sets,
-7,741 printings, 100% supported. Grammar parses 90.7% of lines, lowers 90.1%
-and executes 62.2% (`GRAMMAR_COVERAGE.md`; no shipped set's row fell). **0.9%**
-of supported cards carry a name-keyed hook — 49 cards, 54 entries in 6
-registries (`HOOK_RELIANCE.md`) — and the projection that implies for the
-release line has fallen from 1,195 hand-written entries to **269**, across
-twenty consecutive sets that added no hook and retired several (Odyssey
-three: Gaea's Liege, Erg Raiders, Kudzu). That is the
-measure moving the way the architecture needs it to. Parse coverage: 5,244 of
-5,246 supported cards fully claimed, 2 acknowledged, **0 unclaimed**
-(`PARSE_COVERAGE.md`). `RULES_PROGRESS.md` is the CR coverage tracker
-(419 of 625 tracked rules, 2,956 tests).
-`CARD_VERIFICATION.md` is a log, not a target: 754 passed (497 in-game, 257
-auto), 59 equivalent, 0 failed, 4,433 untested.
+2026-10-21, at Torment's close): 5,388 unique cards over 34 sets,
+7,884 printings, 100% supported. Grammar parses 90.6% of lines, lowers 90.0%
+and executes 62.3% (`GRAMMAR_COVERAGE.md`; the 0.1% fall in the first two is
+Torment's membership in a printing-weighted row, and no shipped set's row
+fell). **0.9%** of supported cards carry a name-keyed hook — 49 cards, 54
+entries in 6 registries (`HOOK_RELIANCE.md`) — and the projection that
+implies for the release line has fallen from 1,195 hand-written entries to
+**262**, across twenty-one consecutive sets that added no hook (Torment's 142
+new cards added none). That is the measure moving the way the architecture
+needs it to. Parse coverage: 5,386 of 5,388 supported cards fully claimed, 2
+acknowledged, **0 unclaimed** (`PARSE_COVERAGE.md`). `RULES_PROGRESS.md` is
+the CR coverage tracker (419 of 625 tracked rules, 3,134 tests).
+`CARD_VERIFICATION.md` is a log, not a target: 812 passed (554 in-game,
+258 auto), 60 equivalent, 0 failed, 4,516 untested.
 
 **A whole wave can fix a hundred cards and move no compiled program**, and 6ED's
 is the run to cite. Five groups, five Known-gaps entries, zero cards implemented,

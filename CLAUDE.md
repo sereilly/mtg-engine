@@ -154,6 +154,25 @@ cast a card from any zone but a hand. `set_progress.json` records it with 321
 new cards and it brought 322, for 6ED's reason: Angelic Wall has an earlier
 printing in a set this manifest does not carry.
 
+**Torment is Odyssey's block-mate, and its one new keyword was machinery.**
+142 of its 143 are new; the one reprint, Sengir Vampire, has printings here
+from Alpha on, so its index (32) moves no card's origin - computed at the
+ingest, rehearsed at both ends at the promotion, where the wrong-end insert
+turned red the printing-order guard and nothing else. It arrived at 70.6%
+supported with **madness** (CR 702.35) *dropped* on six of those cards,
+Odyssey's flashback trap exactly. Madness is not flashback's shape: its
+second ability is a triggered ability, a stack object, so the keyword line
+compiles to a trigger the way cumulative upkeep's and flanking's do
+(`engine/madness.py`); its static half is a third destination for a
+discarded card beside Dodecapod and Library of Leng; and the trigger casts
+the card during its own resolution (CR 608.2g), the first cast this engine
+offers a player from inside a resolution. Around it: a replacement a
+resolving spell creates for the turn, as one record with a lifetime
+(`engine/turn_replacements.py`, which retired Blind Fury's dedicated `Game`
+field), and one question for whether an activation's non-mana cost can be
+paid (`Game.unpayable_activation_cost`), asked by the engine and the AI
+alike.
+
 **Urza's Saga is Stronghold's lesson with three cards instead of one, and it is
 the set to point at when somebody asks whether the rehearsal is worth a
 minute.** 325 of its 335 are new and it shares 17 oracle_ids (32 card *names*)
@@ -229,7 +248,16 @@ that had never cast from a graveyard, a land tapped for mana by two of its
 three roads without telling anyone (a cost an effect collected ran no mana
 ability at all - 1,261 of 3,380 cases), and the set in a browser, where a
 person could not see a flashback price, stop an "up to" discard early, or
-answer the draw-skip prompt at all.
+answer the draw-skip prompt at all — and
+**Torment is the fifteenth**, 143 of 143 across eight parallel groups in one
+wave, adding none, with every card landed by wave 1. **Its second wave took
+no card at all**: one group was the client (the madness offer and nine more
+prompts wave 1 had named a person could not answer, each driven in a
+browser), two
+took what wave 1 had measured (a returned Aura asking for its host and
+protection asked of an Aura's host; every activation ban on a land's tap;
+one gate for an activation's cost, for the engine and the AI), and one
+answered the promotion rehearsal before the promotion.
 Reliance is **0.9% of supported cards**, 49 of 5,388 (Torment's 142 new cards
 added none), down from 52 of 4,924 and
 from 53 of 3,715 before that —
@@ -819,6 +847,13 @@ adding entries, not editing dispatch**:
   the grammar's parse claim (`engine/grammar/registries.py`) and by the support
   gate (`_derived_static_claims`). Adding an interceptor means adding its line
   there, or the card is unsupported however well the interceptor works.
+- `engine/turn_replacements.py` — a CR 614 replacement **a resolving spell
+  creates for the turn** (Equal Treatment, Plagiarize, Blind Fury): a
+  `TurnReplacement` record on the controller's seat with its lifetime and a
+  CR 614.5 key, read by the ordinary interceptors and ended by one
+  `clear_turn_replacements` at cleanup. Blind Fury's dedicated `Game` field
+  and its cleanup line were retired onto it; a third such card adds a field
+  or an event value, never a `Game` field.
 - `engine/replacement_choices.py` — for a replacement that is optional or offers
   a choice: the interceptor offers a `ReplacementChoice` (seat, option labels,
   default) instead of applying the effect, and a `@replacement_choice(kind)`
@@ -1131,6 +1166,18 @@ adding entries, not editing dispatch**:
   "instead" (`oracle.expand_instead_paragraph_lines` rewrites the paragraph
   into the conditional the grammar already read). A count over "each
   graveyard" refuses rather than being summed.
+- `engine/madness.py` — madness (CR 702.35), a static ability and a trigger.
+  **Not a rewrite**: the trigger is a stack object, so the keyword line
+  compiles to one (`oracle.keyword_line_triggers`, condition
+  `exiled_with_madness`, instruction `offer_madness_cast`), as cumulative
+  upkeep and flanking do. The static half is the third discard-destination
+  replacement (`replacements.DISCARD_INTO_EXILE`, beside Dodecapod and
+  Library of Leng): still a discard for every watcher. The trigger grants a
+  stored `CastPermission` out of exile that requires the madness cost
+  (CR 118.9b) and arms `madness_cast`; the cast is made during the trigger's
+  resolution (CR 608.2g: no priority after it, then the trigger finishes),
+  answered over the wire by `madness_cast_confirm`. A seat nobody asks
+  answers with the AI's rehearsed cast chooser.
 - `engine/destruction_events.py` — **a permanent is destroyed** (CR 701.8)
   is one event, and it says who caused it. Announced where a destruction
   is *decided* - the two destroy paths, once indestructibility, a
@@ -1671,7 +1718,13 @@ adding entries, not editing dispatch**:
   of Solitude. Each row says what it binds, because a sentence about
   *permanents* does not reach a card in a hand (CR 109.2). The wire carries
   each refusal as the sentence the route refuses with (`ability_denials`), and
-  the menu shows it.
+  the menu shows it. **Whether a cost paid in anything but mana can be paid
+  is one question too** (`Game.unpayable_activation_cost`, CR 601.2h): asked
+  by the activation path above the mana payment and by the AI's chooser,
+  where the refusals had been written inline one per cost block and the AI
+  proposed 26 abilities whose cost the board could not pay. And a land's tap
+  asks the whole table (`Game.land_tap_prohibition`), so City of Solitude
+  and Cursed Totem stop mana abilities as their rulings say.
 - `engine/card_hooks.py` — name-keyed registries for truly bespoke behavior
   (spell-resolved and counterspell riders, leave-battlefield effects,
   draw-step modifiers) plus
@@ -1981,8 +2034,8 @@ The board UI is **canvas-rendered** (`web/static/battlefield-canvas.js`).
 ## Card verification tracker
 
 `CARD_VERIFICATION.md` / `card_verification.json` track which cards have been
-manually validated in-game (754 of the 5,388 catalog cards passing — 497
-checked in-game and 257 auto-passed — with 59 more reported `equivalent`; the
+manually validated in-game (812 of the 5,388 catalog cards passing — 554
+checked in-game and 258 auto-passed — with 60 more reported `equivalent`; the
 rest — almost all of M21, Antiquities, Legends, The Dark, Ice Age, Fallen
 Empires, Homelands, Alliances, Mirage, Visions, Weatherlight, Tempest,
 Stronghold, Exodus, Urza's Saga and every set since, Invasion, Planeshift,
@@ -2058,6 +2111,15 @@ spell lost its targets, through an arm of the resolution neither closer
 had read — and passing only after a third fix was watched. Every row was
 re-recorded by the agent that had watched it fail, which is the rule in the
 next paragraph kept six times in a day.
+**Torment moved it 497 to 554, and two of the three defects its Phase 5
+found were in no card.** The smoke game, played to turn 19, lost a turn: a
+state read raced an action, so the client saw a step already over and the
+server skipped a human's second main phase - a session's routes now run one
+at a time and a payload is encoded as one moment
+(`web.runtime.one_request_at_a_time`). A hidden button showed and did
+nothing (a later CSS rule out-ranked `.hidden`). And Gurzigost's "as though
+it weren't blocked" opened a division the server ignored: recorded failing,
+and re-recorded passing only after its fix was watched.
 A card can also be recorded **failing**: that
 is an in-game bug report with a card name on it, and it stays in the tracker
 until the card is fixed **and re-checked in the app** — fixing the code does not

@@ -636,6 +636,46 @@ code that looked like a result. Start long jobs as tracked background tasks,
 give them absolute paths, and read the exit file before trusting the
 notification.
 
+**Torment ran twelve groups in two waves under the same limits, and four
+things about integrating it are procedures.**
+
+*The meeting-point run predicted every full gate.* Each of fourteen links got
+the meeting-point run - every test file any merged branch added or edited,
+the set's own files, the ingest-yield tests and the structural guards - and
+five got a full suite. Wherever both ran, the full suite's reds were exactly
+the meeting run's, to the test. That is what lets a link's gate be cheap; the
+one red no meeting run could see came from a file no link holds (Phase 4,
+"Torment's promotion").
+
+*Dedupe the shapes before the groups exist.* Two cards moved between groups
+at briefing because their sentence was a shape another group's card already
+printed: Cephalid Vandal's "mill a card for each ..." went to the group with
+Mind Sludge's "discards a card for each ..." (one multiplier for three
+verbs), and Plagiarize's turn-long draw replacement to the group with Equal
+Treatment's turn-long damage one (one record for two event kinds, which then
+retired Blind Fury's dedicated `Game` field onto it). `dup_ideas.py` found no
+name invented twice across twelve branches. Reading the sentences for a
+shared shape while writing the briefs is cheaper than reconciling two
+mechanisms at a merge.
+
+*Every agent in flight can stop at once.* An expired session stopped all four
+running agents within a minute, mid-item. Each was resumed by a message
+naming its commits, its uncommitted files, its newest scratch files and its
+last words, and each finished; nothing was lost because each had committed
+as its items landed. That is Planeshift's procedure, and it scales to the
+whole fan-out - which is the argument for "commit as each item lands" in
+every brief.
+
+*A wave-2 group can answer the promotion rehearsal.* The second rehearsal,
+on the link holding every wave-1 branch, turned sixteen tests red. Five were
+ratchets for the promotion commit; the other eleven went to one agent, who
+drove each card an inventory named (two were real findings: Shambling
+Swarm's AI split and Hypnox's trigger label on the wire), committed what
+holds with or without the set shipped, and wrote the inventory rows naming a
+set card as a replay script the promotion commit ran. The script asserted
+every region it edited and skipped its own item where a sibling's merged
+branch had already answered it.
+
 Fallen Empires added two more, both about *how the conflict is resolved* rather
 than about what conflicted. **A whole-file `--theirs` (or `--ours`) discards the
 hunks that were never in dispute.** Resolving one conflicted file that way would
@@ -2424,6 +2464,17 @@ reaches into the private `_parse_equal_to_body`; and `lowering/_amounts.py`
 (929) has a third reading at its foot (lines ~775-929, an X definition written
 onto the sentence that reads one) that its own docstring already names.
 
+**Added at TOR's Phase 6: five grammar modules end the set inside the band,
+and `ast/__init__.py`'s format decision is due.** `lowering/zones.py` is at
+986 - two wave-1 groups each took it to 970 on their own bases and the sum
+landed fourteen under the guard at integration, the summing the playbook
+predicts - with `lowering/redirection.py` 976, `effects/search.py` 972,
+`lowering/reveal.py` 971 and `ast/__init__.py` at 961 (ten lines in one set,
+at two a node). **Phase 0 of the next set** pre-splits the ones two of its
+groups will reach - Judgment's Wishes, its graveyard-working Incarnations and
+its non-mana flashback costs are the families to ask the splitters about - and
+takes the front-door format decision the entry above deferred.
+
 ## Phase 0 — Pre-flight
 
 **Entry:** a set has been chosen. **Exit:** clean tree, every gate green,
@@ -3591,6 +3642,19 @@ one had needed an arm). A guard that reads the shipped catalog can live
 anywhere; the rehearsal is `-m "not slow"` over the whole tree, which is
 an hour and not a gate.
 
+**Torment's promotion found its one red where no rehearsal looked.** Two
+rehearsals, then the promotion's own full suite on the promoted tree: three
+reds, all in a census that reads the shipped catalog
+(`test_graveyard_trigger_target_census.py`), a file neither rehearsal had
+run. A wave-2 merge *after* the second rehearsal gave Gravegouger a list of
+graveyard targets - the shape Decompose's spells already used - and the
+census, written when every such trigger named one card, read the field as
+one. Gravegouger reached it only when Torment shipped. A targeted rehearsal
+re-runs what was red; a later merge can make a different file red that only
+the promotion shows. **The promotion's full suite is the gate, and `main`
+moves only after it** - which kept this a commit on the promotion link (the
+census reads each chosen card) rather than a red `main`.
+
 **A new layout makes guards blind, not red.** A split card's whole-card
 program is supported and has no instructions, so every guard and instrument
 whose population is "each card, compiled" walks past both halves and reports
@@ -3753,6 +3817,24 @@ review directly shrinks this phase.
    a second and a third gate: about five agent-hours and two full suites
    after the promotion, and they are where this set's most serious defects
    were found.
+
+   **Torment's Phase 5 was one agent with the same four lists, and two of
+   the three defects it found were in no card.** The smoke game, played to
+   turn 19, lost a turn: a state read raced an action - the routes run in a
+   thread pool, and a payload held the game's own log list and was encoded
+   after the route returned - so the client read "declare blockers" with the
+   log already past it, sent `next_phase`, and the server skipped the human's
+   second main phase. A per-session lock around every session route
+   (`web.runtime.one_request_at_a_time`, encoding under the lock) took torn
+   reads from 25 in about 500 to none. A hidden "Choose no more" button
+   showed and did nothing, because a later CSS rule of the same specificity
+   out-ranked `.hidden`, and the same pattern sits under five more elements.
+   The third was a card: Gurzigost's "assign as though it weren't blocked"
+   opened a division dialog whose answer the server ignored; it was recorded
+   failing and re-recorded passing only after the fix was watched. **Two of
+   three came from playing, not from the lists** - as at Apocalypse and
+   Odyssey. Budget the smoke game as the main event of this phase, not its
+   warm-up.
 
    **For a reprint set this step is the only one that shows what promotion
    bought**, and
@@ -5015,3 +5097,29 @@ ROADMAP entry with its parts named.
 2026 edition - `scripts/cr_edition_diff.py`, five cited rules re-pointed -
 and CR 605.1a's fourth criterion became a rule the engine asks rather than a
 ruling it held to one cost. Phase 0 gains the bump as a step of its own.
+
+### TOR — 2026-10-21
+
+*Two waves and twelve groups on Odyssey's block-mate: 70.6% on arrival, one
+keyword the engine lacked, 142 of 143 new.* Phase 0 pre-split ten modules in
+three rounds - the last after the wave was planned, on the three modules two
+groups would reach - and integration crossed no cap. Wave 1's eight groups
+landed all 143 cards with no hook; madness was machinery (a keyword line
+compiled to a trigger, a third discard destination, a cast during
+resolution), not a rewrite. Wave 2 took no card: the client (ten items
+driven in a browser), the engine and AI piles wave 1 had measured, and the
+promotion rehearsal answered by an agent with a replay script. `oracle_diff`
+moved no card a group had not named on any merge. The ingest's yield was
+twenty reds over seven cards, each owned; the promotion's full suite found
+three more, in a census no rehearsal ran.
+
+*Edits in place:* Integration gains the Torment block - the meeting-point
+run predicted every full gate, shapes deduped at briefing, every agent in
+flight can stop at once, a wave-2 group answers the rehearsal. *Phase 0:*
+three rounds and what each measured (ask a splitter where a card will be
+*taught*; nine of ten docstrings said something false). *Phase 4:* the
+promotion's own full suite is the gate. *Phase 5:* one agent; a whole game to turn 19 lost a turn to a torn state read (a per-session request lock), and 57 rows recorded, none failing. *Known gaps:*
+Odyssey's module entry is drained (ten pre-splits) and replaced - five
+modules inside the band and `ast/__init__.py`'s format decision, for the
+next Phase 0. What the set measured and left is one ROADMAP entry with its
+parts named.
