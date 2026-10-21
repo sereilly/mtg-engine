@@ -156,6 +156,17 @@ PARSE_LAYERS = [
     # shares no vocabulary with the filter parser that reads one. Below
     # `nouns`, which returns the moment one of these matches.
     "abilities",
+    # CR 602.1b's activation instructions: the text after an activated
+    # ability's effect that is about the *ability* — "Activate only …", "Any
+    # player may activate this ability.", "X can't be 0.", "X is …", "Spend
+    # only red mana on X." Each is recorded as an `ast.ActivationRestriction`
+    # (an `ast/lines.py` node), lowered to nothing, and enforced off the raw
+    # text by the table its reader asks. Pre-split out of `effects/stack.py` at
+    # Torment's Phase 0, 38 lines under the guard below, where they were the
+    # one subject not about an object on the stack. Here because it reads no
+    # layer, and under both its callers: `effects/stack.py`'s modal head
+    # (Triassic Egg) and `sequences`.
+    "activation_instructions",
     # A card **name** is a literal string, not a description of a set of
     # objects, so the scan that reads one shares no vocabulary with the filter
     # parser above it. Split out of `nouns` when the cross-axis class union
@@ -1136,7 +1147,9 @@ LOWER_LAYERS = [
 # between the two in either direction, and the block moved byte-identically, so
 # no compiled program moves. Parse-only for `damage_locks`' reason: all three
 # arrangements build one `ast.ChangeTarget` — which is what makes them three
-# arrangements rather than three effects.
+# arrangements rather than three effects. (The last subject on that list left
+# too, at Torment's Phase 0, for `activation_instructions` in `PARSE_LAYERS`;
+# Autumn Willow's waiver, which the list never named either, for `permissions`.)
 EFFECT_FAMILIES = ["damage", "characteristics", "base_pt", "types", "board", "cards", "exile", "stack", "retargeting", "combat", "game", "mana", "production_changes", "library", "search", "reveal", "control_changes", "prevention", "damage_instances", "redirection", "damage_locks", "counters", "tapping", "attachments", "tokens", "returns", "text_changes", "destruction", "zones", "hand", "permissions", "requirements",
                    # `separations` arrived whole at Invasion's first wave —
                    # CR 700.3's two piles, on all three sides at once

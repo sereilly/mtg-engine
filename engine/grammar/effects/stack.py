@@ -2,10 +2,9 @@
 declining a cost costs.
 
 Counterspell's production, the two copy-a-spell templates (CR 707.10), the modal
-head ("Choose one —") every modal spell and ability is announced with, the closed
-list of penalties a card imposes on a player who declines an "unless they pay"
-cost, and the activation restrictions ("activate only during your upkeep") that
-gate an ability.
+head ("Choose one —") every modal spell and ability is announced with, and the
+closed list of penalties a card imposes on a player who declines an "unless they
+pay" cost.
 
 The copy productions arrived here from ``subject_verb`` when that module crossed
 the thousand-line guard, and the move is the family rule rather than the nearest
@@ -18,11 +17,23 @@ Phase 0, along the line the list above draws by leaving it out — every subject
 named there acts on a stack object as a *whole*, and CR 115.7's re-aim leaves
 the object where it is, resolving as printed, and changes one of the choices
 made when it was announced.
+
+**Two more left at Torment's Phase 0**, 38 lines under the guard, and neither
+was a sentence about a stack object. The activation instructions (CR 602.1b:
+"Activate only …", "X can't be 0.", "X is …", "Spend only red mana on X.")
+went to ``grammar/activation_instructions.py``, outside this package: they say
+whether an ability may be put on the stack at all, the node they build is a
+line part in ``ast/lines.py``, and nothing lowers them. The modal head below
+still reads one, for Triassic Egg. Autumn Willow's shroud waiver went to
+``effects/permissions.py``, beside the targeting ban it is the granted twin of,
+where the same Phase 0 had already sent its lowering. This docstring had listed
+the first of them as a subject, and had never named the second.
 """
 
 from .. import ast
+from ..activation_instructions import _parse_activation_restriction
 from ..errors import GrammarError
-from ..lexer import DASH, SELF, WORD
+from ..lexer import DASH, WORD
 from ..references import parse_player_ref, parse_target_spec
 from ..stream import TokenStream
 from ..phrases import (_accept_conjoined_life_cost, _accept_mana_alternatives,
@@ -598,175 +609,6 @@ def _parse_unpaid_penalty_sentence(stream: TokenStream) -> str | None:
     return None
 
 
-def _parse_cost_x_definition(stream: TokenStream) -> ast.ActivationRestriction | None:
-    """A trailing "X is the number of pin counters on this artifact." sentence
-    (Voodoo Doll) — what the ability's **cost** X is, when the card says.
-
-    The same arrangement as :func:`_parse_activation_restriction` below, for the
-    same reason: the sentence belongs to the ability rather than to the effect,
-    and what enforces it is the activation path, which reads the raw text. The
-    grammar's job is to account for the tokens — and, through
-    ``engine/cost_x_definitions.py``, to refuse a definition nothing computes.
-
-    Refusing is the whole point of asking that module rather than matching "x
-    is" here: an unimplemented definition consumed silently would leave the
-    activator announcing X freely on a cost the card fixes, which on a {X}{X}
-    ability is free.
-    """
-    from ...cost_x_definitions import cost_x_definition_readable
-
-    mark = stream.mark()
-    stream.accept_punct(".", ";")
-    if not stream.at_word("x") or stream.peek_word(1) != "is":
-        stream.reset(mark)
-        return None
-    words: list[str] = []
-    while not stream.exhausted and not stream.at_punct("."):
-        words.append(str(stream.next().text))
-    sentence = " ".join(words).replace(" '", "'")
-    if not cost_x_definition_readable(sentence):
-        stream.reset(mark)
-        return None
-    stream.accept_punct(".")
-    return ast.ActivationRestriction(sentence)
-
-
-def _parse_x_spend_restriction(stream: TokenStream) -> ast.ActivationRestriction | None:
-    """A trailing "Spend only red mana on X." sentence (Crimson Hellkite).
-
-    The third rider in this family, and the same arrangement as the two beside
-    it: the sentence constrains the ability's **cost**, not its effect, so the
-    grammar accounts for the tokens and ``mixins/stack/activation.py`` — which
-    reads the raw ``ability.source_line`` — is what charges the colour.
-
-    Read through ``oracle_types.x_spend_colors_from_text``, the same function
-    the enforcement calls, rather than by matching the words here. That is the
-    rule the two siblings state: a copy of the phrase in the grammar is free to
-    drift from the code that acts on it, and a drifted copy consumes a
-    restriction nobody applies — which on an {X} cost is the caster paying the
-    colour they happen to have.
-    """
-    from ...oracle_types import x_spend_colors_from_text
-
-    mark = stream.mark()
-    stream.accept_punct(".", ";")
-    if not stream.at_word("spend"):
-        stream.reset(mark)
-        return None
-    words: list[str] = []
-    while not stream.exhausted and not stream.at_punct("."):
-        words.append(str(stream.next().text))
-    sentence = " ".join(words).replace(" '", "'")
-    colours = x_spend_colors_from_text(sentence)
-    if len(colours) != 1:
-        # No colour read at all, or the "black **and/or** red" pair. The pair is
-        # refused rather than charged as its first colour: splitting X between
-        # two colours is the activator's CR 601.2h choice, and the machinery
-        # that makes it (``casting._x_color_allocations``) is on the spell path
-        # only. Charging the first colour alone would make the ability
-        # *unpayable* from a pool the card allows — a restriction wrong in the
-        # other direction, and still a restriction the card does not print.
-        # No card in the pool prints the pair on an activated ability; the day
-        # one does, it reports unsupported naming this sentence.
-        stream.reset(mark)
-        return None
-    stream.accept_punct(".")
-    return ast.ActivationRestriction(sentence)
-
-
-def _parse_activation_restriction(stream: TokenStream) -> ast.ActivationRestriction | None:
-    """A trailing "Activate only …" / "Any player may activate this ability."
-    sentence on an activated ability.
-
-    Recorded on the AST and lowered to nothing. The restriction is *enforced*
-    from the raw ability text in ``mixins/stack/activation.py``, which reads
-    ``ability.source_line`` -- so consuming the sentence here drops no behaviour,
-    it only lets the line satisfy the grammar's full-consumption invariant.
-
-    "Drops no behaviour" is true **only of a clause something enforces**, which
-    is why both branches below ask the module that enforces theirs. The
-    permission branch already did; the "Activate ..." branch consumed the rest
-    of the sentence verbatim and asked nothing, so Vampire Bats' "Activate no
-    more than twice each turn" satisfied the invariant against a table with no
-    row for it -- the card compiled supported with an uncapped {B} pump. A
-    clause `engine/activation_restrictions.py` cannot read now leaves the line
-    refused, and the card reports unsupported naming the sentence.
-    """
-    from ...activation_permissions import permission_clause_readable
-    from ...activation_restrictions import (activation_restriction_line,
-                                            x_zero_restriction_line)
-
-    mark = stream.mark()
-    stream.accept_punct(".", ";")
-    words: list[str] = []
-    # "X can't be 0." (Aladdin's Lamp, Helm of Obedience.) A constraint on the
-    # value chosen for X (CR 601.2b) rather than on when the ability may be
-    # activated, so it opens on a different word and is enforced by a different
-    # gate — but it is the same *kind* of sentence, a rider on the ability line
-    # whose enforcement lives outside the compiled program, and it is admitted
-    # here on the same terms: the module that enforces it says whether it can
-    # read the sentence, and a wording that module cannot read leaves the line
-    # refused.
-    if stream.at_word("x"):
-        x_mark = stream.mark()
-        probe: list[str] = []
-        while not stream.exhausted and not stream.at_punct("."):
-            probe.append(str(stream.next().text))
-        sentence = " ".join(probe).replace(" '", "'")
-        if x_zero_restriction_line(sentence):
-            stream.accept_punct(".")
-            return ast.ActivationRestriction(sentence)
-        stream.reset(x_mark)
-        stream.reset(mark)
-        return None
-    if stream.accept_word("activate"):
-        words.append("activate")
-    elif stream.at_word("any", "only"):
-        # A "who may activate" permission (CR 602.1a). The spellings used to be
-        # listed here as literal token sequences -- a fourth copy of a table
-        # `engine/activation_permissions.py` now holds -- so a permission the
-        # engine could not enforce still consumed its line and the card was
-        # admitted with the clause dropped. The sentence is read verbatim and
-        # handed to that module, which is the code that enforces it: a shape it
-        # does not implement leaves the line refused.
-        probe_words: list[str] = []
-        while not stream.exhausted and not stream.at_punct("."):
-            probe_words.append(str(stream.next().text))
-        sentence = " ".join(probe_words).replace(" '", "'")
-        if not permission_clause_readable(sentence):
-            stream.reset(mark)
-            return None
-        stream.accept_punct(".")
-        return ast.ActivationRestriction(sentence)
-    else:
-        stream.reset(mark)
-        return None
-    # Consume the remainder of the sentence verbatim; the enforcing code reads
-    # the original text, so the grammar only has to account for the tokens --
-    # but only once that code has said it can read the sentence at all.
-    #
-    # A SELF token is rendered as the phrase rather than as the name the lexer
-    # collapsed. "Activate only if **Hakim** isn't enchanted" reaches the
-    # enforcement path as printed text and reaches *this* path as tokens, and
-    # the two have to hand `activation_restrictions` the same sentence or the
-    # gate and the grammar disagree about which cards are readable — so both
-    # sides say `_SELF_SUBJECT`, the enforcement path by collapsing the name and
-    # this one by never having it.
-    from ...activation_restrictions import _SELF_SUBJECT
-
-    while not stream.exhausted and not stream.at_punct("."):
-        token = stream.next()
-        words.append(
-            _SELF_SUBJECT if token.kind == SELF else str(token.text)
-        )
-    sentence = " ".join(words).replace(" '", "'")
-    if not activation_restriction_line(sentence):
-        stream.reset(mark)
-        return None
-    stream.accept_punct(".")
-    return ast.ActivationRestriction(sentence)
-
-
 def _parse_copy_that_spell(stream: TokenStream) -> ast.Statement:
     """``Copy that spell. You may choose new targets for the copy.``
 
@@ -832,49 +674,6 @@ def _parse_copy_this_spell(stream: TokenStream) -> ast.Statement | None:
         stream.reset(mark)
         return None
     return ast.CopySpell(ast.PlayerRef("you"), may_choose_new_target=True)
-
-
-def _parse_can_be_targeted_as_though(
-    stream: TokenStream, subject: "ast.Recipient"
-) -> "ast.WaiveShroud | None":
-    """``can be the target of spells and abilities controlled by <player> as
-    though it didn't have shroud`` — the permission clause, without its subject.
-
-    Autumn Willow. CR 609.4's "as though" cutting a hole in CR 702.18 for one
-    seat, and the twin of ``phrases._parse_can_attack_as_though`` one rule
-    over: both are permissions that lift a restriction and change nothing else.
-
-    Every word after "can" is required literally, and that is the production
-    rather than a shortcoming of it. The three that could vary do not vary
-    across any card, and each names a different mechanism if it did: "spells
-    and abilities" is both kinds because CR 115.1a and CR 115.1c/d make them
-    separately targeted and a card naming one of them is a narrower effect;
-    and "shroud" is the one keyword whose restriction
-    ``permanent_state._can_be_targeted`` lifts through this record — hexproof
-    is already seat-relative and protection asks about the source's qualities,
-    so neither would be this rule with a word changed. What *does* vary is the
-    player, which is why that is the field.
-
-    Non-consuming on refusal, so every other "can …" sentence keeps the reading
-    it has today.
-    """
-    mark = stream.mark()
-    if not stream.accept_phrase("can", "be", "the", "target", "of"):
-        stream.reset(mark)
-        return None
-    if not stream.accept_phrase("spells", "and", "abilities", "controlled", "by"):
-        stream.reset(mark)
-        return None
-    player = parse_player_ref(stream)
-    if player is None:
-        stream.reset(mark)
-        return None
-    if not stream.accept_phrase(
-        "as", "though", "it", "didn't", "have", "shroud"
-    ):
-        stream.reset(mark)
-        return None
-    return ast.WaiveShroud(player)
 
 
 def _parse_put_exiled_card_on_stack_as_copy(

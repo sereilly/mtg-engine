@@ -240,7 +240,6 @@ from .retargeting import _parse_change_event_targets, _parse_change_target
 from .stack import (
     _parse_bid_life_contest,
     _parse_put_exiled_card_on_stack_as_copy,
-    _parse_can_be_targeted_as_though,
     _parse_copy_that_spell,
     _parse_copy_this_spell,
     _parse_counter,
@@ -248,9 +247,6 @@ from .stack import (
     _parse_modal_head,
     _UNPAID_PENALTIES,
     _parse_unpaid_penalty_sentence,
-    _parse_activation_restriction,
-    _parse_x_spend_restriction,
-    _parse_cost_x_definition,
 )
 from .requirements import (
     _parse_attacks_this_turn_if_able,
@@ -302,9 +298,12 @@ from .game import (
 # granting half in `permissions`. Re-exported under the names they had, so
 # no caller moved. (`parse_extra_land_plays` followed at Odyssey's Phase 0 and
 # is not re-exported: `statements`, its one caller, imports it from
-# `permissions` by name, as it does `_parse_cast_from_exiled_with`.)
+# `permissions` by name, as it does `_parse_cast_from_exiled_with`.) Autumn
+# Willow's shroud waiver, the targeting ban's granted twin, came over from
+# `stack` at Torment's Phase 0 and keeps its address the same way.
 from .permissions import (
     _parse_bound_permanent_activation_ban,
+    _parse_can_be_targeted_as_though,
     _parse_targeting_ban,
     parse_cant_activate_nonmana_abilities,
     parse_cant_cast_spell_types,
@@ -459,9 +458,6 @@ __all__ = [
     "_parse_modal_head",
     "_UNPAID_PENALTIES",
     "_parse_unpaid_penalty_sentence",
-    "_parse_activation_restriction",
-    "_parse_x_spend_restriction",
-    "_parse_cost_x_definition",
     "_parse_cant_attack_or_block",
     "parse_block_count_grant",
     "parse_simultaneous_phasing",
