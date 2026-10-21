@@ -135,6 +135,7 @@ def lower_described_return(
     node: ast.ReturnToZone,
     subject,
     event: str | None = None,
+    produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...] | None:
     """The untargeted readings whose object is a **described** set.
 
@@ -144,9 +145,11 @@ def lower_described_return(
     new one. ``None`` means the sentence names an object a player *targets*,
     which is `returns`' half; a `LoweringError` raised in here is final.
 
-    ``produced`` is not a parameter, and its absence is the seam stated as a
-    signature: a described set is read off the board, so no earlier step of the
-    sentence has anything to hand it.
+    A described set is read off the board, so ``produced`` names nothing any
+    reading here returns *by*. It is read once, as a **gate**: "all cards in
+    your graveyard **destroyed this way**" (Cleansing Meditation) is still a
+    pile swept by description, narrowed by a record an earlier step of the
+    sentence must have written (``ObjectFilter.destroyed_this_way``).
     """
     # "Each player discards their hand, then **returns up to three cards from
     # their graveyard to their hand**." (Ill-Gotten Gains.) One pick per seat
@@ -606,6 +609,20 @@ def lower_described_return(
                 "or an unnamed subject over your own",
                 node=node,
             )
+        # "…return all cards in your graveyard **destroyed this way** to the
+        # battlefield." (Cleansing Meditation.) Taken off the filter before the
+        # card gate for the reason "that were put there from the battlefield
+        # this turn" is one branch up — how a card reached the pile is not on
+        # the card (CR 400.7) — and carried beside it. Gated on a step of this
+        # effect having destroyed something, the producer discipline every
+        # "this way" in this package keeps: with no destroy in front of it the
+        # words name an empty set, and the sweep would return the whole pile.
+        destroyed = subject.filter.destroyed_this_way
+        if destroyed and "destroyed_this_way" not in produced:
+            raise LoweringError(
+                "'destroyed this way' with no earlier step of this effect that "
+                "destroyed anything", node=node,
+            )
         # Through the *card* gate every other printed card phrase runs through,
         # with the zone taken off first: the zone is read above, by this
         # production, and leaving it on would make the shared gate refuse a
@@ -613,7 +630,8 @@ def lower_described_return(
         # card matcher cannot test — is that gate's answer and not a second
         # copy of it here.
         scoped = dataclasses.replace(
-            subject.filter, zone="battlefield", zone_owner=None
+            subject.filter, zone="battlefield", zone_owner=None,
+            destroyed_this_way=False,
         )
         swept = chargeable_card_filter(scoped)
         if swept is None:
@@ -624,6 +642,8 @@ def lower_described_return(
         # ability saying otherwise — carried only when the word was printed, so
         # every payload written before this stays byte-identical.
         tapped = {"tapped": True} if node.entering_tapped else {}
+        if destroyed:
+            tapped = {**tapped, "destroyed_this_way": True}
         return (
             OracleInstruction(
                 "return_all_cards_from_graveyard", "",

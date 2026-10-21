@@ -10569,6 +10569,11 @@ def return_all_cards_from_graveyard(game: Game, instruction: OracleInstruction, 
     # nothing else (CR 613.1), so the record the game kept as the move happened
     # is the only thing that can answer.
     only_this_turn = bool(instruction.payload.get("put_there_this_turn"))
+    # "…return all cards in your graveyard **destroyed this way** to the
+    # battlefield." (Cleansing Meditation.) The pile intersected with what the
+    # destroy step in front of this one recorded — beside the filter for the
+    # history's reason above, and answered the same way, by count of entries.
+    destroyed_only = bool(instruction.payload.get("destroyed_this_way"))
     if who == "each_player":
         # CR 101.4's order, and a seat that has left the game returns nothing
         # (CR 800.4a): a lost player has no battlefield, so putting a card onto
@@ -10613,6 +10618,8 @@ def return_all_cards_from_graveyard(game: Game, instruction: OracleInstruction, 
                 arrived.pop(match)
                 allowed.append(index)
             taken = allowed
+        if destroyed_only:
+            taken = _destroyed_this_way_slots(player, taken, context)
         cards = [player.graveyard[index] for index in taken]
         for index in sorted(taken, reverse=True):
             player.graveyard.pop(index)
@@ -10639,6 +10646,50 @@ def return_all_cards_from_graveyard(game: Game, instruction: OracleInstruction, 
     if not returned:
         game.log.append(f"{context.card.name}: no cards to return")
     return True, "resolved"
+
+
+def _destroyed_this_way_slots(player, taken, context) -> list[int]:
+    """The slots of *taken* (indices into *player*'s graveyard) holding a card
+    an earlier step of this resolution destroyed, newest first.
+
+    "Destroy all enchantments, then return all cards in your graveyard
+    **destroyed this way** to the battlefield." (Cleansing Meditation.) The
+    destroy step recorded the *permanents* (``destroyed_this_way_objects``);
+    what lies in the pile now is a new object with no memory of them (CR
+    400.7), and two copies of one card in a pile are one ``CardDefinition`` —
+    so a slot is admitted by **count of entries**, the way the "put there this
+    turn" history beside it is: a copy already in the graveyard before the
+    sweep is not returned because a second copy of it was destroyed.
+
+    Held to the arrival record as well: a destroyed permanent whose card a
+    replacement sent somewhere else (CR 614) never reached this pile, and its
+    name must not claim an older copy that did. A token's card never gets here
+    (CR 111.7), and the seam records the whole card (CR 709.4), so the
+    permanent's card is compared the same way.
+    """
+    from ..faces import whole_card
+
+    destroyed = [
+        whole_card(perm.card)
+        for perm in context.results.get("destroyed_this_way_objects") or ()
+        if not perm.metadata.get("is_token")
+    ]
+    arrived = list(player.cards_put_into_your_graveyard_from_battlefield_this_turn)
+    allowed: list[int] = []
+    for index in sorted(taken, reverse=True):
+        card = player.graveyard[index]
+        was_destroyed = next(
+            (i for i, held in enumerate(destroyed) if held is card), None
+        )
+        came_from_battlefield = next(
+            (i for i, held in enumerate(arrived) if held is card), None
+        )
+        if was_destroyed is None or came_from_battlefield is None:
+            continue
+        destroyed.pop(was_destroyed)
+        arrived.pop(came_from_battlefield)
+        allowed.append(index)
+    return allowed
 
 
 #: The scratchpad key the random reveal writes beside ``revealed_card``: which

@@ -252,6 +252,8 @@ class _FilterDraft:
     in_combat_with_source: bool = False
     was_dealt_damage_this_turn: bool = False
     put_there_from_battlefield_this_turn: bool = False
+    #: See ``ast.ObjectFilter.destroyed_this_way``.
+    destroyed_this_way: bool = False
     dealt_damage_to_source_this_turn: bool = False
     zone: str = "battlefield"
     #: See ``ast.ObjectFilter.also_ability`` — "target **spell or ability**"
@@ -386,6 +388,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         in_combat_with_source=d.in_combat_with_source,
         was_dealt_damage_this_turn=d.was_dealt_damage_this_turn,
         put_there_from_battlefield_this_turn=d.put_there_from_battlefield_this_turn,
+        destroyed_this_way=d.destroyed_this_way,
         chosen_by_opponent=d.chosen_by_opponent,
         not_chosen_this_way=d.not_chosen_this_way,
         on_the_battlefield=d.on_the_battlefield,

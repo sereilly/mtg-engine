@@ -196,6 +196,21 @@ def accept_history_relation(stream: TokenStream, d) -> bool:
     ):
         d.not_chosen_this_way = True
         return True
+    # "…return all cards **in your graveyard destroyed this way** to the
+    # battlefield" (Cleansing Meditation). The record of this resolution's
+    # destroy step, asked of the cards of a pile — so only behind a card phrase
+    # already scoped to a graveyard. Everywhere else "destroyed this way" is a
+    # sentence's own subject or count ("Creatures destroyed this way can't be
+    # regenerated", "for each land destroyed this way") and its readers take
+    # the noun phrase *before* the participle; consumed here, those words would
+    # vanish into a narrowing nothing they feed reads.
+    if (
+        d.is_card
+        and d.zone == "graveyard"
+        and stream.accept_phrase("destroyed", "this", "way")
+    ):
+        d.destroyed_this_way = True
+        return True
     return False
 
 
