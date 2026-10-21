@@ -54,6 +54,7 @@ from .prevention import (
     _parse_bound_targeting_prevention,
 )
 from .redirection import (
+    _attach_damage_redirect_offer,
     _parse_damage_becomes_counter_removal,
     _parse_damage_redirect,
     _parse_double_combat_damage,
@@ -327,6 +328,7 @@ __all__ = [
     "_parse_damage_redirect",
     "_parse_double_combat_damage",
     "_parse_optional_damage_redirect",
+    "_attach_damage_redirect_offer",
     "_parse_damage_cant_be_prevented",
     "parse_source_damage_lock",
     "_parse_bound_targeting_prevention",

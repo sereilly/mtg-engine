@@ -93,6 +93,7 @@ from .lowering import (
     _lower_combat_restriction,
     _lower_create_delayed_trigger,
     _lower_next_draw_replacement,
+    _lower_damage_redirect_offer,
     _lower_create_token,
     _lower_damage,
     _lower_damage_conjunction,
@@ -534,6 +535,15 @@ def lower_statement(
             "then": created,
             "else": (),
         }),)
+
+    if isinstance(statement, ast.DamageRedirectOffer):
+        # The damage sentence is lowered here, under this line's event, and the
+        # offer composed around it in the redirection family (which may not
+        # import the damage one): see `_lower_damage_redirect_offer`.
+        return _lower_damage_redirect_offer(statement, lower_statement(
+            statement.damage, produced, event=event,
+            event_subject=event_subject, whole_effect=False,
+        ))
 
     if isinstance(statement, ast.NextDrawReplacement):
         # The inner sentence is lowered under *this* line's event, not the

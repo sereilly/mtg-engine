@@ -162,11 +162,15 @@ def _read_cost(cost: str) -> "AlternativeCost | None":
     charges is one answer whichever rule prints it, and the gate and the
     payment behind those fields already exist.
 
-    **{X} is refused.** A flashback cost with an X in it announces a number
-    the cast path has no channel for when the card's own mana cost prints
-    none, and charging it as 0 is a spell cast for less than it prints.
-    (A *granted* flashback cost equal to the card's mana cost may carry an X,
-    because then the mana cost announced it — see :func:`granted_cost`.)
+    **{X} is read here and asked of the card elsewhere.** "Flashback
+    {X}{R}{R}" (Flaming Gambit): CR 601.2b announces X as the spell is cast,
+    and the cast path charges an alternative cost's {X} at the announced value
+    (``_pay_cast_cost(..., mana_cost=)``, the road Recoup's granted "equal to
+    its mana cost" already takes over an X spell). What the cast path has no
+    channel for is an X the card's *mana cost* does not print — nothing
+    offers that announcement — and that is a question about the card, not
+    about this line: :func:`flashback_x_unannounced` asks it and
+    ``oracle.compile_card_oracle`` refuses the card on it.
     """
     from .alternative_costs import AlternativeCost, _read_cost_clauses
     from .mana_payment import mana_cost_from_symbols
@@ -177,9 +181,14 @@ def _read_cost(cost: str) -> "AlternativeCost | None":
     mana, rest = parts.group("mana"), parts.group("rest")
     if not mana and not rest:
         return None
-    if mana and mana_cost_from_symbols(mana) is None:
-        # A hybrid, Phyrexian or {X} symbol: a cost this cannot express must
-        # refuse its line rather than be charged as the part that was read.
+    fixed = re.sub(r"\{x\}", "", mana or "", flags=re.I)
+    if mana and fixed and mana_cost_from_symbols(fixed) is None:
+        # A hybrid or Phyrexian symbol: a cost this cannot express must refuse
+        # its line rather than be charged as the part that was read.
+        return None
+    if mana and not fixed and not rest:
+        # "Flashback {X}" alone: a cost that is nothing but an announced
+        # number. No card prints it, and nothing here would price it.
         return None
     fields: dict = {}
     if rest:
@@ -282,6 +291,29 @@ def printed_flashback_cost(card) -> "AlternativeCost | None":
     every graveyard on every poll.
     """
     return _printed_cost(getattr(card, "oracle_text", "") or "")
+
+
+def flashback_x_unannounced(card) -> str | None:
+    """The printed flashback line whose {X} nothing announces, or None.
+
+    "Flashback {X}{R}{R}" over "{X}{R}" (Flaming Gambit) is an X the cast
+    announces like any X in a mana cost — the caster says the number, pays
+    it in the flashback cost, and the effect reads it (CR 107.3a, 601.2b).
+    Over a mana cost printing no X there is no such announcement anywhere in
+    this engine (the X box is offered off the mana cost), so the cast would
+    charge X as 0: a spell cast for less than it prints. The support gate
+    refuses that card naming the line, as it refused every {X} before the
+    reader above learned the symbol.
+    """
+    cost = printed_flashback_cost(card)
+    if cost is None or "{X}" not in (cost.mana or "").upper():
+        return None
+    if "{X}" in (getattr(card, "mana_cost", "") or "").upper():
+        return None
+    for line in (getattr(card, "oracle_text", "") or "").split("\n"):
+        if is_flashback_line(line):
+            return " ".join(_REMINDER.sub("", line).split()).strip()
+    return None
 
 
 def granted_cost(card, cost: str) -> "AlternativeCost | None":
@@ -420,6 +452,7 @@ __all__ = [
     "flashback_cost_for_line",
     "flashback_cost_text",
     "flashback_permission",
+    "flashback_x_unannounced",
     "granted_cost",
     "has_flashback",
     "is_flashback",

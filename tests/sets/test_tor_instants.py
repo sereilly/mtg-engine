@@ -124,6 +124,135 @@ def test_w1g6_liquify_reads_mana_value_on_the_stack_with_its_x(set_pool, catalog
     assert [c.name for c in game.players[1].graveyard] == ["Mind Twist"]
     assert len(game.players[0].hand) == 2, "Liquify stayed in hand; three Islands went"
 
+from engine.models import Permanent as _W1G6Permanent  # noqa: E402
+from tests.helpers import _nosick as _w1g6_nosick  # noqa: E402
+
+
+def _w1g6_gambit_table(set_pool, catalog_by_name, *, zone="hand", life=20,
+                       interactive=(), walker=False):
+    """Seat 0 has Flaming Gambit in *zone*; seat 1 has a Grizzly Bears, a
+    Hill Giant and (with *walker*) a Basri Ket at 3 loyalty. Mana enforced."""
+    gambit = set_pool("TOR")["Flaming Gambit"]
+    theirs = [
+        _w1g6_nosick(_W1G6Permanent(card=catalog_by_name[name]))
+        for name in ("Grizzly Bears", "Hill Giant")
+    ]
+    if walker:
+        theirs.append(_W1G6Permanent(
+            card=catalog_by_name["Basri Ket"], metadata={"loyalty_counters": 3},
+        ))
+    me = _W1G6PlayerState(name="P1", library=[catalog_by_name["Island"]] * 3)
+    getattr(me, zone).append(gambit)
+    game = _W1G6Game(players=[
+        me, _W1G6PlayerState(name="P2", life=life, battlefield=theirs),
+    ])
+    game.enforce_mana_costs = True
+    game.interactive_seats = set(interactive)
+    return game
+
+
+def _w1g6_permanent(game, seat, name):
+    return next(p for p in game.controlled_by(seat) if p.card.name == name)
+
+
+def test_w1g6_flaming_gambit_hits_the_player_who_declines(set_pool, catalog_by_name):
+    """"Flaming Gambit deals X damage to target player or planeswalker. That
+    player … may choose a creature they control and have Flaming Gambit deal
+    that damage to it instead." Cast for X=3 ({3}{R}, the whole pool): a seat
+    nobody asks keeps its creatures while the damage is not lethal, and a
+    person who is asked may decline."""
+    game = _w1g6_gambit_table(set_pool, catalog_by_name)
+    game.players[0].mana_pool.update({"R": 1, "C": 3})
+    assert game.cast_from_hand(0, "Flaming Gambit", target_player_index=1, x_value=3).supported
+    _w1g6_resolve_stack(game)
+    assert game.players[1].life == 17
+    assert not any(game.players[0].mana_pool.values())
+    assert [p.card.name for p in game.controlled_by(1)] == ["Grizzly Bears", "Hill Giant"]
+
+    game = _w1g6_gambit_table(set_pool, catalog_by_name, interactive={1})
+    game.players[0].mana_pool.update({"R": 1, "C": 3})
+    assert game.cast_from_hand(0, "Flaming Gambit", target_player_index=1, x_value=3).supported
+    owed = [choice for choice in game.pending_choices if choice.kind == "permanent_choice"]
+    assert [choice.player_index for choice in owed] == [1], "the damaged player is asked"
+    assert game.confirm_permanent_choice(1, None)
+    _w1g6_resolve_stack(game)
+    assert game.players[1].life == 17
+
+
+def test_w1g6_flaming_gambit_s_damaged_player_sends_it_to_a_creature(set_pool, catalog_by_name):
+    """The asked seat names its Hill Giant: the Giant is dealt the 3 and dies,
+    the player loses nothing. A seat nobody asks does the same when the damage
+    would otherwise be lethal (it names its first creature)."""
+    game = _w1g6_gambit_table(set_pool, catalog_by_name, interactive={1})
+    game.players[0].mana_pool.update({"R": 1, "C": 3})
+    giant = _w1g6_permanent(game, 1, "Hill Giant")
+    assert game.cast_from_hand(0, "Flaming Gambit", target_player_index=1, x_value=3).supported
+    assert game.confirm_permanent_choice(1, giant.permanent_id)
+    _w1g6_resolve_stack(game)
+    assert game.players[1].life == 20
+    assert [p.card.name for p in game.controlled_by(1)] == ["Grizzly Bears"]
+    assert "Hill Giant" in [c.name for c in game.players[1].graveyard]
+
+    game = _w1g6_gambit_table(set_pool, catalog_by_name, life=3)
+    game.players[0].mana_pool.update({"R": 1, "C": 3})
+    assert game.cast_from_hand(0, "Flaming Gambit", target_player_index=1, x_value=3).supported
+    _w1g6_resolve_stack(game)
+    assert game.players[1].life == 3
+    assert [p.card.name for p in game.controlled_by(1)] == ["Hill Giant"]
+
+
+def test_w1g6_flaming_gambit_at_a_planeswalker_asks_its_controller(set_pool, catalog_by_name):
+    """"…or that planeswalker's controller": aimed at Basri Ket, the walker's
+    controller is asked. Declining, the walker loses 2 loyalty; naming the
+    Grizzly Bears, the Bears are dealt the 2 and the walker is untouched."""
+    game = _w1g6_gambit_table(set_pool, catalog_by_name, interactive={1}, walker=True)
+    walker = _w1g6_permanent(game, 1, "Basri Ket")
+    spec = game.cast_target_spec(0, set_pool("TOR")["Flaming Gambit"])
+    assert {entry["name"] for entry in spec["valid_targets"] if entry["kind"] == "permanent"} == {"Basri Ket"}
+    game.players[0].mana_pool.update({"R": 1, "C": 2})
+    assert game.cast_from_hand(
+        0, "Flaming Gambit", target_permanent_ids=[walker.permanent_id],
+        target_player_index=1, x_value=2,
+    ).supported
+    assert game.confirm_permanent_choice(1, None)
+    _w1g6_resolve_stack(game)
+    assert walker.metadata["loyalty_counters"] == 1
+    assert game.players[1].life == 20
+
+    game = _w1g6_gambit_table(set_pool, catalog_by_name, interactive={1}, walker=True)
+    walker = _w1g6_permanent(game, 1, "Basri Ket")
+    bears = _w1g6_permanent(game, 1, "Grizzly Bears")
+    game.players[0].mana_pool.update({"R": 1, "C": 2})
+    assert game.cast_from_hand(
+        0, "Flaming Gambit", target_permanent_ids=[walker.permanent_id],
+        target_player_index=1, x_value=2,
+    ).supported
+    assert game.confirm_permanent_choice(1, bears.permanent_id)
+    _w1g6_resolve_stack(game)
+    assert walker.metadata["loyalty_counters"] == 3
+    assert "Grizzly Bears" in [c.name for c in game.players[1].graveyard]
+
+
+def test_w1g6_flaming_gambit_flashes_back_for_x_r_r(set_pool, catalog_by_name):
+    """"Flashback {X}{R}{R}": the X the cast announces is paid in the
+    flashback cost and dealt by the spell, which is then exiled. One mana
+    short of {2}{R}{R} for X=2 is a cast refused with nothing spent."""
+    game = _w1g6_gambit_table(set_pool, catalog_by_name, zone="graveyard")
+    game.players[0].mana_pool.update({"R": 2, "C": 1})
+    refused = game.cast_from_hand(
+        0, "Flaming Gambit", target_player_index=1, x_value=2, from_zone="graveyard",
+    )
+    assert not refused.supported
+    assert [c.name for c in game.players[0].graveyard] == ["Flaming Gambit"]
+    game.players[0].mana_pool["C"] += 1
+    assert game.cast_from_hand(
+        0, "Flaming Gambit", target_player_index=1, x_value=2, from_zone="graveyard",
+    ).supported
+    _w1g6_resolve_stack(game)
+    assert game.players[1].life == 18
+    assert not any(game.players[0].mana_pool.values())
+    assert [c.name for c in game.players[0].exile] == ["Flaming Gambit"]
+
 # ==== end W1G6 ======================================================
 
 

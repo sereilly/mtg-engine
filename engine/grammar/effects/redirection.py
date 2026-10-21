@@ -28,7 +28,7 @@ between any of the three modules in either direction.
 from .. import ast
 from ..amounts import parse_amount
 from ..errors import GrammarError
-from ..lexer import NUMBER
+from ..lexer import NUMBER, SELF
 from ..readers import accept_source_reference
 from ..references import parse_player_ref, parse_recipient
 from ..stream import TokenStream
@@ -325,3 +325,67 @@ def _parse_optional_damage_redirect(stream: TokenStream) -> "ast.RedirectDamage 
     if not stream.accept_word("instead"):
         raise stream.error("expected 'instead' to end a redirection effect")
     return ast.RedirectDamage(to=to, new_recipient=new_recipient, optional=True)
+
+
+#: The card types "may choose a <type> they control" may name: a permanent
+#: damage can be dealt to (CR 120.1 - creatures, planeswalkers, battles).
+_REDIRECT_OFFER_TYPES = frozenset({"creature", "planeswalker", "battle"})
+
+
+def _attach_damage_redirect_offer(
+    stream: TokenStream, steps: list
+) -> bool:
+    """Fold "That player or that planeswalker's controller may choose a
+    creature they control and have <this spell> deal that damage to it
+    instead." into the damage sentence before it (Flaming Gambit).
+
+    A statement about the damage in front of it rather than a step, so it is
+    folded the way ``riders._attach_source_damage_lock`` folds Lava Burst's:
+    the sentence deals nothing of its own. Its subject must be the damage's
+    own recipient read back — "that player" after "target player", and "that
+    player or that planeswalker's controller" after "target player or
+    planeswalker" — because the offer is the damaged seat's; any other subject
+    is a different card and is left unread. The dealer must be the sentence's
+    own source, "that damage" the amount it dealt, and "it" the object just
+    chosen. Non-consuming on refusal.
+    """
+    if not steps or not isinstance(steps[-1], ast.DealDamage):
+        return False
+    damage = steps[-1]
+    if len(damage.recipients) != 1:
+        return False
+    recipient = damage.recipients[0]
+    if not (isinstance(recipient, ast.PlayerRef) and recipient.kind == "target_player"):
+        return False
+    mark = stream.mark()
+    if not stream.accept_phrase("that", "player"):
+        return False
+    if recipient.or_planeswalker and not stream.accept_phrase(
+        "or", "that", "planeswalker", "'s", "controller"
+    ):
+        stream.reset(mark)
+        return False
+    if not stream.accept_phrase("may", "choose"):
+        stream.reset(mark)
+        return False
+    stream.accept_word("a", "an")
+    card_type = stream.peek_word()
+    if card_type not in _REDIRECT_OFFER_TYPES:
+        stream.reset(mark)
+        return False
+    stream.advance()
+    if not stream.accept_phrase("they", "control", "and", "have"):
+        stream.reset(mark)
+        return False
+    token = stream.peek()
+    if token is not None and token.kind == SELF:
+        stream.advance()
+    elif not stream.accept_phrase("this", "spell"):
+        stream.reset(mark)
+        return False
+    if not stream.accept_phrase("deal", "that", "damage", "to", "it", "instead"):
+        stream.reset(mark)
+        return False
+    stream.accept_punct(".")
+    steps[-1] = ast.DamageRedirectOffer(damage, card_type)
+    return True

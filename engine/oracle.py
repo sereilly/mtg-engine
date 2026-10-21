@@ -52,7 +52,8 @@ from .characteristic_defining import dynamic_pt_for
 from .auras import aura_claim, unclaimed_aura_lines
 from .cycling import expand_cycling_lines, unread_cycling_line
 from .flashback import (FLASHBACK_CLAIM, expand_flashback_lines,
-                        flashback_claims_line, unread_flashback_line)
+                        flashback_claims_line, flashback_x_unannounced,
+                        unread_flashback_line)
 from .fading import unread_fading_line
 from .equipment import expand_equip_lines, has_equip_ability, is_equip_line
 from .alternative_costs import (
@@ -8301,10 +8302,25 @@ def compile_card_oracle(card: CardDefinition) -> OracleProgram:
             True, MULTI_FACE_EFFECT_KIND,
             f"{card.layout} card: every face supported", text,
         )
-    return _compile_card_oracle(
+    program = _compile_card_oracle(
         card.name, card.primary_type, card.oracle_text, card.keywords, card.layout,
         card.is_legendary,
     )
+    # A flashback cost with an {X} the card's mana cost does not print
+    # (``flashback.flashback_x_unannounced``): the one support question about
+    # the keyword that needs the mana cost, which the text compiler above is
+    # never handed. Asked of a program that compiled, so the reason a card
+    # fails is still its first one.
+    if program.supported:
+        unannounced = flashback_x_unannounced(card)
+        if unannounced is not None:
+            return OracleProgram(
+                False, "unsupported",
+                f"unimplemented flashback cost: {unannounced} "
+                "(an X no announcement supplies)",
+                program.normalized_text,
+            )
+    return program
 
 
 def simple_card_keywords(card: CardDefinition) -> tuple[str, ...] | None:

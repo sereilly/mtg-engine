@@ -22,6 +22,7 @@ written, every card printing it was in one.
 from __future__ import annotations
 
 import random
+import re
 from functools import lru_cache
 
 import pytest
@@ -73,11 +74,18 @@ def _mk(name: str, mana_cost: str, type_line: str, oracle_text: str) -> CardDefi
     )
 
 
+#: The X every census cast of a card printing {X} announces, and pays at.
+_CENSUS_X = 2
+
+
 def _pay(player, cost: str, short: int = 0) -> None:
     """Put exactly *cost* in *player*'s pool (generic as colourless), less
     *short* units — so a cast that succeeds leaves nothing behind and a cast
-    one mana short has nothing to make it up from."""
-    wanted = mana_cost_from_symbols(cost) or {}
+    one mana short has nothing to make it up from. An {X} is priced at
+    :data:`_CENSUS_X`, the value :func:`_announce` announces."""
+    wanted = mana_cost_from_symbols(
+        re.sub(r"\{X\}", "{%d}" % _CENSUS_X, cost, flags=re.I)
+    ) or {}
     pool = {symbol: 0 for symbol in "WUBRGC"}
     for symbol, count in wanted.items():
         pool["C" if symbol == "generic" else symbol] += count
@@ -199,6 +207,22 @@ def _role_refs(game, entries: list) -> list[dict]:
 
 
 def _announce(game, card, zone: str) -> dict:
+    """:func:`_announce_targets`, and an X for a card printing {X}.
+
+    "Flashback {X}{R}{R}" over "{X}{R}" (Flaming Gambit, Torment): the census
+    announced no X, paid no X and so cast every X spell for 0 — which for a
+    card whose X is its whole effect is a cast that moves nothing. CR 601.2b
+    announces X with the cast, so both casts announce :data:`_CENSUS_X` and
+    :func:`_pay` prices the {X} at it.
+    """
+    keywords = _announce_targets(game, card, zone)
+    cost = printed_flashback_cost(card)
+    if "{X}" in (card.mana_cost or "").upper() or "{X}" in ((cost.mana if cost else "") or "").upper():
+        keywords = {**keywords, "x_value": _CENSUS_X}
+    return keywords
+
+
+def _announce_targets(game, card, zone: str) -> dict:
     """The first target *card*'s own picker offers, as cast keywords.
 
     Off ``cast_target_spec`` for the zone the cast leaves — the list a client

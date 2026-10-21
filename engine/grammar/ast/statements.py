@@ -52,6 +52,7 @@ from ._core import (
 )
 from .damage import (
     DamageCantBePreventedOrRedirected,
+    DamageRedirectOffer,
     DamageReducedByPaidMana,
     DamageRidersUntilEndOfTurn,
     DamageUnlessPay,
@@ -314,7 +315,7 @@ Effect = Union[
     CoinFlipStakesLoop,
     DamageThoseDamagedThisGame,
     DamageRidersUntilEndOfTurn,
-    DealDamage, Pump, SetBasePT, ChangeBasePT, GainAbilityText, GainKeyword, GainType, BecomeAura, ChangeSupertype, ChangeLandType, BecomeThatType, LandTypeSwap, LoseAbilityText, LoseKeyword, MoveCounter, PlayerGetsCounters, PutCounter, RemoveCounter,
+    DealDamage, DamageRedirectOffer, Pump, SetBasePT, ChangeBasePT, GainAbilityText, GainKeyword, GainType, BecomeAura, ChangeSupertype, ChangeLandType, BecomeThatType, LandTypeSwap, LoseAbilityText, LoseKeyword, MoveCounter, PlayerGetsCounters, PutCounter, RemoveCounter,
     DoublePower, SwitchPT,
     GainLife, LoseLife, PayLife, SetLifeTotal, ExchangeLifeTotals, Ante, Draw, Discard, LookTopCycleForLife, SeparateLibraryTopIntoPiles, SeparateIntoPiles, Mill, MillUntil, PutMilledCardOntoBattlefield, PutHandCardsOnLibrary, Scry, Surveil, Destroy, Sacrifice, SacrificeAndReturnTargets,
     SacrificeExpansionPermanents, ShuffleGraveyardIntoLibrary, ShuffleHandIntoLibrary,
