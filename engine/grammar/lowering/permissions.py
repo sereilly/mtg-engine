@@ -18,6 +18,17 @@ duration over a CR 406.3 face-down card, one printed sentence away from Ice
 Cauldron's "you may cast that card for as long as it remains exiled" — but it
 lowers to its **own** instruction kind, so a seat that may see a card can never
 be found to have permission to cast it.
+
+**Autumn Willow's shroud waiver came home at Torment's Phase 0**, from
+``delayed``, where it had sat since Visions' second wave beside "Choose target
+creature" on the grounds that each was "the first sentence of a two-sentence
+spell whose second sentence is the delayed half". The Willow prints one
+sentence and no delay. What it prints is this module's question: target player
+*may* target the creature, which the rules alone (CR 702.18a) would not allow,
+and the creature stays where it is with its shroud intact (CR 609.4's "as
+though"). The parse side has called it a permission all along —
+``effects/stack.py`` reads it as "the twin of ``_parse_can_attack_as_though``
+… both are permissions that lift a restriction and change nothing else".
 """
 
 from __future__ import annotations
@@ -26,7 +37,7 @@ from ...library_top import WHILE_REVEALED_CARD_ON_TOP
 from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
-from ._common import _restrictions_beyond
+from ._common import _REST_OF_TURN, _describe_targets, _restrictions_beyond
 from ._piles import _SEARCH_EXILE_HONOURED, _linked_exile_filter
 
 
@@ -521,3 +532,34 @@ def _lower_play_with_top_revealed(
             {"cards_from": "revealed_card", "duration": "end_of_turn"},
         ),
     )
+
+
+def _lower_waive_shroud(node: "ast.WaiveShroud") -> tuple[OracleInstruction, ...]:
+    """"Until end of turn, Autumn Willow can be the target of spells and
+    abilities controlled by **target player** as though it didn't have shroud."
+
+    Refuses on two axes, both by name, exactly as ``_lower_attack_as_though``
+    does for the other "as though" permission. The **duration** must be this
+    turn's, because the waiver is a list of seats stamped on the permanent and
+    swept by the cleanup step — a durationless printing would be a static
+    ability nothing here ends. And the **player** must be one the activation
+    chooses: a fixed seat is chosen by nobody (CR 115.1a), so a sentence naming
+    one would arm the waiver for whoever the resolution happened to be carrying.
+    """
+    if node.duration.kind not in _REST_OF_TURN:
+        raise LoweringError(
+            "a durationless shroud exception is a static ability, which "
+            "nothing here would ever end",
+            node=node,
+        )
+    if node.player.kind not in ("target_player", "target_opponent"):
+        raise LoweringError(
+            f"the shroud exception is granted to a chosen player, not to "
+            f"{node.player.kind!r}",
+            node=node,
+        )
+    payload: dict[str, object] = {}
+    _describe_targets(payload, node.player)
+    if "targets" not in payload:
+        raise LoweringError("this shroud exception names no player", node=node)
+    return (OracleInstruction("waive_shroud_for_target_player", "", payload),)

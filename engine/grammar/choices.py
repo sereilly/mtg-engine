@@ -24,6 +24,10 @@ parses a whole statement, and `parse_statement` is the roof one layer up.
 
 Below `delayed`, from which it takes the delayed-trigger production its own
 probe asks — and which never imports it back.
+
+The lowering half took the same line at Torment's Phase 0:
+`_lower_choose_target` left `lowering/delayed.py` for `lowering/choices.py`,
+under this module's name, so the mirror re-formed.
 """
 
 from __future__ import annotations

@@ -231,6 +231,7 @@ from .permissions import (
     _lower_cast_from_exiled_with,
     _lower_cast_permission,
     _lower_play_with_top_revealed,
+    _lower_waive_shroud,
 )
 from .attachments import (
     _lower_attach,
@@ -374,11 +375,10 @@ from .stack import (
 )
 from .delayed import (
     _lower_delayed_self_action,
-    _lower_choose_target,
     _lower_create_delayed_trigger,
     _lower_delayed_destroy,
-    _lower_waive_shroud,
 )
+from .choices import _lower_choose_target
 from .prohibitions import _lower_cant_be
 from .requirements import (_lower_attacks_this_turn_if_able,
                            _lower_destroy_chosen_that_didnt_attack,

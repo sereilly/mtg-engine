@@ -1571,6 +1571,15 @@ LOWERING_FAMILIES = [
      # Lowering-only, like `zones`, `library`, `mana` and `redirection`: the
      # parse half is 329 lines and crossed nothing.
      "exchanges",
+     # `choices` split off `lowering/delayed.py` at Torment's Phase 0, with
+     # that module at exactly the guard. The line is the one the parse side
+     # drew when `grammar/choices.py` left `grammar/delayed.py` -- "a shared
+     # reason is not a shared subject" -- and the name is that module's, so
+     # the mirror re-forms. `_lower_choose_target` is CR 601.2c's announcement
+     # and nothing else; the shared reason it lived beside the delays (see
+     # under this list) held for 7 of the 23 shipped cards that reach it.
+     # Lowering-only, like `delayed`: `ChooseTarget` sits in `ast/stack.py`.
+     "choices",
      # `colors` split off `lowering/types.py` at 1,010 lines, Apocalypse's
      # second wave — the round "target **spell or permanent**" stopped being
      # read as "target permanent" (Illusion, Blind Seer) and the colour
@@ -1616,7 +1625,10 @@ LOWERING_FAMILIES = [
 # the playbook's tiebreak — and `_lower_choose_target` / `_lower_waive_shroud`
 # travelled with it because each is the *first* sentence of a two-sentence spell
 # whose second sentence is the delayed half, so the pair is read together or not
-# at all.
+# at all. Torment's Phase 0 measured that reason and both left: it held for 7 of
+# the 23 cards that reach the choice (the Oaths, the Keepers and Victimize print
+# no delay) and for none of Autumn Willow, whose waiver is one sentence. The
+# choice went to `choices`, above, and the waiver to `permissions`.
 # `search` is on both sides of the mirror as of Visions' first wave:
 # `lowering/search.py` split off `lowering/library.py` in the same round
 # `effects/search.py` had already split off `effects/library.py`, so the
