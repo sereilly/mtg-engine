@@ -782,6 +782,16 @@ ACTIVATED_LABELS: dict[str, str] = {
     # restriction word wherever the thing denied happens to be -- a block, a
     # phasing, here a land play.
     "forbid_land_plays_this_turn": "activated_restriction",
+    # Major Teroh (TOR): "{3}{W}{W}, Sacrifice Major Teroh: Exile all black
+    # creatures." Named at Torment's promotion rehearsal, where it was the
+    # first *activated* ability the grammar reads to produce this kind (every
+    # shipped one is a trigger, `triggered_exile` below) and so took the
+    # category default, `activated_zones`. Driven: the activation sacrifices
+    # Teroh and exiles every black creature on both sides. It removes
+    # permanents, which is ``exile_target_permanent``'s and ``exile_self``'s
+    # bucket above — how many, and by which description, is not the question
+    # the bucket answers.
+    "exile_all_matching": "activated_destruction",
 }
 
 # Instruction kind -> label, for an ability the grammar reads in the **triggered**
@@ -1324,6 +1334,19 @@ TRIGGERED_LABELS: dict[str, str] = {
     # graveyard." Beside `exile_graveyard_cards` -- whose pile and how the
     # card is picked are payload.
     "exile_cards_from_graveyard": "triggered_exile",
+    # --- Torment, at its promotion rehearsal --------------------------------
+    # Hypnox: "When this creature enters, if you cast it from your hand, exile
+    # all cards from target opponent's hand." The guard's second assert, shown
+    # once its first (Major Teroh's) was answered. Hand disruption, beside
+    # `exile_cards_from_hand`'s `activated_discard` (Parallax Nexus) for that
+    # row's reason: the cards come back when Hypnox leaves, to the player they
+    # were taken from, and the point of the ability is the taking. Not only a
+    # report bucket: the trigger reached the client with `spell_pattern`, so
+    # `web/serialization` sent it as `is_triggered: False` - the Planeshift
+    # rehearsal's two entry triggers exactly. Driven: the trigger is on the
+    # stack after the cast, the hand is exiled, and handed back when Hypnox
+    # leaves.
+    "exile_hand_pile": "triggered_discard",
 }
 
 # The one instruction kind whose label depends on what triggered it: `may` wraps

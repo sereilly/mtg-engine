@@ -20,6 +20,17 @@ have:
 Driven for every non-Aura permanent in the pool whose cast names a permanent
 for its entry trigger, with the two announcements recorded as they are made.
 
+**The invariant is per target.** CR 115.1d chooses a trigger's targets as it
+goes on the stack, and each object chosen becomes the target once for each
+time it was chosen (CR 115.9a counts them): so the trigger announces "becomes
+the target" once per target it chose, and "a player chooses targets" once for
+the object. It was written as "exactly one announcement, of the permanent the
+cast named", which every unit satisfied while every entry trigger in the pool
+named one target. Petradon ("When this creature enters, exile **two** target
+lands", Torment) is the first that names two, and its promotion rehearsal read
+the two correct announcements as a finding. The census now names as many as
+the trigger owes and holds each to having been chosen, and announced, once.
+
 Validated backwards: with ``stack_targets.permanent_spell_targets_nothing``
 answering False the census names every permanent it examines, on all three
 counts.
@@ -34,6 +45,7 @@ from engine import Game, PlayerState
 from engine.faces import compilation_units
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
+from engine.stack_targets import chosen_targets
 from engine.targeting import cast_announced_entry_trigger
 from tests.helpers import resolve_stack
 
@@ -113,22 +125,33 @@ def _units(_pool) -> list:
         game = _table(_pool, card)
         if game.entry_trigger_cast_targets(0, card, optional_cost_payments={}) is None:
             continue
+        spec = game.cast_target_spec(0, card)
         offered = [
-            entry for entry in game.cast_target_spec(0, card).get("valid_targets") or ()
+            entry for entry in spec.get("valid_targets") or ()
             if entry.get("kind") == "permanent"
         ]
-        if offered:
-            found.append((card, offered[0]))
+        owed = _targets_owed(spec)
+        if len(offered) >= owed:
+            found.append((card, offered[:owed]))
     return found
 
 
-def _cast(pool, card, entry, **table):
+def _targets_owed(spec: dict) -> int:
+    """How many targets an announcement the trigger could make names: the
+    printed count where the picker says it is exact ("two target lands"),
+    and otherwise one — every "up to" and single target in the pool."""
+    if spec.get("exact_targets") and isinstance(spec.get("max_targets"), int):
+        return spec["max_targets"]
+    return 1
+
+
+def _cast(pool, card, entries, **table):
     game = _table(pool, card, **table)
-    target = game.permanent_at(entry["seat"], entry["index"])
+    targets = [game.permanent_at(entry["seat"], entry["index"]) for entry in entries]
     assert game.queue_from_hand(
-        0, card.name, target_permanent_ids=[target.permanent_id],
+        0, card.name, target_permanent_ids=[target.permanent_id for target in targets],
     ).supported, card.name
-    return game, target
+    return game, targets
 
 
 def test_the_cast_announces_nothing_and_the_trigger_announces_once(
@@ -136,19 +159,40 @@ def test_the_cast_announces_nothing_and_the_trigger_announces_once(
 ):
     units = _units
     findings: list[str] = []
-    for card, entry in units:
+    for card, entries in units:
         _announced.clear()
-        game, target = _cast(_pool, card, entry)
+        game, targets = _cast(_pool, card, entries)
         if _announced:
             findings.append(f"{card.name}: the cast announced {_announced}")
             continue
         spell = game.stack[-1]
         assert not spell.is_ability and spell.card is card
         game.resolve_top_of_stack()
+        trigger = next(
+            (item for item in reversed(game.stack) if item.is_ability and item.card is card),
+            None,
+        )
+        if trigger is None:
+            findings.append(f"{card.name}: no entry trigger went on the stack")
+            continue
+        # What the trigger chose, read off the object (`stack_targets`), and
+        # what the cast named: a legal announcement is the trigger's own
+        # (CR 603.3d), so the two are one list.
+        chosen = [
+            target.permanent_id for target in chosen_targets(game, trigger) or ()
+            if target.kind == "permanent"
+        ]
+        named = [target.permanent_id for target in targets]
+        if sorted(chosen) != sorted(named):
+            findings.append(f"{card.name}: the cast named {named} and the trigger chose {chosen}")
         became = [row for row in _announced if row[0] == "self_becomes_target"]
         chose = [row for row in _announced if row[0] == "player_chooses_targets"]
-        if [row[1:3] for row in became] != [(target.permanent_id, "an ability")]:
+        # Once per target chosen, each by the ability (CR 115.1d, CR 115.9a).
+        if sorted(row[1:3] for row in became) != sorted(
+            (permanent_id, "an ability") for permanent_id in chosen
+        ):
             findings.append(f"{card.name}: as its trigger went on the stack, {became}")
+        # Once for the object, however many it chose.
         if [row[3] for row in chose] != [True]:
             findings.append(f"{card.name}: \"chooses targets\" announced {chose}")
 
@@ -159,9 +203,9 @@ def test_the_cast_announces_nothing_and_the_trigger_announces_once(
 def test_a_countered_permanent_spell_never_targeted_anything(_pool, _units, _announced):
     units = _units
     findings: list[str] = []
-    for card, entry in units:
+    for card, entries in units:
         _announced.clear()
-        game, _target = _cast(_pool, card, entry)
+        game, _targets = _cast(_pool, card, entries)
         game.counter_stack_object(game.stack[-1])
         resolve_stack(game)
         if _announced:

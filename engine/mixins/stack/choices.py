@@ -10093,8 +10093,19 @@ class PendingChoicesMixin:
         on it leaves the mandatory target to the other side, and there the
         division is concentrated on one creature: an effect aimed at the
         wrong board does least harm in one place.
+
+        **Counters that lower toughness are split by what they kill**
+        (``ai_policy.divided_shrink_shares``), and concentrated where they
+        harm least when they land on the wrong board
+        (``ai_policy.least_harmed_permanent``) — Shambling Swarm's come back off
+        at the next end step, so a share that kills nothing is a share
+        wasted. Reviewed at Torment's promotion rehearsal, by running it: the
+        spread killed nothing over four creatures with an X/1 among them, and
+        on its controller's own board it killed the Savannah Lions it was
+        offered first beside a Hill Giant that would have lived.
         """
-        from ...divided_damage import CHOSEN, EVENLY, spread_shares
+        from ...ai_policy import divided_shrink_shares, least_harmed_permanent
+        from ...divided_damage import CHOSEN, EVENLY, divided_instruction, spread_shares
 
         permanents = [
             target["permanent_id"] for target in choice.data.get("targets") or ()
@@ -10110,12 +10121,33 @@ class PendingChoicesMixin:
             and (not wanted or target.get("seat") in wanted)
         ]
         ceiling = max(1, int(choice.data.get("max_targets") or 1))
+        chosen = choice.data.get("division", EVENLY) == CHOSEN
+        divided = divided_instruction(
+            (getattr(item, "ability_instruction", None),)
+            if getattr(item, "ability_instruction", None) is not None else ()
+        )
+        counter = str((divided.payload.get("counter") if divided is not None else "") or "")
+        if chosen and wanted and preferred:
+            shares = divided_shrink_shares(
+                self, preferred, int(choice.data["division_total"]), ceiling, counter,
+            )
+            if shares:
+                return self._resolve_trigger_targets(
+                    choice, [permanent_id for permanent_id, _ in shares],
+                    [share for _, share in shares],
+                )
+        if chosen and not preferred and permanents:
+            least_harmed = least_harmed_permanent(
+                self, permanents, int(choice.data["division_total"]), counter,
+            )
+            if least_harmed is not None:
+                permanents = [least_harmed]
         picked = preferred[:ceiling] if preferred else permanents[:1]
         if not picked:
             self.discard_pending_choice(choice)
             return True
         amounts = None
-        if choice.data.get("division", EVENLY) == CHOSEN:
+        if chosen:
             amounts = spread_shares(int(choice.data["division_total"]), len(picked))
         return self._resolve_trigger_targets(choice, picked, amounts)
 

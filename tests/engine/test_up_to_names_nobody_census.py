@@ -186,7 +186,45 @@ def _stage(game, card, where, ability):
     add_counters(source, "verse", 3)
     if card.primary_type == "planeswalker":
         add_counters(source, "loyalty", 6)
+    if where == "activated" and ability is not None:
+        _meet_a_counted_pile(game, source, ability)
     return source
+
+
+#: How deep a pile the census will build to meet a printed restriction.
+_DEEPEST_PILE = 20
+
+
+def _meet_a_counted_pile(game, source, ability) -> None:
+    """Grow the activator's graveyard until the ability's own printed
+    restriction stops refusing it, if a deeper pile is what it asks for.
+
+    "Threshold — {T}: Untap up to three target lands. Activate only if there
+    are seven or more cards in your graveyard." (Krosan Restorer, Torment.)
+    Neither table holds seven, so the activation was refused by CR 602.5 —
+    its targets were never asked — and the census reported a bare
+    announcement refused. Asked of the engine's own gate
+    (``activation_prohibitions.activation_prohibition``, the one the
+    activation path refuses with), never of the number printed: a card at a
+    time until that gate says yes, so "seven" is the card's to say and any
+    other counted pile is met the same way. A restriction no pile meets
+    ("only during your upkeep") is left exactly as it was, the cards taken
+    back out, and the unit is refused and reported as before.
+    """
+    from engine.activation_prohibitions import activation_prohibition
+
+    yard = game.players[0].graveyard
+    added = 0
+    refusal = activation_prohibition(game, 0, source, ability)
+    while (
+        refusal is not None and refusal.kind == "printed_restriction"
+        and added < _DEEPEST_PILE
+    ):
+        yard.append(_fixture(f"Pile Card {added}", "Instant", shroud=False))
+        added += 1
+        refusal = activation_prohibition(game, 0, source, ability)
+    if refusal is not None and added:
+        del yard[-added:]
 
 
 def _announce(game, card, where, position, step, ability, source) -> bool:

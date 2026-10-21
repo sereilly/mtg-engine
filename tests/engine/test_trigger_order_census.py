@@ -51,8 +51,17 @@ SAMPLE = 12
 
 #: What each family must count (scenarios with a choice to make). Measured
 #: at SAMPLE = 12, the same before and after round 4: upkeep 9, end 5,
-#: entry 10, dies 10, attacks 11.
-FLOORS = {"upkeep": 7, "end": 4, "entry": 8, "dies": 8, "attacks": 9}
+#: entry 10, dies 10, attacks 11 — on an unscreened draw.
+#:
+#: Since Torment's promotion rehearsal the pairs are drawn from cards that
+#: fire alone (``_scenarios``' *fires*), so a pair family reaches nearly its
+#: whole sample: measured upkeep 15 / 16, end 12 / 12, dies 12 / 12, attacks
+#: 10 / 10 (two pairs each hold an "attacks alone" trigger, which fires alone
+#: and rightly not beside a second attacker), entry 10 / 11 (unscreened: an
+#: observer fires only for the entrant it describes) — without and with
+#: Torment shipped. Two under the lower of each, and never below the floor
+#: the family had before.
+FLOORS = {"upkeep": 13, "end": 10, "entry": 8, "dies": 10, "attacks": 9}
 
 
 def _kinds(card):
@@ -70,7 +79,28 @@ def _is_creature(card) -> bool:
     return "Creature" in (card.type_line or "")
 
 
-def _scenarios(cards: dict, family: str) -> list[dict]:
+def _scenarios(cards: dict, family: str, fires=None) -> list[dict]:
+    """The family's scenarios. *fires* (a card name -> bool) screens the
+    cards a **pair** is drawn from: only cards that put a trigger on the
+    stack for seat 0 at this family's event when alone on the census board.
+
+    Without it a pair was two cards that *print* a trigger of the kind, and
+    most such triggers are conditional on a board this census does not set
+    up ("if you control no untapped lands", "if a creature died this turn",
+    "at the beginning of each opponent's upkeep") — so how many pairs owed an
+    order was a fact about which cards the seeded draw happened to pick, and
+    every ingest redrew it. Torment's promotion rehearsal is where that
+    showed: no card's behaviour changed, the pool gained 143 names, and the
+    draw that had reached 5 of 12 end-step pairs reached 3 (upkeep: 9 of 22
+    scenarios, then 6 of 23), under floors of 4 and 7. Each pair it lost was
+    read: a conditional trigger beside a card that makes the condition false
+    (Thran Quarry's "if you control no creatures" beside Asmira, Osai
+    Vultures' "if a creature died this turn"). Screened, every pair drawn is
+    two triggers at once by construction, and a pair that then owes nothing
+    is a finding rather than the noise — the ones that do are an "attacks
+    alone" trigger beside a second attacker, and two fading upkeeps
+    ``trigger_order.interchangeable`` rightly does not ask about.
+    """
     rng = random.Random(6033)
     by_kind: dict[str, list[str]] = defaultdict(list)
     for name in sorted(cards):
@@ -79,6 +109,20 @@ def _scenarios(cards: dict, family: str) -> list[dict]:
 
     def pairs(pool, k):
         pool = sorted(set(pool))
+        if fires is not None:
+            # Screened in a seeded order, and only as far as the draw needs:
+            # twice the pairs' worth of cards that fire is enough to draw *k*
+            # distinct pairs from, and screening the whole family would cost a
+            # game per card printing the kind.
+            order = list(pool)
+            rng.shuffle(order)
+            firing: list[str] = []
+            for name in order:
+                if len(firing) >= 2 * k:
+                    break
+                if fires(name):
+                    firing.append(name)
+            pool = sorted(firing)
         out: set = set()
         while len(out) < min(k, len(pool) * (len(pool) - 1) // 2):
             a, b = rng.sample(pool, 2)
@@ -265,8 +309,24 @@ def _run(cards, family, scenario, monkeypatch) -> dict:
         )
     return {
         "owed": len(owed), "asked": len(asked), "reversed": reversed_ok,
+        "pushed": sum(len(items) for items in moments.values()),
         "label": f"{scenario['board']}{' + ' + scenario['enters'] if 'enters' in scenario else ''}",
     }
+
+
+def _fires_alone(cards, family, monkeypatch):
+    """Whether one card alone on seat 0's board puts a triggered ability of
+    seat 0's on the stack at *family*'s event — the screen ``_scenarios``
+    draws its pairs through, asked through the same ``_run`` the census is."""
+    memo: dict[str, bool] = {}
+
+    def fires(name: str) -> bool:
+        if name not in memo:
+            with monkeypatch.context() as patch:
+                memo[name] = _run(cards, family, {"board": [name]}, patch)["pushed"] >= 1
+        return memo[name]
+
+    return fires
 
 
 @pytest.mark.parametrize("family", sorted(FLOORS))
@@ -275,7 +335,7 @@ def test_one_controllers_simultaneous_triggers_are_hers_to_order(
 ):
     cards = catalog_by_name
     results = []
-    for scenario in _scenarios(cards, family):
+    for scenario in _scenarios(cards, family, _fires_alone(cards, family, monkeypatch)):
         with monkeypatch.context() as patch:
             results.append(_run(cards, family, scenario, patch))
     counted = [r for r in results if r["owed"]]
