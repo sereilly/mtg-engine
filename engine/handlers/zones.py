@@ -10877,12 +10877,9 @@ def _returning_aura_host(game, seat: int, card, already_there):
     host is attached to an object its controller chooses, as it enters, and
     "doing this does not target the permanent" (Replenish's and Cleansing
     Meditation's ruling, 2004-10-04) — so shroud and hexproof are no bar. The
-    enchant ability is ``enchant_card_refusal``, the one predicate the cast
-    gate, the pickers and the CR 704.5m sweep share; protection (CR 702.16c,
-    "can't be enchanted by Auras that have the stated quality") is asked
-    beside it through ``_is_protected_from`` with the card as the source,
-    because that predicate does not ask it and the CR 702.16c sweep would bin
-    the Aura the moment it arrived. Only a permanent that was on the
+    enchant ability and protection (CR 702.16c, "can't be enchanted by Auras
+    that have the stated quality") are ``enchant_card_refusal``, the one
+    predicate every host chooser asks. Only a permanent that was on the
     battlefield before the return (*already_there*).
 
     **The choice is not asked.** Every seat takes ``ai_policy``'s pick — an
@@ -10900,7 +10897,6 @@ def _returning_aura_host(game, seat: int, card, already_there):
         host for host in already_there
         if game.is_on_battlefield(host)
         and enchant_card_refusal(game, card, seat, host) is None
-        and not game._is_protected_from(host, card, seat=seat)
     ]
     if not legal:
         return None

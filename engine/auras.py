@@ -1738,14 +1738,17 @@ def aura_attach_refusal(game, aura, host) -> str | None:
     CR 303.4j: an effect that would attach an Aura to something it can't legally
     enchant simply doesn't move it — so this is asked *before* the move, and the
     Aura stays where it is when it answers. One predicate rather than a check at
-    each mover, for the reason ``equip_refusal`` is one: the cast gate, the
-    CR 704.5m sweep, a picker and a resolution all ask the same question, and a
-    fifth copy is a fifth chance to disagree.
+    each mover, for the reason ``equip_refusal`` is one: a picker and a
+    resolution ask the same question, and a second copy is a second chance to
+    disagree.
 
     Every clause is one the engine already reads somewhere else:
     ``aura_enchant_noun`` is what the cast gate matches a target against,
     ``enchant_seat_satisfied`` is the seat half of the same clause (CR 702.5),
-    and ``cannot_be_enchanted`` is CR 303.4's protection half.
+    ``cannot_be_enchanted`` is CR 303.4's "can't be enchanted" half, and
+    ``_is_protected_from`` is CR 702.16c's — see :func:`enchant_card_refusal`
+    for why this is a host being *chosen*, and the state-based sweep's
+    question of an attached Aura is a different one.
     """
     if host is aura:
         return "an Aura can't enchant itself"
@@ -1765,10 +1768,58 @@ def enchant_card_refusal(game, card, controller_seat, host, *, aura=None) -> str
     has none of its own) and the card as printed.
 
     One body rather than two, because :func:`aura_attach_refusal` delegates
-    here: the cast gate, the CR 704.5m sweep, two pickers and two resolutions
-    all ask this, and a second copy is a second chance to disagree about what a
-    legal host is.
+    here: every picker, every attach and every Aura put onto the battlefield
+    with a host ask this, and a second copy is a second chance to disagree
+    about what a legal host is.
+
+    **This is the question of a host being *chosen*** — an Aura becoming
+    attached, entering attached, or offered a host to enter on — and it asks
+    CR 702.16c's first sentence: a permanent with protection "can't be
+    enchanted by Auras that have the stated quality". It did not, so a black
+    Aura card against a White Knight came back legal: Takklemaggot's picker
+    offered the Knight, Hakim's and Iridescent Drake's reanimations attached a
+    card to a creature protected from it, Academy Researchers offered one from
+    the hand, and in every case the CR 702.16c sweep then put the Aura into a
+    graveyard the rules say it never leaves (CR 303.4i: it "remains in its
+    current zone"; CR 701.3b: an attach to an illegal host "doesn't move" it).
+
+    It is **not** the question of an Aura already attached, and no state-based
+    action asks it. That one is ``Game.check_state_based_actions``' CR 702.16c
+    sweep, which carries CR 702.16n's exemption ("this effect doesn't remove
+    this Aura", Floating Shield) — an exemption from the *state-based action*
+    alone: a creature with protection from white still can't *become* enchanted
+    by a white Aura, whatever another Aura on it says. The one grant this
+    question leaves out is the Aura's own, on the host it is already on
+    (``ignoring_aura``): there the attach is a no-op (CR 701.3b), and asking it
+    must not report the Aura illegal on the creature its own protection
+    covers. ``tests/regressions/test_aura_host_protection.py`` holds every
+    caller.
     """
+    refusal = _enchant_clause_refusal(
+        game, card, controller_seat, host, aura=aura,
+    )
+    if refusal is not None:
+        return refusal
+    # CR 702.16c (and 702.16k's player form, which is why the seat goes along:
+    # "can't be enchanted by Auras that player controls"). A permanent Aura is
+    # asked through the layers; a card — in a graveyard, a hand, or a permanent
+    # not yet on the battlefield — by what it is, under the seat that will
+    # control it.
+    on_board = aura is not None and game.is_on_battlefield(aura)
+    if game._is_protected_from(
+        host, aura if on_board else card, seat=controller_seat,
+        ignoring_aura=(
+            aura if on_board and aura.metadata.get("attached_to") is host
+            else None
+        ),
+    ):
+        return f"{host.card.name} has protection from {card.name}"
+    return None
+
+
+def _enchant_clause_refusal(game, card, controller_seat, host, *, aura=None) -> str | None:
+    """What the enchant ability and CR 303.4's "can't be enchanted" effects
+    say about *host* — :func:`enchant_card_refusal` without protection."""
     from .mixins.stack import (aura_enchant_noun, enchant_seat_satisfied,
                                permanent_matches_enchant_noun)
     from .target_immunity import cannot_be_enchanted
