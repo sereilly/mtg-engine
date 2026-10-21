@@ -191,6 +191,26 @@ def _parse_state_trigger_event(
                     )
     stream.reset(watched_mark)
 
+    # "When **no creatures are on the battlefield**, sacrifice this
+    # enchantment." (Last Laugh.) The "there are no …" branch below in the
+    # other word order: the same state over every battlefield, so the same
+    # kind and the same carried subject. Here the zone is a predicate
+    # ("are on the battlefield") rather than the noun's own scope, so the noun
+    # parser stops at "are" and the predicate is required in full — "when no
+    # creatures are tapped" is a different sentence and refuses.
+    word_order_mark = stream.mark()
+    if stream.accept_word("no"):
+        described = parse_subject_filter_at(stream, plural=True)
+        if (
+            described is not None
+            and not described.on_the_battlefield
+            and stream.accept_phrase("are", "on", "the", "battlefield")
+        ):
+            return ast.TriggerEvent(
+                "no_permanents_anywhere", word, subject=described,
+            )
+    stream.reset(word_order_mark)
+
     state_mark = stream.mark()
     if stream.accept_phrase("there", "are"):
         # "When there are **no lands on the battlefield**, sacrifice this

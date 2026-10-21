@@ -407,7 +407,13 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
         "whenever a spell or ability an opponent controls causes you to discard a card",
     ),
     "no_islands": "when you control no islands",
-    "no_permanents_anywhere": "when there are no lands on the battlefield",
+    # Both word orders (Mana Vortex / Drop of Honey; Last Laugh): one kind, two
+    # rows, and the shadowing guard checks each row's example against every
+    # earlier row of another kind.
+    "no_permanents_anywhere": (
+        "when there are no lands on the battlefield",
+        "when no creatures are on the battlefield",
+    ),
     "self_cast": "when you cast this spell",
     "self_put_into_graveyard_from_library":
         "when this card is put into your graveyard from your library",

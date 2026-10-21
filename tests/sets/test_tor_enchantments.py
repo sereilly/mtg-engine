@@ -56,6 +56,55 @@ log), not instruction kinds alone.
 
 # ==== W1G7 ==========================================================
 # W1G7's tests go between this line and the "end W1G7" line.
+from engine import Game as _w1g7_Game, PlayerState as _w1g7_PlayerState
+from engine.models import Permanent as _w1g7_Permanent
+from tests.helpers import resolve_stack as _w1g7_resolve_stack
+
+
+def test_w1g7_last_laugh_sacrifices_itself_once_its_damage_empties_the_board(set_pool):
+    """"When no creatures are on the battlefield, sacrifice this enchantment."
+
+    Drop of Honey's state trigger in the other word order. A Bolt kills the
+    Elves; Last Laugh's ping kills the Raiders; with no creature left anywhere
+    it is sacrificed — and the ping for the Raiders' death still resolves from
+    a source that has left, so each player loses 2."""
+    tor, lea = set_pool("TOR"), set_pool("LEA")
+    laugh = _w1g7_Permanent(card=tor["Last Laugh"])
+    elves = _w1g7_Permanent(card=lea["Llanowar Elves"])
+    raiders = _w1g7_Permanent(card=lea["Mons's Goblin Raiders"])
+    game = _w1g7_Game(players=[
+        _w1g7_PlayerState(name="P0", battlefield=[laugh, elves], hand=[lea["Lightning Bolt"]]),
+        _w1g7_PlayerState(name="P1", battlefield=[raiders]),
+    ])
+    game.enforce_mana_costs = False
+
+    game.cast_from_hand(0, "Lightning Bolt", target_permanent_ids=[elves.permanent_id])
+    _w1g7_resolve_stack(game)
+    game._settle()
+
+    assert [c.name for c in game.players[0].graveyard] == [
+        "Lightning Bolt", "Llanowar Elves", "Last Laugh",
+    ]
+    assert [c.name for c in game.players[1].graveyard] == ["Mons's Goblin Raiders"]
+    assert [p.life for p in game.players] == [18, 18]
+    assert any("Last Laugh sacrificed" in line for line in game.log)
+
+
+def test_w1g7_last_laugh_stays_while_any_creature_is_on_the_battlefield(set_pool):
+    """The set is every battlefield: an opponent's creature keeps it."""
+    tor, lea = set_pool("TOR"), set_pool("LEA")
+    laugh = _w1g7_Permanent(card=tor["Last Laugh"])
+    ogre = _w1g7_Permanent(card=lea["Gray Ogre"])
+    game = _w1g7_Game(players=[
+        _w1g7_PlayerState(name="P0", battlefield=[laugh]),
+        _w1g7_PlayerState(name="P1", battlefield=[ogre]),
+    ])
+    game.check_state_based_actions()
+    assert laugh in game.players[0].battlefield
+    game.remove_from_battlefield(ogre)
+    game.check_state_based_actions()
+    assert laugh not in game.players[0].battlefield
+    assert [c.name for c in game.players[0].graveyard] == ["Last Laugh"]
 
 # ==== end W1G7 ======================================================
 
