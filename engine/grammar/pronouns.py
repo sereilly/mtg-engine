@@ -25,6 +25,18 @@ the permanent the sentence before it removed, guarded on the same
 does. The grant rider here had been stepping round them the whole time: it
 claims "that creature" only when a grant verb follows, "so 'that creature's
 controller …' (a different referent) keeps its own reading".
+
+Torment's Phase 0 sent the **second pump** on to `second_pumps`: "That
+creature gets an additional +4/+4" (Wild Might), "If this spell was kicked,
+they get +1/+1" (Savage Offensive), "…Zombie creatures you control get an
+additional +2/+2" (Strength of Night). They were the whole of this module's
+growth since that Phase 0, one a set from Prophecy to Apocalypse, and none of
+them read the binding above: each took the step in front's own subject — a
+target or a *sweep*, which chose nothing for a binding to name — and the last
+had no pronoun at all. The plural "Each of them gets …" stayed, because its
+antecedent is `statement_bound_several_targets`, this module's binding in the
+plural, and the call it made into the second-pump rider is the sentence loop's
+to make now.
 """
 
 from __future__ import annotations
@@ -41,13 +53,11 @@ from .effects import (_parse_create_token, _parse_gains, _parse_gets,
                       _parse_loses, _parse_put_counter)
 from .effects.characteristics import _parse_quoted_abilities
 from .phrases import _accept_self_reference
-from .references import parse_recipient
 from .rebinding import statement_bound_target as _statement_bound_target
 from .rebinding import (statement_bound_several_targets
                         as _statement_bound_several_targets)
-from .statements import _parse_condition, _parse_statement_body
+from .statements import _parse_condition
 from .stream import TokenStream
-from .tolls import _accept_trailing_toll
 from .vocabulary import CARD_TYPES
 
 
@@ -107,8 +117,8 @@ def _parse_plural_pronoun_pump_rider(
     any of them.
 
     The bound spec **stays a target**, exactly as
-    :func:`rebinding.rebind_pump_pronoun_to_sentence_target` keeps its own: CR
-    601.2c chose the two creatures once, both steps carry the identical
+    :func:`sentence_rebinding.rebind_pump_pronoun_to_sentence_target` keeps its
+    own: CR 601.2c chose the two creatures once, both steps carry the identical
     ``targets`` payload, and the picker therefore asks once for the spell rather
     than twice.
 
@@ -117,9 +127,6 @@ def _parse_plural_pronoun_pump_rider(
     this pool prints; admitting a spelling nobody prints is how a production
     comes to claim a sentence it has not been checked against.
     """
-    second_pump = _parse_pronoun_pump_rider(stream, steps)
-    if second_pump is not None:
-        return second_pump
     target = _statement_bound_several_targets(steps[-1]) if steps else None
     if target is None:
         return None
@@ -141,193 +148,6 @@ def _parse_plural_pronoun_pump_rider(
         stream.reset(mark)
         return None
     return statement
-
-
-def _parse_pronoun_pump_rider(
-    stream: TokenStream, steps: list[ast.Statement]
-) -> ast.Statement | None:
-    """A **second pump** on what the pump before it named, read off that pump.
-
-    "Target creature gets +1/+1 until end of turn. **That creature gets an
-    additional +4/+4** until end of turn unless any player pays {2}." (Wild
-    Might.) "Creatures you control get +0/+1 until end of turn. **They get an
-    additional +0/+2** until end of turn unless any player pays {2}." (Rhystic
-    Shield.) The pronoun names the previous pump's subject — one chosen target
-    ("that creature", "it") or the set a sweep named ("they", "those
-    creatures") — and the new pump is given that subject, a copy of it: the
-    same ``targets`` payload, so CR 601.2c's one choice is asked once, and for
-    a sweep the same noun phrase, which is the same set (CR 611.2c fixes both
-    when the effects begin, in the same resolution).
-
-    Read here, beside the plural rider whose method it shares (the ordinary
-    ``_parse_gets`` with the bound subject handed in), and only after a
-    ``Pump``: "an additional" is what that antecedent licenses, and without it
-    "they" is a player word. The trailing toll is read too, because a rider is
-    parsed outside ``parse_statement`` and the toll is the whole point of these
-    two cards.
-    """
-    last = steps[-1] if steps else None
-    if not isinstance(last, ast.Pump) or not isinstance(last.subject, ast.TargetSpec):
-        return None
-    bound = last.subject
-    mark = stream.mark()
-    if bound.quantifier == "target" and bound.targeted:
-        named = stream.accept_word("it") or stream.accept_phrase("that", "creature")
-    elif bound.quantifier in ("all", "each"):
-        named = stream.accept_word("they") or stream.accept_phrase("those", "creatures")
-    else:
-        return None
-    if not named or not stream.at_word("gets", "get"):
-        stream.reset(mark)
-        return None
-    try:
-        pump = _parse_gets(stream, bound, additional=True)
-    except GrammarError:
-        stream.reset(mark)
-        return None
-    if not isinstance(pump, ast.Pump):
-        stream.reset(mark)
-        return None
-    return _accept_trailing_toll(_parse_statement_body, stream, pump) or pump
-
-
-def _parse_conditional_set_pump_rider(
-    stream: TokenStream, steps: list[ast.Statement]
-) -> ast.Statement | None:
-    """``If <condition>, they get +N/+N [duration].`` after a sentence about a
-    **set** of creatures.
-
-    "Creatures you control gain first strike until end of turn. **If this
-    spell was kicked, they get +1/+1 until end of turn.**" (Savage Offensive.)
-    The plural pronoun names the set the sentence in front described — not a
-    target, so none of the singular binders has anything to hand it, and read
-    fresh "they" is a player word and the line refuses at "expected a
-    subject".
-
-    The pump is given that sentence's own subject, a copy of it: the same noun
-    phrase is the same set, because both effects begin in the one resolution
-    and CR 611.2c fixes each of them then. That is
-    :func:`_parse_pronoun_pump_rider`'s argument for "They get an additional
-    +0/+2" (Rhystic Shield), one antecedent kind over — that rider reads the
-    pronoun after a *pump* and needs "an additional" to license it; this one
-    reads it after a pump **or a keyword grant**, and what licenses it is the
-    condition in front, which makes the sentence a second effect on the same
-    creatures rather than a restatement of the first.
-
-    Only a sweep ("all" / "each", untargeted) is an antecedent. After a target
-    the pronoun is "it" / "that creature" and
-    :func:`_parse_conditional_pronoun_grant_rider` and the "instead" pair own
-    those sentences; a plural pronoun there would name several targets, which
-    :func:`_parse_plural_pronoun_pump_rider` reads with its "each of".
-    """
-    last = steps[-1] if steps else None
-    if not isinstance(last, (ast.GainKeyword, ast.Pump)):
-        return None
-    bound = last.subject
-    if not (
-        isinstance(bound, ast.TargetSpec)
-        and bound.quantifier in ("all", "each")
-        and not bound.targeted
-    ):
-        return None
-    mark = stream.mark()
-    if not stream.accept_word("if"):
-        return None
-    try:
-        condition = _parse_condition(stream)
-    except GrammarError:
-        stream.reset(mark)
-        return None
-    if not stream.accept_punct(","):
-        stream.reset(mark)
-        return None
-    named = stream.accept_word("they") or stream.accept_phrase("those", "creatures")
-    if not named or not stream.at_word("gets", "get"):
-        stream.reset(mark)
-        return None
-    try:
-        pump = _parse_gets(stream, bound)
-    except GrammarError:
-        stream.reset(mark)
-        return None
-    if not isinstance(pump, ast.Pump):
-        stream.reset(mark)
-        return None
-    return ast.Conditional(condition, pump)
-
-
-def _narrows_filter(wider: ast.ObjectFilter, narrower: ast.ObjectFilter) -> bool:
-    """Whether every restriction *wider* prints, *narrower* prints too.
-
-    Field by field: a field *wider* leaves at its default restricts nothing,
-    and one it sets must be set to the same value on *narrower* — so
-    "creatures you control" is wider than "Zombie creatures you control" and
-    not than "Zombie creatures", which may be an opponent's.
-    """
-    return all(
-        getattr(wider, field.name) in (field.default, getattr(narrower, field.name))
-        for field in dataclasses.fields(wider)
-    )
-
-
-def _parse_conditional_additional_pump_rider(
-    stream: TokenStream, steps: list[ast.Statement]
-) -> ast.Statement | None:
-    """``If <condition>, <a narrower set> get an additional +N/+N [duration].``
-
-    "Creatures you control get +1/+1 until end of turn. **If this spell was
-    kicked, Zombie creatures you control get an additional +2/+2 until end of
-    turn.**" (Strength of Night.) :func:`_parse_conditional_set_pump_rider`
-    with the set *named* instead of referred to: no pronoun to bind, so the
-    subject is read by the ordinary reader, and what this rider adds is the
-    licence for "an additional" — which ``_parse_gets`` hands only to a caller
-    that has checked a pump of the same creatures came first.
-
-    Here that check is containment rather than identity. The sweep in front
-    must be a pump and every restriction it prints must be printed again on
-    this one (:func:`_narrows_filter`), so each creature the second pump
-    reaches was reached by the first and "additional" is true of all of them.
-    A set the first sweep did not cover refuses: for those creatures the word
-    would be false, and the sentence is one no card prints.
-
-    The word is required, not merely admitted — without it the sentence is an
-    ordinary conditional sweep the statement grammar already reads.
-    """
-    last = steps[-1] if steps else None
-    if not isinstance(last, ast.Pump):
-        return None
-    bound = last.subject
-    if not (
-        isinstance(bound, ast.TargetSpec)
-        and bound.quantifier in ("all", "each")
-        and not bound.targeted
-    ):
-        return None
-    mark = stream.mark()
-    if not stream.accept_word("if"):
-        return None
-    try:
-        condition = _parse_condition(stream)
-        if not stream.accept_punct(","):
-            raise stream.error("expected ',' after the condition")
-        subject = parse_recipient(stream)
-        if not (
-            isinstance(subject, ast.TargetSpec)
-            and subject.quantifier in ("all", "each")
-            and not subject.targeted
-            and _narrows_filter(bound.filter, subject.filter)
-            and stream.at_word("gets", "get")
-            and stream.words_from(1)[:2] == ("an", "additional")
-        ):
-            raise stream.error("not an additional pump of a covered set")
-        pump = _parse_gets(stream, subject, additional=True)
-    except GrammarError:
-        stream.reset(mark)
-        return None
-    if not isinstance(pump, ast.Pump):
-        stream.reset(mark)
-        return None
-    return ast.Conditional(condition, pump)
 
 
 def _parse_pronoun_counter_rider(

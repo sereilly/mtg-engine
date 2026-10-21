@@ -26,8 +26,9 @@ the seam that sentence describes and is not true of the file. The loop is not a
 line production; it is what a line production is *handed*. Above ``riders``,
 ``repeats``, ``control_flow`` and ``pronouns`` — every attacher this loop drives
 had already left ``parser`` for this same guard, and none of them reaches back.
-(Five modules now: ``conditional_instead`` was cut out of ``control_flow`` at
-Invasion's Phase 0, and its one rider is driven from here like the rest.)
+(Six modules now: ``conditional_instead`` was cut out of ``control_flow`` at
+Invasion's Phase 0 and ``second_pumps`` out of ``pronouns`` at Torment's, and
+their riders are driven from here like the rest.)
 Below ``parser``, whose import of ``_statements_from_sentences`` is also that
 name's re-export, so its old address still answers. Only that one: the five
 readers around it are pulled by nothing outside this module, and
@@ -69,10 +70,11 @@ from .pronouns import (_RIDER_FOLDED, _attach_returned_text_change,
                        _parse_its_controller_creates_rider,
                        _parse_pronoun_counter_rider,
                        _parse_plural_pronoun_pump_rider,
-                       _parse_conditional_additional_pump_rider,
-                       _parse_conditional_set_pump_rider,
                        _parse_pronoun_grant_rider, _parse_pronoun_verb_rider,
                        _parse_that_controller_reveals_rider)
+from .second_pumps import (_parse_conditional_additional_pump_rider,
+                           _parse_conditional_set_pump_rider,
+                           _parse_pronoun_pump_rider)
 from .sentence_rebinding import (
     rebind_alternative_pronoun_to_choice_target,
     rebind_delayed_pronoun_to_sentence_target,
@@ -588,6 +590,16 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             pronoun_verb = _parse_pronoun_verb_rider(stream, steps)
             if pronoun_verb is not None:
                 steps.append(pronoun_verb)
+                continue
+            # "Target creature gets +1/+1 until end of turn. **That creature
+            # gets an additional +4/+4** …" (Wild Might.) A second pump on what
+            # the pump in front named. Asked here, ahead of the plural below,
+            # because the plural rider asked it first until Torment's Phase 0
+            # moved it to `second_pumps` with the two conditional pumps; the
+            # two openings are disjoint, so the order is kept, not argued.
+            second_pump = _parse_pronoun_pump_rider(stream, steps)
+            if second_pump is not None:
+                steps.append(second_pump)
                 continue
             # "Untap two target creatures. **Each of them** gets +1/+1 until
             # end of turn." (Hope and Glory.) The plural of the pronoun the

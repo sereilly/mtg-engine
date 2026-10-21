@@ -44,7 +44,7 @@ def _parse_gets(
     *additional* admits "gets **an additional** +4/+4" (Wild Might), and only
     the caller that has checked a pump of the same subject came first may pass
     it: the word says this is a second, separate pump, which is exactly what a
-    second ``Pump`` already is (``pronouns._parse_pronoun_pump_rider``).
+    second ``Pump`` already is (``second_pumps._parse_pronoun_pump_rider``).
     """
     stream.expect_word("gets", "get")
     if additional and not isinstance(subject, ast.PlayerRef):
