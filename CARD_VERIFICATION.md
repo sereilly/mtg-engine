@@ -3,10 +3,10 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **5388**
-- Passed: **789** (531 checked in-game, 258 auto-passed)
+- Passed: **797** (539 checked in-game, 258 auto-passed)
 - Failed: **0**
-- Equivalent to a passing card: **61**
-- Untested: **4538**
+- Equivalent to a passing card: **60**
+- Untested: **4531**
 
 An *auto-pass* is derived, never recorded: the card has no abilities, or nothing but keywords the engine implements, so its behaviour is the generic combat and keyword code plus its printed numbers, and there is no card-specific path for a manual check to exercise. The note names which. A result recorded in-game always takes precedence over it.
 
@@ -374,7 +374,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Basalt Golem | ⬜ untested |  |
 | Basalt Monolith | ✅ pass |  |
 | Bash to Bits | ⬜ untested |  |
-| Basking Rootwalla | ⬜ untested |  |
+| Basking Rootwalla | ✅ pass |  |
 | Basri Ket | ⬜ untested |  |
 | Basri's Acolyte | ⬜ untested |  |
 | Basri's Aegis | ⬜ untested |  |
@@ -711,7 +711,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Cephalid Illusionist | ⬜ untested |  |
 | Cephalid Looter | ✅ pass |  |
 | Cephalid Retainer | ⬜ untested |  |
-| Cephalid Sage | ⬜ untested |  |
+| Cephalid Sage | ✅ pass |  |
 | Cephalid Scout | ⬜ untested |  |
 | Cephalid Shrine | ⬜ untested |  |
 | Cephalid Snitch | ⬜ untested |  |
@@ -803,7 +803,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Circle of Protection: Shadow | ⬜ untested |  |
 | Circle of Protection: White | ✅ pass |  |
 | Circling Vultures | ⬜ untested |  |
-| Circular Logic | ⬜ untested |  |
+| Circular Logic | ✅ pass |  |
 | Citadel of Pain | ⬜ untested |  |
 | Citanul Centaurs | ⬜ untested |  |
 | Citanul Druid | ⬜ untested |  |
@@ -2812,7 +2812,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Merseine | ⬜ untested |  |
 | Mesa Falcon | ⬜ untested |  |
 | Mesa Pegasus | ✅ pass |  |
-| Mesmeric Fiend | ⬜ untested |  |
+| Mesmeric Fiend | ✅ pass |  |
 | Mesmeric Trance | ⬜ untested |  |
 | Metallic Sliver | ✅ pass | auto-pass: no abilities |
 | Metalworker | ⬜ untested |  |
@@ -3021,7 +3021,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Nantuko Disciple | ⬜ untested |  |
 | Nantuko Elder | ⬜ untested |  |
 | Nantuko Mentor | ⬜ untested |  |
-| Nantuko Shade | ≡ equivalent | same behaviour as Frozen Shade |
+| Nantuko Shade | ✅ pass |  |
 | Nantuko Shrine | ⬜ untested |  |
 | Narcissism | ⬜ untested |  |
 | Narwhal | ✅ pass | auto-pass: keywords only (first strike, protection from red) |
@@ -3116,7 +3116,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Oath of Scholars | ⬜ untested |  |
 | Obelisk of Undoing | ⬜ untested |  |
 | Obliterate | ⬜ untested |  |
-| Obsessive Search | ⬜ untested |  |
+| Obsessive Search | ✅ pass |  |
 | Obsessive Stitcher | ⬜ untested |  |
 | Obsianus Golem | ✅ pass |  |
 | Obsidian Acolyte | ⬜ untested |  |
@@ -3486,7 +3486,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Pursued Whale | ⬜ untested |  |
 | Pursuit of Knowledge | ✅ pass |  |
 | Putrefaction | ⬜ untested |  |
-| Putrid Imp | ⬜ untested |  |
+| Putrid Imp | ✅ pass |  |
 | Putrid Warrior | ⬜ untested |  |
 | Pygmy Allosaurus | ✅ pass | auto-pass: keywords only (swampwalk) |
 | Pygmy Hippo | ⬜ untested |  |
@@ -4505,7 +4505,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Straw Golem | ⬜ untested |  |
 | Stream of Life | ✅ pass |  |
 | Strength of Isolation | ⬜ untested |  |
-| Strength of Lunacy | ⬜ untested |  |
+| Strength of Lunacy | ✅ pass |  |
 | Strength of Night | ⬜ untested |  |
 | Strength of Unity | ⬜ untested |  |
 | Strip Mine | ⬜ untested |  |

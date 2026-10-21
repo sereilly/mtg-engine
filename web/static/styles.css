@@ -3112,6 +3112,14 @@ pre {
   padding-top: 12px;
 }
 
+/* The `display: flex` above comes after `.hidden` and outranks it, so a footer
+   the code hid stayed on screen: the revealed-hand dialog's "Choose no more"
+   showed for Duress and Mesmeric Fiend, whose picks are not "up to", as a
+   button that did nothing. */
+.modal-footer.hidden {
+  display: none;
+}
+
 /* Reorder library modal */
 .reorder-library-box {
   width: min(700px, 94vw);
