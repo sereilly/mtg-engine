@@ -7403,6 +7403,124 @@ function triggerNamesSeveralTargets(info) {
   return (info.candidates || []).every((c) => (c.kind || "permanent") === "permanent");
 }
 
+// …and the graveyard twin: "exile up to two target cards from a single
+// graveyard" (Gravegouger; `single_graveyard`). A pile and its slots are the
+// several-card answer the server takes (`target_seat` + `graveyard_indices`),
+// so these are picked together in the panel — one button per card, toggled,
+// all from the pile of the first pick — where each click used to send its
+// card as the whole announcement, and a person could not name two.
+function triggerNamesSeveralGraveyardCards(info) {
+  if (!info || Number(info.max_targets || 1) <= 1) return false;
+  const candidates = info.candidates || [];
+  return candidates.length > 0 && candidates.every((c) => c.kind === "graveyard");
+}
+
+// The cards picked so far for the open several-graveyard prompt: `key` names
+// the prompt they belong to (the panel is redrawn on every state, and a new
+// prompt starts empty), `seat` the pile, `slots` the graveyard indices in the
+// order they were picked.
+let triggerGraveyardPicks = null;
+
+function triggerGraveyardPicksFor(info) {
+  const key = JSON.stringify([
+    info.card_name,
+    (info.candidates || []).map((c) => [c.seat, c.graveyard_index, c.name]),
+  ]);
+  if (!triggerGraveyardPicks || triggerGraveyardPicks.key !== key) {
+    triggerGraveyardPicks = { key, seat: null, slots: [] };
+  }
+  return triggerGraveyardPicks;
+}
+
+function applyTriggerGraveyardCardsPrompt(info) {
+  const limit = Number(info.max_targets);
+  const exact = !!info.exact_targets;
+  const minimum = exact ? limit : 1;
+  const picks = triggerGraveyardPicksFor(info);
+  const candidates = info.candidates || [];
+  q("promptTitle").textContent = "Choose targets";
+  q("promptBody").textContent =
+    `${info.card_name || "The ability"}: its triggered ability names ` +
+    `${exact ? "exactly " : info.up_to ? "up to " : ""}${limit} target card${limit === 1 ? "" : "s"}` +
+    (info.single_graveyard ? " from a single graveyard" : "") +
+    ". Click each, then confirm.";
+  // One group per pile, so "a single graveyard" is visible as a choice of
+  // group; the seats in table order.
+  const piles = [...new Set(candidates.map((c) => Number(c.seat)))].sort((a, b) => a - b);
+  const rows = piles.map((pileSeat) => {
+    const buttons = candidates
+      .map((c, i) => ({ c, i }))
+      .filter(({ c }) => Number(c.seat) === pileSeat)
+      .map(({ c, i }) => {
+        const at = picks.seat === pileSeat ? picks.slots.indexOf(Number(c.graveyard_index)) : -1;
+        const chosen = at >= 0;
+        return (
+          `<button type="button" class="prompt-choice-btn${chosen ? " selected" : ""}" ` +
+          `data-trigger-graveyard-pick="${i}">${chosen ? `${at + 1}. ` : ""}${escapeHtml(c.name || "a card")}</button>`
+        );
+      })
+      .join("");
+    return `<div>${escapeHtml(graveyardOwnerLabel(pileSeat))}:</div><div class="prompt-choice-column">${buttons}</div>`;
+  });
+  const n = picks.slots.length;
+  rows.push(`<div>${n} of ${exact ? "" : "up to "}${limit} chosen.</div>`);
+  if (info.up_to) {
+    rows.push(
+      `<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn" ` +
+      `id="triggerGraveyardNoneBtn">Name no target</button></div>`,
+    );
+  }
+  q("promptSteps").innerHTML = rows.join("");
+  q("promptSteps").querySelectorAll("[data-trigger-graveyard-pick]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const c = candidates[Number(btn.dataset.triggerGraveyardPick)];
+      const pileSeat = Number(c.seat);
+      const slot = Number(c.graveyard_index);
+      if (picks.seat !== null && picks.seat !== pileSeat && picks.slots.length) {
+        updateActionHint(
+          `${info.card_name || "The ability"} takes its cards from a single graveyard — ` +
+          "deselect the others to choose from this one.",
+          true,
+        );
+        return;
+      }
+      const at = picks.slots.indexOf(slot);
+      if (at >= 0) {
+        picks.slots.splice(at, 1);
+      } else if (picks.slots.length < limit) {
+        picks.seat = pileSeat;
+        picks.slots.push(slot);
+      } else {
+        updateActionHint(`${info.card_name || "The ability"} names at most ${limit} — click one to deselect it.`, true);
+        return;
+      }
+      if (!picks.slots.length) picks.seat = null;
+      applyTriggerGraveyardCardsPrompt(info);
+    });
+  });
+  document.getElementById("triggerGraveyardNoneBtn")?.addEventListener("click", () => {
+    triggerGraveyardPicks = null;
+    // "Up to" may name nobody: an empty list of slots, which the server
+    // records as the several-target answer "nobody".
+    submitPromptAction({
+      seat, action: "trigger_target_confirm", target_seat: seat, graveyard_indices: [],
+    });
+  });
+  const okBtn = q("promptOkBtn");
+  okBtn.classList.remove("hidden");
+  okBtn.textContent = n ? `Confirm ${n} target${n === 1 ? "" : "s"}` : "Confirm targets";
+  okBtn.disabled = n < minimum;
+  okBtn.onclick = () => {
+    if (picks.slots.length < minimum) return;
+    const body = {
+      seat, action: "trigger_target_confirm",
+      target_seat: picks.seat, graveyard_indices: [...picks.slots],
+    };
+    triggerGraveyardPicks = null;
+    submitPromptAction(body);
+  };
+}
+
 // A triggered ability choosing its target as it goes on the stack (CR 603.3d):
 // Floral Spuzzem's artifact, Teferi's Tutelage's opponent, Mystic Snake's
 // spell, Gravedigger's card. Four kinds of candidate arrive in one list and
@@ -7516,6 +7634,11 @@ function applyTriggerTargetPrompt(info) {
   q("promptCancelBtn").disabled = true;
   q("promptCustomOkBtn").disabled = true;
   const candidates = info.candidates || [];
+  // Several cards in one graveyard (Gravegouger) are picked together here.
+  if (triggerNamesSeveralGraveyardCards(info)) {
+    applyTriggerGraveyardCardsPrompt(info);
+    return;
+  }
   // Several targets in one announcement are picked together in the
   // several-targets dialog (`renderSeveralTargetsModal`) — a click on the
   // board answers with one id, which for this ability was the whole answer
