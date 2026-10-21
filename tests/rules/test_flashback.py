@@ -244,13 +244,16 @@ def _creature_tokens_to_act_on(game) -> None:
     nothing moved") — the Alter Reality row's kind exactly: a board that
     cannot show what the card does. Put down on both boards alike, before the
     "before" snapshot, so the hand cast and the flashed-back one compare the
-    same thing; a token is a token by its card (``tokens.make_token_card``)."""
+    same thing. A token is a token by its *permanent*: the matcher asks
+    ``Permanent.metadata["is_token"]``, which the engine's own token maker sets
+    (``handlers/board_misc``); ``tokens.make_token_card`` marks the card, which is
+    what a token is once the permanent is gone."""
     from engine.tokens import make_token_card
 
     for seat in (0, 1):
         game.players[seat].battlefield.append(_nosick(Permanent(card=make_token_card(
             "Squirrel Token", 1, 1, "Creature — Squirrel", colors=("G",),
-        ))))
+        ), metadata={"is_token": True})))
 
 
 def _announce_targets(game, card, zone: str) -> dict:
