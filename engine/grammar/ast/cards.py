@@ -716,6 +716,12 @@ class ChooseCardsInHand:
     count: Amount
     filter: ObjectFilter
     drawn_this_turn: bool = False
+    #: "…, then choose X cards in your hand **and discard the rest**."
+    #: (Breakthrough.) The complement of the pick is what moves, and only this
+    #: sentence describes it — read apart, "discard the rest" has no set to take
+    #: the rest of. So it rides the pick, as ``KeepChosenSacrificeRest``'s fate
+    #: rides its keep, and the lowering emits the discard of the complement.
+    discard_rest: bool = False
 
 
 @dataclass(frozen=True)

@@ -340,7 +340,10 @@ def _lower_search_library(
                 )
         else:
             payload["count"] = "x"
-        payload["up_to"] = True
+        # "…for **X** cards" with no "up to" (Insidious Dreams) is CR
+        # 701.23d's floor: the finder must find X if able, so no ceiling flag.
+        if node.up_to:
+            payload["up_to"] = True
         payload["destination"] = _SEARCH_DESTINATIONS[node.to.name]
         if node.all_tapped:
             payload["enters_tapped"] = True

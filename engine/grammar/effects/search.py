@@ -249,6 +249,15 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
     each = _accept_search_one_of_each(stream, graveyard, possessive)
     if each is not None:
         return each
+    # "Search your library for **X cards**, then shuffle and put those cards on
+    # top in any order." (Insidious Dreams.) The counted tail with the cast's X
+    # and no "up to": a quantity search, so CR 701.23d's floor, not a ceiling.
+    exact = stream.mark()
+    if stream.accept_word("x"):
+        return _parse_counted_search(
+            stream, graveyard, None, possessive, ceiling=ast.Var("x"), exact=True,
+        )
+    stream.reset(exact)
     if not stream.accept_word("a", "an"):
         raise stream.error("a search for more than one card has no representation")
     # "a card named X" is read by the noun parser, like every other restriction
@@ -721,6 +730,7 @@ def _accept_each_searcher_shuffle(stream: TokenStream) -> bool:
 def _parse_counted_search(
     stream: TokenStream, graveyard: bool, count: int | None,
     possessive: str = "your", ceiling: "ast.Amount | None" = None,
+    exact: bool = False,
 ) -> ast.Statement:
     """The tail of ``Search your library for up to <N> <filter>, reveal <them>,
     <where they go>, then shuffle.`` (Cultivate, Land Tax.)
@@ -739,6 +749,9 @@ def _parse_counted_search(
     and says nothing about the second is a different effect, and defaulting the
     second to the first is how a search silently puts two lands on the
     battlefield.
+
+    *exact* is a count printed without "up to" ("for X cards", Insidious
+    Dreams): CR 701.23d makes it a floor the finder must meet if able.
     """
     filt = parse_object_filter(stream)
     # "…for up to three cards **with the same name as target creature**" (Pack
@@ -779,15 +792,12 @@ def _parse_counted_search(
                     stream.expect_word("library")
                 stream.accept_phrase("in", "any", "order")
                 zone = ast.Zone("library_top")
-                if ceiling is not None:
-                    raise stream.error(
-                        "a search with a computed ceiling puts its finds in one zone"
-                    )
                 return ast.SearchLibrary(
                     ast.PlayerRef("you"), filt, zone, graveyard,
                     extra_destinations=() if count is None else (zone,) * (count - 1),
                     tapped=(False,) * (0 if count is None else count),
-                    up_to=True, unbounded=count is None, reveal=reveal,
+                    up_to=not exact, reveal=reveal, count_amount=ceiling,
+                    unbounded=count is None and ceiling is None,
                 )
     stream.reset(top_mark)
     # "…for up to X basic land cards **and** put them onto the battlefield
@@ -821,7 +831,7 @@ def _parse_counted_search(
                 () if count is None else (destination,) * (count - 1)
             ),
             tapped=(tapped,) * (0 if count is None else count),
-            up_to=True,
+            up_to=not exact,
             # "Any number of" is the ceiling-less spelling; a computed ceiling
             # ("that many", X) is the other reason the count is not printed,
             # and it says so on its own field rather than borrowing this one.

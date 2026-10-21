@@ -590,6 +590,15 @@ def lower_untargeted_return(
         payload: dict[str, object] = {}
         if node.to.owner.kind == "you":
             payload["to_seat"] = "controller"
+        # "…the discarded card **from your graveyard**" (Pitchstone Wall): the
+        # handler looks in that one pile; any other printed source refuses.
+        if node.from_zone is not None:
+            owner = getattr(node.from_zone.owner, "kind", None)
+            if node.from_zone.name != "graveyard" or owner != "you":
+                raise LoweringError(
+                    "the bound card returns from your graveyard alone", node=node
+                )
+            payload["from_seat"] = "controller"
         return (
             OracleInstruction("return_bound_card_to_owners_hand", "", payload),
         )

@@ -104,20 +104,42 @@ def _parse_draw(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
     # the whole statement: a "for each" after a draw multiplies the cards, and
     # a production claiming it at statement level would take it away from the
     # mana clause and the counter placement that print it too.
-    multiplier = _parse_draw_multiplier(stream)
+    multiplier = _parse_card_multiplier(stream, count, up_to, "draw")
     if multiplier is not None:
-        # Only the plain "a card" spelling composes: "draw two cards for each …"
-        # is a product this AST has no node for, and reading it as the
-        # multiplier alone would halve the card's effect.
-        if not (isinstance(count, ast.Fixed) and count.value == 1) or up_to:
-            raise stream.error("a per-each draw multiplies one card")
         return ast.Draw(player, multiplier)
     return ast.Draw(player, count, up_to=up_to)
 
 
+def _parse_card_multiplier(
+    stream: TokenStream, count: "ast.Amount", up_to: bool, verb: str,
+) -> "ast.Amount | None":
+    """The trailing "for each …" of a draw, a discard or a mill, as the amount
+    it makes, or None when the clause is not there.
+
+    **One shape, three verbs.** "Draw a card for each …" (Chromatic Orrery),
+    "Target player discards a card **for each Swamp you control**" (Mind
+    Sludge) and "Then mill a card **for each shred counter on this
+    creature**" (Cephalid Vandal) are the same multiplier over the same "a
+    card", and the quantities under them are one reader's
+    (:func:`_parse_draw_multiplier`). The discard and the mill used to stop at
+    "for each" as unconsumed text: the reading existed, for one verb.
+
+    Only the plain "a card" spelling composes: "draw two cards for each …" is
+    a product this AST has no node for, and reading it as the multiplier alone
+    would halve the card's effect. "Up to" beside a multiplier is a ceiling no
+    count node carries, so it refuses for the same reason.
+    """
+    multiplier = _parse_draw_multiplier(stream)
+    if multiplier is None:
+        return None
+    if not (isinstance(count, ast.Fixed) and count.value == 1) or up_to:
+        raise stream.error(f"a per-each {verb} multiplies one card")
+    return multiplier
+
+
 def _parse_draw_multiplier(stream: TokenStream) -> "ast.Amount | None":
     """``for each color among <objects>`` / ``for each <word> counter on <the
-    source>`` after a draw, or None.
+    source>`` after a draw, a discard or a mill, or None.
 
     Two quantities, and the words are what name each — the same way the
     where-clause tells "the number of" from "the greatest power among". A "for
@@ -288,6 +310,11 @@ def _parse_discard(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
         stream.reset(mark)
         stream.expect_word("card", "cards")
     at_random = stream.accept_phrase("at", "random")
+    # "Target player discards a card **for each Swamp you control**." (Mind
+    # Sludge.) The draw's multiplier, read by the draw's reader.
+    multiplier = _parse_card_multiplier(stream, count, up_to, "discard")
+    if multiplier is not None:
+        count = multiplier
     return ast.Discard(player, count, at_random, up_to=up_to, filter=narrowed)
 
 
@@ -329,6 +356,11 @@ def _parse_mill(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
         return ast.Mill(player, ast.Half(ast.CountOf(pile), accept_rounding(stream), divisor))
     count = parse_amount(stream)
     stream.expect_word("card", "cards")
+    # "Then mill a card **for each shred counter on this creature**."
+    # (Cephalid Vandal.) The draw's multiplier, read by the draw's reader.
+    multiplier = _parse_card_multiplier(stream, count, False, "mill")
+    if multiplier is not None:
+        return ast.Mill(player, multiplier)
     repeated = _parse_mill_repeat_tail(stream, player, count)
     if repeated is not None:
         return repeated

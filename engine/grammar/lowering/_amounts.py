@@ -763,6 +763,28 @@ def halved_count_spec(amount: "ast.Amount", node) -> dict | None:
     return spec
 
 
+def per_card_count_spec(
+    amount: "ast.Amount", node, player: "ast.PlayerRef | None" = None
+) -> dict | None:
+    """The ``x_from_count`` spec of "<verb> a card **for each** …", or None.
+
+    One reader for the three verbs the parse side reads the clause after
+    (``effects/cards._parse_card_multiplier``): "draw a card for each color
+    among …" (Chromatic Orrery), "discards a card for each Swamp you control"
+    (Mind Sludge), "mill a card for each shred counter on this creature"
+    (Cephalid Vandal). A "they control" count moves onto the targeted seat
+    (:func:`count_filter_on_targeted_seat`), as the draw has since Allied
+    Strategies.
+    """
+    if isinstance(amount, ast.ColorsAmong):
+        return count_spec(amount.filter, node, aggregate="distinct_colors")
+    if isinstance(amount, ast.CountOf):
+        return count_spec(count_filter_on_targeted_seat(amount.filter, player), node)
+    if isinstance(amount, ast.CountersOnSource):
+        return {"source_counters": amount.kind}
+    return None
+
+
 # ---------------------------------------------------------------------------
 # How big a printed P/T change is.
 #

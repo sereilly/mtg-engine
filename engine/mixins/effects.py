@@ -1530,6 +1530,10 @@ class EffectsMixin:
                         "discarded_card": card,
                         "discarded_name": card.name,
                         "event_subject_player": seat,
+                        # "That card" / "the discarded card" in a graveyard,
+                        # under the key every ``BOUND_CARD_EVENTS`` reader asks
+                        # (Pitchstone Wall).
+                        "dead_card": card,
                     },
                 ))
         self._enqueue_triggered_batch(events)

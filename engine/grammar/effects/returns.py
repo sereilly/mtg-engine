@@ -193,8 +193,14 @@ def _parse_return(
         stream.reset(top_mark)
     if top_of_graveyard is not None:
         subject = top_of_graveyard
-    elif stream.accept_phrase("that", "card") or stream.accept_phrase(
-        "the", "first", "card"
+    elif (
+        stream.accept_phrase("that", "card")
+        or stream.accept_phrase("the", "first", "card")
+        # "Whenever you discard a card, … return **the discarded card** from
+        # your graveyard to your hand." (Pitchstone Wall.) The same referent
+        # under a discard trigger: the card the event discarded, which the
+        # lowering reads off the record the discard fire site froze.
+        or stream.accept_phrase("the", "discarded", "card")
     ):
         # "…return **the first card** to the battlefield under its owner's
         # control at the beginning of the next end step." (Lifeline.) Oracle's
@@ -252,10 +258,15 @@ def _parse_return(
     # read here, behind the bare pronoun only, and carried on the node. Which
     # card "it" is stays the lowering's question: it names a card an earlier
     # step of this effect put there, or it refuses.
+    # "…return the discarded card **from your graveyard** …" (Pitchstone
+    # Wall): the bound card has no noun for the zone to ride either.
     pronoun_from: ast.Zone | None = None
     if (
         isinstance(subject, ast.TargetSpec)
-        and subject.quantifier == "it"
+        and (
+            subject.quantifier == "it"
+            or (subject.quantifier == "that" and subject.filter.is_card)
+        )
         and not subject.targeted
         and stream.accept_phrase("from", "your", "graveyard")
     ):
