@@ -1711,6 +1711,9 @@ seam report takes when it is written from a call graph alone:
 The `records.py` objection was right and understated: `amounts.py` imports
 `records` at **module level**, so reading `amounts.accept_counter_kind` from
 inside `records` is a real import cycle, not only a docstring's warning.
+(It no longer arises: `accept_counter_kind` went down to `readers`, below
+every caller, at Torment's Phase 0, where a fifth hand-written copy of the
+same reading already lived.)
 **`ast/_references.py` drained at EXO's Phase 0 along exactly the seam
 recorded here** — 997 -> 698 + `_payloads.py` (336), `ObjectFilter.to_payload`
 moved whole with the class arriving as an argument so nothing cycles. The
@@ -1721,6 +1724,10 @@ invisible to one guard and a violation of the other until both are told.
 **`lowering/sequences.py` is what is left**, at 920 after STH's wave 2 moved two
 fusers into it, with four of its six opening on a `(Tap, payoff)` pair — still
 unowned, and the observation still unspent.
+**Spent at Torment's Phase 0**, at 981: the six fusers left for
+`lowering/fusions.py` and the composer kept the name, 378 lines. They were
+never one pipeline - `statement_dispatch`'s `Sequence` arm asks every fuser
+before `_lower_steps`, which runs only when all of them decline.
 
 **And the pattern across three sets is worth more than the list.** Every module
 named in this entry has eventually been split along the line somebody had
@@ -2361,6 +2368,62 @@ run was green in 27 minutes where the last serial one had taken 4h45m, and
 splitting tests/ai took the wall time to ~15. ROADMAP's standing invariant 2
 has the readings.
 
+**The modules drained 2026-10-20, at Torment's Phase 0, in three rounds of
+ten pre-splits - and the one that most needed it was not on this list.**
+`lowering/delayed.py` had stood at exactly 1,000 since Apocalypse
+(`9fa3b8f4`); the seven named above were read off a list and it was not on
+it, while the live `wc -l` line put it first. That is the Size watch
+section's argument for keeping no table, made by this entry. Round 1 split the
+three tightest; its splitters probed the set and named where it lands, and
+round 2 split the four that two of them named or that every family reads.
+Round 3 ran after Torment was ingested and its wave-1 groups planned, on the
+three modules two of those groups would reach. Each split moved 0 compiled
+programs (of 5,266, then of 5,408 with Torment), and each round's merged tree
+had its own full suite.
+
+| Module | Before | After | Where it went |
+| --- | ---: | ---: | --- |
+| `lowering/delayed.py` | 1,000 | 856 | the announcement to a new `lowering/choices.py` (the parse side's name), Autumn Willow's waiver to `lowering/permissions.py` |
+| `ast/records.py` | 989 | 833 | eight `ForEach` record sets to a new floor `ast/loops.py` |
+| `lowering/sequences.py` | 981 | 378 | the six fusers to a new family `lowering/fusions.py` |
+| `effects/stack.py` | 962 | 761 | the activation instructions to a new `activation_instructions.py`, the waiver's parse half to `effects/permissions.py` |
+| `condition_counts.py` | 957 | 846 | the colour clauses, with their six lowering branches (`lowering/conditions.py` 952 -> 831), to `color_conditions.py` / `lowering/_color_conditions.py` |
+| `amounts.py` | 947 | 842 | the counter bounds home to `bounds.py`, `accept_counter_kind` down to `readers.py` |
+| `pronouns.py` | 962 | 782 | the three second-pump riders to a new `second_pumps.py` |
+| `effects/damage.py` | 958 | 624 | whom a damage clause hits, to a new floor `effects/_recipients.py` (the lowering floor's name) |
+| `effects/characteristics.py` | 949 | 775 | a player's life total (CR 119.3's gain and loss) to a new floor `effects/_life.py` |
+| `lowering/keywords.py` | 949 | 729 | the quoted-ability grant to a new `lowering/granted_abilities.py` (the engine module's name) |
+
+The handed seam for `delayed` was wrong - it would have sent the delayed
+destroys back to `destruction`, reversing the Urza's Saga Phase 0 that brought
+them *from* there - and the one handed for `effects/stack.py` was right.
+
+**What stays inside the band, for the wave's briefs** (re-read the live line
+first): `effects/search.py` 962 (one Torment card, Insidious Dreams, so an
+owned module), `ast/__init__.py` 951 (below), and six lowering modules at
+946-954 that the probes found Torment passing through rather than growing.
+`riders.py` (940) is not reached; when it next splits,
+`pronouns._attach_sacrifice_when_control_lost` (84 lines, the twin of
+`riders._attach_tap_when_control_lost`) goes with its twin.
+The four per-set test files the entry named (2,527-2,597 lines) were not
+split: each already has a continuation file with 400 to 2,000 lines of
+room (`…_round_36_onward`, `…_wave_two`, `…_late_rounds`,
+`…_early_rounds`), which is where a shipped card's new test goes, and the
+wave briefs say so.
+
+**Added at Torment's Phase 0, for the next Phase 0: `ast/__init__.py` is at
+951 and grows two lines for every node any family adds** - an import and an
+`__all__` entry, 870 -> 951 between Invasion and Odyssey. It is a front door,
+not a family, so splitting it buys nothing; all three front doors list
+`__all__` one name per line, and the relief is a decision about that format
+taken for the three together. Torment is expected to add a handful of nodes
+and stay under; the set after it is not. Two seams were also named and left:
+`amounts.py`'s "equal to" front end (about 395 lines, where 11 of its 12
+commits since the Exodus split landed) cannot take a layer while `bounds`
+reaches into the private `_parse_equal_to_body`; and `lowering/_amounts.py`
+(929) has a third reading at its foot (lines ~775-929, an X definition written
+onto the sentence that reads one) that its own docstring already names.
+
 ## Phase 0 — Pre-flight
 
 **Entry:** a set has been chosen. **Exit:** clean tree, every gate green,
@@ -2597,6 +2660,35 @@ instruments current.
    Widened to the layering guard's own list and the live dispatch tables, it
    named two nodes missing from the union on the day. Grep the tests for the
    split module's bare name before running anything.
+
+   **Torment ran "ask the splitters" three times, and priced the
+   measurement each time.** Round 1's three splitters probed all 143 of the
+   set's cards through the live grammar and reported which modules each
+   parse *returned through*; round 2 chose its four modules partly on that.
+   Round 2's splitters counted only productions that **accepted** something,
+   and the numbers fell: 23 Torment cards "through `pronouns`" were 0 (every
+   declining rider returns `False`, and the probe counted any non-`None`
+   return), 11 "through `effects/stack.py`" were 4. Then the wave's groups
+   were planned, and round 3 pre-split the three modules two groups would
+   reach, each brief naming the cards from a probe of the **furthest
+   production that accepted** every refused line. Even that over-stated: the
+   damage splitter found three of its four named cards taught elsewhere (an
+   "instead" rider, a player reference, a redirect), and the keywords
+   splitter two of three. A furthest-production probe is still a refusal
+   site - where the parser stopped, not where the sentence will be taught.
+   Every split stood anyway on Nemesis' trigger, shared and tight; the
+   question to hand a splitter is "where will each of these be *taught*?",
+   and its answer is the most useful thing in the report.
+   And **nine of the ten modules' own docstrings said something false about
+   their contents**: a first paragraph naming a subject the code did not have
+   (`delayed`, `effects/stack`, `lowering/keywords`' "and taking one away"),
+   a first line false for 8 of 52 nodes (`ast/records`), a rule standing in
+   for an argument about the file (`sequences`), a binding the module's
+   growth did not read (`pronouns`), "has never split" of a module that had
+   (`condition_counts`), and subjects that had left at earlier splits
+   (`effects/characteristics`, `effects/damage`). The tenth (`amounts`) had
+   its two false sentences in neighbours'. Read the code first; the
+   docstring is the thing the split corrects.
 4. Clear anything above in Known gaps marked for Phase 0.
 
 ## Phase 1 — Ingest and measure
