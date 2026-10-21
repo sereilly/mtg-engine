@@ -12,6 +12,7 @@ from ..land_mana_swaps import (production_snapshot, source_wide_swap,
                                substitute_production)
 from ..mana_payment import answer_color_choices
 from ..land_play_allowance import clear_turn_land_play_effects
+from ..counter_conditions import clear_next_spell_promises
 from ..spell_prohibitions import clear_turn_spell_prohibitions
 from ..game_types import OracleExecutionContext, SimulationResult
 from ..oracle import compile_card_oracle
@@ -394,6 +395,9 @@ class TurnManagementMixin:
         # land-play records above it: a prohibition that outlived its turn is a
         # seat that quietly stops casting.
         clear_turn_spell_prohibitions(self)
+        # "The next … spell you cast **this turn** can't be countered."
+        # (Overmaster.) A promise no spell spent ends with its turn.
+        clear_next_spell_promises(self)
         # "Until that player's next turn" (Firestorm Phoenix) is an ordinal
         # against the counter just incremented, so this drops what has expired
         # rather than deciding anything — engine/hand_locks.py derives the

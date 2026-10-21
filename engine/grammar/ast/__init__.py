@@ -415,6 +415,7 @@ from .stack import (
     CounterSpell,
     DestroyCounteredAbilitySource,
     ModalNode,
+    NextSpellUncounterable,
     PutExiledCardOnStackAsCopy,
     WaiveShroud,
 )
@@ -866,6 +867,7 @@ __all__ = [
     "CreateDelayedTrigger",
     "NextDrawReplacement",
     "CounterSpell",
+    "NextSpellUncounterable",
     "ModalNode",
     # combat
     "CantBe",

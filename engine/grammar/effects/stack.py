@@ -39,6 +39,7 @@ from ..stream import TokenStream
 from ..phrases import (_accept_conjoined_life_cost, _accept_mana_alternatives,
                        _parse_mana_payment, _parse_per_each_objects,
                        _parse_zone, accept_bidding_procedure)
+from ..readers import accept_spell_type_union
 from ..records import _parse_for_each_this_way
 from ..sacrifices import _parse_counted_sacrifice
 from ..vocabulary import NUMBER_WORDS
@@ -759,3 +760,31 @@ def _parse_bid_life_contest(stream: TokenStream) -> ast.Statement | None:
     return ast.BidLifeContest(
         (ast.PlayerRef("you"), rival), starting_bid=starting_bid
     )
+
+
+def parse_next_spell_uncounterable(
+    stream: TokenStream,
+) -> "ast.NextSpellUncounterable | None":
+    """``The next <type>[ or <type>] spell you cast this turn can't be
+    countered.`` (Overmaster, Insist.)
+
+    The whole sentence or nothing: refused without consuming where any word
+    of it differs, so a sentence that opens "The next …" and goes on to say
+    something else (Mangara's Tome's "The next time you would draw …") keeps
+    its own reader. The type union is the one the permission sentences read
+    (``readers.accept_spell_type_union``) with the singular noun, and the
+    window must be "this turn" — a "next spell" effect that outlived its turn
+    is not this card.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("the", "next"):
+        return None
+    card_types = accept_spell_type_union(stream, noun="spell")
+    if (
+        card_types is None
+        or not stream.accept_phrase("you", "cast", "this", "turn")
+        or not stream.accept_phrase("can't", "be", "countered")
+    ):
+        stream.reset(mark)
+        return None
+    return ast.NextSpellUncounterable(card_types)

@@ -15,9 +15,12 @@ That is also the line inside ``cards``. Every other production there is a card
 move nothing: they read who may cast what, out of which zone, for how long. The
 call graph had already fallen apart along it. ``_parse_cast_permission`` is
 reached from the statement dispatcher and from nothing else, and
-``_accept_spell_type_union`` is reached from ``_parse_cast_permission`` and from
-nothing else; neither is called by anything left behind, and neither calls
-anything left behind.
+``_accept_spell_type_union`` was reached from ``_parse_cast_permission`` and
+from nothing else; neither was called by anything left behind, and neither
+called anything left behind. (The union reader went down to ``readers`` at
+Torment's first wave, as ``accept_spell_type_union``, when "The next instant
+or sorcery **spell** you cast this turn" (Overmaster) became its second
+caller.)
 
 **And the withholding half arrived at Mercadian Masques' third Phase 0**, when
 ``effects/game.py`` sat eight lines under the guard. Five productions came over:
@@ -83,42 +86,9 @@ from ..nouns import parse_object_filter
 from ..durations import _parse_duration
 from ..phrases import _parse_zone
 from ..references import parse_player_ref, parse_target_spec
+from ..readers import accept_spell_type_union
 from ..stream import TokenStream
-from ..vocabulary import CARD_TYPES, NUMBER_WORDS, singular as _singular
-
-
-def _accept_spell_type_union(stream: TokenStream) -> "tuple[str, ...] | None":
-    """``instant and sorcery`` / ``creature`` in front of the word "spells",
-    consumed — or None with the cursor where it was.
-
-    A **cross-type union**, which is why it is read here rather than by the
-    noun parser: that reader answers "instant and sorcery **cards**" already,
-    and the word a permission sentence prints is "spells". CR 112.1 makes a
-    spell a card on the stack, so the two nouns name the same characteristics
-    and only the zone differs — but a permission's zone is stated separately
-    ("from the top of your graveyard"), so folding the two would give the
-    sentence two answers about where the card is.
-
-    Both joining words are read. "Instant **and** sorcery spells" is a union
-    despite the conjunction (no spell is both), exactly as "instant **or**
-    sorcery card" is, and refusing one spelling would refuse the card that
-    prints it for a grammatical accident.
-    """
-    mark = stream.mark()
-    found: list[str] = []
-    while True:
-        word = stream.peek_word()
-        if word is None or _singular(word) not in CARD_TYPES:
-            break
-        found.append(_singular(word))
-        stream.advance()
-        if stream.accept_word("and", "or"):
-            continue
-        break
-    if not found or not stream.accept_word("spells"):
-        stream.reset(mark)
-        return None
-    return tuple(found)
+from ..vocabulary import NUMBER_WORDS
 
 
 def _cast_it_while_exiled(stream: TokenStream) -> bool:
@@ -349,7 +319,7 @@ def _parse_cast_permission(stream: TokenStream) -> ast.Statement | None:
     # Canyons). One reader for the noun phrase, because the two sentences print
     # the same union and differ only in what follows it — a zone in one and a
     # timing permission in the other.
-    named_types = _accept_spell_type_union(stream)
+    named_types = accept_spell_type_union(stream)
     if named_types is not None:
         # "…from **the top of** your graveyard." One card, not the pile: read
         # here rather than left to the noun parser because the phrase is a

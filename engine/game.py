@@ -136,6 +136,13 @@ class Game(
     # controls alone. By ``permanent_id``, so CR 400.7's returning permanent —
     # a new object with a new id — is not still banned.
     permanent_activations_forbidden_this_turn: set[int] = field(default_factory=set)
+    # "The next instant or sorcery spell you cast this turn can't be countered."
+    # (Overmaster, Insist.) What a resolved spell promised a spell its
+    # controller has not cast yet, as ``counter_conditions.NextSpellPromise``
+    # entries: spent by the cast path on the first matching spell (CR 601.2i),
+    # read by every counter through ``counter_conditions.cant_be_countered``,
+    # and dropped at the turn boundary with the records above.
+    next_spells_uncounterable: list = field(default_factory=list)
     stack: list[StackItem] = field(default_factory=list)
     log: list[str] = field(default_factory=list)
     # CR 701.20: cards revealed to all players, as a structured record beside

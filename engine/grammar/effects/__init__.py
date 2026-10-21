@@ -246,6 +246,7 @@ from .stack import (
     _parse_modal_head,
     _UNPAID_PENALTIES,
     _parse_unpaid_penalty_sentence,
+    parse_next_spell_uncounterable,
 )
 from .requirements import (
     _parse_attacks_this_turn_if_able,
@@ -456,6 +457,7 @@ __all__ = [
     "_parse_modal_head",
     "_UNPAID_PENALTIES",
     "_parse_unpaid_penalty_sentence",
+    "parse_next_spell_uncounterable",
     "_parse_cant_attack_or_block",
     "parse_block_count_grant",
     "parse_simultaneous_phasing",

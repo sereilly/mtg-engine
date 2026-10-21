@@ -680,6 +680,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # block-pair effect.
     "destroy_block_pair_partner": "destruction",
     "counter_top_stack_spell": "counterspells",
+    # "The next instant or sorcery spell you cast this turn can't be
+    # countered." (Overmaster, Insist.) Beside the counter it answers: what
+    # the promise is about is whether a spell can be countered.
+    "make_next_spell_uncounterable": "counterspells",
     # An auction of life with a spell at stake (Mages' Contest). Beside the
     # counter it decides, for the reason Illicit Auction's sits beside the
     # steals: what the sentence is *about* is the spell, and the bidding is how

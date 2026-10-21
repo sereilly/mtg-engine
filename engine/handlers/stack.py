@@ -4,7 +4,8 @@ from typing import TYPE_CHECKING
 
 from ..card_hooks import ON_SPELL_COUNTERED
 from ..color_changes import forget_spell_color_change, recolor_spell
-from ..counter_conditions import cant_be_countered
+from ..counter_conditions import (cant_be_countered,
+                                  promise_next_spell_uncounterable)
 from ..divided_damage import DIVIDED_TARGETS, divided_entry, stamped_entry
 from ..exiled_records import (EXILE_RECORD_KEY, EXILED_SPELL_CONTROLLER_KEY,
                               StackAnnouncement, is_live, record_exiled_card,
@@ -899,7 +900,7 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
         # same question asked of the battlefield instead of the spell — one
         # predicate with both halves behind it, so no counter path can come to
         # ask only one of them.
-        uncounterable = cant_be_countered(game, target.card)
+        uncounterable = cant_be_countered(game, target.card, target)
         if uncounterable is not None:
             game.log.append(f"{card.name}: {uncounterable}")
             return True, "resolved"
@@ -2091,5 +2092,24 @@ def ban_targeting(game: Game, instruction: OracleInstruction, context: OracleExe
     game.log.append(
         f"{context.card.name}: nothing can be targeted by spells or activated "
         f"abilities"
+    )
+    return True, "resolved"
+
+
+@effect_handler("make_next_spell_uncounterable")
+def make_next_spell_uncounterable(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"The next instant or sorcery spell you cast this turn can't be
+    countered." (Overmaster, Insist.)
+
+    Records the promise for the resolving spell's controller (CR 109.5's
+    "you"); the cast path spends it on that seat's next matching spell and
+    every counter asks it through ``counter_conditions.cant_be_countered``.
+    """
+    seat = game.players.index(context.caster)
+    card_types = tuple(instruction.payload.get("card_types") or ())
+    promise_next_spell_uncounterable(game, seat, card_types, context.card.name)
+    game.log.append(
+        f"The next {' or '.join(card_types)} spell {context.caster.name} casts "
+        f"this turn can't be countered ({context.card.name})"
     )
     return True, "resolved"

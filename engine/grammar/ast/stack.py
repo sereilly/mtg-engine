@@ -488,3 +488,24 @@ class BidLifeContest:
 
     bidders: tuple[PlayerRef, ...]
     starting_bid: int = 1
+
+
+@dataclass(frozen=True)
+class NextSpellUncounterable:
+    """"The next instant or sorcery spell you cast this turn can't be
+    countered." (Overmaster; Insist names creature spells.)
+
+    A one-shot effect of a resolving spell that reaches a spell **not yet
+    cast**: the next one of *card_types* its controller casts this turn, and
+    only that one. It is not a trigger (nothing is put on the stack when the
+    spell is cast) and not a static (no permanent prints it), so it is its own
+    node: a record the resolution leaves for the cast path to spend, and the
+    same "can't be countered" (CR 101.2, CR 701.6a) every counter asks of a
+    spell that prints it about itself.
+
+    ``card_types`` is the printed union, in the words the line prints it
+    ("instant", "sorcery"); a spell answers when it has any of them
+    (CR 205.2).
+    """
+
+    card_types: tuple[str, ...]

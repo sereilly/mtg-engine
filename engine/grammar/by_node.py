@@ -43,7 +43,7 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_keep_chosen_discar
                        _lower_exile_cards_from_hand,
                        _lower_move_counter, _lower_note_mana_spent,
                        _lower_bid_life_for_control, _lower_become_blocked,
-                       _lower_bid_life_contest,
+                       _lower_bid_life_contest, _lower_next_spell_uncounterable,
                        _lower_produces_mana_instead, _lower_spend_mana_as_though,
                        _lower_added_mana_becomes, _lower_grant_mana_spending,
                        _lower_change_land_type, _lower_change_supertype,
@@ -206,6 +206,7 @@ _BY_NODE_TYPE: dict[type, object] = {
     # because what it lowers to is a sequence — the bidding, then a counter
     # the winner's seat decides — where the auction above is one instruction.
     ast.BidLifeContest: _lower_bid_life_contest,
+    ast.NextSpellUncounterable: _lower_next_spell_uncounterable,
     ast.BecomeBlocked: _lower_become_blocked,
     # "Choose a card name." (Foreshadow.) The name is chosen as the spell
     # resolves (CR 608.2) and CR 202.1 lets a player name any card at all, so

@@ -240,6 +240,46 @@ def _parse_keyword_list(stream: TokenStream) -> tuple[str, ...]:
     return tuple(keywords)
 
 
+def accept_spell_type_union(
+    stream: TokenStream, noun: str = "spells"
+) -> "tuple[str, ...] | None":
+    """``instant and sorcery`` / ``creature`` in front of *noun* ("spells", or
+    "spell" for one), consumed — or None with the cursor where it was.
+
+    A **cross-type union**, which is why it is read here rather than by the
+    noun parser: that reader answers "instant and sorcery **cards**" already,
+    and the word a permission sentence prints is "spells". CR 112.1 makes a
+    spell a card on the stack, so the two nouns name the same characteristics
+    and only the zone differs — but a permission's zone is stated separately
+    ("from the top of your graveyard"), so folding the two would give the
+    sentence two answers about where the card is.
+
+    Both joining words are read. "Instant **and** sorcery spells" is a union
+    despite the conjunction (no spell is both), exactly as "instant **or**
+    sorcery card" is, and refusing one spelling would refuse the card that
+    prints it for a grammatical accident.
+
+    Came down from ``effects/permissions`` at Torment's first wave, when "The
+    next instant or sorcery **spell** you cast this turn can't be countered"
+    (Overmaster, ``effects/stack``) became a second caller in another family.
+    """
+    mark = stream.mark()
+    found: list[str] = []
+    while True:
+        word = stream.peek_word()
+        if word is None or _singular(word) not in CARD_TYPES:
+            break
+        found.append(_singular(word))
+        stream.advance()
+        if stream.accept_word("and", "or"):
+            continue
+        break
+    if not found or not stream.accept_word(noun):
+        stream.reset(mark)
+        return None
+    return tuple(found)
+
+
 def accept_counter_kind(stream: TokenStream) -> "GToken | None":
     """The counter's written name as its token, or None with the cursor where
     it was.

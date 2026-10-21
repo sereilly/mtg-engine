@@ -804,3 +804,31 @@ def _lower_bid_life_contest(
         "else": (),
     })
     return (OracleInstruction("sequence", "", {"steps": (auction, won)}),)
+
+
+#: The card types "the next <type> spell" may name: each one the cast path's
+#: type test (``search_filters.card_has_type``) can answer for a spell.
+_NEXT_SPELL_TYPES = frozenset({
+    "artifact", "creature", "enchantment", "instant", "sorcery",
+    "planeswalker", "battle",
+})
+
+
+def _lower_next_spell_uncounterable(
+    node: ast.NextSpellUncounterable,
+) -> tuple[OracleInstruction, ...]:
+    """``The next instant or sorcery spell you cast this turn can't be
+    countered.`` (Overmaster, Insist.) One instruction: the promise the
+    handler records, which the cast path spends and every counter asks
+    (``engine/counter_conditions.py``)."""
+    unknown = [t for t in node.card_types if t not in _NEXT_SPELL_TYPES]
+    if not node.card_types or unknown:
+        raise LoweringError(
+            f"no spell type the cast path can test: {unknown or 'none'}", node=node
+        )
+    return (
+        OracleInstruction(
+            "make_next_spell_uncounterable", "",
+            {"card_types": list(node.card_types)},
+        ),
+    )
