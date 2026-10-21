@@ -64,8 +64,8 @@ def _parse_sacrifice(stream: TokenStream, player: ast.PlayerRef) -> ast.Statemen
     # "sacrifices **a third of the creatures they control** of their choice"
     # (Pox). The fraction's noun is this production's own object phrase, so the
     # head is read here and the count built beside the subject rather than
-    # handed to `parse_amount` — the same arrangement `_parse_loses` and
-    # `_parse_discard` make, and for their reason. The definite article is
+    # handed to `parse_amount` — the same arrangement `_life.accept_life_loss`
+    # and `_parse_discard` make, and for their reason. The definite article is
     # consumed here too: the noun parser reads "creatures they control" and not
     # "the creatures they control", because everywhere else the article would be
     # a different noun phrase.

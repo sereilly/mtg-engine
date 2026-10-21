@@ -81,7 +81,6 @@ from .characteristics import (
     _parse_loses,
     _parse_has,
     _parse_has_base_pt,
-    _parse_for_each,
 )
 from .base_pt import (
     _parse_change_base_pt,
@@ -337,7 +336,6 @@ __all__ = [
     "_parse_has",
     "_parse_has_base_pt",
     "_expect_counter_kind",
-    "_parse_for_each",
     "_parse_distribute_counters",
     "_parse_put_counter",
     "_parse_move_counter",

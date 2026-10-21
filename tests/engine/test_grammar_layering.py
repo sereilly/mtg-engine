@@ -1731,9 +1731,12 @@ LOWERING_FAMILIES = [
 # rather than staying in either: two families reading it is exactly the
 # condition that makes something a floor.
 # Asymmetric like `zones`, `types`, `counter_removal` and
-# `tokens`: the parse side stays in `effects/game.py` and
-# `effects/characteristics.py`, where a life sentence is one branch of the
-# verb table each.
+# `tokens`: the parse side has no `life` *family*. The exchange and the set
+# are sentences in `effects/game.py`, and the gain and the loss have been read
+# since the Phase 0 before Torment by `effects/_life.py` — a floor rather than
+# a family, because "gains" and "loses" are each one production in
+# `effects/characteristics.py` that has read the verb before a life total is
+# the question, and a family may not call another.
 # `sequences` is the lowering-only family Mirage's wave 1 split off
 # `lowering/control_flow.py`, along the line that module's own docstring
 # already drew: it names three composers (`sequence`, `may`, `one_of`) and
@@ -2129,7 +2132,15 @@ def test_layers_only_import_downward(layers):
         # `_parse_reveal_top`, which has read "Reveal" before the run is tried,
         # and a family may not be called from another one. It reads the noun
         # parser one layer down and no sibling; nothing reads back.
-        ("effects", ("_strips", "_other_libraries", "_reveal_until"), ()),
+        #
+        # `_life` is the fourth, pre-split out of `characteristics` at the
+        # Phase 0 before Torment with that module 51 lines under the guard:
+        # CR 119.3's gain and loss, which `_parse_gains` and `_parse_loses`
+        # ask exactly where their arms sat — `_reveal_until`'s reason again,
+        # one verb and one entry point. `characteristics` is its one importer;
+        # it reads the amount, record and noun parsers one layer down and no
+        # sibling, and nothing reads back.
+        ("effects", ("_strips", "_other_libraries", "_reveal_until", "_life"), ()),
         # `_targets` joins the lowering floors at Prophecy's wave 2, when
         # `_roles` — split out of it at Mercadian Masques — first read it back:
         # a printed "another target" is planned as two roles from the
@@ -2561,6 +2572,16 @@ FAMILY_SHARED = {
     # A single-importer floor like `_strips` above. No mirror to fork:
     # `lowering/reveal.py` lowers the node in one function and has not split.
     "_reveal_until",
+    # `effects/_life`, pre-split out of `effects/characteristics.py` at the
+    # Phase 0 before Torment — a player's life total gained and lost (CR
+    # 119.3): the gain arm of `_parse_gains` and the three loss arms of
+    # `_parse_loses`. The seam is that module's own first line, "what a
+    # permanent *is*", which a life total is not; the arms were also where it
+    # had grown most since `base_pt` left it, and where Transcendence's "gain 2
+    # life for each 1 life you lost" stops. A single-importer floor like
+    # `_reveal_until` above and for its reason. The name is `lowering/life.py`'s,
+    # so the mirror re-forms on the parse side as far as a floor can.
+    "_life",
     # `_recipients` split out of `lowering/damage.py` at ULG wave 1, when that
     # module sat 24 lines under the size guard with a new counted-amount branch
     # to land. The seam is the one that module's own docstring already drew

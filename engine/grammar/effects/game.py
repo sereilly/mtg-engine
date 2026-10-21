@@ -8,7 +8,8 @@ Grouped because each is a sentence about the game state rather than about one
 permanent's characteristics, and none of them shares vocabulary with another
 family. *Losing* the game is not here, though this docstring used to list it:
 "loses the game" is one branch of ``_parse_loses`` in
-``effects/characteristics.py``, beside the life it shares a verb with.
+``effects/characteristics.py``, in front of the life readings it shares a verb
+with (which that production asks of ``effects/_life.py``).
 
 **Token creation left at Mirage's second wave**, when the token production grew
 a board-count multiplier and this module crossed the 1,000-line guard. The cut
