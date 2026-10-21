@@ -215,11 +215,42 @@ def _announce(game, card, zone: str) -> dict:
     announces X with the cast, so both casts announce :data:`_CENSUS_X` and
     :func:`_pay` prices the {X} at it.
     """
+    if _acts_on_creature_tokens(card):
+        _creature_tokens_to_act_on(game)
     keywords = _announce_targets(game, card, zone)
     cost = printed_flashback_cost(card)
     if "{X}" in (card.mana_cost or "").upper() or "{X}" in ((cost.mana if cost else "") or "").upper():
         keywords = {**keywords, "x_value": _CENSUS_X}
     return keywords
+
+
+#: "For each creature token on the battlefield, its controller creates a token
+#: that's a copy of that creature." (Parallel Evolution, Torment.) A card whose
+#: effect is about creature tokens already on the battlefield, by its printed
+#: words — the mirrored board has none.
+_ACTS_ON_CREATURE_TOKENS = re.compile(r"creature tokens? on the battlefield", re.I)
+
+
+def _acts_on_creature_tokens(card) -> bool:
+    return bool(_ACTS_ON_CREATURE_TOKENS.search(card.oracle_text or ""))
+
+
+def _creature_tokens_to_act_on(game) -> None:
+    """Each seat gets a 1/1 green Squirrel creature token, for a card that
+    acts on the creature tokens on the battlefield (Parallel Evolution).
+
+    The mirrored board holds no token, so a correct Parallel Evolution copied
+    nothing and the census read it as a card that does nothing ("resolved and
+    nothing moved") — the Alter Reality row's kind exactly: a board that
+    cannot show what the card does. Put down on both boards alike, before the
+    "before" snapshot, so the hand cast and the flashed-back one compare the
+    same thing; a token is a token by its card (``tokens.make_token_card``)."""
+    from engine.tokens import make_token_card
+
+    for seat in (0, 1):
+        game.players[seat].battlefield.append(_nosick(Permanent(card=make_token_card(
+            "Squirrel Token", 1, 1, "Creature — Squirrel", colors=("G",),
+        ))))
 
 
 def _announce_targets(game, card, zone: str) -> dict:
