@@ -7525,7 +7525,9 @@ function applyTriggerTargetPrompt(info) {
     q("promptTitle").textContent = "Choose targets";
     q("promptBody").textContent =
       `${info.card_name || "The ability"}: its triggered ability names ` +
-      `${info.up_to ? "up to " : ""}${limit} targets.`;
+      `${info.exact_targets ? "exactly " : info.up_to ? "up to "
+        : Number.isInteger(info.division_total) ? "1 to " : ""}${limit} targets` +
+      (Number.isInteger(info.division_total) ? `, dividing ${info.division_total} among them.` : ".");
     q("promptSteps").innerHTML = "<div>Action: choose them in the dialog and confirm.</div>";
     q("promptOkBtn").classList.add("hidden");
     return;
@@ -10298,6 +10300,32 @@ function renderRevealedHandPickModal(info) {
 // The defending player's graveyard, with only the positions the printed noun
 // phrase admits selectable — a graveyard is a public zone (CR 400.2), so the
 // rest of the pile is shown and marked illegal rather than hidden.
+// Where a graveyard pick sends what it picks (`destination` on the prompt),
+// as the dialog says it: "exile" for every printed exile, and "put on the
+// bottom of … library" for Gurzigost's and Anurid Scavenger's upkeep tolls
+// ("…unless you put a card from your graveyard on the bottom of your
+// library"), which this dialog called an exile — the title, the sentence and
+// the button — while the server put the cards on the library's bottom.
+function graveyardPickWords(info) {
+  if (info?.destination === "library_bottom") {
+    const whose = info.owner_seat === seat ? "your" : `${info.owner_name || "that player"}'s`;
+    return {
+      title: "Put Cards on the Bottom of a Library",
+      verb: `put on the bottom of ${whose} library`,
+      button: "Put",
+      buttonTail: " on the bottom",
+      none: "Put nothing on the bottom",
+    };
+  }
+  return {
+    title: "Exile Cards from a Graveyard",
+    verb: "exile",
+    button: "Exile",
+    buttonTail: "",
+    none: "Exile nothing",
+  };
+}
+
 function renderGraveyardExileModal(info) {
   const modal = document.getElementById("graveyardExileModal");
   if (!modal) return;
@@ -10309,11 +10337,14 @@ function renderGraveyardExileModal(info) {
   modal.classList.remove("hidden");
   const legal = new Set(info.legal_indices || []);
   const cap = Number(info.count || 0);
+  const words = graveyardPickWords(info);
+  const title = document.getElementById("graveyardExileTitle");
+  if (title) title.textContent = words.title;
   const subtitle = document.getElementById("graveyardExileSubtitle");
   if (subtitle) {
     subtitle.textContent =
-      `${info.card_name || "Choose"}: exile ${info.up_to ? "up to " : ""}${cap} ` +
-      `card(s) from ${info.owner_name || "that player"}'s graveyard, then Confirm.`;
+      `${info.card_name || "Choose"}: choose ${info.up_to ? "up to " : ""}${cap} ` +
+      `card(s) from ${info.owner_name || "that player"}'s graveyard to ${words.verb}, then Confirm.`;
   }
   const grid = document.getElementById("graveyardExileGrid");
   const confirmBtn = document.getElementById("graveyardExileConfirmBtn");
@@ -10328,8 +10359,8 @@ function renderGraveyardExileModal(info) {
     const chosen = graveyardExileSelected.size;
     confirmBtn.disabled = chosen < need;
     confirmBtn.textContent = info.up_to
-      ? (chosen === 0 ? "Exile nothing" : `Exile ${chosen} card${chosen === 1 ? "" : "s"}`)
-      : `Exile ${chosen} of ${need}`;
+      ? (chosen === 0 ? words.none : `${words.button} ${chosen} card${chosen === 1 ? "" : "s"}${words.buttonTail}`)
+      : `${words.button} ${chosen} of ${need}${words.buttonTail}`;
   };
   if (grid) {
     grid.innerHTML = (info.cards || [])
@@ -10682,16 +10713,34 @@ function severalTargetsPrompt(state = currentState) {
     const candidates = (trigger.candidates || []).filter(
       (c) => (c.kind || "permanent") === "permanent" && Number.isInteger(c.id),
     );
-    const minimum = trigger.up_to ? 0 : 1;
+    // "Exile **two** target lands" (Petradon) names exactly its count
+    // (`exact_targets`, CR 601.2c): the confirm waits for the last one, where
+    // a short answer was offered and then refused by the server.
+    const exact = !!trigger.exact_targets;
+    const minimum = exact ? limit : trigger.up_to ? 0 : 1;
+    // "Distribute three -1/-1 counters among one, two, or three target
+    // creatures" (Shambling Swarm): the division is announced with the
+    // targets (CR 601.2d), so the dialog takes a share per chosen target and
+    // the answer is `divided_targets`. A plain id list was refused for any
+    // split the server could not infer (2+1).
+    const divisionTotal = Number.isInteger(trigger.division_total) ? trigger.division_total : null;
+    // "one, two, or three target creatures" is a range, not a count.
+    const count = exact ? `exactly ${limit}`
+      : trigger.up_to ? `up to ${limit}`
+        : divisionTotal !== null ? `1 to ${limit}` : `${limit}`;
     return {
-      key: `trigger:${trigger.card_name}:${candidates.map((c) => c.id).join(",")}`,
+      key: `trigger:${trigger.card_name}:${candidates.map((c) => c.id).join(",")}:${divisionTotal ?? ""}`,
       action: "trigger_target_confirm",
       candidates,
       limit,
       minimum,
+      divisionTotal,
       subtitle: `${trigger.card_name || "The ability"}: its triggered ability names `
-        + `${trigger.up_to ? "up to " : ""}${limit} targets. `
-        + (minimum === 0 ? "Confirm with none chosen to name no target." : "Choose at least one."),
+        + `${count} targets. `
+        + (divisionTotal !== null
+          ? `Divide ${divisionTotal} among the targets you choose; each gets at least 1.`
+          : minimum === 0 ? "Confirm with none chosen to name no target."
+            : exact ? `Choose ${limit}.` : "Choose at least one."),
     };
   }
   return null;
@@ -10706,18 +10755,90 @@ function candidateOwnerLabel(ownerSeat, state = currentState) {
   return `${name || `Seat ${owner + 1}`}'s`;
 }
 
+// A divided trigger's shares, by candidate id, in the order the targets were
+// chosen (`renderSeveralTargetsModal`): re-split evenly whenever the targets
+// change, and edited one input at a time after that.
+let severalTargetsShares = new Map();
+
+// Whether the drafted division is one the server takes: every chosen target
+// at least 1 (CR 601.2d), and the shares summing to the total.
+function severalTargetsDivisionValid(prompt) {
+  if (prompt.divisionTotal === null || prompt.divisionTotal === undefined) return true;
+  const ids = [...modalModeTargetsSelected];
+  if (!ids.length) return false;
+  const shares = ids.map((id) => Number(severalTargetsShares.get(id)));
+  return shares.every((n) => Number.isInteger(n) && n >= 1)
+    && shares.reduce((sum, n) => sum + n, 0) === prompt.divisionTotal;
+}
+
+function resplitSeveralTargetsShares(prompt) {
+  severalTargetsShares = new Map();
+  if (prompt.divisionTotal === null || prompt.divisionTotal === undefined) return;
+  const ids = [...modalModeTargetsSelected];
+  if (!ids.length) return;
+  const shares = evenStartingDivision(prompt.divisionTotal, ids.length);
+  ids.forEach((id, position) => severalTargetsShares.set(id, shares[position]));
+}
+
+// The share inputs under the tiles. Rebuilt only when the chosen targets
+// change, so a state arriving mid-edit does not take the input away.
+function renderSeveralTargetsDivision(prompt, syncConfirm) {
+  const box = document.getElementById("modalModeTargetsDivision");
+  if (!box) return;
+  const divides = prompt.divisionTotal !== null && prompt.divisionTotal !== undefined;
+  box.classList.toggle("hidden", !divides);
+  if (!divides) {
+    box.innerHTML = "";
+    box.dataset.sig = "";
+    return;
+  }
+  const ids = [...modalModeTargetsSelected];
+  const remainingText = () => {
+    const assigned = ids.reduce((sum, id) => sum + (Number(severalTargetsShares.get(id)) || 0), 0);
+    const left = prompt.divisionTotal - assigned;
+    if (!ids.length) return `Choose a target to divide ${prompt.divisionTotal} among.`;
+    if (left === 0) return "Fully assigned.";
+    return left > 0 ? `${left} still to assign.` : `${-left} too many assigned.`;
+  };
+  const sig = JSON.stringify([prompt.key, ids]);
+  if (box.dataset.sig === sig) return;
+  box.dataset.sig = sig;
+  const byId = new Map(prompt.candidates.map((entry) => [entry.id, entry]));
+  box.innerHTML = ids
+    .map((id) => {
+      const entry = byId.get(id) || {};
+      return `<div class="prompt-choice-row"><label>${escapeHtml(entry.name || "Target")} `
+        + `(${escapeHtml(candidateOwnerLabel(entry.seat))}) `
+        + `<input type="number" min="1" max="${prompt.divisionTotal}" data-trigger-share="${id}" `
+        + `value="${Number(severalTargetsShares.get(id)) || 1}"></label></div>`;
+    })
+    .join("") + `<div id="modalModeTargetsDivisionRemaining">${escapeHtml(remainingText())}</div>`;
+  box.querySelectorAll("[data-trigger-share]").forEach((input) => {
+    const onEdit = () => {
+      severalTargetsShares.set(Number(input.dataset.triggerShare), Number(input.value));
+      const note = document.getElementById("modalModeTargetsDivisionRemaining");
+      if (note) note.textContent = remainingText();
+      syncConfirm();
+    };
+    input.addEventListener("input", onEdit);
+    input.addEventListener("change", onEdit);
+  });
+}
+
 function renderSeveralTargetsModal(prompt) {
   const modal = document.getElementById("modalModeTargetsModal");
   if (!modal) return;
   if (!prompt) {
     modal.classList.add("hidden");
     modalModeTargetsSelected = new Set();
+    severalTargetsShares = new Map();
     severalTargetsOpenFor = null;
     return;
   }
   if (severalTargetsOpenFor !== prompt.key) {
     severalTargetsOpenFor = prompt.key;
     modalModeTargetsSelected = new Set();
+    severalTargetsShares = new Map();
   }
   modal.classList.remove("hidden");
   const limit = prompt.limit;
@@ -10726,7 +10847,10 @@ function renderSeveralTargetsModal(prompt) {
   const list = document.getElementById("modalModeTargetsList");
   const confirmBtn = document.getElementById("modalModeTargetsConfirmBtn");
   const syncConfirm = () => {
-    if (confirmBtn) confirmBtn.disabled = modalModeTargetsSelected.size < prompt.minimum;
+    if (confirmBtn) {
+      confirmBtn.disabled = modalModeTargetsSelected.size < prompt.minimum
+        || !severalTargetsDivisionValid(prompt);
+    }
   };
   if (list) {
     list.innerHTML = prompt.candidates
@@ -10743,23 +10867,40 @@ function renderSeveralTargetsModal(prompt) {
         else if (modalModeTargetsSelected.size < limit) modalModeTargetsSelected.add(id);
         else return;
         el.classList.toggle("selected");
+        // The targets changed, so the division starts again from an even split.
+        resplitSeveralTargetsShares(prompt);
+        renderSeveralTargetsDivision(prompt, syncConfirm);
         syncConfirm();
       });
     });
   }
+  renderSeveralTargetsDivision(prompt, syncConfirm);
   syncConfirm();
   if (confirmBtn) {
     // Rebound on every render: the action is the open prompt's, and a handler
     // bound for the last prompt would answer this one with the wrong action.
     confirmBtn.onclick = async () => {
       const ids = [...modalModeTargetsSelected];
-      if (ids.length < prompt.minimum) return;
+      if (ids.length < prompt.minimum || !severalTargetsDivisionValid(prompt)) return;
+      const byId = new Map(prompt.candidates.map((entry) => [entry.id, entry]));
+      // A division is sent the way a divided spell's is: one entry per target
+      // with its share (`divided_targets`, {seat, id, amount}).
+      const divided = prompt.divisionTotal !== null && prompt.divisionTotal !== undefined
+        ? ids.map((id) => ({
+          seat: Number(byId.get(id)?.seat), id, amount: Number(severalTargetsShares.get(id)),
+        }))
+        : null;
       modalModeTargetsSelected = new Set();
+      severalTargetsShares = new Map();
       severalTargetsOpenFor = null;
       modal.classList.add("hidden");
       try {
-        // An explicit list either way: an empty one is the answer "nobody".
-        await sendAction({ seat, action: prompt.action, target_permanent_ids: ids });
+        if (divided) {
+          await sendAction({ seat, action: prompt.action, divided_targets: divided });
+        } else {
+          // An explicit list either way: an empty one is the answer "nobody".
+          await sendAction({ seat, action: prompt.action, target_permanent_ids: ids });
+        }
       } catch (e) {
         updateActionHint(e.message, true);
       }
