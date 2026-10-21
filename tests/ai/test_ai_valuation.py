@@ -494,6 +494,34 @@ def test_every_divided_card_in_the_pool_is_described(catalog):
         # the list now; `tests/ai/test_ai_policy.py` holds it on an invented
         # card.
         "Shower of Coals",
+        # Reviewed at Torment's promotion rehearsal, by running each. Two
+        # cards: one adds nothing and one is the finding.
+        #
+        # Violent Eruption is Volley of Boulders at 4: "4 damage divided as
+        # you choose among any number of targets", "opponent" off the
+        # `damage` category (derived: thresholded, not whole-board). Driven,
+        # the concentrate policy sends all 4 at the opponent's face from hand
+        # on every board tried (empty, two creatures, a Serra Angel, the
+        # opponent at 3 life), and so does its madness cast out of exile -
+        # what is new is beside the division, a cast from a zone the
+        # discard opened, which changes what the AI pays and not where it
+        # aims.
+        "Violent Eruption",
+        # Shambling Swarm is the finding, and the pool's first divided
+        # *trigger*: "When this creature dies, distribute three -1/-1
+        # counters among one, two, or three target creatures" - announced
+        # as it goes on the stack (CR 603.3d), by
+        # `Game._default_trigger_division` for a seat nobody asks. Its side
+        # is right: "opponent", off the counter's sign, as Contagion's.
+        # Its split was not. The counters come back off at the next end
+        # step, so a share is worth what it kills, and one apiece over the
+        # first three creatures offered killed nothing over a Hill Giant, a
+        # Craw Wurm, a Grizzly Bears and a Llanowar Elves; with nothing on
+        # the opponent's side the whole three landed on its controller's
+        # first creature. `ai_policy.divided_shrink_shares` (lethal shares
+        # first) and `least_harmed_permanent` answer it now;
+        # `tests/ai/test_ai_divided_trigger_shares.py` holds both.
+        "Shambling Swarm",
     }
     assert set(described) <= reviewed, sorted(set(described) - reviewed)
 

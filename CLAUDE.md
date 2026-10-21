@@ -16,9 +16,9 @@ Weatherlight (167), Tempest (335), Stronghold (143), Exodus (143),
 Urza's Saga (335), Urza's Legacy (143), Classic Sixth Edition (335),
 Urza's Destiny (143), Mercadian Masques (335), Nemesis (143), Prophecy (143),
 Invasion (335), Planeshift (143), Seventh Edition (335), Apocalypse (143),
-Odyssey (335) and Core Set 2021 (285), 5,246 unique cards, all classified as
+Odyssey (335), Torment (143) and Core Set 2021 (285), 5,388 unique cards, all classified as
 supported.
-**Thirty-three sets, and their sizes are the whole spread**: 4ED and 5ED are pure
+**Thirty-four sets, and their sizes are the whole spread**: 4ED and 5ED are pure
 reprint sets, every one of their cards already in the pool, so they are the two
 sets that ship without implementing a card, and **6ED is the third of that shape
 and the first where it is only *almost* true** — 333 of its 335 were already
@@ -165,7 +165,7 @@ Rehearsed at the wrong end before the real promotion, the prefix guard passed
 and `test_the_shipped_sets_are_in_printing_order` failed at index 20 — which is
 exactly the division of labour those two guards are documented to have, observed
 rather than assumed. Which is why
-the per-set totals sum to far more than 5,246 — they are printings (7,741 of
+the per-set totals sum to far more than 5,388 — they are printings (7,884 of
 them). Alliances was the
 first set to reach 100% with **zero name-keyed hooks**, across all 144, Visions
 is the second across all 167, **Weatherlight is the third** across all 167
@@ -230,7 +230,8 @@ three roads without telling anyone (a cost an effect collected ran no mana
 ability at all - 1,261 of 3,380 cases), and the set in a browser, where a
 person could not see a flashback price, stop an "up to" discard early, or
 answer the draw-skip prompt at all.
-Reliance is **0.9% of supported cards**, 49 of 5,246, down from 52 of 4,924 and
+Reliance is **0.9% of supported cards**, 49 of 5,388 (Torment's 142 new cards
+added none), down from 52 of 4,924 and
 from 53 of 3,715 before that —
 and Mercadian Masques is the first set in four to move the numerator, *down*:
 Food Chain is the second card to print Metamorphosis' cost-record-plus-spend-
@@ -263,7 +264,7 @@ Dark at 47.9%, Fourth Edition at 100%, Ice Age at 49.3%, Fallen Empires at
 67.6%, Homelands at 66.1%, Fifth Edition at 100%, Alliances at 43.1%, Mirage
 at 54.9%, Visions at 59.3%, Weatherlight at 59.9%, Tempest at 67.8%,
 Stronghold at 67.8% again, Exodus at 63.6%, Classic Sixth Edition at 100%,
-Urza's Destiny at 69.9%, Nemesis at 66.4%, Prophecy at 58.0%, Invasion at 66.0%, Planeshift at 65.7%, Seventh Edition at 99.4%, Apocalypse at 65.7% and Odyssey at 65.4%, and all twenty-five were promoted to `sets` once every card was, which is the role working as designed rather than a role nobody uses. 4ED is the degenerate case that shows what the role is
+Urza's Destiny at 69.9%, Nemesis at 66.4%, Prophecy at 58.0%, Invasion at 66.0%, Planeshift at 65.7%, Seventh Edition at 99.4%, Apocalypse at 65.7%, Odyssey at 65.4% and Torment at 70.6%, and all twenty-six were promoted to `sets` once every card was, which is the role working as designed rather than a role nobody uses. 4ED is the degenerate case that shows what the role is
 *for* rather than an exception to it: it entered `measured` fully supported and
 left the same day, and the ingest still paid — a guard proved itself unable to
 tell the roles apart for an all-reprint set, which is a finding only the
@@ -1980,12 +1981,12 @@ The board UI is **canvas-rendered** (`web/static/battlefield-canvas.js`).
 ## Card verification tracker
 
 `CARD_VERIFICATION.md` / `card_verification.json` track which cards have been
-manually validated in-game (754 of the 5,246 catalog cards passing — 497
+manually validated in-game (754 of the 5,388 catalog cards passing — 497
 checked in-game and 257 auto-passed — with 59 more reported `equivalent`; the
 rest — almost all of M21, Antiquities, Legends, The Dark, Ice Age, Fallen
 Empires, Homelands, Alliances, Mirage, Visions, Weatherlight, Tempest,
 Stronghold, Exodus, Urza's Saga and every set since, Invasion, Planeshift,
-Apocalypse and Odyssey included, all promoted before their in-game pass —
+Apocalypse, Odyssey and Torment included, all promoted before their in-game pass —
 have no
 recorded result yet, which SET_PLAYBOOK.md Phase 5 owns and deliberately does
 not gate promotion on; the summary at the top of the markdown is the current

@@ -4,10 +4,10 @@ Cards the engine resolves through the same code paths, differing only in values 
 
 A card whose class contains a **verified** card needs no separate manual pass: it exercises no engine path that card didn't. This is weaker than checking the card — it inherits its peer's correctness, and cannot catch a card whose data breaks a generic path.
 
-- Cards in the catalog: **5246**
-- Distinct behaviours: **4752**
-- Cards sharing a behaviour with another: **716** in **222** classes
-- Unverified cards covered by a verified peer: **194**
+- Cards in the catalog: **5388**
+- Distinct behaviours: **4889**
+- Cards sharing a behaviour with another: **723** in **224** classes
+- Unverified cards covered by a verified peer: **195**
 
 | Size | Cards |
 | --- | --- |
@@ -29,8 +29,10 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 6 | Craven Giant, Goblin Raider, Hulking Cyclops, Hulking Ogre, Ogre Taskmaster, Spineless Thug |
 | 6 | Divine Transformation, Feast of the Unicorn, Giant Strength, Hero's Resolve, **Holy Strength**, **Unholy Strength** |
 | 6 | Drowned, Metathran Zombie, Phyrexian Monitor, Restless Dead, Unworthy Dead, Walking Dead |
+| 6 | Fetid Horror, **Frozen Shade**, Hoar Shade, Looming Shade, Nantuko Shade, Primeval Shambler |
 | 5 | Adventurers' Guildhouse, Cathedral of Serra, Mountain Stronghold, Seafarer's Quay, Unholy Citadel |
 | 5 | Aerathi Berserker, Frost Giant, Hunding Gjornersen, Marhault Elsdragon, Wolverine Pack |
+| 5 | Angel of Retribution, Ekundu Griffin, Sabertooth Wyvern, Sky Spirit, Thunder Spirit |
 | 5 | Angelfire Crusader, Firescreamer, Flame Spirit, Ridgeline Rager, Storm Shaman |
 | 5 | Black Scarab, Blue Scarab, Green Scarab, Red Scarab, White Scarab |
 | 5 | **Black Ward**, **Blue Ward**, **Green Ward**, **Red Ward**, **White Ward** |
@@ -40,7 +42,6 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 5 | **Crystal Rod**, **Iron Star**, **Ivory Cup**, **Throne of Bone**, **Wooden Sphere** |
 | 5 | Dwarven Song, Heaven's Gate, Sea Kings' Blessing, Sylvan Paradise, Touch of Darkness |
 | 5 | Emerald Medallion, Jet Medallion, Pearl Medallion, Ruby Medallion, Sapphire Medallion |
-| 5 | Fetid Horror, **Frozen Shade**, Hoar Shade, Looming Shade, Primeval Shambler |
 | 5 | Hematite Talisman, Lapis Lazuli Talisman, Malachite Talisman, Nacre Talisman, Onyx Talisman |
 | 5 | **Ice Storm**, Rain of Tears, **Sinkhole**, **Stone Rain**, Winter's Grasp |
 | 5 | Rune of Protection: Black, Rune of Protection: Blue, Rune of Protection: Green, Rune of Protection: Red, Rune of Protection: White |
@@ -50,7 +51,6 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 4 | Colossal Dreadmaw, Rootbreaker Wurm, Wildwood Patrol, Yavimaya Wurm |
 | 4 | Crossbow Infantry, D'Avenant Archer, Elite Archers, Heavy Ballista |
 | 4 | **Deathlace**, **Lifelace**, **Purelace**, **Thoughtlace** |
-| 4 | Ekundu Griffin, Sabertooth Wyvern, Sky Spirit, Thunder Spirit |
 | 4 | Endoskeleton, Spirit Shield, Tawnos's Weaponry, Zelyon Sword |
 | 4 | Firefly, **Granite Gargoyle**, Hellkite Punisher, **Shivan Dragon** |
 | 4 | Goblin Chariot, Lightning Elemental, Raging Goblin, Thundering Giant |
@@ -77,6 +77,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 3 | Lone Wolf, Pride of Lions, Thorn Elemental |
 | 3 | Metathran Soldier, Phantom Warrior, Tidal Kraken |
 | 3 | Ramosian Commander, Ramosian Lieutenant, Ramosian Sergeant |
+| 3 | Staunch Defenders, Teroh's Faithful, Venerable Monk |
 | 2 | About Face, Transmutation |
 | 2 | Absolute Grace, Absolute Law |
 | 2 | Acridian, Winding Wurm |
@@ -98,6 +99,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | Azimaet Drake, Drake Hatchling |
 | 2 | **Bad Moon**, **Crusade** |
 | 2 | Balduvian Horde, Minotaur Explorer |
+| 2 | Balshan Collaborator, Dungeon Shade |
 | 2 | **Basalt Monolith**, Grim Monolith |
 | 2 | Basri's Solidarity, Titania's Boon |
 | 2 | Battle Strain, Heat of Battle |
@@ -143,6 +145,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | Elven Cache, **Regrowth** |
 | 2 | Elvish Bard, Taunting Elf |
 | 2 | Ember Beast, Mogg Flunkies |
+| 2 | Ephemeron, Skywing Aven |
 | 2 | Essence Flare, **Unstable Mutation** |
 | 2 | Execute, Slay |
 | 2 | Feral Instinct, Fevered Strength |
@@ -227,7 +230,6 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | Skulking Fugitive, Tar Pit Warrior |
 | 2 | Snow-Covered Swamp, **Swamp** |
 | 2 | Soltari Monk, Soltari Priest |
-| 2 | Staunch Defenders, Venerable Monk |
 | 2 | Stronghold Taskmaster, Urborg Shambler |
 | 2 | Talruum Minotaur, Wild Colos |
 | 2 | Torment, **Weakness** |

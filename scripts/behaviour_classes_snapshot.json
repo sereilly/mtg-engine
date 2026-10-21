@@ -252,6 +252,14 @@
     "Walking Dead"
   ],
   [
+    "Fetid Horror",
+    "Frozen Shade",
+    "Hoar Shade",
+    "Looming Shade",
+    "Nantuko Shade",
+    "Primeval Shambler"
+  ],
+  [
     "Adventurers' Guildhouse",
     "Cathedral of Serra",
     "Mountain Stronghold",
@@ -264,6 +272,13 @@
     "Hunding Gjornersen",
     "Marhault Elsdragon",
     "Wolverine Pack"
+  ],
+  [
+    "Angel of Retribution",
+    "Ekundu Griffin",
+    "Sabertooth Wyvern",
+    "Sky Spirit",
+    "Thunder Spirit"
   ],
   [
     "Angelfire Crusader",
@@ -329,13 +344,6 @@
     "Sapphire Medallion"
   ],
   [
-    "Fetid Horror",
-    "Frozen Shade",
-    "Hoar Shade",
-    "Looming Shade",
-    "Primeval Shambler"
-  ],
-  [
     "Hematite Talisman",
     "Lapis Lazuli Talisman",
     "Malachite Talisman",
@@ -392,12 +400,6 @@
     "Lifelace",
     "Purelace",
     "Thoughtlace"
-  ],
-  [
-    "Ekundu Griffin",
-    "Sabertooth Wyvern",
-    "Sky Spirit",
-    "Thunder Spirit"
   ],
   [
     "Endoskeleton",
@@ -536,6 +538,11 @@
     "Ramosian Sergeant"
   ],
   [
+    "Staunch Defenders",
+    "Teroh's Faithful",
+    "Venerable Monk"
+  ],
+  [
     "About Face",
     "Transmutation"
   ],
@@ -618,6 +625,10 @@
   [
     "Balduvian Horde",
     "Minotaur Explorer"
+  ],
+  [
+    "Balshan Collaborator",
+    "Dungeon Shade"
   ],
   [
     "Basalt Monolith",
@@ -798,6 +809,10 @@
   [
     "Ember Beast",
     "Mogg Flunkies"
+  ],
+  [
+    "Ephemeron",
+    "Skywing Aven"
   ],
   [
     "Essence Flare",
@@ -1134,10 +1149,6 @@
   [
     "Soltari Monk",
     "Soltari Priest"
-  ],
-  [
-    "Staunch Defenders",
-    "Venerable Monk"
   ],
   [
     "Stronghold Taskmaster",

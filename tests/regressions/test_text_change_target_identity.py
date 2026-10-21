@@ -16,8 +16,9 @@ at a static that is not the first permanent on its board. The recolour handler
 beside this one was moved onto ``resolve_target_permanent`` rounds ago for the
 same reason; this one was left on the slot.
 
-The census is every pool card that compiles the instruction — six — each
-announced by id at the **second** of two permanents.
+The census is every pool card that compiles the instruction — seven since
+Torment's Alter Reality — each announced by id at the **second** of two
+permanents.
 """
 
 from __future__ import annotations
@@ -66,10 +67,15 @@ def _text_changers(pool):
     )
 
 
-#: The six, pinned so a seventh has to be driven here.
+#: The seven, pinned so an eighth has to be driven here. Alter Reality (TOR)
+#: joined at Torment's promotion rehearsal: "Change the text of target spell
+#: or permanent by replacing all instances of one color word with another."
+#: and flashback {1}{U}. Driven by id at the second of two permanents from
+#: hand and by flashback, it rewrites the one it named; its "spell" half is
+#: refused at announcement, ROADMAP's "Text changes aimed at a spell".
 TEXT_CHANGERS = (
-    "Balduvian Shaman", "Crystal Spray", "Magical Hack", "Mind Bend",
-    "Sleight of Mind", "Whim of Volrath",
+    "Alter Reality", "Balduvian Shaman", "Crystal Spray", "Magical Hack",
+    "Mind Bend", "Sleight of Mind", "Whim of Volrath",
 )
 
 

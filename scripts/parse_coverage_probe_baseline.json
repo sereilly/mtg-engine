@@ -254,6 +254,13 @@
   ]
  },
  {
+  "card": "Balthor the Stout",
+  "clause": "another target barbarian creature gets +1/+0 until end of turn",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
   "card": "Barl's Cage",
   "clause": "target creature doesn't untap during its controller's next untap step",
   "ignored": [
@@ -538,10 +545,24 @@
   ]
  },
  {
+  "card": "Cephalid Vandal",
+  "clause": "put a shred counter on this creature. then mill a card for each shred counter on this creature",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
   "card": "Ceta Sanctuary",
   "clause": "if you control a red or green permanent, draw a card, then discard a card. if you control a red permanent and a green permanent, instead draw two cards, then discard a card",
   "ignored": [
    "or"
+  ]
+ },
+ {
+  "card": "Chainer, Dementia Master",
+  "clause": "exile all nightmares",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -605,6 +626,15 @@
   "card": "Cleanse",
   "clause": "destroy all black creatures",
   "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Cleansing Meditation",
+  "clause": "destroy all enchantments. if there are seven or more cards in your graveyard, instead destroy all enchantments, then return all cards in your graveyard destroyed this way to the battlefield",
+  "ignored": [
+   "all",
+   "all",
    "all"
   ]
  },
@@ -801,6 +831,13 @@
   ]
  },
  {
+  "card": "Devastating Dreams",
+  "clause": "each player sacrifices x lands of their choice. devastating dreams deals x damage to each creature",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "Diabolic Servitude",
   "clause": "exile the creature put onto the battlefield with this enchantment",
   "ignored": [
@@ -954,6 +991,13 @@
   "clause": "you may have it deal damage equal to its power to target creature. if you do, this creature assigns no combat damage this turn",
   "ignored": [
    "have"
+  ]
+ },
+ {
+  "card": "Dwell on the Past",
+  "clause": "target player shuffles up to four target cards from their graveyard into their library",
+  "ignored": [
+   "target"
   ]
  },
  {
@@ -1439,6 +1483,13 @@
   ]
  },
  {
+  "card": "Gravegouger",
+  "clause": "exile up to two target cards from a single graveyard",
+  "ignored": [
+   "target"
+  ]
+ },
+ {
   "card": "Greater Werewolf",
   "clause": "put a -0/-2 counter on each creature blocking or blocked by this creature",
   "ignored": [
@@ -1458,6 +1509,13 @@
   "clause": "tap all lands target player controls",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Gurzigost",
+  "clause": "you may have this creature assign its combat damage this turn as though it weren't blocked",
+  "ignored": [
+   "have"
   ]
  },
  {
@@ -1713,6 +1771,13 @@
   ]
  },
  {
+  "card": "Hypnox",
+  "clause": "if you cast it from your hand, exile all cards from target opponent's hand",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Icatian Lieutenant",
   "clause": "target soldier creature gets +1/+0 until end of turn",
   "ignored": [
@@ -1823,6 +1888,13 @@
   "clause": "untap all creatures",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Invigorating Falls",
+  "clause": "you gain life equal to the number of creature cards in all graveyards",
+  "ignored": [
+   "cards"
   ]
  },
  {
@@ -2121,10 +2193,24 @@
   ]
  },
  {
+  "card": "Llawan, Cephalid Empress",
+  "clause": "return all blue creatures your opponents control to their owners' hands",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Lobotomy",
   "clause": "target player reveals their hand, then you choose a card other than a basic land card from it. search that player's graveyard, hand, and library for all cards with the same name as the chosen card and exile them. then that player shuffles",
   "ignored": [
    "card"
+  ]
+ },
+ {
+  "card": "Longhorn Firebeast",
+  "clause": "any opponent may have it deal 5 damage to them. if a player does, sacrifice this creature",
+  "ignored": [
+   "have"
   ]
  },
  {
@@ -2186,6 +2272,13 @@
  {
   "card": "Magnify",
   "clause": "all creatures get +1/+1 until end of turn",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Major Teroh",
+  "clause": "exile all black creatures",
   "ignored": [
    "all"
   ]
@@ -2414,6 +2507,13 @@
  {
   "card": "Multani's Decree",
   "clause": "destroy all enchantments. you gain 2 life for each enchantment destroyed this way",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Mutilate",
+  "clause": "all creatures get -1/-1 until end of turn for each swamp you control",
   "ignored": [
    "all"
   ]
@@ -3413,6 +3513,14 @@
   ]
  },
  {
+  "card": "Shambling Swarm",
+  "clause": "distribute three -1/-1 counters among one, two, or three target creatures. for each -1/-1 counter you put on a creature this way, remove a -1/-1 counter from that creature at the beginning of the next end step",
+  "ignored": [
+   "or",
+   "target"
+  ]
+ },
+ {
   "card": "Shard Phoenix",
   "clause": "it deals 2 damage to each creature without flying",
   "ignored": [
@@ -3551,6 +3659,13 @@
   "clause": "search your library for an elf permanent card, put it onto the battlefield, then shuffle",
   "ignored": [
    "permanent"
+  ]
+ },
+ {
+  "card": "Slithery Stalker",
+  "clause": "exile target green or white creature an opponent controls",
+  "ignored": [
+   "or"
   ]
  },
  {

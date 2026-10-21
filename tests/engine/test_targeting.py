@@ -543,9 +543,16 @@ def test_the_agreement_ratchet_still_examines_the_card_that_broke_it(supported_c
         if any(_graveyard_reads(compile_card_oracle(card)))
     }
 
+    # Chainer, Dementia Master (TOR) is the sixth, reviewed at Torment's
+    # promotion rehearsal, and Coffin Queen's shape again: "{B}{B}{B}, Pay 3
+    # life: Put target creature card from a graveyard onto the battlefield
+    # under your control." on an activated ability, answered by
+    # `derive_activation_spec`. Driven: its picker offers the creature cards
+    # in both graveyards and nothing else, and a card from either returns
+    # under Chainer's controller, black and a Nightmare.
     assert widened == {
         "Hymn of Rebirth", "Necromancy", "Reanimate", "Coffin Queen",
-        "Iridescent Drake",
+        "Iridescent Drake", "Chainer, Dementia Master",
     }
 
 

@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**419 / 625 tracked rules covered (67%)** — 3122 tests, 0 unannotated.
+**419 / 625 tracked rules covered (67%)** — 3134 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -300,7 +300,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **118.6** Some objects have no mana cost. This represents an unpayable cost. An ability can also have an un... *(1 tests)*
 - [x] **118.7** What a player actually needs to do to pay a cost may be changed or reduced by effects. If the man... *(7 tests, subrules abc)*
 - [x] **118.8** Some spells and abilities have additional costs. An additional cost is a cost listed in a spell’s... *(5 tests)*
-- [x] **118.9** Some spells have alternative costs. An alternative cost is a cost listed in a spell’s text, or ap... *(27 tests, subrules abcd)*
+- [x] **118.9** Some spells have alternative costs. An alternative cost is a cost listed in a spell’s text, or ap... *(29 tests, subrules abcd)*
 - [ ] **118.10** Each payment of a cost applies to only one spell, ability, or effect. For example, a player can’t...
 - [ ] **118.11** The actions performed when paying a cost may be modified by effects. Even if they are, meaning th...
 - [x] **118.12** Some spells, activated abilities, and triggered abilities read, “[Do something]. If [a player] [d... *(5 tests, subrules a)*
@@ -489,7 +489,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **400.4** Cards with certain card types can’t enter certain zones.
 - [x] **400.5** The order of objects in a library, in a graveyard, or on the stack can’t be changed except when e... *(2 tests)*
 - [ ] **400.6** If an object would move from one zone to another, determine what event is moving the object. If t...
-- [x] **400.7** An object that moves from one zone to another becomes a new object with no memory of, or relation... *(34 tests, subrules a)*
+- [x] **400.7** An object that moves from one zone to another becomes a new object with no memory of, or relation... *(36 tests, subrules a)*
 - [ ] **400.8** If an object in the exile zone is exiled, it doesn’t change zones, but it becomes a new object th...
 - [ ] **400.9** If a face-up object in the command zone is turned face down, it becomes a new object.
 - [ ] **400.10** If an object in the command zone is put into the command zone, it doesn’t change zones, but it be...
@@ -661,9 +661,9 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 514. Cleanup Step
 
-- [x] **514.1** First, if the active player’s hand contains more cards than their maximum hand size (normally sev... *(7 tests)*
+- [x] **514.1** First, if the active player’s hand contains more cards than their maximum hand size (normally sev... *(8 tests)*
 - [x] **514.2** Second, the following actions happen simultaneously: all damage marked on permanents (including p... *(21 tests)*
-- [x] **514.3** Normally, no player receives priority during the cleanup step, so no spells can be cast and no ab... *(4 tests, subrules a)*
+- [x] **514.3** Normally, no player receives priority during the cleanup step, so no spells can be cast and no ab... *(5 tests, subrules a)*
 
 ### 601. Casting Spells
 
@@ -688,7 +688,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **603.1** Triggered abilities have a trigger condition and an effect. They are written as “[When/Whenever/A... *(3 tests, subrules b)*
 - [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(35 tests, subrules bcd)*
-- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(104 tests, subrules bcd)*
+- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(105 tests, subrules bcd)*
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(26 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(10 tests)*
 - [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(16 tests, subrules acd)*
@@ -737,7 +737,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 608. Resolving Spells and Abilities
 
 - [x] **608.1** Each time all players pass in succession, the spell or ability on top of the stack resolves. (See... *(2 tests)*
-- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(167 tests, subrules bcdhmn)*
+- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(169 tests, subrules bcdghmn)*
 - [x] **608.3** If the object that’s resolving is a permanent spell, its resolution may involve several steps. Th... *(3 tests, subrules ab)*
 
 ### 609. Effects
@@ -829,7 +829,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 616. Interaction of Replacement and/or Prevention Effects
 
-- [x] **616.1** If two or more replacement and/or prevention effects are attempting to modify the way an event af... *(52 tests, subrules efg)*
+- [x] **616.1** If two or more replacement and/or prevention effects are attempting to modify the way an event af... *(54 tests, subrules efg)*
 - [x] **616.2** A replacement or prevention effect can become applicable to an event as the result of another rep... *(1 tests)*
 
 ### 700. General
@@ -859,7 +859,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **701.6** Counter *(15 tests, subrules ab)*
 - [x] **701.7** Create *(3 tests, subrules a)*
 - [x] **701.8** Destroy *(7 tests, subrules abc)*
-- [x] **701.9** Discard *(5 tests, subrules ac)*
+- [x] **701.9** Discard *(6 tests, subrules ac)*
 - [x] **701.12** Exchange *(11 tests, subrules ab)*
 - [x] **701.13** Exile *(7 tests, subrules a)*
 - [x] **701.14** Fight *(7 tests, subrules abd)*
@@ -1019,4 +1019,5 @@ Listed rather than dropped — see `EXCLUDED` in `scripts/rules_progress.py`. A 
 
 - **702.33** Keyword Abilities (13 tests)
 - **702.34** Keyword Abilities (22 tests)
+- **702.35** Keyword Abilities (12 tests)
 - **723.5** Controlling Another Player (3 tests)

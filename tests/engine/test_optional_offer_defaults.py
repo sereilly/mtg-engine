@@ -520,6 +520,22 @@ def test_every_offer_with_a_rider_names_a_reviewed_action_kind(catalog):
         "exile_cards_from_graveyard", "gain_control_of_target",
         "source_bites_target", "steal_target_linked_to_source",
         "untap_target_permanent",
+        # Dawn of the Dead (TOR), read at its promotion rehearsal: "At the
+        # beginning of your upkeep, you may return target creature card from
+        # your graveyard to the battlefield. That creature gains haste until
+        # end of turn. Exile it at the beginning of the next end step."
+        # Targeted, so the empty cases are the two rules above - driven: with
+        # no creature card in the graveyard the trigger is removed as it is
+        # put on the stack (CR 603.3d), and with its target exiled in
+        # response it is removed at resolution (CR 608.2b), the haste and the
+        # delayed exile never armed. Both riders read the record the
+        # reanimation writes (`reanimated_permanents`), so a returned
+        # creature that dies first leaves the delayed exile nothing to find
+        # (CR 400.7). And not a self-payment: the exile at the end step is of
+        # a card already in the graveyard, Academy Rector's reasoning below,
+        # so a seat nobody asks takes the offer - driven, a hasty attacker
+        # for the turn.
+        "reanimate_creature",
         # Empty, and the rider behind it is itself a no-op — the same shape as
         # the two rows this round added, with nothing at stake. Ice Cauldron
         # grants permission over an empty pile; Flash offers a cost computed
