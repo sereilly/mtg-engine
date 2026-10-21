@@ -24,12 +24,29 @@ def _client_reads(js: str, key: str) -> bool:
     return re.search(rf'state\.{escaped}\b|state\["{escaped}"\]', js) is not None
 
 
+#: Prompts whose **server half** a wave-1 group built while the client half is
+#: the next wave's first group (a wave-1 group does not edit ``web/static/``),
+#: each with what the client must do. Not a waiver: the test beside each one
+#: fails the moment the client reads the key, so the entry is deleted with the
+#: client change rather than left behind as a blanket.
+_AWAITING_CLIENT: dict[str, str] = {
+    # Torment W1G1, madness (CR 702.35a): render the offer (card, cost, the
+    # exile slot), let the seat tap lands while it is open (``tap`` /
+    # ``activate`` answer it), open the ordinary cast dialog on the exiled
+    # card and send its fields as ``madness_cast_confirm`` with
+    # ``accept: true`` — or ``accept: false`` to decline. Ignore the exile
+    # card's ``castable_now``: no priority is held during a resolution.
+    "madness_cast": "madness_cast_confirm",
+}
+
+
 def test_every_prompt_has_a_client_renderer():
     js = APP_JS.read_text(encoding="utf-8")
     missing = sorted(
         spec.prompt_key
         for spec in CHOICE_SPECS.values()
         if not _client_reads(js, spec.prompt_key)
+        and spec.prompt_key not in _AWAITING_CLIENT
     )
     assert not missing, (
         f"prompts the client never renders: {missing} — add a getter reading "
@@ -45,8 +62,20 @@ def test_every_prompt_action_is_sent_by_the_client():
         spec.action
         for spec in CHOICE_SPECS.values()
         if spec.action and f'action: "{spec.action}"' not in js
+        and spec.action not in _AWAITING_CLIENT.values()
     )
     assert not missing, f"prompt answers the client never sends: {missing}"
+
+
+def test_a_prompt_awaiting_its_client_is_still_awaiting_it():
+    """Each ``_AWAITING_CLIENT`` entry names a registered prompt the client
+    neither reads nor answers yet. Once it does, the entry is stale and goes."""
+    js = APP_JS.read_text(encoding="utf-8")
+    keys = {spec.prompt_key: spec.action for spec in CHOICE_SPECS.values()}
+    for key, action in _AWAITING_CLIENT.items():
+        assert keys.get(key) == action, f"{key} is not a registered prompt answered by {action}"
+        assert not _client_reads(js, key), f"the client reads {key} now: delete its entry"
+        assert f'action: "{action}"' not in js, f"the client sends {action} now: delete its entry"
 
 
 def test_the_auto_pass_asks_the_server_whether_a_prompt_is_owed():

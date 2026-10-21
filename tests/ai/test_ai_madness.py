@@ -93,3 +93,40 @@ def test_a_seeded_torment_game_casts_a_card_for_its_madness_cost():
     )
     assert any("for its madness cost" in line and " cast " in line
                for line in report.log_lines)
+
+
+def _compulsion_board(hand: tuple[str, ...], islands: int) -> Game:
+    game = Game(players=[
+        PlayerState(
+            name="AI",
+            battlefield=[Permanent(card=_CARDS["Compulsion"])]
+            + [Permanent(card=_CARDS["Island"]) for _ in range(islands)],
+            hand=[_CARDS[name] for name in hand],
+            library=[_CARDS["Forest"]] * 5,
+        ),
+        PlayerState(name="Other"),
+    ])
+    game.enforce_mana_costs = True
+    return game
+
+
+def test_the_ai_discards_a_madness_card_to_its_own_outlet_and_only_one_it_can_cast():
+    """A discard cost is a trade the activation chooser does not price, so it
+    activated no "{1}{U}, Discard a card: Draw a card" at all. A card with
+    madness is the exception: discarding it offers it for its madness cost,
+    so with Obsessive Search ({U}) in hand and {1}{U}{U} to spend, Compulsion
+    is activated **naming the Search** rather than the Island before it — and
+    with only {1}{U} (the Search's cast unpayable beside the ability) it is
+    not, any more than with no madness card at all."""
+    from engine.ai_policy import choose_activation_action
+
+    game = _compulsion_board(("Island", "Obsessive Search"), islands=3)
+    action = choose_activation_action(game, 0)
+    assert action is not None and action.permanent_name == "Compulsion"
+    assert action.cost_hand_index == 1
+    assert choose_activation_action(
+        _compulsion_board(("Island", "Obsessive Search"), islands=2), 0,
+    ) is None
+    assert choose_activation_action(
+        _compulsion_board(("Island", "Island"), islands=3), 0,
+    ) is None
