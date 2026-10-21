@@ -627,13 +627,29 @@ PARSE_LAYERS = [
     # shape: what stays in the dispatcher is asked of one object — this source,
     # this spell, this flip, this turn — and everything that asks "how many?" of
     # a set is here, which the two modules' imports show rather than assert.
-    # No mirror name to reuse: `lowering/conditions.py` lowers both halves and
-    # has never split, so nothing over there is forked by taking one. Below
-    # `conditions`, which calls it and is never imported back. It sat "above
-    # `condition_clauses`, whose blocker count it reads" until that reader came
-    # across to its only caller; the two are independent now, and the order
-    # between them here asserts nothing.
+    # No mirror name to reuse: `lowering/conditions.py` lowers both halves, and
+    # neither of its own splits went along this line, so nothing over there is
+    # forked by taking one. Below `conditions`, which calls it and is never
+    # imported back. It sat "above `condition_clauses`, whose blocker count it
+    # reads" until that reader came across to its only caller; the two are
+    # independent now, and the order between them here asserts nothing.
     "condition_counts",
+    # The conditions about **colour**: the board's census by colour (the
+    # Invasion Djinns), and a colour asked of the effect's own target against
+    # it, one chosen permanent, a described set or the other target (Tsabo's
+    # Assassin, Guard Dogs, Jaded Response, Dead Ringers). Pre-split out of
+    # `condition_counts` at Torment's Phase 0, 43 lines under the guard below
+    # with threshold — a count — the spine of the set. Measured: the one closed
+    # block in that module (one caller, nothing else called, the one reader of
+    # the card-type table), the one whose subject was not a count (four of its
+    # five clauses ask a colour of one object), and the one that grew alone —
+    # one asker a set since Invasion. The name is its mirror's,
+    # `lowering/_color_conditions.py`, cut in the same commit because the same
+    # four commits grew it: the `record_conditions` arrangement. Below
+    # `conditions`, which asks it where the counted reader used to and is never
+    # imported back; independent of `condition_counts`, so the order between
+    # them here asserts nothing.
+    "color_conditions",
     "effects", "conditions",
     # The trailing clauses that share a sentence's printed subject — "…gets
     # +2/+0 **and deals 1 damage to you**", "…gains shroud **and doesn't untap
@@ -2114,7 +2130,7 @@ def test_layers_only_import_downward(layers):
         # `_discards` joins at Odyssey's wave 1: the four whole readings of a
         # discard (every matching card, the whole hand, each player, the
         # effect's own controller), which `hand` now imports as four calls.
-        ("lowering", ("_common", "_filters", "_targets", "_events", "_frozen_seats", "_deaths", "_delays", "_amounts", "_counted_damage", "_counted_pumps", "_bites", "_seats", "_sacrifices", "_chosen_members", "_records", "_sweeps", "_destroy_sweeps", "_conjuncts", "_bound_returns", "_bound_exiles", "_described_returns", "_piles", "_counter_stores", "_plus_one_counters", "_named_counters", "_blankets", "_counted_redirects", "_instance_redirects", "_prevented_riders", "_pump_categories", "_zone_categories", "_combat_categories", "_record_keys", "_record_conditions", "_record_definitions", "_cost_records", "_superlatives", "_recipients", "_collapses", "_declaration_costs", "_counted_life", "categories", "conditions", "_discards"), ()),
+        ("lowering", ("_common", "_filters", "_targets", "_events", "_frozen_seats", "_deaths", "_delays", "_amounts", "_counted_damage", "_counted_pumps", "_bites", "_seats", "_sacrifices", "_chosen_members", "_records", "_sweeps", "_destroy_sweeps", "_conjuncts", "_bound_returns", "_bound_exiles", "_described_returns", "_piles", "_counter_stores", "_plus_one_counters", "_named_counters", "_blankets", "_counted_redirects", "_instance_redirects", "_prevented_riders", "_pump_categories", "_zone_categories", "_combat_categories", "_record_keys", "_record_conditions", "_color_conditions", "_record_definitions", "_cost_records", "_superlatives", "_recipients", "_collapses", "_declaration_costs", "_counted_life", "categories", "conditions", "_discards"), ()),
         # `costs` is shared beside `_core` rather than a family: a cost is
         # charged on the way to the stack and never lowered, so it has no
         # `effects/` or `lowering/` twin to be a family of — and both
@@ -3113,6 +3129,21 @@ FAMILY_SHARED = {
     # arrangement `_bound_returns` has with `_described_returns`, and nothing
     # reads back.
     "_record_conditions",
+    # `_color_conditions` split out of `lowering/conditions.py` at Torment's
+    # Phase 0, 48 lines under the guard, in the commit that cut its parse-side
+    # mirror `color_conditions` out of `condition_counts` and along the same
+    # seam: the six branches that lower a colour asked of the effect's own
+    # target or of the board's census. Measured on both sides rather than
+    # carried across — the four commits that grew the parse block (Invasion's
+    # census, Planeshift's Guard Dogs, Apocalypse's Dead Ringers and Jaded
+    # Response) are the four that grew these branches, and the last three grew
+    # nothing else in either module but the referent question Dead Ringers
+    # needed, which stays. `CHOSEN_PERMANENT` left with them; no
+    # helper of `conditions` is read here. Each branch is a bare `isinstance`
+    # on its own node, so where `conditions` hands the node down decides
+    # nothing — it is the point the six stood. A floor for `_record_conditions`'
+    # reason: `conditions` is its only reader, and nothing reads back.
+    "_color_conditions",
     # `_record_definitions` pre-split out of `lowering/where_x.py` at the Phase 0
     # before Odyssey, 35 lines under the guard with at least four of the wave's
     # nine groups due to add a "where X is …" definition. It is the entry
