@@ -307,8 +307,11 @@ def test_the_pile_a_seat_denies_is_not_its_own_unless_there_is_no_other():
 def test_the_cards_their_owner_could_still_cast_go_first(set_pool):
     """Firebolt in a graveyard is a spell its owner still holds (CR 702.34a).
     The pick a seat nobody asks makes out of **another** seat's pile takes it
-    before the cards in front of it; a pile with no flashback card, and the
-    seat's own pile, are taken in pile order as they always were.
+    before the cards in front of it; a pile with no flashback card is taken in
+    pile order as it always was. The seat's **own** pile is a price, and gives
+    the least valuable up first — the Firebolt last of all
+    (``ai_valuation.graveyard_price_order``, Torment's W2G3; it was pile
+    order).
 
     The prompt is armed by hand, so this is about the default and not about
     which card's road reaches it."""
@@ -337,7 +340,7 @@ def test_the_cards_their_owner_could_still_cast_go_first(set_pool):
         return sorted(card.name for card in game.players[owner_seat].exile)
 
     assert pick(1) == ["Firebolt", "Grizzly Bears", "Hill Giant"]
-    assert pick(0) == ["Craw Wurm", "Grizzly Bears", "Hill Giant"]
+    assert pick(0) == ["Grizzly Bears", "Hill Giant", "Scryb Sprites"]
     game = rig(None, 0, yards={"AI": [], "Opp": list(pile)})
     assert graveyard_denial_order(game, 1, [0, 1, 2, 3, 4]) == [4, 0, 1, 2, 3]
     assert graveyard_denial_order(game, 1, [0, 1]) == [0, 1]

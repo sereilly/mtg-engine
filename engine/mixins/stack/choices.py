@@ -7313,8 +7313,16 @@ class PendingChoicesMixin:
         One such weight, for another seat's pile: the cards their owner could
         still cast from there go first (``ai_valuation.graveyard_denial_order``
         — a flashback card is a spell that seat still holds). A pile with none
-        is taken in pile order exactly as before, and the seat's own pile is
-        never reordered.
+        is taken in pile order exactly as before.
+
+        And its mirror for the seat's **own** pile, where every pick in the
+        pool is a price or a forced loss — an offer's ("any player may exile a
+        card from their graveyard", Carrion Rats), a toll's (Rotting Giant,
+        Gurzigost's bottom of the library), an "if you do" (Ichorid), a
+        replacement's (Nefarious Lich), an upkeep's (Decaying Soil): the least
+        valuable first (``ai_valuation.graveyard_price_order``). Pile order
+        gave up whatever sat at the bottom, a flashback spell as soon as a
+        land (Torment's W2G3).
         """
         live = self.live_graveyard_exile_candidates(choice)
         owner_index = int(choice.data["owner_index"])
@@ -7322,6 +7330,10 @@ class PendingChoicesMixin:
             from ...ai_valuation import graveyard_denial_order
 
             live = graveyard_denial_order(self, owner_index, live)
+        else:
+            from ...ai_valuation import graveyard_price_order
+
+            live = graveyard_price_order(self, owner_index, live)
         wanted = self._how_many_graveyard_cards(choice)
         if not self._resolve_graveyard_exile_pick(choice, live[:wanted]):
             self._record_graveyard_exile(choice, [])

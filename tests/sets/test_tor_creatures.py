@@ -1245,7 +1245,10 @@ def test_w1g4_carrion_rats_an_opponent_exiles_from_their_graveyard(set_pool):
     game, _rats = _w1g4_carrion_attack(set_pool, "Carrion Rats", mine=pile, theirs=pile)
 
     assert game.players[1].life == 20
-    assert _w1g4_names(game.players[1].exile) == ["Giant Growth"]
+    # The least valuable card of the four (W2G3: an own-pile price is paid
+    # with ``ai_valuation.graveyard_price_order``); pile order gave up the
+    # Giant Growth, the bottom card.
+    assert _w1g4_names(game.players[1].exile) == ["Swamp"]
     assert game.players[0].exile == []
     assert any("declined Carrion Rats" in line for line in game.log)
 

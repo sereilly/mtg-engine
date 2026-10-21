@@ -4479,7 +4479,10 @@ class SpellCastingMixin:
             # each ``pop`` takes exactly one copy.
             #
             # A cast that named no set takes the top of the pile down, the
-            # deterministic pick every unnamed cost here has.
+            # deterministic pick every unnamed cost here has — least valuable
+            # first where the cards are a plain price
+            # (``ai_valuation.graveyard_price_order``): Haunting Misery and
+            # Skeletal Scrying read how many went, not which.
             if cost.exile_graveyard_filter is not None:
                 owed = cost.exiled_from_graveyard(x_value)
                 if cost_graveyard_indices is not None:
@@ -4511,7 +4514,16 @@ class SpellCastingMixin:
                     )
                     if not candidates:
                         break  # gated above; a pile that changed since is a no-op
+                    from ...ai_valuation import (graveyard_price_order,
+                                                 reads_what_its_cost_exiled)
+
                     index = candidates[-1]
+                    if not reads_what_its_cost_exiled(
+                        compile_card_oracle(card).instructions
+                    ):
+                        index = graveyard_price_order(
+                            self, caster_index, list(reversed(candidates)),
+                        )[0]
                     paid = caster.graveyard.pop(index)
                     caster.exile.append(paid)
                     self.log.append(

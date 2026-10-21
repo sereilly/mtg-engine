@@ -491,10 +491,13 @@ def test_w1g5_nefarious_lich_turns_damage_into_cards_exiled_from_its_controllers
     assert game.cast_from_hand(1, "Lightning Bolt", target_player_index=0).supported
     _w1g5_resolve_stack(game)
     assert alice.life == 20
+    # Torment's W2G3: a price out of a seat's own pile is its least valuable
+    # cards (``ai_valuation.graveyard_price_order``) — it was the first three
+    # in pile order, the Grizzly Bears and the Hill Giant among them.
     assert sorted(card.name for card in alice.exile) == [
-        "Forest", "Grizzly Bears", "Hill Giant",
-    ], "a seat nobody asks gives up the first three in pile order"
-    assert [card.name for card in alice.graveyard] == ["Sol Ring", "Island"]
+        "Forest", "Island", "Sol Ring",
+    ], "a seat nobody asks gives up the least valuable three"
+    assert [card.name for card in alice.graveyard] == ["Grizzly Bears", "Hill Giant"]
     assert not alice.lost
 
     assert _w1g5_dealt(game, bob, 3, catalog_by_name["Lightning Bolt"], 1) == 3

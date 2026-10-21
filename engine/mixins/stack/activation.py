@@ -1984,6 +1984,8 @@ class AbilityActivationMixin:
                 permanent.card.name, False, "unsupported", named_cost_refusal
             )
         if ability.cost.exile_filter is not None:
+            from ...ai_valuation import reads_what_its_cost_exiled
+
             exile_cost_choice = self._choose_exile_cost(
                 ability.cost, controller, controller_index, permanent,
                 # A card from hand (Cadaverous Bloom) is named where every
@@ -1999,6 +2001,9 @@ class AbilityActivationMixin:
                     (graveyard_target_before_cost.seat, target_permanent_index)
                     if graveyard_target_before_cost is not None else None
                 ),
+                # A plain price unless the effect reads what was exiled
+                # (Necropolis' "the exiled card's mana value").
+                price=not reads_what_its_cost_exiled((ability.instruction,)),
             )
             if exile_cost_choice is None:
                 details = (
@@ -3399,6 +3404,7 @@ class AbilityActivationMixin:
         self, cost, controller, controller_index: int, permanent,
         cost_permanent_index, cost_permanent_ids=None,
         cost_graveyard_indices=None, spare_graveyard_slot=None,
+        price: bool = False,
     ) -> "tuple | None":
         """What an "Exile <noun phrase>" activation cost will eat, chosen and
         **not yet paid** — or None when nothing in the named zone could pay,
@@ -3425,7 +3431,12 @@ class AbilityActivationMixin:
 
         The named choice is honoured where it is legal and otherwise the first
         eligible object is taken, which is what every other cost payment in this
-        file does for a non-interactive seat.
+        file does for a non-interactive seat. *price* says the cards out of the
+        payer's own graveyard are a plain payment — the effect does not read
+        which they were (``ai_valuation.reads_what_its_cost_exiled``) — and then
+        "first" is the least valuable (``ai_valuation.graveyard_price_order``):
+        Grim Lavamancer gave up the bottom two cards of its pile, a flashback
+        spell as soon as a land.
         """
         described = cost.exile_filter or {}
         # "Exile **any number of** cards from your graveyard" (Painbringer):
@@ -3520,6 +3531,12 @@ class AbilityActivationMixin:
                 # lets the cost be paid with it, and the ability then has no
                 # legal target (CR 608.2b).
                 default_order = slots
+                if price and pile is controller:
+                    from ...ai_valuation import graveyard_price_order
+
+                    default_order = graveyard_price_order(
+                        self, controller_index, slots,
+                    )
                 if (
                     spare_graveyard_slot is not None
                     and pile is self.players[spare_graveyard_slot[0]]

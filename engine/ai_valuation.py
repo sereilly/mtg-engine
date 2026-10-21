@@ -4719,6 +4719,72 @@ def graveyard_denial_order(game, owner_seat: int, slots) -> list:
     )
 
 
+def graveyard_price_order(game, owner_seat: int, slots) -> list:
+    """*slots* — positions in *owner_seat*'s own graveyard that seat is giving
+    up **as a price** — least valuable first.
+
+    :func:`graveyard_denial_order` read the other way round, because it is the
+    same question asked by the card's owner: a card its owner could still
+    **cast from there** (flashback, CR 702.34a — printed, or granted by
+    Recoup) is a spell that seat still holds, so it goes last. Among the rest,
+    mana value, the one ranking every card in the pool answers (the reading
+    Forgotten Lore's default gives the pile an opponent picks from): a land
+    goes before a spell and a cheap spell before a dear one. Ties keep pile
+    order, so a seed that met none of this replays as it did.
+
+    For every pick out of a seat's own pile whose cards are a payment and not
+    what the effect then reads: an offer's or a toll's price ("any player may
+    exile a card from their graveyard", Carrion Rats; Gurzigost's "unless you
+    put two cards from your graveyard on the bottom"), a replacement's (Nefarious
+    Lich), an activation cost (Grim Lavamancer) and a spell's additional cost
+    (Haunting Misery). The defaults took the pile in order, so the price was
+    whatever sat at the bottom — a flashback spell as soon as a land.
+    """
+    from .flashback import has_flashback
+
+    pile = game.players[owner_seat].graveyard
+
+    def worth(slot) -> tuple:
+        if not (isinstance(slot, int) and 0 <= slot < len(pile)):
+            return (1, 0.0)
+        card = pile[slot]
+        castable = has_flashback(card, game=game, owner_seat=owner_seat)
+        return (1 if castable else 0, float(getattr(card, "cmc", 0) or 0))
+
+    return sorted(slots, key=worth)
+
+
+#: The record keys through which an effect reads **which** cards its own cost
+#: exiled: a characteristic of the exiled card ("put X +1/+1 counters, where X
+#: is the exiled card's mana value", Necropolis) or a condition on it. The
+#: count alone (``cost_exiled_count``, Painbringer) is not on the list — any
+#: cards make the same count.
+_COST_EXILE_READERS = frozenset({
+    "cost_exile_characteristic", "exiled_for_cost", "exiled_set_for_cost",
+})
+
+
+def reads_what_its_cost_exiled(instructions) -> bool:
+    """Whether a step of *instructions* reads which cards its own cost exiled
+    — so the cards an exile cost takes are not a plain price and
+    :func:`graveyard_price_order` must not choose them (the effect wants the
+    dearest, not the cheapest)."""
+    def mentions(value) -> bool:
+        if isinstance(value, str):
+            return value in _COST_EXILE_READERS
+        if isinstance(value, dict):
+            return any(
+                key in _COST_EXILE_READERS or mentions(item)
+                for key, item in value.items()
+            )
+        if isinstance(value, (list, tuple)):
+            return any(mentions(item) for item in value)
+        payload = getattr(value, "payload", None)
+        return isinstance(payload, dict) and mentions(payload)
+
+    return mentions(tuple(instructions or ()))
+
+
 def _walk_program(program):
     """Every instruction on a program, wrappers opened."""
     def walk(instructions):
@@ -4783,6 +4849,8 @@ __all__ = [
     "forget_damage_history",
     "untap_for_the_next_turn",
     "graveyard_denial_order",
+    "graveyard_price_order",
+    "reads_what_its_cost_exiled",
     "hand_entry_steps",
     "hand_waiver",
     "harms_its_own_source",
