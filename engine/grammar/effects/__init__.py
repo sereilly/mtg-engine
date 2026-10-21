@@ -56,7 +56,7 @@ from .prevention import (
 from .redirection import (
     _parse_damage_becomes_counter_removal,
     _parse_damage_redirect,
-    _parse_double_combat_damage,
+    _parse_turn_damage_replacement,
     _parse_optional_damage_redirect,
 )
 from .tapping import (
@@ -177,6 +177,7 @@ from .cards import (
     _parse_reveal_hand,
     _parse_reveal_hand_and_choose,
     parse_put_milled_card_onto_battlefield,
+    parse_turn_draw_replacement,
 )
 # CR 601.3's permission sentences, split off `cards` at the size guard under
 # the name `lowering/permissions.py` has carried since Alliances. The two names
@@ -324,7 +325,7 @@ __all__ = [
     "_parse_chosen_source_next_damage",
     "_parse_damage_becomes_counter_removal",
     "_parse_damage_redirect",
-    "_parse_double_combat_damage",
+    "_parse_turn_damage_replacement",
     "_parse_optional_damage_redirect",
     "_parse_damage_cant_be_prevented",
     "parse_source_damage_lock",
@@ -431,6 +432,7 @@ __all__ = [
     "_parse_tapped_lands_produce_chosen",
     "_parse_tapper_produces_instead",
     "parse_turn_mana_change",
+    "parse_turn_draw_replacement",
     "_parse_spend_mana_as_though",
     "_parse_double",
     "_parse_switch_pt",

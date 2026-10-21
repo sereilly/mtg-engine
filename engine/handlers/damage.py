@@ -3335,3 +3335,51 @@ def grant_damage_riders_until_eot(game: Game, instruction: OracleInstruction, co
             + " and ".join(granted)
         )
     return True, "resolved"
+
+
+@effect_handler("arm_turn_damage_replacement")
+def arm_turn_damage_replacement(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"If any source would deal 1 or more damage to a permanent or player this
+    turn, it deals 2 damage to that permanent or player instead." (Equal
+    Treatment.) "If a creature would deal combat damage to a creature this
+    turn, it deals double that damage to that creature instead." (Blind Fury.)
+
+    A CR 614 replacement armed by a *resolving spell*, so there is no permanent
+    for an interceptor to read and the effect is recorded on its controller's
+    seat (``engine/turn_replacements.py``) with the turn as its lifetime; the
+    interceptors in ``engine/replacements.py`` read the record and the cleanup
+    step's one sweep ends it. Every printed narrowing rides the record, so the
+    interceptor tests what the card said rather than what one card says.
+
+    Two resolutions arm two records — two effects (CR 614.5) — which is what
+    makes two Blind Furies quadruple the damage.
+    """
+    from ..turn_replacements import DAMAGE, TurnReplacement, arm_turn_replacement
+
+    payload = instruction.payload
+    record = arm_turn_replacement(game, TurnReplacement(
+        seat=game.players.index(context.caster),
+        event=DAMAGE,
+        source_name=getattr(context.card, "name", None),
+        combat_only=bool(payload.get("combat_only")),
+        source_creature=bool(payload.get("source_creature")),
+        recipient_creature=bool(payload.get("recipient_creature")),
+        at_least=int(payload.get("at_least", 1) or 1),
+        multiplier=int(payload.get("multiplier", 1) or 1),
+        becomes=(
+            int(payload["becomes"]) if payload.get("becomes") is not None else None
+        ),
+    ))
+    what = (
+        f"becomes {record.becomes}" if record.becomes is not None
+        else f"is multiplied by {record.multiplier}"
+    )
+    game.log.append(
+        f"{context.card.name}: this turn, "
+        + ("combat " if record.combat_only else "")
+        + "damage "
+        + ("dealt by a creature " if record.source_creature else "")
+        + ("to a creature " if record.recipient_creature else "")
+        + what
+    )
+    return True, "resolved"

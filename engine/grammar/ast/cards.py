@@ -846,3 +846,21 @@ class RandomGraveyardCardFate:
     ``card_type`` is the printed test; the two destinations are fixed words.
     """
     card_type: str
+
+
+@dataclass(frozen=True)
+class TurnDrawReplacement:
+    """"Until end of turn, if target player would draw a card, instead that
+    player skips that draw and you draw a card." (Plagiarize.)
+
+    A CR 614 replacement over a *draw* that a resolving spell creates for the
+    turn: the draw-event twin of :class:`TurnDamageReplacement`, recorded the
+    same way (``engine/turn_replacements.py``). ``player`` is whose draws it
+    takes — the chosen target, so the lowering describes it for the picker —
+    and the substitute is fixed by the production: the effect's controller
+    draws one card instead, a draw this same effect may not replace again
+    (CR 614.5). The window is required; the record only a sweep ends.
+    """
+
+    player: PlayerRef
+    duration: Duration

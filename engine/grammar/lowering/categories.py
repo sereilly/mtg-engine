@@ -440,10 +440,13 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "double_next_damage_from_chosen_source": "damage",
     "redirect_damage_from_target_spell_until_eot": "damage",
     # "…it deals **double** that damage to that creature instead" (Blind
-    # Fury). The third half of a damage event a CR 614 replacement can
-    # change, beside the recipient above and the prevention elsewhere:
-    # categorised with the damage it multiplies.
-    "double_combat_damage_until_eot": "damage",
+    # Fury), "…it deals **2** damage to that permanent or player instead"
+    # (Equal Treatment). The third half of a damage event a CR 614
+    # replacement can change, beside the recipient above and the prevention
+    # elsewhere: categorised with the damage it changes. It was
+    # ``double_combat_damage_until_eot``, a kind with Blind Fury's one shape
+    # in its name.
+    "arm_turn_damage_replacement": "damage",
     # The class-scoped, optional one (Blood of the Martyr). Same category
     # for the same reason: what it moves is damage, and being optional and
     # being about a class are payload differences.

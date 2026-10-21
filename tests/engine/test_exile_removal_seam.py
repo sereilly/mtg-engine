@@ -413,6 +413,14 @@ _COMPUTED_ATTRIBUTE_WRITES: dict[str, str] = {
     "engine/shields.py::shields_on": (
         "the shield collection's attribute on a recipient, not a zone."
     ),
+    "engine/turn_replacements.py::turn_replacements_on": (
+        "the turn-replacement collection's attribute on a player (W1G7, TOR), "
+        "not a zone — the shape of the three collections above."
+    ),
+    "engine/turn_replacements.py::arm_turn_replacement": (
+        "the per-seat count that keys each turn replacement (CR 614.5), an "
+        "integer attribute on a player, not a zone."
+    ),
     "engine/late_modules.py::__getattr__": (
         "a submodule of the engine package, kept on the LateModules "
         "instance it was read through: never a zone, a game or a player."

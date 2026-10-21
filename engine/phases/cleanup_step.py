@@ -33,6 +33,7 @@ from ..mana_spending import clear_turn_permissions as clear_turn_mana_spending
 from ..library_top import clear_reveal_grants
 from ..shields import END_OF_TURN, clear_shields
 from ..text_changes import end_until_eot_text_changes
+from ..turn_replacements import clear_turn_replacements
 from ..pt import remove_temporary_pt
 from ..turn_state import stamped_turn_has_passed
 
@@ -138,10 +139,6 @@ class CleanupStepMixin:
         # anywhere else, so every turn-bounded record ends in one place.
         self.expire_stamped_phase_skips()
         self.combat_damage_prevented_until_eot = False
-        # "…this turn" (Blind Fury). Cleared here and **not** at the end of
-        # combat, unlike the Fog flag above: the sentence names the turn, so a
-        # second combat phase is still doubled.
-        self.combat_damage_doubled_between_creatures.clear()
         self.combat_damage_prevented_for = []
         self.combat_damage_prevented_except_from = []
         # CR 603.7b: a delayed trigger scoped to "this turn" that has not fired
@@ -198,6 +195,11 @@ class CleanupStepMixin:
             # CR 614.9's redirects expire with the turn for the same reason and
             # by the same one sweep (engine/damage_redirects.py).
             clear_redirects(player)
+            # …and so do the replacements a resolving spell armed for the turn
+            # (Blind Fury, Equal Treatment, Plagiarize — CR 514.2), one sweep
+            # over the record rather than a line per card: not at the end of
+            # combat, because each sentence names the turn.
+            clear_turn_replacements(player)
             # "Until end of turn, if you tap a land you control for mana, it
             # produces {U} instead of any other type." (Deep Water.) A CR 611.2
             # swap with a printed window, and it expires by the same one sweep

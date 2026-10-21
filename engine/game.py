@@ -177,23 +177,10 @@ class Game(
     skip_phase_counts: dict[object, int] = field(default_factory=dict)
     skip_step_counts: dict[object, int] = field(default_factory=dict)
     combat_damage_prevented_until_eot: bool = False
-    # "If a creature would deal combat damage to a creature this turn, it deals
-    # **double** that damage to that creature instead." (Blind Fury.) A CR 614
-    # replacement armed by a resolving *spell* rather than derived from a
-    # permanent, which is why it is a record here and not a static the
-    # interceptor reads off a board: there is no permanent to read, and by the
-    # time a blocker connects the spell is a card in a graveyard.
-    #
-    # A **list** rather than a flag, for `_damage_multiplier`'s stated reason
-    # one file over: two copies are two effects at the same order, so applying
-    # them together is exactly the sequence CR 616.1's default choice produces
-    # and the doubling squares. The entries are the card names, for the log.
-    #
-    # Cleared at the cleanup step alone. The sentence says "this turn", not
-    # "this combat", so a second combat phase is still covered — which is the
-    # difference from the Fog flag above it, and the reason the two are not one
-    # sweep.
-    combat_damage_doubled_between_creatures: list[str] = field(default_factory=list)
+    # Blind Fury's "this turn" doubling was a list here, cleared by a line of
+    # its own in the cleanup step. It is a record on its caster's seat now,
+    # beside Equal Treatment's and Plagiarize's (``engine/turn_replacements.py``),
+    # and the cleanup step's one sweep ends all three.
     # "Prevent all combat damage that would be dealt this turn **to Dogs you
     # control**." (Pack Leader.) The scoped twin of the flag above, and a list
     # rather than a flag because each entry carries the noun phrase it protects

@@ -286,6 +286,11 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # gate walks into it for the same reason: what the line touches is
     # what the armed effect touches.
     "arm_draw_replacement": "zones",
+    # "Until end of turn, if target player would draw a card, instead that
+    # player skips that draw and you draw a card." (Plagiarize.) A draw
+    # replacement like the one above, for the turn rather than once, and in
+    # the family of the draws it takes.
+    "arm_turn_draw_replacement": "zones",
     # Forgotten Lore: an opponent picks out of your graveyard, again for
     # each payment, and the pick the loop stopped on is the one you keep.
     "repeated_graveyard_pick": "zones",

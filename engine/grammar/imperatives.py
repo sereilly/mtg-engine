@@ -46,7 +46,7 @@ from .effects import (
     parse_land_type_swap,
     _parse_damage_becomes_counter_removal,
     _parse_damage_redirect,
-    _parse_double_combat_damage,
+    _parse_turn_damage_replacement,
     _parse_damage_cant_be_prevented,
     _parse_coin_flip_stakes_loop,
     parse_mutual_control_of_sets,
@@ -206,7 +206,7 @@ def parse_imperative(
     # subject-verb reader below would take "a creature" for one and fail on the
     # modal — the same reason the redirect above and the lock below are read
     # here. Refuses without consuming.
-    doubled = _parse_double_combat_damage(stream)
+    doubled = _parse_turn_damage_replacement(stream)
     if doubled is not None:
         return doubled
     # "Damage that would be dealt to that creature this turn can't be prevented
