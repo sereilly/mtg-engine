@@ -30,12 +30,22 @@ its first caller, which is the reading of "incidental home" this module's second
 paragraph already records — and `postmodifiers` was eleven lines under the
 thousand-line guard with a new noun phrase due to land on it. That branch is
 `with_clauses`' now, and so is the import.
+
+**A sixth came down out of `amounts` at Torment's Phase 0**, by the rule that
+paragraph states: ``accept_counter_kind`` reads one token — CR 122.1's open
+name for a counter — and touches no filter, no draft and no quantity. It had
+been parked in `amounts` because that module is unlayered, on the claim that no
+layered home could serve its four callers at four layers. This one does, and it
+already held the fifth copy of the same reading, in ``_parse_entering_counters``
+below, written out by hand because the canonical one was out of reach. Its
+callers (`with_clauses`, `phrases`, `condition_clauses`, `prevented_riders` and
+`amounts` itself) import it from here, and nothing re-exports it.
 """
 
 from __future__ import annotations
 
 from . import ast
-from .lexer import PT, SELF, WORD
+from .lexer import GToken, PT, SELF, WORD
 from .stream import TokenStream
 from .vocabulary import (CARD_TYPES, KEYWORD_INDEX, NUMBER_WORDS,
                          match_longest, singular as _singular)
@@ -228,6 +238,45 @@ def _parse_keyword_list(stream: TokenStream) -> tuple[str, ...]:
     if not keywords:
         raise stream.error("expected a keyword ability")
     return tuple(keywords)
+
+
+def accept_counter_kind(stream: TokenStream) -> "GToken | None":
+    """The counter's written name as its token, or None with the cursor where
+    it was.
+
+    **CR 122.1's open key space, read in one place.** A counter's kind is
+    whatever word the card invented ("bounty", "corpse", "wind", "mire") *or* a
+    P/T token, which the lexer gives its own kind — and "counter"/"counters"
+    itself is never the kind, which is what stops a bare "put a counter on it"
+    from inventing a counter called "counter".
+
+    Written once because the reading was **four** productions in four modules
+    by the time a fifth wanted it: ``phrases._expect_counter_kind`` (the same
+    question, raising instead of declining),
+    ``condition_clauses._accept_counter_kind``, the inline form inside
+    ``amounts.accept_counters_on_source``, and the noun-phrase postmodifier
+    "…with a <kind> counter on it". Each was correct when written and each was
+    a place the next kind of counter could be forgotten.
+
+    **Here since Torment's Phase 0**, and the sentence that kept it in
+    ``amounts`` for five sets was wrong when it was written: it said the
+    callers "sit at four different layers, so no layered home could serve them
+    all". This module is that home. It sits under every one of them — and
+    under ``amounts``, which reads it for its three counter counts — and the
+    reader needs nothing but the stream and the lexer's two token kinds, so
+    nothing above can reach back down into it.
+
+    ``+1/+0`` is the reason it is not ``peek_word``: the lexer gives a P/T its
+    own token kind, so a word-only reader silently refused "three or more
+    **+1/+0** counters" while its "**echo** counters" twin worked.
+    """
+    token = stream.peek()
+    if token is None or token.kind not in (PT, WORD):
+        return None
+    if token.is_word("counter", "counters"):
+        return None
+    stream.advance()
+    return token
 
 
 def _parse_entering_counters(

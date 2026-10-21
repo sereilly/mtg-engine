@@ -29,9 +29,8 @@ clause's only caller. This module is no longer read by either.
 from __future__ import annotations
 
 from . import ast
-from .amounts import accept_counter_kind
 from .lexer import PT
-from .readers import accept_source_reference
+from .readers import accept_counter_kind, accept_source_reference
 from .stream import TokenStream
 from .vocabulary import CARD_TYPES, NUMBER_WORDS
 
@@ -160,14 +159,14 @@ def _accept_counter_kind(stream: TokenStream) -> str | None:
     A **P/T token or a word**, because CR 122.1a spells one kind with symbols
     and CR 122.1 lets the rest have any name.
 
-    Two lines, because the reading is now ``amounts.accept_counter_kind`` and
+    Two lines, because the reading is now ``readers.accept_counter_kind`` and
     it used to be four productions in four modules. This copy was written out
     rather than imported "because a condition declines where that one raises" —
     a real difference from ``phrases._expect_counter_kind``, and the wrong one
     to settle by copying the *reader*: declining and raising are one accept plus
     what its caller does with a None, and the copy meant a counter kind could be
-    admitted in one module and refused in another. ``amounts`` is unlayered, so
-    a condition may read it.
+    admitted in one module and refused in another. ``readers`` sits below every
+    parse layer, so a condition may read it.
     """
     token = accept_counter_kind(stream)
     return None if token is None else token.text

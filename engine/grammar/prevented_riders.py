@@ -18,22 +18,23 @@ what the coupling would buy is worse than the import. This is deliberately
 card may carry depend on which shield printed them, and the module it moved out
 of says so twice.
 
-**Not ``records``, and the reason is a cycle rather than a taxonomy.** The
-subject fits at first reading — "the damage prevented this way" names a record,
-and ``records._parse_for_each_this_way`` already reads Temper's leading half —
-but every production in that module answers "how many?" with an ``Amount``,
-where this one returns a whole rider node. And the mechanical half is decisive:
-``amounts.py`` imports ``records`` at module level, so reading
-``amounts.accept_counter_kind`` from inside ``records`` would close exactly the
-import cycle that module's split was taken to remove.
+**Not ``records``.** The subject fits at first reading — "the damage prevented
+this way" names a record, and ``records._parse_for_each_this_way`` already
+reads Temper's leading half — but every production in that module answers "how
+many?" with an ``Amount``, where this one returns a whole rider node. There was
+a mechanical half as well, and it is the one that has gone: ``amounts.py``
+imports ``records`` at module level, so reading ``accept_counter_kind`` from
+inside ``records`` would have closed the import cycle that module's split was
+taken to remove — while the reader lived in ``amounts``. It came down to
+``readers`` at Torment's Phase 0, below both, so what keeps this out of
+``records`` now is the taxonomy alone.
 
 Above ``records`` and ``readers``, which it reads and which never read it back,
 and below every family that calls it.
 """
 
 from . import ast
-from .amounts import accept_counter_kind
-from .readers import accept_source_reference
+from .readers import accept_counter_kind, accept_source_reference
 from .records import _parse_for_each_this_way
 from .stream import TokenStream
 from .vocabulary import COLOR_WORDS

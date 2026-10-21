@@ -27,7 +27,7 @@ holding two things:
   are named below.
 * The imports divide the same way. Only this half read ``phrases``,
   ``seat_records``, the colour table and the tokenizer; only the other half
-  reads ``amounts.accept_counter_kind``, the P/T token and the card-type table.
+  reads ``readers.accept_counter_kind``, the P/T token and the card-type table.
 * No function in either half calls one in the other.
 
 It is also the half that **grows with the pool**. Of the seventeen commits that

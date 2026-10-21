@@ -4,6 +4,14 @@ The legacy rules re-derived quantities inline in every regex, and used a
 lenient number parse that turned an unrecognized word into a silent ``0``
 ("deals <n> damage" with an unparsed n dealt nothing). Quantities parse in one
 place here and an unknown quantity word is an error, not a zero.
+
+**Two pieces left at Torment's Phase 0**, each for a module whose stated
+subject already named it. The counter-count *bounds* went to ``bounds``, whose
+docstring had been calling them its neighbours since Urza's Saga. The
+counter-*kind* reader went to ``readers``, which sits under every one of its
+callers, where the claim that kept it here said no layered home could. What
+stays is quantities: a number, X, a fraction, a count (of objects, or of the
+counters on one), and the back-references "equal to …" reads.
 """
 
 from __future__ import annotations
@@ -13,7 +21,7 @@ from ..oracle_types import (LIFE_LOST_THIS_WAY, MANA_PAID_BY_SEAT,
                             SECRET_NUMBERS_BY_SEAT)
 from . import ast
 from .errors import GrammarError
-from .lexer import GToken, NUMBER, PT, WORD
+from .lexer import NUMBER, PT, WORD
 # `parse_equal_to` below reads the record-shaped quantities too — one
 # printed "equal to …" reaches both families, which is why the split is
 # by what the quantity *is* rather than by which reader asks for it.
@@ -21,6 +29,7 @@ from .cost_records import (accept_counters_removed_for_cost,
                            accept_cost_channel_possessive,
                            accept_cost_characteristic_of)
 from .records import accept_damage_dealt_by_chosen_cast
+from .readers import accept_counter_kind, accept_source_reference
 from .stream import TokenStream
 from .vocabulary import ALL_SUBTYPES, CARD_TYPES, NUMBER_WORDS, singular as _singular
 
@@ -222,121 +231,12 @@ def _accept_rounding(stream: TokenStream) -> str:
     return "down"
 
 
-#: The three readers below all delimit one printed phrase — "the number of
-#: <kind> counters on <somewhere>" — and differ only in the operator in front of
-#: it and in whose pile it names. They sit together for that reason: the fork
-#: they were is what a fragment fork always is, three readers of one sentence in
-#: three modules, and the second one to be extended is the moment it shows.
-def _accept_counter_count(
-    stream: TokenStream, *, comparison: tuple[str, ...], on_source: bool,
-) -> str | None:
-    """``<comparison> the number of <kind> counters on <referent>``, as the
-    counter's printed name — or None with the cursor exactly where it was.
-
-    *on_source* picks the referent, and it is the whole difference between the
-    two bounds this serves: the ability's own **source** (Wave of Terror,
-    Legacy's Allure), read through ``accept_source_reference`` so a card naming
-    itself needs no code, against a bare "it" (Corrosion), which names the
-    object being tested. They are different piles, so a reader that admitted
-    either would answer one card's phrase with the other card's count — which
-    is why "it" is refused outright by the source form rather than falling
-    through to it.
-
-    Refuses without consuming, so "with mana value 3 or less" keeps its own
-    reading.
-    """
-    mark = stream.mark()
-    if not stream.accept_phrase(*comparison, "the", "number", "of"):
-        stream.reset(mark)
-        return None
-    kind = stream.peek_word()
-    if kind is None:
-        stream.reset(mark)
-        return None
-    stream.advance()
-    if not stream.accept_phrase("counters", "on"):
-        stream.reset(mark)
-        return None
-    if on_source:
-        # Late import for `accept_counters_on_source`'s reason below: `nouns`
-        # reads this module for its comparisons, so the cycle is broken at call
-        # time rather than at import time.
-        from .nouns import accept_source_reference
-
-        if stream.at_word("it") or not accept_source_reference(stream):
-            stream.reset(mark)
-            return None
-    elif not stream.accept_word("it"):
-        stream.reset(mark)
-        return None
-    return kind
-
-
-def accept_source_counter_bound(
-    stream: TokenStream, *, comparison: tuple[str, ...] = ("equal", "to"),
-) -> str | None:
-    """``<comparison> the number of <kind> counters on <this permanent>``
-    — "with mana value **equal to** …" (Wave of Terror), "with power **less
-    than or equal to** …" (Legacy's Allure).
-
-    *comparison* is the caller's, because the caller is what knows which field
-    the answer lands in: the two operators bound different characteristics and
-    reach different matchers. Reading either here and returning only the kind
-    would let one card's operator be tested as the other's — a narrowing
-    silently widened, on a phrase whose whole job is to narrow.
-    """
-    return _accept_counter_count(stream, comparison=comparison, on_source=True)
-
-
-def accept_counters_on_it_bound(stream: TokenStream) -> str | None:
-    """``less than or equal to the number of <kind> counters on it``
-    (Corrosion).
-
-    The bound above with the pronoun in place of the source. "On **it**" is
-    required: that word is the whole difference between a count on the object
-    being tested and a count on the ability's own permanent.
-    """
-    return _accept_counter_count(
-        stream,
-        comparison=("less", "than", "or", "equal", "to"),
-        on_source=False,
-    )
-
-
-def accept_counter_kind(stream: TokenStream) -> "GToken | None":
-    """The counter's written name as its token, or None with the cursor where
-    it was.
-
-    **CR 122.1's open key space, read in one place.** A counter's kind is
-    whatever word the card invented ("bounty", "corpse", "wind", "mire") *or* a
-    P/T token, which the lexer gives its own kind — and "counter"/"counters"
-    itself is never the kind, which is what stops a bare "put a counter on it"
-    from inventing a counter called "counter".
-
-    Written here because the reading was **four** productions in four modules
-    by the time a fifth wanted it: ``phrases._expect_counter_kind`` (the same
-    question, raising instead of declining),
-    ``condition_clauses._accept_counter_kind``, the inline form inside
-    :func:`accept_counters_on_source` below, and now the noun-phrase
-    postmodifier "…with a <kind> counter on it". Each was correct when written
-    and each was a place the next kind of counter could be forgotten. In
-    ``amounts`` because this module is unlayered — every parse layer may read
-    it — and the four callers sit at four different layers, so no layered home
-    could serve them all.
-
-    ``+1/+0`` is the reason it is not ``peek_word``: the lexer gives a P/T its
-    own token kind, so a word-only reader silently refused "three or more
-    **+1/+0** counters" while its "**echo** counters" twin worked.
-    """
-    token = stream.peek()
-    if token is None or token.kind not in (PT, WORD):
-        return None
-    if token.is_word("counter", "counters"):
-        return None
-    stream.advance()
-    return token
-
-
+# The three counts of a named counter (CR 122.1), one per referent a sentence
+# can name: the ability's source, the firing event's subject, the permanent
+# granting the ability. The kind word all three open on is
+# ``readers.accept_counter_kind``, and the two *bounds* stated against a count
+# like these ("less than or equal to the number of rust counters on it") are
+# ``bounds``' — both left this module at Torment's Phase 0.
 def accept_counters_on_source(stream: TokenStream) -> "ast.CountersOnSource | None":
     """``<word> counters on <the source>`` — the count of a named counter the
     ability's own source is carrying, or None when the words are something else.
@@ -361,11 +261,6 @@ def accept_counters_on_source(stream: TokenStream) -> "ast.CountersOnSource | No
     if token is not None:
         kind = token.text
         if stream.accept_word("counter", "counters") and stream.accept_word("on"):
-            # Late import for the reason the noun imports below give: nouns
-            # depends on this module for comparisons, so the cycle is broken at
-            # call time.
-            from .nouns import accept_source_reference
-
             if accept_source_reference(stream):
                 return ast.CountersOnSource(kind)
     stream.reset(mark)
