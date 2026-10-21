@@ -52,7 +52,7 @@ from .effects import (_parse_damage_becomes_counter_removal,
                       _parse_return_instead_of_untapping,
                       _parse_count_objects,
                       _parse_tapped_lands_produce_chosen,
-                      parse_turn_mana_change,
+                      parse_turn_mana_change, parse_turn_draw_replacement,
                       _parse_spend_mana_as_though,
                       _parse_choose_blocks_for_defenders,
                       _parse_sacrifice_expansion_permanents,
@@ -526,6 +526,13 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
                 mana_change = parse_turn_mana_change(stream, duration)
                 if mana_change is not None:
                     return mana_change
+                # "Until end of turn, **if target player would draw a card,
+                # instead that player skips that draw and you draw a card**."
+                # (Plagiarize.) A turn-long draw replacement, read behind the
+                # window for False Dawn's reason above.
+                draw_change = parse_turn_draw_replacement(stream, duration)
+                if draw_change is not None:
+                    return draw_change
                 return _distribute_duration(
                     parse_statement(stream, top_level=False), duration, stream
                 )

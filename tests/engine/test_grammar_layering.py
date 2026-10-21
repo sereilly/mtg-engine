@@ -1906,7 +1906,7 @@ AST_FAMILIES = [
         # reveals already were.)
         "reveal",
         # `redirection` is the fourth of `types`' shape: `RedirectDamage`,
-        # `DoubleCombatDamage` and `DamageBecomesCounterRemoval` are all facts
+        # `TurnDamageReplacement` and `DamageBecomesCounterRemoval` are all facts
         # about a **damage event**, and they live in `ast/damage.py` beside
         # every other damage node because that is what they are. The guard
         # fired on the productions (`effects/prevention.py` at 1,103), not on

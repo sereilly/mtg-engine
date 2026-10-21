@@ -139,8 +139,14 @@ def test_w2g7_616_1e_each_shape_alone_keeps_the_order_it_had(set_pool):
 
 @pytest.mark.cr("616.1e")
 def test_w2g7_616_1e_the_registrations_say_which_shape_they_are(set_pool):
-    """The default reads a declared role, not an order range: the cap and all
-    three multipliers carry one, and nothing else in a damage event does."""
+    """The default reads a declared role, not an order range: the two caps and
+    all three multipliers carry one, and nothing else in a damage event does.
+
+    The turn's two (W1G7, TOR) are registered on both recipients and narrowed
+    by their records: Blind Fury's doubling says "to a creature" on its record
+    and Equal Treatment's setter — a CAP, since it sets the dealt damage to a
+    printed number the way Forethought Amulet's does — names "a permanent or
+    player"."""
     game = _w2g7_board()
     roles = {
         candidate.key: candidate.amount_role
@@ -151,6 +157,8 @@ def test_w2g7_616_1e_the_registrations_say_which_shape_they_are(set_pool):
         "_cap_damage_from_source_class": CAP,
         "_multiply_damage_dealt": MULTIPLIER,
         "_double_next_damage_from_chosen_source": MULTIPLIER,
+        "_multiply_turn_damage": MULTIPLIER,
+        "_turn_damage_becomes": CAP,
     }
     creature_roles = {
         candidate.amount_role

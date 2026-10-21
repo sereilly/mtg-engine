@@ -1022,23 +1022,15 @@ class DeclareBlockersStepMixin:
             scoped_seat = entry.get("controller_seat")
             if scoped_seat is not None and self.controller_index_of(blocker) != scoped_seat:
                 continue
-            filt = entry.get("filter") or {}
-            type_filter = filt.get("type_filter", "creature")
-            if type_filter == "creature" and not blocker.is_creature:
-                continue
-            if type_filter != "creature" and not blocker.has_type(type_filter):
-                continue
-            if any(
-                not self._has_keyword(blocker, kw)
-                for kw in filt.get("with_keywords") or []
-            ):
-                continue
-            if any(
-                self._has_keyword(blocker, kw)
-                for kw in filt.get("without_keywords") or []
-            ):
-                continue
-            return False
+            # The noun phrase through ``subject_matches``, the one reader of a
+            # filter payload — the attack gate's twin read. It spelled out
+            # three fields (a type and two keyword lists) and so could not
+            # test a colour: "Green creatures and white creatures can't block
+            # this turn" (Flash of Defiance) refused rather than reaching both.
+            # No observer: the entry is a record on the game, and the
+            # lowering admits only what the object alone answers.
+            if subject_matches(self, blocker, dict(entry.get("filter") or {})):
+                return False
 
         # **The blocker's own restriction, which nothing asked.**
         # "This creature can't block." compiled to a `cant_block` instruction,

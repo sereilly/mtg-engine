@@ -656,6 +656,26 @@ def accept_printed_number(stream: "TokenStream") -> int | None:
     return None
 
 
+def accept_each_life_lost(stream: "TokenStream") -> "ast.EachLifeLost | None":
+    """``for each <N> life you lost`` — the firing event's life loss as a count,
+    or None with nothing consumed.
+
+    One reader for both printed positions: leading, "**For each 1 life you
+    lost,** sacrifice a permanent …" (Oath of Lim-Dûl, read by
+    ``sentence_clauses``, which then wants its comma), and trailing, "you gain
+    2 life **for each 1 life you lost**" (Transcendence, read by
+    ``effects/_life``). The unit is carried rather than checked here, so each
+    lowering refuses a unit it cannot honour by name.
+    """
+    mark = stream.mark()
+    if stream.accept_phrase("for", "each"):
+        per = accept_printed_number(stream)
+        if per is not None and stream.accept_phrase("life", "you", "lost"):
+            return ast.EachLifeLost(per=per)
+    stream.reset(mark)
+    return None
+
+
 # ---------------------------------------------------------------------------
 # "…each player **who <did something>**" — a seat narrowed by a record
 # ---------------------------------------------------------------------------

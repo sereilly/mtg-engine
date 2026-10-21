@@ -111,7 +111,7 @@ from .fighting import (
 from .redirection import (
     _lower_damage_redirect_offer,
     _lower_damage_becomes_counter_removal,
-    _lower_double_combat_damage,
+    _lower_turn_damage_replacement,
     _lower_redirect_damage,
 )
 from ._blankets import _lower_prevent_all
@@ -290,6 +290,7 @@ from .cards import (
     _lower_put_milled_card_onto_battlefield,
     _lower_scry,
     _lower_surveil,
+    _lower_turn_draw_replacement,
 )
 # The hand family, split off `.cards` at the size guard in the same round its
 # parse mirror was. Every name keeps its address: this package re-exports flat,
@@ -510,7 +511,7 @@ __all__ = [
     "_lower_choose_damage_source",
     "_lower_chosen_source_next_damage",
     "_lower_prevent_half",
-    "_lower_double_combat_damage",
+    "_lower_turn_damage_replacement",
     "_lower_redirect_damage",
     "_lower_damage_redirect_offer",
     "_lower_prevent_all",
@@ -633,6 +634,7 @@ __all__ = [
     "_lower_produces_mana_instead",
     "_lower_spend_mana_as_though",
     "_lower_added_mana_becomes",
+    "_lower_turn_draw_replacement",
     "_lower_grant_mana_spending",
     "_lower_double_power",
     "_lower_switch_pt",

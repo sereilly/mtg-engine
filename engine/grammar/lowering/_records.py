@@ -693,6 +693,9 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # last seat has answered — see ``oracle_types.SECRET_NUMBERS_BY_SEAT``.
     "secretly_choose_numbers": SECRET_NUMBERS_BY_SEAT,
     "choose_color": CHOSEN_COLOR_THIS_WAY,
+    # Floating Shield's "the chosen color", read off the source's entry record
+    # into the same slot (``keywords._chosen_color_prelude``).
+    "recall_chosen_color": CHOSEN_COLOR_THIS_WAY,
     # "Reveal any number of blue cards in your hand." (Brine Seer and the
     # eleven cards printed with it.) **Two** records, and the count is the
     # primary: every sentence in the pool that follows this one spends it — see

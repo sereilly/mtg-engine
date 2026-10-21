@@ -273,6 +273,43 @@ def arm_draw_replacement(game: Game, instruction: OracleInstruction, context: Or
     return True, "resolved"
 
 
+@effect_handler("arm_turn_draw_replacement")
+def arm_turn_draw_replacement(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Until end of turn, if target player would draw a card, instead that
+    player skips that draw and you draw a card." (Plagiarize.)
+
+    A CR 614 replacement a resolving spell creates for the turn, recorded on
+    the caster's seat (CR 109.5's "you") with the chosen player as the seat
+    whose draws it takes (``engine/turn_replacements.py``); the draw seam's
+    interceptor in ``engine/replacements.py`` reads it and the cleanup step's
+    one sweep ends it. On the game rather than on any permanent for
+    ``arm_draw_replacement``'s reason above: the effect is the resolved
+    spell's (CR 611.2), and there is no permanent.
+
+    The chosen player is the spell's announced target; one who has become an
+    illegal target by resolution has already stopped the spell (CR 608.2b),
+    so this reads the resolution's target and nothing else.
+    """
+    from ..turn_replacements import DRAW, TurnReplacement, arm_turn_replacement
+
+    target = context.target
+    if target is None or target not in game.players:
+        game.log.append(f"{context.card.name}: no player was chosen")
+        return True, "resolved"
+    affected = game.players.index(target)
+    arm_turn_replacement(game, TurnReplacement(
+        seat=game.players.index(context.caster),
+        event=DRAW,
+        source_name=getattr(context.card, "name", None),
+        affected_seat=affected,
+    ))
+    game.log.append(
+        f"{context.card.name}: this turn, if {target.name} would draw a card, "
+        f"{context.caster.name} draws instead"
+    )
+    return True, "resolved"
+
+
 @effect_handler("put_exiled_pile_top_into_hand")
 def put_exiled_pile_top_into_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Put the top card of the exiled pile into its owner's hand." (Mangara's

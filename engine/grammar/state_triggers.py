@@ -101,6 +101,13 @@ def _parse_state_trigger_event(
             stream.advance()
             if stream.accept_phrase("or", "less", "life"):
                 return ast.TriggerEvent("life_at_most", word)
+            # "When **you have 20 or more life**, you lose the game."
+            # (Transcendence.) The same life total crossed from below, so
+            # its own kind beside the one above for the reason
+            # ``source_power_at_least`` is one: the comparison is what the
+            # sweep asks, and the threshold and seat stay payload either way.
+            if stream.accept_phrase("or", "more", "life"):
+                return ast.TriggerEvent("life_at_least", word)
     stream.reset(life_mark)
 
     unpaid_mark = stream.mark()
@@ -190,6 +197,26 @@ def _parse_state_trigger_event(
                         "permanent_counters_reach_threshold", word, subject=watched,
                     )
     stream.reset(watched_mark)
+
+    # "When **no creatures are on the battlefield**, sacrifice this
+    # enchantment." (Last Laugh.) The "there are no …" branch below in the
+    # other word order: the same state over every battlefield, so the same
+    # kind and the same carried subject. Here the zone is a predicate
+    # ("are on the battlefield") rather than the noun's own scope, so the noun
+    # parser stops at "are" and the predicate is required in full — "when no
+    # creatures are tapped" is a different sentence and refuses.
+    word_order_mark = stream.mark()
+    if stream.accept_word("no"):
+        described = parse_subject_filter_at(stream, plural=True)
+        if (
+            described is not None
+            and not described.on_the_battlefield
+            and stream.accept_phrase("are", "on", "the", "battlefield")
+        ):
+            return ast.TriggerEvent(
+                "no_permanents_anywhere", word, subject=described,
+            )
+    stream.reset(word_order_mark)
 
     state_mark = stream.mark()
     if stream.accept_phrase("there", "are"):

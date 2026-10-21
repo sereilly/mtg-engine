@@ -440,10 +440,13 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "double_next_damage_from_chosen_source": "damage",
     "redirect_damage_from_target_spell_until_eot": "damage",
     # "…it deals **double** that damage to that creature instead" (Blind
-    # Fury). The third half of a damage event a CR 614 replacement can
-    # change, beside the recipient above and the prevention elsewhere:
-    # categorised with the damage it multiplies.
-    "double_combat_damage_until_eot": "damage",
+    # Fury), "…it deals **2** damage to that permanent or player instead"
+    # (Equal Treatment). The third half of a damage event a CR 614
+    # replacement can change, beside the recipient above and the prevention
+    # elsewhere: categorised with the damage it changes. It was
+    # ``double_combat_damage_until_eot``, a kind with Blind Fury's one shape
+    # in its name.
+    "arm_turn_damage_replacement": "damage",
     # The class-scoped, optional one (Blood of the Martyr). Same category
     # for the same reason: what it moves is damage, and being optional and
     # being about a class are payload differences.
@@ -818,6 +821,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # different questions, and one switch must not be able to gate half of
     # either off.
     "choose_color": "chosen_colors",
+    # "Sacrifice this Aura: Target creature gains protection from **the chosen
+    # color** until end of turn." (Floating Shield.) The colour the source
+    # chose as it entered, copied into the slot `choose_color` writes: the
+    # same value, asked of a record rather than of a player.
+    "recall_chosen_color": "chosen_colors",
     # "That player chooses artifact, creature, land, or non-Aura enchantment."
     # (Teferi's Realm.) Beside `choose_color` and in its family: a sentence that
     # produces a value and no effect of its own, read back by the next sentence

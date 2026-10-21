@@ -1414,9 +1414,18 @@ class GameEndingMixin:
                     # empty hand exactly as it does for an opponent's.
                     holds = any(not player.hand for player in self.players)
                     key = ("empty_hand", trig.source_line)
-                elif kind == "life_at_most":
+                elif kind in ("life_at_most", "life_at_least"):
                     if trig.instruction is None:
                         continue
+                    # "When you have **20 or more** life, you lose the game."
+                    # (Transcendence.) The same reading crossed from below:
+                    # only the comparison differs, so one branch asks
+                    # whichever the kind names.
+                    reached = (
+                        (lambda life, bound: life <= bound)
+                        if kind == "life_at_most"
+                        else (lambda life, bound: life >= bound)
+                    )
                     # "**When you have 10 or less life**" (Opal Avenger).
                     # "**When an opponent has 10 or less life**" (Lurking
                     # Jackals). CR 603.8 off a life total, and *which* total
@@ -1446,13 +1455,13 @@ class GameEndingMixin:
                         continue
                     if trig.condition.payload.get("life_seat") == "an opponent":
                         holds = any(
-                            player.life <= threshold
+                            reached(player.life, threshold)
                             for index, player in enumerate(self.players)
                             if index != observer and not player.lost
                         )
                     else:
-                        holds = self.players[observer].life <= threshold
-                    key = ("life_at_most", trig.source_line)
+                        holds = reached(self.players[observer].life, threshold)
+                    key = (kind, trig.source_line)
                 else:
                     continue
                 announced = permanent.metadata.get("_state_trigger_announced") or set()

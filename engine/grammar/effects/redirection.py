@@ -115,7 +115,7 @@ def _parse_damage_becomes_counter_removal(
     return ast.DamageBecomesCounterRemoval(recipient, str(counter), duration)
 
 
-def _parse_double_combat_damage(stream: TokenStream) -> "ast.DoubleCombatDamage | None":
+def _parse_turn_damage_replacement(stream: TokenStream) -> "ast.TurnDamageReplacement | None":
     """``If a creature would deal combat damage to a creature this turn, it
     deals double that damage to that creature instead.`` (Blind Fury —
     CR 614.)
@@ -124,29 +124,84 @@ def _parse_double_combat_damage(stream: TokenStream) -> "ast.DoubleCombatDamage 
     module's own stated reason: one printed sentence returns either node, and
     two parse modules would be one importing the other.
 
-    **Every word is required**, and each is a narrowing the interceptor tests:
-    "combat" (a ping ability is not), "a creature" on each end (the face is not,
-    which is what makes this a trick for blockers rather than a burn spell), and
-    "this turn". A wording that dropped any of them would be a different card
-    wearing this one's head, so the production refuses rather than reading it as
-    this one — and refuses **without consuming**, so every other "If a creature
-    would …" sentence keeps the reader it has.
+    ``If any source would deal 1 or more damage to a permanent or player this
+    turn, it deals 2 damage to that permanent or player instead.`` (Equal
+    Treatment.) The same sentence with each of its terms changed — the source,
+    the recipient, the printed floor, no "combat", and a number for the
+    result instead of a factor — so it is this production with the terms read
+    as fields rather than a second production that would drift from it.
+
+    **Every word is read**, and each is a narrowing the interceptor tests:
+    "combat" (a ping ability is not), "a creature" on either end (the face is
+    not, which is what makes Blind Fury a trick for blockers rather than a burn
+    spell), the floor, and "this turn". The recipient is restated after "to
+    that" and must restate the same noun, and the result is one of the two
+    printed shapes. A wording outside them is a different card wearing this
+    one's head, so the production refuses rather than reading it as this one —
+    and refuses **without consuming**, so every other "If a creature would …"
+    sentence keeps the reader it has.
     """
     mark = stream.mark()
-    if not stream.accept_phrase(
-        "if", "a", "creature", "would", "deal", "combat", "damage", "to",
-        "a", "creature", "this", "turn",
-    ):
+    if not stream.accept_word("if"):
+        return None
+    if stream.accept_phrase("a", "creature"):
+        source_creature = True
+    elif stream.accept_phrase("any", "source"):
+        source_creature = False
+    else:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("would", "deal"):
+        stream.reset(mark)
+        return None
+    at_least = 1
+    floor = stream.accept_kind(NUMBER)
+    if floor is not None:
+        if not stream.accept_phrase("or", "more"):
+            stream.reset(mark)
+            return None
+        at_least = int(floor.text)
+    combat_only = stream.accept_word("combat")
+    if not stream.accept_phrase("damage", "to"):
+        stream.reset(mark)
+        return None
+    if stream.accept_phrase("a", "creature"):
+        restated: tuple[str, ...] = ("creature",)
+    elif stream.accept_phrase("a", "permanent", "or", "player"):
+        restated = ("permanent", "or", "player")
+    else:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("this", "turn"):
         stream.reset(mark)
         return None
     stream.accept_punct(",")
-    if not stream.accept_phrase(
-        "it", "deals", "double", "that", "damage", "to", "that", "creature",
-        "instead",
+    if not stream.accept_phrase("it", "deals"):
+        stream.reset(mark)
+        return None
+    multiplier, becomes = 1, None
+    if stream.accept_phrase("double", "that", "damage"):
+        multiplier = 2
+    else:
+        amount = stream.accept_kind(NUMBER)
+        if amount is None or not stream.accept_word("damage"):
+            stream.reset(mark)
+            return None
+        becomes = int(amount.text)
+    if not (
+        stream.accept_phrase("to", "that", *restated)
+        and stream.accept_word("instead")
     ):
         stream.reset(mark)
         return None
-    return ast.DoubleCombatDamage()
+    return ast.TurnDamageReplacement(
+        source_creature=source_creature,
+        recipient_creature=restated == ("creature",),
+        combat_only=combat_only,
+        at_least=at_least,
+        multiplier=multiplier,
+        becomes=becomes,
+    )
 
 
 def _parse_damage_redirect(stream: TokenStream) -> "ast.RedirectDamage | None":

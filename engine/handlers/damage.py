@@ -1645,6 +1645,18 @@ def source_bites_target(game, instruction, context):
         # nothing rather than the enchantment biting with its own zero power.
         bound = (context.trigger_context or {}).get("event_subject_permanent_id")
         source = game.permanent_by_id(bound) if isinstance(bound, int) else None
+    elif instruction.payload.get("biter") == "tapped_this_way":
+        # ``biter: "tapped_this_way"`` — "Tap target untapped creature you
+        # control. If you do, **it** deals damage …" (Spirit Flare). The
+        # creature the step in front of this one tapped, read off the record
+        # that step wrote (``tapped_permanents``) by stable id. Exactly one:
+        # the pronoun names one object, and a record of none (the tap did not
+        # happen, so "if you do" already declined) or of several is no biter.
+        tapped = context.results.get("tapped_permanents") or ()
+        source = (
+            game.permanent_by_id(tapped[0])
+            if len(tapped) == 1 and isinstance(tapped[0], int) else None
+        )
     if source is None:
         game.log.append(f"{card.name}: nothing to deal the damage")
         return True, "resolved"
@@ -3334,4 +3346,52 @@ def grant_damage_riders_until_eot(game: Game, instruction: OracleInstruction, co
             f"{context.card.name}: what {creature.card.name} damages this turn "
             + " and ".join(granted)
         )
+    return True, "resolved"
+
+
+@effect_handler("arm_turn_damage_replacement")
+def arm_turn_damage_replacement(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"If any source would deal 1 or more damage to a permanent or player this
+    turn, it deals 2 damage to that permanent or player instead." (Equal
+    Treatment.) "If a creature would deal combat damage to a creature this
+    turn, it deals double that damage to that creature instead." (Blind Fury.)
+
+    A CR 614 replacement armed by a *resolving spell*, so there is no permanent
+    for an interceptor to read and the effect is recorded on its controller's
+    seat (``engine/turn_replacements.py``) with the turn as its lifetime; the
+    interceptors in ``engine/replacements.py`` read the record and the cleanup
+    step's one sweep ends it. Every printed narrowing rides the record, so the
+    interceptor tests what the card said rather than what one card says.
+
+    Two resolutions arm two records — two effects (CR 614.5) — which is what
+    makes two Blind Furies quadruple the damage.
+    """
+    from ..turn_replacements import DAMAGE, TurnReplacement, arm_turn_replacement
+
+    payload = instruction.payload
+    record = arm_turn_replacement(game, TurnReplacement(
+        seat=game.players.index(context.caster),
+        event=DAMAGE,
+        source_name=getattr(context.card, "name", None),
+        combat_only=bool(payload.get("combat_only")),
+        source_creature=bool(payload.get("source_creature")),
+        recipient_creature=bool(payload.get("recipient_creature")),
+        at_least=int(payload.get("at_least", 1) or 1),
+        multiplier=int(payload.get("multiplier", 1) or 1),
+        becomes=(
+            int(payload["becomes"]) if payload.get("becomes") is not None else None
+        ),
+    ))
+    what = (
+        f"becomes {record.becomes}" if record.becomes is not None
+        else f"is multiplied by {record.multiplier}"
+    )
+    game.log.append(
+        f"{context.card.name}: this turn, "
+        + ("combat " if record.combat_only else "")
+        + "damage "
+        + ("dealt by a creature " if record.source_creature else "")
+        + ("to a creature " if record.recipient_creature else "")
+        + what
+    )
     return True, "resolved"

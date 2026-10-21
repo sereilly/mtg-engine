@@ -199,22 +199,40 @@ class DamageBecomesCounterRemoval:
 
 
 @dataclass(frozen=True)
-class DoubleCombatDamage:
+class TurnDamageReplacement:
     """"If a creature would deal combat damage to a creature this turn, it deals
     **double** that damage to that creature instead." (Blind Fury — CR 614.)
+    "If any source would deal 1 or more damage to a permanent or player this
+    turn, it deals **2** damage to that permanent or player instead." (Equal
+    Treatment.)
 
     Its own node beside :class:`RedirectDamage` and for that node's reason: what
     changes here is neither who takes the damage nor whether it is dealt, but
     **how much** — so a flag on either of them would put three different
     replacements one boolean apart in every reader.
 
-    Nothing is parameterised yet and that is deliberate. The pool prints one
-    card, whose every word is a narrowing the interceptor tests: combat damage,
-    dealt by a creature, dealt to a creature, for this turn. A field here with
-    no second card behind it would be a claim nothing checks; the day a card
-    prints "triple" or names a class, the number and the phrase are what move
-    onto the node.
+    It was ``DoubleCombatDamage`` with no fields, and its docstring said what
+    would change it: "the day a card prints 'triple' or names a class, the
+    number and the phrase are what move onto the node." Equal Treatment is
+    that card — another source, another recipient, no "combat", a printed
+    floor and a set number rather than a factor — so each is a field, and
+    every one is a narrowing ``turn_replacements.damage_record_answers``
+    tests.
     """
+
+    #: "if **a creature** would deal …" — False is "any source".
+    source_creature: bool = False
+    #: "… damage **to a creature**" — False is "to a permanent or player".
+    recipient_creature: bool = False
+    #: "would deal **combat** damage".
+    combat_only: bool = False
+    #: "would deal **1 or more** damage" — the printed floor; 1 is what any
+    #: damage event already is, so it narrows nothing.
+    at_least: int = 1
+    #: "it deals **double** that damage instead".
+    multiplier: int = 1
+    #: "it deals **2** damage to that permanent or player instead".
+    becomes: int | None = None
 
 
 @dataclass(frozen=True)

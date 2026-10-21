@@ -198,6 +198,20 @@ DAMAGE_BECOMES_COUNTERS = 8  # Lichenthrope
 # the whole event, so a shield spent first is spent on damage that was never
 # going to be dealt.
 DAMAGE_BECOMES_LIBRARY_EXILE = 9  # Crumbling Sanctuary
+# "If any source would deal 1 or more damage to a permanent or player this
+# turn, it deals 2 damage to that permanent or player instead." (Equal
+# Treatment.) Forethought Amulet's cap (5) with no threshold worth the name and
+# every source and recipient: the damage *dealt* becomes a printed number. Ahead
+# of the points shields (40-600) for the cap's reason — a shield spent first
+# absorbs from the printed damage and this then sets the rest to 2 anyway,
+# where this first leaves the shield its points: 5 against "prevent the next
+# 3" is 0 dealt this way round and 2 the other. Behind the "prevent all"
+# blankets (0-13), against which the order cannot matter, because no slot
+# below 10 is free and none is needed. Declared a CAP, so a multiplier it
+# contends with goes first (``effect_ordering.choose_effect``): doubling a 2
+# to 4 is not what the affected player would choose. CR 616.1e lets them
+# choose either; this is the default for a seat nobody asks.
+TURN_DAMAGE_BECOMES = 14  # Equal Treatment
 # "If damage would be dealt to **you**, put that many delay counters on this
 # enchantment instead." (Delaying Shield.) / "…exile that many cards from your
 # graveyard instead. If you can't, you lose the game." (Nefarious Lich.) The
@@ -232,7 +246,8 @@ DAMAGE_MULTIPLIER = 700  # Fiery Emancipation
 #: The turn-scoped doubling a spell arms (Blind Fury), one step later than the
 #: static multiplier above. Its own order because it is its own effect: CR 616.1
 #: counts effects, and sharing a number would make the two one contender and
-#: silently drop whichever was asked second.
+#: silently drop whichever was asked second. Read off the turn's records
+#: (``engine/turn_replacements.py``), as Equal Treatment's setter at 14 is.
 COMBAT_DAMAGE_DOUBLER = 710  # Blind Fury
 #: "…the next time that source would deal damage this turn, it deals **double**
 #: that damage instead." (Desperate Gambit.) The third multiplier and the only
@@ -322,6 +337,17 @@ DRAW_BECOMES_COUNTER = 25  # Pursuit of Knowledge
 # one hands back nothing — the order a player holding both would choose, which
 # CR 616.1e permits. Declining either leaves the event for whatever is behind.
 DRAW_MAY_BE_SKIPPED = 26  # Obstinate Familiar
+# "Until end of turn, if target player would draw a card, instead that player
+# skips that draw and you draw a card." (Plagiarize.) A mandatory consuming
+# replacement another player armed, so behind everything the drawing player
+# armed for their own benefit (5-26) for the argument the slots below make —
+# and ahead of the four mandatory consumers that cost the drawing player
+# something more than the card: under Chains of Mephistopheles the draw would
+# become a discard first and the card *it* draws would then go to the
+# Plagiarist anyway, and Forbidden Crypt can end the game, where this only
+# takes the draw. CR 616.1e lets the drawing player choose; this is the default
+# for a seat nobody asks.
+DRAW_GIVEN_TO_ANOTHER = 29  # Plagiarize
 DRAW_DISCARD_INSTEAD = 30  # Chains of Mephistopheles
 # Beside it, and last for the same reason: this one takes the draw away too.
 # Between the two the order is arbitrary — no card in the pool prints both, and
@@ -2292,35 +2318,40 @@ def _multiply_damage_dealt(game, payload: dict) -> ReplacementOutcome | None:
     return ReplacementOutcome(new_amount=amount * multiplier)
 
 
-def _applies_combat_damage_doubler(game, payload: dict) -> bool:
-    """Whether Blind Fury's turn is on and this event is the one it names.
+def _turn_damage_records(game, payload: dict, *, multiplying: bool) -> list:
+    """The turn-long damage replacements a resolution armed that answer to this
+    event (``engine/turn_replacements.py``) — the multiplying ones or the
+    setting ones. Pure.
 
-    Every word of the sentence is a narrowing and each is tested here rather
-    than dropped: **combat** damage (a ping ability is not), dealt by a
-    **creature** (a Lightning Bolt is not, and neither is a creature's own
-    activated ability — CR 109.5 makes the source of that ability the
-    permanent, so the test is the *combat* flag rather than the source's type
-    alone), and dealt **to a creature** (the face is not, which is what makes
-    this card a trick for blockers rather than a burn spell).
+    Every printed narrowing is a field on the record and is tested by
+    ``damage_record_answers`` rather than spelled here, so Blind Fury's
+    "combat … a creature … to a creature" and Equal Treatment's "any source …
+    1 or more … a permanent or player" are one reader.
     """
-    if not game.combat_damage_doubled_between_creatures:
-        return False
-    if payload["amount"] <= 0 or not payload.get("combat"):
-        return False
-    recipient = payload.get("recipient")
-    source = payload.get("source")
-    if not isinstance(recipient, Permanent) or not recipient.is_creature:
-        return False
-    return isinstance(source, Permanent) and source.is_creature
+    from .turn_replacements import (DAMAGE, armed_turn_replacements,
+                                    damage_record_answers)
+
+    return [
+        record for record in armed_turn_replacements(game, DAMAGE)
+        if ((record.multiplier > 1) if multiplying else (record.becomes is not None))
+        and damage_record_answers(record, payload)
+    ]
+
+
+def _applies_turn_damage_multiplier(game, payload: dict) -> bool:
+    """Whether a turn-long doubling (Blind Fury) answers to this event."""
+    return bool(_turn_damage_records(game, payload, multiplying=True))
 
 
 @replacement_effect(
     "damage_to_creature", COMBAT_DAMAGE_DOUBLER,
-    applies=_applies_combat_damage_doubler, amount_role=MULTIPLIER,
+    applies=_applies_turn_damage_multiplier, amount_role=MULTIPLIER,
 )
-def _double_combat_damage_between_creatures(
-    game, payload: dict
-) -> ReplacementOutcome | None:
+@replacement_effect(
+    "damage_to_player", COMBAT_DAMAGE_DOUBLER,
+    applies=_applies_turn_damage_multiplier, amount_role=MULTIPLIER,
+)
+def _multiply_turn_damage(game, payload: dict) -> ReplacementOutcome | None:
     """Blind Fury: "If a creature would deal combat damage to a creature this
     turn, it deals double that damage to that creature instead."
 
@@ -2331,14 +2362,64 @@ def _double_combat_damage_between_creatures(
     Two copies square rather than adding, for the reason ``_damage_multiplier``
     records: each is its own effect at its own moment, and applying them
     together is the sequence CR 616.1's default choice produces.
+
+    Registered on both recipients and narrowed by the record: Blind Fury's
+    record says "to a creature", so a player is never doubled — the test is
+    the card's, not the registration's.
     """
-    multiplier = 2 ** len(game.combat_damage_doubled_between_creatures)
+    records = _turn_damage_records(game, payload, multiplying=True)
+    multiplier = 1
+    for record in records:
+        multiplier *= record.multiplier
     amount = payload["amount"]
     game.log.append(
-        f"{amount} combat damage becomes {amount * multiplier} "
-        f"({game.combat_damage_doubled_between_creatures[0]})"
+        f"{amount} {'combat ' if payload.get('combat') else ''}damage becomes "
+        f"{amount * multiplier} ({records[0].source_name})"
     )
     return ReplacementOutcome(new_amount=amount * multiplier)
+
+
+def _applies_turn_damage_becomes(game, payload: dict) -> bool:
+    """Whether a turn-long "it deals N damage instead" (Equal Treatment)
+    changes this event. Pure.
+
+    An event already at the printed number is left alone: replacing 2 with 2
+    changes nothing, and counting it as a contender would put a CR 616.1e
+    question to the affected player about an effect that cannot matter.
+    """
+    return any(
+        record.becomes != payload["amount"]
+        for record in _turn_damage_records(game, payload, multiplying=False)
+    )
+
+
+@replacement_effect(
+    "damage_to_creature", TURN_DAMAGE_BECOMES,
+    applies=_applies_turn_damage_becomes, amount_role=CAP,
+)
+@replacement_effect(
+    "damage_to_player", TURN_DAMAGE_BECOMES,
+    applies=_applies_turn_damage_becomes, amount_role=CAP,
+)
+def _turn_damage_becomes(game, payload: dict) -> ReplacementOutcome | None:
+    """Equal Treatment: "If any source would deal 1 or more damage to a
+    permanent or player this turn, it deals 2 damage to that permanent or
+    player instead."
+
+    A CR 120.4b effect: the 2 is the damage *dealt*, so lifelink gains 2 and a
+    "deals damage" trigger sees 2. Two copies set the same number, and the
+    newest record names the effect in the log.
+    """
+    records = [
+        record for record in _turn_damage_records(game, payload, multiplying=False)
+        if record.becomes != payload["amount"]
+    ]
+    record = records[-1]
+    amount = payload["amount"]
+    game.log.append(
+        f"{amount} damage becomes {record.becomes} ({record.source_name})"
+    )
+    return ReplacementOutcome(new_amount=int(record.becomes))
 
 
 def _applies_next_damage_doubled(game, payload: dict) -> bool:
@@ -3641,6 +3722,68 @@ def _run_armed_draw_replacement(game, payload: dict) -> ReplacementOutcome | Non
         OracleExecutionContext(
             caster=player, target=player, card=card, source_permanent=source
         ),
+    )
+    payload["drawn"] = draws_behind(
+        game, player, int(payload["count"]) - 1, queued_excludes(payload)
+    )
+    return ReplacementOutcome(replaced=True)
+
+
+def _turn_draw_records(game, payload: dict) -> list:
+    """The turn-long draw replacements a resolution armed over the drawing
+    seat (Plagiarize), oldest first, less the ones this event has already been
+    through (CR 614.5). Pure."""
+    from .turn_replacements import DRAW, armed_turn_replacements
+
+    seat = game.players.index(payload["player"])
+    excluded = set(payload.get("exclude_sources") or ())
+    return [
+        record for record in armed_turn_replacements(game, DRAW)
+        if record.affected_seat == seat and record.key not in excluded
+    ]
+
+
+def _applies_turn_draw_replacement(game, payload: dict) -> bool:
+    return int(payload.get("count", 0)) > 0 and bool(_turn_draw_records(game, payload))
+
+
+@replacement_effect(
+    "draw", DRAW_GIVEN_TO_ANOTHER, applies=_applies_turn_draw_replacement
+)
+def _draw_given_to_another(game, payload: dict) -> ReplacementOutcome | None:
+    """Plagiarize: "Until end of turn, if target player would draw a card,
+    instead that player skips that draw and you draw a card."
+
+    One draw at a time (CR 121.2): the first is taken, the effect's controller
+    draws one card in its place, and the draws queued behind go back through
+    the seam — so each of them is taken in turn.
+
+    **The substitute is a draw of its own**, made through the seam, so another
+    replacement may take it — and **not this one** (CR 614.5: "a replacement
+    effect gets only one opportunity to affect an event or any modified events
+    that may replace it"), nor any the replaced draw had already been through.
+    The record's key joins the event's exclusions for exactly that. It is what
+    the card's rulings describe (2007-07-15): two Plagiarizes cast at each
+    other "effectively cancel each other out" — the drawer's draw goes to the
+    other player, whose substitute draw the second Plagiarize hands back, and
+    the draw that comes back has been through both — and one aimed at its own
+    caster (2004-10-04) "has no useful effect", because the draw it makes is
+    the one it may not replace.
+
+    Nothing is drawn by the player who skipped, so this reports 0 for them,
+    and a library they could not have drawn from loses them nothing (the
+    2007-07-15 ruling on an empty library): the draw never happens.
+    """
+    player = payload["player"]
+    record = _turn_draw_records(game, payload)[0]
+    beneficiary = game.players[record.seat]
+    game.log.append(
+        f"{player.name} skips a draw and {beneficiary.name} draws instead "
+        f"({record.source_name})"
+    )
+    game._draw_with_replacements(
+        beneficiary, 1,
+        exclude_sources=queued_excludes(payload) + (record.key,),
     )
     payload["drawn"] = draws_behind(
         game, player, int(payload["count"]) - 1, queued_excludes(payload)

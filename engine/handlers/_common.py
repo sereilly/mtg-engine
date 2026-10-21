@@ -207,6 +207,15 @@ def count_from_payload(
         # earlier producer carries neither key, so `_scaled` is the identity
         # for all of them.
         return max(0, _scaled(int(context.results.get(back_reference, 0) or 0), spec))
+    # "…you gain 2 life for each 1 life **you lost**." (Transcendence.) The
+    # branch above one record over: a number the *firing event* carried,
+    # frozen into the trigger's context by its fire site, rather than one a
+    # step of this resolution wrote. An absent record counts zero, which is
+    # the honest answer for an ability resolving with no event behind it.
+    trigger_record = spec.get("trigger_record")
+    if trigger_record is not None:
+        frozen = (context.trigger_context or {}).get(trigger_record, 0)
+        return max(0, _scaled(int(frozen or 0), spec))
     # "…for each **creature card** put into your graveyard this way" (Song of
     # Blood). The branch above one question over: that one reads a record that
     # is already a number, and this reads a record of the *cards themselves* and

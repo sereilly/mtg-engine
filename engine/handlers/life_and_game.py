@@ -669,6 +669,10 @@ def target_gains_life(game: Game, instruction: OracleInstruction, context: Oracl
     # every time an opponent's creature dies.
     if per_each is not None and per_each.get("history") == "creatures_died_this_turn":
         life_gain *= int(getattr(game, "creatures_died_this_turn", 0))
+    if per_each is not None and per_each.get("trigger_record") is not None:
+        # "…you gain 2 life **for each 1 life you lost**" (Transcendence): the
+        # firing event's loss, through the one count evaluator.
+        life_gain *= count_from_payload(game, context, per_each)
     if per_each is not None and per_each.get("cost_counters_removed") is not None:
         # "…**for each elixir counter removed this way**" (Essence Bottle).
         # The counters this ability's own cost took off, which after CR 601.2h

@@ -26,6 +26,7 @@ from ._counted_damage import (_READABLE_COST_SACRIFICE_CHARACTERISTICS,
                               revealed_cards_count_spec)
 from ._common import (
     dropped_narrowings,
+    _REST_OF_TURN,
     _amount_payload,
     _describe_targets,
     _restrictions_beyond,
@@ -677,3 +678,34 @@ def _lower_surveil(node: ast.Surveil) -> tuple[OracleInstruction, ...]:
     """"Surveil N." (CR 701.25a.) Scry's shape for scry's reason: the count is
     the whole payload, and the library is the controller's own."""
     return (OracleInstruction("surveil", "", {"amount": _amount_payload(node.count)}),)
+
+
+def _lower_turn_draw_replacement(
+    node: "ast.TurnDrawReplacement",
+) -> tuple[OracleInstruction, ...]:
+    """"Until end of turn, if target player would draw a card, instead that
+    player skips that draw and you draw a card." (Plagiarize.)
+
+    The chosen player is the spell's target (CR 601.2c), described for the
+    picker exactly as any "target player" sentence describes it; the handler
+    arms a ``turn_replacements.TurnReplacement`` on the caster's seat naming
+    that player, and the draw seam's interceptor does the rest.
+
+    Two refusals, each a way the card could otherwise mean more than it says:
+    a window other than the turn is a record nothing ends, and a player the
+    spell did not choose ("each opponent") has no announcement for the handler
+    to read — read as the target it would take whichever seat the resolution
+    defaulted to.
+    """
+    if node.duration.kind not in _REST_OF_TURN:
+        raise LoweringError(
+            "a recorded draw replacement lasts exactly this turn", node=node
+        )
+    if node.player.kind not in ("target_player", "target_opponent"):
+        raise LoweringError(
+            "whose draws this replacement takes is the player the spell chose",
+            node=node,
+        )
+    payload: dict[str, object] = {}
+    _describe_targets(payload, node.player)
+    return (OracleInstruction("arm_turn_draw_replacement", "", payload),)

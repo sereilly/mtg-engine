@@ -915,3 +915,42 @@ def _parse_for_each_revealed_discard(
         stream.reset(mark)
         return None
     return ast.DiscardRevealedMatchingUnlessPayLife(player, filt, amount)
+
+
+def parse_turn_draw_replacement(
+    stream: TokenStream, duration: "ast.Duration"
+) -> "ast.TurnDrawReplacement | None":
+    """``if <player> would draw a card, instead that player skips that draw and
+    you draw a card`` behind a leading window — "Until end of turn, …"
+    (Plagiarize) — or None with the cursor untouched.
+
+    Reached only behind the printed window, for ``parse_turn_mana_change``'s
+    reason (False Dawn): the record this arms hangs off a seat and only the
+    cleanup sweep ends it, so a reading with no window has nothing to say how
+    long it lasts.
+
+    The substitute is read whole rather than as a sentence of its own: "skips
+    that draw" is the replacement taking the event (CR 614.1a), which no
+    statement means on its own, and "you draw a card" is the draw that takes
+    its place — one the same effect may not replace again (CR 614.5). A card
+    printing another substitute is a different sentence and refuses here.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("if"):
+        return None
+    try:
+        player = parse_player_ref(stream)
+    except GrammarError:
+        player = None
+    if (
+        player is not None
+        and stream.accept_phrase("would", "draw", "a", "card")
+    ):
+        stream.accept_punct(",")
+        if stream.accept_phrase(
+            "instead", "that", "player", "skips", "that", "draw", "and", "you",
+            "draw", "a", "card",
+        ):
+            return ast.TurnDrawReplacement(player, duration)
+    stream.reset(mark)
+    return None

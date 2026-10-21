@@ -371,7 +371,15 @@ def _snapshot(game, card) -> tuple:
         (_damage_dealt(game, player, 3), _damage_dealt(game, player, 3, combat=True))
         for player in game.players
     )
-    return (tuple(seats), tuple(game.extra_phases_remaining()), tuple(grants), probes)
+    # W1G7 (TOR): a one-turn rule a resolving spell leaves on the game —
+    # Flash of Defiance's "can't block this turn" — is in no zone, on no
+    # permanent and in no shield, so without this the census read it as a
+    # spell that moved nothing.
+    rules = tuple(
+        repr(entry)
+        for entry in game.blocking_restrictions_until_eot + game.attack_restrictions_until_eot
+    )
+    return (tuple(seats), tuple(game.extra_phases_remaining()), tuple(grants), probes, rules)
 
 
 def _cast_and_settle(card, zone: str):

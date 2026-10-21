@@ -16,7 +16,7 @@ share nothing but the generic helpers every family here uses. See
 ``tests/engine/test_grammar_layering.py``.
 
 **The module is CR 614 on a damage event, which is wider than its name**, and
-Mirage's second wave is where that showed. ``_lower_double_combat_damage``
+Mirage's second wave is where that showed. ``_lower_turn_damage_replacement``
 arrived on one branch and stated the taxonomy — three replacements separated by
 *which half of the event they change*, the recipient here, the amount there,
 whether it happens at all in ``prevention``. ``_lower_damage_becomes_counter_removal``
@@ -832,22 +832,41 @@ def _lower_optional_class_redirect(
     )
 
 
-def _lower_double_combat_damage(
-    node: ast.DoubleCombatDamage,
+def _lower_turn_damage_replacement(
+    node: ast.TurnDamageReplacement,
 ) -> tuple[OracleInstruction, ...]:
     """Blind Fury: "If a creature would deal combat damage to a creature this
-    turn, it deals double that damage to that creature instead."
+    turn, it deals double that damage to that creature instead." Equal
+    Treatment: "If any source would deal 1 or more damage to a permanent or
+    player this turn, it deals 2 damage to that permanent or player instead."
 
     Beside the redirect in this module rather than with the shields: all three
     are CR 614 replacements on a damage event, and what separates them is which
     half of the event they change — the recipient here, the amount there, and
     whether it happens at all in ``prevention``.
 
-    No payload, because the node carries none: the pool prints one wording and
-    every word of it is a narrowing the interceptor tests. A parameter with no
-    second card behind it would be a claim nothing checks.
+    One instruction for both: the handler arms one
+    ``turn_replacements.TurnReplacement`` and the record's fields are the
+    node's. A narrowing left at its default is omitted, so the payload says
+    exactly what the card printed.
     """
-    return (OracleInstruction("double_combat_damage_until_eot", "", {}),)
+    if (node.multiplier > 1) == (node.becomes is not None):
+        raise LoweringError(
+            "a turn damage replacement doubles the damage or sets it, one of "
+            "the two",
+            node=node,
+        )
+    payload: dict[str, object] = {}
+    for name in ("source_creature", "recipient_creature", "combat_only"):
+        if getattr(node, name):
+            payload[name] = True
+    if node.at_least > 1:
+        payload["at_least"] = node.at_least
+    if node.becomes is not None:
+        payload["becomes"] = node.becomes
+    else:
+        payload["multiplier"] = node.multiplier
+    return (OracleInstruction("arm_turn_damage_replacement", "", payload),)
 
 
 def _lower_damage_becomes_counter_removal(

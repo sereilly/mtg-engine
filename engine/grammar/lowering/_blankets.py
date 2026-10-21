@@ -36,6 +36,7 @@ from ._common import (
     _is_source,
     _is_you,
     _restrictions_beyond,
+    refuse_untestable,
     testable_filter_payload,
 )
 from ._events import _RECORDED_PERMANENTS
@@ -677,15 +678,27 @@ def _lower_prevent_all(
             )
         if node.to.quantifier in ("target", "up_to"):
             # The handler's predicate is `is_creature` and nothing else, so a
-            # shield printed over a player or over a narrowed noun phrase would
-            # arm on the wrong object — or on none — while the card reported as
-            # supported. Both are refused rather than dropped.
-            if node.to.filter.card_types != ("creature",) or _restrictions_beyond(
-                node.to.filter, frozenset({"card_types"})
-            ):
+            # shield printed over a player or another type would arm on the
+            # wrong object — or on none — while the card reported as supported.
+            # Refused rather than dropped.
+            if node.to.filter.card_types != ("creature",):
                 raise LoweringError(
-                    "the directional shield is armed on one unnarrowed target "
-                    "creature",
+                    "the directional shield is armed on a target creature",
+                    node=node,
+                )
+            # "…dealt to and dealt by **target creature you control** this
+            # turn." (Cephalid Illusionist.) A narrowing of a *chosen* target
+            # is the picker's and the gates' to honour, not the handler's: the
+            # description below is the list the activation is held to
+            # (CR 602.2b/601.2c) and the list CR 608.2b re-judges at
+            # resolution, and the handler acts only on the target that list
+            # admitted. So the narrowing rides the description — refused only
+            # where the matcher cannot test it — which is what the
+            # ``dealt by target …`` twin above has always done.
+            if _restrictions_beyond(node.to.filter, frozenset({"card_types"})):
+                refuse_untestable(
+                    _filter_payload(node.to.filter),
+                    refusal="the shield's target picker cannot test",
                     node=node,
                 )
             if node.to.quantifier == "up_to":

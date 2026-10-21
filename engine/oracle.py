@@ -1763,6 +1763,13 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("life_at_most",
      r"whenever (?:you have|(?P<life_seat>an opponent) has) "
      r"(?P<life_count>[a-z0-9]+) or less life"),
+    # "When **you have 20 or more life**, you lose the game." (Transcendence.)
+    # The row above crossed from below: the same seat and threshold groups, so
+    # the same payload, and its own kind because the comparison is the
+    # question the sweep asks (the arrangement `source_power_at_least` has).
+    ("life_at_least",
+     r"whenever (?:you have|(?P<life_seat>an opponent) has) "
+     r"(?P<life_count>[a-z0-9]+) or more life"),
     # "**When** a player doesn't pay this enchantment's cumulative upkeep, …"
     # (Thought Lash.) Not a state trigger: CR 702.24a's ability resolves and
     # *fails to be paid* at one identifiable moment, so this is announced from
@@ -2084,6 +2091,14 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # claim is what kept ``parse_coverage`` from ever naming the line.
     ("no_permanents_anywhere",
      r"when there are no (?P<absent_subjects>[^,]+) on the battlefield"),
+    # "When **no creatures are on the battlefield**, sacrifice this
+    # enchantment." (Last Laugh.) Drop of Honey's sentence in the other word
+    # order — the same state (CR 603.8) over the same set, so the same kind
+    # and payload, and a second row rather than a second kind: the kind is the
+    # dispatcher's address and the sweep in `mixins/game_ending.py` already
+    # answers it. Two rows because a pattern may not name one group twice.
+    ("no_permanents_anywhere",
+     r"when no (?P<absent_subjects>[^,]+) are on the battlefield"),
     # "When you control a Dwarf, sacrifice this creature." (Goblins of the
     # Flarg.) A state trigger (CR 603.8) like the two above, and the *positive*
     # one: those fire while a described set is empty, this while it is not.
