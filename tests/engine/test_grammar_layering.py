@@ -1464,6 +1464,18 @@ LOWERING_FAMILIES = [
 # `EFFECT_FAMILIES` above and naming it twice would be a list disagreeing with
 # itself.
 ] + ["returns", "exile", "keywords",
+    # `granted_abilities` split off `keywords` at Torment's Phase 0, 51 lines
+    # under the guard, on that module's own title: "keyword abilities
+    # (CR 702)". A quoted ability ("…gains "<ability>"", Life Matrix) is
+    # CR 113.3 — a whole printed ability carried as text and compiled off the
+    # permanent — and the two lowerings called nothing of each other's. The
+    # one table both read, the printed grant durations, went down to
+    # `_common`. The name is `engine/granted_abilities.py`'s, the probe the
+    # lowering asks, so the mirror re-forms on the engine side as `colors`
+    # and `linked_exile` do. Lowering-only for `types`' reason: the parse half
+    # is a branch of the "gains" / "has" productions the keyword grant reads
+    # too, and the guard fired on the lowerings.
+    "granted_abilities",
     # `keyword_removal` is `keywords`' other half, split at Tempest's wave-3
     # integration when two groups' additions summed past the cap with neither
     # at fault. The seam is that module's own first line — "granting one, and

@@ -609,7 +609,7 @@ def test_yare_compiles_both_of_its_sentences(set_pool):
     """The second sentence's "that creature" is the bound object the first one
     targeted, not a second choice -- so it emits no target description of its
     own and the handler acts on the spell's one target, the idiom
-    ``lowering/keywords.py`` established for the identical pronoun."""
+    ``lowering/granted_abilities.py`` established for the identical pronoun."""
     program = compile_card_oracle(set_pool("MIR")["Yare"])
     assert program.supported, program.reason
     # One instruction, not two. This used to destructure a trailing

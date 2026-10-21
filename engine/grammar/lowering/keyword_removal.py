@@ -34,9 +34,9 @@ from ._common import (_describe_targets, _filter_payload, _is_landwalk,
 
 
 #: Which sweep ends a removed ability line, by the printed duration. The same
-#: words ``lowering/keywords._GRANT_DURATIONS`` reads on the granting side —
-#: spelled here rather than imported because the two families do not import each
-#: other — and only the two this removal's handler records: ``None`` (no printed
+#: words ``_common._GRANT_DURATIONS`` reads on the granting side — spelled here
+#: rather than imported from that floor because this is a different set, not a
+#: copy — and only the two this removal's handler records: ``None`` (no printed
 #: duration) is CR 611.2a's indefinite removal, the channel's original reading.
 _LINE_REMOVAL_DURATIONS: dict[str | None, str | None] = {
     None: None,

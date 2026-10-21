@@ -85,10 +85,10 @@ def lower_block_count_grant(node: "ast.BlockCountGrant") -> tuple[OracleInstruct
     # "**That creature** can block up to two additional creatures this turn."
     # (Yare's second sentence.) The bound object the sentence in front of it
     # already targeted, not a second choice — so no ``targets`` description is
-    # emitted and the handler acts on the spell's one target, the idiom
-    # `lowering/keywords.py` established for the identical pronoun. A bound
-    # object carries no narrowing to honour, so a restated adjective refuses
-    # rather than being dropped.
+    # emitted and the handler acts on the spell's one target, the idiom the
+    # quoted grant established for the identical pronoun (Life Matrix, in
+    # `lowering/granted_abilities.py`). A bound object carries no narrowing to
+    # honour, so a restated adjective refuses rather than being dropped.
     elif _restrictions_beyond(node.subject.filter, frozenset({"card_types"})):
         raise LoweringError(
             '"that creature" carries a narrowing the bound object cannot honour',

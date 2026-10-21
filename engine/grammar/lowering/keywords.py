@@ -1,4 +1,4 @@
-"""Lowering for keyword abilities (CR 702): granting one, and taking one away.
+"""Lowering for keyword abilities (CR 702): granting one.
 
 Split out of ``characteristics`` when that module reached the thousand-line
 guard, and split *here* because the two answer different questions. CR 208 is
@@ -6,9 +6,17 @@ what a creature's power and toughness *are* — a characteristic, computed in
 layer 7. CR 702 is an ability an object *has*, granted and removed in layer 6.
 The pump family and this one shared no helper, only the module.
 
-The gate both halves pass is the same one: a word outside
-``vocabulary.IMPLEMENTED_KEYWORDS`` refuses the line rather than lowering onto a
-grant of nothing (or, worse, a removal of nothing, which reads as working).
+This title read "granting one, and taking one away" until the second half left
+for ``keyword_removal`` at Tempest's wave-3 integration. The gate both halves
+pass is still the same one: a word outside ``vocabulary.IMPLEMENTED_KEYWORDS``
+refuses the line rather than lowering onto a grant of nothing (or, worse, a
+removal of nothing, which reads as working).
+
+**A quoted ability is not a keyword**, and its grant ("…gains "<ability>"",
+Life Matrix — CR 113.3) left for ``granted_abilities`` at Torment's Phase 0,
+51 lines under the guard. Nothing here called it or was called by it; the one
+thing the two lowerings shared, the table of printed durations a grant has a
+sweep for, went down to ``_common``. What stayed is the half that grows.
 """
 
 from __future__ import annotations
@@ -27,13 +35,13 @@ from ..keywords import (PROTECTION_FROM_CHOSEN_COLOR,
 from ..vocabulary import IMPLEMENTED_KEYWORDS
 from ._events import _RECORDED_PERMANENTS, binds_block_pair
 from ._record_keys import CREATED_TOKEN
-from ._common import (_check_grantable, _describe_several_targets,
+from ._common import (_GRANT_DURATIONS, _check_grantable,
+                      _describe_several_targets,
                       _describe_targets, _filter_payload,
                       _durationless_reason, _is_created_token,
                       _refuse_bare_chosen_ability,
                       _restrictions_beyond, _is_enchanted,
-                      _is_source, _is_target, _names_several_targets,
-                      testable_filter_payload)
+                      _is_source, _is_target, _names_several_targets)
 
 #: Where a landwalk whose land type is not printed reads that type from
 #: (Excavator: "landwalk of each of the land types of **the sacrificed land**").
@@ -50,35 +58,14 @@ _KEYWORD_GRANTS: dict[tuple[str, str], str] = {
 }
 
 
-#: The printed durations a grant has a sweep for, mapped to the
-#: `keywords.KEYWORD_GRANT_DURATIONS` key that names it. Everything absent
-#: refuses: a duration the engine cannot *end* is a grant that outlives what the
-#: card said, which is worse than an unsupported card.
-#:
-#: One table for both grant channels — a keyword and a quoted ability line —
-#: because the printed phrase is the same phrase and the two channels are swept
-#: together. It served the quoted line alone while the keyword grant answered
-#: the question with a boolean, which is how "until end of combat" over a
-#: keyword became "until end of turn" without anything refusing.
-_GRANT_DURATIONS: dict[str, str] = {
-    "until_end_of_turn": "end_of_turn",
-    "this_turn": "end_of_turn",
-    "until_end_of_combat": "end_of_combat",
-    # "…gains that ability **until your next upkeep**" (Gabriel Angelfire).
-    # Whose upkeep is CR 109.5's answer — the controller of the ability — and
-    # the handler freezes that seat, because by the time the sweep runs the
-    # affected permanent may be controlled by somebody else.
-    "until_your_next_upkeep": "your_next_upkeep",
-}
-
-
 def _grant_duration(node, duration) -> str:
     """The channel key *duration* names, or a refusal.
 
     Asked by every grant lowering in this file, so a printed duration is
-    admitted in exactly one place — which is what makes the table above the
-    answer to "which durations does this engine end" rather than a list one
-    branch happens to consult.
+    admitted in exactly one place — which is what makes ``_GRANT_DURATIONS``
+    (on ``_common`` since its other reader, the quoted grant, left) the answer
+    to "which durations does this engine end" rather than a list one branch
+    happens to consult.
     """
     key = _GRANT_DURATIONS.get(duration.kind)
     if key is None:
@@ -361,12 +348,12 @@ def _lower_granted_keywords(
         duration = _grant_duration(node, node.duration)
     # Which sweep ends this grant, decided **before** any kind is chosen. Every
     # branch below used to hand the layer-6 channel a bare ``until_eot=True``,
-    # so a duration this table does not hold did not refuse — it became end of
-    # turn. That took "until end of combat" through the opponent's whole turn
-    # and ended "until your next turn" a step early, and it is why Erhnam
+    # so a duration ``_GRANT_DURATIONS`` does not hold did not refuse — it became
+    # end of turn. That took "until end of combat" through the opponent's whole
+    # turn and ended "until your next turn" a step early, and it is why Erhnam
     # Djinn's line needed a card-keyed hook: the one duration whose loss was
     # *visible* was special-cased into a refusal here, and the hook caught it.
-    # The hook is gone with this table.
+    # The hook is gone with that table.
     # "Creatures you control gain flying until end of turn." (Basri, Devoted
     # Paladin's −6.) A team grant locked in at resolution (CR 611.2c) — its own
     # kind, resolved over the controller's board by the handler.
@@ -389,7 +376,7 @@ def _lower_granted_keywords(
         and node.subject.quantifier == "all"
         and node.subject.filter.controller in ("you", None)
         # The handler resolves the board once, at resolution (CR 611.2c), so a
-        # duration it can end is the only requirement — which the table above
+        # duration it can end is the only requirement — which `_grant_duration`
         # has already checked.
         and duration == "end_of_turn"
     ):
@@ -612,10 +599,11 @@ def _lower_granted_keywords(
     # because the ability's target is a *card* in a graveyard or a library
     # and the permanent did not exist when it was announced.
     #
-    # The quoted-ability grant beside this one has read the same record since
-    # Dreams of the Dead; the *keyword* grant refused the subject outright,
-    # which is one printed pronoun with two answers. `produced` is the gate,
-    # so with nothing recorded the words keep whatever reading they had.
+    # The quoted-ability grant (`lowering/granted_abilities.py`) has read the
+    # same record since Dreams of the Dead; the *keyword* grant refused the
+    # subject outright, which is one printed pronoun with two answers.
+    # `produced` is the gate, so with nothing recorded the words keep whatever
+    # reading they had.
     # "**Those creatures** gain haste until end of turn." (Reins of Power.) The
     # plural spelling of the identical back-reference, admitted beside the
     # singular rather than under a branch of its own: the ``permanents_from``
@@ -739,211 +727,3 @@ def _lower_granted_keywords(
         {"chooser": "target_controller", **_targets_description(payload)},
     )
     return (ask, grant)
-
-
-
-def _lower_gain_ability_text(
-    node: ast.GainAbilityText,
-    produced: frozenset[str] = frozenset(),
-    event: str | None = None,
-    event_subject: object | None = None,
-) -> tuple[OracleInstruction, ...]:
-    """"…gains "<ability>"." (Life Matrix.) CR 113.3 / CR 611.2c.
-
-    The grant is the *text*: `engine/keywords.py`'s granted-ability-lines
-    channel records it, ``Permanent.effective_card`` folds it into the rules
-    text, and the compiler makes the ability from there — so the activation
-    enumerator, the trigger scans and the web payload all find it without
-    knowing that a spell granted it.
-
-    Two gates, both of them the difference between a card that works and a card
-    that reports supported and sits inert:
-
-    * the quoted text has to compile (``granted_ability_supported``), because a
-      grant of a sentence the engine cannot read grants nothing;
-    * the duration has to be one the engine can end. Every grant channel here
-      expires at the cleanup step or not at all, so a printed "until end of
-      combat" (Johan) would silently run to end of turn.
-    """
-    from ...granted_abilities import granted_ability_supported
-
-    if not node.abilities:
-        raise LoweringError("a quoted grant needs an ability", node=node)
-    if node.self_name is not None and not _is_source(node.subject):
-        # "Johan can't attack" is an ability on Johan and a proper noun on
-        # anything else. The grant is recorded as text and recompiled on
-        # whatever permanent holds it, so handing this sentence to another
-        # creature would record a line that stops compiling on arrival — a
-        # grant of nothing, which is exactly what the probe below exists to
-        # refuse. Caught here because the probe cannot see who receives it.
-        raise LoweringError(
-            f"the granted ability {node.abilities[0]!r} names its own source, "
-            "so it can only be granted to that source",
-            node=node,
-        )
-    for text in node.abilities:
-        if not granted_ability_supported(text, node.self_name):
-            raise LoweringError(
-                f"the granted ability {text!r} is not one the engine compiles",
-                node=node,
-            )
-    if node.duration.kind is not None and node.duration.kind not in _GRANT_DURATIONS:
-        raise LoweringError(
-            f"no granted-ability channel expires {node.duration.kind!r}", node=node
-        )
-    payload: dict[str, object] = {
-        "abilities": tuple(node.abilities),
-        # A grant with no printed duration lasts as long as the object
-        # (CR 611.2a) — the same reading the durationless keyword
-        # grant above takes, and the reason the channel takes the sweep's name
-        # rather than assuming one answer.
-        "duration": _GRANT_DURATIONS.get(node.duration.kind),
-    }
-    # "If it doesn't have "<ability>," it gains that ability." (Musician.) The
-    # printed condition is about the very sentence being granted, so it rides
-    # on the grant rather than wrapping it: CR 611.2c allows a permanent to
-    # hold one ability twice, and a second copy of Musician's would ask for the
-    # upkeep payment a second time.
-    if node.only_if_absent:
-        payload["only_if_absent"] = True
-    if _is_source(node.subject):
-        return (OracleInstruction("grant_self_ability_text", "", payload),)
-    # "Each of **those creatures** gains "{4}: Remove a paralyzation counter
-    # from this creature."" (Dread Wight.) The bound plural: the recipients are
-    # whatever an earlier step of this same effect recorded (CR 611.2c fixed
-    # the set when the effect began), so nothing is chosen and no ``targets``
-    # description is emitted. The same kind as the single-permanent grant,
-    # because the grant is identical and only its subject differs — and
-    # ``_grant_ability_texts`` is already the one place a quoted ability is
-    # recorded, so a set is a loop rather than a second channel.
-    #
-    # The gates are the ones every bound-plural reader here applies: no
-    # narrowing beyond the card type (a restated adjective would be dropped and
-    # the grant would reach permanents the phrase excludes), and a producer must
-    # have run — with nothing recorded the handler grants nothing while the card
-    # compiles clean.
-    if (
-        isinstance(node.subject, ast.TargetSpec)
-        and node.subject.quantifier == "those"
-        and not node.subject.targeted
-    ):
-        if _restrictions_beyond(node.subject.filter, frozenset({"card_types"})):
-            raise LoweringError(
-                "a bound plural carries no narrowing the grant could honour",
-                node=node,
-            )
-        recorded = tuple(sorted(produced & _RECORDED_PERMANENTS))
-        if not recorded:
-            raise LoweringError(
-                "\"those creatures\" names objects nothing in this effect "
-                "recorded", node=node,
-            )
-        if len(recorded) != 1:
-            raise LoweringError(
-                "\"those creatures\" is ambiguous: several earlier steps "
-                "recorded objects", node=node,
-            )
-        payload["permanents_from"] = recorded[0]
-        return (OracleInstruction("grant_target_ability_text", "", payload),)
-    # "Put a matrix counter on target creature and **that creature** gains …"
-    # (Life Matrix.) The bound object the clause in front of it already
-    # targeted, not a second choice — so no ``targets`` description is emitted
-    # and the handler acts on the ability's one target, exactly as the
-    # where-clause pump reads the same pronoun. A bound object carries no
-    # narrowing to honour, so a restated adjective refuses rather than being
-    # dropped.
-    bound = (
-        isinstance(node.subject, ast.TargetSpec)
-        and node.subject.quantifier == "that"
-        and not _restrictions_beyond(node.subject.filter, frozenset({"card_types"}))
-    )
-    if bound and binds_block_pair(event, event_subject):
-        # "Whenever this creature blocks a creature, … **the creature** gains
-        # "<ability>" and "<ability>"." (Mindbender Spores.) The other half of
-        # the block, which the trigger froze — never a choice, so the recipient
-        # is neither a target nor a record this effect wrote.
-        #
-        # Read **before** the target-shaped reading below, and that order is the
-        # card: on the *blocks* half of the event the stack item's target is the
-        # blocking creature itself (the fire site puts it there so a
-        # self-affecting trigger can find itself), so the fall-through would
-        # have granted both abilities to the Spores and left the creature it
-        # blocked untouched — a card that reports supported and plays as its own
-        # opposite.
-        payload["on_block_pair"] = True
-        types = tuple(node.subject.filter.card_types)
-        if types:
-            payload["subject_types"] = types
-        return (OracleInstruction("grant_target_ability_text", "", payload),)
-    if bound:
-        # "Return target … creature card from your graveyard to the
-        # battlefield. **That creature** gains "Cumulative upkeep {2}.""
-        # (Dreams of the Dead.) The bound object is a permanent an earlier step
-        # of this effect *created*, not the ability's target — the target is a
-        # card in a graveyard, and granting to it would grant to nothing. So
-        # when a step recorded permanents, the grant reads that record; when
-        # none did, the words keep their existing reading as the ability's own
-        # chosen target (Life Matrix, Glyph of Delusion) and the payload below
-        # is byte-identical to what it has always been.
-        recorded = tuple(sorted(produced & _RECORDED_PERMANENTS))
-        if len(recorded) > 1:
-            raise LoweringError(
-                "\"that creature\" is ambiguous: several earlier steps "
-                "recorded objects", node=node,
-            )
-        if recorded:
-            payload["permanents_from"] = recorded[0]
-            return (
-                OracleInstruction("grant_target_ability_text", "", payload),
-            )
-        # The printed noun, carried even though the *choice* was made by the
-        # clause in front of this one: "**that enchantment** gains …"
-        # (Balduvian Shaman) is not a creature, and the grant's resolution
-        # otherwise asks whether it is — the default every other card printing
-        # this shape has wanted. Dropped, the enchantment is no valid target and
-        # the grant silently does nothing.
-        types = tuple(node.subject.filter.card_types)
-        if types:
-            payload["subject_types"] = types
-        return (OracleInstruction("grant_target_ability_text", "", payload),)
-    # "Until end of turn, **creatures you control** gain "{1}: Regenerate this
-    # creature."" (Resuscitate.) A *described* set rather than a chosen one:
-    # nothing is targeted, so no ``targets`` description is emitted and the
-    # board is read as the effect resolves (CR 611.2c fixes the set then).
-    #
-    # The same shape ``grant_team_keyword_until_eot`` already has one grant over
-    # — a keyword and a quoted ability are the same layer-6 addition and differ
-    # only in what is recorded — so this is the *same* kind with a filter on the
-    # payload rather than a second channel: ``_grant_ability_texts`` is already
-    # the one place a quoted ability is written, and a set is a loop around it,
-    # exactly as the bound plural above is.
-    #
-    # Every key of the printed phrase must be testable, because the receiver
-    # applies it with ``subject_matches``: a narrowing dropped here is a grant
-    # reaching creatures the sentence excludes.
-    if (
-        isinstance(node.subject, ast.TargetSpec)
-        and node.subject.quantifier in ("all", "each")
-        and not node.subject.targeted
-    ):
-        described = testable_filter_payload(
-            node.subject.filter,
-            refusal="a team grant cannot narrow by",
-            node=node,
-            require_narrowing=False,
-        )
-        # Whose creatures. "Creatures **you control**" is the caster's board and
-        # nothing else; a phrase naming no controller reaches every seat, which
-        # is the same pair of scopes the keyword grant reads and for its reason
-        # (Stampede is castable by the defending player).
-        payload["filter"] = {
-            key: value for key, value in described.items() if key != "controller"
-        }
-        if node.subject.filter.controller != "you":
-            payload["every_seat"] = True
-        return (OracleInstruction("grant_target_ability_text", "", payload),)
-    if not _is_target(node.subject):
-        raise LoweringError("unsupported granted-ability subject", node=node)
-    assert isinstance(node.subject, ast.TargetSpec)
-    _describe_targets(payload, node.subject)
-    return (OracleInstruction("grant_target_ability_text", "", payload),)

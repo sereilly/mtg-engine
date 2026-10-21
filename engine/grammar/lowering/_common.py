@@ -358,6 +358,33 @@ RESTRICTION_TURNS: dict[str, int] = {
 _REST_OF_COMBAT = ("this_combat", "until_end_of_combat")
 
 
+#: The printed durations a grant has a sweep for, mapped to the
+#: `keywords.KEYWORD_GRANT_DURATIONS` key that names it. Everything absent
+#: refuses: a duration the engine cannot *end* is a grant that outlives what the
+#: card said, which is worse than an unsupported card.
+#:
+#: One table for both grant channels — a keyword and a quoted ability line —
+#: because the printed phrase is the same phrase and the two channels are swept
+#: together. It served the quoted line alone while the keyword grant answered
+#: the question with a boolean, which is how "until end of combat" over a
+#: keyword became "until end of turn" without anything refusing.
+#:
+#: On this floor since Torment's Phase 0, when the quoted grant left
+#: ``keywords`` for ``granted_abilities``: one table for both channels became
+#: two families reading it, and two copies would be two answers to "which
+#: durations does this engine end" — ``RESTRICTION_TURNS``' reason above.
+_GRANT_DURATIONS: dict[str, str] = {
+    "until_end_of_turn": "end_of_turn",
+    "this_turn": "end_of_turn",
+    "until_end_of_combat": "end_of_combat",
+    # "…gains that ability **until your next upkeep**" (Gabriel Angelfire).
+    # Whose upkeep is CR 109.5's answer — the controller of the ability — and
+    # the handler freezes that seat, because by the time the sweep runs the
+    # affected permanent may be controlled by somebody else.
+    "until_your_next_upkeep": "your_next_upkeep",
+}
+
+
 
 
 

@@ -34,7 +34,7 @@ of `engine/turn_state.py`, and no other grammar module, so nothing can reach
 back through it.
 
 No mirror name to reuse. A duration has no lowering module of its own — each
-family maps the kinds it has a sweep for (`lowering/keywords.py`,
+family maps the kinds it has a sweep for (`lowering/_common.py` for grants,
 `lowering/_counted_pumps.py`, `lowering/base_pt.py`, `lowering/phasing.py`) and
 refuses the rest by name — and `ast.Duration` sits in `ast/_core.py` with the
 rest of the shared vocabulary. The nearest word is `engine/event_durations.py`,
