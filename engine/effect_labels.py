@@ -1334,6 +1334,19 @@ TRIGGERED_LABELS: dict[str, str] = {
     # graveyard." Beside `exile_graveyard_cards` -- whose pile and how the
     # card is picked are payload.
     "exile_cards_from_graveyard": "triggered_exile",
+    # --- Torment, at its promotion rehearsal --------------------------------
+    # Hypnox: "When this creature enters, if you cast it from your hand, exile
+    # all cards from target opponent's hand." The guard's second assert, shown
+    # once its first (Major Teroh's) was answered. Hand disruption, beside
+    # `exile_cards_from_hand`'s `activated_discard` (Parallax Nexus) for that
+    # row's reason: the cards come back when Hypnox leaves, to the player they
+    # were taken from, and the point of the ability is the taking. Not only a
+    # report bucket: the trigger reached the client with `spell_pattern`, so
+    # `web/serialization` sent it as `is_triggered: False` - the Planeshift
+    # rehearsal's two entry triggers exactly. Driven: the trigger is on the
+    # stack after the cast, the hand is exiled, and handed back when Hypnox
+    # leaves.
+    "exile_hand_pile": "triggered_discard",
 }
 
 # The one instruction kind whose label depends on what triggered it: `may` wraps
