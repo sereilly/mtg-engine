@@ -29,15 +29,9 @@ def _client_reads(js: str, key: str) -> bool:
 #: each with what the client must do. Not a waiver: the test beside each one
 #: fails the moment the client reads the key, so the entry is deleted with the
 #: client change rather than left behind as a blanket.
-_AWAITING_CLIENT: dict[str, str] = {
-    # Torment W1G1, madness (CR 702.35a): render the offer (card, cost, the
-    # exile slot), let the seat tap lands while it is open (``tap`` /
-    # ``activate`` answer it), open the ordinary cast dialog on the exiled
-    # card and send its fields as ``madness_cast_confirm`` with
-    # ``accept: true`` — or ``accept: false`` to decline. Ignore the exile
-    # card's ``castable_now``: no priority is held during a resolution.
-    "madness_cast": "madness_cast_confirm",
-}
+#: Empty since Torment's wave 2: ``madness_cast`` (W1G1) was the one entry,
+#: and its client is ``applyMadnessCastPrompt`` in ``app.js``.
+_AWAITING_CLIENT: dict[str, str] = {}
 
 
 def test_every_prompt_has_a_client_renderer():

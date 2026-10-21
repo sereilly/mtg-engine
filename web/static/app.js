@@ -96,6 +96,14 @@ let pendingCastFromZone = null;
 // way that requires an alternative cost (CR 118.9b) — the flag the engine
 // reads to look for that kind of permission first.
 let pendingCastZoneWay = null;
+// A zone cast that is the answer to a madness offer (CR 702.35a), while its
+// cast chain runs: the exile slot it was opened on. The chain is the ordinary
+// one — the card's own target, X, division and Aura prompts — and every one of
+// them ends in `sendAction` with a `cast` body, which `carryMadnessAnswer`
+// turns into `madness_cast_confirm` with `accept: true`. The cast is made
+// while the madness trigger resolves (CR 608.2g), which is why it is not the
+// `cast` route: there is no priority to hold and no timing to check.
+let pendingMadnessCast = null;
 // What a cast still owes in MANA once it has announced its printed alternative
 // cost (CR 118.9d: cost increases apply to an alternative cost too) — the
 // offer's `mana_owed`, "" when it owes none, null when no alternative cost
@@ -3348,6 +3356,17 @@ function getCastChoiceInfo(state = currentState) {
   return info;
 }
 
+// Madness (CR 702.35a): "When this card is exiled this way, its owner may cast
+// it by paying [cost] rather than paying its mana cost. If that player
+// doesn't, they put this card into their graveyard." The offer is made while
+// that trigger resolves (CR 608.2g), and only its owner is asked.
+function getMadnessCastInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.madness_cast;
+  if (!info || info.player_seat !== seat) return null;
+  return info;
+}
+
 // Deflection: "Change the target of target spell with a single target." The
 // candidates are heterogeneous -- whatever that spell could legally have
 // chosen -- so the label says which kind each one is.
@@ -4313,6 +4332,7 @@ function beginPendingHandCast(card, handIndex = null) {
   // A fresh cast is from the hand; a zone cast sets the zone right after.
   pendingCastFromZone = null;
   pendingCastZoneWay = null;
+  pendingMadnessCast = null;
   pendingCastAlternativeOwed = null;
   pendingCastCost = null;
   pendingCastOffers = null;
@@ -4344,6 +4364,7 @@ function clearPendingHandCast() {
   pendingCastModeIndex = null;
   pendingCastFromZone = null;
   pendingCastZoneWay = null;
+  pendingMadnessCast = null;
   pendingCastAlternativeOwed = null;
   pendingCastCost = null;
   pendingCastOffers = null;
@@ -4381,6 +4402,7 @@ function isAnyPromptActive(state = currentState) {
   if (getBodyChoiceInfo(state)) return true;
   if (getEntryExileInfo(state)) return true;
   if (getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state)) return true;
+  if (getMadnessCastInfo(state)) return true;
   if (getManaPaymentInfo(state)) return true;
   if (getBandBlockerInfo(state)) return true;
   if (getMultiblockInfo(state)) return true;
@@ -4416,7 +4438,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getDrawBecomesCounterInfo(state) || getRevealUntilKindInfo(state) || getSkipDrawInfo(state) || getEntryDiscardTollInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getPayAnyAmountInfo(state) || getNumberChoiceInfo(state) || getSecretNumberInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getRepeatProcessInfo(state) || getExileFromHandInfo(state) || getExileHandPileInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getOpponentPicksRevealedInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getOrderTriggersInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getDrawBecomesCounterInfo(state) || getRevealUntilKindInfo(state) || getSkipDrawInfo(state) || getEntryDiscardTollInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getPayAnyAmountInfo(state) || getNumberChoiceInfo(state) || getSecretNumberInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getMadnessCastInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getRepeatProcessInfo(state) || getExileFromHandInfo(state) || getExileHandPileInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getOpponentPicksRevealedInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getOrderTriggersInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -6913,6 +6935,174 @@ function applyCastChoicePrompt(info) {
     // button rather than in a log the player would have to reconstruct.
     labelOf: (option) => `${option.name} (${option.damage} damage)`,
   });
+}
+
+// Madness (CR 702.35a). The offer names the card, its cost and its exile slot
+// (web/prompts.py); the card itself — its target spec included — is in the
+// viewer's exile, and the price this cast will be asked for is the madness way
+// the server lists for that slot under `castable_from_zones[].ways`, with every
+// tax and reduction in force. Its `castable_now` is not read: no priority is
+// held during a resolution, and the offer is the whole of the timing.
+function madnessExiledCard(info, state = currentState) {
+  const exile = state?.players?.[seat]?.exile || [];
+  const card = Number.isInteger(info?.exile_index) ? exile[info.exile_index] : null;
+  return card && typeof card === "object" ? card : null;
+}
+
+function madnessZoneEntry(info, state = currentState) {
+  return (state?.castable_from_zones || []).find(
+    (entry) => entry.zone === "exile" && entry.index === info?.exile_index
+      && (entry.owner_seat ?? seat) === seat,
+  ) || null;
+}
+
+function madnessWayOf(entry, info) {
+  const ways = Array.isArray(entry?.ways) ? entry.ways : [];
+  return ways.find((way) => way.keyword === "madness")
+    // The offer's own cost, where the zone list has not caught up with it.
+    || { keyword: "madness", alternative_cost: true, free: false, land: false,
+      price: info?.cost || "", cost: `pay ${info?.cost || ""}`, source: "madness" };
+}
+
+// "Cast it": the ordinary cast chain on the exiled card, for its madness price
+// — the same target, X, division, mode and Aura prompts a hand cast asks — and
+// every body it sends goes out as `madness_cast_confirm` (`carryMadnessAnswer`).
+function beginMadnessCast(info) {
+  const card = madnessExiledCard(info);
+  if (!card) {
+    updateActionHint(`${info.card_name || "The card"} is no longer in your exile.`, true);
+    return;
+  }
+  const entry = madnessZoneEntry(info);
+  beginZoneCast(card, "exile", entry, madnessWayOf(entry, info), { madnessSlot: info.exile_index });
+}
+
+function applyMadnessCastPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  const card = madnessExiledCard(info);
+  const way = madnessWayOf(madnessZoneEntry(info), info);
+  const price = way.price || info.cost || "{0}";
+  const cardName = info.card_name || normalizeCardName(card) || "The card";
+  const me = getCurrentPlayerState();
+  const pool = me?.mana_pool || {};
+  const poolText = MANA_ORDER.some((symbol) => Number(pool[symbol] || 0) > 0)
+    ? formatManaSymbolsHtml(pool)
+    : "none";
+  title.textContent = `Madness — ${cardName}`;
+  setSymbolsHtml(
+    body,
+    `${cardName} was discarded and is in exile. Cast it now for its madness cost ` +
+      `${price}, or put it into your graveyard. ` +
+      `The cast is made while the madness trigger resolves, so Auto-Tap cannot pay for it: ` +
+      `tap lands for the cost by clicking them, before or after you choose its targets.`,
+  );
+  // The madness price beside the printed one when they differ: a tax
+  // (Sphere of Resistance) is part of what this cast will be asked for.
+  const taxed = info.cost && way.price && way.price !== info.cost
+    ? ` <span class="prompt-subnote">(madness ${renderSymbolsInline(info.cost)} with every cost change in force)</span>`
+    : "";
+  const slot = Number.isInteger(info.exile_index) ? info.exile_index + 1 : null;
+  steps.innerHTML = [
+    `<div id="madnessCardSlot" class="prompt-card-row"></div>`,
+    `<div>In your exile${slot ? ` (card ${slot})` : ""}: ${escapeHtml(cardName)}</div>`,
+    `<div>Madness cost: ${renderSymbolsInline(price)}${taxed}</div>`,
+    `<div>Your mana pool: ${poolText}</div>`,
+    `<div class="prompt-choice-row">` +
+      `<button type="button" class="prompt-choice-btn" id="madnessCastBtn">Cast ${escapeHtml(cardName)} for ${renderSymbolsInline(price)}</button>` +
+      `<button type="button" class="prompt-choice-btn" id="madnessDeclineBtn">Put it into your graveyard</button>` +
+    `</div>`,
+  ].join("");
+  if (card) {
+    const cardEl = createCardElement(card, { compact: true, showManaCost: true });
+    cardEl.classList.add("prompt-card-preview");
+    document.getElementById("madnessCardSlot")?.appendChild(cardEl);
+  }
+
+  document.getElementById("madnessCastBtn")?.addEventListener("click", () => {
+    beginMadnessCast(info);
+  });
+  document.getElementById("madnessDeclineBtn")?.addEventListener("click", async () => {
+    try {
+      await sendAction({ seat, action: "madness_cast_confirm", accept: false });
+      updateActionHint(`${cardName} was put into your graveyard.`);
+    } catch (e) {
+      updateActionHint(e.message, true);
+    }
+  });
+}
+
+// The madness cast was refused for mana: the announcement (its targets, X,
+// division) is kept on `pendingAutoTap.actionBody`, and this asks the player
+// to tap for it and send it again. Not the Auto-Tap dialog — its plan is drawn
+// on a scratch copy of the table, which cannot be taken part-way through a
+// resolution — but the same panel, so Cancel and the land clicks are the ones
+// it already has.
+function applyMadnessPaymentPrompt(pending, autoTapBtn) {
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const me = getCurrentPlayerState();
+  const pool = me?.mana_pool || {};
+  const price = pendingCastZoneWay?.price || (pending.card && pending.card.mana_cost) || "";
+  title.textContent = `Pay the madness cost — ${pending.cardName}`;
+  setSymbolsHtml(
+    body,
+    `Tap lands for ${price} by clicking them, then press Cast. ` +
+      `Your choices for ${pending.cardName} are kept.`,
+  );
+  steps.innerHTML = [
+    `<div>Card: ${escapeHtml(pending.cardName)}</div>`,
+    `<div>Madness cost: ${renderSymbolsInline(price || "{0}")}</div>`,
+    `<div>Current mana: ${MANA_ORDER.some((symbol) => Number(pool[symbol] || 0) > 0) ? formatManaSymbolsHtml(pool) : "none"}</div>`,
+  ].join("");
+  if (autoTapBtn) {
+    autoTapBtn.textContent = "Cast";
+    autoTapBtn.classList.remove("hidden");
+    autoTapBtn.disabled = false;
+  }
+  if (!pending.madnessHinted) {
+    pending.madnessHinted = true;
+    updateActionHint(`Tap lands for ${pending.cardName}'s madness cost, then press Cast.`);
+  }
+}
+
+// The Cast button of that dialog: the kept announcement, sent again. A second
+// refusal for mana keeps the dialog open; any other refusal ends the cast and
+// the offer prompt is back on the panel, still owed.
+async function retryMadnessCast() {
+  const pending = pendingAutoTap;
+  if (!pending) return;
+  pendingAutoTap = null;
+  try {
+    updateActionHint(`Casting ${pending.cardName} for its madness cost...`);
+    await sendAction({ ...pending.actionBody });
+    updateActionHint(`Cast ${pending.cardName} for its madness cost.`);
+    clearPendingHandCast();
+  } catch (e) {
+    if (isManaRefusal(e.message)) {
+      pendingAutoTap = pending;
+      updateActionHint(e.message, true);
+    } else {
+      clearPendingHandCast();
+      updateActionHint(e.message, true);
+    }
+  }
+  renderActivationPrompt();
 }
 
 // "As this enters, choose …" — every shape (see getEnterChoiceInfo).
@@ -11075,7 +11265,11 @@ function renderActivationPrompt() {
   const customRow = q("promptCustomRow");
   const customValue = q("promptCustomValue");
   const customOkBtn = q("promptCustomOkBtn");
-  if (autoTapBtn) autoTapBtn.classList.add("hidden");
+  if (autoTapBtn) {
+    autoTapBtn.classList.add("hidden");
+    // The madness payment dialog relabels it "Cast" (applyMadnessPaymentPrompt).
+    autoTapBtn.textContent = "Auto-Tap";
+  }
   // The OK button is shared by every prompt; restore its default label/handler
   // before dispatching so one prompt's customization (mulligan-bottom's
   // "Confirm (n/n)" text+onclick, the priority prompt's "Next Phase") can't
@@ -11413,6 +11607,15 @@ function renderActivationPrompt() {
     return;
   }
 
+  // The madness offer owns the panel until the player starts its cast; from
+  // there the cast's own prompts (targets, X, division, the payment) take it,
+  // and a cancelled or refused cast hands it back with the offer still owed.
+  const madnessInfo = getMadnessCastInfo();
+  if (madnessInfo && pendingMadnessCast === null) {
+    applyMadnessCastPrompt(madnessInfo);
+    return;
+  }
+
   const retargetChoiceInfo = getRetargetChoiceInfo();
   if (retargetChoiceInfo) {
     applyRetargetChoicePrompt(retargetChoiceInfo);
@@ -11664,6 +11867,18 @@ function renderActivationPrompt() {
     okBtn.disabled = true;
     cancelBtn.classList.remove("hidden");
     cancelBtn.disabled = false;
+    customOkBtn.disabled = true;
+    return;
+  }
+
+  if (pendingAutoTap && pendingMadnessCast !== null) {
+    panel.classList.remove("hidden");
+    okBtn.classList.add("hidden");
+    customRow.classList.add("hidden");
+    applyMadnessPaymentPrompt(pendingAutoTap, autoTapBtn);
+    cancelBtn.classList.remove("hidden");
+    cancelBtn.disabled = false;
+    okBtn.disabled = true;
     customOkBtn.disabled = true;
     return;
   }
@@ -18774,6 +18989,14 @@ function renderZoneCards(
           updateActionHint("Finish the current cast before starting another.", true);
           return;
         }
+        // The card a madness offer is about: its cast answers the offer, so it
+        // goes out as `madness_cast_confirm` rather than as a `cast` the
+        // server would refuse mid-resolution.
+        const madness = zoneKind === "exile" && zoneSeat === seat ? getMadnessCastInfo() : null;
+        if (madness && madness.exile_index === index) {
+          beginMadnessCast(madness);
+          return;
+        }
         beginZoneCast(card, zoneKind, zoneEntry);
       });
     }
@@ -18837,7 +19060,7 @@ function startZoneWayChoicePrompt(card, zone, entry) {
   return true;
 }
 
-async function beginZoneCast(card, zone, entry = null, way = null) {
+async function beginZoneCast(card, zone, entry = null, way = null, { madnessSlot = null } = {}) {
   if (seat === null) return;
   if (pendingCastHandCard) {
     updateActionHint("Finish the current cast before starting another.", true);
@@ -18851,6 +19074,9 @@ async function beginZoneCast(card, zone, entry = null, way = null) {
   beginPendingHandCast(card);
   pendingCastFromZone = zone;
   pendingCastZoneWay = chosenWay;
+  // The answer to a madness offer: every body this chain sends is turned into
+  // `madness_cast_confirm` by `carryMadnessAnswer`.
+  if (Number.isInteger(madnessSlot)) pendingMadnessCast = { slot: madnessSlot };
   try {
     if (startFaceChoicePrompt(card)) return;  // CR 709.3, as in the hand cast
     if (cardIsModal(card) && startModalChoicePrompt(card)) return;
@@ -23023,8 +23249,26 @@ async function sendAction(actionBody) {
     return;
   }
   carryCastZoneAndCost(body);
+  carryMadnessAnswer(body);
   const payload = await postJson(`/api/sessions/${sessionId}/action`, body);
   renderState(payload);
+}
+
+// A cast body built by the ordinary cast chain, while that chain is the answer
+// to a madness offer (`pendingMadnessCast`): the same announcement — targets,
+// X, division, mode, Aura target — sent as `madness_cast_confirm` with
+// `accept: true`. The server reads the zone and the alternative cost itself,
+// so the fields `carryCastZoneAndCost` added ride along harmlessly. Asked here
+// because, like the zone, this is the one place every cast prompt ends.
+function carryMadnessAnswer(body) {
+  if (pendingMadnessCast === null || body.action !== "cast") return body;
+  body.action = "madness_cast_confirm";
+  body.accept = true;
+  // `auto_tap` is a priority-window payment (web/payment_plan.py refuses
+  // mid-resolution), so a madness cast never carries it: its mana is tapped
+  // by hand while the offer is open.
+  delete body.auto_tap;
+  return body;
 }
 
 q("homeHostBtn")?.addEventListener("click", () => {
@@ -23353,6 +23597,12 @@ q("promptCancelBtn").addEventListener("click", () => {
 
 q("promptAutoTapBtn")?.addEventListener("click", async () => {
   try {
+    // A madness cast is paid by hand (applyMadnessPaymentPrompt): the button
+    // resends the kept announcement instead of asking for a plan.
+    if (pendingAutoTap && pendingMadnessCast !== null) {
+      await retryMadnessCast();
+      return;
+    }
     await performAutoTap();
   } catch (e) {
     updateActionHint(e.message, true);
