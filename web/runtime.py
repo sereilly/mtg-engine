@@ -8,9 +8,12 @@ this is the bottom of the layering and cannot take part in a cycle.
 
 from __future__ import annotations
 
+import functools
 from pathlib import Path
+from threading import Lock, RLock
 
 from fastapi import HTTPException
+from fastapi.encoders import jsonable_encoder
 
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.behaviour_signature import peers_by_card
@@ -107,3 +110,60 @@ def _require_session(session_id: str) -> Session:
         return store.get(session_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="session not found") from exc
+
+
+#: One lock per session id, taken by every route that reads or moves that
+#: session's game (:func:`one_request_at_a_time`).
+_SESSION_LOCKS: dict[str, RLock] = {}
+_SESSION_LOCKS_GUARD = Lock()
+
+
+def session_lock(session_id: str) -> RLock:
+    """The lock a request about *session_id* holds while it runs."""
+    with _SESSION_LOCKS_GUARD:
+        return _SESSION_LOCKS.setdefault(session_id, RLock())
+
+
+def one_request_at_a_time(endpoint):
+    """Run a session route under that session's lock, and hand FastAPI a
+    payload that no later request can change.
+
+    Found at Torment's Phase 5 (2026-10-21) by reading the browser's own
+    responses: a ``GET …/state`` answered "declare blockers" with a log that
+    already ended "Declare blockers step complete", at the length of the
+    state *after* the action that leaves the step — a payload of two moments.
+    The log is the client's version guard, so it rendered as current; the
+    client's automatic sender for a stalled declare-blockers step decided on
+    it and sent ``next_phase``, and the server applied that to the game it
+    actually had, which was the player's second main phase — left unplayed.
+
+    Two ways a payload was torn, and this closes both:
+
+    * the routes are plain ``def`` functions, run in a thread pool, so a read
+      and an action for the same game ran at the same time and the state was
+      read part-way through the action — the lock makes a read see the game
+      between actions only, and two actions never interleave;
+    * FastAPI encodes a route's return value *after* the route returns, and
+      the state payload holds the game's own log list (``"log":
+      session.game.log``), so the next action's lines were appended to a
+      response already built — encoding under the lock takes the snapshot.
+
+    Measured in-process (a driver sending the browser's automatic actions,
+    two readers polling the state): 25 of ~500 reads were of no state between
+    actions before, 0 after.
+
+    An ``RLock``, so a route that reaches another locked route's code on the
+    same thread does not wait on itself. The event stream is not wrapped: it
+    lives for the whole game and reads no game state.
+    """
+
+    @functools.wraps(endpoint)
+    def serialized(session_id: str, *args, **kwargs):
+        with session_lock(session_id):
+            result = endpoint(session_id, *args, **kwargs)
+            if isinstance(result, (dict, list)):
+                result = jsonable_encoder(result)
+            return result
+
+    serialized.holds_session_lock = True
+    return serialized

@@ -3,10 +3,10 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **5388**
-- Passed: **784** (526 checked in-game, 258 auto-passed)
+- Passed: **789** (531 checked in-game, 258 auto-passed)
 - Failed: **0**
 - Equivalent to a passing card: **61**
-- Untested: **4543**
+- Untested: **4538**
 
 An *auto-pass* is derived, never recorded: the card has no abilities, or nothing but keywords the engine implements, so its behaviour is the generic combat and keyword code plus its printed numbers, and there is no card-specific path for a manual check to exercise. The note names which. A result recorded in-game always takes precedence over it.
 
@@ -1148,7 +1148,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Destructive Urge | ⬜ untested |  |
 | Detonate | ⬜ untested |  |
 | Devastate | ⬜ untested |  |
-| Devastating Dreams | ⬜ untested |  |
+| Devastating Dreams | ✅ pass |  |
 | Devoted Caretaker | ⬜ untested |  |
 | Devouring Deep | ✅ pass | auto-pass: keywords only (islandwalk) |
 | Devouring Strossus | ⬜ untested |  |
@@ -3097,7 +3097,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Norritt | ⬜ untested |  |
 | North Star | ⬜ untested |  |
 | Northern Paladin | ✅ pass |  |
-| Nostalgic Dreams | ⬜ untested |  |
+| Nostalgic Dreams | ✅ pass |  |
 | Notorious Assassin | ⬜ untested |  |
 | Nova Pentacle | ⬜ untested |  |
 | Noxious Field | ⬜ untested |  |
@@ -3694,7 +3694,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Resistance Fighter | ⬜ untested |  |
 | Respite | ⬜ untested |  |
 | Restless Dead | ⬜ untested |  |
-| Restless Dreams | ⬜ untested |  |
+| Restless Dreams | ✅ pass |  |
 | Restock | ⬜ untested |  |
 | Restrain | ⬜ untested |  |
 | Resurrection | ✅ pass |  |
@@ -4142,7 +4142,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Sibilant Spirit | ⬜ untested |  |
 | Sick and Tired | ⬜ untested |  |
 | Sicken | ⬜ untested |  |
-| Sickening Dreams | ⬜ untested |  |
+| Sickening Dreams | ✅ pass |  |
 | Sidar Jabari | ⬜ untested |  |
 | Siege Striker | ⬜ untested |  |
 | Sift | ⬜ untested |  |
@@ -5026,7 +5026,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Vendetta | ⬜ untested |  |
 | Venerable Monk | ⬜ untested |  |
 | Vengeance | ⬜ untested |  |
-| Vengeful Dreams | ⬜ untested |  |
+| Vengeful Dreams | ✅ pass |  |
 | Venom | ⬜ untested |  |
 | Venomous Breath | ⬜ untested |  |
 | Venomous Dragonfly | ⬜ untested |  |

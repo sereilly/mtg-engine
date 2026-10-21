@@ -54,6 +54,7 @@ from .runtime import (
     _require_session,
     _save_snapshot,
     deck_store,
+    one_request_at_a_time,
     spell_by_name,
     store,
     verification_store,
@@ -388,6 +389,7 @@ def create_session(req: CreateSessionRequest, request: Request):
 
 
 @app.post("/api/sessions/{session_id}/join")
+@one_request_at_a_time
 def join_session(session_id: str, req: JoinSessionRequest, request: Request):
     session = _require_session(session_id)
     try:
@@ -421,6 +423,7 @@ def join_session(session_id: str, req: JoinSessionRequest, request: Request):
 
 
 @app.post("/api/sessions/{session_id}/rejoin")
+@one_request_at_a_time
 def rejoin_session(session_id: str, req: RejoinSessionRequest, request: Request):
     """Take a seat back in a game already in progress — same name, same deck,
     same board; nothing is rebuilt. The seat must be a joined human seat with
@@ -453,6 +456,7 @@ def rejoin_session(session_id: str, req: RejoinSessionRequest, request: Request)
 
 
 @app.post("/api/sessions/{session_id}/start")
+@one_request_at_a_time
 def start_session(session_id: str, req: StartGameRequest):
     session = _require_session(session_id)
     try:
@@ -465,6 +469,7 @@ def start_session(session_id: str, req: StartGameRequest):
 
 
 @app.post("/api/sessions/{session_id}/rematch")
+@one_request_at_a_time
 def rematch_session(session_id: str, req: RematchRequest):
     session = _require_session(session_id)
     if session.mode != "human_vs_human":
@@ -491,6 +496,7 @@ def rematch_session(session_id: str, req: RematchRequest):
 
 
 @app.post("/api/sessions/{session_id}/restart")
+@one_request_at_a_time
 def restart_match(session_id: str, req: RematchRequest):
     """Restart the current match in-place (from the Settings panel).
 
@@ -531,6 +537,7 @@ async def stream_session_events(session_id: str, seat: int | None = Query(defaul
 
 
 @app.get("/api/sessions/{session_id}/state")
+@one_request_at_a_time
 def get_state(session_id: str, seat: int | None = Query(default=None, ge=0)):
     session = _require_session(session_id)
     if seat is not None and seat >= len(session.game.players):
@@ -539,6 +546,7 @@ def get_state(session_id: str, seat: int | None = Query(default=None, ge=0)):
 
 
 @app.get("/api/sessions/{session_id}/card_target_spec")
+@one_request_at_a_time
 def get_card_target_spec(
     session_id: str,
     card_name: str = Query(...),
@@ -569,6 +577,7 @@ def get_card_target_spec(
 
 
 @app.post("/api/sessions/{session_id}/raw-state")
+@one_request_at_a_time
 def set_raw_state(session_id: str, req: RawStateRequest):
     session = _require_session(session_id)
     _apply_raw_state(session, req.state)
@@ -588,15 +597,16 @@ def search_cards(
 # The single game-action endpoint. Its 70-branch dispatch over ActionKind is
 # web.actions.do_action; the path is declared here so app.py stays the one
 # place a route is registered.
-app.post("/api/sessions/{session_id}/action")(do_action)
+app.post("/api/sessions/{session_id}/action")(one_request_at_a_time(do_action))
 
 # The auto-tap preview: the same request body, answered with what the
 # server would tap to pay for it and whether the action then goes through
 # (web.actions.preview_payment). A read — nothing of the session moves.
-app.post("/api/sessions/{session_id}/payment_plan")(preview_payment)
+app.post("/api/sessions/{session_id}/payment_plan")(one_request_at_a_time(preview_payment))
 
 
 @app.post("/api/sessions/{session_id}/run-ai")
+@one_request_at_a_time
 def run_ai(session_id: str, steps: int = Query(default=1, ge=1, le=200)):
     session = _require_session(session_id)
     _save_snapshot(session)
@@ -625,6 +635,7 @@ def run_ai(session_id: str, steps: int = Query(default=1, ge=1, le=200)):
 
 
 @app.post("/api/sessions/{session_id}/undo")
+@one_request_at_a_time
 def undo_action(session_id: str, seat: int | None = Query(default=None, ge=0)):
     session = _require_session(session_id)
     if seat is not None and seat >= len(session.game.players):
