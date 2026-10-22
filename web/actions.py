@@ -417,10 +417,9 @@ def _action_activate(session, req, seat_type):
     # ``is_tap_alone_mana_ability`` is the one predicate the seam and this
     # route ask.
     #
-    # Still open, and the note's remaining half: a *priced* mana ability (the
-    # six above) is paid by the activation path, which announces no
-    # tap-for-mana event. The seam refuses those by design (CR 602.2b); closing
-    # it means moving the announcement into the mana ability's resolution.
+    # A *priced* mana ability (the six above) is refused by the seam by design
+    # (CR 602.2b) and paid by the activation path, which announces the tap for
+    # mana itself (``Game._land_tapped_for_mana``, CR 106.12).
     land_as_mana_tap = permanent.has_type("land")
     seam_ability_index = None
     if land_as_mana_tap:

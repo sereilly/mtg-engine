@@ -13,12 +13,12 @@ ci.yml and fails if the two lists drift, so the YAML stays authoritative.
 default because a mid-round tree is legitimately dirty.
 
 ``--caps`` reports how much room the size guards have left. It fails nothing:
-the guard in ``tests/engine/test_grammar_layering.py`` is what fails, and it
-fails only once a module is already over. The number worth knowing *before* a
-set starts is how many modules are one round away from that, because a cap
-crossed at integration is the expensive kind — it fires on nobody's branch,
-with two groups' additions summed, and the integrator has to find the seam with
-none of the work in hand. Mirage crossed five that way across two waves.
+the guards in ``tests/engine/test_module_size.py`` and
+``tests/engine/test_set_test_convention.py`` are what fail, and they fail only
+once a module is already over. The number worth knowing *before* a set starts
+is how many modules are inside the band, because a cap crossed at integration
+is the expensive kind — it fires on nobody's branch, with two groups' additions
+summed, and the integrator has to find the seam with none of the work in hand.
 Derived on every run, so it cannot go stale the way a written-down list would.
 """
 
