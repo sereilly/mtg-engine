@@ -244,7 +244,7 @@ def test_a_card_type_test_over_a_zone_reads_every_printed_type(sth, catalog):
 
     ``CardDefinition.primary_type`` returns the **first** of a fixed list, so
     "Artifact Creature" answers "creature" and never "artifact" — the
-    disagreement SET_PLAYBOOK's Known gaps records for 77 cards in this pool.
+    disagreement Weatherlight measured for 77 cards in this pool.
     The template's card type is payload, so both readings are reachable, and the
     condition is tested with ``search_filters.card_has_type`` — which is what
     makes "an artifact card" find Battering Ram rather than nothing.
