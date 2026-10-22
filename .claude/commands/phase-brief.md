@@ -13,5 +13,12 @@ been wrong):
 3. `./.venv/Scripts/python.exe scripts/picker_sweep.py --set <CODE>` and
    `scripts/behaviour_classes.py --set <CODE>` for the picker and
    lands-in-an-existing-class questions.
-4. Every brief carries the standing paragraphs from SET_PLAYBOOK.md Phase 3
-   (differential, Rock Hydra test via `run_ai_simulation(required=…)`, caps).
+4. `scripts/integration/furthest.py <CODE> <groups.json> <out>` — per refused
+   line, the furthest production that accepted: the best lead for where a
+   sentence will be taught (still a lead). `gen_cards.py` writes each group's
+   CARDS.md from the same instrument output.
+5. Every brief carries the standing paragraphs from SET_PLAYBOOK.md Phase 3
+   (differential, Rock Hydra test via `run_ai_simulation(required=…)`, the
+   2,000-line module cap and `scripts/integration/headroom.py`, `-n 3` for agents
+   and never the whole suite, poll a background run rather than ending the turn
+   on it).

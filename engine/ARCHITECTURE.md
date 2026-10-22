@@ -134,7 +134,8 @@ Work top-down; stop at the first step that covers the card.
 effect *families* carry the same names on each side — so one template has one
 home per side. The order is asserted by `tests/engine/test_grammar_layering.py`
 (`PARSE_LAYERS` / `LOWER_LAYERS`), along with family independence, the flat
-re-export from each `__init__`, and a 1,000-line cap per module that is a
+re-export from each `__init__`. The module cap (2,000 lines, over every module
+in `engine/`, `web/` and `scripts/`, `tests/engine/test_module_size.py`) is a
 scheduling signal, not style: a family that crosses it has stopped absorbing
 new work and splits along a CR boundary (`nouns.py` → `references.py`,
 `statements.py` → `paragraphs.py`, `lowering/characteristics.py` →
