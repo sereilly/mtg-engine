@@ -75,7 +75,7 @@ TARGETS_CHOSEN_ITEM = "targets_chosen_item"
 #: …and the key present when the choice was a change that "doesn't trigger
 #: abilities of permanents named <name>" (Psychic Battle's last sentence). The
 #: value is that name — the changing permanent's **effective** name, read at
-#: the moment of the change — and ``events._player_chooses_targets_filter``
+#: the moment of the change — and ``event_filters._player_chooses_targets_filter``
 #: compares each observer's effective name against it.
 TARGETS_CHANGED_SILENTLY_FOR = "targets_changed_silently_for"
 

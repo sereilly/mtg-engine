@@ -514,7 +514,7 @@ def test_a_keep_slot_is_labelled_by_its_narrowest_noun():
     """Global Ruin's five slots are each "a land" and one basic land type. A
     label reading the card type alone showed five identical "land" keeps while
     the engine refused two Plains."""
-    from web.prompts import _keep_slot_noun
+    from web.prompt_board import _keep_slot_noun
 
     assert _keep_slot_noun({"type_filter": "land", "subtype_filter": "plains"}) == "Plains"
     assert _keep_slot_noun({"type_filter": "artifact"}) == "artifact"

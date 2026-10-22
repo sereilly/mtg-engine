@@ -365,7 +365,11 @@ POSITIONAL_BASELINE: dict[str, int] = {
     "engine/phases/combat_damage_step.py": 14,
     "engine/phases/combat_phase.py": 11,
     "engine/phases/declare_attackers_step.py": 4,
-    "engine/phases/declare_blockers_step.py": 15,
+    # 15 until the 2,000-line split: three of them are the block triggers'
+    # one slot resolver (`_resolved_block_pairs`), which went to
+    # `block_triggers.py` with the fire sites that read it.
+    "engine/phases/block_triggers.py": 3,
+    "engine/phases/declare_blockers_step.py": 12,
     "engine/phases/untap_step.py": 1,
     "engine/phases/upkeep_step.py": 2,
     # web/actions.py's four sites moved with their handlers when the dispatch
@@ -374,7 +378,9 @@ POSITIONAL_BASELINE: dict[str, int] = {
     "web/action_turn.py": 2,
     "web/combat_prompts.py": 3,
     "web/debug_actions.py": 3,
-    "web/prompts.py": 1,
+    # Cuombajj Witches' "any target" list, which went with its renderer when
+    # `web/prompts.py` was split by kind of answer.
+    "web/prompt_board.py": 1,
     "web/serialization.py": 1,
     "web/state_view.py": 2,
 }

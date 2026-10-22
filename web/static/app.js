@@ -6952,7 +6952,7 @@ function applyCastChoicePrompt(info) {
 }
 
 // Madness (CR 702.35a). The offer names the card, its cost and its exile slot
-// (web/prompts.py); the card itself — its target spec included — is in the
+// (web/prompt_board.py); the card itself — its target spec included — is in the
 // viewer's exile, and the price this cast will be asked for is the madness way
 // the server lists for that slot under `castable_from_zones[].ways`, with every
 // tax and reduction in force. Its `castable_now` is not read: no priority is

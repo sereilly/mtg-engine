@@ -242,7 +242,7 @@ def _parse_ability_activated_event(
 
     Both printed narrowings ride the event rather than the kind. Which side of
     {T} the cost falls on is one word, and the noun after "enchanted" is what
-    the attached permanent has to be; `engine/events.py`'s filter reads both.
+    the attached permanent has to be; `engine/event_filters.py`'s filter reads both.
     """
     mark = stream.mark()
     if not (

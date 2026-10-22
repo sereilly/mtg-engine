@@ -27,7 +27,7 @@ carries a casting permission.
 **Expiry is derived, not swept.** "Until that player's next turn" is an ordinal
 against ``Game.seat_turn_counts`` — the same reading Wall of Dust's "can't
 attack during its controller's next turn" takes
-(``engine/phases/declare_attackers_step.py``). A lock records the seat ordinal
+(``engine/phases/attack_legality.py``). A lock records the seat ordinal
 it expires *on*, so a turn that walks past it needs nothing swept and a lock
 can never outlive its sentence because someone forgot a clearing line.
 :func:`expire_hand_locks` only keeps the list from growing.

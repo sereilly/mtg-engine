@@ -21,7 +21,7 @@ guard was not the move here: ``engine/`` carries 70 such reads and draining them
 is a round of its own (SET_PLAYBOOK.md, Known gaps).
 
 A **ratchet per module**, not a ban, for the reason ``test_control_reads.py``'s
-positional ratchet is one: three reads survive, all in ``web/prompts.py``, and
+positional ratchet is one: three reads survive, all in ``web/prompt_board.py``, and
 all three are faithful *mirrors* of engine resolvers that count by the printed
 type. Fixing the mirror alone would make the board offer a permanent the
 resolver then refuses, which is worse than the bug. The numbers may only go
@@ -88,7 +88,7 @@ PRINTED_READ_BASELINE: dict[str, int] = {
     # It was 3 until Odyssey: the third was Kudzu's own land list, which went
     # with that card's hook — its reattachment is the general permanent choice
     # now, whose candidates are the engine's and read the layers.
-    "prompts.py": 2,
+    "prompt_board.py": 2,
 }
 
 # A permanent's printed card handed whole to a card renderer. The same class
@@ -113,13 +113,13 @@ PRINTED_CARD_ARGUMENT_BASELINE: dict[str, int] = {
     # through ``subject_matches``); only the card *shown* for each is the
     # printed one, so a Clone in a sacrifice list is drawn as a Clone and an
     # animated land as a land. ``_serialize_permanent_summary`` is the fix and
-    # ``web/prompts.py`` cannot reach it: ``prompts`` sits *below*
+    # ``web/prompt_board.py`` cannot reach it: ``prompt_board`` sits *below*
     # ``serialization`` in ``web/__init__.LAYERS``, which is why
     # ``PromptContext`` injects a ``serialize_card`` callable at all. Draining
     # this entry means a second injected callable that takes a permanent —
     # ``PromptContext``'s own shape, which is another group's surface this
     # wave.
-    "prompts.py": 3,
+    "prompt_board.py": 3,
 }
 
 

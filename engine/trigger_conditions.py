@@ -80,7 +80,7 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # this artifact." (Booby Trap.) The same ``draws_card`` announcement the
     # "whenever" table narrows by seat, narrowed here by *two* records the
     # permanent made as it entered (CR 614.1c) — so both are words on the
-    # condition and the comparison is a metadata read in ``engine/events.py``,
+    # condition and the comparison is a metadata read in ``engine/event_filters.py``,
     # where the permanent is in hand. Nothing the announcement could carry says
     # which player a trap was aimed at.
     #

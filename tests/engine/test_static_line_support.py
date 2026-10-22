@@ -75,7 +75,7 @@ IMPLEMENTED_ELSEWHERE: dict[str, str] = {
     "remove a corpse counter from this creature":
         "handlers/board_misc.py, reached as an activated ability (Scavenging Ghoul)",
     "this creature can block an additional creature":
-        "phases/declare_blockers_step.py:_max_blocks_for (Two-Headed Giant of Foriys)",
+        "phases/block_legality.py:_max_blocks_for (Two-Headed Giant of Foriys)",
     "as long as this creature is untapped, all damage that would be dealt to you":
         "phases/combat_damage_step.py (Veteran Bodyguard)",
     "as this creature enters, it becomes your choice of":

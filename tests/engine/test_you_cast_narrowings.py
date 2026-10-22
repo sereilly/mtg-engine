@@ -2,7 +2,7 @@
 on that scope is one the dispatcher asks.
 
 The three cast scopes ("a player casts", "an opponent casts", "you cast")
-print the same narrowings, and ``events._cast_narrowing_admits`` is the one
+print the same narrowings, and ``cast_event_filters._cast_narrowing_admits`` is the one
 reader of them. The two board-wide scopes have gone through it since Urza's
 Chalice; ``_controller_cast_filter`` kept four tests of its own inline and
 asked the helper for nothing else — so a narrowing ``engine/trigger_conditions.py``'s

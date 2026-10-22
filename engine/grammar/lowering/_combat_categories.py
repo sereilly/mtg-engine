@@ -22,8 +22,9 @@ answered by the **combat phase**. Twenty-four have an effect handler and all
 twenty-four are in `engine/handlers/combat.py`, where what the handler writes is
 a mark a combat step reads back. The other ten have no `EFFECT_HANDLERS` entry
 at all — the declarations and the damage assignment
-(`phases/declare_attackers_step.py`, `phases/declare_blockers_step.py`,
-`combat_assignment.py`) read them straight off the compiled program. The
+(`phases/declare_attackers_step.py`, `phases/declare_blockers_step.py` and the
+`attack_legality.py` / `block_legality.py` beside them, `combat_assignment.py`)
+read them straight off the compiled program. The
 converse is not claimed: `evasion`'s four kinds and three of `prevention`'s
 resolve in that handler module too and keep their own categories, because a
 category names the migration family a kind belongs to and not where its handler

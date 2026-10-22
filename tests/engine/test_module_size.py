@@ -73,9 +73,6 @@ OVERSIZED: dict[str, int] = {
     "engine/combat_restrictions.py": 2187,
     "engine/cost_modifiers.py": 2178,
     # --- S11 ---
-    "web/prompts.py": 2892,
-    "engine/phases/declare_blockers_step.py": 2830,
-    "engine/phases/declare_attackers_step.py": 2042,
     # --- integrator ---
 }
 

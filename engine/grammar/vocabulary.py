@@ -152,7 +152,7 @@ IMPLEMENTED_KEYWORDS: frozenset[str] = frozenset({
     # as evasion and what the reminder text ("can block **or** be blocked by
     # only creatures with shadow") says in one breath.
     #
-    # `phases/declare_blockers_step._can_block_attacker` asks both halves off
+    # `phases/block_legality._can_block_attacker` asks both halves off
     # layer 6, so a granted shadow (Dauthi Embrace, Shadow Rift) and a removed
     # one (Reality Anchor) are the ordinary channels with nothing else to build.
     "shadow",

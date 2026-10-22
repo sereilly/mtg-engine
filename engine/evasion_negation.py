@@ -24,7 +24,7 @@ tables.
 
 The effect is *global* and belongs to no particular creature, so unlike the
 restrictions in `combat_restrictions.py` it is not read off the attacker.
-`declare_blockers_step._attacker_has_active_landwalk` asks the board: while any
+`block_legality._attacker_has_active_landwalk` asks the board: while any
 permanent with this line is on the battlefield, that landwalk stops restricting
 blocks for every creature, its controller's included (the card says "creatures",
 not "creatures your opponents control").

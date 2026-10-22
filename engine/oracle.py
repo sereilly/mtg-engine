@@ -564,7 +564,7 @@ def _compile_card_oracle(
         # land had no combat to restrict, and the gate above already asked
         # `combat_restriction_for` through `_is_supported_static_creature_line`,
         # so a land printing one would have been admitted with the restriction
-        # nowhere: `declare_attackers_step.can_attack` scans every permanent's
+        # nowhere: `attack_legality.can_attack` scans every permanent's
         # compiled *instructions*, and this loop is the only place a land's
         # static line becomes one.
         land_statics: list[OracleInstruction] = []

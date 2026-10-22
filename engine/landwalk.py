@@ -280,7 +280,7 @@ def board_named_landwalks(game, seat: int, permanent: "Permanent") -> tuple[str,
     copy's controller's lands; CR 612: a text change is the text) and counted
     for *seat*, the permanent's current controller — the walker's lands name
     the types, and the *defending* player's lands decide whether each one
-    applies (CR 702.14c, ``declare_blockers_step``), which are two different
+    applies (CR 702.14c, ``block_legality``), which are two different
     boards. Every word is put to :func:`landwalk_requirement`, the reader that
     enforces the ability, so a grant nothing would enforce is never made.
     """

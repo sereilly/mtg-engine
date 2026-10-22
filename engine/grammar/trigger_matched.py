@@ -135,7 +135,7 @@ def _accept_card_put_into_graveyard_from_anywhere(
     :class:`ObjectFilter` on a battlefield subject would be matched against. So
     the words are consumed here (a production takes every token of its line or
     refuses it) and the narrowing rides the compiler's ``graveyard_card_filter``,
-    which the event filter in ``engine/events.py`` tests through the card
+    which the event filter in ``engine/event_filters.py`` tests through the card
     matcher.
 
     Non-consuming on refusal, so the subject-led death production behind it

@@ -563,7 +563,7 @@ def _derived_static_claims(
         claims.append("regeneration")
     # The *name-keyed* half of the same CR 504 story (Island Sanctuary's
     # skip-your-draw-for-protection), registered in card_hooks and carried out by
-    # phases/draw_step.py, phases/declare_attackers_step.py and
+    # phases/draw_step.py, phases/attack_legality.py and
     # phases/untap_step.py. It has no instruction either, and until this claim it
     # had no support of its own: the card was held up by a `spell_pattern` marker
     # the whole-text fallback produced from the words "draw a card" inside a

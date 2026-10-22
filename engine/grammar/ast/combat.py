@@ -165,7 +165,7 @@ class AttackAsThough:
     CR 609.4: an "as though" effect applies **only** to the stated effect, so
     this is a *permission* rather than a keyword removal — the creature still
     has defender for everything else, which is the distinction
-    ``declare_attackers_step._ignores_defender`` is written around and the
+    ``attack_legality._ignores_defender`` is written around and the
     reason this is not a :class:`~ast.LoseKeyword` with a narrower duration.
 
     The ignored ability is carried as data rather than baked into the node's

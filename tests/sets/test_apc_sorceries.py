@@ -1831,7 +1831,7 @@ def test_w2g2_gaeas_balance_s_five_descriptions_read_as_five_slots(set_pool):
     the dialog calls each of the five finds, from the slots the card compiles
     to. A dual land answers two of them, which is why they are shown as slots
     with a card in each rather than as a count."""
-    from web.prompts import search_slot_label
+    from web.prompt_cards import search_slot_label
 
     slots = _w2g2_one_of_each(set_pool("APC")["Gaea's Balance"])
 
@@ -1844,7 +1844,7 @@ def test_w2g2_gaeas_balance_s_five_descriptions_read_as_five_slots(set_pool):
 def test_w2g2_guided_passage_s_three_descriptions_read_as_three_slots(set_pool):
     """"…a creature card, a land card, and a noncreature, nonland card." The
     labels are the card's own three phrases, in its order."""
-    from web.prompts import search_slot_label
+    from web.prompt_cards import search_slot_label
 
     slots = _w2g2_one_of_each(set_pool("APC")["Guided Passage"])
 

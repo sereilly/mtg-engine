@@ -116,7 +116,7 @@ _GRAMMAR_STATIC_CREATURE_KINDS = frozenset(
         # duration -- the ability a kicked Prison Barricade is granted in
         # quotes. A CR 609.4 permission that is a static property of the
         # creature, read off the compiled program by
-        # `declare_attackers_step._ignores_defender`; like every kind above,
+        # `attack_legality._ignores_defender`; like every kind above,
         # the instruction is the record the consumer reads.
         "attacks_as_though_no_defender",
     }

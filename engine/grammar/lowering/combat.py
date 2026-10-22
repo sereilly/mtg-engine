@@ -150,7 +150,7 @@ def _lower_combat_restriction(
     # "Creatures can't attack this turn." (Festival.) The attack twin of the
     # blanket can't-block below, and the same three gates for the same reasons:
     # a duration, a plural subject, and a filter the enforcing gate can test.
-    # The gate here is `declare_attackers_step.can_attack`, which tests a filter
+    # The gate here is `attack_legality.can_attack`, which tests a filter
     # payload through `subject_matches` — so what it may carry is wider than the
     # blocker gate's three keys, and is held to `TESTABLE_SUBJECT_FILTER_KEYS`
     # for the reason that set exists: a narrowing the matcher cannot test would
@@ -775,7 +775,7 @@ def _lower_attack_as_though(node: ast.AttackAsThough) -> tuple[OracleInstruction
         # (CR 604.1), so it is not stamped and swept like the one-turn form
         # below: the instruction simply sits on the permanent's program for as
         # long as the line is part of what the permanent says, and
-        # ``declare_attackers_step._ignores_defender`` reads it there -- off
+        # ``attack_legality._ignores_defender`` reads it there -- off
         # ``effective_card``, which is what folds a granted line in.
         #
         # Lowered here rather than added to ``engine/combat_restrictions.py``

@@ -695,7 +695,7 @@ def spells_cast_matching(game: "Game", seat: int, payload: dict) -> bool:
 
     The **one reader of the record**, for :func:`cast_spell_filter`'s reason one
     function up: Skyshroud Condor asks it as a casting gate and Mogg Conscripts
-    asks it as a combat restriction (``phases/declare_attackers_step``), and the
+    asks it as a combat restriction (``phases/attack_legality``), and the
     two must not come to disagree about which casts count.
 
     *seat* is whose "you" it is: the caster for a casting gate (CR 109.5's

@@ -3,7 +3,7 @@ browser.
 
 Found by driving Runed Halo in the running app to look at what it had named.
 The server arms one prompt kind (``enter_choice``) in nine shapes, renders all
-of them (``web/prompts._enter_choice``) and answers all of them
+of them (``web/prompt_values._enter_choice``) and answers all of them
 (``web/action_prompt_answers``) — and the client's reader,
 ``getEnterChoiceInfo``, returned null for every shape that names no opponent.
 So for a human seat a resolved Ward, Runed Halo, Conspiracy or Shimmer left the
@@ -43,7 +43,8 @@ from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from tests.helpers import app_js_function_body
 from web.app import app, store
-from web.prompts import PromptContext, _enter_choice
+from web.prompt_values import _enter_choice
+from web.prompts import PromptContext
 
 client = TestClient(app)
 _CARDS = {card.name: card for card in load_catalog()}

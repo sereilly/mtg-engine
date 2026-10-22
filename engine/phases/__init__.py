@@ -12,7 +12,10 @@ the comprehensive rules turn structure:
     Combat phase           combat_phase
       ├─ Beginning of combat   beginning_of_combat_step
       ├─ Declare attackers     declare_attackers_step
+      │    └─ its legality     attack_legality
       ├─ Declare blockers      declare_blockers_step
+      │    ├─ its legality     block_legality
+      │    └─ its triggers     block_triggers
       ├─ Combat damage         combat_damage_step
       └─ End of combat         end_of_combat_step
     Postcombat main phase  postcombat_main_phase
@@ -33,7 +36,10 @@ from .precombat_main_phase import PrecombatMainPhaseMixin
 from .combat_phase import CombatPhaseMixin
 from .beginning_of_combat_step import BeginningOfCombatStepMixin
 from .declare_attackers_step import DeclareAttackersStepMixin
+from .attack_legality import AttackLegalityMixin
 from .declare_blockers_step import DeclareBlockersStepMixin
+from .block_legality import BlockLegalityMixin
+from .block_triggers import BlockTriggersMixin
 from .combat_damage_step import CombatDamageStepMixin
 from .end_of_combat_step import EndOfCombatStepMixin
 from .postcombat_main_phase import PostcombatMainPhaseMixin
@@ -50,7 +56,10 @@ __all__ = [
     "CombatPhaseMixin",
     "BeginningOfCombatStepMixin",
     "DeclareAttackersStepMixin",
+    "AttackLegalityMixin",
     "DeclareBlockersStepMixin",
+    "BlockLegalityMixin",
+    "BlockTriggersMixin",
     "CombatDamageStepMixin",
     "EndOfCombatStepMixin",
     "PostcombatMainPhaseMixin",

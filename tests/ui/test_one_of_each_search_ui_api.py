@@ -203,7 +203,7 @@ def test_a_search_of_ones_own_library_names_no_other_owner():
 
 
 def test_the_label_is_assembled_from_the_keys_the_predicate_honours():
-    from web.prompts import search_slot_label
+    from web.prompt_cards import search_slot_label
 
     assert search_slot_label({"card_type": "creature"}) == "a creature card"
     assert search_slot_label({"exclude_types": ["creature", "land"]}) == (
