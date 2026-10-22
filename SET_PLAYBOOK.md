@@ -363,6 +363,35 @@ on at least one resolution.
   neither side is necessarily right: count references in the merged body.
 - **Count a module's reach in non-merge commits** (`git log --no-merges`); a
   merge commit touches every file its branch did.
+- **A split round runs like a wave**, one group per subsystem, and it has one
+  extra rule: **a group keeps a temporary re-export, marked as such, for every
+  name it moves that a file another group is splitting imports** — editing that
+  import line would conflict with the other group's move. One sweep after the
+  last merge repoints those importers and deletes the re-exports
+  (`test_import_hygiene.py` names each one nobody pulls any more). The 2,000-line
+  round left 133 and removed them in one pass.
+- **Run `scripts/integration/import_names.py` on every split and every merge
+  of one.** It imports every module any `from X import Y` names, function-level
+  imports included, and asks it for each name. A function-level import of a
+  moved name passes every smoke import and every scan, and fails only when its
+  line runs.
+- **A guard over a list of modules, or `inspect.getsource` of a package, goes
+  blind when the module splits** — `getsource` of a package reads only its
+  `__init__`. Make such a guard walk the package (`pkgutil.iter_modules`, or the
+  directory) with a floor on how many modules it saw. Three groups of the round
+  each found one that would have passed over nothing.
+- **An ordered table stays whole even past the runway** (the prompt registry,
+  the first-match-wins trigger table): a table whose order is behaviour does
+  not scatter across modules. Dump a table or registry before and after — the
+  entries in order, each function by its code — and compare.
+- **A method over the runway on its own is cut into its rule's steps by
+  script**: each step a run of the method's top-level statements copied
+  verbatim into a helper, the run replaced by generated glue (the call, inputs
+  passed as themselves, an early return where the run could return), inputs
+  and outputs from a liveness analysis. The proof is that inlining every
+  helper back gives an AST equal to the original. `_cast_onto_stack` and
+  `_activate_onto_stack` (1,865 and 2,433 lines) were cut that way by CR
+  601.2 / 602.2 step.
 
 ### Mechanical edits
 

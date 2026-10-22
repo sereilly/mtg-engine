@@ -1234,3 +1234,33 @@ Odyssey's module entry is drained (ten pre-splits) and replaced - five
 modules inside the band and `ast/__init__.py`'s format decision, for the
 next Phase 0. What the set measured and left is one ROADMAP entry with its
 parts named.
+
+### CAP — 2026-10-22 (a round, not a set)
+
+*The module cap raised to 2,000 lines and widened from `engine/grammar/` to
+every module in `engine/`, `web/` and `scripts/`, and the 35 modules over it or
+inside its band split by eleven agents in two waves; beside it, the process
+documents cut to what they say now.* The 1,000-line grammar cap had cost a
+pre-split round before every set (Torment's was ten splits in three rounds),
+because splits were cut to just under it, and nothing capped anything else:
+`mixins/stack/choices.py` was 13,312 lines and `handlers/zones.py` 11,769, the
+two files every wave's groups edited. Thirteen merges onto a chain of links,
+each read 0/0/0 on `oracle_diff` and 0 moved on the new `sim_fingerprint` (twelve
+seeded AI games, byte-compared); conflicts were import lines, guard keys and
+prose, every one resolved by an asserting script. Wave 1's full gate read green
+on the whole suite. The largest module afterwards is 1,789 lines.
+
+Alongside: `CLAUDE.md` 155 KB -> 59 KB (the rules, said once; no tracker
+counts), this playbook 341 KB -> 64 KB with its history moved here, `ci.yml`'s
+budget narrative to five rules, and the integrator's toolkit committed as
+`scripts/integration/` (with `import_names.py`, which this round needed). The
+gate cadence is the meeting-point run between merges and the full gate at a
+wave's close and the promotion. `.worktrees/scratch` pruned from 3.4 GB to the
+hand-written notes of every round (`scratch/_archive/`).
+
+*Edits in place:* Module splits gains the split round's five rules (temporary
+re-exports and the sweep, `import_names.py`, blind module-list guards, ordered
+tables whole, cutting a method by step). *Known gaps:* the restructure deleted
+Phyrexian Splicer's runtime narrowing as drained when it is not, found by
+reading the code comments that cite the list; it is restored. Nothing else
+drained.
