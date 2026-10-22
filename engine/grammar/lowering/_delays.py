@@ -25,7 +25,7 @@ from __future__ import annotations
 from ...oracle_types import OracleInstruction
 
 #: ``binds_player`` values naming **where the seat is read from** as the entry
-#: is armed (``handlers/board_misc.create_delayed_trigger`` routes on them).
+#: is armed (``handlers/delayed.create_delayed_trigger`` routes on them).
 #: The player the creating resolution holds — the one its spell or ability
 #: announced (CR 601.2c/602.2b), or the seat its announced object sits with.
 #: The record ``lowering/delayed._SEAT_RECORDS`` names for Suppress, so one

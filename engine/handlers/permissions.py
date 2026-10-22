@@ -7,7 +7,10 @@ cast-or-play permission over cards in a named zone
 (``engine/cast_permissions.py`` holds the state, the cast path asks it, cleanup
 expires the turn-scoped grants). The other two make a hidden card visible: a
 face-down exiled card to the player who may look at it (Gustha's Scepter), and a
-library's top card to everyone (Temporal Aperture).
+library's top card to everyone (Temporal Aperture). Illusionary Mask's "you may
+cast that card face down" arms the choice of the card here
+(``cast_face_down_creature``, from ``board_misc.py`` at the split round below);
+the cast itself is the face-down cast path's.
 
 Split out of ``zones.py`` at the 2,000-line cap's split round.
 """
@@ -419,4 +422,24 @@ def grant_cast_permission(game: Game, instruction: OracleInstruction, context: O
         return True, "resolved"
 
     game.log.append(f"{source_name}: unrecognized cast permission payload")
+    return True, "resolved"
+
+
+@effect_handler("cast_face_down_creature")
+def cast_face_down_creature(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Illusionary Mask: arm a pending choice for the controller to pick a creature
+    card in hand whose mana cost X could pay (cmc <= X), to cast face down as a 2/2.
+    The actual cast happens in confirm_face_down_cast; the choice is optional."""
+    caster = context.caster
+    card = context.card
+    controller_index = game.players.index(caster)
+    max_cmc = max(0, int(context.x_value or 0))
+    eligible = [c for c in caster.hand if c.primary_type == "creature" and int(c.cmc or 0) <= max_cmc]
+    if not eligible:
+        game.log.append(f"{card.name}: no eligible creature in hand to cast face-down (X={max_cmc})")
+        return True, "resolved"
+    game.arm_pending_choice(
+        "face_down_cast", controller_index, max_cmc=max_cmc, card_name=card.name
+    )
+    game.log.append(f"{card.name}: choose a creature (mana value <= {max_cmc}) to cast face down")
     return True, "resolved"

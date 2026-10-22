@@ -328,7 +328,7 @@ def ante_or_exchange_ownership(game: Game, instruction: OracleInstruction, conte
     makes that variant opt-in.
     """
     from ..subject_filters import subject_matches
-    from .control_flow import _narrow_to_takeable_actions
+    from .offers import _narrow_to_takeable_actions
 
     card_name = getattr(context.card, "name", "")
     if not getattr(game, "playing_for_ante", False):

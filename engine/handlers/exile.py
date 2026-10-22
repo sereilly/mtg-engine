@@ -1,7 +1,8 @@
 """Exiling (CR 701.13): an object moved to the exile zone.
 
 The handler twin of ``engine/grammar/lowering/exile.py``. Off the battlefield: a
-target permanent, the source itself, a created token, every permanent a phrase
+target permanent, the source itself, a created token or any number of the
+tokens a creature created (Tetravus), every permanent a phrase
 names (Ugin's −X), a creature until end of turn, and a creature whose controller
 gains life equal to its power. Out of a graveyard: the whole of one, a position
 in it, announced cards, everything a phrase names, what a cost sacrificed, a
@@ -1296,4 +1297,42 @@ def exile_bound_card_from_graveyard(game: Game, instruction: OracleInstruction, 
             )
             return True, "resolved"
     game.log.append(f"{card.name} was no longer in {owner.name}'s graveyard")
+    return True, "resolved"
+
+
+@effect_handler("exile_any_number_of_own_tokens")
+def exile_any_number_of_own_tokens(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """Tetravus: "Exile **any number of** tokens created with this creature."
+
+    The set is found here rather than picked by a target picker, because the
+    phrase names no target at all (CR 115.10a) — it names a set the game can
+    identify, and asks its controller how many of it to take.
+
+    **How many, not which.** Every token in that set was made by the same
+    ability off the same permanent with the same characteristics, so which ones
+    go is not a difference the game can observe; the ones taken are the
+    oldest first, by `permanent_id`, so a replay is a replay. A card whose
+    tokens could differ from one another would need a real picker, which is why
+    the lowering admits this phrase and nothing wider.
+    """
+    source = context.source_permanent
+    if source is None:
+        return True, "resolved"
+    owned = tokens_created_with(game, source)
+    seat = game.controller_index_of(source)
+    if seat is None or not owned:
+        context.results["trigger_count"] = 0
+        return True, "resolved"
+    game.arm_pending_choice(
+        "number_choice", seat,
+        card_name=source.card.name, permanent=source,
+        minimum=0, maximum=len(owned),
+        # The "may" in front of the sentence already asked whether to do this
+        # at all; a seat that got here said yes, so the default takes all of
+        # them rather than making the answer mean nothing.
+        default_number=len(owned),
+        exile_own_tokens=True, results=context.results,
+    )
     return True, "resolved"

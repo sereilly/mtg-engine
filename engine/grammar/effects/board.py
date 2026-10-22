@@ -165,7 +165,7 @@ def _parse_sacrifice(stream: TokenStream, player: ast.PlayerRef) -> ast.Statemen
         # payment as the alternative, decomposed to the same `May` the counted
         # sacrifice below lowers to — not a third fused node. That decomposition
         # is what makes the "cannot afford it" case right for free:
-        # `handlers/control_flow._action_is_takeable` asks `can_pay_life`, so a
+        # `handlers/offers._action_is_takeable` asks `can_pay_life`, so a
         # player at 1 life is never offered the payment and the enchantment goes.
         #
         # Read before the mana spelling because both open "unless you pay", and

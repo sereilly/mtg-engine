@@ -43,7 +43,8 @@ def test_a_mass_damage_sweep_fires_the_triggers_of_what_it_damages(catalog_by_na
     Fungusaur took its point from Earthquake and grew nothing, across five
     shipped sets. Marking damage is half a damage event; the other half is
     `_fire_dealt_damage_triggers`, and every sweep in `handlers/damage.py`
-    reached for the lower call. CR 603.2 puts one trigger on the stack per
+    (`damage_sweeps.py` since the 2,000-line split) reached for the lower
+    call. CR 603.2 puts one trigger on the stack per
     creature dealt to, so the sweep fires per creature and the state-based
     kill still batches after it.
     """

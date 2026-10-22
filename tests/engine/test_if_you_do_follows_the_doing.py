@@ -2,7 +2,7 @@
 
 For most offers taking the offer *is* the doing: "you may sacrifice this
 creature. If you do, destroy target creature" has nothing between the yes and
-the sacrifice, and ``handlers/control_flow._action_is_takeable`` withdraws an
+the sacrifice, and ``handlers/offers._action_is_takeable`` withdraws an
 offer whose action has nothing to act on. One family is different. Where the
 offered action is **a pick out of a hidden zone**, the yes is followed by a
 second prompt — which card — and the seat may hold no eligible card or decline

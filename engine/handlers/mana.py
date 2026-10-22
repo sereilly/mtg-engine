@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 def _pool_clause_seats(game: Game, context, actor: str) -> list[int]:
     """The seats named by ``activate_each_lands_mana_ability`` /
     ``lose_all_unspent_mana``'s ``player`` payload."""
-    from .control_flow import _offered_seats
+    from .offers import _offered_seats
 
     if actor in ("target_player", "that_player"):
         # A spell's own target. Checked rather than handed to the resolver's

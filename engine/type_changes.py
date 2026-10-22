@@ -10,8 +10,8 @@ it's created" — which is what orders it against every other layer-4 effect on
 the same permanent.
 
 The engine used to record them by appending a dict to a metadata list from five
-places (``handlers/board_misc.py`` ×4, ``handlers/zones.py`` ×1 — now
-``handlers/reanimation.py``), none of which
+places (``handlers/board_misc.py`` ×4 and ``handlers/zones.py`` ×1 — now
+``handlers/types.py`` and ``handlers/reanimation.py``), none of which
 recorded *when*. The layer bridge had nothing to order by and gave both lists
 the constant 0 — every addition before every removal, whichever came first — so
 a Snow-Covered Forest thawed by the Weathervane and then frozen again was not
@@ -43,7 +43,7 @@ Two recorded lists and the derived half
 Land types are ``engine/land_types.py``'s (CR 305.7 makes them a replacement
 with rules of its own), a card-type *set* is one stamped slot with one writer
 (``layer_bridge.SET_CARD_TYPES``), and an animation's record is
-``handlers/board_misc._animation_record``'s. ``layer_bridge.collect_type_effects``
+``handlers/animation._animation_record``'s. ``layer_bridge.collect_type_effects``
 reads all of them and is the only reader of what is recorded here.
 """
 

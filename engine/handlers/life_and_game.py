@@ -142,7 +142,7 @@ def player_wins_game(game: Game, instruction: OracleInstruction, context: Oracle
         # the reader Wild Dogs' gate and hand-over share, so a tie names nobody
         # and nobody wins here; the card's own tie sentence is the branch the
         # grammar builds in front of this step.
-        from .control_flow import most_life_seat
+        from ._conditions import most_life_seat
 
         seat = most_life_seat(game)
         if seat is None:
@@ -511,7 +511,7 @@ def target_gains_life(game: Game, instruction: OracleInstruction, context: Oracl
         # player, the caster's opponents for the other word, and nobody who has
         # left the game (CR 800.4a). The same set "each player loses 1 life"
         # reaches one handler up.
-        from .control_flow import _offered_seats
+        from .offers import _offered_seats
 
         single = dataclasses.replace(
             instruction, payload={**instruction.payload, "recipient": "target"}
@@ -924,7 +924,7 @@ def pay_life(game: Game, instruction: OracleInstruction, context: OracleExecutio
 
     Separate from ``target_loses_life`` for the reason ``ast.PayLife`` gives:
     this is an act a player has to be able to perform, and
-    ``handlers/control_flow._action_is_takeable`` asks :func:`can_pay_life`
+    ``handlers/offers._action_is_takeable`` asks :func:`can_pay_life`
     before offering it. Reaching here unable to pay means the offer was never
     narrowed — so it is logged and nothing happens, rather than taking a
     player below zero on a cost they could not have chosen.

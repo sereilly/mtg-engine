@@ -310,7 +310,7 @@ POSITIONAL_BASELINE: dict[str, int] = {
     # module was split at the 2,000-line cap: `pick_target_permanent` (the
     # acknowledged slot read above) and `resolve_own_combatant`.
     "engine/handlers/_targets.py": 2,
-    # `engine/handlers/board_misc.py` left this table in the round after
+    # `engine/handlers/board_misc.py` (now `colors.py`) left this table in the round after
     # Seventh Edition. Its two reads were one handler, `mark_text_modified`,
     # taking a text change's target by battlefield slot and falling back to
     # slot 0 -- the bug this ratchet is about, again: a Sleight of Mind

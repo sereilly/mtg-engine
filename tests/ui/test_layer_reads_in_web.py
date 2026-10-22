@@ -76,7 +76,7 @@ STACK_RECEIVERS = frozenset({"item", "stack_item", "target_item"})
 #: only go down.
 PRINTED_READ_BASELINE: dict[str, int] = {
     # Balance's land/creature lists (2). Both mirror engine resolvers that ask
-    # the same printed question — ``handlers/board_misc.balance_resources``
+    # the same printed question — ``handlers/sacrifices.balance_resources``
     # counts by ``primary_type``, and ``_resolve_balance`` and
     # ``_default_balance`` validate by it. Under Living Lands or Kormus Bell
     # those counts are wrong, and they are wrong in the *engine*: correcting

@@ -149,7 +149,7 @@ def test_grammar_refuses_the_rider_shape_instead_of_swallowing_it():
     seat the offer *can* name ("…unless **that player** pays {1} or 1 life"):
     the destroy family reads the tail now, and what refuses an unresolvable
     payer is ``lowering/control_flow.OFFERABLE_ACTORS`` — the references
-    ``handlers/control_flow._offered_seats`` can actually resolve. That is a
+    ``handlers/offers._offered_seats`` can actually resolve. That is a
     strictly better refusal for the bug class this file guards, because it names
     the payer rather than reporting unconsumed text, and it claims nothing:
     ``scripts/parse_coverage.py`` reads ``usable``, which a lowering refusal

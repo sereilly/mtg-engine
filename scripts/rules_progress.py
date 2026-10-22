@@ -42,7 +42,7 @@ OUTPUT_PATH = REPO_ROOT / "RULES_PROGRESS.md"
 SCOPE: dict[str, str | tuple[str, ...]] = {
     # 1xx — Game Concepts (123 Stickers excluded). 114 Emblems joined with
     # M21's planeswalkers: Liliana, Waker of the Dead and Garruk, Unleashed
-    # both print "You get an emblem with …", and engine/handlers/board_misc.py
+    # both print "You get an emblem with …", and engine/handlers/tokens.py
     # creates one.
     **{s: "all" for s in (
         "100", "101", "102", "103", "104", "105", "106", "107", "108", "109",

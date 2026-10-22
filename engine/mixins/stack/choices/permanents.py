@@ -832,7 +832,7 @@ class PermanentChoicesMixin:
         battlefield cannot turn "a Liliana planeswalker you control" into any
         planeswalker at all.
         """
-        from ....handlers.pump import place_loyalty_counters
+        from ....handlers.counters import place_loyalty_counters
 
         live = self.live_loyalty_recipients(choice)
         if not live:

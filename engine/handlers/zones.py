@@ -372,7 +372,7 @@ def put_chosen_graveyard_cards_on_library_bottom(
     picked and how many, and ``destination`` says where they go. With no
     prompt to ask (a headless or AI seat), the pick's stated default is taken
     where it is armed. The offer in front of this is what refuses a pile too
-    small to pay (``control_flow._action_is_takeable``), so a seat reaching
+    small to pay (``offers._action_is_takeable``), so a seat reaching
     here holds enough.
     """
     seat = game.players.index(context.caster)

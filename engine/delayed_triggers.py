@@ -373,7 +373,7 @@ WHILE_SOURCE_TAPPED = "while_source_tapped"
 #:
 #: An ability that outlives what it is about is safe here only because the card
 #: printing it states an intervening-if — "if that card is exiled" — and that
-#: gate is enforced (``handlers/control_flow``'s ``source_exiled``). A repeating
+#: gate is enforced (``handlers/_conditions``' ``source_exiled``). A repeating
 #: entry with no such gate would go on acting after its subject was gone.
 WHILE_THE_GAME_LASTS = "while_the_game_lasts"
 

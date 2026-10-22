@@ -1037,7 +1037,7 @@ def test_oi_a_land_type_static_is_stamped_by_its_permanent(catalog_by_name):
 # An animation is stamped as it is created (CR 613.7b)
 # ---------------------------------------------------------------------------
 #
-# ``handlers/board_misc._animation_record`` is the one writer of an animation,
+# ``handlers/animation._animation_record`` is the one writer of an animation,
 # and it stamped only the records that *replace* the printed types (the Opal,
 # Hidden, Veiled and Lurking enchantments). An addition — Mishra's Factory, a
 # land Natural Affinity woke, Jade Statue — read as timestamp 0, on the
@@ -1208,7 +1208,7 @@ def test_j6_an_addition_made_after_a_card_type_set_is_applied_after_it(
     The other order is a row of the census above ("karn>soul_sculptor" and its
     three neighbours), driven by cards: the set is later and the permanent is
     an enchantment only."""
-    from engine.handlers.board_misc import ANIMATE_UNTIL_EOT, _animation_record
+    from engine.handlers.animation import ANIMATE_UNTIL_EOT, _animation_record
 
     b = _W2G4Board(catalog_by_name, set_pool)
     sculptor, bears = b.enter("Soul Sculptor"), b.enter("Grizzly Bears")

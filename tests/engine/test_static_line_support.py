@@ -73,7 +73,7 @@ IMPLEMENTED_ELSEWHERE: dict[str, str] = {
     "as long as this creature is untapped, noncreature artifacts":
         "mixins/effects.py:_untapped_artifact_protector_active (Guardian Beast)",
     "remove a corpse counter from this creature":
-        "handlers/board_misc.py, reached as an activated ability (Scavenging Ghoul)",
+        "handlers/counter_removal.py, reached as an activated ability (Scavenging Ghoul)",
     "this creature can block an additional creature":
         "phases/declare_blockers_step.py:_max_blocks_for (Two-Headed Giant of Foriys)",
     "as long as this creature is untapped, all damage that would be dealt to you":

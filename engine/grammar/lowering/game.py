@@ -336,7 +336,7 @@ def _lower_secretly_choose_numbers(
 
 
 #: The seat sets a secret, simultaneous number may be asked of — the two
-#: ``handlers/control_flow._offered_seats`` enumerates as sets.
+#: ``handlers/offers._offered_seats`` enumerates as sets.
 _SECRET_NUMBER_SEATS = frozenset({"each_player", "each_opponent"})
 
 

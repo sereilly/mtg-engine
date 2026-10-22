@@ -180,7 +180,7 @@ def _composes_instructions(payload) -> bool:
     Structural rather than a list of kind names, because a list of wrappers is
     the same thing this module exists to avoid: a frozen description of a pool
     that moves. `engine/handlers/control_flow.py` registers nine handlers and
-    only some of them compose (a coin flip and a chosen number do not), so the
+    only some of them compose (a coin flip and a count do not), so the
     question is asked of the compiled payload instead of the registry.
     """
     if isinstance(payload, OracleInstruction):

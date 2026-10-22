@@ -800,7 +800,7 @@ def test_energy_arc_untaps_any_number_and_shields_both_ends(set_pool):
 # were built - the trailing sentence folds into the quoted text
 # (`parser._attach_granted_ability_permission`), the counted redirect reads
 # CR 115.4's union and hangs its record off a seat
-# (`handlers/damage.redirect_next_damage_to_source_until_eot`), and the "who
+# (`handlers/redirection.redirect_next_damage_to_source_until_eot`), and the "who
 # may activate" clause is a row in `engine/activation_permissions.py` rather
 # than in `activation_restrictions.py` - part 3 named the wrong file, which is
 # a decline list working exactly as intended: it pointed at the question and

@@ -143,7 +143,7 @@ _OBJECT_BINDINGS = (
 
 
 #: Which resolution record names the seat a :data:`EVENTS_SEATED_BY_BOUND_PLAYER`
-#: event fires on. The value is what ``handlers/board_misc.create_delayed_trigger``
+#: event fires on. The value is what ``handlers/delayed.create_delayed_trigger``
 #: routes its ``binds_player`` read on, and every event in that set must have a
 #: row here or the lowering refuses — a seat read out of the wrong record is an
 #: ability that fires on nobody's upkeep, silently.

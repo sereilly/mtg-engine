@@ -2,7 +2,7 @@
 
 CR 613.7 orders the effects in a layer by timestamp, and a resolved effect's is
 "the time it's created" (CR 613.7b). Eight sites wrote a permanent's colour by
-poking a metadata key — five handlers in ``handlers/board_misc.py``,
+poking a metadata key — five handlers in ``handlers/board_misc.py`` (now ``colors.py``),
 ``mixins/effects.py``, ``mixins/stack/choices.py`` and the land-animation
 refresh in ``mixins/permanent_state.py`` — and none of them recorded when. The
 layer bridge had nothing to order by and ordered the *channels* by a constant

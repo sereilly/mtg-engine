@@ -1052,7 +1052,7 @@ PUT_INTO_HAND_THIS_WAY = "put_into_hand_this_way"
 #: cleared as the next begins — "that card" is this round's — and "another
 #: card exiled **this way**" is the whole process's, so the loop files each
 #: round's lists here before clearing them and the name relation reads both.
-#: Written by ``handlers/control_flow.repeat_process_until`` alone; absent
+#: Written by ``handlers/repeats.repeat_process_until`` alone; absent
 #: outside a loop, where "this way" is simply the one record.
 PROCESS_ROUNDS_SO_FAR = "process_rounds_so_far"
 #: What the exile step took, as objects. Written by every exile that a later
@@ -1161,7 +1161,7 @@ EXILED_BY_SEAT = "exiled_by_seat"
 #:
 #: One string that looks like a thirteenth is deliberately **not** this
 #: constant: ``lowering/conditions.py`` emits ``{"kind": "milled_this_way"}``
-#: and ``handlers/control_flow.py`` compares against it. That is a
+#: and ``handlers/_record_conditions.py`` compares against it. That is a
 #: *trigger-condition kind* which happens to be spelled the same way, not the
 #: scratchpad key — one fact wearing another's spelling is what this entry is
 #: against, so folding it would have made the confusion permanent rather than

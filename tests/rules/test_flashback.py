@@ -246,7 +246,7 @@ def _creature_tokens_to_act_on(game) -> None:
     "before" snapshot, so the hand cast and the flashed-back one compare the
     same thing. A token is a token by its *permanent*: the matcher asks
     ``Permanent.metadata["is_token"]``, which the engine's own token maker sets
-    (``handlers/board_misc``); ``tokens.make_token_card`` marks the card, which is
+    (``handlers/tokens``); ``tokens.make_token_card`` marks the card, which is
     what a token is once the permanent is gone."""
     from engine.tokens import make_token_card
 

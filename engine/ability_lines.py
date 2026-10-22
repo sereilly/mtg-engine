@@ -721,7 +721,7 @@ def _records_the_delay_reads(head: OracleInstruction, delayed: OracleInstruction
     effect counts.
 
     CR 608.2h: what a delayed ability refers to is frozen when it is created —
-    ``handlers/board_misc.create_delayed_trigger`` copies the whole resolution
+    ``handlers/delayed.create_delayed_trigger`` copies the whole resolution
     scratchpad into the entry — so the number is right *if and only if* a step
     in front of it actually wrote the record. With no producer the count is a
     silent zero, which on Song of Blood is a delayed ability that pumps nothing
