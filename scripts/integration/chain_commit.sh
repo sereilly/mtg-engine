@@ -6,7 +6,7 @@
 # tip, which is the base for the next chain_stage.sh. Safe while that link's
 # gate is still running: it changes only generated .md files.
 source "$(dirname "${BASH_SOURCE[0]}")/_env.sh"
-g="$1"; msg="$2"
+g="$1"; msg="$(cd "$(dirname "$2")" && pwd)/$(basename "$2")"
 cd "$REPO/.worktrees/$ROUND-int-$g" || exit 2
 [ -n "$(git diff --name-only --diff-filter=U)" ] && { echo "unmerged files remain"; exit 1; }
 git commit -q -F "$msg" || exit 1
