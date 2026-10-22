@@ -237,7 +237,7 @@ def protection_quality(word: str) -> tuple[str, str] | None:
     **The card-type family reads the catalog rather than one word.** It was
     the literal pair ``("planeswalker", "planeswalkers")``, which is a list of
     the card types somebody had met — and the direction that costs is the
-    silent one: ``oracle._is_supported_static_creature_line`` admits any line
+    silent one: ``static_line_support._is_supported_static_creature_line`` admits any line
     beginning "protection from " *without asking this function at all*, so
     Yavimaya Scion ("Protection from artifacts") reported supported, compiled
     to a bare ``static_line``, and had no protection from anything. A word this

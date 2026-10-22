@@ -686,7 +686,7 @@ def _lower_modal_head(node: ast.ModalNode) -> tuple[OracleInstruction, ...]:
     ordinary effect line with its own instructions. Emitting anything here would
     be a fourth reading of text three other places already read.
 
-    Where the modes are assembled — the compiler, `engine/oracle.py` — is not
+    Where the modes are assembled — the compiler, `engine/ability_lines.py` — is not
     this function's business either, and deliberately so: line grouping is line
     classification, and it needs the lines *around* this one, which a parser
     handed one line at a time cannot see.
@@ -841,7 +841,7 @@ def _lower_copy_spell_for_each_other_target(
 
     The chosen spell is the instruction's own target (a ``spell``), narrowed
     by the printed type union and CR 115.9a's single permanent-or-player
-    target (``targeting._copy_for_each_other_target_spec``); the copies'
+    target (``payload_target_specs._copy_for_each_other_target_spec``); the copies'
     targets are the copied spell's own picker asked again at resolution."""
     unknown = [t for t in node.card_types if t not in ("instant", "sorcery")]
     if unknown or node.each_other != "permanent_or_player":

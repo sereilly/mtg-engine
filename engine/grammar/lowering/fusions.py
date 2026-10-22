@@ -315,7 +315,7 @@ def _fused_tap_then_bite(
     ``_one_choice`` onto slot 0, which is the creature the sentence tapped — and
     the bite step carries the two-slot description ``target_bites_target``
     already reads (biter first, bitten second). One picker, announced by the
-    bite step, and ``targeting._from_instructions`` finds it because the tap
+    bite step, and ``instruction_targets._from_instructions`` finds it because the tap
     step describes nothing.
 
     "It" is the tapped creature: the first clause is the only prior choice in

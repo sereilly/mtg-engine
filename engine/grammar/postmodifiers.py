@@ -405,7 +405,7 @@ def _parse_postmodifiers(
             # the one that taps it, which no filter can check. The compiler
             # checks it instead, where the cost and the effect are both in
             # hand — see ``COST_TAPPED_REFERENT`` above and its reader in
-            # ``oracle._parse_activated_ability``.
+            # ``ability_lines._parse_activated_ability``.
             elif stream.accept_phrase(
                 "than", "the", "creature", "tapped", "this", "way",
             ):
@@ -641,7 +641,7 @@ def _parse_postmodifiers(
             # (Escaped Shapeshifter). The negative of the `named` branch below,
             # and it arrives in **two spellings** of the same reference. The
             # grammar reads the card's own name as a SELF token (the lexer
-            # collapsed it); `oracle._restriction_line` has already rewritten it
+            # collapsed it); `self_reference._restriction_line` has already rewritten it
             # to "this creature" by the time the derivation tables see the line.
             # One field for both, because they are one phrase: two would be two
             # readings of a card excluding itself, free to disagree.

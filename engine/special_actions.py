@@ -26,7 +26,7 @@ Three properties follow, and each is load-bearing:
 
 * **It does not use the stack** (CR 116.1), so there is no instruction to
   compile and no handler to dispatch. That is why the support gate reads this
-  table directly (`oracle._derived_static_claims`) — without the row, a card
+  table directly (`derived_static_claims._derived_static_claims`) — without the row, a card
   whose only other text is a keyword and an upkeep trigger reports unsupported
   however well the action works.
 * **It needs priority and nothing else** (CR 116.2e). "Any time you could cast
@@ -60,7 +60,7 @@ if TYPE_CHECKING:
 #: alternative here: no card file contains it, so the arm would be dead — and a
 #: name in a comparison is dispatch, which `tests/engine/test_card_name_reads.py`
 #: allows only in `card_hooks.py`. A card whose printing did spell its own name
-#: would arrive through `oracle._collapse_self_references` like every other
+#: would arrive through `self_reference._collapse_self_references` like every other
 #: self-naming card in the pool.
 _SPECIAL_ACTION_LINES: tuple[tuple[re.Pattern[str], str], ...] = (
     (
@@ -345,7 +345,7 @@ def _load_registrations() -> None:
     """Import the modules that register the offers above.
 
     Function-level and idempotent: this module imports nothing from the engine
-    at module scope (which is what lets `engine/oracle.py` import it from the
+    at module scope (which is what lets `engine/line_classification.py` import it from the
     top), and the registry would otherwise be empty for any caller that had not
     happened to import `engine/auras.py` first — an offer that exists or not
     depending on import order.

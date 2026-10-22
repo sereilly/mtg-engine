@@ -240,7 +240,7 @@ class AlternativeCost:
     #: "You may **tap an untapped creature you control** rather than pay this
     #: spell's mana cost." (Orim's Cure, Ramosian Rally.) The same
     #: ``(count, filter)`` an activation cost's identically printed clause
-    #: carries, read by the same function (``oracle._chargeable_tap_cost``) --
+    #: carries, read by the same function (``chargeable_costs._chargeable_tap_cost``) --
     #: CR 601.2b and CR 602.2b are one announcement step.
     #:
     #: ``tap_count`` of 0 is "no tap cost", which is why the count and not the
@@ -476,7 +476,7 @@ _HAND_CLAUSE = re.compile(r"^you have (?P<board>.+) in hand$")
 #: not an afterthought: this is the only zone the payment can reach, and a
 #: sentence naming another one must refuse rather than be charged against the
 #: hand. The noun phrase itself is delimited here and *read* by
-#: ``oracle._chargeable_discard_filters`` — a regex approximating the noun
+#: ``chargeable_costs._chargeable_discard_filters`` — a regex approximating the noun
 #: parser is a second reader of one phrase, and the direction those drift in is
 #: a cost charged more widely than the card prints.
 _EXILE_FROM_HAND = re.compile(r"^exile (?P<noun>.+) from your hand$")
@@ -523,7 +523,7 @@ _EACH_OTHER_PLAYER_GAINS_LIFE = re.compile(
 
 #: "…its controller may **discard a card that shares a color with that
 #: spell**." (Dream Halls.) The noun phrase is delimited here and *read* by
-#: ``oracle._chargeable_discard_filters``, exactly as the exile clause above
+#: ``chargeable_costs._chargeable_discard_filters``, exactly as the exile clause above
 #: delimits its own -- a regex approximating the noun parser is a second reader
 #: of one phrase.
 #:
@@ -842,7 +842,7 @@ def _read_cost_clauses(costs: str) -> dict | None:
         # reason above: CR 601.2b and CR 602.2b are one announcement step, so
         # what may pay a printed tap is one answer wherever the tap is printed.
         if clause.startswith("tap "):
-            from .oracle import _chargeable_tap_cost
+            from .chargeable_costs import _chargeable_tap_cost
 
             if fields["tap_count"]:
                 # Two tap clauses would need two filters and one field cannot

@@ -650,7 +650,7 @@ def test_a_delayed_trigger_whose_event_has_no_fire_site_refuses(set_pool):
     105 each found after the fact; asked here at the moment the trigger is
     *created* instead. An event outside the table has no site, so the clause is
     not read and the card refuses."""
-    from engine.oracle import _parse_delayed_attack_trigger
+    from engine.ability_lines import _parse_delayed_attack_trigger
 
     assert _parse_delayed_attack_trigger(
         "Until end of turn, whenever a creature you control with power 2 or "

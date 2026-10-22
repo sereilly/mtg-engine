@@ -185,7 +185,7 @@ def test_activated_ability_costs():
 def test_triggered_ability_event_kind_matches_the_legacy_vocabulary():
     node = parse_line("At the beginning of your upkeep, this creature deals 1 damage to you.")
     assert isinstance(node, ast.TriggeredAbilityNode)
-    # Kind strings deliberately match engine/oracle.py's tables so the existing
+    # Kind strings deliberately match engine/trigger_conditions.py's tables so the existing
     # condition_kinds= dispatch sites keep working during migration.
     assert node.event.kind == "upkeep_self"
 

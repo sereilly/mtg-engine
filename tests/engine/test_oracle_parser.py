@@ -279,7 +279,7 @@ def test_a_two_condition_trigger_line_becomes_two_lines():
     condition table, the Aura gate, the parse-coverage census — see two ordinary
     trigger lines it already understands instead of learning a second shape.
     """
-    from engine.oracle import expand_conjoined_trigger_lines
+    from engine.line_rewrites import expand_conjoined_trigger_lines
 
     line = (
         "At the beginning of your upkeep and whenever enchanted land becomes "
@@ -303,7 +303,7 @@ def test_a_conjoined_trigger_rewrite_leaves_every_other_line_alone():
     close), and a conjunction whose second half is not a trigger word at all
     (Merchant Ship's "attacks and isn't blocked").
     """
-    from engine.oracle import expand_conjoined_trigger_lines
+    from engine.line_rewrites import expand_conjoined_trigger_lines
 
     for line in (
         "At the beginning of your upkeep, draw a card and lose 1 life.",

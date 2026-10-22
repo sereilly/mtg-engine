@@ -3,8 +3,8 @@
 Text that names the object it is on means *that* object, and pre-modern
 templating writes that name out where modern templating writes "this creature".
 The lexer already collapses the printed name into one ``SELF`` token, and
-``engine/oracle.py`` collapses it into the words "this creature" for the
-text-keyed rule tables — two readers, one question.
+:func:`_collapse_self_references` below collapses it into the words "this
+creature" for the text-keyed rule tables — two readers, one question.
 
 A legendary card is also referred to by a **shortened** name: "Ugin, the Spirit
 Dragon" says "Ugin", and "Rasputin Dreamweaver" says "Rasputin". The comma form
@@ -42,6 +42,9 @@ quietly talking about itself.
 from __future__ import annotations
 
 import re
+
+from .grammar.vocabulary import CREATURE_TYPES
+from .line_normalization import normalize_creature_line
 
 #: Words a shortened name may not be. An article opens a noun phrase and a
 #: vocabulary word describes objects, so either one standing alone in a card's
@@ -123,6 +126,91 @@ def expand_short_self_references(
         return full
 
     return re.sub(rf"\b{re.escape(short)}\b", _replace, oracle_text)
+
+
+# ---------------------------------------------------------------------------
+# The other reader: a name collapsed to "this creature" for the rule tables.
+# The compiler's until the 2,000-line split (``engine/oracle.py``).
+# ---------------------------------------------------------------------------
+
+def _self_name_forms(card_name: str | None) -> tuple[str, ...]:
+    """The lowercase name forms a card may refer to itself by: the full name,
+    and — for a name with a comma — the short name before it (CR 201.5c,
+    "Ugin, the Spirit Dragon" says "Ugin")."""
+    if not card_name:
+        return ()
+    full = card_name.strip().lower()
+    forms = [full]
+    if "," in full:
+        forms.append(full.split(",", 1)[0].strip())
+    return tuple(forms)
+
+
+#: Words that put the name after them in a **type** position rather than a
+#: self-reference position: "each other attacking **Aurochs**" is a creature
+#: type, not the card talking about itself.
+#:
+#: Only reachable for a card whose own name *is* a creature type — four in the
+#: pool, and only Aurochs uses it as a type. But the failure is the silent kind:
+#: collapsed, the count reads "each other attacking **this creature**", a set of
+#: one thing that excludes itself and is therefore always empty, so the pump
+#: resolves for +0/+0 on a card reporting itself supported.
+_TYPE_POSITION_WORDS = frozenset({
+    "a", "an", "another", "any", "attacking", "blocking", "each", "every",
+    "other", "target", "untapped", "tapped", "all", "no",
+})
+
+
+def _preceding_word(text: str, index: int) -> str:
+    """The word immediately before *index*, lowercased, or "" at the start."""
+    before = text[:index].rstrip()
+    return before.rsplit(" ", 1)[-1].lower() if before else ""
+
+
+def _collapse_self_references(normalized: str, card_name: str | None, replacement: str) -> str:
+    """*normalized* with whole-word self-references replaced by *replacement*.
+
+    A name that is also a **creature type** is left alone where the sentence
+    uses it as one — see :data:`_TYPE_POSITION_WORDS`. Everywhere else it is the
+    card naming itself (CR 201.5), the possessive "Lhurgoyf's power" included,
+    which is the form the pool's other such cards print.
+    """
+    for form in _self_name_forms(card_name):
+        if form.lower() in CREATURE_TYPES:
+            normalized = re.sub(
+                rf"\b{re.escape(form)}\b",
+                lambda match, text=normalized: (
+                    match.group(0)
+                    if _preceding_word(text, match.start()) in _TYPE_POSITION_WORDS
+                    else replacement
+                ),
+                normalized,
+            )
+            continue
+        normalized = re.sub(rf"\b{re.escape(form)}\b", replacement, normalized)
+    return normalized
+
+
+def _restriction_line(line: str, card_name: str | None) -> str:
+    """*line* normalized with the card's own name collapsed to "this creature".
+
+    Pre-modern templating — and modern legendary templating — writes the
+    subject as the card's name: "**Gadrak** can't attack unless…". The combat
+    restriction table is anchored on "this creature", so without this the clause
+    matched nothing and the card reported "text too complex" for a template the
+    engine implements. The lexer already collapses the same references for the
+    grammar (CR 201.5c's short name included); this is that rule on the
+    static-line path.
+
+    Scoped to this one consult rather than folded into
+    ``normalize_creature_line``, whose output is *stored* on the program as
+    ``static_lines`` and matched on by several text-keyed readers — rewriting it
+    for every card that names itself is a change with its own blast radius and
+    no card asking for it.
+    """
+    return _collapse_self_references(
+        normalize_creature_line(line), card_name, "this creature"
+    )
 
 
 __all__ = ["expand_short_self_references", "short_self_name"]

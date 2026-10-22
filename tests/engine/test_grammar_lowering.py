@@ -2019,7 +2019,7 @@ def test_registry_claims_stay_stricter_than_their_enforcement():
 # Trigger conditions the grammar reads (upkeep family)
 #
 # A trigger phrase in engine/grammar/parser.py's tables is only half the story.
-# engine/oracle.py::_parse_triggered_ability still takes the *condition* from
+# engine/ability_lines.py::_parse_triggered_ability still takes the *condition* from
 # its own legacy tables and only the *effect* from the grammar, and the engine
 # dispatches on the pair (legacy condition kind, instruction kind). So a grammar
 # phrase pays off only when the legacy table matches the same line with the same
@@ -2544,7 +2544,7 @@ def _executed_trigger_lines(catalog):
 def test_every_executed_trigger_agrees_with_the_legacy_condition_table(catalog):
     """The grammar's trigger kind must equal the legacy table's for the same line.
 
-    engine/oracle.py takes the condition from ``WHENEVER/WHEN/AT_TRIGGER_PATTERNS``
+    engine/trigger_conditions.py takes the condition from ``WHENEVER/WHEN/AT_TRIGGER_PATTERNS``
     and only the effect from the grammar, so these two tables are not independent:
     the engine dispatches on the legacy kind, while the grammar's kind is what
     ``lower_ability`` checks when it refuses decomposed upkeep effects. If they
@@ -2614,7 +2614,8 @@ def test_every_executed_upkeep_trigger_lands_on_a_pair_something_dispatches(cata
     cleanly and does nothing, which is what this counts.
     """
     from engine.handlers import EFFECT_HANDLERS
-    from engine.oracle import _parse_trigger_condition, normalize_creature_line
+    from engine.oracle import normalize_creature_line
+    from engine.trigger_conditions import _parse_trigger_condition
     from engine.phases.upkeep_effects import UPKEEP_EFFECTS
 
     assert not (_UPKEEP_PAIRS_DISPATCHED_OUTSIDE_THE_REGISTRY & set(UPKEEP_EFFECTS)), (
@@ -3451,7 +3452,7 @@ def test_every_executed_end_step_trigger_lands_on_a_kind_the_step_enqueues(catal
     # Read the **fused** instruction, which is what the step is actually handed.
     # This used to walk `compile_line`'s unfused list, and that is how Sabertooth
     # Mauler got past it: its line lowers to two instructions that each carry the
-    # CR 603.4 gate, so the guard saw a healthy card, while `engine/oracle.py`
+    # CR 603.4 gate, so the guard saw a healthy card, while `engine/front_ends.py`
     # wrapped them in a `sequence` and the step saw one gateless object it never
     # enqueued. A guard that reads a different object from its dispatcher is
     # checking a card nobody plays.
@@ -4324,7 +4325,7 @@ def test_a_pay_to_untap_on_another_trigger_is_not_the_fused_kind():
 def test_a_narrowed_trigger_reads_the_same_subject_on_both_sides():
     """The two front ends turn one printed phrase into one filter.
 
-    ``engine/oracle.py`` takes a trigger's *condition* from its regex table and
+    ``engine/trigger_conditions.py`` takes a trigger's *condition* from its regex table and
     ``engine/grammar/`` takes the *effect*, so a narrowed condition is read
     twice — once by a regex that only delimits the noun phrase, once by the noun
     parser itself. Both go through ``parse_subject_filter``, and this is what
@@ -4344,7 +4345,8 @@ def test_a_narrowed_trigger_reads_the_same_subject_on_both_sides():
     from engine.grammar.lowering._common import _filter_payload
     from engine.grammar.triggers import _parse_trigger_event
     from engine.grammar.stream import TokenStream
-    from engine.oracle import _parse_trigger_condition, normalize_creature_line
+    from engine.oracle import normalize_creature_line
+    from engine.trigger_conditions import _parse_trigger_condition
 
     checked = 0
     disagreements = []
@@ -4419,7 +4421,7 @@ def test_a_narrowed_trigger_reads_the_same_subject_on_both_sides():
                 # The table resolves such a phrase through `card_filter_payload`,
                 # so the honest comparison is that function's own last step.
                 #
-                # The stem says which: `engine/oracle.py` spells the group
+                # The stem says which: `engine/trigger_conditions.py` spells the group
                 # `<name>_card_subject` when the phrase is about a card, and
                 # resolves it to `<name>_card_filter`. The invariant is the same
                 # one either way — one printed phrase, one filter, read the same

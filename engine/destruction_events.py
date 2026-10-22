@@ -83,7 +83,7 @@ if TYPE_CHECKING:
     from .models import Permanent
 
 
-#: The trigger-condition kind, as ``engine/oracle.py``'s table spells it.
+#: The trigger-condition kind, as ``engine/trigger_conditions.py``'s table spells it.
 PERMANENT_DESTROYED = "permanent_destroyed"
 
 #: What is appended to a delayed destruction's mark to name the key its cause

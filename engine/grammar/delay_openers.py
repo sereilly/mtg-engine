@@ -601,7 +601,7 @@ def _parse_source_block_pair_delay(
     (Zombie Boa). Returns ``(event, partner phrase, duration)``.
 
     The printed static form of the same sentence is a trigger of the permanent
-    (``engine/oracle.py``'s ``creature_blocks_or_blocked_by``); this is that
+    (``engine/trigger_conditions.py``'s ``creature_blocks_or_blocked_by``); this is that
     ability *created* for a window, which is what the trailing "this combat"
     says. Its subject is the source rather than a described class — the delayed
     entry watches one permanent by id — so the noun phrase after "by" narrows

@@ -863,7 +863,7 @@ def _lower_exile_graveyard_position(
 #:
 #: Spelled with the ``_role`` suffix every dependency in a roles description
 #: carries, which is what ``targeting.role_dependency`` finds it by; the answer
-#: behind the name is one entry in ``targeting.ROLE_RELATION_TESTS``, read by
+#: behind the name is one entry in ``target_roles.ROLE_RELATION_TESTS``, read by
 #: the picker, by the announcement gate and by the CR 608.2b re-check alike.
 IN_GRAVEYARD_OF_ROLE = "in_graveyard_of_role"
 

@@ -17,7 +17,7 @@ that someone may respond to — so it has to be a compiled
 :class:`~engine.oracle_types.ParsedTriggeredAbility` with an instruction behind
 it. That is **cumulative upkeep's and flanking's shape** (CR 702.24a,
 CR 702.25a: a keyword line *defined* as a triggered ability), and the keyword
-line goes through the same seam they do, ``oracle.keyword_line_triggers``, read
+line goes through the same seam they do, ``keyword_lines.keyword_line_triggers``, read
 by both compiler front ends and by the Aura gate through
 ``_is_supported_keyword_line``. The grammar is not asked: no card outside a
 reminder prints "When this card is exiled this way", and its one fire site is
@@ -111,7 +111,7 @@ def madness_cost_text(part: str) -> str | None:
     upper case ("{1}{R}"), or None when the part is not a madness this engine
     can charge.
 
-    The gate's admission test too (``oracle._qualified_keyword_part``), for
+    The gate's admission test too (``keyword_lines._qualified_keyword_part``), for
     ``cumulative_upkeep.cumulative_upkeep_cost``'s reason: the reader that
     charges the cost is the one that admits the line. **A hybrid, Phyrexian
     or {X} symbol refuses** (``mana_cost_from_symbols``): an X here would be

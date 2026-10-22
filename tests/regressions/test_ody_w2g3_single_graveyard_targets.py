@@ -165,9 +165,9 @@ def test_every_line_naming_several_graveyard_targets_announces_them(pool):
 def test_the_census_sees_the_old_derivation(pool, monkeypatch):
     """Validated backwards: with the picker row answering as it did before
     the fix, the census names the five lines the wave-1 report named."""
-    from engine import targeting
+    from engine import payload_target_specs
 
-    announced = targeting._graveyard_exile_pile_spec
+    announced = payload_target_specs._graveyard_exile_pile_spec
 
     def as_before(payload):
         if payload.get("graveyard_owner") != "you":
@@ -175,7 +175,8 @@ def test_the_census_sees_the_old_derivation(pool, monkeypatch):
         return announced(payload)
 
     monkeypatch.setitem(
-        targeting._KIND_TO_SPEC_FROM_PAYLOAD, "exile_cards_from_graveyard", as_before
+        payload_target_specs._KIND_TO_SPEC_FROM_PAYLOAD,
+        "exile_cards_from_graveyard", as_before,
     )
 
     rows, _examined = _counted_lines(pool)

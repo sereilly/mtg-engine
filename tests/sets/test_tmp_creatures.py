@@ -1617,7 +1617,7 @@ from engine import Game as _W3G4Game
 from engine import PlayerState as _W3G4PlayerState
 from engine.models import Permanent as _W3G4Permanent
 from engine.oracle import compile_card_oracle as _w3g4_compile
-from engine.oracle import expand_same_is_true_lines as _w3g4_expand
+from engine.line_rewrites import expand_same_is_true_lines as _w3g4_expand
 from tests.helpers import _mk_card as _w3g4_mk_card
 
 

@@ -184,7 +184,7 @@ def test_an_allowance_without_a_rider_costs_no_life():
 
 @pytest.mark.cr("305.2")
 def test_the_support_gate_claims_the_card_through_this_table():
-    """``oracle._derived_static_claims`` asks ``land_play_allowance_for``, so the
+    """``derived_static_claims._derived_static_claims`` asks ``land_play_allowance_for``, so the
     thing that says "supported" and the thing that grants the land play are one
     table. When they were two, the sentence was claimed pool-wide and the
     behaviour was granted to one name."""

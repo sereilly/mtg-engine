@@ -43,9 +43,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from engine.card_loader import load_cards  # noqa: E402
 from engine.oracle import compile_card_oracle, compiled_faces  # noqa: E402
-from engine.targeting import (  # noqa: E402
+from engine.picker_probes import (  # noqa: E402
     card_names_a_chooser,
     cast_picker_expected,
+)
+from engine.targeting import (  # noqa: E402
     derive_activation_spec,
     derive_cast_spec,
 )

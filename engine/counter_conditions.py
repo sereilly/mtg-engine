@@ -186,7 +186,7 @@ def _key(sentence: str) -> str:
 #: whitelist comes to claim what it does not implement.
 _UNCOUNTERABLE = re.compile(r"^this spell can't be countered$")
 
-#: The claim name ``oracle._derived_static_claims`` reports for it. Its own name
+#: The claim name ``derived_static_claims._derived_static_claims`` reports for it. Its own name
 #: rather than "counter_conditions", because that one says what a *counter*
 #: may ask and this says what a spell answers.
 UNCOUNTERABLE_CLAIM = "uncounterable"
@@ -196,7 +196,7 @@ def uncounterable_line(line: str) -> bool:
     """Whether *line* is the printed "This spell can't be countered."
 
     The **table's own** answer to "is this my sentence?", read by the support
-    gate (``oracle._is_supported_static_creature_line`` and
+    gate (``static_line_support._is_supported_static_creature_line`` and
     ``_derived_static_claims``), by the grammar's parse claim and by
     ``scripts/parse_coverage.py`` — so what is claimed and what is enforced are
     one function rather than three copies of a phrase.
@@ -257,7 +257,8 @@ def uncounterable_class_line(line: str) -> str | None:
     """The card type whose spells *line* makes uncounterable, or None.
 
     One reader, every caller: the grammar's parse claim, the two support gates
-    in ``engine/oracle.py``, ``scripts/parse_coverage.py`` and the counter path
+    (``engine/static_line_support.py``, ``engine/derived_static_claims.py``),
+    ``scripts/parse_coverage.py`` and the counter path
     below all ask it, so what is claimed and what is enforced cannot drift.
     Anchored on the whole line — a sentence that merely contains the words
     ("Creature spells **you control** can't be countered") names a narrower set

@@ -1,11 +1,12 @@
 """Guards against first-match-wins shadowing in the trigger-condition tables.
 
-The tables in engine/oracle.py are matched with an unanchored ``re.match`` in
-listed order, so a pattern that is a strict prefix of a later pattern's
-canonical text silently swallows it (this happened to
-``creature_attacks_or_blocks`` and ``creature_deals_damage_to_opponent``). Each
-pattern gets a canonical example text here; every earlier pattern must fail to
-match every later pattern's example.
+The tables in engine/whenever_triggers.py and engine/trigger_conditions.py are
+matched with an unanchored ``re.match`` in listed order, so a pattern that is
+a strict prefix of a later pattern's canonical text silently swallows it (this
+happened to ``creature_attacks_or_blocks`` and
+``creature_deals_damage_to_opponent``). Each pattern gets a canonical example
+text here; every earlier pattern must fail to match every later pattern's
+example.
 """
 
 from __future__ import annotations
@@ -15,12 +16,10 @@ import re
 import pytest
 
 from engine.card_loader import load_cards
-from engine.oracle import (
-    AT_TRIGGER_PATTERNS,
-    WHEN_TRIGGER_PATTERNS,
-    WHENEVER_TRIGGER_PATTERNS,
-    compile_card_oracle,
-)
+from engine.oracle import compile_card_oracle
+from engine.trigger_conditions import (AT_TRIGGER_PATTERNS,
+                                       WHEN_TRIGGER_PATTERNS)
+from engine.whenever_triggers import WHENEVER_TRIGGER_PATTERNS
 
 from tests.helpers import _mk_creature_card
 from tests.helpers import LEA_PATH

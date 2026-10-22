@@ -300,7 +300,7 @@ def parse_subject_filter(phrase: str, *, plural: bool = False) -> ast.ObjectFilt
     prints — the dropped-rider bug class, in the one position where it fires on
     every creature instead of one.
 
-    Public because ``engine/oracle.py``'s trigger-condition table reads its
+    Public because ``engine/trigger_conditions.py``'s trigger-condition table reads its
     subjects through this: both front ends of the pipeline turn one printed
     phrase into one filter, rather than a regex approximating what the noun
     parser does. Held to that by
@@ -545,7 +545,7 @@ def _parse_card_alternatives(
     None refuses the line, which is what a phrase the charger cannot test has to
     do: dropped instead, the cost would be payable with any card at all. What
     "cannot test" means is not decided here — ``chargeable_card_filter`` decides
-    it, and ``engine/oracle.py``'s reader of the same clause asks the same
+    it, and ``engine/chargeable_costs.py``'s reader of the same clause asks the same
     function.
     """
     alternatives: list[ast.ObjectFilter] = []

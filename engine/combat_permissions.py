@@ -109,9 +109,10 @@ MUST_BLOCK_UNTIL_EOT = "must_block_until_eot"
 #: count and a scan for the other spelling answers zero.
 #:
 #: Whole printed lines rather than prefixes, which is the anchoring
-#: ``combat_restriction_for`` already has and the reason ``oracle.py``'s own
-#: comment gives for preferring a table: a prefix claim admits any sentence
-#: beginning with the words and drops whatever follows.
+#: ``combat_restriction_for`` already has and the reason
+#: ``static_line_support.py``'s own comment gives for preferring a table: a
+#: prefix claim admits any sentence beginning with the words and drops
+#: whatever follows.
 #:
 #: "…**this turn**" is deliberately absent. That spelling is a one-shot grant
 #: (Yare, Mounted Archers, Blaze of Glory) written onto the permanent as

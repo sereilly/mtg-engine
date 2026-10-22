@@ -820,7 +820,7 @@ def kicked_second_damage_target(
     cannot say. The card-divided list is the engine's one announcement of
     targets spanning both battlefields and the players' faces
     (``_targets.card_divided_target_description``), so the kicked arm goes
-    there, and ``targeting._as_kicked`` already collapses the pair to the arm a
+    there, and ``cast_targets._as_kicked`` already collapses the pair to the arm a
     given cast will run.
 
     Nothing observable is lost by the two damages sharing one step: no player

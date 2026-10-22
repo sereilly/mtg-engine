@@ -569,7 +569,7 @@ def _lower_pump(
         # (Day.) A seat the announcement chooses (CR 601.2c), and the one
         # controller word `all` cannot say: it means "every player's", so the
         # sentence pumped the whole table and derived no picker at all. The
-        # word travels as payload — `targeting._sweep_controller_spec` reads it
+        # word travels as payload — `payload_target_specs._sweep_controller_spec` reads it
         # for the picker and the handler narrows by it through
         # ``subject_matches``, the arrangement the tap, destroy and animation
         # sweeps over the same printed phrase already have. Any other seat

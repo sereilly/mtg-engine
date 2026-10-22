@@ -896,7 +896,7 @@ def test_w3g3_blood_oath_damages_the_player_who_revealed(set_pool):
 # planeswalker." Two instances of the printed word "target", so CR 601.2c
 # announces two objects — and the line lowers to a `sequence` of two ordinary
 # `deal_damage` steps, each carrying one target description.
-# `targeting._from_instructions` answers with the *first* spec any step
+# `instruction_targets._from_instructions` answers with the *first* spec any step
 # describes, so the caster was asked for a creature, the seat was never
 # announced, and the second step resolved against the target the first one was
 # still holding: the log read "Lunge dealt 2 damage to Grizzly Bears" twice and

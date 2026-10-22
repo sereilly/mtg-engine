@@ -1928,7 +1928,7 @@ def test_barbarian_guides_grants_the_landwalk_to_a_creature_you_chose(set_pool):
 def test_every_land_type_barbarian_guides_offers_targets_the_same_creature(set_pool):
     """Why reading the modes is sound, stated as the property it rests on.
 
-    ``targeting._from_instructions`` descends into a ``choose_one`` only when
+    ``instruction_targets._from_instructions`` descends into a ``choose_one`` only when
     every mode derives the *same* spec, because CR 601.2b settles the mode
     before the targets — a modal card whose modes choose differently must pick
     the mode first, and Essence Filter and Relic Bind still answer None for

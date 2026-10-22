@@ -95,7 +95,7 @@ def _parse_reanimation_aura_line(line: str) -> "ast.TriggeredAbilityNode | None"
 #: them away by the time a production could look. What comes out is not a
 #: rewrite of the sentence but its *removal*: the quoted clause becomes an
 #: :class:`ast.BecomeAura` node and the rest of the line is handed back to the
-#: ordinary parser, which is the same shape ``oracle.expand_conjoined_trigger_lines``
+#: ordinary parser, which is the same shape ``line_rewrites.expand_conjoined_trigger_lines``
 #: uses one layer up — a line every reader downstream already knows how to read.
 _BECOMES_AURA_SENTENCE_RE = re.compile(
     r'(?P<head>^.*?)\bit becomes an aura with '

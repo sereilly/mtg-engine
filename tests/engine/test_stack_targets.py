@@ -759,7 +759,7 @@ _UNANNOUNCED_TRIGGER_TARGETS = frozenset({
     # Honorable Scout sat here from Planeshift's ingest to its first wave: "you
     # gain 2 life for each black and/or red creature *target opponent*
     # controls" puts the target inside the count's noun phrase
-    # (`per_each.owner: "target_opponent"`), and `targeting._life_gain_spec`
+    # (`per_each.owner: "target_opponent"`), and `payload_target_specs._life_gain_spec`
     # now reads it there as `_counted_scope_spec` reads a counted draw's.
 })
 

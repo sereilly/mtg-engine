@@ -1069,7 +1069,7 @@ def test_the_narrower_becomes_target_scopes_still_watch_themselves(set_pool):
     """The board-wide row is last in the condition table, so "this creature"
     and "enchanted creature" keep their identity tests — a subject-led row
     placed first would have answered all three through a filter."""
-    from engine.oracle import _parse_trigger_condition
+    from engine.trigger_conditions import _parse_trigger_condition
 
     narrow, _ = _parse_trigger_condition(
         "whenever this creature becomes the target of a spell or ability"

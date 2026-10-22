@@ -777,9 +777,9 @@ def _every_nested_step(instruction) -> tuple:
     contains, so "which keys hold steps" has one answer here: a branch key
     added there and not here would be an effect this predicate cannot see into.
 
-    Named apart from ``targeting._nested_steps`` on purpose. That one walks a
+    Named apart from ``instruction_targets._nested_steps`` on purpose. That one walks a
     single level off a *third* copy of the step-key table
-    (``targeting._WRAPPER_STEP_KEYS``), and this one walks all of them off the
+    (``instruction_targets._WRAPPER_STEP_KEYS``), and this one walks all of them off the
     grammar's; sharing the name would be one word for two facts, which is the
     shape ``_per_recipient_count`` was recorded under in SET_PLAYBOOK's Known
     gaps until VIS wave 4 split it into ``_amounts._recipient_seat_count`` and

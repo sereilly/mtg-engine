@@ -66,7 +66,7 @@ STATE_TRIGGER_LATCH = "state_trigger_latch"
 #: the sweeps in ``mixins/game_ending.py`` have always used.
 _ANNOUNCED = "_state_trigger_announced"
 
-#: The condition kind ``engine/oracle.py``'s table gives "whenever <noun
+#: The condition kind ``engine/trigger_conditions.py``'s table gives "whenever <noun
 #: phrase> has N or more K counters on it".
 WATCHED_COUNTER_THRESHOLD = "permanent_counters_reach_threshold"
 

@@ -140,7 +140,7 @@ def _parse_cast_event(
     # ``chosen_color`` key and not a colour word. The whole line has to be
     # consumed here or the four words fall through to the effect parser, which
     # is where they were refusing the card: the trigger's own dispatcher is
-    # ``events._cast_narrowing_admits``, reading the key ``oracle.py``'s table
+    # ``events._cast_narrowing_admits``, reading the key ``trigger_conditions.py``'s table
     # captures from the same words.
     #
     # Read **first**, ahead of the colour union below: that branch opens on the
@@ -184,7 +184,7 @@ def _parse_cast_event(
         stream.reset(mark)
     # "…you cast a **nonred** spell" (Dwarven Patrol), and "…you cast a
     # **red** spell" beside it. The third scope of the colour narrowing, read
-    # apart from the loop above because it is held to what `engine/oracle.py`'s
+    # apart from the loop above because it is held to what `engine/trigger_conditions.py`'s
     # table carries on this scope: one colour word or one negated one, never
     # the union ("you cast a green or white spell" has no row, and a line read
     # here that the table reads differently is a trigger watching a set the
@@ -210,7 +210,7 @@ def _parse_cast_event(
     # "…casts a **multicolored** spell" (Rewards of Diversity). The word sits
     # where a colour does and is not one (CR 105.4), so it is read beside the
     # colour loop above rather than inside it — and all three printed scopes
-    # are read, because `engine/oracle.py`'s table carries the marker on all
+    # are read, because `engine/trigger_conditions.py`'s table carries the marker on all
     # three and a scope read on one side only is a line that strands there.
     #
     # *Consumed and not carried*, the split the ordinal exclusion below makes:
@@ -294,7 +294,7 @@ def _parse_cast_event(
                     # dropped while the other kept it.
                     # The clause is *consumed* and not carried: the
                     # condition — this narrowing included — comes from
-                    # `engine/oracle.py`'s table, and this side only has to
+                    # `engine/trigger_conditions.py`'s table, and this side only has to
                     # read the whole line rather than choke on it. The same
                     # split the "if it wasn't sacrificed" qualifier makes
                     # below. A clause it cannot read refuses the line, so

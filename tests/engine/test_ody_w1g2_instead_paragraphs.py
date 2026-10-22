@@ -1,5 +1,5 @@
 """An ability-word paragraph that says "…instead" is the last sentence of the
-paragraph above it (``oracle.expand_instead_paragraph_lines``, W1G2).
+paragraph above it (``line_rewrites.expand_instead_paragraph_lines``, W1G2).
 
 "Thermal Blast deals 3 damage to target creature.\\nThreshold — Thermal Blast
 deals 5 damage instead if there are seven or more cards in your graveyard."
@@ -21,9 +21,8 @@ import pytest
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units
 from engine.models import CardDefinition
-from engine.oracle import (
-    compile_card_oracle, expand_ability_lines, expand_instead_paragraph_lines,
-)
+from engine.oracle import compile_card_oracle, expand_ability_lines
+from engine.line_rewrites import expand_instead_paragraph_lines
 from engine.oracle_types import strip_ability_word
 
 _W1G2_POOL = load_cards(manifest_set_paths(include_measured=True))

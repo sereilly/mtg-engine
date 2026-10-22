@@ -44,7 +44,7 @@ _BAIT = (
     "Island", "Forest", "Swamp", "Goblin Balloon Brigade", "Thallid",
 )
 
-#: The cost-picker flags ``targeting.COST_PICKER_FLAGS`` whose answer is a
+#: The cost-picker flags ``cost_pickers.COST_PICKER_FLAGS`` whose answer is a
 #: permanent on the battlefield (a discard or a library-top cost names a card
 #: in hand, which has its own refusal already).
 _PERMANENT_COST_FLAGS = (

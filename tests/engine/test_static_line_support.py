@@ -47,12 +47,9 @@ from engine.hand_size import hand_size_line
 from engine.untap_restrictions import self_untap_line
 from engine.grammar import compile_line
 from engine.grammar.registries import registry_for_line
-from engine.oracle import (
-    _derived_static_claims,
-    _is_supported_static_creature_line,
-    compile_card_oracle,
-    normalize_creature_line,
-)
+from engine.oracle import (_derived_static_claims, compile_card_oracle,
+                           normalize_creature_line)
+from engine.static_line_support import _is_supported_static_creature_line
 from engine.static_bonuses import static_bonus_for
 
 # Distinctive prefix of the normalized line -> where the behavior lives.
@@ -112,7 +109,7 @@ def _derived(normalized: str) -> bool:
         # trigger the table does not own.
         or land_play_line(normalized) in ("allowance", "prohibition")
         # **Every table the gate itself names**, asked of this one line
-        # through `oracle._derived_static_claims` — the same function
+        # through `derived_static_claims._derived_static_claims` — the same function
         # `_is_supported_static_creature_line`'s siblings ask when they admit a
         # card. Seven arms stood here spelled out by hand (cost_modifiers,
         # replacements, prevention, global_statics, library_top, enter_effects,

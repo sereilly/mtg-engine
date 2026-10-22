@@ -231,7 +231,7 @@ class ObjectFilter:
     #: The same exclusion when the name printed is the **card's own** — the
     #: only spelling any card in the pool prints. Its own field because neither
     #: front end holds a name at that point: the lexer has collapsed the words
-    #: to a SELF token for the grammar, and ``oracle._restriction_line`` has
+    #: to a SELF token for the grammar, and ``self_reference._restriction_line`` has
     #: rewritten them to "this creature" for the derivation tables. What the
     #: matcher compares is still the *name*, read off the ability's source.
     not_named_source: bool = False

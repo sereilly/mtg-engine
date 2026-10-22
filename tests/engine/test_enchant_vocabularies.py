@@ -4,10 +4,10 @@ nouns.
 CR 702.5's enchant ability is read by three separate registries, in three
 files, for three different questions:
 
-* ``targeting._ENCHANT_NOUNS`` — the **claim**. It builds the regex
+* ``enchant_targets._ENCHANT_NOUNS`` — the **claim**. It builds the regex
   ``enchant_line_subject`` matches, which is what tells the support gate and
   ``parse_coverage`` that the printed line is accounted for.
-* ``targeting._ENCHANT_NOUN_TO_SPEC`` — the **picker**. It turns the clause
+* ``enchant_targets._ENCHANT_NOUN_TO_SPEC`` — the **picker**. It turns the clause
   into the target spec ``_enumerate_targets`` offers hosts from.
 * ``mixins/stack/casting._ENCHANT_TARGET_MATCHERS`` — the **gate**. It answers
   "is this permanent a legal host", for the cast check (CR 601.2c), for
@@ -34,7 +34,7 @@ from engine.mixins.stack.casting import (
     permanent_matches_enchant_noun,
 )
 from engine.models import Permanent
-from engine.targeting import _ENCHANT_NOUNS, _ENCHANT_NOUN_TO_SPEC
+from engine.enchant_targets import _ENCHANT_NOUNS, _ENCHANT_NOUN_TO_SPEC
 
 from tests.helpers import _mk_creature_card
 

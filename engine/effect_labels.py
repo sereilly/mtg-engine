@@ -361,7 +361,7 @@ ACTIVATED_LABELS: dict[str, str] = {
     # category rename cannot re-bucket the card.
     "counter_stack_ability": "activated_counterspells",
     # Giant Slug's "{5}: At the beginning of your next upkeep, …". The label
-    # `engine/oracle.py` already reports for an activated ability that creates a
+    # `engine/ability_lines.py` already reports for an activated ability that creates a
     # delayed trigger (CR 603.7); the grammar reads this one, so it takes the
     # same word rather than a second name for the same shape.
     "create_delayed_trigger": "activated_delayed_trigger",

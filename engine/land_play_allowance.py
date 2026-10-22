@@ -22,7 +22,7 @@ Everything below is derived from the printed sentence, so a differently-named
 card with the same template needs no code at all —
 ``tests/rules/test_land_play_allowance.py`` pins that with invented cards.
 
-The **support gate reads this same table** (``oracle._derived_static_claims``),
+The **support gate reads this same table** (``derived_static_claims._derived_static_claims``),
 so a wording it does not understand cannot be admitted as supported and then
 silently unenforced.
 """

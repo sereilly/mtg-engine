@@ -45,7 +45,7 @@ if TYPE_CHECKING:
 
 # The filter-payload keys :func:`subject_matches` implements. A narrowed trigger
 # condition, sacrifice cost or sacrifice effect carrying anything outside this
-# set is refused where it is *compiled* (engine/oracle.py::_resolve_subject_groups
+# set is refused where it is *compiled* (engine/trigger_conditions.py::_resolve_subject_groups
 # for a trigger, engine/grammar for the other two), not silently ignored where it
 # is dispatched: a restriction the matcher cannot test would make the effect
 # reach a strictly larger set than the card prints, which is the one thing it
@@ -136,7 +136,7 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # places: spelled out it is a literal the *pure* matcher compares
     # (``not_named``), and printed as the card's own name it has already been
     # collapsed — to a SELF token by the lexer, to "this creature" by
-    # ``oracle._restriction_line`` — so the name is read off the ability's
+    # ``self_reference._restriction_line`` — so the name is read off the ability's
     # source and the key is testable here and nowhere else
     # (``not_named_source``, on ``exclude_self``'s footing and out of
     # ``OBJECT_ONLY_FILTER_KEYS`` below for its reason).
@@ -1094,7 +1094,7 @@ def subject_matches(
     # "…a creature with flying **not named Escaped Shapeshifter**". The name
     # comes off the ability's *source*, which is the only place either front end
     # still has it: the lexer collapsed the printed name to a SELF token and
-    # ``oracle._restriction_line`` rewrote it to "this creature", so neither
+    # ``self_reference._restriction_line`` rewrote it to "this creature", so neither
     # payload carries a string. A *name* comparison, never identity — a second
     # copy of the card is excluded too (CR 201.2) — and through the effective
     # card on both sides, so a Clone of the card is excluded and the card
@@ -1226,7 +1226,7 @@ def subject_matches(
         # What the phrase is *for* is the binding it leaves behind, and that is
         # not this predicate's business: a later slot narrowed to "that
         # player's graveyard" is a relation between two chosen objects, which
-        # ``targeting.ROLE_RELATION_TESTS`` answers and ``subject_matches``
+        # ``target_roles.ROLE_RELATION_TESTS`` answers and ``subject_matches``
         # never sees.
         elif controller == "any_player":
             if game.controller_index_of(obj) is None:

@@ -539,7 +539,7 @@ def _sacrifice_filter(phrase: str) -> dict | None:
     rather than re-deriving the filter is what keeps this cost and an activation
     cost printing the same noun phrase from admitting different permanents.
     """
-    from .oracle import _chargeable_sacrifice_filter
+    from .chargeable_costs import _chargeable_sacrifice_filter
 
     return _chargeable_sacrifice_filter(phrase)
 

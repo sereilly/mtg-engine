@@ -48,7 +48,7 @@ the two kinds. A citation naming a rule that exists is invisible to
 `rules_gaps.py`, which checks that the number and its subrule letter are real,
 not that the sentence beside it is what the rule says.)
 
-The support gate reads this file too (``oracle._derived_static_claims``,
+The support gate reads this file too (``derived_static_claims._derived_static_claims``,
 ``auras.aura_continuous_claim``), so a card whose whole text is one of these
 sentences is supported *because* the restriction is implemented — and a wording
 this file cannot read makes the card unsupported rather than admitting it with
@@ -607,7 +607,7 @@ def _lines_of(card) -> tuple[str, ...]:
 
     Pre-modern and legendary templating writes the subject as the card's name —
     "**Bartel Runeaxe** can't be the target of Aura spells" — while the patterns
-    above are anchored on the self-reference. Through ``oracle._restriction_line``
+    above are anchored on the self-reference. Through ``self_reference._restriction_line``
     rather than a second collapser here: the *gate* already reads the line that
     way, and a runtime reader normalizing differently is exactly how a card
     compiles supported and then protects nobody, which is what the first run of

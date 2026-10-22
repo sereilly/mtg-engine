@@ -143,7 +143,7 @@ SCOPE: dict[str, str | tuple[str, ...]] = {
         "702.36",  # Fear
         "702.108", # Prowess
         "702.111", # Menace
-        # NOT 702.83 Exalted, for 701.43's reason: `engine/oracle.py` cites
+        # NOT 702.83 Exalted, for 701.43's reason: `engine/whenever_triggers.py` cites
         # 702.83a because exalted is *defined* with the words Reckless Ogre
         # prints ("whenever this creature attacks alone"), and that event is
         # CR 506.5, which is tracked and covered. The keyword itself is on no

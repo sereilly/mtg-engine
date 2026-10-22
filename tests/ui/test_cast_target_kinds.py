@@ -296,7 +296,7 @@ def test_the_prompt_requires_the_printed_number():
 # That is fixed for the two walks the pool's two cards take, and the guard next
 # door pins both by name. What has no guard is the **kind**: `requires_source`
 # rides on top of whatever target description the card prints
-# (`targeting._off_target_chosen_source_redirect_spec` returns
+# (`payload_target_specs._off_target_chosen_source_redirect_spec` returns
 # `{**described, "requires_source": True}`), so the next card to print the
 # phrase decides its own walk. A "divided", "several", "stack" or "player"
 # description would route to a walk with no stage, and the failure is the

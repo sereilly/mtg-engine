@@ -39,7 +39,7 @@ from .trigger_tables import _DAMAGE_RECIPIENTS, _DAMAGER_NOUNS
 
 #: The bare seat words a damage recipient may end with, where the noun phrase
 #: in front of them already carried the article ("a creature **or opponent**",
-#: Flesh Reaver). Held to the words ``engine/oracle.py``'s
+#: Flesh Reaver). Held to the words ``engine/trigger_conditions.py``'s
 #: ``damage_recipient_seat_after`` alternation names: a word consumed here that
 #: the condition table cannot test is a trigger firing on damage the card
 #: narrows away.
@@ -56,7 +56,7 @@ def _parse_damage_dealt_event(
     ones, because they are one event asked with different narrowings. Both are
     read here and carried on the node: the damager (the source itself, the
     permanent this Aura enchants, any source a player controls, or a noun
-    phrase) and the recipient. `engine/oracle.py`'s table names the same groups,
+    phrase) and the recipient. `engine/trigger_conditions.py`'s table names the same groups,
     and `engine/damage_events.py` announces the event once for all of them.
 
     Tried before the phrase table, whose remaining entries would claim these
@@ -76,7 +76,7 @@ def _parse_damage_dealt_event(
     # would take "you" for a damager and then fail on the missing "deals",
     # refusing the line rather than falling through to here. The recipient is
     # consumed and not carried, exactly as the active form's is —
-    # `engine/oracle.py`'s row marks the seat and `events._damage_dealt_filter`
+    # `engine/trigger_conditions.py`'s row marks the seat and `events._damage_dealt_filter`
     # tests it, which is where every other recipient narrowing is answered.
     passive = stream.mark()
     if stream.accept_word("you're") or (
@@ -143,7 +143,7 @@ def _parse_damage_dealt_event(
         # outright — so without this branch the words strand the line.
         #
         # Consumed and not carried, exactly as Justice's "or spell" is:
-        # `engine/oracle.py`'s table marks the self-reference and
+        # `engine/trigger_conditions.py`'s table marks the self-reference and
         # `events._damage_dealt_filter` tests it by identity, which is not
         # something an `ObjectFilter` narrowing could say.
         self_recipient = stream.mark()
@@ -191,7 +191,7 @@ def _parse_damage_dealt_event(
             #
             # **Consumed and not carried**, which is where this differs from
             # the seat-first union below and matches Justice's "or spell" above
-            # it: `engine/oracle.py`'s condition table is what tests a
+            # it: `engine/trigger_conditions.py`'s condition table is what tests a
             # recipient seat (`damage_recipient_seat_after`), and this node's
             # `narrowings` are noun phrases — a seat is not one, so there is
             # nothing here that could hold it. Left on the stream instead, the
@@ -218,7 +218,7 @@ def _parse_damage_dealt_event(
         #
         # **Carried, not merely consumed**, which is where this differs from
         # Justice's "or spell" above: that word narrows nothing the noun parser
-        # reads, and this is a whole printed phrase. `engine/oracle.py`'s table
+        # reads, and this is a whole printed phrase. `engine/trigger_conditions.py`'s table
         # delimits it as a `damaged_subject` group, so the grammar records it
         # under the same stem — a phrase one front end consumed and the other
         # tested is a card whose two halves watch different sets, which is

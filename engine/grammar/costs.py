@@ -3,7 +3,7 @@
 Split out of `parser.py` when that file crossed 1,000 lines again. It is a
 coherent family rather than an arbitrary cut: these productions all answer one
 question, "what does activating this ability charge?", and each of them is
-paired with a reader in `engine/oracle.py` that collects the same cost. That
+paired with a reader in `engine/activation_costs.py` that collects the same cost. That
 pairing is the reason the file exists as a unit — the two halves of a cost must
 agree, and keeping this half in one place is what makes the agreement legible.
 
@@ -171,7 +171,7 @@ def _accept_exile_top_of_library(
     The cost twin of ``effects/zones._parse_exile_top_of_library``, and a
     separate reader for the reason the whole of this module is separate: an
     effect's exile is lowered onto a handler and a cost's is charged by
-    ``engine/oracle.py``'s reader, which has to admit exactly what this admits.
+    ``engine/activation_costs.py``'s reader, which has to admit exactly what this admits.
     Every word of "of your library" is expected, exactly as the effect side
     expects them — "the top card of target player's library" is somebody else's
     card and a cost this charger has no payment path for.
@@ -492,7 +492,7 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
             # Scavengers). Read here for the library form's reason directly
             # above — CR 404.1/404.2 name these cards by *position*, so the object
             # reader below refuses the phrase outright — and gated by the same
-            # payload builder ``engine/oracle.py``'s charger runs, so the two
+            # payload builder ``engine/chargeable_costs.py``'s charger runs, so the two
             # halves of the cost cannot admit different clauses.
             #
             # Only the payer's own pile: an activation cost paid out of
@@ -562,7 +562,7 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
             # (Zombie Assassin). One printed verb naming a chosen set and the
             # source, so it becomes two entries — the sacrifice's "two lands
             # and this artifact" one verb over, and read by the charger through
-            # one reader for both (``oracle._split_conjoined_self``). Only the
+            # one reader for both (``activation_costs._split_conjoined_self``). Only the
             # source may follow: a second *chosen* exile has no field to be
             # charged from, so anything else is left unconsumed and refuses.
             tail = stream.mark()
@@ -843,7 +843,7 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
                 # ``ActivatedAbilityCost.discard_cards`` is what collects it.
                 # "Discard **two** cards" (Prophecy's five spellshapers) is the
                 # same cost counted: the charger has always taken a number, and
-                # its reader in ``engine/oracle.py`` goes through
+                # its reader in ``engine/activation_costs.py`` goes through
                 # ``cast_costs.read_discard_clause`` — the reader Forbid's
                 # counted buyback already uses — so the two halves read one
                 # count. Only a printed number of two or more; an X here would

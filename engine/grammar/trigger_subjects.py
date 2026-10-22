@@ -11,7 +11,7 @@ reads "**a Forest an opponent controls** becomes tapped" through the noun
 parser. The two readings of "becomes tapped" disagree about what the words in
 front of the verb are, and a named subject must be tried first: `parse_target_spec`
 would happily claim "enchanted land" as a quantified subject and name a condition
-`engine/oracle.py`'s table does not.
+`engine/trigger_conditions.py`'s table does not.
 
 Split out of `triggers` at the thousand-line guard, along the boundary that
 module already drew — these four sat together, called together, and reach
@@ -177,7 +177,7 @@ _ATTACHED_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
     # already spells, imported rather than re-listed: a second copy would go
     # stale the next time a narrower class of spell is printed, and the two
     # tables have to name the same four readings or the grammar and
-    # `engine/oracle.py` would claim different lines. Longest first, which is
+    # `engine/trigger_conditions.py` would claim different lines. Longest first, which is
     # how that tuple is already ordered — "a spell" ahead of "a spell or
     # ability" would consume the shorter reading and strand the rest.
     *(
@@ -293,7 +293,7 @@ def _parse_named_subject_tap_event(
     quantifies.
 
     One production for both subjects and both trigger words, because they are
-    one event: `engine/oracle.py`'s table used to spell "enchanted land"
+    one event: `engine/trigger_conditions.py`'s table used to spell "enchanted land"
     (Psychic Venom) and "this land" (City of Brass) as conditions of their own,
     and a kind of its own is what let each be dispatched by a pass inside
     `tap_land_for_mana` that fired on the single tapper it sat in. The subject

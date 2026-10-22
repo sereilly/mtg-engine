@@ -200,7 +200,7 @@ def discard_whole_hand(
     # the key's absence: an unkeyed payload is the controller's own hand
     # one branch up, and that is the one player this effect must not hit.
     # The ``targets`` description beside it is what raises the picker —
-    # ``targeting._from_instruction`` reads it generically, so the trigger
+    # ``instruction_targets._from_instruction`` reads it generically, so the trigger
     # announces an opponent (``_choose_trigger_targets``) instead of
     # falling through to the first living one.
     if node.player.kind in ("target_player", "target_opponent"):

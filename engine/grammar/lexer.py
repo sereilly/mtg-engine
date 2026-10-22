@@ -115,7 +115,7 @@ def _self_reference_spans(normalized: str, card_name: str | None) -> list[tuple[
     creature type and not the card: collapsed to SELF the phrase counts other
     attacking copies of *this permanent excluding itself*, which is always
     none, so the pump resolves for +0/+0 on a card reporting itself supported.
-    ``oracle._collapse_self_references`` applies the same rule on the
+    ``self_reference._collapse_self_references`` applies the same rule on the
     static-line path, in the one spelling that path cannot share.
 
     **And a name that is also an effect verb is left alone in verb position.**
@@ -177,7 +177,7 @@ def _self_reference_spans(normalized: str, card_name: str | None) -> list[tuple[
 
 
 #: Words after which a name that is *also* a creature type reads as the type.
-#: The same set ``oracle._TYPE_POSITION_WORDS`` holds; kept here rather than
+#: The same set ``self_reference._TYPE_POSITION_WORDS`` holds; kept here rather than
 #: imported because this reader works on raw character offsets and that one on
 #: a normalized line, and `engine.oracle` imports this package.
 _TYPE_POSITION_WORDS = frozenset({
@@ -221,7 +221,7 @@ def _in_verb_position(normalized: str, start: int, end: int, needle: str) -> boo
     Only ever true for a card whose own name is an effect verb — one in the
     pool — so it costs two set lookups on every other card and nothing else.
 
-    ``oracle._collapse_self_references`` deliberately grows no twin of this. Its
+    ``self_reference._collapse_self_references`` deliberately grows no twin of this. Its
     collapse is a *retry* run only when the plain reading found no trigger
     condition, so a verb-named card with no trigger never reaches it; a
     verb-named card that printed one would need the rule there too.

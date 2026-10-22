@@ -52,8 +52,6 @@ OVERSIZED: dict[str, int] = {
     "engine/ai_policy.py": 9198,
     "engine/ai_valuation.py": 4935,
     # --- S4 ---
-    "engine/oracle.py": 8417,
-    "engine/targeting.py": 5535,
     # --- S5 ---
     "engine/legality.py": 7245,
     "engine/activation_restrictions.py": 2422,

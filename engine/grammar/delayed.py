@@ -580,7 +580,7 @@ def fold_counter_countdown(stream: TokenStream, effect, parse_statement):
 
     All Hallow's Eve prints the identical pair without needing this, and the
     difference says why the fold is safe: its two sentences are one **triggered**
-    line, split into condition and effect by ``engine/oracle.py`` and parsed as
+    line, split into condition and effect by ``engine/trigger_conditions.py`` and parsed as
     one statement — where these two are behind a *delay*, and the delay
     production stops at the first sentence end (see the guard above it, which is
     there so a prefix is never accepted).

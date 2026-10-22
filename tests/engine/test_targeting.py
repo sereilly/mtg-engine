@@ -28,12 +28,9 @@ from engine.faces import compilation_units
 from engine.card_loader import load_catalog
 from engine.faces import castable_faces
 from engine.oracle import compile_card_oracle
-from engine.targeting import (
-    card_names_a_chooser,
-    derive_cast_spec,
-    derive_cast_target,
-    line_names_a_cast_target,
-)
+from engine.targeting import (derive_cast_spec, derive_cast_target,
+                              line_names_a_cast_target)
+from engine.picker_probes import card_names_a_chooser
 
 
 def _supported_units(pool):
@@ -475,7 +472,7 @@ def test_whose_graveyard_a_reanimation_offers_is_the_programs_answer(supported_c
     a spec is own-graveyard-only exactly when its program does not say
     ``any_graveyard``.
     """
-    from engine.targeting import _ENCHANT_GRAVEYARD_LINE
+    from engine.enchant_targets import _ENCHANT_GRAVEYARD_LINE
 
     disagreements = []
     for card in supported_cards:
@@ -577,7 +574,7 @@ def test_a_reanimation_printed_your_graveyard_still_offers_only_yours(supported_
 # self-contained.
 import pytest as _w3g5_pytest
 
-from engine.targeting import cast_picker_expected as _w3g5_cast_picker_expected
+from engine.picker_probes import cast_picker_expected as _w3g5_cast_picker_expected
 from engine.targeting import (
     line_names_a_cast_target as _w3g5_names_a_cast_target,
 )

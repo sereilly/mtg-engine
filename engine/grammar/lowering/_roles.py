@@ -280,7 +280,7 @@ def _sequence_role_name(
 #: names the same object; a pair of slots no permanent could answer both of
 #: therefore cannot be one. That is the evidence
 #: :func:`describe_sequence_target_roles` otherwise has only for a seat beside
-#: an object, and it is the same fact ``targeting._slot_roles_spec`` states
+#: an object, and it is the same fact ``target_descriptions._slot_roles_spec`` states
 #: about its own shared list: "the intersection of 'you control' and 'an
 #: opponent controls' is *nothing*".
 #:
@@ -366,11 +366,11 @@ def _spell_role_description(described: dict, carrier) -> dict:
     A role *is* its description — the roles walk enumerates a slot from
     nothing else — and a counter keeps what narrows its spell on its own
     payload rather than in ``targets`` ("counter target **creature** spell" is
-    ``card_types`` beside a bare description; ``targeting._counter_spec`` is
+    ``card_types`` beside a bare description; ``payload_target_specs._counter_spec`` is
     the reader). Stamped as it stood, such a slot would offer every spell on
     the stack to a card that names some of them. So the step's own derived
     picker is asked, and each ``stack_*`` key it answers with rides the role
-    under that name; ``targeting._from_targets_payload`` hands them back.
+    under that name; ``target_descriptions._from_targets_payload`` hands them back.
 
     Anything else the step's picker says that a role has no word for refuses
     the line, which is the direction that cannot widen an announcement. No
@@ -444,7 +444,7 @@ def describe_sequence_target_roles(
     "Lunge deals 2 damage to target creature and 2 damage to target player or
     planeswalker." Two instances of the word "target", so CR 601.2c announces
     two objects — and the steps carried one description each, which the picker
-    reads through ``targeting._from_instructions``: that returns the *first*
+    reads through ``instruction_targets._from_instructions``: that returns the *first*
     spec any step describes, so the caster was asked for a creature, the seat
     slot was never announced, and the second step resolved against the target
     the first one was still holding. Lunge dealt both points to the creature.

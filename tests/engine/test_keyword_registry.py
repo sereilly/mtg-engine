@@ -4,7 +4,7 @@
 abilities the engine actually implements. Two different questions consult it and
 they have to agree:
 
-* **may this printed line be admitted?** — `engine/oracle.py`'s keyword-line
+* **may this printed line be admitted?** — `engine/keyword_lines.py`'s keyword-line
   classifier, deciding whether a creature whose text is "Vigilance" is supported;
 * **may this keyword be lowered?** — the grammar, refusing to compile a grant of
   a keyword whose behaviour does not exist.
@@ -207,7 +207,7 @@ def test_the_aura_grant_vocabulary_is_the_keyword_registry():
 
 # --- W1G4: protection qualities are one reader over two catalogs ---
 def test_the_gate_admits_exactly_the_protection_qualities_the_shield_models():
-    """`oracle._protection_quality_word` **is** `keywords.protection_quality`.
+    """`keyword_lines._protection_quality_word` **is** `keywords.protection_quality`.
 
     It used to be a hand-written copy, and the copy's card-type family was the
     literal pair "planeswalker"/"planeswalkers" — so "protection from artifacts"
@@ -220,7 +220,7 @@ def test_the_gate_admits_exactly_the_protection_qualities_the_shield_models():
     vocabulary wide enough to cross every family.
     """
     from engine.keywords import protection_quality
-    from engine.oracle import _protection_quality_word
+    from engine.keyword_lines import _protection_quality_word
 
     for word in (
         "white", "blue", "black", "red", "green",   # colours
@@ -258,7 +258,7 @@ def test_a_protection_line_naming_an_unmodelled_quality_is_refused():
     `_is_supported_static_creature_line` did to Yavimaya Scion for as long as
     the card had been in the pool.
     """
-    from engine.oracle import _is_supported_static_creature_line
+    from engine.static_line_support import _is_supported_static_creature_line
 
     assert _is_supported_static_creature_line("Protection from artifacts")
     assert not _is_supported_static_creature_line(

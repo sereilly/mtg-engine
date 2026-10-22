@@ -7,7 +7,7 @@ IR (``lower.py``). It replaced the flat ``@parse_rule`` registry in
 and silently dropped any part of a card's text its first matching rule did not
 cover.
 
-**It is the only parser.** ``engine/oracle.py`` reads a line through this
+**It is the only parser.** ``engine/front_ends.py`` reads a line through this
 package and then through ``card_hooks.CARD_LINE_INSTRUCTIONS``, and there is
 nothing after that: a line neither claims produces no instruction, and its card
 is reported unsupported naming the clause.
@@ -349,7 +349,7 @@ def subject_filter_payload(
 
     None means refuse, for either of the two ways this can fail: the phrase is
     not a subject the noun parser reads, or it is one carrying a restriction the
-    matcher cannot test. The caller (``engine/oracle.py``'s trigger table) makes
+    matcher cannot test. The caller (``engine/trigger_conditions.py``'s trigger table) makes
     the whole condition refuse, because the alternative is a trigger that
     announces itself on a strictly larger set than the card prints.
 
@@ -435,7 +435,7 @@ def graveyard_position_payload_for(
 
     The string-in front door onto ``phrases.accept_graveyard_position``, for the
     readers that arrive with a delimited clause rather than a token stream:
-    ``engine/oracle.py``'s activation-cost charger, ``engine/cast_costs.py``'s
+    ``engine/activation_costs.py``'s charger, ``engine/cast_costs.py``'s
     additional cost and ``engine/alternative_costs.py``'s alternative one. All
     three used to have no reader at all; giving each its own regex would be
     three more answers to "which card does this name", and the direction a cost

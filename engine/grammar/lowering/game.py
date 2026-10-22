@@ -375,7 +375,7 @@ def _lower_count_objects(node: ast.CountObjects) -> tuple[OracleInstruction, ...
 #: The player references a skip may name, and the word each one puts on the
 #: payload. "you" is CR 109.5's controller, fixed at lowering; the two pronouns
 #: are CR 115.1 targets, fixed only once the spell or ability has chosen one —
-#: so the handler resolves them and ``targeting.player_pronoun_spec`` raises the
+#: so the handler resolves them and ``payload_target_specs.player_pronoun_spec`` raises the
 #: picker that lets a seat be chosen at all.
 #:
 #: A set rather than a truth test on the word, for the reason the lowering

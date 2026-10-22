@@ -13,7 +13,7 @@ Covenant is an **Ice Age** card, so that was live in the shipped pool.
 
 **CR 118.9 and CR 601.2b's optional half** had a wire (``alternative_cost``,
 ``alternative_cost_hand_index``, ``optional_cost_payments``) that nothing ever
-sent, because ``targeting._cost_picker_spec`` models a cost the caster will
+sent, because ``cost_pickers._cost_picker_spec`` models a cost the caster will
 certainly pay and an offer needs a shape of its own. Nine shipped cards were
 therefore castable at their printed default price and at no other.
 

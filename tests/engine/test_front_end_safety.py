@@ -1,6 +1,6 @@
 """Guard: a grammar production must never take a line over and say *less*.
 
-`engine/oracle.py` reads a line through two front ends in order — the grammar,
+`engine/front_ends.py` reads a line through two front ends in order — the grammar,
 then `card_hooks.CARD_LINE_INSTRUCTIONS` — and the first that claims it wins. So
 a production that learns to read a hooked line *silently replaces* that hook.
 `tests/engine/test_card_lines.py` catches the resulting dead entry; it does not
@@ -26,6 +26,7 @@ authors being careful, which is not a mechanism.
 import pytest
 
 from engine.faces import compilation_units
+import engine.front_ends as front_ends
 import engine.oracle as oracle
 from engine.card_loader import load_catalog
 from engine.oracle_types import clear_compilation_caches
@@ -96,13 +97,13 @@ def with_and_without_grammar():
     # instructions are its halves', and its own program has none to compare.
     cards = compilation_units(load_catalog())
     live = {c.name: _kinds(oracle.compile_card_oracle(c)) for c in cards}
-    original = oracle._grammar_instruction
-    oracle._grammar_instruction = lambda *args, **kwargs: None
+    original = front_ends._grammar_instruction
+    front_ends._grammar_instruction = lambda *args, **kwargs: None
     clear_compilation_caches()
     try:
         hooks_only = {c.name: _kinds(oracle.compile_card_oracle(c)) for c in cards}
     finally:
-        oracle._grammar_instruction = original
+        front_ends._grammar_instruction = original
         clear_compilation_caches()
     return live, hooks_only
 
