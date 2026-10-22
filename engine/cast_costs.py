@@ -71,11 +71,11 @@ if TYPE_CHECKING:
 #
 # The first of those is a sentence this table already reads in full, so the
 # keyword line is rewritten into it before any line is classified
-# (:func:`expand_buyback_lines`, composed into ``oracle.expand_ability_lines``)
+# (:func:`expand_buyback_lines`, composed into ``line_rewrites.expand_ability_lines``)
 # and from there nothing downstream knows the word: ``_read_cost_clauses``
-# reads the offer, ``legality.cast_cost_offers`` prices it against the pool and
+# reads the offer, ``legality_cast_spec.cast_cost_offers`` prices it against the pool and
 # the untapped lands, ``web/static/app.js``'s cast-offer prompt asks for it, and
-# ``casting._optional_cost_announcement`` records how many times it was taken.
+# ``cast_additional_costs._optional_cost_announcement`` records how many times it was taken.
 #
 # The **second** static ability is the half none of that machinery had, and it
 # is implemented at the one seam a resolving spell leaves the stack through
@@ -319,10 +319,10 @@ def buyback_paid(card: CardDefinition, choices: dict | None) -> bool:
 # you cast this spell.'" That is CR 601.2b's optional additional cost, the
 # sentence this table already reads in full -- so the keyword line is rewritten
 # into it before any line is classified (:func:`expand_kicker_lines`, composed
-# into ``oracle.expand_ability_lines``) and nothing downstream knows the word:
-# ``_read_cost_clauses`` reads the offer, ``legality.cast_cost_offers`` prices it
+# into ``line_rewrites.expand_ability_lines``) and nothing downstream knows the word:
+# ``_read_cost_clauses`` reads the offer, ``legality_cast_spec.cast_cost_offers`` prices it
 # against the pool and the untapped lands, the browser's cast-offer prompt asks
-# for it, ``casting._optional_cost_announcement`` checks it and the stack item
+# for it, ``cast_additional_costs._optional_cost_announcement`` checks it and the stack item
 # records it under ``additional_costs_paid``.
 #
 # What kicker has that buyback does not is that **other sentences of the card
@@ -707,7 +707,7 @@ def _additional_costs_of_text(
     """:func:`additional_costs` keyed on what it actually reads.
 
     Cached because it is asked of every card in every hand on every poll
-    (``legality.cast_cost_offers``) and now runs the whole rewrite pass to
+    (``legality_cast_spec.cast_cost_offers``) and now runs the whole rewrite pass to
     answer — and because the answer is a pure function of exactly the three
     arguments ``expand_ability_lines`` takes.
 
@@ -897,7 +897,7 @@ def costs_charged_from(
 ) -> tuple[AdditionalCost, ...]:
     """The additional costs *card* is charged for a cast leaving *from_zone*.
 
-    The zone test ``queue_from_hand`` and ``targeting._cast_cost_picker`` both
+    The zone test ``queue_from_hand`` and ``cast_targets._cast_cost_picker`` both
     make, written once: a cost naming a zone is a price for casting from *that*
     zone (Demonic Embrace's graveyard price), so a reader that took the card
     alone would describe a cast nobody is being charged for.

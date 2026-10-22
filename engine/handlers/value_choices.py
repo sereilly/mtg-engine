@@ -196,7 +196,7 @@ def secretly_choose_numbers(game: Game, instruction: OracleInstruction, context:
     the discipline ``choose_number`` states and for a reason: a provisional
     number is a number, and the sentences behind this one would lose life by
     it if anything let them run early. A seat nobody asks is answered where
-    the prompt is armed (``default_at_arm``) by ``ai_policy.choose_secret_number``,
+    the prompt is armed (``default_at_arm``) by ``ai_prompts.choose_secret_number``,
     which reads life totals and never this map — so a seat the engine plays
     commits before any other answer exists and cannot be told one.
 
@@ -260,7 +260,7 @@ def choose_color(game: Game, instruction: OracleInstruction, context: OracleExec
     one of them would leave the other reader with nothing and no error.
 
     A deterministic default is stamped first — the colour of the opposing object
-    on the stack this choice is answering (``ai_valuation.threatening_color``),
+    on the stack this choice is answering (``ai_prompt_readers.threatening_color``),
     and failing one the colour the chooser's opponents hold most of among
     nontoken permanents, the policy the entry state applies — so a headless or
     AI seat is never blocked and never left with a colour nobody controls,

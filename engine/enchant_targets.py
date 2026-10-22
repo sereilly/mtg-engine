@@ -13,7 +13,7 @@ card in a graveyard" (Animate Dead) is not this: it chooses a card, and
 One reading of the line for every reader of it — the cast picker, the cast
 path's enchant gate (``mixins/stack/cast_target_validation``), ``engine/auras.py`` and the
 grammar's registry claim. Split out of ``engine/targeting.py`` at the
-2,000-line cap; ``engine.targeting`` still exports the names its callers pull.
+2,000-line cap; a caller imports a name from here.
 """
 
 from __future__ import annotations

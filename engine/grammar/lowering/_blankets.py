@@ -286,7 +286,7 @@ def _lower_prevent_all(
 
     ``prevent_all_combat_damage`` sets one turn-wide flag
     (``game.combat_damage_prevented_until_eot``) that
-    ``prevention._prevent_all_combat_damage`` reads on every damage event whose
+    ``prevention.shields._prevent_all_combat_damage`` reads on every damage event whose
     ``combat`` flag is set. That is the entirety of its contract, and it takes
     an empty payload — so every narrowing the sentence could carry is something
     the handler would ignore, and each one is checked here instead of dropped:

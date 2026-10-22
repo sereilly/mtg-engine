@@ -12,7 +12,7 @@ once X is a number (CR 601.2c–d), over ``_divided_total`` and its siblings.
 The Aura enchant-noun helpers live here because an Aura chooses what it
 attaches to as it is cast (CR 303.4a). ``permanent_matches_enchant_noun`` is
 the *gate* — asked by the cast check below, the target picker,
-``auras.aura_attach_refusal`` and the CR 704.5m sweep — and
+``aura_attachment.aura_attach_refusal`` and the CR 704.5m sweep — and
 ``engine/enchant_targets.py`` reads the same line for the claim and the
 picker; the two share a vocabulary deliberately (see its
 ``enchant_line_subject``).
@@ -67,7 +67,7 @@ _ENCHANT_TARGET_MATCHERS = {
     # the fallback below, which says yes for a noun nobody has read.
     "permanent": lambda perm: True,
     # "Enchant **Swamp**" (Spreading Algae). A land subtype, from the same
-    # vocabulary catalog `targeting._ENCHANT_LAND_SUBTYPES` builds the picker's
+    # vocabulary catalog `enchant_targets._ENCHANT_LAND_SUBTYPES` builds the picker's
     # spec out of, so the hosts offered and the hosts allowed are one reading.
     #
     # This row is the half that would otherwise be missing, and its absence is
@@ -127,9 +127,9 @@ def enchant_noun_seat(noun: str) -> str | None:
     The seat half of the clause, separated from the type half because the type
     is a question about the permanent alone while this one needs two seats —
     asked by the cast gate (CR 601.2c), by the AI's target picker, by
-    ``auras.aura_attach_refusal`` and by the CR 704.5m sweep that puts the Aura
+    ``aura_attachment.aura_attach_refusal`` and by the CR 704.5m sweep that puts the Aura
     into the graveyard when its host stops satisfying the clause. The split
-    itself is ``targeting.enchant_subject_seat``, which the picker's spec is
+    itself is ``enchant_targets.enchant_subject_seat``, which the picker's spec is
     also built from, so the offered list and the enforced rule cannot drift.
     """
     return enchant_subject_seat(noun)[1]
@@ -158,7 +158,7 @@ def permanent_matches_enchant_noun(permanent: Permanent, noun: str) -> bool:
     """Whether *permanent* is a legal host for an Aura printing "enchant *noun*".
 
     Read by the cast gate (CR 601.2c), the target picker,
-    ``auras.aura_attach_refusal`` and the CR 704.5m sweep — one answer, so the
+    ``aura_attachment.aura_attach_refusal`` and the CR 704.5m sweep — one answer, so the
     list offered and the rule enforced cannot drift.
     """
     noun = enchant_subject_seat(noun)[0]
@@ -167,7 +167,7 @@ def permanent_matches_enchant_noun(permanent: Permanent, noun: str) -> bool:
     if negated is not None:
         excluded, noun = negated.group("subtype"), negated.group("noun")
     # "Enchant creature **without flying**" (Roots). The keyword half of
-    # CR 702.5's [quality], split by the reader `targeting.enchant_subject_spec`
+    # CR 702.5's [quality], split by the reader `enchant_targets.enchant_subject_spec`
     # builds the picker from — so the hosts offered and the hosts allowed are
     # one reading. Through ``Permanent.has_keyword``, which is CR 613 layer 6's
     # answer: a creature *granted* flying stops being a legal host (and
@@ -175,7 +175,7 @@ def permanent_matches_enchant_noun(permanent: Permanent, noun: str) -> bool:
     # Aura in the graveyard), while one that has lost it becomes one.
     #
     # The word itself is validated where the clause is *claimed*
-    # (`targeting.enchant_line_subject`): a keyword nothing implements answers
+    # (`enchant_targets.enchant_line_subject`): a keyword nothing implements answers
     # no for every creature, which would make this exclusion match them all.
     noun, without_keyword = enchant_subject_keyword_exclusion(noun)
     if without_keyword is not None and permanent.has_keyword(without_keyword):
@@ -210,13 +210,13 @@ def permanent_matches_enchant_noun(permanent: Permanent, noun: str) -> bool:
         # Both fallbacks used to answer True, on the reasoning that refusing
         # would make such an Aura uncastable rather than loud. It is already
         # loud, and one step earlier: an unread noun fails
-        # ``targeting.enchant_line_subject``'s vocabulary, so the enchant line
+        # ``enchant_targets.enchant_line_subject``'s vocabulary, so the enchant line
         # is unclaimed, the card compiles **unsupported** ("unimplemented aura
         # effect: enchant equipment") and no player can put it in a deck. What
         # the permissive answer bought was therefore nothing, and what it cost
         # was the one way the three vocabularies can drift apart: this table is
-        # the *gate*, ``targeting._ENCHANT_NOUNS`` is the *claim* and
-        # ``targeting._ENCHANT_NOUN_TO_SPEC`` is the *picker*, and a noun added
+        # the *gate*, ``enchant_targets._ENCHANT_NOUNS`` is the *claim* and
+        # ``enchant_targets._ENCHANT_NOUN_TO_SPEC`` is the *picker*, and a noun added
         # to the other two and not to this one is a supported, deckable Aura
         # whose printed restriction nothing tests — Roots' failure exactly, and
         # a restriction that fails open is wrong in the player's favour and
@@ -295,7 +295,7 @@ def _named_divided_targets(
     Pyrokinesis) and "…among all creatures target opponent controls" (Dwarven
     Catapult) name no player, so a `target_player_index` on one of those is the
     seat every cast carries rather than a target — read through the same
-    ``creatures_only`` / ``land_filter`` narrowing ``legality._enumerate_targets``
+    ``creatures_only`` / ``land_filter`` narrowing ``legality_enumeration._enumerate_targets``
     consults before it offers a face, so the gate and the picker cannot
     disagree about what a legal target is.
     """
@@ -382,7 +382,7 @@ class CastTargetValidationMixin:
         The four seats are the ones ``subject_matches`` refuses without: a caller
         that cannot say whose ability this is must not be handed a narrowing it
         would then ignore. Every one is supplied by the two callers below and by
-        ``legality._ability_target_legal``.
+        ``legality_enumeration._ability_target_legal``.
 
         Deliberately silent about "…with mana value X" (Detonate), which is the
         one restriction with no literal to test — ``destroy_subject_filter``
@@ -439,7 +439,7 @@ class CastTargetValidationMixin:
         announcement it is.
 
         **Two player roles are filled from *role_seats***, the per-slot list a
-        roles announcement of several seats carries (``targeting.ROLE_SEATS``).
+        roles announcement of several seats carries (``target_roles.ROLE_SEATS``).
         "Choose any number of creatures **target player** controls. Choose the
         same number of creatures **another target player** controls."
         (Cultural Exchange.) The paragraph above stands for every announcement
@@ -541,7 +541,7 @@ class CastTargetValidationMixin:
         announcement in hand is asking.
 
         *target_role_seats* is the announcement's seat **per role**, where it
-        named more than one player (``targeting.ROLE_SEATS``); the roles gate
+        named more than one player (``target_roles.ROLE_SEATS``); the roles gate
         below fills each player slot from it, and every seat in it is held to
         the same name-protection question the scalar is.
         """
@@ -1104,7 +1104,7 @@ class CastTargetValidationMixin:
             # (Shattered Crypt) is an exact count and does need X legal ones.
             #
             # The ceiling on such a list is a board count and is checked where
-            # that count is known (``legality.announced_cast_x``), which is why
+            # that count is known (``legality_cast_spec.announced_cast_x``), which is why
             # the maximum below asks whether the printed count is a number
             # before comparing to it.
             if printed == "x" and targets_desc.get("quantifier") == "up_to":
@@ -1226,7 +1226,7 @@ class CastTargetValidationMixin:
         # same view the picker's spec is.
         # CR 601.2c's **count**, here because here is where X is a number:
         # "two target creatures" names two and "Tap X target creatures" names
-        # X (`legality.cast_target_count_refusal`). Once per announced mode,
+        # X (`legality_cast_gates.cast_target_count_refusal`). Once per announced mode,
         # like the gates above. An X the caller announced (or the card
         # defined) is counted; one this function inferred from the pool a few
         # lines up is not — the caster never said it.

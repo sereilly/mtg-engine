@@ -528,7 +528,7 @@ def test_grindstone_repeats_while_the_two_milled_cards_share_a_colour(set_pool):
     assert len(game.players[1].graveyard) == 6
     assert len(game.players[1].library) == 4
     # And the picker knows the ability targets. A new control-flow wrapper is
-    # invisible to `targeting.py`'s unwrap list until somebody adds it, and the
+    # invisible to `instruction_targets.py`'s unwrap list until somebody adds it, and the
     # failure is the Roots class: the client sends a bare activation and the
     # ability mills whoever the resolution happened to be holding.
     program = compile_card_oracle(set_pool("TMP")["Grindstone"])
@@ -1304,7 +1304,7 @@ def test_phyrexian_splicer_compiles_with_its_choice_in_the_cost(set_pool):
     chosen ability", which a word picked at resolution would narrow too late.
 
     Two readers have to agree about it — the grammar's cost parser gates whether
-    the line compiles, and `oracle.parse_activated_ability_cost` produces the
+    the line compiles, and `activation_costs.parse_activated_ability_cost` produces the
     cost that is charged — so the options are asserted off the compiled cost.
     """
     from engine.oracle import compile_card_oracle

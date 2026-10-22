@@ -15,7 +15,7 @@ carries ``target``. So its count was only ever a maximum.
 
 The picker had the same gap from the other side: ``exact_targets`` was absent
 from the spec, so a browser's confirm button accepted one target too. Both now
-ask ``targeting.slot_list_is_exact``. A list with a slot the card lets the
+ask ``target_descriptions.slot_list_is_exact``. A list with a slot the card lets the
 caster leave empty (Primal Might's "up to one target creature you don't
 control") answers False to both and may still name fewer.
 """

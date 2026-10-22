@@ -367,7 +367,7 @@ class PaymentChoicesMixin:
         pool that this payment can spend is the game's to answer, and two
         readers already answer it for the AI's cast plan: the tap seam's own
         gate (``land_mana_tap_refusal`` — a summoning-sick land creature, a
-        land under Interdict) and ``ai_policy._land_mana_is_unplannable``
+        land under Interdict) and ``ai_mana_sources._land_mana_is_unplannable``
         (mana that may be spent only on something else, CR 106.6; an amount or
         a colour the board decides and decides at nothing). A plan that
         counted such a land said "can pay", tapped it, and failed part-way —

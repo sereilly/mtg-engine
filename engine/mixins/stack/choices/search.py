@@ -981,7 +981,7 @@ class LibrarySearchChoicesMixin:
         exiles every land it can find and never returns one, so the old policy
         emptied a headless seat's land supply the day the card was supported.
         Which of the two a card is is derived from its compiled program
-        (``ai_valuation.exiled_search_pile_comes_back``) and carried on the
+        (``ai_prompt_readers.exiled_search_pile_comes_back``) and carried on the
         prompt, never named here: the reasoning "the cards come back castable"
         was a fact about three cards rather than about the sentence.
 
@@ -1011,7 +1011,7 @@ class LibrarySearchChoicesMixin:
             # (Skyship Weatherlight): everything is not the default that
             # leaves no value on the table, it is the one that leaves most of
             # the library in exile. How many, and which, is a weight
-            # (`ai_policy.slow_pile_picks`); that it is asked at all is this
+            # (`ai_prompts.slow_pile_picks`); that it is asked at all is this
             # registry's decision, made where the candidates are known.
             from ....ai_prompts import slow_pile_picks
 

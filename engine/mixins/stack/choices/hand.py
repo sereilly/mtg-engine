@@ -1086,7 +1086,7 @@ class HandChoicesMixin:
         and headless play need, and it is the same policy every other pick out
         of a hand in this file states. A seat that should choose cleverly needs
         a weight in ``engine/ai_valuation.py``, not a branch here — and the one
-        that does is ``ai_policy.order_hand_pick``: a pick the program then puts
+        that does is ``ai_prompts.order_hand_pick``: a pick the program then puts
         onto the battlefield for its owner (Stronghold Gambit) takes the card
         that sentence admits, at its superlative's extreme.
         """

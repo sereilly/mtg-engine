@@ -55,7 +55,7 @@ rest is one subject a module:
   offer's price, a toll's branches, a chosen colour, name, number or pile).
 
 The same split is why ``ai_prompt_readers.offered_action_is_a_payment`` is in
-this family rather than in ``engine/mixins/stack/choices.py`` beside the
+this family rather than in ``engine/mixins/stack/choices/`` beside the
 default that reads it. "This offer's price comes out of the taker's own
 permanents, hand, library or life" is a claim about what a card *does*, true
 of every card printing the sentence; "and therefore a seat nobody asked
@@ -230,7 +230,7 @@ def entry_triggers_bought(
     trigger, since it describes only the first.
 
     Derived as a difference of two readings of the compiled program
-    (``targeting.entry_trigger_instructions``) rather than by naming the gate,
+    (``cast_targets.entry_trigger_instructions``) rather than by naming the gate,
     so any condition the kicked view comes to understand is covered here too.
     Empty for an instant or sorcery, whose bought half is a step of its own
     resolution and is read off the cast spec.

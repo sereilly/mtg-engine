@@ -18,7 +18,7 @@ is the one worth having. Add a keyword to the grammar's list alone and nothing
 happens at all: the card stays unsupported, naming the keyword line as too
 complex, and the full suite stays green — that is exactly what a lifelink
 experiment did, 4,458 tests passing over an edit that did nothing. Add it to
-`oracle.py`'s list alone and the card is admitted while the behaviour behind it
+`keyword_lines.py`'s list alone and the card is admitted while the behaviour behind it
 is missing, which is the silent-wrongness invariant (a card may fail loudly; it
 may never resolve as something other than what it says).
 
@@ -73,7 +73,7 @@ def test_an_implemented_keyword_is_not_also_on_the_blocklist(keyword):
     """The third place a keyword's name can live, and the one that outranks
     everything else.
 
-    ``oracle.UNSUPPORTED_KEYWORDS`` names keyword *mechanics* the engine does
+    ``keyword_lines.UNSUPPORTED_KEYWORDS`` names keyword *mechanics* the engine does
     not model, matched against the **ingested** ``keywords`` field before any
     line is classified. It is not the negation of the registry — "Enchant" and
     "Landwalk" are Scryfall tags whose behaviour lives elsewhere — so it cannot
@@ -98,7 +98,7 @@ def test_an_implemented_keyword_is_not_also_on_the_blocklist(keyword):
     )
     assert compile_card_oracle(card).supported, (
         f"{keyword!r} is implemented but a card carrying it in its ingested "
-        "keywords field compiles unsupported — check oracle.UNSUPPORTED_KEYWORDS"
+        "keywords field compiles unsupported — check keyword_lines.UNSUPPORTED_KEYWORDS"
     )
 
 

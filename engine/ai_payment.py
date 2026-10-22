@@ -377,7 +377,7 @@ def _cost_for(
         tax += more
         reduction = CostReduction(reduction.generic + less, reduction.colored)
     # The best split of X among the colours the card allows, which is the one
-    # the cast path will try first (`casting._x_color_allocations`). The AI is
+    # the cast path will try first (`pool_payment._x_color_allocations`). The AI is
     # sizing the cost, so it wants the payment that will actually be attempted;
     # a split the cast would not choose prices a different spell.
     allocation = game._x_color_allocations(

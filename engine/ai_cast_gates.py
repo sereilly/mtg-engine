@@ -377,7 +377,7 @@ def _no_legal_cast_target(game: Game, caster_index: int, card: CardDefinition) -
     travel back into the cast path.
     """
     # **The engine's rule first, through the engine's predicate** (CR 601.2c,
-    # `legality.no_legal_cast_target_refusal`) — the very call the cast path
+    # `legality_cast_gates.no_legal_cast_target_refusal`) — the very call the cast path
     # refuses with, so a spell the engine would decline for want of a target is
     # one this policy cannot propose, by construction rather than by two
     # readers happening to agree. They did not: this function decided "needs a

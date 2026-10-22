@@ -477,7 +477,7 @@ ENFORCED_ATTACHED_COMBAT_RESTRICTIONS = frozenset({
     # same sentence about itself, which is what makes it one table asked with
     # the subject rewritten rather than a second reading.
     #
-    # Its readers are ``phases/declare_blockers_step._can_block_attacker``,
+    # Its readers are ``phases/block_legality._can_block_attacker``,
     # which refuses every blocker, and ``legality.is_unblockable``, which fades
     # the creature in the UI. Both already answered the kind off the
     # *attacker's own* program and had to be taught this channel as well --
@@ -511,7 +511,7 @@ ENFORCED_ATTACHED_COMBAT_RESTRICTIONS = frozenset({
     # "Enchanted creature can block only creatures with flying." (Air Bladder.)
     # Shacklegeist prints the same sentence about itself, so it is the same
     # table asked with the subject rewritten. Its reader is
-    # ``phases/declare_blockers_step._can_block_attacker``, which asks this
+    # ``phases/block_legality._can_block_attacker``, which asks this
     # channel and the blocker's own compiled program in one loop — the shape
     # ``cant_block_subject`` above already has, for its reason.
     "can_block_only_with_keyword",

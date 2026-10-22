@@ -58,8 +58,9 @@ from .zone_changes import (RETURN_TO_HAND_INSTEAD_TEXT,
 #: ``engine/grammar/registries.py`` asks to account for the line's *parse*:
 #: nothing the grammar could lower would run these, because the interceptor
 #: already does, from the card's text, on every relevant event.
-#: ``engine/oracle.py``'s support gate asks to account for the card's
-#: *support* — and until this round it did not. It asked the other six
+#: The support gates (``static_line_support``, ``derived_static_claims``)
+#: ask to account for the card's *support* — and until this round they did
+#: not. They asked the other six
 #: text-keyed tables (untap restrictions, land plays, global statics, draw-step
 #: bonuses, cost modifiers, entry effects) and not the CR 614 one, so a
 #: permanent whose *only* ability is a replacement effect produced no

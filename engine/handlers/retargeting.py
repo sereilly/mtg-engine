@@ -397,7 +397,7 @@ def change_event_object_targets(game: Game, instruction: OracleInstruction, cont
     triggered (CR 603.10). The seat that chooses is payload: this effect's
     controller for the bare sentence, or the seat "the player who reveals the
     card with the greatest mana value" names, through the one reader an offer
-    to that seat goes through (``control_flow._offered_seats``) — and where
+    to that seat goes through (``offers._offered_seats``) — and where
     that names nobody (a tie, nothing revealed) nothing is changed.
 
     CR 115.7a, each sentence of it:
@@ -418,7 +418,7 @@ def change_event_object_targets(game: Game, instruction: OracleInstruction, cont
     resolution until it is answered (``run_resumable``). Where the sentence
     says *may*, the first prompt carries "leave the targets as they are" as an
     answer — one decision, not a yes/no in front of a picker. A
-    **non-interactive** seat is not asked: ``ai_policy.choose_target_change``
+    **non-interactive** seat is not asked: ``ai_prompts.choose_target_change``
     is its stated policy, read on the spot, and "leave it" is one of its
     answers. On the spot matters: the object is the next thing to resolve, and
     a queued offer drained after the stack empties would be answered too late

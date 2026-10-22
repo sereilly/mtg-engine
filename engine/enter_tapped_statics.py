@@ -40,7 +40,7 @@ _PATTERN = re.compile(r"^(?P<subject>.+?) enters? tapped$")
 def enter_tapped_static_for(normalized_line: str) -> dict | None:
     """The subject filter payload *normalized_line* taps on entry, or None.
 
-    Takes an already-normalized line (``oracle.normalize_creature_line``), with
+    Takes an already-normalized line (``line_normalization.normalize_creature_line``), with
     or without its trailing period.
     """
     match = _PATTERN.match(normalized_line.strip().rstrip("."))

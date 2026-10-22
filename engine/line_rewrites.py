@@ -14,8 +14,8 @@ quality; and an ability-word paragraph saying "...instead" is joined onto the
 paragraph it replaces (CR 608.2c, CR 207.2c). One is the card's: a legendary
 card's short self-reference written out (``engine/self_reference.py``).
 
-Split out of ``engine/oracle.py`` at the 2,000-line cap; ``engine.oracle``
-still exports the two entry points.
+Split out of ``engine/oracle.py`` at the 2,000-line cap; a caller imports
+the two entry points from here.
 """
 
 from __future__ import annotations

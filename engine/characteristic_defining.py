@@ -723,7 +723,7 @@ _PATTERNS: tuple[tuple[re.Pattern[str], object], ...] = (
 def dynamic_pt_for(normalized_line: str) -> DynamicPT | None:
     """The characteristic-defining P/T *normalized_line* defines, or None.
 
-    Takes an already-normalized line (``oracle.normalize_creature_line``).
+    Takes an already-normalized line (``line_normalization.normalize_creature_line``).
     """
     for pattern, build in _PATTERNS:
         match = pattern.match(normalized_line)
@@ -765,7 +765,7 @@ def defines_whole_pt(line: str) -> bool:
     is not enough.
 
     Takes the line as printed and normalizes it the way
-    ``oracle.normalize_creature_line`` does for the two things a quoted token
+    ``line_normalization.normalize_creature_line`` does for the two things a quoted token
     ability can carry — case and punctuation — so the grammar can ask without
     importing the compiler that imports it.
     """

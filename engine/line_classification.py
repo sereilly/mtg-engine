@@ -647,7 +647,7 @@ def _noncreature_line_instructions(
     For a permanent it is a mirror of everything the card does, scanned by kind
     by the layer bridge, the upkeep pass and the AI: the same mirror
     ``_parse_creature_program`` has always built for creatures, and which
-    ``engine/ai_valuation.py``'s ``SPELL_TYPES`` gate already documents. A
+    ``engine/ai_weighed_cast.py``'s ``SPELL_TYPES`` gate already documents. A
     permanent's abilities keep their own entries in ``activated_abilities`` and
     ``triggered_abilities``; nothing resolves this list on its own.
     """

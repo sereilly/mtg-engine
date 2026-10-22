@@ -202,7 +202,7 @@ def pick_target_permanent(
     above this function now: CR 608.2b's gate judges the target against its
     description, and where it is still legal on another battlefield the seat
     is settled from the id again before any handler runs
-    (``LegalityMixin.resettle_announced_target_seats``), so the *player* this
+    (``ResolutionTargetsMixin.resettle_announced_target_seats``), so the *player* this
     is handed is the one the target is on.
 
     An id that resolves to **nothing** is a different question, and it has an
@@ -234,7 +234,7 @@ def pick_target_permanent(
             # Sappers, Whippoorwill and Merieke Ri Berit all read the same
             # resolver. A spell, an activated ability and a trigger whose
             # target was chosen are refused above the instructions when
-            # *every* target is gone (``legality.illegal_targets_refusal``);
+            # *every* target is gone (``legality_resolution.illegal_targets_refusal``);
             # this is what is left for the object that still resolves because
             # another of its targets is legal, and for a trigger whose target
             # a fire site stamped — and it is the reading a slot blanked by
@@ -631,7 +631,7 @@ def resolve_role_player(
     no longer resolves.
 
     **Unless the announcement recorded its seats per role**
-    (``targeting.ROLE_SEATS``), which is what one naming two players does:
+    (``target_roles.ROLE_SEATS``), which is what one naming two players does:
     "…creatures **target player** controls … creatures **another target
     player** controls" (Cultural Exchange). Then the slot is read the way its
     siblings read theirs — positionally — and the scalar is not consulted at
@@ -694,7 +694,7 @@ def _role_seat_is_still_a_target(
 
     The question is the announcement's own, through the list the picker and
     the cast gate read (``Game._enumerate_targets`` over the role, exactly as
-    ``legality.role_target_options`` asks it), so "may be targeted" has one
+    ``legality_roles.role_target_options`` asks it), so "may be targeted" has one
     answer at both ends. Asked as a *triggered* ability's would be: that
     skips the one test which depends on what kind of object is resolving —
     "can't be the targets of spells or activated abilities" (Peace Talks),

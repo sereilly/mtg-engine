@@ -83,7 +83,7 @@ def _unnamed_single_pile_refusal(card, spec: dict, seat) -> str | None:
     graveyard" may not be accepted without the seat whose graveyard they are
     in, or None.
 
-    The relation across the targets (``targeting.SINGLE_GRAVEYARD``) is held by
+    The relation across the targets (``target_descriptions.SINGLE_GRAVEYARD``) is held by
     the announcement's own shape: one seat, and slots counted into that seat's
     pile — a split across two graveyards cannot be spelled. What *can* be
     spelled is slots with no seat, and both gates read that as "legal in any
@@ -100,7 +100,7 @@ def _unnamed_single_pile_refusal(card, spec: dict, seat) -> str | None:
 def _iter_instruction_tree(instruction):
     """*instruction* and every instruction nested inside it.
 
-    Through ``targeting._nested_steps``, which is the one table saying which
+    Through ``instruction_targets._nested_steps``, which is the one table saying which
     payload keys a wrapper carries its children under — a second walker beside
     it would answer differently the day a wrapper kind is added, and that table
     exists because exactly that happened to ``if_then``.
@@ -543,7 +543,7 @@ def _resolution_rechecks_description(spec: dict) -> bool:
 
     No for the shapes the question is not about:
 
-    * a **cost** picker (any of ``targeting.COST_PICKER_FLAGS`` on the spec
+    * a **cost** picker (any of ``cost_pickers.COST_PICKER_FLAGS`` on the spec
       itself) — a payment is not a target (CR 601.2b vs 601.2c), and a
       sacrificed creature has, by design, left the description;
     * a **stack** target — its own branch below, and a spell's type does not
@@ -552,7 +552,7 @@ def _resolution_rechecks_description(spec: dict) -> bool:
       characteristics to change (CR 613.1), and the stamp branch below already
       answers its "is it still there?";
     * a **roles** spec — every role carries its own description and relation,
-      which ``handlers/_common.roles_still_legal`` re-asks at resolution
+      which ``handlers/_targets.roles_still_legal`` re-asks at resolution
       through the same ``ROLE_RELATION_TESTS`` the picker narrowed with. A flat
       enumeration here would compare the second role's target against the
       first role's list.
@@ -679,7 +679,7 @@ _UNOBLIGED_CAST_KINDS = frozenset({
 #: Spec flags that mean the picker is **not a target** (CR 115.1): a *source of
 #: your choice* is chosen, not targeted (CR 609.7a) — Reverse Damage, Eye for an
 #: Eye; ``optional`` is Clone's "you may have this enter as a copy". A cost is
-#: asked through :func:`targeting.spec_is_a_cost` beside these.
+#: asked through :func:`cost_pickers.spec_is_a_cost` beside these.
 _UNTARGETED_SPEC_FLAGS = ("source_of_choice", "requires_source", "optional")
 
 #: The printed quantifiers that let an announcement name **nobody** (CR 601.2c:
@@ -751,7 +751,7 @@ def cast_target_obligation(
 
     **A modal spell answers for the mode it was announced with** (CR 601.2b
     chooses the mode before CR 601.2c chooses the targets): *mode_index* picks
-    the steps through :func:`targeting.announced_mode_instructions`, and a cast
+    the steps through :func:`cast_targets.announced_mode_instructions`, and a cast
     naming no mode is the mode-0 cast it resolves as. This function used to
     answer None for every modal spell — "its spec is mode 0's whichever mode
     was chosen; the chosen mode's arm in ``_validate_cast_targets`` judges it"
@@ -848,7 +848,7 @@ def exact_target_count(spec: dict | None, instruction, x_value: int | None) -> i
     # only for the quantifier ``exactly``, a slot list carries ``target``, and
     # its slots were a ceiling the announcement could fall short of: each of
     # those four was castable naming one creature, which made the drawback half
-    # of the card optional. ``targeting.slot_list_is_exact`` is the question the
+    # of the card optional. ``target_descriptions.slot_list_is_exact`` is the question the
     # picker's ``exact_targets`` flag asks too; a list with an "up to one" slot
     # in it (Primal Might) may legally name fewer and answers False to both.
     if described.get("quantifier") != "exactly" and not slot_list_is_exact(described):
@@ -1221,7 +1221,7 @@ def targeting_ban_refusal(game, card, *, from_zone: str = "hand") -> str | None:
     player has no legal target while one is up.
 
     **One predicate, two readers.** The cast path asks it to refuse, and
-    ``ai_policy._can_cast_with_targets`` asks it before proposing — because a
+    ``ai_cast_gates._can_cast_with_targets`` asks it before proposing — because a
     refused cast costs nothing and breaks no rule, and a seat that re-proposes
     the same card every turn does nothing until the ban expires. That is what
     ``simulate_ai_games.py``'s ``refused_casts`` counts, and Visions' Phase 5

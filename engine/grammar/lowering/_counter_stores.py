@@ -138,7 +138,7 @@ def _lower_player_gets_counters(
     compiling onto a field nobody sweeps. "That player" is a reading of the
     trigger that fired — the damaged player's seat, frozen by
     ``damage_events._announce`` — and "**defending player**" (Swamp Mosquito) is
-    CR 506.2's, frozen by the combat fire site. ``_events.frozen_seat_record``
+    CR 506.2's, frozen by the combat fire site. ``_frozen_seats.frozen_seat_record``
     says which record a printed word names, so under an event that froze neither
     the words name a player nobody recorded and the sentence refuses.
     """

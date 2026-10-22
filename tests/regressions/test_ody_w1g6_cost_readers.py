@@ -1,7 +1,7 @@
 """ODY W1G6 — a cost the grammar admits and the charger did not read.
 
 Three findings, each a cost clause with **two readers** (``grammar/costs.py``
-admits the line; ``oracle.parse_activated_ability_cost`` charges it) that
+admits the line; ``activation_costs.parse_activated_ability_cost`` charges it) that
 disagreed in the direction that never crashes — an ability cheaper than the
 card:
 

@@ -1,6 +1,6 @@
 """Regression: "Sacrifice this **Aura**" is a cost, and nothing charged it.
 
-`engine/oracle.parse_activated_ability_cost` read a card's reference to itself
+`engine/activation_costs.parse_activated_ability_cost` read a card's reference to itself
 in a cost through three hand-written regexes, each with its own alternation of
 nouns — and every one of them listed **card types only**:
 `artifact|creature|enchantment|permanent|land|token`. `Aura` and `Equipment` are

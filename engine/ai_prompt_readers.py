@@ -24,8 +24,8 @@ cast and activation paths) or the policy's answer to it (``ai_prompts``):
   :func:`graveyard_price_order`), and whether an effect reads which cards its
   cost exiled.
 
-The engine's resolution paths import most of these from ``ai_valuation``,
-which binds them for that reason.
+The engine's resolution paths import these from here, inside the function
+that asks.
 """
 
 from __future__ import annotations

@@ -552,7 +552,7 @@ def findings(rows) -> dict:
 _SWITCH = "a switch is read as the caster's own; at the opposing 0/4 it kills"
 #: A shrink or a tap whose only target here is the caster's own creature,
 #: with a card drawn beside it: aimed at an opponent's permanent or not cast
-#: (``ai_policy.spell_target_side``), where the card is worth more than the
+#: (``ai_target_sides.spell_target_side``), where the card is worth more than the
 #: point of damage the attacker loses.
 _OWN_ONLY = "its side is the opponent's and its one target is the caster's own; the card it draws is worth more"
 #: "All creatures get +X/-X": an X in mana is announced at the largest the

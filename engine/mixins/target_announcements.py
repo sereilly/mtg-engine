@@ -156,7 +156,7 @@ class TargetAnnouncementsMixin:
         # *targets_already_chosen* is the one exception, and it is a rule
         # rather than a list of callers: an **activated** ability chose its
         # targets when it was activated (CR 602.2b, gated once in
-        # `legality.activation_target_refusal`), and a **copy** inherits the
+        # `legality_abilities.activation_target_refusal`), and a **copy** inherits the
         # original's (CR 707.10). Both were announced with their targets
         # already made, so asking again would replace a choice a player has
         # made with one they have not.
@@ -396,7 +396,7 @@ class TargetAnnouncementsMixin:
         :meth:`_stamp_stack_targets` for an item built with ids,
         ``_activate_onto_stack`` where the default is applied before the item
         exists, and **again as the object resolves**
-        (``LegalityMixin.resettle_announced_target_seats``): a target that
+        (``ResolutionTargetsMixin.resettle_announced_target_seats``): a target that
         changed controller while the object waited is still the target where
         CR 608.2b's gate judged it legal, and the seat it was announced on is
         no longer the one it stands on.
@@ -644,7 +644,7 @@ class TargetAnnouncementsMixin:
             # Which seats are targets is ``stack_targets``' answer, the one
             # reader of what a stack object announced: one event per player
             # role, each its own seat where the announcement recorded several
-            # (``targeting.ROLE_SEATS``).
+            # (``target_roles.ROLE_SEATS``).
             from ..stack_targets import chosen_targets
 
             for target in chosen_targets(self, item) or ():

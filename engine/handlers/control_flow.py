@@ -110,7 +110,7 @@ def _spent_role(step: OracleInstruction) -> dict | None:
     it acts on, or None for a step that spends no role.
 
     Two spellings of "which role is mine" exist and both are read: the key
-    inside the description (``targeting.payload_own_role``, a step of a
+    inside the description (``target_roles.payload_own_role``, a step of a
     sentence spent a role at a time) and ``subject_role`` beside it (a
     one-instruction roles sentence whose handler asks for its role by name —
     "Put X glyph counters on target creature that target Wall blocked").
@@ -922,7 +922,7 @@ def _offer_to_seat(
         "_context": context,
         # Who the card offers this to, as printed: one seat's answer is read
         # differently when every seat is being asked the same question
-        # (``ai_policy.offer_buys_own_drawback``).
+        # (``ai_prompts.offer_buys_own_drawback``).
         "_offered_actor": instruction.payload.get("actor", "you"),
     }
     # "…**If you do**, untap this land." (Forsaken City.) Where the offered
@@ -1034,7 +1034,7 @@ def choose_one(game: Game, instruction: OracleInstruction, context: OracleExecut
 
     Not a modal **ability**. A modal triggered ability chooses its mode as it is
     put on the stack (CR 700.2b), which
-    ``mixins/stack/resolution._choose_trigger_mode`` does, and by the time such
+    ``mixins/stack/trigger_targets._choose_trigger_mode`` does, and by the time such
     an ability resolves ``_chosen_trigger_instruction`` has already substituted
     the chosen mode — so a modal head never arrives here with a mode still to
     pick. What does arrive is every choice CR 608.2d makes "while applying the

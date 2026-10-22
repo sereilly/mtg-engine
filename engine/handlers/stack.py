@@ -1222,7 +1222,7 @@ def ban_targeting(game: Game, instruction: OracleInstruction, context: OracleExe
     State plus a reader, never a flag stamped on each object — the same shape
     ``cant_attack_until_eot`` takes and for the same reason: a permanent that
     enters after this resolves is covered too, and a player has nowhere to
-    stamp a flag at all. ``legality._enumerate_targets`` is the reader, which
+    stamp a flag at all. ``legality_enumeration._enumerate_targets`` is the reader, which
     is the one list the target picker and the announcement gates share, and
     the cleanup step's countdown is what ends the window.
     """

@@ -475,7 +475,7 @@ carry its row, and the census is in hand.
      the insert position decides their origin (Phase 4).
 5. **Probe a keyword's rewrite target against the live grammar before sizing
    it.** A keyword defined as a rewrite (equip, cycling, echo, buyback, kicker,
-   flashback) costs a rewrite in `oracle.expand_ability_lines` plus whatever the
+   flashback) costs a rewrite in `line_rewrites.expand_ability_lines` plus whatever the
    rewritten sentence still needs, and the census reports only the printed line
    refusing. Check which of the census's big rocks are already-built rewrites: a
    block's second set inherits its first set's keyword work, so a high arrival
@@ -511,7 +511,7 @@ provides?* Three sweeps, in order of blast radius:
    ten. A face is a card (`engine/faces.py`) is the precedent for a layout, and
    a new layout owes the face-blind census before its promotion (Phase 4).
 2. **Keywords.** Diff the set's keyword lines against
-   `vocabulary.IMPLEMENTED_KEYWORDS` **and** `oracle.UNSUPPORTED_KEYWORDS` — a
+   `vocabulary.IMPLEMENTED_KEYWORDS` **and** `keyword_lines.UNSUPPORTED_KEYWORDS` — a
    third table that outranks both and is matched against the ingested
    `keywords` field before any line is classified, so a keyword implemented in
    full can still cost every card that prints it. A keyword defined as a
@@ -593,7 +593,7 @@ Rounds run as waves of groups, briefed, merged and gated as in Integration.
 - **Write a refusing gate's refusal test before trusting the gate**; the
   positive cases all pass.
 - **Record which layer a failure is in** — parse, lowering, no handler, gate, or
-  `engine/oracle.py`'s trigger-condition table (the trigger front end that feeds
+  `engine/trigger_conditions.py`'s trigger-condition table (the trigger front end that feeds
   dispatch; a condition can parse and still fire on the wrong event). **A
   refusal can be manufactured by probe order**: when it names a verb the
   sentence does not contain, suspect the production above it.
@@ -854,7 +854,7 @@ one adds it. Re-check an entry against the code before briefing it.
   own, with `oracle_diff`.
   - *An optional slot.* "…fights **up to one** target creature an opponent
     controls" (Primal Might): a roles walk answers every role or refuses, so
-    `targeting._slot_roles_spec` leaves such a card on one shared list that
+    `target_descriptions._slot_roles_spec` leaves such a card on one shared list that
     loses the per-slot narrowing (the description records `optional_slots`).
     Part: an optional role in the walk and in the client.
   - *A seat chosen by one instruction and read by the next.* Keeper of the Dead
@@ -891,9 +891,9 @@ one adds it. Re-check an entry against the code before briefing it.
   `resolve_own_combatant`.
 
 - **Off-battlefield colour reads ignore a colour-defining static.**
-  `handlers/_common.graveyard_card_matches`' colour branch (about twenty call
+  `handlers/_filters.graveyard_card_matches`' colour branch (about twenty call
   sites with no game or owner in scope), the `@staticmethod`
-  `_exile_search_matches` in `mixins/stack/choices.py`, and
+  `_exile_search_matches` in `mixins/stack/choices/search.py`, and
   `_card_matches_filter`'s `game=`/`owner=` (passed by only some callers)
   read the printed `card.colors`; Celestial Dawn reaches a
   graveyard. *Why:* the narrowing answers from the card as printed where the CR
@@ -948,16 +948,17 @@ one adds it. Re-check an entry against the code before briefing it.
   web writer, an `id` on `valid_targets`, `session_store`'s annotation, and six
   test call sites passing `(seat, index)`.
 
-- **`web/prompts.py`'s Balance lists ask the printed type.** The engine counts
+- **`web/prompt_board.py`'s Balance lists ask the printed type.** The engine counts
   lands and creatures through the layers; the prompt lists them by
   `card.primary_type` (two of the reads ratcheted in
   `tests/ui/test_layer_reads_in_web.py`), so an animated land or an
   Opalescence enchantment is offered in the wrong list, and a land creature
-  belongs in both. `prompts` sits below `serialization` in `web.LAYERS`, so the
+  belongs in both. `prompt_board` sits below `serialization` in `web.LAYERS`, so the
   part missing is a second injected callable on `PromptContext` that takes a
   permanent. *Clears:* a small round of its own.
 
-- **Eight `card.primary_type` reads in `engine/ai_policy.py` are untriaged**
+- **Eight `card.primary_type` reads in `engine/ai_policy.py` and the modules
+  split out of it are untriaged**
   (`PRIMARY_TYPE_BASELINE` in `tests/engine/test_layer_reads.py`): each wants
   the card-or-permanent judgement the other sites got. Krovikan Vampire's death
   record beside them wants a "was a creature" stamp at the removal seam
@@ -968,7 +969,7 @@ one adds it. Re-check an entry against the code before briefing it.
   `grant_exile_prevention_shield` and `grant_reflecting_prevention_shield` share
   one body and differ by rider. Folding them into one kind with the rider as
   payload moves every affected card's compiled program, because the kind is
-  read by `targeting`'s picker table and the effect-label buckets. *Clears:* a
+  read by `instruction_targets`' picker table and the effect-label buckets. *Clears:* a
   round of its own with `oracle_diff`, never a wave's tail.
 
 - **"Who <did X>" is spelled two ways.** `PlayerRef` carries

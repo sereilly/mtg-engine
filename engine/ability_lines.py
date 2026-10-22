@@ -165,7 +165,7 @@ def _mode_reading(
     *event* is the head's own contribution to what the bullet means: under
     "**An opponent** chooses one —" (CR 700.2e) the mode's "that player" names
     the chooser, a seat the sentence cannot see from inside the bullet. See
-    ``lowering/_events.OPPONENT_CHOSE_MODE``.
+    ``lowering/_frozen_seats.OPPONENT_CHOSE_MODE``.
     """
     found = _line_instruction(label, card_name, event=event)
     if found is None:

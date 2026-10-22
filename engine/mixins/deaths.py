@@ -236,7 +236,7 @@ class DeathsMixin:
         # Named **here** rather than aliased into ``dies`` at the compiler,
         # because the two halves are announced from different fire sites: the
         # entry half by
-        # ``stack/resolution._apply_self_enters_battlefield_triggers`` and this
+        # ``stack/triggered_abilities._apply_self_enters_battlefield_triggers`` and this
         # half here, each onto the stack (CR 603.3). A single kind that meant
         # "dies" to the compiler would have no entry half at all.
         for trig in matching_triggers(

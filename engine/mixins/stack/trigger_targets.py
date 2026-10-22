@@ -28,7 +28,7 @@ from ...targeting import ANNOUNCED_PLAYER_WORDS, announces_a_target
 
 
 #: How a printed controller narrowing reaches the target spec. A key here is a
-#: narrowing `legality._enumerate_targets` performs; a controller word absent
+#: narrowing `legality_enumeration._enumerate_targets` performs; a controller word absent
 #: from it is one the enumerator cannot answer, and
 #: `_choose_trigger_targets` declines rather than offering a wider list than
 #: the card prints.
@@ -170,7 +170,7 @@ class TriggerTargetsMixin:
         into a no-op, which is a different observable game state (nothing
         responds to it, and nothing counts it as having resolved).
 
-        The offered list is ``legality.trigger_mode_options``, which is also
+        The offered list is ``legality_abilities.trigger_mode_options``, which is also
         what decides the empty case one line above: the gate and the picker are
         one call, not two tables.
         """
@@ -329,7 +329,7 @@ class TriggerTargetsMixin:
             # of spells or abilities" (Ground Seal) such a trigger has no
             # legal target to be put on the stack with, which is CR 603.3d's
             # removal exactly as the arm below applies it to an empty list.
-            # ``legality.sealed_graveyard_target_refusal`` is the one
+            # ``legality_resolution.sealed_graveyard_target_refusal`` is the one
             # predicate, asked again as the ability resolves (CR 608.2b).
             if self.sealed_graveyard_target_refusal(item) is not None:
                 self.stack = [existing for existing in self.stack if existing is not item]
@@ -481,7 +481,7 @@ class TriggerTargetsMixin:
         * :meth:`cast_announcement_fault` — an entry trigger carrying the
           target its permanent spell named is asked whether that target is one
           it could have chosen itself;
-        * ``legality.entry_trigger_cast_targets`` — the cast picker that names
+        * ``legality_cast_spec.entry_trigger_cast_targets`` — the cast picker that names
           it, which has to offer this list and not a wider one.
 
         *announced* is those two readers' question: the item's target fields
@@ -772,7 +772,7 @@ class TriggerTargetsMixin:
                 # "…exile **up to two** target cards **from a single
                 # graveyard**" (Gravegouger). Several cards in a graveyard are
                 # one announcement too (CR 601.2c), all out of one pile where
-                # the spec says so (``targeting.SINGLE_GRAVEYARD``) — so what is
+                # the spec says so (``target_descriptions.SINGLE_GRAVEYARD``) — so what is
                 # on offer is the most any one pile holds, and the answer names
                 # a pile and its slots (``_resolve_trigger_graveyard_targets``).
                 from collections import Counter
@@ -969,7 +969,7 @@ class TriggerTargetsMixin:
         """Which candidate a non-interactive seat takes for *option*.
 
         A stated policy, like the "first printed mode" beside it, and derived
-        rather than named: ``ai_valuation.activation_target_side`` reads the
+        rather than named: ``ai_target_sides.activation_target_side`` reads the
         mode's own instruction kind through ``INSTRUCTION_CATEGORIES`` and says
         whether an effect of that family wants an opponent's side or its own.
         A family with no answer falls back to the first candidate offered,

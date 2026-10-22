@@ -54,7 +54,7 @@ def _damage_word_matches(trig, combat: bool) -> bool:
 
     "Whenever this creature is dealt **combat** damage" (Wall of Essence, Wall
     of Souls) reads the printed word off the condition's ``damage_combat``
-    payload — the same key ``events._damage_dealt_filter`` reads for the same
+    payload — the same key ``event_filters._damage_dealt_filter`` reads for the same
     printed word on the *dealing* side of the event, deliberately, because one
     word answered by two spellings is how two dispatch scopes come to disagree
     about what it means.
@@ -957,7 +957,7 @@ class EffectsMixin:
         # a comment claiming "protection is not prevention". CR 702.16e says the
         # opposite in as many words — "Any damage that would be dealt … is
         # prevented" — so it is a CR 615 shield like every other, registered in
-        # ``engine/prevention.py`` and asked at the one seam every damage event
+        # ``engine/prevention/`` and asked at the one seam every damage event
         # passes through. Two consequences of moving it, both the rule's:
         # unpreventable damage (Whippoorwill, Lava Burst) gets through, and
         # protection contends under CR 616.1 with whatever else applies.

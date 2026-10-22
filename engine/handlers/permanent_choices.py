@@ -771,7 +771,7 @@ def choose_target_permanents(game: Game, instruction: OracleInstruction, context
             if seat is not None:
                 # The literal every other handler that writes this key spells
                 # (`control_changes`, `damage`); it is declared in
-                # `grammar/lowering/_events.CHOSEN_PLAYER`, which the handler
+                # `grammar/lowering/_record_keys.CHOSEN_PLAYER`, which the handler
                 # layer does not import from.
                 context.results["chosen_player"] = seat
     if not chosen:

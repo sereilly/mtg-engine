@@ -997,7 +997,7 @@ def return_all_cards_from_graveyard(game: Game, instruction: OracleInstruction, 
                 from ..ai_targets import choose_returning_aura_host
 
                 # One legal host is no question; a seat nobody asks takes the
-                # policy's pick (``ai_policy.choose_returning_aura_host``).
+                # policy's pick (``ai_targets.choose_returning_aura_host``).
                 hosts[(seat, index)] = (
                     legal[0] if len(legal) == 1
                     else choose_returning_aura_host(game, seat, card, legal)
@@ -1152,7 +1152,7 @@ def _legal_returning_aura_hosts(game, seat: int, card, already_there) -> list:
 
     **Who chooses.** An interactive seat with more than one legal host is
     asked (``permanent_choice``, armed by the handler, the candidates this
-    list). Every other seat takes ``ai_policy.choose_returning_aura_host`` —
+    list). Every other seat takes ``ai_targets.choose_returning_aura_host`` —
     an Aura whose text works against its host goes on an opponent's
     permanent, any other on its controller's — which is also that prompt's
     default (``default_prefers: "returning_aura_host"``).
@@ -1259,7 +1259,7 @@ def sacrifice_and_return_targets(
     ):
         # Not a fizzle: CR 608.2b counters the ability only if *every* target
         # is illegal, and that is decided above this handler
-        # (``legality.illegal_targets_refusal``). This is the printed
+        # (``legality_resolution.illegal_targets_refusal``). This is the printed
         # condition, so the ability resolves and does nothing.
         game.log.append(
             f"{context.card.name}: both targets are not still legal — nothing happens"

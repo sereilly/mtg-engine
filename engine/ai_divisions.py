@@ -206,7 +206,7 @@ def _card_divided_target_count(spec: dict, x_value: int | None) -> int | None:
     The two spellings the description carries: a printed number, and the string
     ``"x"`` for a count announced under CR 107.3a. The policy has just chosen
     that X, so it is the value passed in — the same number
-    ``casting._card_divided_target_count`` will read off the announcement, which
+    ``cast_target_validation._card_divided_target_count`` will read off the announcement, which
     is what keeps the proposal and the gate counting the same thing.
     """
     printed = spec.get("divided_target_count")

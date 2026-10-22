@@ -400,7 +400,7 @@ def static_substitution_for(game, land) -> "ManaSubstitution | None":
     Every battlefield, not the land controller's: "**a land** is tapped for
     mana" names no seat at all, so an opponent's Ritual of Subdual covers this
     land exactly as its controller's does. That is the same reading
-    ``replacements._applies_lands_cant_enter`` takes of "Lands can't enter the
+    ``replacements.permanents._applies_lands_cant_enter`` takes of "Lands can't enter the
     battlefield" and for the same reason — the sentence has no "you" in it.
 
     Where several clauses reach one land — a Tundra under Naked Singularity is

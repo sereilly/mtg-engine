@@ -334,7 +334,7 @@ class SpellCastingMixin:
         # the id list positional in role order (``None`` where the slot is not
         # a permanent), the scalar seat (the first player named) and — only
         # where two or more players were named — every seat by slot
-        # (``targeting.ROLE_SEATS``), which is what the gate, the stack item
+        # (``target_roles.ROLE_SEATS``), which is what the gate, the stack item
         # and the resolution read slot 1's player from. One translation, the
         # activation path's own, where each caller used to make it for itself
         # (the wire did, onto one seat).
@@ -967,7 +967,7 @@ class SpellCastingMixin:
         # chose — CR 601.2c settles the targets before CR 601.2f calculates the
         # cost, which is what makes the sentence answerable at all.
         #
-        # Read off `cost_modifiers.self_per_target_tax`, the table the support
+        # Read off `self_cost_modifiers.self_per_target_tax`, the table the support
         # gate and the parse census also ask, rather than off a substring here:
         # this used to be Fireball's own sentence written out in this function
         # and again as a literal in parse_coverage, and Phyrexian Purge is the
@@ -1292,7 +1292,7 @@ class SpellCastingMixin:
                         # permanent as it is built.
                         "chosen_creature_type": chosen_type_word,
                         # Every seat the announcement named, by role, where it
-                        # named two or more (`targeting.ROLE_SEATS`) — beside
+                        # named two or more (`target_roles.ROLE_SEATS`) — beside
                         # `target_player_index` above, which then holds the
                         # first. None for every other cast.
                         ROLE_SEATS: role_seats,

@@ -207,7 +207,7 @@ def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: 
     binds_player = payload.get("binds_player")
     if binds_player:
         # The literal, for the reason `choose_permanent` above spells it: the
-        # key is declared in `grammar/lowering/_events.CHOSEN_PLAYER`, and the
+        # key is declared in `grammar/lowering/_record_keys.CHOSEN_PLAYER`, and the
         # handler layer does not import from the grammar's lowering package.
         #
         # "…at the beginning of **their** next upkeep" (Sabertooth Cobra) binds

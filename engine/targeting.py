@@ -580,10 +580,10 @@ def spec_offers_a_player(spec: dict | None) -> bool:
 
     The one answer to "may the seat this announcement names be a target?",
     read by the three places that have to agree about it:
-    ``legality._enumerate_targets`` (which seats the picker lists),
-    ``legality.cast_target_refusal`` (whether a seat named with no object
+    ``legality_enumeration._enumerate_targets`` (which seats the picker lists),
+    ``legality_cast_gates.cast_target_refusal`` (whether a seat named with no object
     beside it is held to that list, CR 601.2c) and
-    ``legality.illegal_targets_refusal`` (whether it is re-asked at resolution,
+    ``legality_resolution.illegal_targets_refusal`` (whether it is re-asked at resolution,
     CR 608.2b).
 
     A player kind, less the two divided shapes whose printed noun admits no
@@ -626,7 +626,7 @@ def spec_names_the_stack(spec: dict | None) -> bool:
 
     The one answer to "has ``target_stack_index`` anything to say here?", for
     the gate that refuses a stack object named where it has not
-    (``legality.stray_stack_target_refusal``, and its activation twin). Four
+    (``legality_stack.stray_stack_target_refusal``, and its activation twin). Four
     shapes, because the stack reaches a spec four ways: the ``stack`` kind (a
     counter, a copy, a retarget), ``spell_or_permanent`` (the Laces, Illusion,
     Unsubstantiate), the ``also_stack`` flag on a chosen-source picker (Circle
@@ -648,7 +648,7 @@ def stack_object_mana_value(item) -> int:
     The printed cost, **plus** whatever X was announced for each ``{X}`` in it:
     CR 202.3b says that while a spell is on the stack, an X in its mana cost is
     the chosen value, so Fireball cast for X=3 has mana value 4 and not 1. That
-    is the whole difference from ``handlers/zones._mana_value_of``, which asks
+    is the whole difference from ``handlers/returns._mana_value_of``, which asks
     about a card in a graveyard — a zone where CR 107.3g pins X at 0.
 
     One reader, because the number is asked by things that must agree: a cost
@@ -986,7 +986,7 @@ ANNOUNCED_PLAYER_WORDS = frozenset({"target", "target_player", "target_opponent"
 # "Is the player this cast names one its effect helps?" was answered here, for
 # the web route's default seat, off a list of three instruction kinds — and
 # again in ``engine/ai_valuation.py``, for the AI's tie-break, off a different
-# list and a family rule. It is ``ai_valuation.cast_helps_the_player_it_names``
+# list and a family rule. It is ``ai_target_sides.cast_helps_the_player_it_names``
 # now, one derivation with both readers: which kinds are a gift is a valuation
 # (the families are that module's), and this module does not import it.
 

@@ -793,7 +793,7 @@ class PileChoicesMixin:
         ``engine/ai_valuation.py``, not a branch here.
 
         One such weight, for another seat's pile: the cards their owner could
-        still cast from there go first (``ai_valuation.graveyard_denial_order``
+        still cast from there go first (``ai_prompt_readers.graveyard_denial_order``
         — a flashback card is a spell that seat still holds). A pile with none
         is taken in pile order exactly as before.
 
@@ -802,7 +802,7 @@ class PileChoicesMixin:
         card from their graveyard", Carrion Rats), a toll's (Rotting Giant,
         Gurzigost's bottom of the library), an "if you do" (Ichorid), a
         replacement's (Nefarious Lich), an upkeep's (Decaying Soil): the least
-        valuable first (``ai_valuation.graveyard_price_order``). Pile order
+        valuable first (``ai_prompt_readers.graveyard_price_order``). Pile order
         gave up whatever sat at the bottom, a flashback spell as soon as a
         land (Torment's W2G3).
         """
@@ -921,7 +921,7 @@ class PileChoicesMixin:
         graveyard and the seat at index 1 its opponent's, over the same board
         (Decompose, Rapid Decay, Ebony Charm, Carrion Beetles, Famished
         Ghoul). Which pile a seat denies is
-        ``ai_valuation.denied_graveyard_pile``; still seat order within it,
+        ``ai_prompt_readers.denied_graveyard_pile``; still seat order within it,
         so it is as seed-deterministic as it was.
         """
         from ....ai_prompt_readers import denied_graveyard_pile

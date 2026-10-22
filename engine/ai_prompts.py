@@ -22,8 +22,7 @@ weighing rather than stating:
   hand pick takes cards in (:func:`order_hand_pick`).
 
 What each offer, toll and pile *does* is ``ai_prompt_readers``'. The
-resolution paths import these from ``ai_policy``, which binds them for that
-reason.
+resolution paths import these from here, inside the function that asks.
 """
 
 from __future__ import annotations
@@ -636,14 +635,14 @@ def offer_buys_own_drawback(game: Game, player_index: int, entry: dict) -> bool:
 
 
 #: The printed actors that put one offer to every seat of a set
-#: (``handlers/control_flow._offered_seats``) — "any player may …" reaches the
+#: (``handlers/offers._offered_seats``) — "any player may …" reaches the
 #: AST as ``each_player``.
 _SEAT_SET_OFFERS = frozenset({"each_player", "each_opponent"})
 
 
 def chained_toll_declined(game: Game, player_index: int, entry: dict) -> bool:
     """Whether a seat nobody asked declines one link of an "unless **any
-    player** pays" chain (`handlers/control_flow.unless_player_pays`).
+    player** pays" chain (`handlers/offers.unless_player_pays`).
 
     The chain asks every seat in turn, the effect's own controller included —
     and for that seat the standing policy, *pay tolls*, is backwards: Rhystic

@@ -341,7 +341,7 @@ def parse_exile_graveyard_arrivals_this_turn(
     a half-read line would take that claim away from it.
 
     The three printed scopes are read in the same vocabulary
-    `replacements.graveyard_exile_scope` uses, so one phrase has one meaning
+    `replacements.zone_changes.graveyard_exile_scope` uses, so one phrase has one meaning
     across the two readings. Which of them an *effect* can arm is the
     lowering's answer.
     """

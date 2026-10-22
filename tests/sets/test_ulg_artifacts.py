@@ -808,7 +808,7 @@ def test_w2g2_the_escape_hatch_is_not_inferred_from_the_prohibition(set_pool):
 # than over the declaration. What was missing is the other side of the same
 # sentence — a seat that has to *build* a declaration under it.
 #
-# `engine.legality.attack_declaration_refusal` is the predicate the AI prunes
+# `engine.phases.attack_legality.attack_declaration_refusal` is the predicate the AI prunes
 # against, and it did not carry either attack cap: they were checked inline in
 # `declare_attackers` and nowhere else. So an AI facing a Crawlspace proposed
 # three attackers, the declaration refused the set *whole*, and

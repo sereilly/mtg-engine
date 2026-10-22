@@ -124,7 +124,7 @@ def accept_zone_possessive(stream: TokenStream) -> "ast.PlayerRef | None":
     # 506.2's seat, which the *combat* named rather than the sentence:
     # nothing is chosen, so it is neither of the two target spellings
     # above, and the lowering admits it only under a trigger whose fire
-    # site froze one (`_events._DEFENDING_PLAYER_EVENTS`).
+    # site froze one (`_frozen_seats._DEFENDING_PLAYER_EVENTS`).
     elif stream.accept_phrase("defending", "player", "'s"):
         return ast.PlayerRef("defending_player")
     # "from **an opponent's** graveyard" (Misinformation). CR 601.2c

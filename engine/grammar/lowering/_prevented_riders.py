@@ -163,7 +163,7 @@ def _lower_team_shield(
     one, because ``Shield.kind`` names the interceptor that consumes the shield
     and this one is found by a different route: a phrase has no object to hang a
     record on, so it lives on the seat and is matched against each damaged
-    permanent (``prevention._class_shields``).
+    permanent (``prevention.shields._class_shields``).
 
     Every part of the sentence is checked, because each is a way it could mean
     more:

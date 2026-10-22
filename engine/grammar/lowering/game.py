@@ -437,7 +437,7 @@ def _lower_skip_phase(
     "Whenever this creature deals combat damage to a player, **that player**
     skips their next combat phase." (Blinding Angel.) The one other seat a skip
     can name, and the only one fixed by the *firing event* rather than by the
-    ability: ``_events.frozen_seat_record`` says which record the event froze
+    ability: ``_frozen_seats.frozen_seat_record`` says which record the event froze
     for the word, and an event that froze none refuses here — read as the
     caster's seat it would skip the Angel's own controller's combat.
     """

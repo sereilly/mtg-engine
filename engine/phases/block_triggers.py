@@ -21,7 +21,7 @@ from ..models import Permanent
 from ..trigger_utils import matching_triggers
 
 
-#: CR 509.3e's threshold, as ``engine/oracle.py``'s condition table records it:
+#: CR 509.3e's threshold, as ``engine/whenever_triggers.py``'s condition table records it:
 #: "blocks or becomes blocked by **one or more** Orcs" (Dwarven Soldier). Absent
 #: means the sentence printed no number, which is the per-creature firing
 #: CR 509.3b/509.3d give — so the two shapes are told apart by the payload and
@@ -631,7 +631,7 @@ class BlockTriggersMixin:
                             "event_subject_controller": blocker_seat,
                             # CR 506.2's seat, so a sentence after this
                             # event may say "defending player" and name one
-                            # (`lowering/_events._DEFENDING_PLAYER_EVENTS`).
+                            # (`lowering/_frozen_seats._DEFENDING_PLAYER_EVENTS`).
                             "trigger_defending_player_index": defending_index,
                             # The pair this firing is about, by stable id
                             # and under the key the *blocks* half already

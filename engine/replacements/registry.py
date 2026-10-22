@@ -441,7 +441,7 @@ def replacement_candidates(kind: str) -> list[Candidate]:
     """*kind*'s interceptors as CR 616.1 candidates, with the outcome bookkeeping
     already wired into ``apply``.
 
-    The counterpart of ``prevention.shield_candidates``: a damage event's
+    The counterpart of ``prevention.registry.shield_candidates``: a damage event's
     contenders are both lists together, and neither caller should have to
     re-implement what applying one does to the event.
     """

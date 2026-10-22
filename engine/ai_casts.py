@@ -944,7 +944,7 @@ def _cast_candidate_announcing(
                 # --- W2G2: "X target creatures" names exactly X (CR 601.2c) ---
                 # X was sized above as the most the lands could pay, before any
                 # target existed; the cast gate now counts the targets against
-                # it (`legality.cast_target_count_refusal`). So X is the number
+                # it (`legality_cast_gates.cast_target_count_refusal`). So X is the number
                 # of targets this board supplied, never more — the seat used to
                 # announce X=5, name one creature and pay for five. The cost
                 # below is planned against this X.

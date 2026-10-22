@@ -710,7 +710,7 @@ class ChooseCardsInHand:
     :class:`ObjectFilter`, because it is not a characteristic of a card at
     all: nothing on the face answers it and no reader of a card in a zone can.
     It is a fact about the *player's* turn, so it is answered where the player
-    is known — see ``handlers/cards.chosen_hand_card_candidates``, the one rule
+    is known — see ``handlers/hand.chosen_hand_card_candidates``, the one rule
     the picker and the resolver both ask.
     """
     count: Amount

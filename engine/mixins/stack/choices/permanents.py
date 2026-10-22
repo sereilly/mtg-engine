@@ -445,7 +445,7 @@ class PermanentChoicesMixin:
         # a candidate that shares a colour with the effect's target goes first
         # — the relation the condition itself will ask, through the reader it
         # asks it with (CR 105.2, layer 5 on both sides). Which cards print
-        # such a test is `ai_valuation.pick_is_tested_for_a_shared_color`, off
+        # such a test is `ai_prompt_readers.pick_is_tested_for_a_shared_color`, off
         # the compiled program; stable, so board order still breaks every tie.
         context = choice.data.get("_context")
         if live and getattr(context, "card", None) is not None:
@@ -619,7 +619,7 @@ class PermanentChoicesMixin:
         # whichever creature had been on the battlefield longest, which in six
         # simulated games was a seat's 7/7 while a 1/1 stood beside it. Asked
         # of the valuation the docstring above points at
-        # (``ai_policy.given_back_first``): the asking permanent last, the
+        # (``ai_cast_gates.given_back_first``): the asking permanent last, the
         # cheapest loss first, board order between equals.
         #
         # Keyed on that structural fact and on a floor, never on a card: every

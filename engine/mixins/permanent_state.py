@@ -747,7 +747,7 @@ class PermanentStateMixin:
         #
         # The other half of the same printed paragraph - "if you can't, put this
         # creature into its owner's graveyard instead of onto the battlefield" -
-        # is the CR 614 interceptor in engine/replacements.py, asked before this
+        # is the CR 614 interceptor in engine/replacements/, asked before this
         # runs. So by the time this arms, the graveyard is known to hold enough:
         # the exile here is a cost that *can* be paid, and the only open
         # question is which cards pay it and which counter each one buys.
@@ -773,7 +773,7 @@ class PermanentStateMixin:
         # and its four siblings.) CR 614.1a's entry toll, charged here for
         # Frankenstein's Monster's reason one branch up: the other half of the
         # same paragraph - "if you don't, put it into its owner's graveyard" -
-        # is the interceptor in engine/replacements.py, and it declined to apply,
+        # is the interceptor in engine/replacements/, and it declined to apply,
         # which is exactly the statement that the battlefield holds something
         # the toll accepts. So this is a cost that *can* be paid and the only
         # open question is which permanent pays it.

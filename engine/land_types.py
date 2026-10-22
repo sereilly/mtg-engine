@@ -521,7 +521,7 @@ def resolve_static_land_type_change(
 def static_land_type_change_for(normalized_line: str) -> StaticLandTypeChange | None:
     """The static land-type change *normalized_line* imposes, or None.
 
-    Takes an already-normalized line (``oracle.normalize_creature_line``), with
+    Takes an already-normalized line (``line_normalization.normalize_creature_line``), with
     or without its trailing period.
     """
     line = normalized_line.strip().lower().rstrip(".")

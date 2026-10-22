@@ -485,7 +485,7 @@ def test_barbed_wires_shield_answers_only_to_the_source_that_armed_it(set_pool):
     """CR 615.9 rechecks the property the shield recorded, and what this one
     recorded is the permanent itself — so damage from anything else is none of
     its business. A recipientless shield reaches every recipient in the game
-    (``prevention._table_shields``), which is exactly why it has to be narrow at
+    (``prevention.shields._table_shields``), which is exactly why it has to be narrow at
     the other end: without the source it would absorb the next point of damage
     dealt to anybody by anything."""
     game, _p0, p1, _wire = _w2g3_wired(set_pool)

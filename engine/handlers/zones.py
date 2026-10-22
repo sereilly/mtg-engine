@@ -410,7 +410,7 @@ def put_self_into_zone(game: Game, instruction: OracleInstruction, context: Orac
     answers for both.
 
     The destination is payload, and today the only one the grammar admits is a
-    graveyard — see ``lowering/zones._lower_put_source_into_zone``, which
+    graveyard — see ``lowering/returns._lower_put_source_into_zone``, which
     refuses the rest by name rather than letting a card report itself supported
     and land somewhere else.
 

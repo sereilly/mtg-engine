@@ -23,7 +23,7 @@ ends (CR 514.2). That is the shape ``engine/shields.py`` (prevention),
 - each carries its ``lifetime``, and :func:`clear_turn_replacements` is the one
   sweep that ends them, so a new kind needs no new clearing line either;
 - the interceptors that *apply* them are registered in
-  ``engine/replacements.py``, where every CR 614 effect goes and where CR 616.1
+  ``engine/replacements/``, where every CR 614 effect goes and where CR 616.1
   orders them against everything else.
 
 Blind Fury was the precedent and the shape this replaced: a dedicated
@@ -54,7 +54,7 @@ round can ask about them freely.
 A third card of this kind adds a **field** if it prints a narrowing none of
 these is (a source colour, "you control"), a value of ``event`` if it watches
 an event neither of these is (a life gain: "if a player would gain life this
-turn, …"), and an interceptor in ``engine/replacements.py`` for that event —
+turn, …"), and an interceptor in ``engine/replacements/`` for that event —
 never a ``Game`` field or a cleanup line.
 """
 

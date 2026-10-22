@@ -409,7 +409,7 @@ def attached_static_redirects(game, recipient) -> list[DamageRedirect]:
     the Aura is attached, and deriving it here on each event is what makes
     removal free (``engine/auras.py``: the Aura ceasing to be attached is the
     whole of the removal, and there is no remembered delta). The same shape
-    ``prevention._attached_damage_shields`` has, one module over.
+    ``prevention.shields._attached_damage_shields`` has, one module over.
 
     "You" is CR 109.5's controller of the **Aura**, which is why the scan is
     over the permanents *recipient* controls rather than over the battlefield
@@ -563,9 +563,9 @@ def spell_source_matches(game, redirect: DamageRedirect, source) -> bool:
 
     ``spell_sources`` None is every source. Otherwise three questions, each
     asked of the one reader that already answers it: is the source a **spell**
-    (``replacements._source_is_a_spell`` — the resolving stack object, which is
+    (``replacements.damage._source_is_a_spell`` — the resolving stack object, which is
     the only way a spell can be told from a permanent's ability), does it have
-    one of the printed **card types** (``prevention.source_has_type``), and is
+    one of the printed **card types** (``prevention.registry.source_has_type``), and is
     it the recorded **colour as a source of damage**
     (``damage_source_colors``, CR 609.7b — rechecked at damage time, so a spell
     recoloured on the stack is that colour or not when its damage would be

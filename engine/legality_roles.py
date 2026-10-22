@@ -2,7 +2,7 @@
 
 "Target creature you control and target creature an opponent controls" is a
 **roles** announcement: each role has its own description, and a later role
-may be narrowed by what an earlier one named (``targeting.ROLE_RELATION_TESTS``).
+may be narrowed by what an earlier one named (``target_roles.ROLE_RELATION_TESTS``).
 This is the one place that answers it, at both ends of the object's life:
 
 * **announcing** — :meth:`RoleTargetsMixin.role_target_options` is every legal
@@ -260,7 +260,7 @@ class RoleTargetsMixin:
     def _role_relation_test(self, role: dict, roles: list[dict], chosen: tuple):
         """The predicate *role*'s dependency imposes, or None when it has none.
 
-        The relation itself is ``engine/targeting.ROLE_RELATION_TESTS``, which
+        The relation itself is ``engine/target_roles.ROLE_RELATION_TESTS``, which
         the resolution's CR 608.2b re-check reads too — the picker, this gate
         and that re-check are three questions about one relation, and this repo
         keeps finding the bug where they were three tables.
@@ -379,7 +379,7 @@ class RoleTargetsMixin:
         This is the *whole-object* half of the rule ("if all its targets … are
         now illegal, the spell … doesn't resolve"). The per-target half — an
         illegal target is not affected while the rest of the spell still
-        happens — is ``handlers/_common.resolve_role_player`` for the seat and
+        happens — is ``handlers/_targets.resolve_role_player`` for the seat and
         ``resolve_role_permanent`` for the object, each answering None for a
         role that is no longer legal.
 

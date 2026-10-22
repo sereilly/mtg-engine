@@ -164,7 +164,7 @@ def _static_shield_match(line: str, card_name: str | None = None):
     legendary templating write "Prevent all damage that would be dealt to
     **Cho-Manno**" where modern templating writes "this creature", and the
     pattern is anchored on the modern wording. The same rewrite
-    ``oracle._restriction_line`` makes for the combat-restriction table, at the
+    ``self_reference._restriction_line`` makes for the combat-restriction table, at the
     one consult that needs it — a caller naming no card gets today's answer
     unchanged, which is what every reader asking about a *line* rather than a
     card wants.

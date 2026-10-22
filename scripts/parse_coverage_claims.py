@@ -446,7 +446,7 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # "If this card is in a graveyard, effects from spells named Flame Burst
     # count it as a card named Flame Burst." (Pardic Firecat, Diligent
     # Farmhand.) Read off the card in the graveyard by the one name test every
-    # zone count asks (handlers/_common._card_matches_filter), so the sentence
+    # zone count asks (handlers/_filters._card_matches_filter), so the sentence
     # has no instruction and this channel asks that test's own matcher.
     ("counted_names.py", counts_as_claims_line),
     # A printed additional cost (CR 601.2b). Not an instruction — a cost is not
@@ -466,7 +466,7 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     ("alternative_costs.py (granted)", granted_alternative_cost_claims_line),
     # CR 702.34a: "You may cast this card from your graveyard by paying {4}{R}
     # rather than paying its mana cost." — what a flashback keyword line is by
-    # the time this census reads it (`oracle.expand_ability_lines`). A CR 601.3
+    # the time this census reads it (`line_rewrites.expand_ability_lines`). A CR 601.3
     # permission that requires a CR 118.9 alternative cost: no instruction,
     # carried out by `cast_permissions.permission_for` and the cast path. The
     # row this report was asking for on 27 Odyssey cards, each of which compiled
@@ -778,7 +778,7 @@ HANDLER_CLAIMS: dict[str, tuple[str, ...]] = {
     ),
     # Power Sink: "Counter target spell unless its controller pays {X}." The
     # counter handler arms the pending payment (handlers/stack.py); when it goes
-    # unpaid, mixins/stack/choices._resolve_mana_payment counters the spell and
+    # unpaid, mixins/stack/choices/payments._resolve_mana_payment counters the spell and
     # runs the ON_SPELL_COUNTERED hook, which is what taps the lands and empties
     # the pool. One resolution, so the second sentence is the same handler's
     # work rather than a step of its own — the grammar reads it as a rider on

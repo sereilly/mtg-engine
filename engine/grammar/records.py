@@ -544,7 +544,7 @@ def accept_additional_cost_paid(stream: "TokenStream") -> str | None:
     payment channel is how the two come to name different ones.
 
     The symbols are captured **as printed** and interpreted by nobody here.
-    ``lowering/loops.optional_cost_key`` turns them into the canonical key
+    ``lowering/_cost_records.optional_cost_key`` turns them into the canonical key
     through ``mana_payment``, which is the same pair of functions the payment
     recorded them under — so one reader decides what "{1}{R}" means and the
     parse cannot disagree with the charge. The leading "for each" is the

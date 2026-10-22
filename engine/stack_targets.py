@@ -206,7 +206,7 @@ def _target_instances(text: str) -> int:
 
 #: Spec flags under which the picker is not a target at all: CR 609.7a's
 #: "source of your choice" is chosen, not targeted, and ``optional`` is Clone's
-#: copy-on-enter choice. A cost is asked through ``targeting.spec_is_a_cost``.
+#: copy-on-enter choice. A cost is asked through ``cost_pickers.spec_is_a_cost``.
 #:
 #: ``requires_source`` is deliberately **not** here although
 #: ``legality._UNTARGETED_SPEC_FLAGS`` lists it: that flag sits on a spec whose
@@ -366,7 +366,7 @@ def permanent_spell_targets_nothing(item) -> bool:
 def _spell_names_a_target(card) -> bool:
     """Whether an instant or sorcery's own effect lines say "target".
 
-    ``targeting.line_names_a_cast_target`` over ``legality._cast_lines`` — the
+    ``picker_probes.line_names_a_cast_target`` over ``legality._cast_lines`` — the
     forward ratchet's own probe, so "this card targets as it is cast" has one
     reading here and in ``tests/engine/test_targeting.py``.
     """
@@ -438,7 +438,7 @@ def _read(game: "Game", item: "StackItem", announcement: _Announcement) -> list[
         #
         # …unless the announcement named **more than one** player, when each
         # seat is its own slot of the fourth positional list
-        # (``targeting.ROLE_SEATS``: "…target player controls … another target
+        # (``target_roles.ROLE_SEATS``: "…target player controls … another target
         # player controls", Cultural Exchange). Read off the scalar, both
         # roles were one player: "becomes the target" fired twice for the
         # first and never for the second. A slot that list leaves ``None``
@@ -936,7 +936,7 @@ def blank_illegal_targets(item: "StackItem", targets) -> int:
     creatures **another target player** controls" (Cultural Exchange) names
     two players, and one of them given shroud in response is one illegal
     target of a spell that still resolves. Its slot of the per-role seat list
-    (``targeting.ROLE_SEATS``) becomes ``None``, which every reader of that
+    (``target_roles.ROLE_SEATS``) becomes ``None``, which every reader of that
     list takes as "names nobody" — so the step spending that role is skipped
     (``handlers/control_flow._role_scoped``) rather than run against the
     scalar seat beside it. The list is replaced, never mutated: a copy of the

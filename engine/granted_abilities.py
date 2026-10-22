@@ -177,7 +177,7 @@ def bind_chosen_player(text: str) -> str:
     bound", and it is "the chosen player" — the seat
     ``chosen_player_index`` holds. So the pronoun is translated into that
     vocabulary at grant time, which is the same move
-    ``oracle.expand_ability_lines`` makes for equip: rewrite the sentence once,
+    ``line_rewrites.expand_ability_lines`` makes for equip: rewrite the sentence once,
     into words every reader downstream already knows, rather than teaching every
     reader a second pronoun.
 

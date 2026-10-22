@@ -617,7 +617,7 @@ def parse_player_subject_verb(
                 # It must be consumed here — `_parse_optional_action`'s own
                 # "or" is next and would read "{2}" as a second *action*.
                 # What each way buys is read behind the sentence, by
-                # `sentence_clauses._accept_graded_toll_outcomes`.
+                # `tolls._accept_graded_toll_outcomes`.
                 # "…may pay {R}{R} **or 2 life**." (Emberwilde Djinn.)
                 # The other currency of CR 118.8's alternative, and it
                 # is read here beside the mana one for that reader's

@@ -322,7 +322,7 @@ def test_prismatic_circle_arms_nothing_when_no_colour_was_recorded(set_pool):
     """A shield that recorded no property answers to *every* source, which is
     the widest possible reading of a sentence naming one colour.
 
-    The static half of the same phrase (``prevention._resolved_chosen_color``)
+    The static half of the same phrase (``prevention.static._resolved_chosen_color``)
     already refuses that way; this is the one-shot half held to it.
     """
     from tests.helpers import _damage_dealt

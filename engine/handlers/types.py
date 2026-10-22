@@ -344,7 +344,7 @@ def become_aura_with_enchant(game: Game, instruction: OracleInstruction, context
     below writes — so every reader of "is this an Aura?" (``equipment.attachment_refusal``,
     the CR 704.5m sweep, the P/T derivation) gets one answer from the layer
     system rather than from a rewritten card. CR 613 layer 6 gives it the enchant
-    ability (CR 702.5), recorded under ``auras.BECAME_AURA_ENCHANT``.
+    ability (CR 702.5), recorded under ``aura_attachment.BECAME_AURA_ENCHANT``.
 
     Nothing here attaches it. That is the sentence behind this one, in the same
     resolution — which is what makes the order safe: state-based actions are

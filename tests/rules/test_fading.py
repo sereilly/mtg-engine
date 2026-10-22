@@ -52,7 +52,7 @@ def _fader(
     """A permanent whose printed text is "Fading *count*" with its reminder.
 
     The ingested ``keywords`` field carries "Fading" exactly as Scryfall spells
-    it, because that field is what ``oracle.UNSUPPORTED_KEYWORDS`` is matched
+    it, because that field is what ``keyword_lines.UNSUPPORTED_KEYWORDS`` is matched
     against before any line is classified.
     """
     noun = type_line.split(" — ")[0].split()[-1].lower()

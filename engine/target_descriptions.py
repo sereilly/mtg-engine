@@ -14,8 +14,8 @@ ordinary description of its own; the role vocabulary is
 The kind a printed type filter means (:data:`_TYPE_FILTER_TO_KIND`) and the
 graveyard spec kinds (:data:`GRAVEYARD_TARGET_KIND`, :data:`SINGLE_GRAVEYARD`)
 live here because this is the lowest reader that names them. Split out of
-``engine/targeting.py`` at the 2,000-line cap; ``engine.targeting`` still
-exports the names its callers pull.
+``engine/targeting.py`` at the 2,000-line cap; a caller imports a name from
+here.
 """
 
 from __future__ import annotations
@@ -352,7 +352,7 @@ def _narrowing_flags(source: dict) -> dict:
 #: The narrowings a **graveyard** role carries, and the whole of what separates
 #: one from the battlefield roles beside it.
 #:
-#: Every name here is one ``handlers/_common.graveyard_card_matches`` already
+#: Every name here is one ``handlers/_filters.graveyard_card_matches`` already
 #: reads, which is the point: the picker, the announcement gate and the CR
 #: 608.2b re-check ask that one predicate, so a role described in this module's
 #: own spelling would be a fourth reading of "which cards may be chosen" — the
@@ -472,7 +472,7 @@ def _slot_roles_spec(targets: dict, slot_filters: list) -> dict | None:
     were in that state, six of them with a controller restriction enforced by
     nothing at all.
 
-    Roles are the shape already built for it: ``legality._role_target_walk``
+    Roles are the shape already built for it: ``legality_roles._role_target_walk``
     enumerates slot *n* with slots 0…n-1 settled, which gets each slot its own
     filter, gets CR 601.2c's distinctness for free (a permanent taken by an
     earlier role is not offered to a later one), and makes the picker and the
@@ -571,7 +571,7 @@ def _from_targets_payload(targets) -> dict | None:
         spec = {"kind": "divided", "division": targets.get("division", "evenly")}
         # "…among any number of **target creatures**" (Fire Covenant). The
         # printed noun, carried through so the picker offers what the card
-        # names — without it the seat loop in `legality._enumerate_targets`
+        # names — without it the seat loop in `legality_enumeration._enumerate_targets`
         # offers both players' faces, which is a legal Fire Covenant target
         # only in an engine that never read the noun.
         narrowing = targets.get("filter") or {}
@@ -775,7 +775,7 @@ def _from_targets_payload(targets) -> dict | None:
         # this spec is built from the card alone.
         #
         # The picker resolves it through `oracle_types.cost_target_count`, the
-        # same reader `legality.cast_target_refusal` gates the announcement
+        # same reader `legality_cast_gates.cast_target_refusal` gates the announcement
         # with — a second arithmetic would be a picker offering a count the
         # engine then refuses.
         flags = {**flags, "cost_targets": count, "exact_targets": True}

@@ -67,7 +67,7 @@ REVEALED_TEXT = "play with the top card of your library revealed"
 #: re-asks rather than a moment something sweeps at.
 #:
 #: Here rather than in the grammar for ``REVEALED_TEXT``'s reason, and the
-#: reason ``replacements.REPLACEMENT_LINES`` is where it is: this module is
+#: reason ``replacements.lines.REPLACEMENT_LINES`` is where it is: this module is
 #: what finally *asks* the condition (:func:`grant_holds`), so the parse side
 #: that attaches the clause and the lowering that translates it both name the
 #: implementer's own constant, and a rename cannot leave one of them behind.

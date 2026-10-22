@@ -408,7 +408,7 @@ class ActivationChecksMixin:
         #
         # The total is the ability's own X, which for these cards the *text*
         # defines rather than the activation announcing — the same number
-        # ``legality._size_activation_x_targets`` gives the picker, read through
+        # ``legality_abilities._size_activation_x_targets`` gives the picker, read through
         # the same evaluator so what the browser offers and what this accepts
         # cannot disagree.
         ability_instruction = getattr(ability, "instruction", None)

@@ -630,7 +630,7 @@ class OptionalPayChoicesMixin:
            CR 118.8 alternative? A printed cost is already answered above, and
            correctly: the seat spends what is floating and no more.
         2. does taking it spend something of the seat's own
-           (``ai_valuation.offered_action_is_a_payment``)?
+           (``ai_prompt_readers.offered_action_is_a_payment``)?
         3. is refusing it free — no "if you don't" branch and no legacy damage
            field, which are the two spellings of a printed penalty?
 
@@ -659,7 +659,7 @@ class OptionalPayChoicesMixin:
         )
 
     def _weighed_offer_trade(self, choice: PendingChoice) -> "bool | None":
-        """`ai_policy.offer_trade_is_worth_taking` for a **free, untolled**
+        """`ai_prompts.offer_trade_is_worth_taking` for a **free, untolled**
         offer — the only kind whose accept branch is the whole of its price —
         or None for every other, which the standing policy answers."""
         from ....ai_prompts import offer_trade_is_worth_taking
@@ -677,7 +677,7 @@ class OptionalPayChoicesMixin:
         """The printed player references in this offer's branches that resolve
         to the offered seat ("caster", "target_player"), for the readers whose
         answer depends on who a step lands on
-        (``ai_valuation.offered_action_is_a_payment``, ``toll_branch_loss``).
+        (``ai_prompt_readers.offered_action_is_a_payment``, ``toll_branch_loss``).
 
         Resolved here because only the resolution knows the bindings: "that
         player" is whoever the offer was rebound to, and CR 601.2b's chooser is
@@ -706,7 +706,7 @@ class OptionalPayChoicesMixin:
         entry applies its decline consequence (Hasran Ogress' damage).
 
         A *stated policy*, not the payability test. Floating mana is always
-        spent; an untapped land only when ``ai_policy.optional_pay_may_tap_lands``
+        spent; an untapped land only when ``ai_prompts.optional_pay_may_tap_lands``
         says the tap is worth it — a toll always, a gift only with mana nothing
         else this turn would spend — because tapping is a real decision about
         the rest of the turn. ``_player_can_pay_optional`` is the wider question
@@ -735,7 +735,7 @@ class OptionalPayChoicesMixin:
         # Islands untapped, and Rootwater Thief never paid its {2}. Whether
         # tapping a land is worth it is a *weight* — pay tolls always, take
         # gifts only with mana nothing else this turn will spend — and it lives
-        # with the other weights (`ai_policy.optional_pay_may_tap_lands`).
+        # with the other weights (`ai_prompts.optional_pay_may_tap_lands`).
         # Paying is then the plan `_pay_optional` already spends, lands and all.
         from ....ai_prompts import optional_pay_may_tap_lands
 
@@ -811,7 +811,7 @@ class OptionalPayChoicesMixin:
             floating = True
         # One link of an "unless any player pays" chain asks the effect's own
         # controller too, and paying is only right for the seat the unpaid
-        # branch hurts (`ai_policy.chained_toll_declined`).
+        # branch hurts (`ai_prompts.chained_toll_declined`).
         from ....ai_prompts import (chained_toll_declined,
                                     offer_buys_own_drawback)
 
@@ -833,7 +833,7 @@ class OptionalPayChoicesMixin:
                 "(it buys a drawback to their own permanent)"
             )
         # **A trade this policy can price on both sides is weighed, not
-        # refused or taken by rule** (`ai_policy.offer_trade_is_worth_taking`:
+        # refused or taken by rule** (`ai_prompts.offer_trade_is_worth_taking`:
         # a draw step for a land card, a card from hand for the source
         # untapped). Asked before the two constants below because each was
         # wrong about one of them: "make no trades" declined Forsaken City at
@@ -861,8 +861,8 @@ class OptionalPayChoicesMixin:
         # …unless the toll's two losses are both priceable off the compiled
         # program and the penalty is the smaller one — "2 damage" against
         # "sacrifice that artifact" (Curse Artifact). The comparison and its
-        # weights are `ai_policy.toll_decline_is_smaller_loss` with the
-        # magnitudes derived in `ai_valuation.toll_branch_loss`; a side the
+        # weights are `ai_prompts.toll_decline_is_smaller_loss` with the
+        # magnitudes derived in `ai_prompt_readers.toll_branch_loss`; a side the
         # program cannot price answers False and the pay-tolls policy stands.
         elif floating is not None:
             from ....ai_prompts import toll_decline_is_smaller_loss

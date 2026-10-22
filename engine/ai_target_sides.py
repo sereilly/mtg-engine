@@ -426,7 +426,7 @@ def cast_helps_the_player_it_names(
     disagree about the same card.
 
     Read off the slot the cast's own picker is derived from
-    (``targeting._first_described_slot``, through the mode the cast names),
+    (``instruction_targets._first_described_slot``, through the mode the cast names),
     so the answer is about the target the announcement actually makes — one
     step, not every step the spell goes on to carry out, some of which are
     about somebody else ("…that player loses 5 life **and you gain 5
@@ -475,7 +475,7 @@ def entry_trigger_target_side(card: CardDefinition) -> str | None:
     should be aimed at — "you", "opponent" or None.
 
     This engine names an entry trigger's target as the permanent is cast
-    (``targeting._cast_target_spec``: "a standing approximation"), so the cast
+    (``cast_targets._cast_target_spec``: "a standing approximation"), so the cast
     is where an AI seat chooses it — and :func:`spell_target_side` reads only
     what resolves *as a spell*, which for a creature is nothing. With no side
     the chooser took the caster's own board first: Nekrataal destroyed its
@@ -521,7 +521,7 @@ def entry_trigger_target_side(card: CardDefinition) -> str | None:
 _SEAT_DENIAL_KINDS = frozenset({"discard_target_cards", "target_loses_life"})
 
 #: The spec kinds whose candidates include a player's face
-#: (``resolution._CHOOSABLE_TRIGGER_PLAYER_KINDS``, the picker's own set).
+#: (``trigger_targets._CHOOSABLE_TRIGGER_PLAYER_KINDS``, the picker's own set).
 _SEAT_SPEC_KINDS = frozenset({"player", "player_or_planeswalker", "any"})
 
 
@@ -588,7 +588,7 @@ def entry_trigger_seat_side(
 
     Asked of the one trigger the cast's picker is derived from -- the first
     that describes a target, among those a cast announced with
-    *optional_cost_payments* will fire (``targeting.entry_trigger_instructions``,
+    *optional_cost_payments* will fire (``cast_targets.entry_trigger_instructions``,
     CR 702.33g) -- so the answer is about the target the cast actually names.
     Only the denial is answered: a gift aimed by this rule could contradict the
     printed phrase ("target **opponent** draws two cards", Lord of

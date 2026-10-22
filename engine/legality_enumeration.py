@@ -36,7 +36,7 @@ def _cast_from_graveyard_slot(spec: dict, graveyard, spell) -> int | None:
     """The slot of *graveyard* the spell being cast out of it occupies, or
     None when this spec is not such a cast's.
 
-    ``handlers/_common.excluded_graveyard_slot``'s shape, for the other reason
+    ``handlers/_filters.excluded_graveyard_slot``'s shape, for the other reason
     one slot of a pile is not a candidate: there the printed word "another"
     rules out an ability's own source, here CR 601.2a has already moved the
     card to the stack. A **slot** for that function's reason too — two copies
@@ -994,7 +994,7 @@ class TargetEnumerationMixin:
         # Reconstruction returns an *artifact* card, Raise Dead a creature card,
         # Chandra a red instant or sorcery. One template with the type as data,
         # and one predicate shared with the cast-time re-check and the handler
-        # (`engine/handlers/_common.py`) — a picker that offers what
+        # (`engine/handlers/_filters.py`) — a picker that offers what
         # resolution then refuses is the bug this module exists to prevent, and
         # it was live: the re-check asked only "is it a creature card?".
 
@@ -1046,7 +1046,7 @@ class TargetEnumerationMixin:
 
 
 #: The payload keys a composed instruction nests its steps under, in the order
-#: :func:`engine.targeting._from_instructions` reads them. Held to that order on
+#: :func:`engine.instruction_targets._from_instructions` reads them. Held to that order on
 #: purpose: the picker's *kind* comes from there and its *restriction* comes from
 #: here, and two walks that disagreed would offer a target the resolution then
 #: declines — the two-readers failure this file exists to prevent.

@@ -1078,7 +1078,7 @@ def _stack_item_targets(item, game: Game) -> list[dict]:
 
     # Several **players**, each its own target ("…target player controls …
     # another target player controls", Cultural Exchange). The announcement
-    # recorded a seat per role (``targeting.ROLE_SEATS``) and the scalar read
+    # recorded a seat per role (``target_roles.ROLE_SEATS``) and the scalar read
     # below is only the first of them, so without this the table was shown a
     # spell aimed at one player while it was aimed at two. A slot CR 608.2b
     # blanked is ``None`` and draws no arrow.

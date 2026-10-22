@@ -232,7 +232,7 @@ _NO_PICKER = {
     # written out: a spec for the kind, an "all slots from one pile"
     # constraint, a handler that consumes announced slots, and the AI's side
     # of naming graveyard slots. Odyssey's second wave was that round
-    # (``targeting.SINGLE_GRAVEYARD``), and it moved Ebony Charm's second mode,
+    # (``target_descriptions.SINGLE_GRAVEYARD``), and it moved Ebony Charm's second mode,
     # Decompose and the two activations with it. Under a *trigger* the same
     # sentence is still chosen at resolution; no card prints one.
 }

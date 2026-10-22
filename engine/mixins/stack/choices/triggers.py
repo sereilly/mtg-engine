@@ -817,7 +817,7 @@ class TriggerChoicesMixin:
         (CR 603.3d, CR 601.2d): which targets, and each one's share.
 
         The policy a divided *spell* is proposed with
-        (``ai_policy.choose_divided_targets``), applied to the trigger's own
+        (``ai_divisions.choose_divided_targets``), applied to the trigger's own
         candidates: on the side the effect wants
         (:meth:`_default_trigger_target_side` — Shambling Swarm's ``-1/-1``
         reads as an opponent's), **spread** as far as the ceiling allows, with
@@ -827,9 +827,9 @@ class TriggerChoicesMixin:
         wrong board does least harm in one place.
 
         **Counters that lower toughness are split by what they kill**
-        (``ai_policy.divided_shrink_shares``), and concentrated where they
+        (``ai_divisions.divided_shrink_shares``), and concentrated where they
         harm least when they land on the wrong board
-        (``ai_policy.least_harmed_permanent``) — Shambling Swarm's come back off
+        (``ai_divisions.least_harmed_permanent``) — Shambling Swarm's come back off
         at the next end step, so a share that kills nothing is a share
         wasted. Reviewed at Torment's promotion rehearsal, by running it: the
         spread killed nothing over four creatures with an X/1 among them, and
@@ -888,7 +888,7 @@ class TriggerChoicesMixin:
         """The seats whose permanent a non-interactive *chooser* aims *item*
         at, or the empty set when the effect does not say.
 
-        ``ai_valuation.ability_target_side`` reads the ability step by step with
+        ``ai_target_sides.ability_target_side`` reads the ability step by step with
         its wrappers opened ("you may return target land" is still a bounce),
         and ``activation_target_side`` answers from the top-level kind's family
         where no step carries a ``targets`` description (Man-o'-War's bounce) —
@@ -964,7 +964,7 @@ class TriggerChoicesMixin:
         Among the free ones, a choice asked **at resolution** (CR 608.2d — a
         prompt carrying the resolution's ``_context``) skips an alternative that
         would change nothing on the board as it now stands
-        (``ai_valuation.offered_alternative_changes_nothing``): Urborg aimed at
+        (``ai_prompt_readers.offered_alternative_changes_nothing``): Urborg aimed at
         a swampwalker takes swampwalk, not the first strike it does not have.
         Printed order is still the answer whenever no alternative is a no-op.
         """
@@ -1014,7 +1014,7 @@ class TriggerChoicesMixin:
         **A modal triggered ability's mode is weighed** (CR 700.2b: Relic
         Bind, Elder Gargaroth, Trufflesnout — the prompts that carry the
         ability, ``_trigger_item``). The stated answer above is what
-        ``ai_policy.choose_trigger_mode`` starts from and falls back to; where
+        ``ai_prompts.choose_trigger_mode`` starts from and falls back to; where
         another offered mode is measured to do more, that one is taken. The
         valuation is the policy's and so are its weights; that it is consulted
         here is the registry's decision, as it is for every default that asks

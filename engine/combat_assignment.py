@@ -171,7 +171,7 @@ def defender_assigns_line(line: str) -> bool:
 
     One reader, three callers, the arrangement ``cast_bans``' board bans
     have: ``engine/grammar/registries.py`` asks it so the printed line is
-    *claimed*, ``engine/oracle.py``'s support gate asks it so the card is
+    *claimed*, ``engine/derived_static_claims.py``'s support gate asks it so the card is
     admitted on the strength of a rule that exists, and
     ``phases/combat_damage_step`` asks it so the line is *enforced*. A
     substitution claimed and not enforced is an enchantment that reports

@@ -275,7 +275,7 @@ def _lower_become_aura(node: ast.BecomeAura) -> tuple[OracleInstruction, ...]:
     one instruction kind and one handler rather than two of each.
 
     An unrestricted enchant clause needs no rider *test*, only the noun, and
-    ``mixins/stack.permanent_matches_enchant_noun`` is what tests that — the
+    ``mixins/stack/cast_target_validation.permanent_matches_enchant_noun`` is what tests that — the
     same reader every printed ``Enchant <noun>`` line goes through. So the
     refusal here is no longer "the clause has no rider" but "the clause has a
     rider the engine cannot test", which is the shape of every gate in this

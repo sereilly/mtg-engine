@@ -395,7 +395,7 @@ def _rebind_blocking_pronoun(statement: ast.Statement) -> ast.Statement:
     cannot mean the creature being chosen, since no creature blocks itself — so
     the only object it can name is the ability's own source (CR 109.5). That is
     the relation ``blocking_source`` already carries, and the same rewrite
-    ``lowering/characteristics._resolve_per_each_pronoun`` makes one file over
+    ``lowering/_counted_pumps._resolve_per_each_pronoun`` makes one file over
     for Johtull Wurm's "for each creature blocking it".
 
     A rewrite here rather than a second parse rule, because the printed words
@@ -491,7 +491,7 @@ def lower_ability(
     from ``node.event.kind``; an effect line has none of its own, and the one
     caller that supplies one is the modal assembly in ``engine/ability_lines.py``,
     where CR 700.2e's "an opponent chooses one —" makes the mode's "that
-    player" name the chooser (``lowering/_events.OPPONENT_CHOSE_MODE``). It is
+    player" name the chooser (``lowering/_frozen_seats.OPPONENT_CHOSE_MODE``). It is
     ignored for every other node kind, which carry their own or none.
     """
     if isinstance(node, ast.SpellEffectLine):

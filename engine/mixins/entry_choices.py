@@ -261,7 +261,7 @@ class EntryChoicesMixin:
         which is legal and pointless.
 
         **Unless the card feeds the type rather than hosing it**, which
-        ``ai_valuation.chosen_creature_type_side`` reads off what *card* does
+        ``ai_prompt_readers.chosen_creature_type_side`` reads off what *card* does
         with the word: Belbe's Portal puts a creature of the chosen type out of
         its controller's hand, Urza's Incubator makes its controller's spells
         of the type cheaper, and the opponents' type is the one answer certain

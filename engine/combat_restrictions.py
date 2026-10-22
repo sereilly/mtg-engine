@@ -69,7 +69,7 @@ class CombatRestriction:
 
 #: The evasion abilities the "can block … as though it had …" row above may
 #: name. Shadow only, and deliberately: the enforcement site is
-#: `declare_blockers_step._can_block_attacker`'s **shadow** branch, so a word
+#: `block_legality._can_block_attacker`'s **shadow** branch, so a word
 #: admitted here that it does not read would be a line this gate accepts and
 #: nothing acts on — a card reported supported for a permission that never
 #: applies. `engine/evasion_negation.py` made the same choice for the same
@@ -186,7 +186,7 @@ def _printed_noun(phrase: str) -> dict | None:
 
     **The one reader of a noun in this file.** It began as the reader for an
     "as long as … controls …" board clause — the same question
-    `activation_restrictions._controlled_board_phrase` and
+    `activation_conditions._controlled_board_phrase` and
     `untap_restrictions._blocked_subject` ask, so it got the same answer — and
     it is now what every union member goes through too. The five hand-written
     regexes that used to read those (`_blocker_noun`) are gone: they knew
@@ -280,10 +280,10 @@ def combat_restriction_for(
 ) -> CombatRestriction | None:
     """The combat restriction *normalized_line* imposes, or None.
 
-    Takes an already-normalized line (``oracle.normalize_creature_line``), which
+    Takes an already-normalized line (``line_normalization.normalize_creature_line``), which
     is what the compiler holds at the point it needs this — usually with the
     card's self-references collapsed to "this creature"
-    (``oracle._restriction_line``). *card_name* is what that collapse erased:
+    (``self_reference._restriction_line``). *card_name* is what that collapse erased:
     "creatures named **this creature**" (Akron Legionnaire's exception names
     the card itself) is resolved back to the printed name here, because the
     filter matches by *name*, never by identity — a second Akron Legionnaire
@@ -788,7 +788,7 @@ def _blocker_union(phrase: str, card_name: str | None = None) -> list[dict] | No
 def _restore_own_name(phrase: str, card_name: str | None) -> str | None:
     """*phrase* with "this creature" put back to the printed card name.
 
-    "creatures named **this creature**" is what ``oracle._restriction_line``
+    "creatures named **this creature**" is what ``self_reference._restriction_line``
     collapsed Akron Legionnaire's self-naming exception to; the filter matches
     by *name* rather than by identity, so a second copy and a token wearing the
     name are both excepted. A caller with no name to give gets a refusal rather

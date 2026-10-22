@@ -441,7 +441,7 @@ def _lower_prevent_damage(
         # records is not in the sentence, it is what the permanent chose as it
         # entered (CR 614.1c), so the handler reads it off the source at
         # resolution and arms nothing when nothing was recorded — the reading
-        # ``prevention._resolved_chosen_color`` already takes for the static
+        # ``prevention.static._resolved_chosen_color`` already takes for the static
         # half of the same phrase.
         #
         # Read before the axis check below, which sees neither a colour nor a
@@ -508,7 +508,7 @@ def _lower_prevent_damage(
             # direction, on a card whose whole point is the narrowing.
             #
             # The whole noun phrase travels as a ``source_filter`` instead,
-            # which ``Shield`` already carries and ``prevention._source_matches``
+            # which ``Shield`` already carries and ``prevention.shields._source_matches``
             # already rechecks (CR 615.9) through ``subject_matches`` — the one
             # answer every reader of a printed noun phrase asks. So a phrase
             # the matcher cannot test refuses here rather than being ignored at
@@ -583,7 +583,7 @@ def _lower_prevent_damage(
     # upkeep it is.
     #
     # `any_recipient` is the flag Penance already put on the colour shield for
-    # exactly this absence, and `prevention._table_shields` is what makes every
+    # exactly this absence, and `prevention.shields._table_shields` is what makes every
     # recipient find it — so the reach costs nothing new here.
     #
     # Only the ability's **own** source, and refused otherwise: `is_source` is

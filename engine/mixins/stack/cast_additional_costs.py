@@ -924,7 +924,7 @@ class AdditionalCastCostsMixin:
             # A cast that named no set takes the top of the pile down, the
             # deterministic pick every unnamed cost here has — least valuable
             # first where the cards are a plain price
-            # (``ai_valuation.graveyard_price_order``): Haunting Misery and
+            # (``ai_prompt_readers.graveyard_price_order``): Haunting Misery and
             # Skeletal Scrying read how many went, not which.
             if cost.exile_graveyard_filter is not None:
                 owed = cost.exiled_from_graveyard(x_value)

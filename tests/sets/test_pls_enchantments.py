@@ -33,7 +33,7 @@ a prompt.
 # is Benevolent Unicorn's sentence with both ends changed, and it arrived
 # *supported* with that line unclaimed: the card compiled on its draw trigger
 # alone. The source class and the protected recipients are parameters of the
-# one CR 614 interceptor (``replacements._read_damage_delta``), never a second
+# one CR 614 interceptor (``replacements.damage._read_damage_delta``), never a second
 # one.
 
 from engine import Game as _w1g8e_Game, PlayerState as _w1g8e_Player  # noqa: E402

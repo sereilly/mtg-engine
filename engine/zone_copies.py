@@ -90,7 +90,7 @@ def _normalized(line: str) -> str:
     Reminder text is stripped **here** rather than assumed absent. The two
     callers reach this table with different strings — the grammar's fallback
     hands over the raw printed line and the support gate hands over
-    ``oracle.normalize_creature_line``'s output, which has already dropped the
+    ``line_normalization.normalize_creature_line``'s output, which has already dropped the
     parenthetical — and Volrath's Shapeshifter is the first line to reach a
     derivation table carrying one. A table that only worked from one of the two
     would be a card that compiles and never dispatches.

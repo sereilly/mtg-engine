@@ -132,7 +132,8 @@ def own_cast_ban_line(line: str) -> SeatedCastBan | None:
 
     One reader, three callers, exactly as :func:`global_cast_ban_line` has:
     ``engine/grammar/registries.py`` asks it so the printed line is *claimed*,
-    ``engine/oracle.py``'s two support gates ask it so the card is admitted on
+    the two support gates (``engine/static_line_support.py``,
+    ``engine/derived_static_claims.py``) ask it so the card is admitted on
     the strength of a restriction that exists, and ``mixins/stack/casting.py``
     asks it at CR 601.2 so the line is *enforced*. A restriction claimed and not
     enforced is a permanent that reports supported while its controller keeps
@@ -254,8 +255,8 @@ def chosen_name_ban_line(line: str) -> bool:
     """Whether *line* is a chosen-name prohibition — either printed row.
 
     One reader, every caller, exactly as :func:`global_cast_ban_line` has:
-    ``engine/grammar/registries.py`` and ``engine/oracle.py``'s creature gate
-    ask it so the printed line is *claimed*, and ``mixins/stack/casting.py``
+    ``engine/grammar/registries.py`` and ``engine/static_line_support.py``'s
+    creature gate ask it so the printed line is *claimed*, and ``mixins/stack/casting.py``
     asks :func:`chosen_name_ban` at CR 601.3 so the line is *enforced*. A
     restriction claimed and not enforced is a permanent that reports supported
     and stops nothing.
@@ -567,8 +568,8 @@ def last_cast_color_ban_line(line: str) -> bool:
     """Whether *line* is, in full, Mana Maze's prohibition.
 
     One reader, four callers: ``engine/grammar/registries.py`` asks it so the
-    printed line is *claimed*, ``engine/oracle.py``'s support gate so the card
-    is admitted on the strength of a restriction that exists,
+    printed line is *claimed*, ``engine/derived_static_claims.py``'s support
+    gate so the card is admitted on the strength of a restriction that exists,
     ``mixins/stack/casting.py`` at CR 601.2 so it is *enforced*, and
     ``ai_policy`` so a seat stops proposing what the cast path will refuse.
     """
@@ -684,8 +685,8 @@ def spell_cap_line(line: str) -> int | None:
 
     One reader, three callers, exactly as :func:`global_cast_ban_line` has:
     ``engine/grammar/registries.py`` asks it so the printed line is *claimed*,
-    ``engine/oracle.py``'s support gate asks it so the card is admitted on the
-    strength of a restriction that exists, and ``mixins/stack/casting.py`` asks
+    ``engine/derived_static_claims.py``'s support gate asks it so the card is
+    admitted on the strength of a restriction that exists, and ``mixins/stack/casting.py`` asks
     it at CR 601.2 so the line is *enforced*. A restriction claimed and not
     enforced is an enchantment that reports supported while every player casts
     as many spells as they like — which on this card is the whole of what it

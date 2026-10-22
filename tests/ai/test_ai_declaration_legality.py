@@ -2,7 +2,7 @@
 prints? (CR 508.1c.)
 
 A census rather than a handful of cases, and the reason is the failure it was
-written for. ``engine/legality.attack_declaration_refusal`` is the predicate
+written for. ``engine/phases/attack_legality.attack_declaration_refusal`` is the predicate
 ``ai_declarations._legal_declaration`` prunes against, and until W2G4 it did not
 include either attack **cap**: those were checked inline in
 ``declare_attackers`` and nowhere else. So the AI proposed an over-cap set, the

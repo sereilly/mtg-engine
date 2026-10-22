@@ -4,7 +4,7 @@ and what announces them.
 Eight cards, and the thing they have in common is not an effect: every one of
 them is a **trigger condition** the engine had no announcement for, or had an
 announcement for only half of. That is the failure this file is written against,
-and it is the quiet one — a condition can sit in ``engine/oracle.py``'s pattern
+and it is the quiet one — a condition can sit in ``engine/trigger_conditions.py``'s pattern
 table *and* the grammar's phrase table, compile a real instruction, satisfy the
 support gate and `tests/engine/test_trigger_dispatchers.py` alike, and still
 never fire. Nothing crashes and no census can see it.

@@ -171,7 +171,7 @@ def _keyword_list(words: str | None) -> tuple[str, ...] | None:
 def land_animation_for(normalized_line: str) -> LandAnimation | None:
     """The land animation *normalized_line* imposes, or None.
 
-    Takes an already-normalized line (``oracle.normalize_creature_line``), with
+    Takes an already-normalized line (``line_normalization.normalize_creature_line``), with
     or without its trailing period.
     """
     match = _PATTERN.match(normalized_line.strip().rstrip("."))

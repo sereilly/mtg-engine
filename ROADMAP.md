@@ -271,8 +271,8 @@ one card prints this") reads as a work item long after it stopped being true.
   whose comparisons happen later on plain `.name` (`dead_name` is *correct* by
   CR 707.2 — copy effects end on leaving the battlefield).
 
-- **Six toll cards have an unpriceable side.** `ai_valuation.toll_branch_loss`
-  prices a toll's two losses and `ai_policy.toll_decline_is_smaller_loss`
+- **Six toll cards have an unpriceable side.** `ai_prompt_readers.toll_branch_loss`
+  prices a toll's two losses and `ai_prompts.toll_decline_is_smaller_loss`
   compares them. Of the pool's 22 toll cards, 8 are decided by the comparison,
   8 are mana-priced and deliberately left to the floating-mana policy, and 6 —
   counter that spell, a coin flip, counter placement: Mana Vortex, Amulet of
@@ -331,7 +331,7 @@ one card prints this") reads as a work item long after it stopped being true.
   cannot be activated — Echo Chamber used to pay {4} and {T} into a choice with
   no candidates, and the gate above it could not see the problem because an
   ability whose target an opponent announces has no spec for it to read.
-  `legality._announced_choice_refusal` reads the `announced_target` key the
+  `legality_abilities._announced_choice_refusal` reads the `announced_target` key the
   lowering now carries, and asks the chooser's own battlefield, which is the
   board the resolution's candidate rule will ask.
 
@@ -378,9 +378,9 @@ one card prints this") reads as a work item long after it stopped being true.
 - **CR 608.2b is asked of every object whose targets somebody chose** (APC
   wave 2; of instants and sorceries since NEM). "If all its targets are now
   illegal, the spell or ability doesn't resolve" is one gate,
-  `legality.illegal_targets_refusal`, asked once above the instructions - and
+  `legality_resolution.illegal_targets_refusal`, asked once above the instructions - and
   CR 608.2a's intervening-if is asked before it. CR 601.2c's announcement half
-  is its twin, `legality.cast_target_refusal`. Besides a spell it answers for
+  is its twin, `legality_cast_gates.cast_target_refusal`. Besides a spell it answers for
   **an activated ability** (`StackItem.activated`) and for **a triggered
   ability whose target was chosen** (`StackItem.targets_chosen`: the
   `trigger_target` answer or default, an entry trigger's accepted cast
@@ -399,7 +399,7 @@ one card prints this") reads as a work item long after it stopped being true.
   if its target becomes illegal" is blanked all the same (Gilded Drake, which
   traded itself for a bystander). Held by
   `tests/engine/test_ability_target_resolution_census.py`. One clause is a
-  separately named gate (EXO): `legality.stale_comparison_refusal` re-asks a
+  separately named gate (EXO): `legality_resolution.stale_comparison_refusal` re-asks a
   printed comparison between two seats ("target opponent who has more life
   than you do" - the Keepers, the Oaths) at resolution.
 
@@ -407,12 +407,12 @@ one card prints this") reads as a work item long after it stopped being true.
   only whether a target was still on the battlefield and targetable, so a
   Terror target turned black resolved — or, far more often, the handler's
   fall-through scan acted on a *bystander*. `illegal_targets_refusal` now asks
-  `LegalityMixin._described_cast_target_slots`, the very enumeration CR
+  `CastTargetGatesMixin._described_cast_target_slots`, the very enumeration CR
   601.2c's half uses, so announcement and resolution are one predicate. Census
   over 280 single-target spells and 19 board changes: 130 resolutions acted on
   an illegal target before, 0 after. **A modal spell is judged against the mode
   it announced** (PLS wave 2): the spec is derived per chosen mode
-  (`targeting.announced_mode_instructions`, `mode_index=` on
+  (`cast_targets.announced_mode_instructions`, `mode_index=` on
   `derive_cast_spec`) at announcement and at resolution alike, where it used to
   be judged against mode 0's and then excluded for it. Telim'Tor's
   Edict ("you own or control") needs an observer in the enumerator's
@@ -435,7 +435,7 @@ one card prints this") reads as a work item long after it stopped being true.
     in response). (e) Any fire-site stamp. The same resolver leaves a
     *triggered* ability whose stamped graveyard choice vanishes falling to
     its untargeted deterministic pick; an **activated** ability's is gated
-    (`legality.vanished_graveyard_target_refusal`).
+    (`legality_resolution.vanished_graveyard_target_refusal`).
   * **An ability printing "target" more than once with one derived slot**:
     Cuombajj Witches (still deals 1 to a first target that gained shroud),
     Mogg Assassin, Keeper of the Dead. Needs the second slot announced - the
@@ -476,18 +476,18 @@ one card prints this") reads as a work item long after it stopped being true.
     kind only.
 
 - **Three handler paths still resolve by index alone** (re-probed
-  2026-10-18; `board_misc.mark_text_modified` was the fourth, and round 3's
+  2026-10-18; `colors.mark_text_modified` was the fourth, and round 3's
   J6 found it hitting the wrong permanent six times in six and moved it onto
   `pick_target_permanent`). True of the code, and since APC wave 2
   unreachable with a stale index from a spell, an activated ability or a
   chosen trigger target, because an illegal slot is blanked above them. Only
   a *stamped* trigger target can still walk in.
-  `combat.remove_creature_from_combat`, `zones.exile_target_creature_until_eot`
-  and `zones.exile_creature_gain_life_equal_to_power`. All three also carry a
+  `combat.remove_creature_from_combat`, `exile.exile_target_creature_until_eot`
+  and `exile.exile_creature_gain_life_equal_to_power`. All three also carry a
   "fall back to the first matching permanent" default, the look-alike class.
   Round 3's J1 listed the wider set that reads `context.target_permanent_index`
   directly: these three plus `destruction.py`, `damage.deal_damage`,
-  `tapping.py` and `zones.return_creature_from_graveyard_to_hand`. Since bare
+  `tapping.py` and `returns.return_creature_from_graveyard_to_hand`. Since bare
   announcements are stamped, all of them are dead for announced objects by
   census and alive for triggers.
 
@@ -501,7 +501,7 @@ one card prints this") reads as a work item long after it stopped being true.
   1,417 missed it, 195 hit a bystander and 6 charged "that creature's
   controller" to the old seat (Liquid Fire). Of 141 chosen trigger targets,
   111 missed and 100 hit a bystander. The fix is the one this entry named.
-  `LegalityMixin.resettle_announced_target_seats` settles the seat from the
+  `ResolutionTargetsMixin.resettle_announced_target_seats` settles the seat from the
   ids again as the object resolves, through `announced_target_seat`, and only
   where the CR 608.2b gate judged every live target legal. The resolvers'
   seat scoping is deliberate and stands
@@ -560,10 +560,10 @@ one card prints this") reads as a work item long after it stopped being true.
   (`tests/engine/test_entry_trigger_stack_census.py`) and
   `modal_triggers.INLINE_TRIGGER_CONDITIONS` is empty. **A permanent spell's
   cast still names its entry trigger's target**
-  (`targeting._cast_target_spec`'s last branch), held to the trigger's own list
-  (CR 603.3d, `LegalityMixin.entry_trigger_cast_targets`), with an
+  (`cast_targets._cast_target_spec`'s last branch), held to the trigger's own list
+  (CR 603.3d, `CastTargetSpecMixin.entry_trigger_cast_targets`), with an
   announcement the trigger could not have made set aside at the push
-  (`resolution.cast_announcement_fault`). Round 3 closed the rest of what this
+  (`trigger_targets.cast_announcement_fault`). Round 3 closed the rest of what this
   entry listed (2026-10-06/18). A graveyard-card entry trigger is asked
   through its own picker: 0 of 18 had been, and 14 of 14 returned another
   card when the named one was exiled in response. An "up to one" trigger that
@@ -661,7 +661,7 @@ one card prints this") reads as a work item long after it stopped being true.
   2026-09-07). `_perform_entry_state`'s "enters with N +0/+1 counters" branch
   writes `metadata["plus_0_1_counters"]`, a key nothing reads (`_PT_COUNTER_KEYS`
   has no `+0/+1` row, so `pt.pt_counter_key` spells it differently), and it
-  assigns rather than accumulates. `prevention.source_has_type` falls back to
+  assigns rather than accumulates. `prevention.registry.source_has_type` falls back to
   the printed type line for a source that is not a `Permanent`, so a shield
   reading "by creatures" would answer for a creature *spell* on the stack.
   `@upkeep_effect("upkeep_self", "deal_damage")` ignores its recipient payload
@@ -671,7 +671,7 @@ one card prints this") reads as a work item long after it stopped being true.
   substring test), skipping the cap enforcement and the emptied-kinds record
   every other placement goes through.
 
-- **`handlers/_common.py`'s `"triggering_spell"` mana value has CR 202.3b's
+- **`handlers/_amounts.py`'s `"triggering_spell"` mana value has CR 202.3b's
   gap** — it reads the cast card's `cmc`, so an {X} spell's mana value on the
   stack is wrong. The same bug was fixed for Spell Blast and Mana Drain through
   `targeting.stack_object_mana_value`; this site cannot use it because the cast
@@ -686,7 +686,7 @@ one card prints this") reads as a work item long after it stopped being true.
   named set or refuses. For a **cast** the engine takes
   `cost_graveyard_indices` (Skeletal Scrying, Haunting Misery) and no client
   sends it, so the top-down default is still what a person gets. Parts: a
-  cost spec out of `engine/targeting.py` carrying the candidates
+  cost spec out of `engine/cost_pickers.py` carrying the candidates
   (`_graveyard_exile_candidates`), and a cast arm in the client -
   `startCastCostPrompt` asks costs before X, and this cost's count *is* X
   (Infernal Harvest's pinned reason in `_PICKERLESS_CAST_COSTS`).
@@ -759,7 +759,7 @@ one card prints this") reads as a work item long after it stopped being true.
     check reads the forms a band may take (`band_forms`: 12 of 60 had been
     wrong).
   * *The AI.* It rehearses a cast on a copy before proposing it
-    (`ai_valuation.rehearse`; `tests/ai/test_ai_idle_cast_census.py`: 587
+    (`ai_rehearsal.rehearse`; `tests/ai/test_ai_idle_cast_census.py`: 587
     proposals that moved nothing, to 0; which bullet and which target in
     `test_ai_mode_chooser_census.py` / `test_ai_one_target_cast_census.py`).
     The copy conceals what its seat cannot see
@@ -804,7 +804,7 @@ one card prints this") reads as a work item long after it stopped being true.
     bare. Thirteen of the 21 are "that player" triggers that have no seat
     without a real event. Four of those were fired for real, and all four
     were stamped from their own list. The **eight that have no list whatever
-    the event** each need `resolution._trigger_target_candidates` to be handed
+    the event** each need `trigger_targets._trigger_target_candidates` to be handed
     a spec it can enumerate (`targeting.derive_instruction_spec`), and what
     differs is the shape:
     - Erithizon, Ley Line and The Abyss: a target another player chooses,
@@ -830,7 +830,7 @@ one card prints this") reads as a work item long after it stopped being true.
     Invulnerability, Reflect Damage, Reverse Damage, Samite Ministration,
     Shadowbane). Prismatic Circle and Story Circle derive `color_filter` None,
     so their picker offers every colour. The parts are a flag from
-    `targeting._prevention_shield_spec` for `prevention_color_chosen`, filled
+    `payload_target_specs._prevention_shield_spec` for `prevention_color_chosen`, filled
     from the permanent's chosen colour in `activation_target_spec` and
     `activation_target_refusal`. A spell chosen as the source is recorded as
     its `CardDefinition`, so two copies on the stack are one source. The
@@ -865,7 +865,8 @@ one card prints this") reads as a work item long after it stopped being true.
     returning other permanents, several graveyard cards, a card from an empty
     hand), and four are the verse enchantments at no counters. A land given
     an ability by an Aura (Barbed Field) is passed over with every other land.
-    The 8 `primary_type` reads in `ai_policy.py` are untriaged (K3 sorted the
+    The 8 `primary_type` reads in `ai_policy.py` and the modules split out
+    of it are untriaged (K3 sorted the
     other 43).
     *The fight reading, what it leaves* (L2, each pinned in the combat-trick
     census with its reason). Switching P/T is read as a gift (About Face at a
@@ -884,7 +885,7 @@ one card prints this") reads as a work item long after it stopped being true.
     creatures. The untap step is approximated (statics and multiplayer
     ignored). **Every rehearsal now calls `resolve_end_step` and
     `begin_turn_bookkeeping` on its copy**, so a class-level spy on `Game`
-    that counts those must guard with `ai_valuation.rehearsing()`. (A
+    that counts those must guard with `ai_rehearsal.rehearsing()`. (A
     simulated seat is given priority since round 4, so a combat trick is
     cast in combat and a counterspell in response; the round-4 entry below
     has what is left.)
@@ -893,7 +894,7 @@ one card prints this") reads as a work item long after it stopped being true.
     sources such as Coal Golem, the five Attendants and Implements of
     Sacrifice). The parts are a third kind in `_nonland_mana_source`, a
     two-level matching in `_PaymentPlanner`, tap-order staging
-    (`casting._pay_mana_cost_directly` pays generic in the fixed order C, W,
+    (`pool_payment._pay_mana_cost_directly` pays generic in the fixed order C, W,
     U, B, R, G), draw riders in `planned_mana_yield`, the three-a-turn cap of
     Farrelite Priest and the Initiates, and Lotus Blossom's X. Not planned by
     policy: Lion's Eye Diamond, sacrifice-another sources (Ashnod's Altar)
@@ -1050,7 +1051,7 @@ one card prints this") reads as a work item long after it stopped being true.
     preventing nothing; the contenders are dropped and the shield stays armed.
   * *A split card's abilities outside the stack (CR 709.4c)*: a half printing
     cycling cannot be cycled. No card in the pool. Parts:
-    `activation.activate_from_hand`, `trigger_utils.matching_triggers`,
+    `card_activation.activate_from_hand`, `trigger_utils.matching_triggers`,
     `special_actions.special_actions_for`, `ante._oracle_text_of`,
     `library_top.top_castable`, the hand payload's ability menu. And
     `primary_type` on a mixed "Instant // Sorcery" answers one type.
@@ -1128,7 +1129,7 @@ one card prints this") reads as a work item long after it stopped being true.
     hotseat view or a spectator's; split `spectator_visible` to match; check
     the client's single-payload mode still renders its own prompts. Two log
     leads beside it, not driven: a hand-to-library *cost* names its card
-    (`activation.py`), and the search-and-exile line names cards exiled face
+    (`activation_charges.py`), and the search-and-exile line names cards exiled face
     down.
   * *Two prompts that meet refuse each other* - for any reason but a draw.
     Odyssey's closer made a draw wait for the one in front of it (a draw is
@@ -1231,7 +1232,7 @@ one card prints this") reads as a work item long after it stopped being true.
     And the single-graveyard production reads its cards as targets whether or
     not the word "target" is printed (two deletion-probe rows; no pool card).
   * *A characteristic-defining ability off the battlefield* (CR 604.3).
-    `handlers/_common._printed_power` reads "*" as 0, so Carrion Grub with a
+    `handlers/_amounts._printed_power` reads "*" as 0, so Carrion Grub with a
     -vore in the graveyard is 2 where it should be 10: 43 variable-P/T cards.
     No function evaluates `dynamic_pt_count` without a `Permanent`; 15 of the
     43 carry a `count_spec` that `evaluate_count` could answer given an
@@ -1299,7 +1300,7 @@ one card prints this") reads as a work item long after it stopped being true.
     cards, is the X that still has no channel. A waiver is priced at the
     full cost by the castable highlight and the AI
     (`web/state_view._card_castable_now` and
-    `ai_policy._cast_candidate_announcing` should ask
+    `ai_casts._cast_candidate_announcing` should ask
     `permission_for(..., "hand")` and price with `alternative_cost_mana`), so
     both under-offer. Cards exiled from an *opponent's* graveyard as a cost
     land in the payer's exile (Night Soil; `cost_graveyard_indices` carries
@@ -1314,7 +1315,7 @@ one card prints this") reads as a work item long after it stopped being true.
     (`_copy_reaim_is_one_slot`): a copy with several targets, a stack or
     graveyard target, or a mode keeps the original's. "Another target
     player" is held only by the blanket CR 115.3 refusal (`distinct: True` is
-    not lifted by `targeting.roles_spec`). The AI never announces two
+    not lifted by `target_descriptions.roles_spec`). The AI never announces two
     players.
   * *Simultaneity.* Balance's hook plans all three parts up front. (Its
     count by printed type was fixed by round 3's K3, count and prompt
@@ -1339,7 +1340,7 @@ one card prints this") reads as a work item long after it stopped being true.
     closes - re-probe before taking it).
     The `effect_order` prompt labels an option with the *exemplar* card's
     name pool-wide - "Urza's Armor" for any static shield - because
-    `prevention.py` and `replacements.py` take the label from the
+    `prevention/registry.py` and `replacements/registry.py` take the label from the
     registration's docstring; it wants a per-event label hook reading the
     source permanent.
   * *Destruction.* Three sacrifices go round `Game.sacrifice_permanent`
@@ -1365,9 +1366,9 @@ one card prints this") reads as a work item long after it stopped being true.
     marks both arms of an "otherwise" pair. An Aura's quoted grant reaches
     its host lowercased. `deal_damage` logs "dealt 0 damage".
     `came_under_your_control_this_turn` reads the summoning-sickness stamp.
-    A triggered line the grammar reads and `oracle.py`'s table does not name
+    A triggered line the grammar reads and `trigger_conditions.py`'s table does not name
     becomes a bare instruction (0 of 1,504 printed lines; invented text
-    only). `legality.announced_cast_x` counts a spell cast out of a
+    only). `legality_cast_spec.announced_cast_x` counts a spell cast out of a
     graveyard. The AI's default on every Rite is its whole hand, and it
     proposes Quirion Ranger's ability with no Forest to return. The seeded
     Antiquities run declines two Ashnod's Transmogrant activations the AI
@@ -1416,7 +1417,7 @@ one card prints this") reads as a work item long after it stopped being true.
     (and `_resolve_put_from_hand_choice`),
     `put_cards_from_hand_onto_battlefield` and
     `put_chosen_hand_cards_onto_battlefield`, choose a host through
-    `zones._legal_returning_aura_hosts` and ask an interactive seat through
+    `reanimation._legal_returning_aura_hosts` and ask an interactive seat through
     `permanent_choice` with the `legal_host_for_card` / `host_controller`
     keys, or leave the card where it is (CR 303.4g); then measure who relies
     on the sweep's "manually placed" exemption before narrowing it.
@@ -1509,7 +1510,7 @@ before citing it.**
 ### Idioms these rounds established
 
 1. **A narrowed trigger condition lands on both sides of the pipeline.** The
-   compiler takes a condition from `engine/oracle.py`'s regex table and the
+   compiler takes a condition from `engine/trigger_conditions.py`'s regex table and the
    effect from the grammar, so a condition narrowed on one side only compiles
    the card **supported and firing on the wrong event** (rounds 7, 28, 54).
    Where a regex cannot describe the narrowing it only *delimits* the phrase — a
@@ -1730,7 +1731,7 @@ before citing it.**
     Ice Age enchantments printing the keyword beside another ability compiled
     clean with it silently dropped (ICE 1) — strictly worse than not
     implementing it, because the card reads as done and plays as a better card
-    than the one printed. `oracle.keyword_line_triggers` is the one reader both
+    than the one printed. `keyword_lines.keyword_line_triggers` is the one reader both
     loops ask. The count that exposed it was per-card instrumentation written
     *before* believing the census: +11 became +23 once both front ends agreed.
 31. **A widened gate stops asking about the line it was widened for.** Three
@@ -1774,7 +1775,7 @@ before citing it.**
     stale (ICE 37). The same rule `HOOK_RELIANCE.md`'s measure names say out
     loud: a ceiling and the thing it measures must count the same population.
 36. **Two callers of one table must spell the sentence the same way.**
-    `activation_restrictions._clauses` splits printed oracle text and keeps
+    `activation_clauses._clauses` splits printed oracle text and keeps
     "step, only"; the grammar consumes the sentence token by token and rebuilds
     "step , only". Every row is written the printed way, so a clause with a
     comma inside it matched from one caller and not the other — the gate calling
@@ -1990,7 +1991,7 @@ gates on the shipped half alone.
 **Read the keyword census against three tables, not one.** The registry diff
 (`vocabulary.IMPLEMENTED_KEYWORDS`, 31 words) misreads in both directions: a
 keyword implemented as the ability CR 702 says it *is* — cumulative upkeep,
-buyback, equip — reads as missing, and `oracle.UNSUPPORTED_KEYWORDS` outranks
+buyback, equip — reads as missing, and `keyword_lines.UNSUPPORTED_KEYWORDS` outranks
 the registry entirely, so a word there costs every card printing it whatever
 the grammar reads (Legends' rampage, Mirage's phasing). Shadow and flanking were
 each a whole bucket the refusal census could not see, because the keyword line
@@ -2028,7 +2029,7 @@ So "31 in the registry" undercounts what the engine implements and always has;
 the honest reading is 31 granted-or-named plus seven rewrites. Alternative costs (CR 118.9) were the third gap and
 are closed: `engine/alternative_costs.py` reads the "rather than pay this
 spell's mana cost" template, the client offers optional and repeated costs
-through `legality.cast_cost_offers`, and the buyback/flashback/evoke/madness
+through `legality_cast_spec.cast_cost_offers`, and the buyback/flashback/evoke/madness
 family is blocked only on its own keywords.
 
 ## Where the sets landed

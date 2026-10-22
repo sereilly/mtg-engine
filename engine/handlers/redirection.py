@@ -43,7 +43,7 @@ def arm_damage_to_counter_removal(game: Game, instruction: OracleInstruction, co
     would be dealt to you until your next upkeep, you remove an echo counter
     from this enchantment instead."
 
-    Arms the CR 614 replacement `engine/replacements.py` applies. The record
+    Arms the CR 614 replacement `engine/replacements/` applies. The record
     goes on the **permanent**, not on the seat it covers: the counters it
     spends live there, CR 122.2 takes them with the permanent when it leaves,
     and a record on the player would outlive the store and replace damage with
@@ -820,7 +820,7 @@ def redirect_next_damage_between_targets_until_eot(
     if len(entries) == 1:
         # CR 608.2b: an end that became illegal while the spell waited is
         # blanked out of the announcement before this runs
-        # (``legality.blank_illegal_resolution_targets`` drops a divided
+        # (``legality_resolution.blank_illegal_resolution_targets`` drops a divided
         # entry), so one entry here is two that were announced and one that
         # is gone - the case the check below was written for, said the way it
         # says it.
@@ -1122,7 +1122,7 @@ def arm_turn_damage_replacement(game: Game, instruction: OracleInstruction, cont
     A CR 614 replacement armed by a *resolving spell*, so there is no permanent
     for an interceptor to read and the effect is recorded on its controller's
     seat (``engine/turn_replacements.py``) with the turn as its lifetime; the
-    interceptors in ``engine/replacements.py`` read the record and the cleanup
+    interceptors in ``engine/replacements/`` read the record and the cleanup
     step's one sweep ends it. Every printed narrowing rides the record, so the
     interceptor tests what the card said rather than what one card says.
 

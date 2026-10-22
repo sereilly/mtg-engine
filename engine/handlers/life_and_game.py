@@ -46,7 +46,7 @@ def player_gets_poison_counters(game: Game, instruction: OracleInstruction, cont
     loses the game with no code here.
 
     **Two events freeze two different seats**, and the ``player`` payload key
-    says which one this sentence named (``lowering/_events.frozen_seat_record``).
+    says which one this sentence named (``lowering/_frozen_seats.frozen_seat_record``).
     A damage event freezes the damaged player (``defending_player_index``,
     stamped by ``damage_events._announce``); an attack freezes CR 506.2's
     defender (``trigger_defending_player_index``, stamped by the combat fire
@@ -1001,7 +1001,7 @@ def skip_next_step(game: Game, instruction: OracleInstruction, context: OracleEx
 
 #: The seats a skip may name that a *firing event* froze, and the trigger-context
 #: key each is read back from — the same two records ``player_gets_poison_counters``
-#: above tells apart, spelled by the words ``lowering/_events.frozen_seat_record``
+#: above tells apart, spelled by the words ``lowering/_frozen_seats.frozen_seat_record``
 #: puts on the payload.
 _FROZEN_SKIP_SEATS: dict[str, str] = {
     "damaged_player": "defending_player_index",

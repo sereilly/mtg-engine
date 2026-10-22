@@ -565,11 +565,11 @@ class DeclareAttackersStepMixin:
         creature itself, which reaches its compiled program as an instruction;
         the one printed on an Aura *about* the creature, which does not - that
         text is on the Aura, so it is read through
-        ``auras.attached_combat_restrictions``; and the one printed on a
+        ``aura_restrictions.attached_combat_restrictions``; and the one printed on a
         permanent the **defending player** controls ("Creatures can't attack you
         unless their controller pays {2} for each creature they control that's
         attacking you", Koskun Falls). All three come from one table
-        (``combat_restrictions._PATTERNS``), which is why a card printing any of
+        (``combat_restriction_table._PATTERNS``), which is why a card printing any of
         those wordings needs nothing here.
 
         *attacked_seat* is the player this attacker is attacking, or None when
@@ -1017,7 +1017,7 @@ class DeclareAttackersStepMixin:
             # themselves.
             defenders=list(defenders),
             # Who attacked, under the key every "that player" in this engine
-            # reads (`lowering/_events.EVENT_SUBJECT_PLAYER`). "Whenever a
+            # reads (`lowering/_frozen_seats.EVENT_SUBJECT_PLAYER`). "Whenever a
             # player attacks …, destroy all creatures **that player** controls"
             # (Total War) is the seat the *event* picked, and the seat-narrowed
             # readings of this same announcement have always had it implicitly

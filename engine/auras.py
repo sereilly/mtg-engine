@@ -363,7 +363,7 @@ def aura_enchant_clause(oracle_text: str) -> str | None:
 
     Returns the noun as printed, graveyard forms included ("creature card in a
     graveyard"), because the reanimation branch needs to tell them apart. The
-    battlefield-only question is :func:`stack.casting.aura_enchant_noun`.
+    battlefield-only question is :func:`stack.cast_target_validation.aura_enchant_noun`.
     """
     for raw_line in (oracle_text or "").lower().split("\n"):
         line = re.sub(r"\([^)]*\)", "", raw_line).strip()
@@ -545,7 +545,7 @@ def attached_trigger_claim(normalized_line: str, card_name: str = "") -> str | N
 def aura_effect_claim(normalized_line: str, card_name: str = "") -> str | None:
     """Name the code implementing *normalized_line*, or None if nothing does.
 
-    Takes an already-normalized line (``oracle.normalize_creature_line``).
+    Takes an already-normalized line (``line_normalization.normalize_creature_line``).
     Returns the claim string rather than a bool so a caller can report *what*
     it believes handles the line.
 
@@ -729,7 +729,7 @@ def aura_compiled_trigger_claim(normalized_line: str, card_name: str = "") -> st
     registries themselves rather than of a copied list of their keys:
 
     * the permanent's own enters trigger, fired inline after the attach by
-      ``stack/resolution._apply_self_enters_battlefield_triggers``;
+      ``stack/triggered_abilities._apply_self_enters_battlefield_triggers``;
     * a registered pay-or-consequence pair, ``phases/upkeep_effects.py``'s
       ``UPKEEP_EFFECTS`` keyed by (condition, instruction kind);
     * an ordinary upkeep trigger (CR 603.3) — a seat-unambiguous condition
@@ -768,7 +768,7 @@ def aura_compiled_trigger_claim(normalized_line: str, card_name: str = "") -> st
         # "When this Aura leaves the battlefield, it deals 1 damage to each
         # Goblin creature." (Goblin Shrine.) CR 603.6c's ability, announced from
         # the one transition off the battlefield
-        # (``mixins/helpers.remove_all_from_battlefield``) rather than from the
+        # (``mixins/control_seam.remove_all_from_battlefield``) rather than from the
         # forty callers that move a permanent — which is why the claim can be
         # made for any Aura, not just one whose host was destroyed.
         return (
@@ -808,7 +808,7 @@ def aura_compiled_trigger_claim(normalized_line: str, card_name: str = "") -> st
     if cond == "self_becomes_target" and kind in EFFECT_HANDLERS:
         # "When enchanted creature becomes the target of a spell or ability,
         # destroy that creature." (Spinal Graft.) CR 603.2's announcement, made
-        # from `mixins/helpers._announce_targeting` — the boundary where an
+        # from `mixins/target_announcements._announce_targeting` — the boundary where an
         # object is put on the stack with its targets settled (CR 601.2c /
         # 602.2b), which is one site for a spell and an ability alike.
         #
@@ -865,7 +865,7 @@ def aura_compiled_trigger_claim(normalized_line: str, card_name: str = "") -> st
         #
         # Both spellings of the announcement in one row, because one fire site
         # makes both and the printed word is the trigger's own narrowing
-        # (``engine/events._opponent_casts_spell_filter``) rather than a second
+        # (``engine/cast_event_filters._opponent_cast_filter``) rather than a second
         # dispatcher. Its own row rather than a widening of the ones above, for
         # their stated reason: each names one condition and the site that fires
         # it.
@@ -930,7 +930,7 @@ def unclaimed_aura_lines(normalized_lines: list[str], card_name: str = "") -> li
     """The Aura effect lines among *normalized_lines* nothing here claims.
 
     The "Enchant <noun>" line itself is the targeting restriction, consumed by
-    ``targeting.py``/``stack/casting.aura_enchant_noun``, and is not an effect.
+    ``targeting.py``/``stack/cast_target_validation.aura_enchant_noun``, and is not an effect.
 
     A line that is *entirely a printed keyword* is not an effect line either —
     it is the Aura's own ability, carried out wherever that keyword is. Capture
@@ -1033,7 +1033,7 @@ def _aura_line_claimed(line: str, card_name: str) -> bool:
         # it rather than of the word it starts with. `startswith("enchant ")`
         # was this file's own widened gate (ICE 36's rule, one module over): it
         # claimed any subject at all, so Roots' "Enchant creature without
-        # flying" compiled supported while `targeting.enchant_subject_spec`
+        # flying" compiled supported while `enchant_targets.enchant_subject_spec`
         # derived no picker — the card was uncastable — and
         # `permanent_matches_enchant_noun` fell through to its permissive
         # fallback, so the exclusion was unenforced. One line, two contradictory

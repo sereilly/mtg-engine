@@ -269,7 +269,7 @@ def pump_target_creature_until_eot(game: Game, instruction: OracleInstruction, c
 
 #: What a "for as long as this permanent remains tapped" pump records on its
 #: **source**: the pumped permanent's id and the boost. Read by
-#: ``mixins/permanent_state._refresh_linked_tapped_pumps`` on every recompute.
+#: ``mixins/dynamic_creatures._refresh_linked_tapped_pumps`` on every recompute.
 #: One name, because the handler that writes it and the refresh that reads it
 #: are in different files and a second spelling is how they come apart.
 PUMP_WHILE_TAPPED_KEY = "pump_while_tapped"

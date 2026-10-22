@@ -82,7 +82,7 @@ class DrawsAndDiscardsMixin:
         Used by the *chosen*-discard flow, where the player picks which card to
         discard and where it goes in one prompt, so the offer has to be known
         before the discard happens. A forced discard instead routes through the
-        ``discard`` replacement in engine/replacements.py, which reads the same
+        ``discard`` replacement in engine/replacements/, which reads the same
         text."""
         return self._player_controls_text(player, TOP_OF_LIBRARY_DISCARD_TEXT)
 
@@ -226,7 +226,7 @@ class DrawsAndDiscardsMixin:
         A replacement that needs the player to choose suspends the draw and
         reports 0 drawn; the cards arrive when the choice is answered, along
         with any draws queued behind it. Which replacements exist lives in
-        engine/replacements.py.
+        engine/replacements/.
 
         This is the *only* way an effect should draw. CR 121.2 makes a
         multi-card instruction that many individual draws, each replaceable on

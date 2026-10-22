@@ -145,7 +145,7 @@ def _build_creature_type_set() -> re.Pattern[str]:
 _CREATURE_TYPE_SET = _LazyPattern(_build_creature_type_set)
 
 
-# Reminder text. `oracle.normalize_creature_line` strips it, but importing the
+# Reminder text. `line_normalization.normalize_creature_line` strips it, but importing the
 # compiler here would be a cycle (it imports `auras`, which imports this
 # module), so the one-line
 # equivalent lives here. Without it an anchored pattern silently stops matching

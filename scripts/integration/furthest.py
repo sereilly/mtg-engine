@@ -7,7 +7,7 @@ did the parse get, and through which grammar functions?
 <out-dir>/<group>/furthest.txt. Patches TokenStream.advance to record the
 highest cursor reached and the grammar frames on the stack at that moment.
 Lines are read the way the compiler reads them (after
-``oracle.expand_ability_lines``).
+``line_rewrites.expand_ability_lines``).
 
 The furthest production that *accepted* is the best lead a brief can give —
 "the parse passed through" overcounts — and it is still a lead: it names where

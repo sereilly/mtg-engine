@@ -508,7 +508,7 @@ def _nonmana_ability_activated_filter(
     return True
 
 
-# The printed recipient of a damage event, as `engine/oracle.py`'s table
+# The printed recipient of a damage event, as `engine/whenever_triggers.py`'s table
 # captures it, mapped to the question the filter asks of the event. Absent
 # means the card named no recipient and every one qualifies.
 #
@@ -1070,7 +1070,7 @@ def _subject_led_filter(
 
 #: The two board-wide block events, and which payload key each one's *partner*
 #: filter lives under. The combatant's own filter is ``combatant_filter`` on
-#: both, exactly as ``engine/oracle.py``'s ``combatant_subject`` group writes it.
+#: both, exactly as ``engine/whenever_triggers.py``'s ``combatant_subject`` group writes it.
 _BOARD_WIDE_BLOCK_PARTNER_KEYS = {
     "matching_creature_becomes_blocked": "blocker",
     "matching_creature_blocks": "blocked",

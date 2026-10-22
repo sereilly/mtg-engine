@@ -9,7 +9,7 @@ roles spell, and then had half of it.
 
 Four readers spelled that question for themselves: the cast gate's slot filler,
 the CR 608.2b re-check, ``resolve_role_player`` and ``app.js``. They read
-``engine.targeting.SEAT_ROLE_KINDS`` now, and the client mirrors it by name —
+``engine.target_roles.SEAT_ROLE_KINDS`` now, and the client mirrors it by name —
 the failure a fifth spelling causes is not a crash but a seat slot filled from
 the *permanent* channel, which then finds nothing in it.
 """
@@ -99,7 +99,7 @@ def test_a_seat_role_ref_lands_the_second_point_on_the_player():
 
 
 def test_the_client_reads_both_spellings_of_a_seat_role():
-    """``app.js`` mirrors ``engine.targeting.SEAT_ROLE_KINDS``.
+    """``app.js`` mirrors ``engine.target_roles.SEAT_ROLE_KINDS``.
 
     Read as text (``tests.helpers.app_js_function_body``) for this file's
     neighbour's reason: the client is DOM-coupled and cannot be imported here,
@@ -116,6 +116,6 @@ def test_the_client_reads_both_spellings_of_a_seat_role():
     for kind in SEAT_ROLE_KINDS:
         assert f'"{kind}"' in source.split("const SEAT_ROLE_KINDS = ")[1][:120], (
             f"the client's seat-role list is missing {kind!r}; it mirrors "
-            "engine.targeting.SEAT_ROLE_KINDS and a slot it does not know is "
+            "engine.target_roles.SEAT_ROLE_KINDS and a slot it does not know is "
             "one it waits for a card click on"
         )

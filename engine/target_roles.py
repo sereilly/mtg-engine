@@ -16,8 +16,8 @@ spends (:func:`payload_own_role`, :func:`payload_role_slot`). Reading a
 ``roles`` description into a spec is ``engine/target_descriptions.py``'s
 ``roles_spec``, beside the description reader it recurses through.
 
-Split out of ``engine/targeting.py`` at the 2,000-line cap; ``engine.targeting``
-still exports the names its callers pull.
+Split out of ``engine/targeting.py`` at the 2,000-line cap; a caller imports
+a name from here.
 """
 
 from __future__ import annotations
@@ -214,8 +214,8 @@ def role_relation_holds(role: dict, earlier, candidate, game=None) -> bool:
     for role 0 — and False whenever it has one this engine cannot answer or the
     earlier role resolves to nothing.
 
-    *game* is passed by both callers (the picker in ``engine/legality.py`` and
-    the CR 608.2b re-check in ``engine/handlers/_common.py``) and consumed by
+    *game* is passed by both callers (the picker in ``engine/legality_roles.py`` and
+    the CR 608.2b re-check in ``engine/handlers/_targets.py``) and consumed by
     the relations that need it. It defaults to None so a relation asked without
     one refuses rather than answering from a narrower reading — the same
     direction an unknown relation takes.

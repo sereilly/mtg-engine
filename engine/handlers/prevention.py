@@ -261,7 +261,7 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
         # resolved.
         #
         # Nothing recorded arms nothing, the reading
-        # ``prevention._resolved_chosen_color`` takes of the same phrase on the
+        # ``prevention.static._resolved_chosen_color`` takes of the same phrase on the
         # static side: a shield naming no colour would answer to every source,
         # which is the widest possible reading of a sentence that names one.
         recorded = (
@@ -324,7 +324,7 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
         # recipient printed — CR 615.8 keys it on the source, so it protects
         # whoever that source was about to damage. It still hangs on the seat
         # that armed it, which is what the cleanup sweep walks; what makes every
-        # recipient find it is ``prevention._table_shields``.
+        # recipient find it is ``prevention.shields._table_shields``.
         any_recipient = bool(instruction.payload.get("prevention_any_recipient"))
         # **The chosen source is the shield's, not the log's.** "The next time
         # a red source **of your choice** would deal damage to you" names one
@@ -412,7 +412,7 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
     # this turn." (Barbed Wire.) CR 615.7's pool with CR 615.8's absent
     # recipient: it answers to one source and shields whoever that source was
     # about to damage. The shield hangs on the activator's seat, which is where
-    # the cleanup sweep walks; `prevention._table_shields` is what lets every
+    # the cleanup sweep walks; `prevention.shields._table_shields` is what lets every
     # recipient find it.
     #
     # Read before the three recipient branches below, because the sentence names
@@ -827,7 +827,7 @@ def grant_team_prevention_shield(game: Game, instruction: OracleInstruction, con
     spell on the stack matched by the ``CardDefinition`` it will deal its damage
     with (CR 615.8). What differs is where the shield can be *found*: it covers
     a printed set of permanents as well as its caster, so it records the phrase
-    and `prevention._class_shields` asks that phrase about each damaged
+    and `prevention.shields._class_shields` asks that phrase about each damaged
     permanent.
 
     The seat is recorded with the phrase, because "creatures **you** control" is
@@ -1175,7 +1175,7 @@ def grant_source_class_prevention_shield(game: Game, instruction: OracleInstruct
     # "Prevent all combat damage that would be dealt **by unblocked creatures**
     # this turn." (Snag.) The same shield with no recipient printed: it still
     # hangs off the caster's seat, which is where the cleanup sweep finds it,
-    # and `prevention._table_shields` is what lets every damaged object reach
+    # and `prevention.shields._table_shields` is what lets every damaged object reach
     # it — the arrangement Penance's colour shield already has.
     any_recipient = bool(instruction.payload.get("any_recipient"))
     combat_only = bool(instruction.payload.get("combat_only"))
@@ -1401,7 +1401,7 @@ def prevent_damage_by_target_spell_until_eot(
     source is its printed ``CardDefinition`` (CR 109.5), one object per card and
     handed out once per copy by the deck builder, so a shield matching on the
     source would silence a *second* copy too. A ``StackItem`` is one object per
-    cast, and ``prevention._resolving_object_shields`` is where the damage paths
+    cast, and ``prevention.shields._resolving_object_shields`` is where the damage paths
     reach it.
 
     The chosen spell's type is re-checked here rather than trusted from the
@@ -1616,7 +1616,7 @@ def prevent_next_damage_from_chosen_source(
     """Desperate Gambit's losing flip: "the next time it would deal damage this
     turn, prevent that damage."
 
-    Arms the CR 615 shield in ``engine/prevention.py``. It protects nobody in
+    Arms the CR 615 shield in ``engine/prevention/``. It protects nobody in
     particular — the sentence names no recipient, so the record sits on the
     source and the prevention applies wherever that source's next damage was
     headed.

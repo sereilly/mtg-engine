@@ -17,7 +17,7 @@ name at all, and several more (``engine/enter_effects.py``,
 ``engine/combat_restrictions.py``, the counter cap beside them) that see the
 compiler's stored text and no name whatsoever. Rewriting the text once, in the
 rewrite pass every reader of a card's lines already starts from
-(``oracle.expand_ability_lines``), is what keeps the gate and the runtime tables
+(``line_rewrites.expand_ability_lines``), is what keeps the gate and the runtime tables
 reading the same sentence — the alternative was a ``legendary`` flag threaded
 through some thirty signatures, most of which would have carried it only to hand
 it on.

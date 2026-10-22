@@ -62,7 +62,7 @@ class ProtectionMixin:
         sweep: "this effect doesn't remove this Aura" exempts the Aura from
         the protection **it** grants and from no other instance, so the sweep
         asks what the creature is protected from without it. The host
-        predicate (``auras.enchant_card_refusal``) passes it too, for the one
+        predicate (``aura_attachment.enchant_card_refusal``) passes it too, for the one
         host whose protection an Aura's own grant can be: the one it is on.
         """
         qualities: set[tuple[str, str]] = set()
@@ -481,7 +481,7 @@ class ProtectionMixin:
         (CR 702.16e/f).
 
         *as_damage_source* is passed by the damage half of protection
-        (CR 702.16e, ``engine/prevention.py``'s interceptor) and **not** by the
+        (CR 702.16e, ``engine/prevention/``'s interceptor) and **not** by the
         blocking half (CR 702.16d/509.1b, the declare-blockers step): a static
         that rewrites a source's colour *for damage* changes which damage is
         prevented and not which creatures may block, and reading it at both
@@ -664,7 +664,7 @@ class ProtectionMixin:
         # "sources that are permanents with that card type"). A card read gives
         # the printed line, so an animated artifact land aiming an ability would
         # be a non-artifact source and a laced permanent the wrong colour —
-        # exactly the split ``prevention.source_has_type`` writes out one module
+        # exactly the split ``prevention.registry.source_has_type`` writes out one module
         # over. The card read stays for a *spell*, which has no permanent.
         qualities = self._protection_qualities(target)
         if (

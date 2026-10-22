@@ -52,7 +52,7 @@ def _echo_creature(name: str, cost: str, *, extra: str = "") -> CardDefinition:
     """A 2/2 whose only ability is echo *cost*.
 
     The ingested ``keywords`` field carries "Echo" exactly as Scryfall spells
-    it, because that field is what ``oracle.UNSUPPORTED_KEYWORDS`` is matched
+    it, because that field is what ``keyword_lines.UNSUPPORTED_KEYWORDS`` is matched
     against before any line is classified — a fixture that left it out would
     test a card the engine never sees.
     """

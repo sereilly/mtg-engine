@@ -92,7 +92,7 @@ _PICKERLESS_CAST_COSTS: dict[str, str] = {
     "Skeletal Scrying": "wire field exists; no cast-side X-sized graveyard set spec or client picker",
     # "As an additional cost to cast this spell, return X Swamps you control to
     # their owner's hand." The charger already honours ``cost_permanent_ids``
-    # (casting.py's return branch); what is missing is the whole announcement:
+    # (cast_additional_costs.py's return branch); what is missing is the whole announcement:
     # ``_cost_picker_specs`` reads the activation spelling
     # (``return_to_hand_filter``) and not the cast one (``return_filter`` /
     # ``return_count_x``), and the cast client asks X inside the divided-damage
