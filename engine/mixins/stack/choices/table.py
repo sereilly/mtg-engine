@@ -47,7 +47,7 @@ register_choice(
     hidden_for_ai=False,
     # The one kind that has always suspended: CR 616.1e stops an event dead, and
     # the loop that event was a step of has to stop with it. The flag it used to
-    # set by hand in engine/replacements.py is this field.
+    # set by hand in engine/replacements/ is this field.
     suspends=True,
 )
 

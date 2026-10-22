@@ -1555,7 +1555,7 @@ def test_w3g2_the_scope_word_is_payload_not_a_constant(set_pool):
     second card work?" test the card-hook bar asks for — and the answer has to
     be yes, or the phrase belongs in ``card_hooks``.
     """
-    from engine.replacements import graveyard_exile_scope
+    from engine.replacements.zone_changes import graveyard_exile_scope
 
     assert graveyard_exile_scope(
         "If a card would be put into your graveyard from anywhere, exile that "

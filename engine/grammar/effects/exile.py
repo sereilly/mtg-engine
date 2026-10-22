@@ -331,7 +331,7 @@ def parse_exile_graveyard_arrivals_this_turn(
     exile that card instead.`` (Yawgmoth's Will.)
 
     CR 614 created by a **spell**. The unbounded spelling of the same sentence
-    is a static ability of a permanent and `engine/replacements.py` reads it
+    is a static ability of a permanent and `engine/replacements/zone_changes.py` reads it
     off that permanent's text; this one names a window, so the effect has to
     leave a record behind and the sentence needs a production.
 

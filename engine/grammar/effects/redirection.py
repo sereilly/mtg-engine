@@ -214,7 +214,7 @@ def _parse_damage_redirect(stream: TokenStream) -> "ast.RedirectDamage | None":
 
     Non-consuming until the shape is settled, because "All damage that would be
     dealt to you by unblocked creatures is dealt to this creature instead" is
-    also the tail of a static ability ``engine/replacements.py`` implements
+    also the tail of a static ability ``engine/replacements/redirects.py`` implements
     whole, and a production that consumed the opening of every "All …" sentence
     would refuse lines other readers claim. Once "is dealt to" has been read the
     sentence is a redirect and nothing else, so from there it raises.

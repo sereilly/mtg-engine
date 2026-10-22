@@ -988,7 +988,7 @@ def test_614_1c_a_rider_the_seam_cannot_perform_refuses_the_whole_line():
 
 
 def _leaving_permanent():
-    from engine.replacements import EXILE_ON_LEAVING_BATTLEFIELD
+    from engine.replacements.zone_changes import EXILE_ON_LEAVING_BATTLEFIELD
 
     permanent = Permanent(card=_mk_card("Borrowed Body", "Creature — Zombie", ""))
     permanent.metadata[EXILE_ON_LEAVING_BATTLEFIELD] = True
@@ -1067,8 +1067,8 @@ def test_614_6_a_token_has_no_card_for_the_replacement_to_exile():
     stops a token card of its own accord as well, which is the belt this is the
     braces for.
     """
-    from engine.replacements import (EXILE_ON_LEAVING_BATTLEFIELD,
-                                     _applies_exile_instead_of_leaving)
+    from engine.replacements.zone_changes import (EXILE_ON_LEAVING_BATTLEFIELD,
+                                                  _applies_exile_instead_of_leaving)
 
     game, player, permanent = _leaving_permanent()
     permanent.metadata["is_token"] = True

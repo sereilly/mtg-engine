@@ -723,7 +723,7 @@ UNTAPPED_ARTIFACT_PROTECTORS: frozenset[str] = frozenset({"Guardian Beast"})
 # Top-of-library discard replacements — moved out
 # --------------------------------------------------------------------------
 # Library of Leng was a name-keyed frozenset here. It is now a text-keyed
-# `discard` replacement in engine/replacements.py, offering the optional
+# `discard` replacement in engine/replacements/zone_changes.py, offering the optional
 # destination as a ReplacementChoice.
 
 

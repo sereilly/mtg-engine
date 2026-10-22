@@ -150,7 +150,7 @@ def _lower_change_target(node: ast.ChangeTarget) -> tuple[OracleInstruction, ...
     have chosen, and the two ``None``s below are what say so. This used to
     refuse them, on the reading that an absent clause was an unimplementable
     one; what was actually absent was a candidate list that could hold a
-    permanent, and that is in ``handlers/stack.py``, not here.
+    permanent, and that is in ``handlers/retargeting.py``, not here.
     """
     spec = node.subject
     if not isinstance(spec, ast.TargetSpec) or spec.quantifier != "target":

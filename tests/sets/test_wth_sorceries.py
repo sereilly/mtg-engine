@@ -698,7 +698,7 @@ def test_gaeas_blessing_returns_the_graveyard_when_it_is_milled(set_pool):
     the card actually moves through. The Blessing itself is in the graveyard
     when the ability resolves, so it goes back too.
     """
-    from engine.replacements import _mill_cards
+    from engine.replacements.draws import _mill_cards
 
     wth, lea = set_pool("WTH"), set_pool("LEA")
     program = _w2g4_compile(wth["Gaea's Blessing"])
@@ -732,7 +732,7 @@ def test_a_second_copy_in_the_graveyard_does_not_trigger(set_pool):
         library=[lea["Island"], lea["Island"]],
         graveyard=[wth["Gaea's Blessing"]],
     )
-    from engine.replacements import _mill_cards
+    from engine.replacements.draws import _mill_cards
 
     _mill_cards(game, game.players[0], 1)
 

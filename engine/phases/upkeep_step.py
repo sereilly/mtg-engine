@@ -28,7 +28,7 @@ from ..models import Permanent
 from ..cast_permissions import expire_at_upkeep as expire_upkeep_permissions
 from ..phasing_locks import expire_phase_out_locks
 from ..pt import BASE_PT_UPKEEP_START_REVERT_KEY, clear_base_pt
-from ..replacements import DAMAGE_TO_COUNTER_REMOVAL_RECORD
+from ..replacements.damage_substitutions import DAMAGE_TO_COUNTER_REMOVAL_RECORD
 from ..oracle import OracleInstruction, compile_card_oracle
 from ..trigger_utils import iter_triggered_abilities, matching_triggers
 from ..turn_state import record_controllers_upkeep

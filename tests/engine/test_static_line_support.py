@@ -57,11 +57,11 @@ from engine.static_bonuses import static_bonus_for
 # Every entry below was verified against the named code, not assumed.
 IMPLEMENTED_ELSEWHERE: dict[str, str] = {
     "damage that would reduce your life total to less than 1":
-        "replacements.py:_floor_life_at_one (Ali from Cairo)",
+        "replacements/damage.py:_floor_life_at_one (Ali from Cairo)",
     "as long as this creature is attacking, prevent all damage deserts":
-        "replacements.py:_prevent_desert_damage (Camel)",
+        "replacements/damage.py:_prevent_desert_damage (Camel)",
     "prevent all damage that would be dealt to this creature by deserts":
-        "replacements.py:_prevent_desert_damage (Desert Nomads)",
+        "replacements/damage.py:_prevent_desert_damage (Desert Nomads)",
     "at end of combat, if this creature attacked or blocked":
         "phases/end_of_combat_step.py (Clockwork Beast)",
     "this creature enters with seven +1/+0 counters":

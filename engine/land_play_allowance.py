@@ -80,7 +80,7 @@ _ANY_NUMBER = re.compile(r"^you may play any number of lands on each of your tur
 # have to remember a special case.
 #
 # Deliberately **not** the same rule as "lands can't enter the battlefield" on
-# the same card: that one is CR 614.17 and lives in `engine/replacements.py`,
+# the same card: that one is CR 614.17 and lives in `engine/replacements/permanents.py`,
 # because it is about a land arriving from anywhere rather than about the action
 # of playing one. A card printing only this line still lets a reanimated land
 # through, which is what it says.

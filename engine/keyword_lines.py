@@ -240,6 +240,6 @@ def keyword_line_triggers(normalized_line: str) -> tuple[ParsedTriggeredAbility,
         # CR 702.35a's second ability ("When this card is exiled this way, its
         # owner may cast it by paying [cost] …"). Its static half is not an
         # ability this returns: it is a CR 614 replacement, read off the
-        # printed line by `engine/replacements.py` (`engine/madness.py`).
+        # printed line by `engine/replacements/zone_changes.py` (`engine/madness.py`).
         *madness_triggers(normalized_line),
     )

@@ -1152,7 +1152,7 @@ def return_attached_permanent_to_hand(game: Game, instruction: OracleInstruction
 #: ("**During your next untap step**, as you untap your permanents, return this
 #: land to its owner's hand" — Undiscovered Paradise). A seat index on the
 #: permanent, written by the ability that armed it and read by the CR 614
-#: ``would_untap`` replacement in `engine/replacements.py`.
+#: ``would_untap`` replacement in `engine/replacements/permanents.py`.
 #:
 #: The seat is recorded rather than left implicit, unlike ``skip_next_untap``'s
 #: unseated default beside it: that clause says "its controller's next untap

@@ -1414,7 +1414,7 @@ def test_113_6k_a_condition_that_cannot_fire_from_the_battlefield_fires_elsewher
     function in a graveyard by what its *effect* does, and this one by what its
     *condition* is.
     """
-    from engine.replacements import _mill_cards
+    from engine.replacements.draws import _mill_cards
 
     wth, lea = set_pool("WTH"), set_pool("LEA")
     blessing = wth["Gaea's Blessing"]
@@ -1442,7 +1442,7 @@ def test_113_6k_the_same_card_on_the_battlefield_never_fires_it(set_pool):
     library move at all. Checked through the fire site rather than through the
     scan, because a scan that never looks is indistinguishable from one that
     looks and finds nothing."""
-    from engine.replacements import _mill_cards
+    from engine.replacements.draws import _mill_cards
 
     wth, lea = set_pool("WTH"), set_pool("LEA")
     p1 = PlayerState(name="P1", library=[lea["Island"], lea["Island"]])

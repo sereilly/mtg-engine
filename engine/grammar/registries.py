@@ -436,7 +436,7 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     if revealed_hands_line(line):
         return "revealed_hands"
 
-    # engine/replacements.py — CR 614 interceptors. The phrase table lives there
+    # engine/replacements/lines.py — CR 614 interceptors. The phrase table lives there
     # rather than here, because the support gate reads it too: what the engine
     # implements and what it claims to have read cannot drift while both
     # readers ask the implementer.
@@ -452,8 +452,8 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     if life_gain_ban_line(line) is not None:
         return "life_prohibitions"
 
-    # engine/prevention.py — CR 615 shields. The same arrangement one layer
-    # over: a permanent's *static* prevention applies from its own text at
+    # engine/prevention/static.py — CR 615 shields. The same arrangement one
+    # layer over: a permanent's *static* prevention applies from its own text at
     # damage time, so there is nothing to lower, and the matcher the
     # interceptor self-selects on is the matcher asked here.
     if prevention_claims_line(line):

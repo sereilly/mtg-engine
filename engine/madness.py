@@ -24,7 +24,7 @@ reminder prints "When this card is exiled this way", and its one fire site is
 the static ability beside it.
 
 **The static half is a CR 614 replacement**, registered in
-``engine/replacements.py`` beside the two that already replace where a
+``engine/replacements/zone_changes.py`` beside the two that already replace where a
 discarded card goes (Dodecapod's battlefield, Library of Leng's library top),
 and asked by the chosen-discard seam ``handlers/discards._resolve_one_discard``
 for the reason that seam already asks Dodecapod's. :func:`exile_madness_card`

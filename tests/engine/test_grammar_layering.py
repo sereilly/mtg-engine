@@ -3033,8 +3033,9 @@ FAMILY_SHARED = {
     "_filters",
     # `_blankets` split out of `lowering/prevention.py` at Visions' first wave,
     # when Remedy's divided pool and Honorable Passage's reflecting rider took
-    # that module past the guard. The line is one `engine/prevention.py` already
-    # draws in its **order bands**, and draws for a reason that decides
+    # that module past the guard. The line is one
+    # `engine/prevention/registry.py` already draws in its **order bands**, and
+    # draws for a reason that decides
     # behaviour: a blanket shield has no charges, so applying it costs its
     # recipient nothing and it runs ahead of every consumable — where a pool
     # (CR 615.7) is spent by points and a CR 615.8 shield by instances, and
@@ -3125,10 +3126,11 @@ FAMILY_SHARED = {
     # went from 21 rows to 34 between Tempest and Invasion where `damage`, the
     # one category larger, went from 30 to 36. The line is the one its rows'
     # comments had drawn singly: every kind in it is answered by the combat
-    # phase, either through `engine/handlers/combat.py` or (ten of the 34) by a
-    # declaration reading the compiled program with no handler at all. Five
-    # lowering modules build those kinds and the one that names the subject,
-    # `combat`, had 130 lines of room for 108 lines of rows, so there was no
+    # phase, either through `engine/handlers/combat.py` (and, since the
+    # 2,000-line cap's split round, `combat_declarations.py`) or (ten of the
+    # 34) by a declaration reading the compiled program with no handler at all.
+    # Five lowering modules build those kinds and the one that names the
+    # subject, `combat`, had 130 lines of room for 108 lines of rows, so there was no
     # family to send them home to; `zones` held its own rows once and gave them
     # up for that reason. A floor that imports nothing, folded back in with
     # `update()`, and not one row's value changed.

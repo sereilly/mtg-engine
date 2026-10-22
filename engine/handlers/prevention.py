@@ -1245,9 +1245,8 @@ def prevent_damage_to_target_until_eot(game: Game, instruction: OracleInstructio
     Cleared by the cleanup step through ``_EOT_METADATA_KEYS``, which is what
     "this turn" means here.
     """
-    from ..prevention import (
-        COMBAT_SHIELD_BOTH, COMBAT_SHIELD_TO, add_directional_shield,
-    )
+    from ..prevention.shields import (COMBAT_SHIELD_BOTH, COMBAT_SHIELD_TO,
+                                      add_directional_shield)
 
     combat_only = bool(instruction.payload.get("combat_only"))
     # "…dealt **to and dealt by** that creature this turn" (Ebony Horse, Maze
@@ -1452,7 +1451,7 @@ def prevent_damage_by_target_until_eot(game: Game, instruction: OracleInstructio
     Cleared by the cleanup step through ``_EOT_METADATA_KEYS``, which is what
     "this turn" means here.
     """
-    from ..prevention import COMBAT_SHIELD_BY, add_directional_shield
+    from ..prevention.shields import COMBAT_SHIELD_BY, add_directional_shield
 
     combat_only = bool(instruction.payload.get("combat_only"))
     # Through the innermost binding, exactly as the recipient half above does
@@ -1601,7 +1600,7 @@ def double_next_damage_from_chosen_source(
     """Desperate Gambit's winning flip: "the next time that source would deal
     damage this turn, it deals double that damage instead."
 
-    Arms the CR 614 replacement in ``engine/replacements.py``; the rider itself
+    Arms the CR 614 replacement in ``engine/replacements/damage.py``; the rider itself
     is a count on the chosen permanent (``engine/next_damage.py``), which is
     what gives it CR 400.7's lifetime and the turn's sweep for free.
     """

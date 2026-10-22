@@ -43,11 +43,9 @@ from engine.control import change_control as _w1g8e_change_control  # noqa: E402
 from engine.models import (CardDefinition as _w1g8e_Card,  # noqa: E402
                            Permanent as _w1g8e_Permanent)
 from engine.oracle import compile_card_oracle as _w1g8e_compile  # noqa: E402
-from engine.replacements import (  # noqa: E402
-    damage_delta_recipients as _w1g8e_delta_recipients,
-    replacement_claims_line as _w1g8e_claims,
-    source_damage_delta as _w1g8e_delta,
-)
+from engine.replacements import replacement_claims_line as _w1g8e_claims
+from engine.replacements.damage import (damage_delta_recipients as _w1g8e_delta_recipients,
+                                        source_damage_delta as _w1g8e_delta)
 
 from tests.helpers import (_damage_dealt as _w1g8e_dealt,  # noqa: E402
                            resolve_stack as _w1g8e_resolve_stack)

@@ -42,7 +42,7 @@ derive theirs. Which lands it covers is a land **type** and not a controller —
 
 One question, three producers, and therefore one answer:
 :func:`swapped_symbol`. The CR 614 interceptor that applies it is
-``engine/replacements.py``'s ``_substitute_land_mana`` — registered there
+``engine/replacements/permanents.py``'s ``_substitute_land_mana`` — registered there
 because that is where a replacement effect goes and where the support gate
 looks for the line's claim, and thin because deciding *what* a land produces
 instead is this module's question and the payment planner has to be able to ask

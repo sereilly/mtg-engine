@@ -21,7 +21,7 @@ from ..keywords import (clear_granted_ability_lines, clear_granted_keywords,
 from ..models import Permanent
 from ..pt import clear_base_pt, remove_temporary_pt
 from ..damage_redirects import clear_redirects
-from ..prevention import clear_directional_shields
+from ..prevention.shields import clear_directional_shields
 from ..shields import END_OF_COMBAT, clear_shields
 from ..trigger_utils import iter_triggered_abilities, make_trigger_event
 

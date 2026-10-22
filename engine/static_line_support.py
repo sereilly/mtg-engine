@@ -474,7 +474,7 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
 
     if cost_modifier_claims_line(normalized):
         return True
-    # **Every** CR 614 replacement carried out by engine/replacements.py from
+    # **Every** CR 614 replacement carried out by engine/replacements/ from
     # the permanent's own text, not one of them.
     #
     # This asked for Conclave Mentor's constant alone, which is the partial-list
@@ -592,13 +592,13 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
         # Desert Nomads / Camel: static shield against Desert lands' damage
         # ability. Handled by a replacement-effect interceptor (checked
         # against oracle text directly) rather than a compiled instruction —
-        # see engine/replacements.py:_prevent_desert_damage, which also
+        # see engine/replacements/damage.py:_prevent_desert_damage, which also
         # covers Camel's clause extending the shield to creatures banded
         # with it.
         "prevent all damage that would be dealt to this creature by deserts",
         "as long as this creature is attacking, prevent all damage deserts would deal to this creature",
         # Ali from Cairo: a life-total-floor replacement effect (CR 614),
-        # handled by engine/replacements.py:_floor_life_at_one against oracle
+        # handled by engine/replacements/damage.py:_floor_life_at_one against oracle
         # text directly rather than a compiled instruction.
         "damage that would reduce your life total to less than 1 reduces it to 1 instead",
         # Guardian Beast: static artifact protection (can't-be-enchanted,

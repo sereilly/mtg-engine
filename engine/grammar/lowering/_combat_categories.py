@@ -19,13 +19,14 @@ The line is a real one rather than a size cut, and the rows below had drawn it
 one comment at a time ("filed with the family whose steps dispatch it",
 "enforced by the declaration rather than by a handler"): every kind here is
 answered by the **combat phase**. Twenty-four have an effect handler and all
-twenty-four are in `engine/handlers/combat.py`, where what the handler writes is
-a mark a combat step reads back. The other ten have no `EFFECT_HANDLERS` entry
-at all — the declarations and the damage assignment
-(`phases/declare_attackers_step.py`, `phases/declare_blockers_step.py`,
+twenty-four were in `engine/handlers/combat.py` — that module and
+`combat_declarations.py` beside it since the 2,000-line cap's split round —
+where what the handler writes is a mark a combat step reads back. The other ten
+have no `EFFECT_HANDLERS` entry at all — the declarations and the damage
+assignment (`phases/declare_attackers_step.py`, `phases/declare_blockers_step.py`,
 `combat_assignment.py`) read them straight off the compiled program. The
 converse is not claimed: `evasion`'s four kinds and three of `prevention`'s
-resolve in that handler module too and keep their own categories, because a
+resolve in those handler modules too and keep their own categories, because a
 category names the migration family a kind belongs to and not where its handler
 sits.
 

@@ -27,8 +27,7 @@ from engine import Game as _w2g3c_Game, PlayerState as _w2g3c_PlayerState  # noq
 from engine.card_loader import (load_cards as _w2g3c_load,  # noqa: E402
                                 manifest_set_path as _w2g3c_path)
 from engine.models import Permanent as _w2g3c_Permanent  # noqa: E402
-from engine.replacements import (source_damage_delta  # noqa: E402
-                                 as _w2g3c_reduction)
+from engine.replacements.damage import source_damage_delta as _w2g3c_reduction
 
 from tests.helpers import _damage_dealt as _w2g3c_dealt  # noqa: E402
 

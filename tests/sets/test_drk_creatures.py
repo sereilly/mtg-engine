@@ -791,7 +791,8 @@ def test_whippoorwill_locks_a_creature_out_of_every_shield(set_pool):
     The lock is enforced where a damage event's contention set is assembled, so
     a shield armed *after* it still does not apply.
     """
-    from engine.prevention import COMBAT_SHIELD_TO, add_directional_shield
+    from engine.prevention.shields import (COMBAT_SHIELD_TO,
+                                           add_directional_shield)
 
     bird = _nosick(Permanent(card=set_pool("DRK")["Whippoorwill"]))
     victim = Permanent(card=_mk_creature_card("Ogre", 3, 3))

@@ -1177,7 +1177,8 @@ def test_freyalises_winds_claims_both_of_its_lines(set_pool):
     shape ``--hollow-lines`` exists to catch: the replacement is claimed by the
     file that implements it, so the second line is not a rider dropped in
     silence."""
-    from engine.replacements import counters_instead_of_untap, replacement_claims_line
+    from engine.replacements import replacement_claims_line
+    from engine.replacements.permanents import counters_instead_of_untap
 
     winds = set_pool("ICE")["Freyalise's Winds"]
     replacement_line = winds.oracle_text.splitlines()[1]

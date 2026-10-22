@@ -488,9 +488,9 @@ def _announce(game, event: dict, dealt: int) -> None:
     # Frozen here (CR 603.10) and by id, because by resolution the creature may
     # have been destroyed and an index is not an identity (CR 400.7). Under the
     # key `handlers/damage.py`'s ``event_subject`` branch, `handlers/pump.py`
-    # and `handlers/destruction.py` already read — one spelling, so a fire site
-    # taught to freeze its subject reaches every reading of "that <noun>" at
-    # once. Only for a *permanent* source: a spell's source is its printed
+    # and `handlers/destroy_sweeps.py` already read — one spelling, so a fire
+    # site taught to freeze its subject reaches every reading of "that <noun>"
+    # at once. Only for a *permanent* source: a spell's source is its printed
     # `CardDefinition` (CR 109.5) with no id, which is exactly the object the
     # sentence cannot name.
     subject_id = getattr(source, "permanent_id", None)

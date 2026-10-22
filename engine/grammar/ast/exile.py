@@ -170,7 +170,7 @@ class ExileGraveyardArrivalsThisTurn:
     CR 614's "would … instead", created by a *spell* rather than printed on a
     permanent — which is the whole reason it is a node at all. The unbounded
     spelling of the same sentence (Forbidden Crypt, Rest in Peace) is a static
-    ability of a permanent, and `engine/replacements.py` reads it straight off
+    ability of a permanent, and `engine/replacements/zone_changes.py` reads it straight off
     that permanent's text; a sorcery is on no battlefield when the replacement
     is meant to apply, so nothing could read it there and the effect has to
     leave a record behind instead.

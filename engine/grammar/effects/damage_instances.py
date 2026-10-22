@@ -17,9 +17,10 @@ amount of damage; the number of events or sources dealing it doesn't matter",
 where everything here modifies "the next instance of damage from that source,
 regardless of how much damage that is". ``lowering/_blankets.py`` had already
 written that sentence down — "a pool (CR 615.7) is spent by points and a
-CR 615.8 shield by instances" — because ``engine/prevention.py``'s order bands
-depend on it. What stays behind names the **recipient**; everything here names
-the **source**, and its recipient is optional (Penance prints none at all).
+CR 615.8 shield by instances" — because ``engine/prevention/registry.py``'s
+order bands depend on it. What stays behind names the **recipient**; everything
+here names the **source**, and its recipient is optional (Penance prints none
+at all).
 
 ``_parse_source_of_choice_effect`` returning *either* node is what kept this
 half out of ``effects/redirection.py``, and that is unchanged rather than

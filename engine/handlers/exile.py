@@ -1038,7 +1038,7 @@ def exile_graveyard_arrivals_this_turn(game: Game, instruction: OracleInstructio
     exile that card instead." (Yawgmoth's Will.)
 
     CR 614 for a window. The marker goes on the seat and the interceptor in
-    ``engine/replacements.py`` reads it — the arrangement Disintegrate's
+    ``engine/replacements/zone_changes.py`` reads it — the arrangement Disintegrate's
     "if it would die this turn" already has on a permanent, one object wider —
     because a sorcery is on no battlefield when the replacement is meant to
     apply, and the static reading of the same sentence works by scanning

@@ -413,7 +413,7 @@ PRIMARY_TYPE_BASELINE: dict[str, int] = {
     # instant or sorcery spell" a copy is. No effect in the pool changes a
     # spell's card type, so the printed word is the answer; the collapse to
     # one word is harmless for the two types that are never combined.
-    "handlers/stack.py": 2,         # Fork's target: an instant or sorcery spell
+    "handlers/spell_copies.py": 2,  # Fork's target: an instant or sorcery spell
     "mixins/stack/casting.py": 2,   # …and the cast gate for the same target
     "mixins/stack/resolution.py": 1,  # a copy of an instant or sorcery
     # **A permanent that has already left.** "…if a creature dealt damage by

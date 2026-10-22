@@ -1,4 +1,4 @@
-"""Unit tests for the replacement-effect registry (engine/replacements.py).
+"""Unit tests for the replacement-effect registry (engine/replacements/).
 
 The migrated Lich / Disintegrate / Jade Monolith / Personal Incarnation
 behaviors keep their existing per-card tests as the regression net; these

@@ -869,7 +869,7 @@ def test_w2g1_volraths_curse_can_be_bought_off_for_one_turn(set_pool):
 from engine import Game, PlayerState
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
-from engine.replacements import damage_multiplier_line
+from engine.replacements.damage import damage_multiplier_line
 
 
 def _w2g3e_game(*battlefields):

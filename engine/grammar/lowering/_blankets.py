@@ -2,8 +2,8 @@
 
 Split off ``lowering/prevention.py`` at Visions' first wave, the round Remedy's
 divided pool and Honorable Passage's reflecting rider took that module past the
-thousand-line guard. The line is one ``engine/prevention.py`` already draws in
-its order bands, and draws for a reason that decides behaviour: a blanket has
+thousand-line guard. The line is one ``engine/prevention/registry.py`` already
+draws in its order bands, and draws for a reason that decides behaviour: a blanket has
 **no charges**, so applying it costs its recipient nothing and it runs before
 every consumable shield — where a pool (CR 615.7) is spent by points and a
 CR 615.8 shield by instances, and spending one on damage a blanket was going to

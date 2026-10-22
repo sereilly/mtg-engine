@@ -420,7 +420,7 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # Its own channel, asking the reader that answers it.
     ("cast_permissions.py (controller's graveyard opened)",
      board_graveyard_play_line),
-    # A CR 614 replacement effect, in full. `engine/replacements.py`'s
+    # A CR 614 replacement effect, in full. `engine/replacements/lines.py`'s
     # REPLACEMENT_LINES *is* the set of constants its interceptors probe for, so
     # asking it is asking the code that carries the line out. Three of these
     # phrases used to sit in _MIXIN_TEXT_SCANS below as literals — a second copy
@@ -428,7 +428,7 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # "If an instant or sorcery source would deal 3 or more damage to you…" read
     # as unclaimed rather than as what it was: a replacement with no interceptor
     # behind it at all.
-    ("replacements.py", replacement_claims_line),
+    ("replacements/lines.py", replacement_claims_line),
     # "Players can't gain life." (Forsaken Wastes, CR 119.7.) A prohibition
     # rather than a replacement — `Game._gain_life` asks it before it gathers
     # CR 614's contenders, because the rule says a replacement over a banned
@@ -705,7 +705,7 @@ HANDLER_CLAIMS: dict[str, tuple[str, ...]] = {
         "you may have it block an attacking creature of your choice",
         "creatures it was blocking that had become blocked by only that creature this combat become unblocked",
     ),
-    # handlers/stack copy_top_stack_spell + the UI retarget flow (Fork).
+    # handlers/spell_copies copy_top_stack_spell + the UI retarget flow (Fork).
     "copy_top_stack_spell": ("you may choose new targets for the copy",),
     # Natural Selection's confirm flow carries the shuffle flag.
     "reorder_target_library_top": ("you may have that player shuffle",),
@@ -714,7 +714,7 @@ HANDLER_CLAIMS: dict[str, tuple[str, ...]] = {
         "that creature attacks this turn if able",
         "destroy it at the beginning of the next end step if it didn't attack this turn",
     ),
-    # Siren's Call: handlers/combat.py force_active_player_creatures_to_attack
+    # Siren's Call: handlers/combat_declarations.py force_subject_to_attack_until_eot
     # arms destroy_if_did_not_attack_eot (drained in end_step.py), exempting
     # creatures not controlled continuously since the turn began (the
     # summoning_sickness_turn stamp, re-stamped on control changes).
