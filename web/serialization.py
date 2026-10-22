@@ -26,7 +26,8 @@ from engine.models import Permanent, PlayerState
 from engine.layer_bridge import displayed_type_line
 from engine.library_top import top_is_public
 from engine.mana_payment import taps_for_payment
-from engine.oracle import LOYALTY_ANY_TIME_STATIC, compile_card_oracle
+from engine.line_classification import LOYALTY_ANY_TIME_STATIC
+from engine.oracle import compile_card_oracle
 from engine.activation_prohibitions import activation_prohibition
 from engine.keywords import abilities_lost_at, derived_ability_lines
 from engine.hand_locks import locked_hand_indices

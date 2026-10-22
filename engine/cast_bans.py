@@ -425,7 +425,7 @@ def _a_nontoken_permanent_is_named(game: "Game", wanted: str) -> bool:
 #: ``_CHOSEN_NAME_BAN``'s reason one screen up — claiming the casting half
 #: alone would ship an enchantment that stops an opponent's Counterspell and
 #: lets their Icy Manipulator through, which is not the card — and the two
-#: enforcement sites (``mixins/stack/casting.py``, ``mixins/stack/activation.py``)
+#: enforcement sites (``mixins/stack/casting.py``, ``mixins/stack/activation_checks.py``)
 #: both ask :func:`global_play_timing`.
 #:
 #: "Their own turns" is the seat's, so the question is whether the player

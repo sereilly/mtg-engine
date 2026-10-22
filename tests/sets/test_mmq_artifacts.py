@@ -885,7 +885,7 @@ def test_w2g1_kyren_toy_announcing_nothing_announces_zero(set_pool):
     engine's stated default for a headless or AI seat, and it is a legal
     announcement because removing zero counters is always payable (CR 601.2h
     forbids only what cannot be done). That is the whole difference from the
-    "any number of" cost one row over in ``mixins/stack/activation.py``, where
+    "any number of" cost one row over in ``mixins/stack/activation_checks.py``, where
     naming nothing removes every counter — and getting it wrong here would
     empty the artifact for one mana. The constant the sentence prints still
     applies, so the ability is never free of effect: zero counters buy one

@@ -62,6 +62,7 @@ import pytest
 
 import engine.handlers._targets as handler_targets
 import engine.mixins.stack.activation as activation_path
+import engine.mixins.stack.card_activation as card_activation_path
 import engine.mixins.stack.casting as casting_path
 from engine import Game, PlayerState
 from engine.card_loader import load_catalog
@@ -462,9 +463,12 @@ _KNOWN = frozenset({
 def _the_tree_as_it_was(monkeypatch) -> None:
     """Switch the announcement default off and give the resolver its scan
     back: every owed target left unnamed is the handler's to find again."""
-    monkeypatch.setattr(
-        activation_path, "default_activation_target", lambda *a, **k: None
-    )
+    # The graveyard road (``activate_from_graveyard``) asks the default from
+    # its own module, so it is switched off there too.
+    for path in (activation_path, card_activation_path):
+        monkeypatch.setattr(
+            path, "default_activation_target", lambda *a, **k: None
+        )
     monkeypatch.setattr(
         casting_path, "default_cast_target", lambda *a, **k: (None, False)
     )

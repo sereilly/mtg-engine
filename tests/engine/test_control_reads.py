@@ -350,7 +350,9 @@ POSITIONAL_BASELINE: dict[str, int] = {
     # path, reading through `permanent_at` — when Kor Chant gave a *spell* the
     # same announcement.
     "engine/mixins/stack/activation.py": 1,
-    "engine/mixins/stack/casting.py": 4,
+    # The cast side's four went with ``_validate_cast_targets`` when
+    # ``casting.py`` split at the 2,000-line cap.
+    "engine/mixins/stack/cast_target_validation.py": 4,
     # 4 -> 3 at Odyssey: Kudzu's own reattach prompt subscripted its chooser's
     # battlefield by a wire index, and went with the card's hook — the general
     # permanent choice answers by id. The 3 split with the module (one
@@ -390,7 +392,8 @@ def _battlefield_aliases(tree: ast.Module) -> set[str]:
 
     Counted because otherwise the guard is one line away from being bypassed:
     aliasing the list and subscripting the alias is the same positional read,
-    and it is already the majority spelling in ``mixins/stack/casting.py``.
+    and it is already the majority spelling in
+    ``mixins/stack/cast_target_validation.py``.
     Names are collected module-wide rather than per function; a name that means
     "a battlefield" in one function and something else in another is a naming
     problem of its own."""

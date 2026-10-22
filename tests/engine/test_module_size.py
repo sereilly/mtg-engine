@@ -49,9 +49,6 @@ OVERSIZED: dict[str, int] = {
     # --- S4 ---
     # --- S5 ---
     # --- S6 ---
-    "engine/mixins/stack/casting.py": 6192,
-    "engine/mixins/stack/activation.py": 4300,
-    "engine/mixins/stack/resolution.py": 2906,
     # --- S7 ---
     # --- S8 ---
     # --- S9 ---

@@ -36,7 +36,7 @@ def record_tapped_to_pay(source: "Permanent", tapped: "Permanent") -> None:
     """Note that *tapped* was tapped to pay for an ability of *source*.
 
     Called from the one place an activation cost taps anything
-    (``engine/mixins/stack/activation.py``), so a second tapping path cannot
+    (``engine/mixins/stack/activation_charges.py``), so a second tapping path cannot
     quietly fail to record — the same reason ``Game.become_tapped`` is the one
     untapped→tapped transition.
     """

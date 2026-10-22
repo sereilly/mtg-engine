@@ -93,7 +93,7 @@ PARSE_LAYERS = [
     # parse side reaches. The seam is the mirror's own, not a new one: the
     # lowering halves of these two subjects separated at ULG wave 1, because
     # `_PRODUCES` is keyed by *instruction kind* and a cost has none — it is
-    # charged by `engine/mixins/stack/activation.py` on the way to the stack
+    # charged by `engine/mixins/stack/activation_charges.py` on the way to the stack
     # (CR 601.2h, CR 602.2b), not by anything the dispatcher runs. The parse
     # halves had stayed in one file only because neither had yet crossed a cap.
     #
@@ -2603,7 +2603,7 @@ FAMILY_SHARED = {
     # `_cost_records` split out of `_records` in the same wave and for the same
     # reason, along the seam that module's own docstring has drawn since it was
     # written: `_PRODUCES` is keyed by *instruction kind*, and nothing about a
-    # cost can be — a cost is charged by `mixins/stack/activation.py` on the way
+    # cost can be — a cost is charged by `mixins/stack/activation_charges.py` on the way
     # to the stack (CR 601.2h) rather than by anything the dispatcher runs. Six
     # families and `lower.py` read it and it reads nothing back. Its importers
     # were repointed rather than re-exported through `_records`, which is that

@@ -199,7 +199,7 @@ _MIXIN_TEXT_SCANS = (
 )
 
 _ACTIVATION_GATES = (
-    # queue_permanent_ability's per-ability textual gates (stack/activation.py).
+    # queue_permanent_ability's per-ability textual gates (stack/activation_checks.py).
     "activate only during your upkeep",
     "only during your turn",
     "once each turn",
@@ -389,14 +389,14 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # The same shape one rule over — "Activated abilities of creatures can't be
     # activated." (Cursed Totem), CR 602.5's board half, enforced by
     # `activation_restrictions.global_activation_ban` from
-    # `mixins/stack/activation.py`. Its own channel beside the cast ban and for
+    # `mixins/stack/activation_checks.py`. Its own channel beside the cast ban and for
     # that channel's reason: the reader that answers the line is the one asked.
     ("activation_restrictions.py (board-wide ban)",
      lambda s: global_activation_ban_line(s) is not None),
     # The **timing** half of both rules at once — "Players can cast spells and
     # activate abilities only during their own turns." (City of Solitude.) One
     # printed sentence read by `cast_bans.global_play_timing` from both
-    # `mixins/stack/casting.py` and `mixins/stack/activation.py`, so it gets one
+    # `mixins/stack/casting.py` and `mixins/stack/activation_checks.py`, so it gets one
     # channel asking that one reader: a claim split over two would be free to
     # survive the removal of either gate.
     ("cast_restrictions.py (board-wide own-turn window)",
@@ -664,7 +664,7 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # because this table is asked per sentence — the cost table reads them
     # together (`cast_costs.x_one_of_each_color_line`), folds the pair onto the
     # card's {X} offer and the payment sets the colours aside
-    # (`casting._pay_cast_cost`); a card printing either alone, or over an X no
+    # (`pool_payment._pay_cast_cost`); a card printing either alone, or over an X no
     # offer carries, is refused by the support gate and never reaches here.
     ("x spend one of each color (cast_costs.py)", x_one_of_each_color_sentence),
     ("ante boilerplate (deck construction, not gameplay)", lambda s: s.startswith("remove this card from your deck before playing")),

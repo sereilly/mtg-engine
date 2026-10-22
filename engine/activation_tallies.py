@@ -232,7 +232,7 @@ def activations_this_turn(game: "Game", source) -> int:
     """How many capped activations *source* has already made this turn.
 
     The one read of the tally :func:`mark_activated_this_turn` writes, shared by
-    the rows below and by `mixins/stack/activation.py`'s refusal -- so the key is
+    the rows below and by `mixins/stack/activation_checks.py`'s refusal -- so the key is
     spelled once and the two cannot drift. A permanent that is gone has made
     none (CR 400.7: what comes back is a new object).
     """

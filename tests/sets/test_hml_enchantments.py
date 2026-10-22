@@ -536,7 +536,7 @@ def test_aether_storms_ban_is_claimed_by_the_table_that_enforces_it(set_pool):
     """The card was already "supported" on its second line alone, so its count
     does not move — what moves is that the first line is now read by something.
 
-    Asserted through the reader ``mixins/stack/casting.py`` asks, not through a
+    Asserted through the reader ``mixins/stack/cast_target_validation.py`` asks, not through a
     literal: a claim that does not go through the enforcing code is exactly the
     drift ``engine/grammar/registries.py`` exists to prevent.
     """
@@ -615,7 +615,7 @@ import pytest
 from engine import Game, PlayerState
 from engine.aura_attachment import attach_aura
 from engine.keywords import grant_keyword
-from engine.mixins.stack.casting import permanent_matches_enchant_noun
+from engine.mixins.stack.cast_target_validation import permanent_matches_enchant_noun
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.pt import add_pt_modifier

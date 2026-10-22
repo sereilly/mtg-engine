@@ -602,7 +602,7 @@ class BecomeAura:
     sentence behind it.
 
     ``noun`` is the enchant clause's head noun ("creature"), the same word
-    ``mixins/stack/casting.permanent_matches_enchant_noun`` matches a host
+    ``mixins/stack/cast_target_validation.permanent_matches_enchant_noun`` matches a host
     against everywhere else in this engine.
 
     ``origin_is_source`` is the clause's rider — "put onto the battlefield

@@ -80,7 +80,7 @@ class RoleTargetsMixin:
         **A stack role is filled from the stack channel** (*target_stack_item*,
         which an activation has carried since Deathgrip), for the reason a
         cast's player role is filled from ``target_player_index``
-        (``casting._named_role_targets``): the announcement already has a field
+        (``cast_target_validation._named_role_targets``): the announcement already has a field
         meaning exactly that, and a second arity beside it is a second answer
         to one question. Which slot is the stack one comes from *roles*, so an
         id list positional in role order carries ``None`` there, and a role ref

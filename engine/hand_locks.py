@@ -21,7 +21,7 @@ question the game can ask. What is observable is *how many*: with two copies
 in hand and one locked, the player may play one. The record is therefore a
 **count** per (seat, card), and the readers below take the first that many
 occurrences. A caller looking for a copy to play asks for the first *unlocked*
-one, the same way ``_cast_onto_stack`` already prefers the occurrence that
+one, the same way the cast's ``_spell_source`` already prefers the occurrence that
 carries a casting permission.
 
 **Expiry is derived, not swept.** "Until that player's next turn" is an ordinal

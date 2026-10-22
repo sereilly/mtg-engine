@@ -500,7 +500,7 @@ def test_a_cost_modifier_reaches_a_hand_activated_ability(catalog_by_name, set_p
     alice, bob = PlayerState(name="Alice"), PlayerState(name="Bob")
     game = Game(players=[alice, bob])
     pool = set_pool("USG")
-    from engine.mixins.stack.activation import hand_activation_cost
+    from engine.mixins.stack.card_activation import hand_activation_cost
     from engine.oracle import compile_card_oracle
     from engine.targeting import usable_activated_abilities
     from engine.activation_zones import HAND

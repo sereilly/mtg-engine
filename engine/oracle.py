@@ -91,8 +91,8 @@ from .line_classification import (_noncreature_line_instructions,
 # pulled from ``engine.oracle``. Three are ``__all__``'s; the rest are pulled
 # by modules other groups were splitting in the same round (``auras``,
 # ``cast_costs``, ``enter_effects``, ``prevention``,
-# ``activation_restrictions``, ``events``, ``mixins/permanent_state``,
-# ``mixins/stack/activation``), whose import lines were left alone. New code
+# ``activation_restrictions``, ``events``, ``mixins/permanent_state``), whose
+# import lines were left alone. New code
 # imports a name from the module that defines it.
 from .trigger_conditions import trigger_condition_of_line
 from .chargeable_costs import (_chargeable_discard_filters,
@@ -102,7 +102,7 @@ from .chargeable_costs import (_chargeable_discard_filters,
 from .activation_costs import parse_activated_ability_cost
 from .self_reference import _collapse_self_references
 from .line_rewrites import expand_card_lines
-from .line_classification import LOYALTY_ANY_TIME_STATIC, compile_emblem_text
+from .line_classification import compile_emblem_text
 
 
 __all__ = [
@@ -647,7 +647,7 @@ def _compile_card_oracle(
         # refused here: CR 601.2c announces targets after CR 601.2b picks the
         # mode, and with the mode in somebody else's hands (CR 700.2e) the
         # caster could not name one while casting. There is an announcement
-        # shape for it now — `mixins/stack/casting.arm_modal_mode_targets`
+        # shape for it now — `mixins/stack/cast_announcement.arm_modal_mode_targets`
         # asks the caster for the mode's targets the moment the chooser
         # answers, inside the same uninterruptible window (CR 601.2i) — so the
         # gate is gone rather than widened.

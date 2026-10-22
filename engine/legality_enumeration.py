@@ -46,7 +46,7 @@ def _cast_from_graveyard_slot(spec: dict, graveyard, spell) -> int | None:
     of one card in one graveyard are one ``CardDefinition`` object, so
     excluding by identity would take both where the cast takes one. The first
     matching slot is the one the cast path itself takes
-    (``_cast_onto_stack`` walks the pile from the bottom).
+    (``_spell_source`` walks the pile from the bottom).
 
     The card as the zone holds it: a split card is held whole and cast as a
     half (CR 709.4), so the half is widened before it is looked for.
@@ -810,7 +810,7 @@ class TargetEnumerationMixin:
         # exclusion asked inside one branch is an exclusion every other branch
         # drops, and CR 702.5's [quality] can narrow any of the six enchant
         # nouns. Layer 6, through the same ``has_keyword`` the cast gate asks
-        # (``stack/casting.permanent_matches_enchant_noun``) — one reading, so
+        # (``stack/cast_target_validation.permanent_matches_enchant_noun``) — one reading, so
         # the picker cannot offer a host the cast then refuses.
         without_keyword = spec.get("without_keyword")
         if without_keyword and self._has_keyword(perm, without_keyword):

@@ -1,13 +1,18 @@
 # Mixin classes for the Game dataclass.
 # Per-phase / per-step turn-structure mixins live in engine.phases, not here.
 # Stack mixins (casting, activation, resolution, pending choices) live in
-# engine.mixins.stack, one per stage of an object's life on the stack; the
+# engine.mixins.stack, one per stage of an object's life on the stack, each
+# with the parts split out of it at the 2,000-line cap beside it; the
 # pending choices are a package of their own, one mixin per prompt family.
 from .game_ending import GameEndingMixin
 from .turn_management import TurnManagementMixin
 from .phase_steps import PhaseStepsMixin
 from .stack import (
     AbilityActivationMixin,
+    ActivationPaymentMixin,
+    CardActivationMixin,
+    ActivationChecksMixin,
+    ActivationChargesMixin,
     PendingChoicesMixin,
     ReplacementChoicesMixin,
     LibrarySearchChoicesMixin,
@@ -24,7 +29,14 @@ from .stack import (
     SpellChoicesMixin,
     SacrificeChoicesMixin,
     SpellCastingMixin,
+    AdditionalCastCostsMixin,
+    AlternativeCastCostsMixin,
+    CastTargetValidationMixin,
+    PoolPaymentMixin,
+    CastAnnouncementMixin,
     StackResolutionMixin,
+    TriggerTargetsMixin,
+    TriggeredAbilitiesMixin,
 )
 from .oracle_instructions import OracleInstructionsMixin
 # A permanent's state, its board-wide statics and its recompute: one mixin

@@ -414,7 +414,7 @@ PRIMARY_TYPE_BASELINE: dict[str, int] = {
     # spell's card type, so the printed word is the answer; the collapse to
     # one word is harmless for the two types that are never combined.
     "handlers/spell_copies.py": 2,  # Fork's target: an instant or sorcery spell
-    "mixins/stack/casting.py": 2,   # …and the cast gate for the same target
+    "mixins/stack/cast_target_validation.py": 2,  # …and the cast gate for the same target
     "mixins/stack/resolution.py": 1,  # a copy of an instant or sorcery
     # **A permanent that has already left.** "…if a creature dealt damage by
     # this creature this turn **died**" (Krovikan Vampire): the ledger is
@@ -521,9 +521,11 @@ PRINTED_COMPILE_BASELINE: dict[str, int] = {
     # A spell on the stack: the stack item's card is the object being asked.
     "counter_conditions.py": 1,
     "mixins/target_announcements.py": 1,
-    # …and a modal spell's announced mode (``arm_modal_mode_targets``) and a
-    # spell cast from a graveyard's own card target (Odyssey).
-    "mixins/stack/casting.py": 2,
+    # …and a spell cast from a graveyard's own card target (Odyssey), and a
+    # modal spell's announced mode (``arm_modal_mode_targets``, which went to
+    # ``cast_announcement`` when ``casting.py`` split at the 2,000-line cap).
+    "mixins/stack/casting.py": 1,
+    "mixins/stack/cast_announcement.py": 1,
     "stack_targets.py": 1,
     # The resolving spell CR 608.2b re-asks (``resolving_targets_all_legal``)
     # and the stack item whose graveyard target Ground Seal made untargetable

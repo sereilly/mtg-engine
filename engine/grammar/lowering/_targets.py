@@ -200,7 +200,7 @@ def card_divided_shares_payload(effects) -> dict[str, object] | None:
       instruction that has one of each.
 
     ``amount`` is the **sum**, which is what every reader that sizes a divided
-    spell already asks for (``casting._divided_total``, the AI's valuation) and
+    spell already asks for (``cast_target_validation._divided_total``, the AI's valuation) and
     is honest: it is what the spell deals in total. The per-target numbers ride
     the ``shares`` list, and the stamping at announcement is what pins each one
     to its target.
@@ -268,7 +268,7 @@ def _describe_targets(
 
     *announced_x_bound* is a lowering's claim that every announcement-time
     reader of its kind resolves an X bound: the cast gate
-    (``casting._validate_cast_targets``) substitutes the announced X before any
+    (``cast_target_validation._validate_cast_targets``) substitutes the announced X before any
     arm reads the description and the picker probes without it, and the
     handler re-asks it through the dispatcher's substitution (CR 601.2b, then
     601.2c, then 608.2b). Only a lowering whose handler re-checks its own

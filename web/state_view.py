@@ -54,7 +54,7 @@ from engine.classifier import classify_card
 from engine.faces import castable_faces, face_cards
 from engine.activation_zones import HAND
 from engine.cycling import expand_cycling_line
-from engine.mixins.stack.activation import hand_activation_cost
+from engine.mixins.stack.card_activation import hand_activation_cost
 from engine.oracle import compile_card_oracle
 from engine.mana_payment import mana_cost_label
 from engine.restricted_mana import ACTIVATE, CAST, PaymentPurpose

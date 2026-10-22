@@ -1,7 +1,7 @@
 """Whether a player can pay a mana cost from what is *on the board*, and how.
 
 There are two different questions about paying, and the engine only ever
-answered one of them well. ``SpellCastingMixin._pay_mana_cost`` spends the
+answered one of them well. ``PoolPaymentMixin._pay_mana_cost`` spends the
 **pool** — the right question while casting or activating, where producing the
 mana is the player's own separate action. The other question is asked by an
 effect that must collect a cost with no priority window in between: "you may pay

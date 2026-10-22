@@ -708,7 +708,7 @@ def _candidates(
     asking about the same card the announcement was.
     """
     from .legality import targeting_instruction
-    from .mixins.stack.resolution import _controller_narrowing_is_in
+    from .mixins.stack.trigger_targets import _controller_narrowing_is_in
 
     spec = dict(announcement.spec)
     instruction = announcement.instruction

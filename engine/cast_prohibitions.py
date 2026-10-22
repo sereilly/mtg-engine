@@ -215,7 +215,7 @@ def _own_turn_only(game, seat, card, from_zone):
     # "Players can cast spells and activate abilities only during their own
     # turns." (City of Solitude.) Read off the board, not off the spell:
     # nothing about the card decides it, only whose turn it is. The activation
-    # half of the same sentence is `mixins/stack/activation.py`'s.
+    # half of the same sentence is `mixins/stack/activation_checks.py`'s.
     permanent = global_play_timing(game, seat)
     if permanent is None:
         return None

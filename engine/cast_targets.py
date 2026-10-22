@@ -350,7 +350,7 @@ def _cast_target_spec(
     # carries one set of target fields, so a second entry trigger with a target
     # of its own (a Battlemage kicked with both costs) is announced by nobody
     # here and chooses on the stack -- see
-    # ``resolution._apply_self_enters_battlefield_triggers``, which spends the
+    # ``triggered_abilities._apply_self_enters_battlefield_triggers``, which spends the
     # announcement on exactly the trigger this reads.
     return _from_instructions(viewed(_entry_trigger_instructions(program)))
 

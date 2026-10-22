@@ -9,7 +9,7 @@ files, for three different questions:
   ``parse_coverage`` that the printed line is accounted for.
 * ``enchant_targets._ENCHANT_NOUN_TO_SPEC`` — the **picker**. It turns the clause
   into the target spec ``_enumerate_targets`` offers hosts from.
-* ``mixins/stack/casting._ENCHANT_TARGET_MATCHERS`` — the **gate**. It answers
+* ``mixins/stack/cast_target_validation._ENCHANT_TARGET_MATCHERS`` — the **gate**. It answers
   "is this permanent a legal host", for the cast check (CR 601.2c), for
   ``aura_attachment.aura_attach_refusal`` and for the CR 704.5m sweep.
 
@@ -29,7 +29,7 @@ from __future__ import annotations
 import pytest
 
 from engine.faces import compilation_units
-from engine.mixins.stack.casting import (
+from engine.mixins.stack.cast_target_validation import (
     _ENCHANT_TARGET_MATCHERS,
     permanent_matches_enchant_noun,
 )
@@ -57,9 +57,9 @@ def test_every_shipped_auras_enchant_noun_has_a_matcher(catalog):
     regex admits by some other route (a colour word, a negation, a seat clause)
     still has to reach a row here once it has been split down to its head noun.
     """
-    from engine.mixins.stack.casting import aura_enchant_noun
+    from engine.mixins.stack.cast_target_validation import aura_enchant_noun
     from engine.oracle import compile_card_oracle
-    from engine.targeting import (
+    from engine.enchant_targets import (
         enchant_subject_colours,
         enchant_subject_keyword_exclusion,
         enchant_subject_seat,

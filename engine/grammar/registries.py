@@ -301,7 +301,7 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     if self_untap_line(line, card_name) is not None:
         return "untap_restrictions"
 
-    # engine/targeting.py + engine/mixins/stack/casting.py — an Aura's
+    # engine/targeting.py + engine/mixins/stack/cast_target_validation.py — an Aura's
     # "Enchant <subject>" attachment restriction (CR 702.5). It is not an effect
     # at all: `aura_enchant_noun` reads it to decide which permanents the Aura
     # may legally be cast onto, and `derive_cast_target` reads it to tell the UI

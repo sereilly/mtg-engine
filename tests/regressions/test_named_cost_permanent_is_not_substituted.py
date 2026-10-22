@@ -12,7 +12,7 @@ headless convention. For a seat that *named something* it is a substitution:
 Ertai, the Corrupted ("{U}, {T}, Sacrifice a creature or enchantment: Counter
 target spell"), told to sacrifice a Sol Ring, sacrificed **Ertai**.
 
-``AbilityActivationMixin._named_cost_refusal`` is the one check, over the
+``ActivationPaymentMixin._named_cost_refusal`` is the one check, over the
 union of the candidate lists those blocks build. The sweep below names, for
 every ability in the pool with such a cost, one permanent its own cost picker
 does **not** offer — and requires the activation to be refused with the board
