@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with
 code in this repository. It says how the code works **now**. How each rule was
-learned is in `SET_PLAYBOOK.md`'s retrospectives and in `git log`; when a set or
+learned is in `SET_RETROSPECTIVES.md` and in `git log`; when a set or
 a round changes a rule, edit the rule here in place and put the story in the
 commit message. It carries no number a tracker owns — counts live in the
 generated `*.md` trackers, so finishing a set does not edit this file to update

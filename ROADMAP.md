@@ -75,8 +75,8 @@ Anything that weakens these is a regression regardless of what it enables:
    job, and every push after it was red on the budget alone, with the suite
    passing. The readings were 2,791s, 4,698s, 4,253s, 6,312s, then **17,103s**
    (run 39354486029, 30,751 tests). That last one is 79% of GitHub's six-hour
-   job limit. The decision SET_PLAYBOOK recorded as owed (raise BUDGET, or
-   split the job) was taken by the owner as a split, in parallel.
+   job limit. The decision Odyssey's retrospective recorded as owed (raise
+   BUDGET, or split the job) was taken by the owner as a split, in parallel.
 
    **`tests/ai` was the long pole and is now two shards.** Under 3% of the
    tests had taken as long as the other two shards together. The `slow`
@@ -125,7 +125,7 @@ Anything that weakens these is a regression regardless of what it enables:
    * Growth was mild until Invasion: +16.4% tests took +18.6% runner wall
      time at 6ED, the same super-linearity ICE measured. Then it was not. The
      pool-wide censuses and the AI's whole-game simulations became the growth
-     (SET_PLAYBOOK counts sixty tests as ~41% of worker time at APC), and
+     (sixty tests were ~41% of worker time at APC), and
      round 3's through-combat rehearsal made every AI decision dearer. At
      round 4's close, locally at `-n 8`, the slowest items were all of that
      kind: the ULG simulation above, the batch over every set's casts (418s
@@ -1469,11 +1469,12 @@ one card prints this") reads as a work item long after it stopped being true.
   keys. Left alone as a merge hazard with no card behind it; take it between
   waves, not during one.
 
-- **`engine/auras.py` is 2,839 lines.** It is outside the grammar cap, but it
-  is visibly two files — the claim tables, and the attach/derive machinery from
-  `auras_attached_to` down — and it has grown 700 lines since Alliances
-  recorded the same observation at 2,111. Split before the next Aura-heavy
-  round, not during it.
+- **`engine/auras.py` is over the 2,000-line module cap** (3,773 lines, held at
+  that size in `test_module_size.OVERSIZED` until its split). It is visibly
+  two files — the claim tables, and the attach/derive machinery from
+  `auras_attached_to` down — and it has grown about 1,650 lines since
+  Alliances recorded the same observation at 2,111. The cap's split round
+  owns it; that seam is the lead to hand over.
 
 - **`_offer_to_seat` moves `context.target` to the offered seat and deliberately
   not `context.caster`**, so a bare imperative inside "each player may …" would
@@ -1590,9 +1591,12 @@ before citing it.**
     unreadable ability, an Aura whose effect line is unimplemented, a permanent
     whose lines are all markers — refused naming the clause, rather than
     resolving the readable part.
-13. **Obey a size guard rather than raising it.** `parser.py` at 1,000 lines
-    (round 31) and the per-set test files (round 33) were both split instead;
-    the guard is the signal that a family stopped absorbing new work. Take the
+13. **Obey a size guard rather than raising it.** The module cap is 2,000 lines
+    over `engine/`, `web/` and `scripts/` (`test_module_size.py`, with a band of
+    200 that Phase 0 reads), and a split leaves what it touches at about 1,500.
+    `parser.py` at the grammar's old 1,000 lines (round 31) and the per-set test
+    files (round 33) were both split instead of raised; the guard is the signal
+    that a module stopped absorbing new work by subject. Take the
     split *when it fires*: Antiquities' two (`nouns.py` → `references.py`,
     `statements.py` → `paragraphs.py`) each fell along a line the CR already
     draws — what a noun phrase describes against what it points at, a sentence
@@ -2125,26 +2129,35 @@ row on membership alone.
 
 ## Size watch
 
-The 1,000-line cap on `engine/grammar/` modules is a scheduling signal, not
-style: it fires when a family stops absorbing new work, and the split is
-cheapest while the work that crossed the line is still in hand (idiom 13).
+The 2,000-line cap on every module in `engine/`, `web/` and `scripts/`
+(`tests/engine/test_module_size.py`; per-set test files have their own 2,600)
+is a scheduling signal, not style: it fires when a module stops absorbing new
+work by subject, and the split is cheapest while the work that crossed the line
+is still in hand (idiom 13). It was the grammar's alone at 1,000 lines until
+2026-10-21; that cap cost a pre-split round before every set, because splits
+were made to just under it, while the modules outside it grew without limit.
+The band is the last **200** lines, and a split leaves every module it touches
+at about 1,500 or less. Modules that were already over on the day the cap was
+widened are held at their size in `test_module_size.OVERSIZED` until their
+split round clears them.
 
 **There is deliberately no table of the closest modules here.** It went stale
 the moment anyone worked, and at HML two groups planned around it and were
 wrong — it named five modules at 989–995 that were at 571–978, while the two
-that breached were the ones it did not name. The live reading is one line:
+that breached were the ones it did not name. The live reading is one command:
 
 ```powershell
-find engine/grammar -name "*.py" | xargs wc -l | sort -rn | head
+python scripts/integration/headroom.py    # or: python scripts/check_all.py --caps
 ```
 
-Read it at Phase 0 and pre-split every module **two or more groups will
-reach**, not the tightest ones. Stronghold priced the difference with a card:
-`lowering/characteristics.py` at 7 under was read as shared, left alone, and
-cost Spined Sliver a wave. Every cap crossed since Visions was crossed *at
-integration*, on nobody's branch, by two groups' additions summing — so a module
-one group owns can be left to that group, and the module nobody owns is the one
-that drifts.
+Read it at Phase 0 and pre-split every module inside the band, plus any that
+**two or more groups will reach** and could carry into it (`furthest.py`), not
+the tightest ones alone. Stronghold priced the difference with a card:
+`lowering/characteristics.py` at 7 under the old cap was read as shared, left
+alone, and cost Spined Sliver a wave. Every cap crossed since Visions was
+crossed *at integration*, on nobody's branch, by two groups' additions summing
+— so a module one group owns can be left to that group, and the module nobody
+owns is the one that drifts.
 
 **Every split so far fell along a line something else had already drawn.**
 Reuse the other side's family name every time so the mirror re-forms instead of
@@ -2159,8 +2172,11 @@ module two families import is a floor, not a family — `lowering/_amounts.py`
 and `lowering/_sacrifices.py` both arrived that way, when moving a shared helper
 into `_common` would have pushed *that* past the cap.
 
-**A module split needs three scans, not two**: the dead-import scan
-(`tests/engine/test_import_hygiene.py`), the missing-name scan — a `NameError`
-the moment the line runs, so run it *before* the suite; it fired three times in
-one wave — and a scan for a function left byte-identical in both halves, which
-no guard sees because the dead copy imports clean and is never reached.
+**A split is code motion**, proven by `oracle_diff` 0/0/0 and
+`sim_fingerprint` 0 moved, and it owes the six scans in `SET_PLAYBOOK.md`
+(Integration, "Module splits"): the dead-import scan, the missing-name scan —
+a `NameError` waits for its line to run, so run it *before* the suite — a scan
+for a function left byte-identical in both halves, which no guard sees because
+the dead copy imports clean and is never reached, and three more for what is
+keyed on a path, module-level execution order and what reads the module by
+name.
