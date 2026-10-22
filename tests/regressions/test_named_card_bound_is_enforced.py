@@ -10,7 +10,7 @@ invisible to every census because nothing about the compiled program is wrong.
 
 Found at Invasion's first wave while giving Desperate Research ("…other than a
 basic land card name") the same prompt, and fixed in the one place both bounds
-are answered: ``PendingChoicesMixin._named_card_breaks_printed_bound``.
+are answered: ``CardNameChoicesMixin._named_card_breaks_printed_bound``.
 
 The engine holds no card catalog, so a card *type* cannot be asked of a bare
 name. It is asked of every card in the game bearing that name — which is exact

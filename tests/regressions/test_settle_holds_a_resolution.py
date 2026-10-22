@@ -173,7 +173,7 @@ class TestAnAnsweredPromptLeavesTheQueue:
     ever invisible.
 
     ``_resolve_pay_any_amount`` never took its own choice off the queue, which
-    every sibling resolver in ``mixins/stack/choices.py`` does. The AI and
+    every sibling resolver in ``mixins/stack/choices/`` does. The AI and
     headless path hid it: ``auto_resolve_pending_choices`` drops a defaulted
     choice itself. A *confirmed* one stayed queued with ``_answered`` stamped on
     it, and ``waiting_prompt`` reads the queue — so once Liege of the Hollows had

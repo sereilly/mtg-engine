@@ -1419,8 +1419,8 @@ CHOSEN_CARD_TYPE_THIS_WAY = "chosen_card_type_this_way"
 #: player the moment any one of them sacrificed the named card.
 #:
 #: Here rather than beside either writer for ``CHOSEN_THIS_WAY_OBJECTS``'
-#: reason: ``mixins/stack/choices.py`` writes it at both of its sacrifice
-#: sites, ``handlers/damage.py`` reads it, and
+#: reason: ``mixins/stack/choices/sacrifice.py`` writes it at both of its
+#: sacrifice sites, ``handlers/damage.py`` reads it, and
 #: ``grammar/lowering/_records._PRODUCES`` declares it.
 SACRIFICED_CARDS_BY_SEAT = "sacrificed_cards_by_seat"
 
@@ -1437,7 +1437,8 @@ SACRIFICED_CARDS_BY_SEAT = "sacrificed_cards_by_seat"
 #: A second key rather than a length taken at the reader, for that pair's reason
 #: exactly: the two questions have different answers the moment a card asks
 #: *which* were sacrificed with a narrowing on it. Written at the one place both
-#: sacrifice paths record a card (``mixins/stack/choices._record_sacrificed_card``),
+#: sacrifice paths record a card
+#: (``mixins/stack/choices/sacrifice._record_sacrificed_card``),
 #: so an interactive seat's answer and a non-interactive seat's inline
 #: resolution cannot record different numbers.
 SACRIFICED_COUNT = "sacrificed_count"
@@ -1657,7 +1658,7 @@ BIDDING_WINNER = "bidding_winner"
 #: over the same slots with the chosen half moving instead. One word, written
 #: by the parse onto ``ast.KeepChosenSacrificeRest.fate``, carried by the
 #: lowering under the payload key ``fate`` and performed by the prompt's own
-#: resolver (``mixins/stack/choices._return_the_chosen``).
+#: resolver (``mixins/stack/choices/sacrifice._return_the_chosen``).
 #:
 #: ``KEEP_FATES`` is the closed vocabulary, read by the lowering's gate and by
 #: the prompt's: a fate admitted with no performer would be a card that asks

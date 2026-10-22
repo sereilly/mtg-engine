@@ -8,6 +8,7 @@ mixin each, composed onto :class:`~engine.game.Game` the same way
     activation   AbilityActivationMixin  CR 602 — activate a permanent's ability
     resolution   StackResolutionMixin    CR 603/608 — trigger, resolve, clean up
     choices      PendingChoicesMixin     the arm / confirm / auto-resolve queue
+                 (+ one mixin per prompt family; a package, see its __init__)
 
 The split is along "what stage of the object's life is this?", which is why
 ``choices`` exists as its own module rather than staying inside the two that arm
@@ -16,7 +17,9 @@ auto-resolve triple is only recognisable as one pattern when its 33 members sit
 together.
 
 The four are disjoint — no method moved between them and none is overridden, so
-composition order carries no meaning.
+composition order carries no meaning. ``choices`` outgrew one module at 13,312
+lines and is a package now: ``PendingChoicesMixin`` is still the queue, and each
+family of prompt beside it is a mixin ``Game`` composes immediately after it.
 """
 
 from .activation import AbilityActivationMixin
@@ -27,12 +30,42 @@ from .casting import (
     enchant_seat_satisfied,
     permanent_matches_enchant_noun,
 )
-from .choices import PendingChoicesMixin
+from .choices import (
+    PendingChoicesMixin,
+    ReplacementChoicesMixin,
+    LibrarySearchChoicesMixin,
+    LibraryChoicesMixin,
+    HandChoicesMixin,
+    PileChoicesMixin,
+    ValueChoicesMixin,
+    CardNameChoicesMixin,
+    NumberChoicesMixin,
+    PermanentChoicesMixin,
+    PaymentChoicesMixin,
+    OptionalPayChoicesMixin,
+    TriggerChoicesMixin,
+    SpellChoicesMixin,
+    SacrificeChoicesMixin,
+)
 from .resolution import StackResolutionMixin
 
 __all__ = [
     "AbilityActivationMixin",
     "PendingChoicesMixin",
+    "ReplacementChoicesMixin",
+    "LibrarySearchChoicesMixin",
+    "LibraryChoicesMixin",
+    "HandChoicesMixin",
+    "PileChoicesMixin",
+    "ValueChoicesMixin",
+    "CardNameChoicesMixin",
+    "NumberChoicesMixin",
+    "PermanentChoicesMixin",
+    "PaymentChoicesMixin",
+    "OptionalPayChoicesMixin",
+    "TriggerChoicesMixin",
+    "SpellChoicesMixin",
+    "SacrificeChoicesMixin",
     "SpellCastingMixin",
     "StackResolutionMixin",
     "aura_enchant_noun",

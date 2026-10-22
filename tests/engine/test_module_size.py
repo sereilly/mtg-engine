@@ -44,7 +44,6 @@ AREAS = ("engine", "web", "scripts")
 #: two groups' deletions from touching in a merge.
 OVERSIZED: dict[str, int] = {
     # --- S1 ---
-    "engine/mixins/stack/choices.py": 13312,
     # --- S2 ---
     "engine/handlers/zones.py": 11769,
     "engine/handlers/_common.py": 3838,

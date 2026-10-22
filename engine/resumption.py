@@ -10,7 +10,7 @@ A decision can interrupt an event part-way. Two things do it today:
   re-run; the loop simply carries on from where it stopped.
 
 Both arrive through ``arm_pending_choice`` and leave through the one completion
-path in ``engine/mixins/stack/choices.py``, so what sets and clears
+path in ``engine/mixins/stack/choices/queue.py``, so what sets and clears
 ``game.effect_suspended`` is the spec, not the caller.
 
 Re-running the *event* is not enough when the event was one step of a loop. A
