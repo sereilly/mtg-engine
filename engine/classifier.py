@@ -22,7 +22,7 @@ def classify_card(card: CardDefinition) -> CardClassification:
     compiled. That is the widened-gate shape — the gate stands in for "is every
     line of this card read?" and answers "does some line of it work?" — and it
     reached further than a census, because `mixins/stack/casting.py`,
-    `web/catalog.py` and `engine/ai_policy.py` all ask this question rather than
+    `web/catalog.py` and `engine/ai_scoring.py` all ask this question rather than
     the compiler's: the card was castable, browsable and playable with a printed
     trigger silently doing nothing.
 

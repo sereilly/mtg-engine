@@ -29,10 +29,10 @@ from __future__ import annotations
 import pytest
 
 from engine import Game, PlayerState
-from engine.ai_policy import _cast_candidate, given_back_first
-from engine.ai_valuation import (entry_self_return_gate,
-                                 entry_trigger_seat_side,
-                                 several_target_slot_sides)
+from engine.ai_casts import _cast_candidate
+from engine.ai_cast_gates import given_back_first
+from engine.ai_valuation import entry_self_return_gate
+from engine.ai_target_sides import entry_trigger_seat_side, several_target_slot_sides
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units
 from engine.models import Permanent

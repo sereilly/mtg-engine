@@ -1,19 +1,19 @@
 """An activated ability naming several targets aims each one at its own board.
 
-`ai_policy._choose_activation_role_targets` took **one** side for the whole
+`ai_abilities._choose_activation_role_targets` took **one** side for the whole
 chain — and none at all unless a role was a seat, so the walk took the first
 option at each level, which is the first board in seat order. "Until end of
 turn, target creature with the chosen ability loses it and **another target
 creature** gains it" (Phyrexian Splicer) therefore named two of the
 activator's own creatures: {2} and a tap to move its own flying from one of
 its creatures to another. The cast side learned a side per role at Planeshift
-(`ai_valuation.role_target_sides`); the activation side asks the same
-derivation now (`ai_valuation.ability_role_target_sides`).
+(`ai_target_sides.role_target_sides`); the activation side asks the same
+derivation now (`ai_target_sides.ability_role_target_sides`).
 """
 from __future__ import annotations
 
 from engine import Game, PlayerState
-from engine.ai_policy import choose_activation_action
+from engine.ai_abilities import choose_activation_action
 from engine.ai_simulator import SimulationReport, _play_activations
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units

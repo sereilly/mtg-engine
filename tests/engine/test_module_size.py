@@ -46,8 +46,6 @@ OVERSIZED: dict[str, int] = {
     # --- S1 ---
     # --- S2 ---
     # --- S3 ---
-    "engine/ai_policy.py": 9198,
-    "engine/ai_valuation.py": 4935,
     # --- S4 ---
     # --- S5 ---
     # --- S6 ---

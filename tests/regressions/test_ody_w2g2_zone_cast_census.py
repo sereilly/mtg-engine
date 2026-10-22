@@ -80,8 +80,9 @@ from collections import Counter
 import pytest
 
 from engine import Game, PlayerState
-from engine.ai_policy import (cast_announcement, choose_cast_action,
-                              spell_being_cast, tap_planned_lands)
+from engine.ai_actions import cast_announcement, spell_being_cast
+from engine.ai_policy import choose_cast_action
+from engine.ai_payment import tap_planned_lands
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.cast_permissions import grant_permission
 from engine.faces import castable_faces
@@ -254,12 +255,12 @@ def execute(game, action):
     zone it names, tap the plan, make the announcement — and answer what the
     resolution asks (a search, a discard) with the seat's defaults, as the
     simulator does after every cast, so the spell has left the stack."""
-    from engine import ai_policy
+    from engine import ai_actions
 
     # Looked up rather than imported so this sweep still runs on the tree
     # before the change, where every executor read the hand — which is how it
     # was validated backwards.
-    finder = getattr(ai_policy, "zone_being_cast_from", None)
+    finder = getattr(ai_actions, "zone_being_cast_from", None)
     zone = game.players[ME].hand if finder is None else finder(game, ME, action)
     spell = spell_being_cast(zone, action)
     tap_planned_lands(game, ME, action)
@@ -503,7 +504,7 @@ def test_a_flashback_card_in_the_graveyard_is_cast_from_it(flashback_rows):
     proposed = {row["card"] for row in flashback_rows if row["proposed"]}
     # The five above, held from the graveyard too: Skull Fracture's cast out
     # of it was a change only by its own trip to exile, which a rehearsal now
-    # takes out as it takes out a hand card's (`ai_valuation.same_position`).
+    # takes out as it takes out a hand card's (`ai_rehearsal.same_position`).
     assert len(proposed) >= 23
 
 

@@ -17,7 +17,7 @@ import pytest
 from engine.faces import compilation_units
 from engine import Game, PlayerState
 from engine.activation_permissions import card_widens_activation
-from engine.ai_policy import (
+from engine.ai_abilities import (
     FOREIGN_ACTIVATION_LIFE_RESERVE,
     choose_activation_action,
     choose_foreign_activation_action,

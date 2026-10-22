@@ -398,8 +398,12 @@ _PRINTED_PRIMARY_TYPE = re.compile(r"\.card\.primary_type\b")
 PRIMARY_TYPE_BASELINE: dict[str, int] = {
     # **Untriaged still**: which cards a weight reaches (``choose_*``'s
     # counts of an opponent's lands and creatures). Each wants the judgement
-    # the others got, in the module whose round it is.
-    "ai_policy.py": 8,
+    # the others got, in the module whose round it is. (One module,
+    # ``ai_policy.py``, until the 2,000-line split.)
+    "ai_abilities.py": 1,
+    "ai_declarations.py": 3,
+    "ai_policy.py": 1,
+    "ai_scoring.py": 3,
     # **A spell on the stack, not a permanent.** ``item.card`` is the card as
     # it was cast — for a split card the half (CR 709.3b) — and CR 613 has no
     # permanent to ask: "copy target instant or sorcery spell" (Fork), "an
@@ -557,7 +561,9 @@ _PRINTED_MANA_VALUE = re.compile(r"\.card\.cmc\b")
 
 #: module -> how many printed mana-value reads survive. Untriaged AI weights.
 PRINTED_MANA_VALUE_BASELINE: dict[str, int] = {
-    "ai_policy.py": 4,
+    "ai_abilities.py": 2,
+    "ai_cast_gates.py": 1,
+    "ai_scoring.py": 1,
 }
 
 

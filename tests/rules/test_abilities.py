@@ -1324,7 +1324,7 @@ def test_603_5_a_declined_tolls_unless_part_is_dealt_with_at_resolution():
     """The "unless" half of CR 603.5: the consequence is "dealt with when the
     ability resolves", whichever way the option goes. Here the seat nobody
     asked *declines* — the two losses are compared now
-    (`ai_policy.toll_decline_is_smaller_loss`; a creature outprices a tap) —
+    (`ai_prompts.toll_decline_is_smaller_loss`; a creature outprices a tap) —
     and the rule's demand is that the printed consequence then actually lands:
     the enchantment taps, and the creature the seat kept stays. The paying
     arm of the same comparison is `tests/ai/test_ai_toll_valuation.py`."""

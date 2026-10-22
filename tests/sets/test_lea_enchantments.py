@@ -6,13 +6,10 @@ card each test names. See tests/sets/README.md for the convention.
 
 from __future__ import annotations
 
-from engine.ai_policy import (
-    choose_cast_action,
-    choose_activation_action,
-    choose_combat_blockers,
-    choose_combat_instant_cast_action,
-    choose_reorder_library_order,
-)
+from engine.ai_policy import choose_cast_action, choose_combat_instant_cast_action
+from engine.ai_abilities import choose_activation_action
+from engine.ai_declarations import choose_combat_blockers
+from engine.ai_prompts import choose_reorder_library_order
 from engine import Game, PlayerState, classify_card, load_cards
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle, lex_oracle_text, parse_activated_ability_cost

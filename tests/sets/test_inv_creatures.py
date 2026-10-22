@@ -595,7 +595,7 @@ def test_w1g4_the_ai_leaves_an_unescorted_puma_at_home(set_pool):
     that creature alone rather than proposing a set the engine refuses whole,
     and beside a green one it sends both.
     """
-    from engine.ai_policy import choose_attackers
+    from engine.ai_declarations import choose_attackers
 
     inv, lea = set_pool("INV"), set_pool("LEA")
     for escort, expected in (("Savannah Lions", {"Savannah Lions"}),

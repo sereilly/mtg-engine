@@ -478,7 +478,7 @@ def test_w1g5_vengeful_dreams_cannot_name_a_creature_that_is_not_attacking(set_p
 # ==== W1G6 ==========================================================
 # W1G6's tests go between this line and the "end W1G6" line.
 from engine import Game as _W1G6Game, PlayerState as _W1G6PlayerState  # noqa: E402
-from engine import ai_policy as _w1g6_ai_policy  # noqa: E402
+from engine import ai_casts as _w1g6_ai_casts  # noqa: E402
 from tests.helpers import resolve_stack as _w1g6_resolve_stack  # noqa: E402
 
 
@@ -524,7 +524,7 @@ def test_w1g6_liquify_cannot_be_announced_at_a_spell_with_mana_value_four(
     assert not refused.supported
     assert "Liquify" in [c.name for c in game.players[0].hand]
     assert len(game.stack) == 1
-    assert _w1g6_ai_policy._cast_candidate(
+    assert _w1g6_ai_casts._cast_candidate(
         game, 0, liquify, game.players[0].hand.index(liquify),
     ) is None
     _w1g6_resolve_stack(game)

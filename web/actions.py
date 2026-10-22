@@ -19,7 +19,7 @@ import random
 from fastapi import HTTPException
 
 from engine.activation_permissions import card_widens_activation
-from engine.ai_valuation import mid_resolution
+from engine.ai_rehearsal import mid_resolution
 from engine.cast_permissions import permission_for
 from engine.cast_timing import casts_at_instant_speed
 from engine.faces import choose_a_face_refusal, holds_spell_named, spell_named

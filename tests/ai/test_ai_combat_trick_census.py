@@ -7,7 +7,7 @@ a cast made in its caster's precombat main phase did **to the combat after
 it** was not in the price: a Giant Growth was a quarter of the body it lent
 whether or not the creature then attacked, a Fog in the caster's own main
 phase "changed" a turn flag and stopped only its caster's own attack, and
-Hatred was the life it cost. ``ai_policy._weighed_through_the_fight`` reads
+Hatred was the life it cost. ``ai_scoring._weighed_through_the_fight`` reads
 such a cast a second time with the turn's combat fought.
 
 **The population** is every supported instant and sorcery — each mode of a
@@ -74,7 +74,7 @@ any target", whose target was still chosen with no fight in the reading;
 Hatred at an X of ten), 13 losses, 8 smaller and 22 mispriced. Now, over
 247 ``(card, mode)``s of 241 cards: the twenty pinned below, none of them
 the fight's. (Four more are in the population because the digest the
-census compares with, ``ai_valuation.position_digest``, now reads exile and
+census compares with, ``ai_rehearsal.position_digest``, now reads exile and
 the standing permissions by name.)
 
 The whole pool takes several minutes, so the suite runs a fixed share of the
@@ -99,11 +99,20 @@ import pytest
 
 from engine import Game, PlayerState
 from engine.ai_combat import run_ai_combat_phase
-from engine.ai_policy import (SPELL_BASE_SCORE, SWING_CAP, cast_announcement,
-                              choose_cast_action, tap_planned_lands)
-from engine.ai_valuation import (CARD_WORTH, permitted_casts, position_digest,
-                                 same_position, scratch_copy, standing_swing,
-                                 standings, swing_worth)
+from engine.ai_scoring import SPELL_BASE_SCORE, SWING_CAP
+from engine.ai_actions import cast_announcement
+from engine.ai_policy import choose_cast_action
+from engine.ai_payment import tap_planned_lands
+from engine.ai_rehearsal import (
+    CARD_WORTH,
+    position_digest,
+    same_position,
+    scratch_copy,
+    standing_swing,
+    standings,
+    swing_worth,
+)
+from engine.ai_weighed_cast import permitted_casts
 from engine.damage_events import DAMAGED_THIS_GAME
 from engine.mixins._constants import phases_after
 from engine.models import Permanent
@@ -292,7 +301,7 @@ def template(card, name: str) -> dict:
 
 def casts_open(game) -> set:
     """``(zone, spell)`` for every cast seat 0 may make from outside its
-    hand (``ai_valuation.permitted_casts``, the engine's list)."""
+    hand (``ai_weighed_cast.permitted_casts``, the engine's list)."""
     return {(permitted.zone, permitted.spell.name) for permitted in permitted_casts(game, ME)}
 
 
@@ -324,7 +333,7 @@ def read(card, built: dict, layout: Layout, game, moved: bool, made_mana: bool) 
     priced by a fight still to come.
 
     The card a cast is made with is given back, as the policy gives it back
-    (``ai_valuation.rehearse``), so a spell bought back is a card to the
+    (``ai_rehearsal.rehearse``), so a spell bought back is a card to the
     good; whether anything *else* changed is asked without it."""
     now = standing_swing(built["now"], standings(game), ME) + CARD_WORTH
     # A fight still to come, read off the board the cast left: the turn's
@@ -537,7 +546,7 @@ def findings(rows) -> dict:
 #: same with no combat in it.
 
 #: "Switch target creature's power and toughness until end of turn" is aimed
-#: by its side (``ai_valuation.instruction_target_side``), which reads a
+#: by its side (``ai_target_sides.instruction_target_side``), which reads a
 #: switch as a gift to the caster's own board. Across the table, at a 0/4
 #: Wall, it is a 4/0 that dies — a removal spell, and not a combat trick.
 _SWITCH = "a switch is read as the caster's own; at the opposing 0/4 it kills"
@@ -547,9 +556,9 @@ _SWITCH = "a switch is read as the caster's own; at the opposing 0/4 it kills"
 #: point of damage the attacker loses.
 _OWN_ONLY = "its side is the opponent's and its one target is the caster's own; the card it draws is worth more"
 #: "All creatures get +X/-X": an X in mana is announced at the largest the
-#: seat can pay (``ai_policy._max_affordable_x``), which kills the caster's
+#: seat can pay (``ai_payment._max_affordable_x``), which kills the caster's
 #: own 2/2; at one it attacks for three. Sized by what each size does only
-#: where the X is life (``ai_policy._cast_candidate_sized``).
+#: where the X is life (``ai_casts._cast_candidate_sized``).
 _MANA_X = "an X in mana is the largest affordable, and +X/-X at that kills the attacker"
 HELD: dict = {
     ("About Face", None, "wall"): _SWITCH,
@@ -563,7 +572,7 @@ HELD: dict = {
 }
 #: Desperate Gambit flips a coin: won, the chosen source's next damage this
 #: turn is doubled; lost, it is prevented. A rehearsal's randomness is its own
-#: on purpose (``ai_valuation._rehearsal_seed``) — it says what such a cast is
+#: on purpose (``ai_rehearsal._rehearsal_seed``) — it says what such a cast is
 #: *like* and must not say how the real flip will fall. The rehearsal's
 #: sample won it; this census's cast, on its own seed, lost.
 _COIN = "a coin flip: the rehearsal's sample won it, the cast lost it"
@@ -575,7 +584,7 @@ LOSSES: dict = {
 #: Soul Burn, "Spend only black and/or red mana on X. Soul Burn deals X
 #: damage to any target. You gain life equal to the damage dealt, but not
 #: more than the amount of {B} spent on X": the policy announces the X its
-#: planner affords under the spend restriction (``ai_policy._max_affordable_x``),
+#: planner affords under the spend restriction (``ai_payment._max_affordable_x``),
 #: five, from a pool of six black and six red. It is in this population because
 #: one cast of it — one damage to its own caster, one life back — leaves
 #: nothing; the fight has nothing to do with the X.

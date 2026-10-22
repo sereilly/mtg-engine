@@ -2,7 +2,7 @@
 
 `ai_policy.choose_cast_action` read the hand and nothing else, so an AI seat's
 commander sat in the command zone for the whole game and Commander-vs-AI was a
-handicap match. The castability read is `ai_valuation.castable_commanders` —
+handicap match. The castability read is `ai_weighed_cast.castable_commanders` —
 the engine's own seam (`may_cast_from_command_zone`, `commander_tax`), so the
 AI is offered exactly the casts the browser badges for a human seat — and the
 weight (`COMMAND_ZONE_CAST_BONUS`) lives in `ai_policy` like every other one.
@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from engine import Game, PlayerState
 from engine.ai_policy import choose_cast_action
-from engine.ai_valuation import castable_commanders
+from engine.ai_weighed_cast import castable_commanders
 from engine.commander import BRAWL, COMMANDER
 from engine.models import Permanent
 
@@ -41,7 +41,7 @@ def _commander_game(set_pool, *, mountains: int, variant: str = COMMANDER) -> Ga
     return game
 
 
-# --- the valuation read (ai_valuation.castable_commanders) -------------------
+# --- the valuation read (ai_weighed_cast.castable_commanders) -------------------
 
 
 def test_castable_commanders_names_the_commander_and_its_tax(set_pool):

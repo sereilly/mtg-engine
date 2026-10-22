@@ -138,7 +138,7 @@ def test_w1g4_the_ai_prices_the_domain_spells_at_the_reduced_cost(set_pool):
     ``cost_reduction_for_cast`` the cast does. Priced at the printed {16} it
     would never propose Draco; priced cheap where it is not, it would propose
     a cast the rules refuse every turn."""
-    from engine.ai_policy import _cost_for
+    from engine.ai_payment import _cost_for
 
     pls = set_pool("PLS")
     for lands, stratadon, draco in (
@@ -533,7 +533,7 @@ _W1G4_FAMILIARS = (
 
 
 def _w1g4_generic_cost(game, seat, card):
-    from engine.ai_policy import _cost_for
+    from engine.ai_payment import _cost_for
 
     return _cost_for(game, game.players[seat], card, None)["generic"]  # _w1g4_generic_cost
 
@@ -1374,7 +1374,7 @@ def test_w1g6_guard_dogs_resolves_whole_for_a_seat_nobody_asks(set_pool):
     default was the first candidate in board order — the white Dogs, which
     share no colour with the red Giant, so the ability was paid for and
     prevented nothing. It is the first candidate that shares a colour with the
-    target now (PLS W2G5, `ai_valuation.pick_is_tested_for_a_shared_color`):
+    target now (PLS W2G5, `ai_prompt_readers.pick_is_tested_for_a_shared_color`):
     the red Goblin Raiders, and the damage is prevented."""
     game, owed = _w1g6_dogs_combat(set_pool, None, interactive=())
     assert owed == [] and game.pending_choices == []
@@ -2010,7 +2010,7 @@ def test_w1g7_meddling_mage_names_something_for_a_seat_nobody_asks(set_pool):
 def test_w1g7_meddling_mage_takes_the_named_card_off_the_ais_proposals(set_pool):
     """A refused cast spends nothing, so a seat that kept proposing the named
     card would do nothing else for as long as the Mage stood."""
-    from engine.ai_policy import _can_cast_with_targets
+    from engine.ai_cast_gates import _can_cast_with_targets
 
     bears = set_pool("LEA")["Grizzly Bears"]
     wolves = set_pool("LEA")["Timber Wolves"]

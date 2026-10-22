@@ -1224,7 +1224,7 @@ def test_508_1c_a_noun_the_reader_refuses_leaves_the_card_unsupported():
 
 import pytest
 
-from engine import Game, PlayerState, ai_policy
+from engine import Game, PlayerState, ai_declarations
 from engine.combat_restrictions import combat_restriction_for
 from engine.models import Permanent
 from engine.tokens import make_token_card
@@ -1295,7 +1295,7 @@ def test_the_ai_declares_the_attackers_a_set_requirement_compels():
     every combat — the seat attacks with nobody all game rather than with
     everybody."""
     game, p0, p1 = _w2g2_pirate_board()
-    assert sorted(ai_policy.choose_attackers(game, 0)) == [0, 1]
+    assert sorted(ai_declarations.choose_attackers(game, 0)) == [0, 1]
 
 
 @pytest.mark.cr("508.1d")

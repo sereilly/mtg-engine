@@ -26,7 +26,7 @@ import random
 
 from engine import Game, PlayerState, load_cards
 from engine.models import Permanent
-from engine.ai_policy import choose_attackers
+from engine.ai_declarations import choose_attackers
 from engine.oracle import compile_card_oracle
 from engine.text_changes import changed_words
 from tests.helpers import _damage_dealt, _game, resolve_stack

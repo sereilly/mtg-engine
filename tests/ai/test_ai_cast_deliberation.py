@@ -1,9 +1,9 @@
 """One cast decision reads the table with nothing cast **once**.
 
 Every card ``choose_cast_action`` weighs is measured against the same table
-with nothing cast (``ai_valuation.rehearse``), and that reading is a copy of
+with nothing cast (``ai_rehearsal.rehearse``), and that reading is a copy of
 the game run out to the end of its turn. Each card took its own: the
-deliberation that keeps the reading (``ai_valuation.deliberating``) was opened
+deliberation that keeps the reading (``ai_rehearsal.deliberating``) was opened
 per card, so a hand of two removal spells read one table twice.
 
 It is cost and nothing else, and the tests here say so two ways: the count of
@@ -20,8 +20,9 @@ from unittest import mock
 import pytest
 
 from engine import Game, PlayerState
-from engine import ai_policy, ai_valuation
-from engine.ai_policy import cast_announcement, choose_cast_action
+from engine import ai_policy, ai_rehearsal, ai_scoring
+from engine.ai_actions import cast_announcement
+from engine.ai_policy import choose_cast_action
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units
 from engine.models import Permanent
@@ -60,9 +61,9 @@ class _Counted:
 
     def __init__(self) -> None:
         self.tally: Counter = Counter()
-        real_copy = ai_valuation.scratch_copy_with
-        real_untouched = ai_valuation._untouched
-        real_rehearse = ai_valuation._rehearse
+        real_copy = ai_rehearsal.scratch_copy_with
+        real_untouched = ai_rehearsal._untouched
+        real_rehearse = ai_rehearsal._rehearse
 
         def copy(game, carried):
             self.tally["copies"] += 1
@@ -79,9 +80,9 @@ class _Counted:
             return real_rehearse(*args, **asked)
 
         self.patches = [
-            mock.patch.object(ai_valuation, "scratch_copy_with", copy),
-            mock.patch.object(ai_valuation, "_untouched", untouched),
-            mock.patch.object(ai_valuation, "_rehearse", rehearse),
+            mock.patch.object(ai_rehearsal, "scratch_copy_with", copy),
+            mock.patch.object(ai_rehearsal, "_untouched", untouched),
+            mock.patch.object(ai_rehearsal, "_rehearse", rehearse),
         ]
 
     def __enter__(self) -> Counter:
@@ -165,9 +166,9 @@ def test_one_announcement_paid_for_two_ways_is_two_rehearsals(pool):
     action = choose_cast_action(game, ME)
     assert action is not None and action.land_tap_indices == (0,)
     other = ai_policy.replace(action, land_tap_indices=(1,))
-    with _Counted() as tally, ai_valuation.deliberating():
+    with _Counted() as tally, ai_rehearsal.deliberating():
         for planned in (action, action, other, other):
-            rehearsal = ai_policy._rehearse_announcement(
+            rehearsal = ai_scoring._rehearse_announcement(
                 game, ME, bolt, cast_announcement(planned), planned=planned,
             )
             assert rehearsal is not None and rehearsal.accepted

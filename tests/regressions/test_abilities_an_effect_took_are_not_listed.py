@@ -33,7 +33,7 @@ from __future__ import annotations
 import pytest
 
 from engine import Game, PlayerState
-from engine.ai_policy import choose_activation_action
+from engine.ai_abilities import choose_activation_action
 from engine.card_loader import load_catalog
 from engine.land_types import change_land_type
 from engine.models import Permanent

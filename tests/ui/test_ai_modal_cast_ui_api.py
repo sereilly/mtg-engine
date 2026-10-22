@@ -1,6 +1,6 @@
 """The web AI casts a modal spell in the mode its policy chose (CR 601.2b).
 
-``engine.ai_policy.cast_announcement`` is the one function that turns a
+``engine.ai_actions.cast_announcement`` is the one function that turns a
 ``CastAction`` into a cast, and ``web/game_flow`` has four sites that make one:
 the AI step's two arms (a human across the table — the spell waits on the
 stack; no human — it resolves), the priority response, and the

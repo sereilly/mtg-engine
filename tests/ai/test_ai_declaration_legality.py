@@ -3,7 +3,7 @@ prints? (CR 508.1c.)
 
 A census rather than a handful of cases, and the reason is the failure it was
 written for. ``engine/legality.attack_declaration_refusal`` is the predicate
-``ai_policy._legal_declaration`` prunes against, and until W2G4 it did not
+``ai_declarations._legal_declaration`` prunes against, and until W2G4 it did not
 include either attack **cap**: those were checked inline in
 ``declare_attackers`` and nowhere else. So the AI proposed an over-cap set, the
 declaration refused it *whole*, and ``web/combat_prompts._ai_declare_attackers``
@@ -34,7 +34,7 @@ import pytest
 
 from engine.faces import compilation_units
 from engine import Game, PlayerState
-from engine.ai_policy import choose_attackers
+from engine.ai_declarations import choose_attackers
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
@@ -214,7 +214,7 @@ def test_the_ai_can_declare_at_one_seat_of_three_under_a_per_defender_cap(set_po
     game.advance_combat_phase()
     assert game.current_step == "declare_attackers"
 
-    from engine.ai_policy import choose_attack_target
+    from engine.ai_scoring import choose_attack_target
 
     target = choose_attack_target(game, 0)
     proposed = choose_attackers(game, 0)
@@ -229,7 +229,7 @@ def test_the_ai_can_declare_at_one_seat_of_three_under_a_per_defender_cap(set_po
 # The entry above was fixed at W2G4 and its blocking twin was declined there
 # with its parts named. This is that twin, and the failure was identical: the
 # three declaration-wide block restrictions lived inline in `declare_blockers`
-# and nowhere else, so `ai_policy.choose_combat_blockers` pruned against
+# and nowhere else, so `ai_declarations.choose_combat_blockers` pruned against
 # nothing at all. It proposed a map the gate refused **whole**,
 # `ai_combat.declare_ai_blockers` fell through to `{}` and `web/game_flow` to a
 # safety valve that wipes *every* seat's blocks — so the defender blocked with
@@ -242,7 +242,7 @@ def test_the_ai_can_declare_at_one_seat_of_three_under_a_per_defender_cap(set_po
 # rise once the prune lands. The census still goes here, because a test is
 # where a declaration is guaranteed to happen.
 
-from engine.ai_policy import choose_combat_blockers  # noqa: E402
+from engine.ai_declarations import choose_combat_blockers  # noqa: E402
 
 #: The instruction kinds that refuse a *block declaration* rather than a pairing
 #: (CR 509.1b). Each is a restriction `_can_block_attacker` structurally cannot

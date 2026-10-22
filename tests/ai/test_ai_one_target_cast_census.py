@@ -1,7 +1,7 @@
 """Census: does an AI seat cast a one-object spell when the board offers exactly
 one legal target, on the side the spell's effect wants?
 
-``ai_policy._can_cast_with_targets`` carries three *preference arms* — "is
+``ai_cast_gates._can_cast_with_targets`` carries three *preference arms* — "is
 there something on the opponent's board worth destroying", and the like —
 and two of them answered with a matcher of their own instead of the engine's
 list. The mode chooser's census found them, because a mode is cast or not on
@@ -44,7 +44,7 @@ creature with no fight to decide — cast, each of them, at a quarter of what
 it lent (or for the turn's record of who dealt damage), until the policy
 weighed a precombat cast through the turn's combat and read the turn's end
 as the next turn begins. Hatred left ``DECLINED`` the other way: it is cast
-now, at the size of X that does most (``ai_policy._cast_candidate_sized``),
+now, at the size of X that does most (``ai_casts._cast_candidate_sized``),
 where the life buys damage that gets through.
 
 Run it as a module (``python -m tests.ai.test_ai_one_target_cast_census``) for
@@ -59,8 +59,8 @@ import pytest
 
 from engine import Game, PlayerState
 from engine.ai_policy import choose_cast_action
-from engine.ai_valuation import (instruction_target_side, scratch_copy,
-                                 standings)
+from engine.ai_target_sides import instruction_target_side
+from engine.ai_rehearsal import scratch_copy, standings
 from engine.auras import attach_aura
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units

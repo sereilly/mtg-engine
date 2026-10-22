@@ -27,8 +27,9 @@ from __future__ import annotations
 import pytest
 
 from engine import Game, PlayerState
-from engine.ai_policy import (cast_announcement, choose_cast_action,
-                              tap_planned_lands)
+from engine.ai_actions import cast_announcement
+from engine.ai_policy import choose_cast_action
+from engine.ai_payment import tap_planned_lands
 from engine.cast_costs import additional_costs, cast_announces_x
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle

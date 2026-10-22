@@ -48,7 +48,7 @@ def test_classify_card_never_widens_the_compilers_answer():
     compiled. That is the widened-gate shape — the question is "is every line of
     this card read?" and the answer given was "does some line of it work?" — and
     it was not confined to a census: `mixins/stack/casting.py`, `web/catalog.py`
-    and `engine/ai_policy.py` all ask this rather than the compiler, so such a
+    and `engine/ai_scoring.py` all ask this rather than the compiler, so such a
     card was castable and playable with a printed trigger doing nothing.
 
     Over the shipped **and** measured pool, because the one card it was hiding

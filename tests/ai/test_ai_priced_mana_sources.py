@@ -11,10 +11,10 @@ This is the cheap half of ROADMAP's "costed and sacrifice mana sources". A
 price paid in **mana** moves nothing on the battlefield — the reason the
 sacrifice sources are still out — but it needs an *input*, a unit from another
 source in the pool before the source is activated, and that is an ordering
-problem: `ai_policy._plan_through_a_priced_source` puts the tap that pays the
+problem: `ai_payment._plan_through_a_priced_source` puts the tap that pays the
 price immediately in front of the source.
 
-Deliberately narrow (`ai_policy._priced_mana_source`): generic mana and {T},
+Deliberately narrow (`ai_mana_sources._priced_mana_source`): generic mana and {T},
 nothing else, on a permanent with no other mana ability. The census below
 counts what that admits and what it leaves, over both manifest roles.
 """
@@ -22,11 +22,16 @@ from __future__ import annotations
 
 import pytest
 
-from engine import Game, PlayerState, ai_policy, ai_simulator
-from engine.ai_policy import (CastAction, _plan_land_taps, _priced_mana_source,
-                              cast_announcement, choose_cast_action,
-                              spell_being_cast, tap_planned_lands,
-                              zone_being_cast_from)
+from engine import Game, PlayerState, ai_payment, ai_simulator
+from engine.ai_actions import (
+    CastAction,
+    cast_announcement,
+    spell_being_cast,
+    zone_being_cast_from,
+)
+from engine.ai_payment import _plan_land_taps, tap_planned_lands
+from engine.ai_mana_sources import _priced_mana_source
+from engine.ai_policy import choose_cast_action
 from engine.card_loader import load_cards, manifest_set_path, manifest_set_paths
 from engine.faces import compilation_units
 from engine.mana_payment import is_mana_ability
@@ -248,7 +253,7 @@ def test_without_the_fallback_none_of_them_is_planned(rows, monkeypatch):
     """Backwards: take the priced arm away and every admitted source is a
     permanent no plan reaches, which is the tree before the change."""
     monkeypatch.setattr(
-        ai_policy, "_plan_through_a_priced_source", lambda *args, **kwargs: None,
+        ai_payment, "_plan_through_a_priced_source", lambda *args, **kwargs: None,
     )
     for row in rows:
         if not row["admitted"]:

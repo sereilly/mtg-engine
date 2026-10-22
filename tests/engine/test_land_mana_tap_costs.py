@@ -165,7 +165,8 @@ def test_every_reader_that_counts_land_mana_counts_what_the_tap_seam_taps():
     than against a second list. The floor is on how many lands it
     examined, for the reason the sweep above gives.
     """
-    from engine.ai_policy import _land_mana_is_unplannable, _plan_land_taps
+    from engine.ai_mana_sources import _land_mana_is_unplannable
+    from engine.ai_payment import _plan_land_taps
     from engine.mana_payment import taps_for_payment, untapped_mana_lands
 
     lands = [card for card in _pool() if card.primary_type == "land"]

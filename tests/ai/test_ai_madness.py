@@ -118,7 +118,7 @@ def test_the_ai_discards_a_madness_card_to_its_own_outlet_and_only_one_it_can_ca
     is activated **naming the Search** rather than the Island before it — and
     with only {1}{U} (the Search's cast unpayable beside the ability) it is
     not, any more than with no madness card at all."""
-    from engine.ai_policy import choose_activation_action
+    from engine.ai_abilities import choose_activation_action
 
     game = _compulsion_board(("Island", "Obsessive Search"), islands=3)
     action = choose_activation_action(game, 0)

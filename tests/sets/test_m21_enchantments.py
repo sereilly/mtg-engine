@@ -895,7 +895,7 @@ def test_enthralling_hold_takes_a_tapped_creature(set_pool):
 def test_the_ai_is_not_offered_a_target_the_cast_would_refuse(set_pool):
     """Two callers, one rule. A restriction only the cast path knew about is an
     AI turn spent on an action the game then rejects."""
-    from engine.ai_policy import _choose_aura_target
+    from engine.ai_targets import _choose_aura_target
 
     pool = set_pool("M21")
     game, _, _, victim = _hold_board(set_pool, victim_tapped=False)

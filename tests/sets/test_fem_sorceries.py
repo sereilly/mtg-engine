@@ -183,7 +183,7 @@ def test_dwarven_catapult_divides_evenly_over_the_opponents_creatures(set_pool):
     the announcement is the target list alone and the engine splits it.
     """
     from engine import Game
-    from engine.ai_policy import choose_divided_targets
+    from engine.ai_divisions import choose_divided_targets
     from engine.models import Permanent, PlayerState
 
     pool = set_pool("FEM")

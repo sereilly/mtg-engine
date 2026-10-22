@@ -26,7 +26,7 @@ because of the list — which is the number that says what the laxity cost. The
 from __future__ import annotations
 
 from engine import Game, PlayerState
-from engine.ai_policy import choose_divided_targets
+from engine.ai_divisions import choose_divided_targets
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.divided_damage import divided_instruction
 from engine.faces import compilation_units

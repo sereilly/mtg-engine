@@ -51,7 +51,7 @@ That was "lands only, by decision", and the decision is reversed here on
 purpose. Its reason was that no automatic payment taps a non-land source, so
 "a glow that needed one would light a card the click then cannot pay for".
 Two things have changed under it. The AI *has* tapped these sources since
-Planeshift (``ai_policy._nonland_mana_source``), so an AI seat cast spells the
+Planeshift (``ai_mana_sources._nonland_mana_source``), so an AI seat cast spells the
 same board showed a human as uncastable. And the question the highlight
 answers is CR 601.2g's — "the player then has a chance to activate mana
 abilities" — which is about what the player is *able* to do, not about which

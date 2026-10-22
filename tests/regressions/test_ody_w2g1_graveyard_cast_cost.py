@@ -49,7 +49,7 @@ _CARDS = ("Haunting Misery", "Skeletal Scrying")
 #: Slots:       0                1         2               3                4           5
 _PILE = ("Grizzly Bears", "Forest", "Black Knight", "Grizzly Bears", "Mind Rot", "Black Knight")
 #: What a cast naming no set gives up for X = 2: the top of the pile down,
-#: least valuable first (``ai_valuation.graveyard_price_order``, Torment's
+#: least valuable first (``ai_prompt_readers.graveyard_price_order``, Torment's
 #: W2G3) — the Forest before any spell for Skeletal Scrying, which takes any
 #: card; for Haunting Misery's four two-mana creature cards the top two.
 #: It was the top two whatever they were (the Mind Rot and a Black Knight).

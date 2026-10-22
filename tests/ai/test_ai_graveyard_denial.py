@@ -34,14 +34,18 @@ import random
 
 import pytest
 
-from engine import Game, PlayerState, ai_policy
-from engine.ai_policy import (cast_announcement, choose_activation_action,
-                              choose_cast_action, spell_being_cast,
-                              tap_planned_lands)
-from engine.ai_valuation import (GRAVEYARD_DENIAL_KINDS, _walk_program,
-                                 denied_graveyard_pile,
-                                 exiles_a_graveyard_target,
-                                 graveyard_denial_order)
+from engine import Game, PlayerState, ai_actions
+from engine.ai_actions import cast_announcement, spell_being_cast
+from engine.ai_abilities import choose_activation_action
+from engine.ai_policy import choose_cast_action
+from engine.ai_payment import tap_planned_lands
+from engine.ai_prompt_readers import (
+    GRAVEYARD_DENIAL_KINDS,
+    denied_graveyard_pile,
+    exiles_a_graveyard_target,
+    graveyard_denial_order,
+)
+from engine.ai_weighed_cast import _walk_program
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import castable_faces
 from engine.game_types import OracleExecutionContext
@@ -116,7 +120,7 @@ def play(held, spell, seat: int, *, yards=None):
     action = choose_cast_action(game, seat)
     if action is None or action.card_name != spell.name:
         return None
-    zone = ai_policy.zone_being_cast_from(game, seat, action)
+    zone = ai_actions.zone_being_cast_from(game, seat, action)
     tap_planned_lands(game, seat, action)
     result = game.cast_from_hand(
         seat, spell_being_cast(zone, action).name, **cast_announcement(action),
@@ -259,7 +263,7 @@ def test_the_sweep_names_the_defect_with_the_old_defaults_restored(monkeypatch):
     the sweep must name the cards — every one wrong from chair 0 and right
     from chair 1, which is why nobody playing the AI from the guest's seat
     saw it. A sweep that read clean here would be a sweep that reads nothing."""
-    from engine import ai_valuation
+    from engine import ai_abilities, ai_targets, ai_valuation
     from engine.mixins.stack import activation as activation_path
     from engine.mixins.stack import casting as casting_path
 
@@ -267,7 +271,8 @@ def test_the_sweep_names_the_defect_with_the_old_defaults_restored(monkeypatch):
         ai_valuation, "denied_graveyard_pile",
         lambda player_index, piles: (list(piles) or [None])[0],
     )
-    monkeypatch.setattr(ai_policy, "_graveyard_denial_target", lambda *args: None)
+    monkeypatch.setattr(ai_targets, "_graveyard_denial_target", lambda *args: None)
+    monkeypatch.setattr(ai_abilities, "_graveyard_denial_target", lambda *args: None)
     # …and the engine's own answer to an announcement naming nothing, which
     # since R3 is the picker's first entry in standing order — the opposing
     # pile first — rather than the handler's scan in seat order. Left on, it
@@ -308,7 +313,7 @@ def test_the_cards_their_owner_could_still_cast_go_first(set_pool):
     before the cards in front of it; a pile with no flashback card is taken in
     pile order as it always was. The seat's **own** pile is a price, and gives
     the least valuable up first — the Firebolt last of all
-    (``ai_valuation.graveyard_price_order``, Torment's W2G3; it was pile
+    (``ai_prompt_readers.graveyard_price_order``, Torment's W2G3; it was pile
     order).
 
     The prompt is armed by hand, so this is about the default and not about

@@ -1,6 +1,6 @@
 """The AI's roles chooser, for an ability that announces a **seat**.
 
-``ai_policy._choose_activation_role_targets`` walks the picker's own chain of
+``ai_abilities._choose_activation_role_targets`` walks the picker's own chain of
 legal targets and turned every pick into a permanent id or a graveyard slot. A
 pick of kind ``"player"`` is neither, so the walk answered "no legal chain" and
 the ability was never proposed. Three abilities in the pool announce a seat in
@@ -27,7 +27,7 @@ from __future__ import annotations
 import pytest
 
 from engine import Game, PlayerState
-from engine.ai_policy import _activation_target_side, _choose_activation_role_targets
+from engine.ai_abilities import _activation_target_side, _choose_activation_role_targets
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from tests.helpers import resolve_stack

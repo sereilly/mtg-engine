@@ -1468,7 +1468,7 @@ def _w3d_board(set_pool, name, creature="Gorilla Chieftain", each=2):
 
 def _w3d_cast(game, seat, name, card, x_value=None):
     """Cast *name* the way an AI seat now does: announce the division first."""
-    from engine.ai_policy import choose_divided_targets
+    from engine.ai_divisions import choose_divided_targets
 
     announced = choose_divided_targets(game, seat, card, x_value)
     result = game.cast_from_hand(

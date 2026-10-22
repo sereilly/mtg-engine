@@ -194,11 +194,11 @@ _PAYERLESS_PLANNERS = {
     # (``_pays``), and hands the matching sources that already say what they
     # pay — its pool argument is empty and its "lands" are those units.
     "engine/board_payment.py",
-    # The AI's planner (``ai_policy._PaymentPlanner``) is the same matching
+    # The AI's planner (``ai_payment._PaymentPlanner``) is the same matching
     # over the same units: each says what it pays for this seat
     # (``_unit_pays``, the permissions asked a unit at a time), so the payer
     # is already in what the matching is handed.
-    "engine/ai_policy.py",
+    "engine/ai_payment.py",
     # "Pay any amount of mana": a generic cost, which every unit pays whatever
     # the seat may spend it as.
     "web/prompts.py",

@@ -42,7 +42,7 @@ from collections import Counter
 import pytest
 
 from engine import Game, PlayerState
-from engine.ai_policy import _cast_candidate
+from engine.ai_casts import _cast_candidate
 from engine.ai_simulator import run_ai_simulation
 from engine.ai_valuation import entry_self_return_gate
 from engine.card_loader import load_cards, manifest_set_path, manifest_set_paths

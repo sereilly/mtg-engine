@@ -26,12 +26,19 @@ from pathlib import Path
 import pytest
 
 from engine import ai_simulator
-from engine.ai_policy import (CastAction, cast_announcement,
-                              choose_cast_action,
-                              choose_combat_instant_cast_action,
-                              choose_land_drop, spell_being_cast,
-                              tap_planned_lands, zone_being_cast_from)
-from engine.ai_valuation import permitted_casts
+from engine.ai_actions import (
+    CastAction,
+    cast_announcement,
+    spell_being_cast,
+    zone_being_cast_from,
+)
+from engine.ai_policy import (
+    choose_cast_action,
+    choose_combat_instant_cast_action,
+    choose_land_drop,
+)
+from engine.ai_payment import tap_planned_lands
+from engine.ai_weighed_cast import permitted_casts
 from engine.card_loader import manifest_set_path
 from engine.cast_permissions import grant_permission
 from engine.flashback import granted_cost
@@ -547,21 +554,25 @@ _ZONE_QUESTIONS = {
 
 def test_every_cast_question_the_policy_asks_names_the_zone():
     """The permission being weighed is one context variable read at one seam
-    (`ai_policy._cast_zone`); this holds it. The mode's twin is
+    (`ai_actions._cast_zone`); this holds it, in every module of the policy
+    (`policy_modules`, the mode guard's own reading of which those are). The
+    mode's twin is
     ``test_ai_mode_chooser.test_every_cast_question_the_policy_asks_names_the_mode``."""
-    root = Path(__file__).resolve().parents[2]
-    tree = ast.parse((root / "engine" / "ai_policy.py").read_text(encoding="utf-8"))
+    from tests.ai.test_ai_mode_chooser import policy_modules
+
     asked = 0
     missing = []
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call):
-            continue
-        name = getattr(node.func, "attr", None) or getattr(node.func, "id", None)
-        if name not in _ZONE_QUESTIONS:
-            continue
-        asked += 1
-        if "from_zone" not in {keyword.arg for keyword in node.keywords}:
-            missing.append((name, node.lineno))
+    for path in policy_modules():
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            name = getattr(node.func, "attr", None) or getattr(node.func, "id", None)
+            if name not in _ZONE_QUESTIONS:
+                continue
+            asked += 1
+            if "from_zone" not in {keyword.arg for keyword in node.keywords}:
+                missing.append((path.name, name, node.lineno))
     assert asked >= 12, f"the scan found only {asked} zone questions"
     assert missing == []
 

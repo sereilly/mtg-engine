@@ -66,7 +66,7 @@ log), not instruction kinds alone.
 import pytest as _w1g8_pytest
 
 from engine import Game as _W1G8Game, PlayerState as _W1G8Player
-from engine.ai_policy import _plan_land_taps as _w1g8_plan_land_taps
+from engine.ai_payment import _plan_land_taps as _w1g8_plan_land_taps
 from engine.board_payment import (board_can_pay as _w1g8_board_can_pay,
                                   tap_alone_symbols as _w1g8_tap_alone_symbols)
 from engine.models import Permanent as _W1G8Permanent

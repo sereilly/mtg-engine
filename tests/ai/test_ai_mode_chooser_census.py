@@ -78,14 +78,21 @@ from engine import Game, PlayerState
 from engine import ai_simulator
 from engine.ai_policy import (choose_cast_action,
                               choose_combat_instant_cast_action)
-from engine.ai_valuation import (CARD_WORTH, combat_is_still_to_come,
-                                 forget_damage_history,
-                                 instruction_target_side, position_digest,
-                                 untap_for_the_next_turn,
-                                 priced_by_the_fight, run_out_the_turn,
-                                 same_position, scratch_copy,
-                                 several_target_slot_sides, standing_swing,
-                                 standings, swing_worth)
+from engine.ai_rehearsal import (
+    CARD_WORTH,
+    combat_is_still_to_come,
+    forget_damage_history,
+    position_digest,
+    untap_for_the_next_turn,
+    priced_by_the_fight,
+    run_out_the_turn,
+    same_position,
+    scratch_copy,
+    standing_swing,
+    standings,
+    swing_worth,
+)
+from engine.ai_target_sides import instruction_target_side, several_target_slot_sides
 from engine.auras import attach_aura
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units
@@ -444,8 +451,8 @@ def mode_acts_on(card, index, candidate) -> bool:
 #
 # The second half of the census: not "is the mode reached" but "is the cast
 # the larger one". Every cast here is made **by the engine, on a census
-# board** — never by ``ai_valuation.rehearse`` — and priced with the one
-# definition of "larger" (``ai_valuation.swing_worth`` over the standing of
+# board** — never by ``ai_rehearsal.rehearse`` — and priced with the one
+# definition of "larger" (``ai_rehearsal.swing_worth`` over the standing of
 # each seat). The policy predicts with that definition; this measures with
 # it; a census that asked the scorer whether the scorer was right would
 # measure nothing.
@@ -518,7 +525,7 @@ def settle(game) -> None:
 def run_out(game) -> None:
     """The turn run out: a combat whose attack is declared and whose blocks
     nobody is owed deals its damage, then CR 514 — "until end of turn" ends
-    and marked damage goes (``ai_valuation.run_out_the_turn``, the reading a
+    and marked damage goes (``ai_rehearsal.run_out_the_turn``, the reading a
     rehearsal takes). Nothing is declared on the way, so what is read
     afterwards is what the cast left and not what a policy then did with it.
 
@@ -557,19 +564,19 @@ def weighed(
     it was worth to seat 0, and whether what it moved is **still moved once
     the turn is over**.
 
-    The swing is ``ai_valuation.swing_worth`` of seat 0's standing swing now
+    The swing is ``ai_rehearsal.swing_worth`` of seat 0's standing swing now
     and once the turn has run out, against the same board with nothing cast
     (*untouched_now*, *untouched_lasting*). The spell's own card is not part
     of it.
 
     **A cast made before the turn's fight is priced with the fight fought**,
     where a reading with no combat in it cannot price it
-    (``ai_valuation.priced_by_the_fight``: everything it changed is gone by
+    (``ai_rehearsal.priced_by_the_fight``: everything it changed is gone by
     the end of the turn, or more of its good is than is left). Then the
     attack, the blocks and the damage are played on a copy of the board as
     the cast left it and on a copy of it with nothing cast (*before_cast*,
-    taken before the cast: ``ai_valuation.scratch_copy``), each run to the
-    end of its turn (``ai_valuation.run_out_the_turn``), and the swing is
+    taken before the cast: ``ai_rehearsal.scratch_copy``), each run to the
+    end of its turn (``ai_rehearsal.run_out_the_turn``), and the swing is
     between those two — and a cast that has left nothing even then **moved
     nothing**: a pump on a creature that had no fight to decide, a shield
     nothing came for, a Fog over a turn nobody attacked in.
@@ -620,11 +627,11 @@ def weighed(
 
 
 def lasting_digest(game) -> dict:
-    """``ai_valuation.position_digest`` of a board whose turn has run out,
+    """``ai_rehearsal.position_digest`` of a board whose turn has run out,
     without the record of what damage was dealt
-    (``ai_valuation.forget_damage_history``) and with the opponent's
+    (``ai_rehearsal.forget_damage_history``) and with the opponent's
     permanents untapped as its untap step will leave them
-    (``ai_valuation.untap_for_the_next_turn``) — the rehearsal's own reading:
+    (``ai_rehearsal.untap_for_the_next_turn``) — the rehearsal's own reading:
     the damage and the tap are gone by then, and what they did is on the
     table."""
     forget_damage_history(game)
@@ -1027,13 +1034,14 @@ def run(card, index, built, *, forced: bool) -> dict:
         else:
             # The web AI's window: the executor there needs a session, and is
             # driven by tests/ui; here the announcement is made the way it is.
-            from engine.ai_policy import spell_being_cast, tap_planned_lands
+            from engine.ai_actions import spell_being_cast
+            from engine.ai_payment import tap_planned_lands
 
             action = chooser(game, ME)
             spell = spell_being_cast(game.players[ME].hand, action)
             tap_planned_lands(game, ME, action)
-            if hasattr(sys.modules["engine.ai_policy"], "cast_announcement"):
-                keywords = sys.modules["engine.ai_policy"].cast_announcement(action)
+            if hasattr(sys.modules["engine.ai_actions"], "cast_announcement"):
+                keywords = sys.modules["engine.ai_actions"].cast_announcement(action)
             else:
                 keywords = dict(
                     target_player_index=action.target_player_index,
@@ -1300,7 +1308,7 @@ UNBUILDABLE = {
 #: which is what makes this a list of right answers rather than of misses.
 #:
 #: Every one was proposed until the policy weighed a precombat cast through
-#: the fight (``ai_policy._weighed_through_the_fight``): cast, at
+#: the fight (``ai_scoring._weighed_through_the_fight``): cast, at
 #: ``SPELL_BASE_SCORE`` and a quarter of whatever it lent, on the first main
 #: phase it was castable in. Named, because a sweep that silently drops what
 #: it does not reach reports a smaller pool as a clean one: these twelve are
@@ -1311,7 +1319,7 @@ HELD = {
     # "Chaos Charm deals 1 damage to target creature", at a creature it does
     # not kill: the damage is gone at cleanup (CR 514.2), and was a change
     # that lasted only while the turn's record of who dealt what was read
-    # as one (``ai_valuation.forget_damage_history``).
+    # as one (``ai_rehearsal.forget_damage_history``).
     ("Chaos Charm", 1): "1 damage to a creature it does not kill, with no fight to finish it",
     ("Chaos Charm", 2): "haste " + _NO_FIGHT + " and no summoning sickness to lift",
     ("Ebony Charm", 2): "fear " + _NO_FIGHT,
@@ -1322,7 +1330,7 @@ HELD = {
     # "Tap target creature": on a board with no attack to clear a blocker
     # for, the creature untaps in its controller's untap step (CR 502.3)
     # having done nothing it would not have done untapped
-    # (``ai_valuation.untap_for_the_next_turn``).
+    # (``ai_rehearsal.untap_for_the_next_turn``).
     ("Ivory Charm", 1): "a tap of a creature with no attack to stop, undone at its untap step",
     ("Rith's Charm", 2): "a shield against a source with no damage coming",
     ("Sapphire Charm", 1): "flying " + _NO_FIGHT,
@@ -1346,7 +1354,7 @@ HELD = {
 #: Charm gained five life at twenty rather than give -2/-2, Hearth Charm
 #: pumped attackers that were not attacking and Ivory Charm shrank creatures
 #: in its own main phase. The policy now measures a cast before it proposes
-#: one (``ai_valuation.rehearse``); those six are gone, and so are Thunderbolt
+#: one (``ai_rehearsal.rehearse``); those six are gone, and so are Thunderbolt
 #: and Sapphire Charm's two, which were never named and lost the same way.
 #:
 #: A change to a weight in ``ai_valuation`` moves an entry here, and moving
@@ -1478,7 +1486,7 @@ def test_the_cast_made_is_never_the_smaller_one(result):
     """**Which bullet, and at which target.** On every board the census
     builds, every bullet worth casting is cast by hand at every target the
     engine's picker offers it, and each cast is priced with the one
-    definition of "larger" (``ai_valuation.swing_worth`` over each seat's
+    definition of "larger" (``ai_rehearsal.swing_worth`` over each seat's
     standing, read as the board stood and again once the turn had run out).
     The cast the policy makes — through the simulator's own executor — must
     measure as much as the best of them, and must move something if any of

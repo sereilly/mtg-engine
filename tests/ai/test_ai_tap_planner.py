@@ -12,7 +12,8 @@ the colour it planned to the tap (``land_tap_colors`` / ``planned_tap_color``).
 """
 from __future__ import annotations
 
-from engine.ai_policy import choose_cast_action, planned_tap_color
+from engine.ai_policy import choose_cast_action
+from engine.ai_payment import planned_tap_color
 from engine.game import Game
 from engine.models import Permanent, PlayerState
 from tests.helpers import _nosick, resolve_stack
@@ -124,10 +125,12 @@ def test_a_board_of_basics_is_planned_exactly_as_before(set_pool):
 
 from types import SimpleNamespace as _W3g4Plan
 
-from engine.ai_policy import (_land_mana_is_unplannable as _w3g4_unplannable,
-                              _land_symbols as _w3g4_land_symbols,
-                              choose_activation_action as _w3g4_choose_activation,
-                              tap_planned_lands as _w3g4_tap_planned_lands)
+from engine.ai_mana_sources import (
+    _land_mana_is_unplannable as _w3g4_unplannable,
+    _land_symbols as _w3g4_land_symbols,
+)
+from engine.ai_abilities import choose_activation_action as _w3g4_choose_activation
+from engine.ai_payment import tap_planned_lands as _w3g4_tap_planned_lands
 from engine.card_loader import load_cards as _w3g4_load_cards
 from engine.card_loader import manifest_set_paths as _w3g4_set_paths
 from engine.named_counters import add_counters as _w3g4_add_counters

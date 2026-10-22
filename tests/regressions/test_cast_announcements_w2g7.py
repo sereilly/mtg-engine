@@ -30,7 +30,7 @@ from __future__ import annotations
 import re
 
 from engine import Game, PlayerState
-from engine.ai_policy import _can_cast_with_targets
+from engine.ai_cast_gates import _can_cast_with_targets
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import face_cards
 from engine.handlers._targets import attached_host

@@ -1,14 +1,14 @@
 """The AI answers CR 601.2b's optional additional costs — every one, not kicker.
 
 ``CastAction.optional_cost_payments`` existed and both executors forwarded it,
-but ``ai_policy._cast_candidate`` asked one question: does this card print a
+but ``ai_casts._cast_candidate`` asked one question: does this card print a
 kicker? So no AI seat ever bought a spell back, and Primitive Justice was always
 cast for one artifact. 31 shipped cards print such an offer; half of each was
 unreachable in simulation.
 
 Which offers a card makes and what each buys is derived
 (``ai_valuation.cast_offers``); how far a seat goes for one is the policy
-(``ai_policy._times_worth_taking``). Both are held here: the derivation against
+(``ai_casts._times_worth_taking``). Both are held here: the derivation against
 the pool and against cards nobody printed, the policy by what a seat does at a
 table.
 """
@@ -18,13 +18,13 @@ from __future__ import annotations
 import pytest
 
 from engine import Game, PlayerState
-from engine.ai_policy import (
+from engine.ai_casts import (
     BUYBACK_LIFE_RESERVE,
     BUYBACK_PERMANENTS_KEPT,
     _cast_candidate,
-    choose_cast_action,
-    tap_planned_lands,
 )
+from engine.ai_policy import choose_cast_action
+from engine.ai_payment import tap_planned_lands
 from engine.ai_simulator import run_ai_simulation
 from engine.ai_valuation import (
     OFFER_ADDS,

@@ -3,7 +3,7 @@
 "Search your library for a card, then shuffle and put that card on top"
 (Vampiric Tutor, Mystical Tutor, Enlightened Tutor, Worldly Tutor; Insidious
 Dreams' X cards; Scouting Trek's basic lands). The finds stay in the library,
-so ``ai_valuation.rehearse`` — which prices a hand, a life total and a board
+so ``ai_rehearsal.rehearse`` — which prices a hand, a life total and a board
 — read the cast as moving nothing it could price: Vampiric Tutor was its 2
 life and never proposed, Mystical Tutor was a cast worth nothing, and
 Insidious Dreams was its discards (Torment's W1G5 measured it and left it).
@@ -33,10 +33,15 @@ from __future__ import annotations
 import random
 
 from engine import Game, PlayerState
-from engine.ai_policy import (CHOSEN_DRAW_SHARE, CHOSEN_DRAWS_COUNTED,
-                              _announcement, _rehearse_announcement,
-                              choose_cast_action)
-from engine.ai_valuation import CARD_WORTH, library_top_setups
+from engine.ai_scoring import (
+    CHOSEN_DRAW_SHARE,
+    CHOSEN_DRAWS_COUNTED,
+    _announcement,
+    _rehearse_announcement,
+)
+from engine.ai_policy import choose_cast_action
+from engine.ai_rehearsal import CARD_WORTH
+from engine.ai_valuation import library_top_setups
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units
 from engine.models import Permanent

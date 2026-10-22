@@ -20,8 +20,11 @@ from __future__ import annotations
 import pytest
 
 from engine import Game, PlayerState
-from engine.ai_policy import _cast_candidate, choose_activation_action, tap_planned_lands
-from engine.ai_valuation import chosen_name_own_zone, entry_trigger_target_side
+from engine.ai_casts import _cast_candidate
+from engine.ai_abilities import choose_activation_action
+from engine.ai_payment import tap_planned_lands
+from engine.ai_prompt_readers import chosen_name_own_zone
+from engine.ai_target_sides import entry_trigger_target_side
 from engine.faces import castable_faces
 from engine.mixins.stack import aura_enchant_noun
 from engine.models import Permanent

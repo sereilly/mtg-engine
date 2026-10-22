@@ -40,7 +40,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from engine import Game, PlayerState, ai_policy
+from engine import Game, PlayerState, ai_abilities
 from engine import activation_prohibitions
 from engine.activation_prohibitions import (ACTIVATION_PROHIBITIONS,
                                             activation_prohibition)
@@ -135,7 +135,7 @@ def _predicate(session, situation, subject_name, **board):
 
 def _ai_proposes(session, situation, subject_name, **board) -> bool:
     game, subject = _board(session, situation, subject_name, **board)
-    action = ai_policy.choose_activation_action(game, 0)
+    action = ai_abilities.choose_activation_action(game, 0)
     return action is not None and (
         game.permanent_at(0, action.permanent_index) is subject
     )
@@ -315,7 +315,7 @@ def test_the_sweep_names_a_reader_with_a_list_of_its_own(session, monkeypatch):
     wire asking none."""
     import web.serialization
 
-    monkeypatch.setattr(ai_policy, "activation_prohibition", lambda *args: None)
+    monkeypatch.setattr(ai_abilities, "activation_prohibition", lambda *args: None)
     monkeypatch.setattr(web.serialization, "activation_prohibition", lambda *args: None)
 
     _counts, disagreements = _sweep(session)

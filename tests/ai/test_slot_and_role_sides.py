@@ -5,7 +5,7 @@ instruction with a count above one ("Put two target lands on top of their
 owners' libraries") and a roles announcement spent a step at a time ("Return
 target creature to its owner's hand. Then return another target creature…").
 The one-target chooser has had a derived side since NEM
-(``ai_valuation.instruction_target_side``); these two shapes each had less:
+(``ai_target_sides.instruction_target_side``); these two shapes each had less:
 
 * the several-target chooser read a table that restated four kinds of that
   reading and lagged the rest, so **Plow Under, Panic Attack, Jagged
@@ -30,10 +30,16 @@ from itertools import product
 import pytest
 
 from engine import Game, PlayerState
-from engine.ai_policy import _OFFERS_ANNOUNCED, _cast_candidate, _cast_candidate_announcing
-from engine.ai_valuation import (_PRINTED_SEATS, _several_target_instruction,
-                                 cast_offers, instruction_target_side,
-                                 role_target_sides, several_target_slot_sides)
+from engine.ai_actions import _OFFERS_ANNOUNCED
+from engine.ai_casts import _cast_candidate, _cast_candidate_announcing
+from engine.ai_target_sides import (
+    _PRINTED_SEATS,
+    _several_target_instruction,
+    instruction_target_side,
+    role_target_sides,
+    several_target_slot_sides,
+)
+from engine.ai_valuation import cast_offers
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units
 from engine.models import Permanent
@@ -359,7 +365,7 @@ def test_w2g5_an_unkicked_roles_spell_is_aimed_like_the_one_target_spell_it_is(p
     _w2g5_cast(game, action)
     assert _w2g5_names(game, 0) == before
     # The dearest thing the bounce may name, where it was the first one in
-    # battlefield order (Grizzly Bears): `ai_policy._best_target`.
+    # battlefield order (Grizzly Bears): `ai_targets._best_target`.
     assert "Serra Angel" in [c.name for c in game.players[1].hand]
 
 

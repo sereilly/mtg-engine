@@ -11,7 +11,7 @@ meant the permanent and ask ``has_type`` / ``is_creature`` now. One test here
 for the first of each shape — and the shape that was live on an ordinary
 board is the first one.
 
-The six that stay, and the eight in ``ai_policy.py`` nobody has asked yet, are
+The six that stay, and the eight in the AI's policy modules nobody has asked yet, are
 in ``tests/engine/test_layer_reads.py``'s ``PRIMARY_TYPE_BASELINE`` with what
 each means.
 """

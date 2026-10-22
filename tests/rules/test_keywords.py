@@ -1626,7 +1626,7 @@ def test_702_111b_menace_blocked_by_two_or_not_at_all():
 def test_702_111b_the_ai_declines_a_lone_block_on_a_menace_attacker():
     """declare_blockers refuses a single block on menace, so the AI must not
     submit one â€” with a single potential blocker it declines the block."""
-    from engine.ai_policy import choose_combat_blockers
+    from engine.ai_declarations import choose_combat_blockers
 
     brute = Permanent(card=_mk_creature("Brute", 4, 5, keywords=("Menace",)))
     lone = Permanent(card=_mk_creature("Lone Wall", 0, 6))

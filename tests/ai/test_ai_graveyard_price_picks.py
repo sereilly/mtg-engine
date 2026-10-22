@@ -1,5 +1,5 @@
 """A seat paying a price out of its **own** graveyard gives up the least
-valuable cards there (``ai_valuation.graveyard_price_order``).
+valuable cards there (``ai_prompt_readers.graveyard_price_order``).
 
 Every default pick out of a seat's own pile went in pile order: the bottom
 card first, whatever it was. Torment's W1G4 saw it where the brief named it —
@@ -17,7 +17,7 @@ owner could still cast from there (flashback) goes last, then mana value, the
 ranking Forgotten Lore's default already gives a pile an opponent picks from.
 Where the effect reads **which** card its cost exiled (Necropolis: "X is the
 exiled card's mana value") the cards are not a plain price, and the pick is
-left as it was (``ai_valuation.reads_what_its_cost_exiled``).
+left as it was (``ai_prompt_readers.reads_what_its_cost_exiled``).
 
 Each behaviour test below was run on the tree before the weight (053649ac)
 and failed there with the pile-order pick.
@@ -25,7 +25,7 @@ and failed there with the pile-order pick.
 from __future__ import annotations
 
 from engine import Game, PlayerState
-from engine.ai_valuation import graveyard_price_order, reads_what_its_cost_exiled
+from engine.ai_prompt_readers import graveyard_price_order, reads_what_its_cost_exiled
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.cast_costs import additional_costs
 from engine.models import Permanent

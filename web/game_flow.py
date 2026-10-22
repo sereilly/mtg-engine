@@ -15,18 +15,18 @@ from fastapi import HTTPException
 
 from engine.ai_combat import declare_ai_blockers
 
+from engine.ai_actions import cast_announcement, spell_being_cast, zone_being_cast_from
 from engine.ai_policy import (
-    cast_announcement,
     cast_chosen_instant,
+    choose_cast_action,
+    choose_combat_instant_cast_action,
+)
+from engine.ai_abilities import (
     choose_activation_action,
     choose_foreign_activation_action,
     choose_hand_activation_action,
-    choose_cast_action,
-    choose_combat_instant_cast_action,
-    spell_being_cast,
-    tap_planned_lands,
-    zone_being_cast_from,
 )
+from engine.ai_payment import tap_planned_lands
 
 from .prompts import auto_resolve_ai_prompts
 from .session_store import Session
@@ -142,17 +142,17 @@ def _ai_step(session: Session) -> bool:
         # — through the one reader the simulator's executor shares.
         cast_zone = zone_being_cast_from(game, seat, cast_action)
         # The spell the policy chose, which for a split card is one half of
-        # the zone's card (CR 709.3) — see `ai_policy.spell_being_cast`.
+        # the zone's card (CR 709.3) — see `ai_actions.spell_being_cast`.
         card_to_cast = spell_being_cast(cast_zone, cast_action)
         # The payment, through the executor the AI simulator shares
-        # (`engine.ai_policy.tap_planned_lands`): each planned land tapped for
+        # (`engine.ai_payment.tap_planned_lands`): each planned land tapped for
         # the colour the plan counted on, by the mana ability that makes it.
         # What comes back is the action as it reads once paid for: a source
         # sacrificed for mana renumbers the slots the announcement names.
         cast_action = tap_planned_lands(game, seat, cast_action)
 
         # The announcement, whole, through the one function that turns a
-        # `CastAction` into a cast (`engine.ai_policy.cast_announcement`): the
+        # `CastAction` into a cast (`engine.ai_actions.cast_announcement`): the
         # seat and the object, X, the alternative cost (CR 118.9), the
         # division (CR 601.2d), the optional costs and the **mode**
         # (CR 601.2b). Each executor in this file spelled those out for itself

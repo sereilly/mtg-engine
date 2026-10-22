@@ -1164,7 +1164,7 @@ def test_w1g1_the_ai_casts_the_plain_spell_when_it_cannot_spare_the_kick(
     assert not action.optional_cost_payments
     assert len(action.target_permanent_ids) == 1
 
-    from engine.ai_policy import tap_planned_lands
+    from engine.ai_payment import tap_planned_lands
 
     tap_planned_lands(game, 0, action)
     result = game.cast_from_hand(
@@ -1183,7 +1183,7 @@ def test_w1g1_the_ai_names_two_targets_for_the_spell_it_kicks(set_pool, name, la
     roles rather than the unkicked picker's flat list.
 
     Both roles on the **opponent's** board (PLS W2G5,
-    `ai_valuation.role_target_sides`): the chain used to be the first legal
+    `ai_target_sides.role_target_sides`): the chain used to be the first legal
     one, which for Falling Timber against a single opposing creature was that
     creature and the caster's own Grizzly Bears — a land sacrificed to prevent
     the combat damage of the seat's own attacker. So the opponent is given the

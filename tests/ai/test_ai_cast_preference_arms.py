@@ -1,4 +1,4 @@
-"""The preference arms in ``ai_policy._can_cast_with_targets`` ask the engine.
+"""The preference arms in ``ai_cast_gates._can_cast_with_targets`` ask the engine.
 
 Found by the mode chooser's census and true of spells with no mode at all.
 Two of the three arms answered "is there something worth pointing this at"
@@ -19,7 +19,8 @@ damage that can only be dealt to a creature scored as game-winning burn.
 """
 from __future__ import annotations
 
-from engine.ai_policy import cast_announcement, choose_cast_action
+from engine.ai_actions import cast_announcement
+from engine.ai_policy import choose_cast_action
 from engine.game import Game
 from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle

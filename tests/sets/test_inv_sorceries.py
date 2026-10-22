@@ -160,7 +160,7 @@ def test_w1g2_battery_creates_a_three_three_green_elephant(set_pool):
 @_w1g2_pytest.mark.slow
 def test_w1g2_the_ai_casts_split_cards_as_halves_without_a_refusal():
     """The simulator deals whole split cards and its policy scores each half as
-    the spell it is (`ai_policy.hand_spells`), pays for the one it picks and
+    the spell it is (`ai_actions.hand_spells`), pays for the one it picks and
     casts it by the half's name. A policy that proposed the *card* would be
     refused every turn (CR 709.3), and a half that reached a graveyard without
     becoming the whole card again would fail the zone-conservation audit under

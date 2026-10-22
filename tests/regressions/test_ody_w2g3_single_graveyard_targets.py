@@ -463,7 +463,7 @@ def test_an_ai_seat_names_an_opponents_cards_for_the_activation(pool):
     exiles nothing, so a seat that names nothing pays {2}{B} and a tap for no
     effect. The chooser names the maximum out of one opponent's pile, and
     proposes nothing when no opponent has a card to take."""
-    from engine.ai_policy import choose_activation_action
+    from engine.ai_abilities import choose_activation_action
 
     game = _duel(pool, battlefield=["Carrion Beetles"])
     game.interactive_seats = set()

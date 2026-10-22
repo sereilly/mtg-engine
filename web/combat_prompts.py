@@ -26,7 +26,8 @@ step that nothing on either side could resolve.
 from __future__ import annotations
 
 from engine.ai_combat import choose_combat_damage_assignment, declare_ai_attackers
-from engine.ai_policy import choose_attack_target, legal_attackers
+from engine.ai_scoring import choose_attack_target
+from engine.ai_declarations import legal_attackers
 from engine.combat_assignment import combat_damage_assigned_by
 
 from .session_store import Session

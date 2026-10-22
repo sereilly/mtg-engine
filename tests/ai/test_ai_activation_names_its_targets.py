@@ -1,6 +1,6 @@
 """The AI's activation chooser names every target its ability owes.
 
-``ai_policy.choose_activation_action`` named a battlefield target and nothing
+``ai_abilities.choose_activation_action`` named a battlefield target and nothing
 else. Two announcements went out short and were answered by the engine instead
 of by the seat:
 
@@ -17,7 +17,7 @@ of by the seat:
 from __future__ import annotations
 
 from engine import Game, PlayerState
-from engine.ai_policy import choose_activation_action
+from engine.ai_abilities import choose_activation_action
 from engine.models import Permanent
 from tests.helpers import resolve_stack
 

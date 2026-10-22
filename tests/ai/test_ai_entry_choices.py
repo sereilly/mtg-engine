@@ -7,17 +7,17 @@ AI or headless seat:
   type for every card printing it — right for the cards that hose the type
   (An-Zerrin Ruins, Engineered Plague) and backwards for the ones that feed it
   (Belbe's Portal paid {3} every turn to put a creature of the opponent's type
-  out of a hand that held none). ``ai_valuation.chosen_creature_type_side``
+  out of a hand that held none). ``ai_prompt_readers.chosen_creature_type_side``
   reads which from what the card does with the word.
 * "Each player chooses a card in their hand" (Stronghold Gambit) took the first
   card in hand order, revealing a land as often as a creature.
-  ``ai_policy.order_hand_pick`` reads what the next sentence does with the pick.
+  ``ai_prompts.order_hand_pick`` reads what the next sentence does with the pick.
 """
 from __future__ import annotations
 
 import pytest
 
-from engine.ai_valuation import chosen_creature_type_side
+from engine.ai_prompt_readers import chosen_creature_type_side
 from engine.game import Game
 from engine.models import Permanent, PlayerState
 from tests.helpers import _mk_card, resolve_stack
@@ -115,7 +115,8 @@ def test_stronghold_gambit_reveals_the_cheapest_creature_card(set_pool):
 def test_stronghold_gambit_is_not_cast_holding_no_creature_card(set_pool):
     """With no creature card of its own to pick, the caster's Gambit can only
     put the *opponent's* pick onto the battlefield."""
-    from engine.ai_policy import _cast_candidate, choose_cast_action
+    from engine.ai_casts import _cast_candidate
+    from engine.ai_policy import choose_cast_action
 
     gambit = set_pool("NEM")["Stronghold Gambit"]
     rock = _mk_card(name="Plain Rock", mana_cost="{1}", type_line="Artifact")
@@ -134,7 +135,7 @@ def test_belbes_portal_is_not_activated_with_no_card_of_the_type_in_hand(set_poo
     """"{3}, {T}: You may put a creature card of the chosen type from your hand
     onto the battlefield." The cost buys nothing without such a card, and the
     simulator watched the AI pay it every turn."""
-    from engine.ai_policy import choose_activation_action
+    from engine.ai_abilities import choose_activation_action
 
     portal = Permanent(card=set_pool("NEM")["Belbe's Portal"])
     portal.metadata["chosen_creature_type"] = "goblin"

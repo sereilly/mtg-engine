@@ -7,7 +7,7 @@ readers**:
 
 * the cast path (``mixins/stack/casting.py::_cast_onto_stack``), which refuses
   with nothing spent and logs why;
-* the AI's proposal gate (``ai_policy._can_cast_with_targets``), which must not
+* the AI's proposal gate (``ai_cast_gates._can_cast_with_targets``), which must not
   offer what the cast path will decline — a refused cast breaks no rule and
   costs nothing, so a seat that re-proposes one does nothing for the rest of
   the game, which is what ``simulate_ai_games.py``'s ``refused_casts`` counts;

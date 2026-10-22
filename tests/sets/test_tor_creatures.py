@@ -889,8 +889,9 @@ def test_w1g3_an_ai_aims_the_champions_life_loss_across_the_table(set_pool):
     """"Target player loses 6 life" names a seat the cast announces, and the
     AI's spell scorer cannot read a trigger: with no side to go on it named its
     own seat and lost the 6 life itself (Soul Scourge the same, for 3).
-    ``ai_valuation._SEAT_DENIAL_KINDS`` now files the life loss as a denial."""
-    from engine.ai_policy import cast_announcement, choose_cast_action
+    ``ai_target_sides._SEAT_DENIAL_KINDS`` now files the life loss as a denial."""
+    from engine.ai_actions import cast_announcement
+    from engine.ai_policy import choose_cast_action
 
     for name, amount in (("Laquatus's Champion", 6), ("Soul Scourge", 3)):
         game = _w1g3_game(set_pool, hand=[name])
@@ -1246,7 +1247,7 @@ def test_w1g4_carrion_rats_an_opponent_exiles_from_their_graveyard(set_pool):
 
     assert game.players[1].life == 20
     # The least valuable card of the four (W2G3: an own-pile price is paid
-    # with ``ai_valuation.graveyard_price_order``); pile order gave up the
+    # with ``ai_prompt_readers.graveyard_price_order``); pile order gave up the
     # Giant Growth, the bottom card.
     assert _w1g4_names(game.players[1].exile) == ["Swamp"]
     assert game.players[0].exile == []
@@ -1487,7 +1488,7 @@ def test_w1g5_nantuko_cultivator_declined_places_and_draws_nothing(set_pool):
 # ==== W1G6 ==========================================================
 # W1G6's tests go between this line and the "end W1G6" line.
 from engine import Game as _W1G6Game, PlayerState as _W1G6PlayerState  # noqa: E402
-from engine import ai_policy as _w1g6_ai_policy  # noqa: E402
+from engine import ai_cast_gates as _w1g6_ai_cast_gates  # noqa: E402
 from engine.cast_prohibitions import cast_prohibition as _w1g6_cast_prohibition  # noqa: E402
 from engine.models import Permanent as _W1G6Permanent  # noqa: E402
 from tests.helpers import _nosick as _w1g6_nosick, resolve_stack as _w1g6_resolve_stack  # noqa: E402
@@ -1532,7 +1533,7 @@ def test_w1g6_llawan_bounces_the_blue_creatures_and_bans_the_blue_creature_spell
         card = next(c for c in game.players[1].hand if c.name == name)
         found = _w1g6_cast_prohibition(game, 1, card)
         assert found is not None and found.source == "Llawan, Cephalid Empress", name
-        assert not _w1g6_ai_policy._can_cast_with_targets(game, 1, card)
+        assert not _w1g6_ai_cast_gates._can_cast_with_targets(game, 1, card)
         refused = game.cast_from_hand(1, name)
         assert not refused.supported and "Llawan" in refused.details
         assert name in [c.name for c in game.players[1].hand]

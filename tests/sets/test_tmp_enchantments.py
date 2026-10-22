@@ -1425,7 +1425,7 @@ def test_duplicity_swaps_the_whole_hand_for_the_pile_it_already_holds(set_pool):
 
     _w2g4_upkeep(game)
     # The offer is a **price** — the hand is what it spends — so a headless
-    # seat declines it (`ai_valuation.SELF_PAYMENT_KINDS`) and the swap only
+    # seat declines it (`ai_prompt_readers.SELF_PAYMENT_KINDS`) and the swap only
     # happens for a seat that says yes.
     assert game.confirm_optional_pay(0, accept=True)
 

@@ -1,13 +1,9 @@
 from __future__ import annotations
 
-from engine.ai_policy import (
-    choose_activation_action,
-    choose_attackers,
-    choose_cast_action,
-    choose_combat_blockers,
-    choose_combat_instant_cast_action,
-    choose_search_library_index,
-)
+from engine.ai_abilities import choose_activation_action
+from engine.ai_declarations import choose_attackers, choose_combat_blockers
+from engine.ai_policy import choose_cast_action, choose_combat_instant_cast_action
+from engine.ai_prompts import choose_search_library_index
 from engine.game import Game
 from engine.models import Permanent, PlayerState
 
@@ -461,7 +457,7 @@ def test_an_each_of_up_to_n_list_is_filled_rather_than_concentrated(set_pool):
     creatures: the side is derived off `damage`, the count off the printed
     ceiling, and the announcement is the one the cast gate takes.
     """
-    from engine.ai_policy import choose_divided_targets
+    from engine.ai_divisions import choose_divided_targets
     from tests.helpers import _mk_card, resolve_stack
 
     pool = set_pool("LEA")

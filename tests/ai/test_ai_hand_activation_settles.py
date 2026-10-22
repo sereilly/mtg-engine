@@ -22,7 +22,7 @@ from collections import Counter
 import pytest
 
 from engine import PlayerState
-from engine.ai_policy import ACTIVATION_LIFE_RESERVE, choose_activation_action
+from engine.ai_abilities import ACTIVATION_LIFE_RESERVE, choose_activation_action
 from engine.ai_simulator import (SimulationReport, _play_activations,
                                  _SimulatedGame, run_ai_simulation)
 from engine.card_loader import manifest_set_path

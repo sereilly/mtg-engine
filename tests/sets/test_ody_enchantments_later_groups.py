@@ -492,7 +492,7 @@ def test_w1g5_nefarious_lich_turns_damage_into_cards_exiled_from_its_controllers
     _w1g5_resolve_stack(game)
     assert alice.life == 20
     # Torment's W2G3: a price out of a seat's own pile is its least valuable
-    # cards (``ai_valuation.graveyard_price_order``) — it was the first three
+    # cards (``ai_prompt_readers.graveyard_price_order``) — it was the first three
     # in pile order, the Grizzly Bears and the Hill Giant among them.
     assert sorted(card.name for card in alice.exile) == [
         "Forest", "Island", "Sol Ring",

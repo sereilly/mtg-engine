@@ -1894,7 +1894,7 @@ def test_spoils_of_war_puts_its_counters_on_the_casters_own_creatures(set_pool):
     The counters used to go nowhere: with no division announced the resolver
     logged "no creatures were given counters" and reported itself resolved.
     """
-    from engine.ai_policy import choose_divided_targets
+    from engine.ai_divisions import choose_divided_targets
 
     game = _w3d_ice_board(
         set_pool, "Spoils of War",

@@ -5,7 +5,7 @@ it answers arrive where the pool is empty — an upkeep, a combat damage step,
 the opponent's turn. So the AI declined every mana-priced offer it was made:
 Vaporous Djinn's "phases out unless you pay {U}{U}" phased it out with two
 Islands untapped, and Rootwater Thief never paid its {2}.
-``ai_policy.optional_pay_may_tap_lands`` is the weight now: a toll is paid
+``ai_prompts.optional_pay_may_tap_lands`` is the weight now: a toll is paid
 from the board whenever it can be, a gift only with mana nothing else this
 turn would spend. The payment itself was always the plan ``_pay_optional``
 spends, lands included.
@@ -13,7 +13,7 @@ spends, lands included.
 from __future__ import annotations
 
 from engine.ai_combat import run_ai_combat_phase
-from engine.ai_policy import optional_pay_may_tap_lands
+from engine.ai_prompts import optional_pay_may_tap_lands
 from engine.game import Game
 from engine.models import Permanent, PlayerState
 from tests.helpers import _nosick, resolve_stack

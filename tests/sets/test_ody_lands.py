@@ -30,7 +30,7 @@ log), not instruction kinds alone.
 import pytest as _w1g2_pytest
 
 from engine import Game as _w1g2_Game, PlayerState as _w1g2_PlayerState
-from engine.ai_policy import (
+from engine.ai_payment import (
     _plan_land_taps as _w1g2_plan_land_taps,
     planned_tap_ability as _w1g2_planned_tap_ability,
 )

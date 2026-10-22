@@ -15,8 +15,9 @@ import dataclasses
 import pytest
 
 from engine import Game, PlayerState
-from engine.ai_policy import (cast_announcement, choose_activation_action,
-                              choose_cast_action)
+from engine.ai_actions import cast_announcement
+from engine.ai_abilities import choose_activation_action
+from engine.ai_policy import choose_cast_action
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.target_requirements import (must_choose_line, one_slot,

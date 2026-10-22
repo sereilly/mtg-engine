@@ -362,7 +362,7 @@ def spread_shares(total: int, count: int) -> list[int]:
     CR 601.2d wants every target to receive at least one, so the remainder is
     spread rather than dropped — the starting division the browser offers a
     person (``evenStartingDivision``), the AI's proposal for a divided spell
-    (``ai_policy._even_shares``) and a seat nobody asks for a divided trigger's
+    (``ai_divisions._even_shares``) and a seat nobody asks for a divided trigger's
     announcement (``Game._default_trigger_division``) all start from this one.
     """
     if count <= 0:

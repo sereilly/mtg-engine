@@ -17,7 +17,7 @@ import dataclasses
 import pytest
 
 from engine import Game, PlayerState
-from engine.ai_policy import choose_activation_action
+from engine.ai_abilities import choose_activation_action
 from engine.equipment import (
     EQUIP_RULES_TEXT,
     attach_equipment,

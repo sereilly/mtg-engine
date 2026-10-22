@@ -1,6 +1,6 @@
 """The AI's payment plan counts mana that does not come from a land.
 
-`ai_policy._plan_land_taps` asked the tap seam's gate of every permanent, and
+`ai_payment._plan_land_taps` asked the tap seam's gate of every permanent, and
 that gate's first line refuses anything that is not a land. So the Moxen, Sol
 Ring, Llanowar Elves, Birds of Paradise and every other "{T}: Add …" permanent
 were **cast and never used**: W1G5 measured it on four Planeshift cards and
@@ -26,9 +26,11 @@ from __future__ import annotations
 import pytest
 
 from engine import Game, PlayerState
-from engine.ai_policy import (CastAction, _can_pay_cost, _nonland_mana_source,
-                              _plan_land_taps, choose_activation_action,
-                              choose_cast_action, tap_planned_lands)
+from engine.ai_actions import CastAction
+from engine.ai_payment import _can_pay_cost, _plan_land_taps, tap_planned_lands
+from engine.ai_mana_sources import _nonland_mana_source
+from engine.ai_abilities import choose_activation_action
+from engine.ai_policy import choose_cast_action
 from engine.ai_valuation import ManaYield, planned_mana_yield
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units
@@ -249,7 +251,7 @@ def test_w2g5_a_sacrifice_or_a_priced_mana_ability_is_never_planned(pool):
     This pinned "no plan ever sacrifices anything", which was the floor
     Planeshift left and the defect the round after it was sent to close: a
     Black Lotus is for exactly this. What stands of it is the policy
-    (`ai_policy._may_sacrifice_for`): the Lotus (mana value 0) goes for the
+    (`ai_payment._may_sacrifice_for`): the Lotus (mana value 0) goes for the
     Elves, and Morgue Toad and Tinder Wall — worth no less than the spell —
     and the Cylix, which spends mana to make it, stay where they are."""
     game = _w2g5_table(

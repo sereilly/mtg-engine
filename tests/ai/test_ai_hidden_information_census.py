@@ -1,14 +1,14 @@
 """Census: does a cast proposal depend on cards its seat cannot see?
 
 The policy rehearses a candidate cast on a copy of the game
-(``ai_valuation.rehearse``), and a copy of the game is a copy of everything
+(``ai_rehearsal.rehearse``), and a copy of the game is a copy of everything
 in it — the next card of every library and every card in the other player's
 hand. Read as they stand, a rehearsed Duress knows whether there is a card
 for it to take: the cast was *proposed* when the opponent held a spell and
 *held* when the same opponent, with the same deck, held lands. That is a
 decision made on a hidden zone (CR 400.2).
 
-``ai_valuation.conceal_from`` deals what the seat cannot see again, on the
+``ai_rehearsal.conceal_from`` deals what the seat cannot see again, on the
 copy, out of everything it cannot tell apart. This sweep is the definition of
 that being done.
 
@@ -49,8 +49,9 @@ from unittest import mock
 import pytest
 
 from engine import Game, PlayerState
-from engine import ai_valuation
-from engine.ai_policy import cast_announcement, choose_cast_action
+from engine import ai_rehearsal
+from engine.ai_actions import cast_announcement
+from engine.ai_policy import choose_cast_action
 from tests.ai import test_ai_idle_cast_census as idle
 from tests.ai import test_ai_mode_chooser_census as modes
 from tests.helpers import _mk_card
@@ -185,7 +186,7 @@ class the_real_hidden_cards:
             for player in game.players:
                 random.shuffle(player.library)
 
-        self.patch = mock.patch.object(ai_valuation, "conceal_from", shuffle_in_place)
+        self.patch = mock.patch.object(ai_rehearsal, "conceal_from", shuffle_in_place)
         self.patch.start()
 
     def __exit__(self, *exc) -> None:

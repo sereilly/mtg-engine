@@ -48,7 +48,7 @@ def _only_findable_shrine(player, shrine):
 
     Sanctum of All searches the **whole** library, so what it finds is decided by
     the random deal and not by what a test planted: at seed 6060 the AI's deck
-    happened to hold four Sanctum of Calm Waters, `ai_policy.choose_search_card`
+    happened to hold four Sanctum of Calm Waters, `ai_prompts.choose_search_card`
     preferred one of them, and it carries a first-main-phase trigger of its own
     that then sat on the stack. Promoting Ice Age is what dealt those copies —
     the deck is drawn from the shipped pool, so widening the pool changes what a

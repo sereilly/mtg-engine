@@ -30,8 +30,8 @@ a prompt.
 import pytest as _w1g5_pytest
 
 from engine import Game as _W1G5Game, PlayerState as _W1G5PlayerState
-from engine.ai_policy import _land_mana_is_unplannable as _w1g5_ai_unplannable
-from engine.ai_policy import _plan_land_taps as _w1g5_ai_tap_plan
+from engine.ai_mana_sources import _land_mana_is_unplannable as _w1g5_ai_unplannable
+from engine.ai_payment import _plan_land_taps as _w1g5_ai_tap_plan
 from engine.ai_policy import choose_land_drop as _w1g5_choose_land_drop
 from engine.ai_simulator import run_ai_simulation as _w1g5_run_ai_simulation
 from engine.card_loader import manifest_set_path as _w1g5_manifest_set_path

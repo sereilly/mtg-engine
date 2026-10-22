@@ -712,7 +712,7 @@ def test_phyrexian_grimoire_over_one_card_still_moves_it(set_pool):
 
 # --- W2G2: Magnetic Web's blocking requirement (CR 509.1c) ---
 
-from engine import Game, PlayerState, ai_policy
+from engine import Game, PlayerState, ai_declarations
 from engine.combat_permissions import MUST_BLOCK_ATTACKERS_UNTIL_EOT
 from engine.models import Permanent
 from engine.named_counters import add_counters
@@ -838,7 +838,7 @@ def test_w2g2_the_ai_declares_a_legal_magnet_attack(set_pool):
     """The AI reads the same predicate the declaration does, so it never
     proposes the half-attack the engine would bounce."""
     game, p0, p1 = _w2g2_magnet_attack_board(set_pool("TMP")["Magnetic Web"])
-    chosen = sorted(ai_policy.choose_attackers(game, 0))
+    chosen = sorted(ai_declarations.choose_attackers(game, 0))
     assert game.declare_attackers(0, chosen, 1)[0], (chosen, game.log)
 
 

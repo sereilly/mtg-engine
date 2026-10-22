@@ -1,14 +1,14 @@
 """A rehearsal that raises is counted, and a simulated run that had one fails.
 
 The policy carries a candidate cast out on a copy of the game before it
-proposes it (``ai_valuation.rehearse``). A copy that raises answers None —
+proposes it (``ai_rehearsal.rehearse``). A copy that raises answers None —
 "this could not be weighed" — which is right for a game somebody is playing
 and is also a silence: before a cast was rehearsed, an engine exception on a
 card's cast was raised by the real cast and stopped a simulated run on the
 spot. That was how a crash-on-cast card was found. Caught one layer down, the
 same exception is a card held or cast unweighed, and nothing says why.
 
-So each one is written down (``ai_valuation.REHEARSALS_RAISED``), and the
+So each one is written down (``ai_rehearsal.REHEARSALS_RAISED``), and the
 simulator reports what its run added (``SimulationReport.rehearsals_raised``)
 with an issue per distinct one — which is what makes
 ``scripts/simulate_ai_games.py`` exit 1.
@@ -21,7 +21,7 @@ from unittest import mock
 import pytest
 
 from engine import Game, PlayerState
-from engine import ai_valuation
+from engine import ai_rehearsal
 from engine.ai_policy import choose_cast_action
 from engine.ai_simulator import run_ai_simulation
 from engine.card_loader import load_cards, manifest_set_path, manifest_set_paths
@@ -50,17 +50,17 @@ class damage_that_raises_in_a_rehearsal:
         real = EFFECT_HANDLERS["deal_damage"]
 
         def handler(game, instruction, context):
-            if ai_valuation.rehearsing():
+            if ai_rehearsal.rehearsing():
                 raise RuntimeError("the handler under test raised")
             return real(game, instruction, context)
 
         self.patch = mock.patch.dict(EFFECT_HANDLERS, {"deal_damage": handler})
         self.patch.start()
-        self.before = Counter(ai_valuation.REHEARSALS_RAISED)
+        self.before = Counter(ai_rehearsal.REHEARSALS_RAISED)
         return self
 
     def raised(self) -> Counter:
-        return ai_valuation.REHEARSALS_RAISED - self.before
+        return ai_rehearsal.REHEARSALS_RAISED - self.before
 
     def __exit__(self, *exc) -> None:
         self.patch.stop()

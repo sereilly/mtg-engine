@@ -1667,7 +1667,7 @@ def test_the_ai_names_both_of_suffocating_blasts_targets_or_does_not_cast_it(
     """An AI seat holding the Blast: with an empty stack it proposes nothing
     (there is no spell to name), and answering an opponent's spell it names
     that spell and an opposing creature — an announcement the engine takes."""
-    from engine import ai_policy
+    from engine import ai_actions, ai_policy
 
     game, p0, p1 = _w2g1_duel()
     _w2g1_put(game, 1, catalog_by_name["Grizzly Bears"])
@@ -1681,7 +1681,7 @@ def test_the_ai_names_both_of_suffocating_blasts_targets_or_does_not_cast_it(
     bolt = _w2g1_spell_from(game, 1, catalog_by_name["Lightning Bolt"], target_player_index=0)
     action = ai_policy.choose_combat_instant_cast_action(game, 0)
     assert action is not None and action.card_name == "Suffocating Blast"
-    announced = ai_policy.cast_announcement(action)
+    announced = ai_actions.cast_announcement(action)
     assert game.stack[announced["target_stack_index"]] is bolt
     named = game.permanent_by_id(announced["target_permanent_ids"][1])
     assert named.card.name == "Grizzly Bears"
@@ -2136,7 +2136,7 @@ def test_w2g4_the_ai_spares_itself_and_sends_captains_maneuvers_damage_across(
     objects — it shielded its opponent's face and sent the damage to their
     creature. It names its own face and theirs now, and the announcement does
     what the card prints: of a Bolt aimed at the caster, two go across."""
-    from engine.ai_policy import choose_divided_targets
+    from engine.ai_divisions import choose_divided_targets
 
     game, _bears, _giant = _w2g4_maneuver_table(set_pool, catalog_by_name)
     maneuver = set_pool("APC")["Captain's Maneuver"]
@@ -2162,7 +2162,7 @@ def test_w2g4_captains_maneuver_is_not_proposed_with_nobody_to_send_the_damage_t
     than one filled from the other board: with the opponent untargetable and
     no opposing permanent, the second end has no taker and the card is not
     announced at all."""
-    from engine.ai_policy import choose_divided_targets
+    from engine.ai_divisions import choose_divided_targets
 
     game, _forest = _w2g4_instant_table(
         set_pool, catalog_by_name, hand=["Captain's Maneuver"], interactive=(),

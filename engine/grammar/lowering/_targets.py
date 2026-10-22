@@ -94,7 +94,7 @@ def card_divided_target_description(
     is not cosmetic. ``targets["count"]`` already means "this description names
     a list of *permanents*" to three readers that were written before a divided
     description could carry a number — ``handlers/damage``'s several-targets
-    branch, ``ai_valuation._several_target_instruction`` and the graveyard
+    branch, ``ai_target_sides._several_target_instruction`` and the graveyard
     picker — and the first of those sits above the divided branch in the same
     function, so a divided description carrying a ``count`` was silently
     resolved as an "up to N target creatures" and dealt nothing at all.
@@ -371,7 +371,7 @@ def _describe_several_card_targets(
 
     The shared *key* is deliberate: ``targets["count"] > 1`` is the one query
     that finds every several-target instruction in a compiled program
-    (``engine/ai_valuation.py`` walks for exactly that), so a card-shaped one
+    (``engine/ai_target_sides.py`` walks for exactly that), so a card-shaped one
     filed under a different key would be invisible to it.
     """
     if not recipient.targeted:

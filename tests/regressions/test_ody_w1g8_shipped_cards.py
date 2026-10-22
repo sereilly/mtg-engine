@@ -227,7 +227,7 @@ def test_toll_valuation_prices_the_spells_own_target(set_pool):
     """`toll_branch_loss` with the offer's context: damage that kills the
     offered seat's creature is that creature, damage that does not is
     nothing, and somebody else's creature is nothing either."""
-    from engine.ai_valuation import TollLoss, toll_branch_loss
+    from engine.ai_prompt_readers import TollLoss, toll_branch_loss
     from engine.game_types import OracleExecutionContext
     from engine.oracle import compile_card_oracle
 

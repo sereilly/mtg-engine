@@ -778,7 +778,7 @@ def test_g4_an_ai_seat_sees_the_granted_cost_too(set_pool):
     re-deriving one — so it has to ask the *same* reader. A policy that saw
     only the printed half would sit on a castable spell all game, which is the
     shape ``_alternative_cost_is_payable`` was written for."""
-    from engine.ai_policy import _alternative_cost_is_payable
+    from engine.ai_cast_gates import _alternative_cost_is_payable
 
     game, _caster, _ = _g4_halls(
         [_G4_LEA["Ancestral Recall"], _G4_LEA["Counterspell"]],

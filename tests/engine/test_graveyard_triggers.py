@@ -169,7 +169,7 @@ def test_every_graveyard_functioning_trigger_reaches_its_zone():
         # cover any small cost, and the seat is interactive so the offer is
         # *asked* rather than defaulted: the non-interactive default taps a
         # land for an optional gift only when nothing else would spend it
-        # (`ai_policy.optional_pay_may_tap_lands`), which is a policy question
+        # (`ai_prompts.optional_pay_may_tap_lands`), which is a policy question
         # and not the one this guard asks.
         #
         # **Two of each**, since Pyre Zombie (INV): its price is {1}{B}{B}, and
