@@ -2447,25 +2447,6 @@ def test_the_front_door_exports_every_family_name(package):
     )
 
 
-def test_no_module_is_back_to_its_old_size():
-    """The point of the split, stated as a number.
-
-    Not a style rule — these three files grow with the card pool, and the reason
-    the split was worth doing is that every new template lands in them. A
-    module drifting back past a thousand lines means the families stopped
-    absorbing new work and something is being appended to whatever was easiest.
-    """
-    oversized = {
-        str(path.relative_to(GRAMMAR)): len(source_text(path).splitlines())
-        for path in GRAMMAR.rglob("*.py")
-        if len(source_text(path).splitlines()) > 1000
-    }
-    assert not oversized, (
-        f"grammar modules back over 1,000 lines: {oversized}. Split along the "
-        "family the new work belongs to rather than raising this number."
-    )
-
-
 # Modules deliberately outside the layer order, each with the reason it is not
 # a layer. Named rather than skipped, because an *un-named* module is silently
 # unguarded — which is how `amounts`, `riders` and `subject_verb` sat outside

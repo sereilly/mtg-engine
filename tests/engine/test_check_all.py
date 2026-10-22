@@ -117,12 +117,30 @@ def test_a_stale_report_fails_the_check(tmp_path, monkeypatch):
 # class this repo keeps finding. So the caps are read back out of the guards
 # that own them rather than trusted.
 
-_GRAMMAR_CAP = re.compile(r"splitlines\(\)\) > (\d+)")
+_MODULE_CAP = re.compile(r"^CAP = (\d[\d_]*)$", re.MULTILINE)
+_MODULE_AREAS = re.compile(r"^AREAS = \(([^)]*)\)$", re.MULTILINE)
 _TEST_FILE_CAP = re.compile(r"limit = (\d[\d_]*)")
+
+#: The labels the report gives the module guard's areas, one per area.
+_MODULE_LABELS = {
+    "engine": "engine modules",
+    "web": "web modules",
+    "scripts": "script modules",
+}
 
 
 def _declared_caps() -> dict[str, int]:
     return {label: cap for label, cap, _root, _glob in check_all.SIZE_GUARDS}
+
+
+def _module_guard() -> tuple[int, list[str]]:
+    source = (REPO / "tests" / "engine" / "test_module_size.py").read_text(
+        encoding="utf-8"
+    )
+    caps = {int(n.replace("_", "")) for n in _MODULE_CAP.findall(source)}
+    assert len(caps) == 1, f"expected one CAP in test_module_size.py, found {caps}"
+    areas = re.findall(r'"([^"]+)"', _MODULE_AREAS.search(source).group(1))
+    return caps.pop(), areas
 
 
 def test_the_headroom_report_uses_the_caps_the_guards_enforce():
@@ -132,17 +150,10 @@ def test_the_headroom_report_uses_the_caps_the_guards_enforce():
     about a module the guard is about to fail on — advisory output that is
     wrong is worse than none, because it is read *instead* of checking.
     """
-    layering = (REPO / "tests" / "engine" / "test_grammar_layering.py").read_text(
-        encoding="utf-8"
-    )
     convention = (REPO / "tests" / "engine" / "test_set_test_convention.py").read_text(
         encoding="utf-8"
     )
-
-    grammar_caps = {int(n) for n in _GRAMMAR_CAP.findall(layering)}
-    assert grammar_caps == {1000}, (
-        f"expected one grammar size cap in test_grammar_layering.py, found {grammar_caps}"
-    )
+    module_cap, areas = _module_guard()
     test_caps = {int(n.replace("_", "")) for n in _TEST_FILE_CAP.findall(convention)}
     assert 2600 in test_caps, (
         "test_set_test_convention.py no longer states a 2,600-line limit; "
@@ -150,7 +161,8 @@ def test_the_headroom_report_uses_the_caps_the_guards_enforce():
     )
 
     declared = _declared_caps()
-    assert declared["grammar modules"] == grammar_caps.pop()
+    for area in areas:
+        assert declared[_MODULE_LABELS[area]] == module_cap, area
     assert declared["per-set test files"] == 2600
 
 
@@ -158,7 +170,11 @@ def test_the_headroom_report_looks_where_the_guards_look():
     """The globs, too — a report scanning a directory the guard does not (or
     missing one it does) is the same drift wearing a different hat."""
     roots = {label: (root, glob) for label, _cap, root, glob in check_all.SIZE_GUARDS}
-    assert roots["grammar modules"] == ("engine/grammar", "**/*.py")
+    _cap, areas = _module_guard()
+    module_labels = {label for label in roots if label.endswith(" modules")}
+    assert module_labels == {_MODULE_LABELS[area] for area in areas}
+    for area in areas:
+        assert roots[_MODULE_LABELS[area]] == (area, "**/*.py")
     assert roots["per-set test files"] == ("tests/sets", "test_*.py")
     for _label, _cap, root, glob in check_all.SIZE_GUARDS:
         assert list((REPO / root).glob(glob)), f"{root}/{glob} matches nothing"

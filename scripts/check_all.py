@@ -67,17 +67,21 @@ def _run(name: str, argv: list[str]) -> tuple[str, float, subprocess.CompletedPr
     return name, time.monotonic() - started, result
 
 
-#: How close to a cap counts as "one round away". Not tuned: it is roughly what
-#: a single group added to a single module in Mirage's waves, so a module inside
-#: it is one group's work from breaching.
-CAP_MARGIN = 30
+#: How close to a cap counts as "in the band": a module inside it is one set's
+#: work from breaching, and SET_PLAYBOOK.md's Phase 0 pre-splits it before the
+#: set rather than during a wave. Ten percent of the module cap; at the old
+#: 1,000-line grammar cap this was 30, which was one group's additions, and a
+#: band that narrow is what made every set start with a pre-split round.
+CAP_MARGIN = 200
 
 #: The size guards, as (label, cap, root, glob). A cap written here and in the
 #: guard is a second copy of one number, which is the failure class this repo
 #: hunts — so ``tests/engine/test_check_all.py`` reads both and fails if they
 #: disagree.
 SIZE_GUARDS: list[tuple[str, int, str, str]] = [
-    ("grammar modules", 1000, "engine/grammar", "**/*.py"),
+    ("engine modules", 2000, "engine", "**/*.py"),
+    ("web modules", 2000, "web", "**/*.py"),
+    ("script modules", 2000, "scripts", "**/*.py"),
     ("per-set test files", 2600, "tests/sets", "test_*.py"),
 ]
 

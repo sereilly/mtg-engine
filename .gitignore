@@ -49,3 +49,6 @@ logs/
 .worktrees/
 .scratch/
 .oracle_diff/
+
+# sim_fingerprint.py snapshots (seeded-run logs; a round's before/after baseline)
+.sim_fingerprint/
