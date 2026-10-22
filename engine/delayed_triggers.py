@@ -565,7 +565,7 @@ class DelayedTrigger:
         asked of the firing event rather than answered by a flag on the entry —
         a flag has a default, and its safe value differs per card.
         """
-        from .handlers._common import _card_matches_filter
+        from .handlers._filters import _card_matches_filter
         from .subject_filters import subject_matches
 
         if self.event != event:

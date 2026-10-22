@@ -103,7 +103,7 @@ def _attached_controller_only(game: "Game", seat: int, permanent: "Permanent") -
     leave the battlefield (CR 704.5m) with nobody able to activate it in the
     meantime.
     """
-    from .handlers._common import attached_host
+    from .handlers._targets import attached_host
 
     host = attached_host(game, permanent, last_known=False)
     if host is None:

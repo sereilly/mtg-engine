@@ -83,7 +83,9 @@ REVIEWED = {
     ("engine/phases/untap_step.py", "701.43a"),
     # Timmerian Fiends exchanges ownership; the comment says "nowhere to be
     # found", which is 701.12a's "if the effect can't be performed".
-    ("engine/handlers/zones.py", "701.12a"),
+    # (Moved with the handler to `ownership.py` when `zones.py` was split at
+    # the 2,000-line cap.)
+    ("engine/handlers/ownership.py", "701.12a"),
 }
 
 _CITATION = re.compile(r"\b(?:CR|rule)\s*(701\.(\d+)[a-z]?)\b")

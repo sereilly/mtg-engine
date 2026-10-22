@@ -11,7 +11,8 @@ from engine.bare_announcements import (
     default_cast_target, names_an_object, seat_of_unseated_slot, standing_order,
 )
 from engine.game_types import OracleExecutionContext
-from engine.handlers._common import pick_target_permanent, resolve_target_permanent
+from engine.handlers._targets import (pick_target_permanent,
+                                      resolve_target_permanent)
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.targeting import usable_activated_abilities

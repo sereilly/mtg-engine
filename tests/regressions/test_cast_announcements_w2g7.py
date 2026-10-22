@@ -33,7 +33,7 @@ from engine import Game, PlayerState
 from engine.ai_policy import _can_cast_with_targets
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import face_cards
-from engine.handlers._common import attached_host
+from engine.handlers._targets import attached_host
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.targeting import derive_cast_spec, spec_is_a_cost, spec_roles

@@ -214,7 +214,7 @@ _PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
     # the chosen type**" (Roots of Life) / "creatures of the chosen type"
     # (An-Zerrin Ruins). CR 614.1c's entry choice, recorded on the source and
     # resolved into an ordinary colour or subtype key by
-    # ``handlers/_common._resolve_chosen_color`` / ``_resolve_chosen_subtype``
+    # ``handlers/_chosen._resolve_chosen_color`` / ``_resolve_chosen_subtype``
     # before any matcher is asked - so all three are honoured in exactly the
     # sense ``colors`` and ``subtypes`` above are, and all three are already in
     # ``TESTABLE_SUBJECT_FILTER_KEYS`` because ``subject_matches`` answers them.
@@ -791,6 +791,6 @@ def split_bound_card_type(filt: "ast.ObjectFilter") -> tuple["ast.ObjectFilter",
         return filt, {}
     import dataclasses
 
-    from ...handlers._common import CHOSEN_CARD_TYPE
+    from ...handlers._chosen import CHOSEN_CARD_TYPE
 
     return dataclasses.replace(filt, of_bound_type=False), {CHOSEN_CARD_TYPE: True}

@@ -45,8 +45,6 @@ AREAS = ("engine", "web", "scripts")
 OVERSIZED: dict[str, int] = {
     # --- S1 ---
     # --- S2 ---
-    "engine/handlers/zones.py": 11769,
-    "engine/handlers/_common.py": 3838,
     # --- S3 ---
     "engine/ai_policy.py": 9198,
     "engine/ai_valuation.py": 4935,

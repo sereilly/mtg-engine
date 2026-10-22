@@ -7,7 +7,7 @@ caller (a test, the AI, ``scripts/run_duel.py``) supplied none.
 
 Downstream, "no seat named" was read as "the opponent". ``StackItem``'s seat was
 defaulted to ``1 - caster`` before the object went on the stack, and
-``handlers/_common.pick_target_permanent`` scopes its id lookup to exactly that
+``handlers/_targets.pick_target_permanent`` scopes its id lookup to exactly that
 player — deliberately, so that widening a target's battlefield is never
 something a resolver does by itself. Each half is defensible; together they
 threw the announcement away and fell through to the scan underneath, which took

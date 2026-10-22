@@ -1269,7 +1269,7 @@ def test_caribou_range_sacrifices_a_caribou_token_for_a_life(set_pool):
 def test_the_caribou_sacrifice_spares_a_printed_caribou(set_pool):
     """"A Caribou **token**" is not "a Caribou": the word is a fact about the
     object (CR 111.1), and dropped it would let the cost eat a real creature."""
-    from engine.handlers._common import permanent_matches_filter
+    from engine.handlers._filters import permanent_matches_filter
     from engine.tokens import make_token_card
 
     aura = Permanent(card=set_pool("ICE")["Caribou Range"])

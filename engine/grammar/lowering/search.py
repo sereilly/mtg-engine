@@ -175,7 +175,7 @@ def _lower_search_library(
         # "…**with the same name as that creature**" (Remembrance). The name is
         # not knowable when the card compiles, exactly as ``named_as_target``'s
         # is not: it is turned into an ordinary ``named`` where the search is
-        # armed (`handlers/zones._search_restrictions`), so every seat answers
+        # armed (`handlers/search._search_restrictions`), so every seat answers
         # the same search — the engine re-checking a pick, the AI choosing and
         # the web picker offering all read ``search_matches`` and none of them
         # has a trigger context in hand.
@@ -200,7 +200,7 @@ def _lower_search_library(
         # name is a *record* rather than a target or an event — the card the
         # reveal one sentence up turned face up — and it is turned into an
         # ordinary ``named`` where the search is armed
-        # (``handlers/zones._search_restrictions``), exactly as the two readings
+        # (``handlers/search._search_restrictions``), exactly as the two readings
         # around it are, so every seat answers the same search.
         #
         # Gated on the record actually being written by a step in front of this
@@ -227,7 +227,7 @@ def _lower_search_library(
         # paid — so it is a number by the time anything looks in the library,
         # just not a number this compile can write down. It travels as the
         # literal ``"x"`` and is resolved once, where the search is armed
-        # (`handlers/zones._search_restrictions`), so the picker, the AI and the
+        # (`handlers/search._search_restrictions`), so the picker, the AI and the
         # re-check all read one already-resolved bound rather than three
         # readings of a symbol.
         #

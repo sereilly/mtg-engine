@@ -32,7 +32,7 @@ list** (``Game._enumerate_targets`` over the slot the announcement owes), read
 in *standing order* — so it is by construction a target the gate would have
 accepted by name, and it is stamped on the stack object exactly as a named one
 is: ``announce_targets_chosen`` fires for it, CR 608.2b re-checks it, and no
-handler is left to choose (``handlers/_common.pick_target_permanent`` has no
+handler is left to choose (``handlers/_targets.pick_target_permanent`` has no
 scan for an announced object).
 
 **Standing order** is the seat an unnamed target has always been looked for
@@ -320,7 +320,7 @@ def announced_slots(game: "Game", seat_player, index, ids):
     An announcement records a battlefield target twice — a slot beside a seat
     and the permanent's id (``Game._stamp_stack_targets``) — and the two stop
     agreeing while the object waits on the stack: anything leaving renumbers
-    every later slot (CR 400.7 keeps the id). ``handlers/_common``'s resolvers
+    every later slot (CR 400.7 keeps the id). ``handlers/_targets``' resolvers
     prefer the id; a dozen older handlers read the slot alone, so for them
 
     * a target named **by id and nothing else** — the address this engine asks

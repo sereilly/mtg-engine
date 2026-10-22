@@ -413,7 +413,7 @@ def _lower_damage_shape(
     # lands that player controls." (Price of Progress.) A printed factor over a
     # counted quantity, unwrapped here and handed to the count branch below as a
     # number rather than as a node: `count_spec` already carries a `multiplier`
-    # (CR 107.3, `handlers/_common._scaled` applies it once for every
+    # (CR 107.3, `handlers/_amounts._scaled` applies it once for every
     # aggregate), so the factor travels the channel every other scaled count
     # travels and no handler learns a new key.
     #

@@ -1,7 +1,7 @@
 """Every count of cards **by name** in a zone, across the pool (CR 201.2a).
 
 ODY W1G4 changed the one name test every zone count asks
-(``handlers/_common._card_matches_filter``): it reads a card's *set* of names
+(``handlers/_filters._card_matches_filter``): it reads a card's *set* of names
 now (CR 709.4a: a split card has two) and it can be told which spell's effect
 is asking, because a card in a graveyard may count as a card of another name to
 exactly that spell — "If this card is in a graveyard, effects from spells named
@@ -17,7 +17,7 @@ show each way the test could go wrong.
 from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units
-from engine.handlers._common import evaluate_count
+from engine.handlers._amounts import evaluate_count
 from engine.oracle import compile_card_oracle
 from engine.oracle_types import OracleInstruction
 from tests.helpers import _mk_card

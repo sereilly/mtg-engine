@@ -10,7 +10,8 @@ it's created" — which is what orders it against every other layer-4 effect on
 the same permanent.
 
 The engine used to record them by appending a dict to a metadata list from five
-places (``handlers/board_misc.py`` ×4, ``handlers/zones.py`` ×1), none of which
+places (``handlers/board_misc.py`` ×4, ``handlers/zones.py`` ×1 — now
+``handlers/reanimation.py``), none of which
 recorded *when*. The layer bridge had nothing to order by and gave both lists
 the constant 0 — every addition before every removal, whichever came first — so
 a Snow-Covered Forest thawed by the Weathervane and then frozen again was not

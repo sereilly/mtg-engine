@@ -14,7 +14,7 @@ differ accordingly: everything in ``_targets`` is read by the handler that acts
 on the one chosen object, and everything here is read by a *walk* —
 ``legality_roles.role_target_options`` enumerates slot *n* with slots 0…n-1 settled,
 the announcement gate re-asks that same call over what the caster named, and
-``handlers/_common.roles_still_legal`` asks it a third time at resolution.
+``handlers/_targets.roles_still_legal`` asks it a third time at resolution.
 
 **It is the half that grows with the pool**, which is the playbook's tiebreak
 when both halves of a split are description builders. The single-slot payload

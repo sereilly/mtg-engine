@@ -1766,7 +1766,7 @@ def _resolved_chosen_color(wanted: dict, holder) -> dict | None:
     stamps it, so the answer lives on the permanent whose text carried the line
     — which is why it is resolved here, where that permanent is in hand, rather
     than in the pure matcher below. The same shape
-    ``handlers/_common._resolve_chosen_color`` gives the noun-phrase side.
+    ``handlers/_chosen._resolve_chosen_color`` gives the noun-phrase side.
 
     None rather than an unnarrowed shield: a holder with no colour recorded has
     named no property for CR 615.9 to recheck, and a shield answering to every

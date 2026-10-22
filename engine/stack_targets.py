@@ -839,7 +839,7 @@ def illegal_target_id(permanent_id) -> int | None:
     negative of one resolves to nothing and never will. That is the whole of
     the mechanism, and it is the one the engine already has: every resolver
     reads "an id was recorded and no longer resolves" as *the target is gone*
-    (``handlers/_common.pick_target_permanent``'s step 0b,
+    (``handlers/_targets.pick_target_permanent``'s step 0b,
     ``resolve_target_permanents``, ``resolve_role_permanent``), so a slot
     rewritten to this id is treated exactly as a departed target is — not
     acted on, and **not replaced** by a scan, because a scan is what an id

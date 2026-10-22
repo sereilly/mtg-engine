@@ -1319,7 +1319,7 @@ def test_w3g2_sneak_attack_with_no_creature_in_hand_arms_nothing(set_pool, catal
 def test_w3g2_sneak_attack_only_offers_creature_cards(set_pool, catalog_by_name):
     """"a **creature** card from your hand" — the printed noun, enforced by the
     candidate rule the prompt and its default both read."""
-    from engine.handlers.zones import put_from_hand_candidates
+    from engine.handlers.hand import put_from_hand_candidates
 
     game, alice, _bob = _g2s_sneak_attack_board(
         set_pool,

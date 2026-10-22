@@ -119,7 +119,7 @@ def _honours_printed_another(node: ast.ReturnToZone) -> bool:
     Exactly one does: the *one-card* targeted graveyard-to-hand return, whose
     payload carries ``exclude_source_card`` and whose three readers — the
     picker, the CR 608.2b re-check and the handler — all resolve it through
-    ``handlers/_common.excluded_graveyard_slot``. The several-card branch is
+    ``handlers/_filters.excluded_graveyard_slot``. The several-card branch is
     deliberately **not** here: its handler resolves a list of slots through
     ``_resolve_graveyard_slots``, which reads a per-card predicate and has
     nowhere to put a per-slot exclusion, and no card in either manifest role
@@ -715,7 +715,7 @@ def _lower_return_to_zone(
                 # The printed "another", on the key the picker
                 # (``targeting._graveyard_return_spec``), the announcement gate
                 # and the handler all read through one predicate
-                # (``handlers/_common.excluded_graveyard_slot``). Its own key
+                # (``handlers/_filters.excluded_graveyard_slot``). Its own key
                 # rather than the ``exclude_self`` a *permanent* narrowing
                 # lowers to, because the two matchers are different: this one
                 # is asked about a card in a zone, which has no

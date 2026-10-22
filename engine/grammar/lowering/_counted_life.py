@@ -278,7 +278,7 @@ def lower_counted_gain(
     # (Multani's Decree.) The bare record one branch down with a printed rate on
     # it, so it goes through ``recorded_count_spec`` — the one reader that
     # unwraps a factor, checks the producer really ran and lands the number on
-    # ``x_from_count``, where ``handlers/_common._scaled`` applies the
+    # ``x_from_count``, where ``handlers/_amounts._scaled`` applies the
     # multiplier. Written here as its own arithmetic it would be a second
     # answer to "two life per what?", and the direction that fails is silent:
     # a factor read by one spender and dropped by the next gains half what the

@@ -251,7 +251,7 @@ SOURCE_MANA_COST = "its_mana_cost"
 #: board** — "…unless you pay {10}. This cost is reduced by {2} for each basic
 #: land type among lands you control." (Draco.) Its value is ``{"generic": n,
 #: "count": <count spec>}``: one repetition, and the ordinary count spec
-#: ``handlers/_common.evaluate_count`` answers. Named here, beside
+#: ``handlers/_amounts.evaluate_count`` answers. Named here, beside
 #: :data:`SOURCE_MANA_COST`, because the lowering writes it and
 #: :func:`resolved_toll_instruction` is its one reader.
 COST_REDUCED_PER_EACH = "reduced_per_each"
@@ -272,7 +272,7 @@ def _reduced_toll_instruction(game, permanent, instruction):
     from dataclasses import replace
 
     from .cost_modifiers import CostReduction, reduce_cost
-    from .handlers._common import evaluate_count
+    from .handlers._amounts import evaluate_count
 
     payload = dict(instruction.payload)
     described = payload.pop(COST_REDUCED_PER_EACH)

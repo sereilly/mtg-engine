@@ -124,7 +124,7 @@ def _recipient_seat_count(node: ast.DealDamage, multiplier: int = 1) -> dict | N
 
 
 #: Characteristics of a cost-eaten permanent that ``count_from_payload``
-#: actually reads back (``engine/handlers/_common.py``). A mana value comes off
+#: actually reads back (``engine/handlers/_amounts.py``). A mana value comes off
 #: the card and survives anything; a power or a toughness is the *effective*
 #: one the permanent last had on the battlefield (CR 608.2h), which the
 #: `Permanent` object still carries after it leaves — the same read
@@ -539,7 +539,7 @@ def lower_ledger_damage(node: ast.DealDamage) -> tuple[OracleInstruction, ...]:
     The turn's damage ledger asked about the creature the sentence targets,
     through the ``x_from_count`` channel every other computed amount travels
     and the ``damage_ledger`` spec Blazing Effigy's where-clause already
-    writes — one reader (``handlers/_common._damage_dealt_this_turn``) for
+    writes — one reader (``handlers/_amounts._damage_dealt_this_turn``) for
     both, so "damage dealt to a creature this turn" is one history.
 
     **The recipient and the creature counted are one object**, and that is
@@ -602,7 +602,7 @@ def lower_revealed_this_way_damage(
 
     *multiplier* is the printed rate, unwrapped by the caller: "deals **3**
     damage … for each card" is three times the count, and it rides the spec's
-    own ``multiplier`` key, which ``handlers/_common._scaled`` already applies
+    own ``multiplier`` key, which ``handlers/_amounts._scaled`` already applies
     to every aggregate. No handler learns a new key.
 
     Three refusals, each the direction that fails loudly:

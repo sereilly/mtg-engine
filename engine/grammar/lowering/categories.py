@@ -679,7 +679,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # "…destroy the blocking creature." / "…destroy the attacking creature."
     # (No Quarter.) The other half of the block pair the firing was about, named
     # by its printed combat role — the same referent
-    # `handlers/_common.block_pair_permanents` already resolves for every other
+    # `handlers/_targets.block_pair_permanents` already resolves for every other
     # block-pair effect.
     "destroy_block_pair_partner": "destruction",
     "counter_top_stack_spell": "counterspells",

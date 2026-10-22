@@ -305,7 +305,8 @@ def test_a_blanked_slot_keeps_its_place_in_the_announcement():
     compares its two targets depends on exactly that to find it has nothing to
     compare, rather than acting on the survivor alone."""
     from engine.game_types import OracleExecutionContext, StackItem
-    from engine.handlers._common import resolve_target_permanents, resolve_target_slots
+    from engine.handlers._targets import (resolve_target_permanents,
+                                          resolve_target_slots)
     from engine.stack_targets import ChosenTarget, blank_illegal_targets, illegal_target_id
 
     game = _w2g3_table()

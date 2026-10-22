@@ -1382,7 +1382,7 @@ def test_a_seat_that_names_no_ability_takes_the_stated_default(set_pool):
     a board with no first-striker would leave the move with no legal first
     target — and deterministic, which the AI-simulation regressions depend on.
     """
-    from engine.handlers._common import CHOSEN_ABILITY
+    from engine.handlers._chosen import CHOSEN_ABILITY
 
     game, splicer, flier, ground = _w3g4b_board(set_pool)
     result = game.activate_permanent_ability(
@@ -1408,7 +1408,7 @@ def test_the_picker_offers_the_words_the_card_printed(set_pool):
 
 # --- Promotion gate: a refused activation takes its announcement back ---
 
-from engine.handlers._common import CHOSEN_ABILITY as _PROMO_CHOSEN_ABILITY
+from engine.handlers._chosen import CHOSEN_ABILITY as _PROMO_CHOSEN_ABILITY
 
 
 def _promo_splicer_alone(set_pool):

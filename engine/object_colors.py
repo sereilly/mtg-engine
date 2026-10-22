@@ -22,7 +22,7 @@ caller that has to branch on the kind of object is a caller that can forget one
 of the two, which is how every site below came to read the printed field.
 
 The colour of a card outside the battlefield used to be read in three places that
-could not agree — ``handlers/_common._card_matches_filter`` (a filter payload),
+could not agree — ``handlers/_filters._card_matches_filter`` (a filter payload),
 ``search_filters.card_colors`` (a library search) and ``_stack_item_colors`` (a
 spell) — and each read the printed field. Two of those took neither a game nor
 an owner and documented the printed reading as deliberate, which it was, right

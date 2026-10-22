@@ -661,11 +661,11 @@ def test_603_3d_the_controller_chooses_which_of_several_legal_targets():
 def test_603_10_the_frozen_seat_is_read_through_one_key_list():
     """The picker and the resolution must name the same player.
 
-    ``_that_player_seat`` reads ``handlers/_common._THAT_PLAYER_CONTEXT_KEYS``
+    ``_that_player_seat`` reads ``handlers/_targets._THAT_PLAYER_CONTEXT_KEYS``
     — the tuple ``frozen_that_player_seat`` reads at resolution — so a second
     copy cannot drift into offering one board and acting on another.
     """
-    from engine.handlers._common import _THAT_PLAYER_CONTEXT_KEYS
+    from engine.handlers._targets import _THAT_PLAYER_CONTEXT_KEYS
 
     game, players, cat = _w2g5_cat_board(2, interactive=False)
     item = StackItem(

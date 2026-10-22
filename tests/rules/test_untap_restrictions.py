@@ -446,7 +446,7 @@ def test_614_1a_a_replaced_untap_may_remove_the_permanent_from_the_battlefield()
     """
     from engine import Game, PlayerState
     from engine.card_loader import load_cards, manifest_set_path
-    from engine.handlers.zones import RETURN_AT_NEXT_UNTAP_SEAT
+    from engine.handlers.returns import RETURN_AT_NEXT_UNTAP_SEAT
     from engine.models import Permanent
 
     basics = {card.name: card for card in load_cards(manifest_set_path("LEA"))}
@@ -483,7 +483,7 @@ def test_614_1a_the_replaced_untap_marker_names_one_players_step():
     so the marker waits."""
     from engine import Game, PlayerState
     from engine.card_loader import load_cards, manifest_set_path
-    from engine.handlers.zones import RETURN_AT_NEXT_UNTAP_SEAT
+    from engine.handlers.returns import RETURN_AT_NEXT_UNTAP_SEAT
     from engine.models import Permanent
 
     basics = {card.name: card for card in load_cards(manifest_set_path("LEA"))}

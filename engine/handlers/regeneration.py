@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ._common import (attached_host, block_pair_permanents,
-                      permanent_matches_filter, resolve_target_permanent)
+from ._filters import permanent_matches_filter
+from ._targets import (attached_host, block_pair_permanents,
+                       resolve_target_permanent)
 from .registry import effect_handler
 
 if TYPE_CHECKING:

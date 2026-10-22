@@ -24,7 +24,8 @@ from __future__ import annotations
 from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units
-from engine.handlers._common import _card_matches_filter, graveyard_card_matches
+from engine.handlers._filters import (_card_matches_filter,
+                                      graveyard_card_matches)
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.targeting import graveyard_target_spec

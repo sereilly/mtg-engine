@@ -11,7 +11,7 @@ whichever comes first. Nether Void's trigger for the second Bolt armed its
 payment against the first.
 
 The fire sites now carry the ``StackItem`` (``cast_item``), and the three
-readers ask one function, ``handlers._common.triggering_spell``. This census
+readers ask one function, ``handlers._targets.triggering_spell``. This census
 puts two spells of one card on the stack under **every** cast trigger in both
 manifest roles whose effect acts on its spell — a counter bound to the trigger,
 a price read off the spell, a copy of it — and asks two questions:

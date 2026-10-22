@@ -422,22 +422,29 @@ def test_every_chosen_name_comparison_over_a_zone_asks_for_either_name():
     import inspect
     import pkgutil
 
-    from engine.handlers import zones
+    import engine.handlers as handlers
     from engine.mixins.stack import choices
 
-    # ``choices`` is a package, one module per family of prompt: read every
-    # module of it, because its ``__init__`` holds none of the comparisons and
-    # a census of that alone would pass over all of them.
-    modules = [zones] + [
+    # Every module of both packages, read one by one. ``handlers/zones.py`` and
+    # ``choices.py`` each held some of the comparisons and each was split into a
+    # package of modules at the 2,000-line cap; a census over a list of modules
+    # is blind to whatever the next split moves out, and ``getsource`` of a
+    # package reads only its ``__init__``, which holds none of them.
+    handler_modules = [
+        importlib.import_module(f"{handlers.__name__}.{info.name}")
+        for info in pkgutil.iter_modules(handlers.__path__)
+    ]
+    choice_modules = [
         importlib.import_module(f"{choices.__name__}.{info.name}")
         for info in pkgutil.iter_modules(choices.__path__)
     ]
-    assert len(modules) > 10, modules
+    assert len(handler_modules) > 30, [module.__name__ for module in handler_modules]
+    assert len(choice_modules) > 10, [module.__name__ for module in choice_modules]
 
     # The census half: every chosen-name comparison over a zone asks
     # ``has_name``. A raw ``card.name == named`` matches neither half's name
     # against "Burn // Grow" and so misses a card the rule says is named that.
-    for module in modules:
+    for module in (*handler_modules, *choice_modules):
         source = inspect.getsource(module)
         assert ".name == named" not in source, module.__name__
         assert ".name != named" not in source, module.__name__

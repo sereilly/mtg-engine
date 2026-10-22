@@ -198,7 +198,7 @@ def land_satisfies(permanent: "Permanent", requirement: LandwalkRequirement) -> 
 # What the types are counted *among* is an ordinary noun phrase in an ordinary
 # count position, so it is read by the grammar's own per-each reader
 # (``grammar.per_each_count_spec_for``) and answered by the one scan every
-# count in the engine uses (``handlers/_common.basic_land_types_among``). The
+# count in the engine uses (``handlers/_amounts.basic_land_types_among``). The
 # subject is the ability's own creature and nothing else: a sentence granting
 # the words to another object would need a recipient this reader does not
 # resolve, so it refuses rather than granting them to the source.
@@ -287,7 +287,7 @@ def board_named_landwalks(game, seat: int, permanent: "Permanent") -> tuple[str,
     specs = _per_type_landwalk_specs(permanent.effective_card.oracle_text or "")
     if not specs:
         return ()
-    from .handlers._common import basic_land_types_among
+    from .handlers._amounts import basic_land_types_among
 
     owner = game.players[seat]
     walks: list[str] = []

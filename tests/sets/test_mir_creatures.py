@@ -344,7 +344,7 @@ def test_the_keyword_comes_back_at_cleanup(set_pool):
 
 # --- Round 7: two conditions the tables were built for and never fed ---
 
-from engine.handlers._common import permanent_effective_colors
+from engine.handlers._filters import permanent_effective_colors
 
 
 def test_spirit_of_the_night_has_first_strike_only_while_attacking(set_pool):

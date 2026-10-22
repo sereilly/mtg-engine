@@ -9,7 +9,7 @@ trigger whose own spell had already been countered went on to act on the
 look-alike.
 
 The fire sites carry the spell's ``StackItem`` now (``cast_item``) and the
-readers ask ``handlers._common.triggering_spell``.
+readers ask ``handlers._targets.triggering_spell``.
 ``tests/engine/test_cast_trigger_spell_identity.py`` asks both questions of
 every such trigger in the pool; these are the two shipped shapes — a counter
 and a copy — with the stack and the log read at each step.

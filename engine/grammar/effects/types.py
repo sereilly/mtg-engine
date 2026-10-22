@@ -457,7 +457,7 @@ def _pt_value(amount: ast.Amount) -> "int | str":
     """One half of a creature body's printed size, as the node carries it.
 
     A number stays a number and an X becomes the string the whole engine spells
-    a variable amount with (``handlers/_common.resolve_amount``) — so a body
+    a variable amount with (``handlers/_amounts.resolve_amount``) — so a body
     that prints "X/X" reaches the handler in the shape every other amount does,
     rather than as a second vocabulary only the animation understands.
     """

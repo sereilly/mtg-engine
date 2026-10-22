@@ -28,7 +28,7 @@ from engine.card_loader import load_cards, manifest_set_paths
 from engine.grammar import compile_line
 from engine.grammar.ast import ObjectFilter, TargetSpec
 from engine.grammar.lowering.returns import subject_names_another
-from engine.handlers._common import excluded_graveyard_slot
+from engine.handlers._filters import excluded_graveyard_slot
 from engine.models import CardDefinition
 from engine.oracle import compile_card_oracle
 from tests.helpers import _mk_card
@@ -48,7 +48,7 @@ _EXCLUSION_KEYS = frozenset({
     "exclude_self",
     # ...and against a **card in a graveyard**, where the exclusion is a slot
     # rather than a characteristic
-    # (``handlers/_common.excluded_graveyard_slot``).
+    # (``handlers/_filters.excluded_graveyard_slot``).
     "exclude_source_card",
     # CR 115.3/601.2c's distinctness over a several-slot announcement.
     "distinct",

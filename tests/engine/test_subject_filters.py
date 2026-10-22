@@ -269,7 +269,7 @@ def test_multicolored_is_two_or_more_of_the_computed_colours(pool):
     printed colours for a card in a zone (CR 202.2).
     """
     from engine.color_changes import change_color
-    from engine.handlers._common import _card_matches_filter
+    from engine.handlers._filters import _card_matches_filter
 
     described = {"type_filter": "creature", "multicolored": True}
     wurm = Permanent(card=pool["Shivan Wurm"])
@@ -460,7 +460,7 @@ def test_chosen_card_type_is_read_off_the_ability_s_source(pool):
     then some: this sentence is a **sweep**, so a dropped narrowing phases out
     every nontoken permanent on the board rather than one type's.
     """
-    from engine.handlers._common import CHOSEN_CARD_TYPE
+    from engine.handlers._chosen import CHOSEN_CARD_TYPE
 
     bear = Permanent(card=pool["Grizzly Bears"])
     forest = Permanent(card=pool["Forest"])
@@ -1063,7 +1063,7 @@ def test_blocked_or_was_blocked_this_turn_names_either_side_of_a_block(pool):
     defender that blocked nothing. All five are the same card, so only the
     records tell them apart.
     """
-    from engine.handlers._common import permanent_matches_filter
+    from engine.handlers._filters import permanent_matches_filter
 
     blocked = Permanent(card=pool["Grizzly Bears"])
     unblocked = Permanent(card=pool["Grizzly Bears"])
@@ -1645,7 +1645,7 @@ def test_a_card_matches_every_type_printed_on_it(catalog_by_name):
     """CR 205.2a: a card has all the types on its line. The matcher used to ask
     ``primary_type``, which collapses "Artifact Creature — Construct" to one
     word and would have refused it as an artifact card."""
-    from engine.handlers._common import _card_matches_filter
+    from engine.handlers._filters import _card_matches_filter
 
     juggernaut = catalog_by_name["Juggernaut"]
     assert _card_matches_filter(juggernaut, {"type_filter": "artifact"})
@@ -1679,7 +1679,7 @@ def test_a_class_union_is_answered_about_a_card_too(catalog_by_name):
     such a filter is the size of the whole hand.
     """
     from engine.grammar import card_filter_payload
-    from engine.handlers._common import _card_matches_filter
+    from engine.handlers._filters import _card_matches_filter
     from engine.subject_filters import CARD_ONLY_FILTER_KEYS, card_only_filter
 
     assert "any_classes" in CARD_ONLY_FILTER_KEYS
@@ -1715,7 +1715,7 @@ def test_a_supertype_narrows_a_permanent(catalog_by_name, set_pool):
     Nothing in layers 4-6 computes one here, so the answer is read off the line
     the permanent effectively has."""
     from engine.grammar import subject_filter_payload
-    from engine.handlers._common import permanent_matches_filter
+    from engine.handlers._filters import permanent_matches_filter
     from engine.models import Permanent
 
     described = subject_filter_payload("a legendary creature")
@@ -2274,7 +2274,7 @@ def test_chosen_keyword_is_read_off_the_ability_s_source(pool):
     instead would miss it.
     """
     from engine.keywords import grant_keyword
-    from engine.handlers._common import CHOSEN_ABILITY
+    from engine.handlers._chosen import CHOSEN_ABILITY
 
     splicer = Permanent(card=pool["Phyrexian Splicer"])
     flier = Permanent(card=pool["Air Elemental"])          # printed flying
@@ -2506,7 +2506,7 @@ def test_apc_w1g9_in_combat_with_source_is_the_union_of_both_block_relations(poo
     the key rather than ignore it: an in-combat relation dropped from a targeted
     destroy is every creature on the board.
     """
-    from engine.handlers._common import permanent_matches_filter
+    from engine.handlers._filters import permanent_matches_filter
 
     described = {"type_filter": "creature", "in_combat_with_source": True}
 
@@ -2592,7 +2592,7 @@ def test_tor_w1g2_a_power_bound_counts_the_observer_s_own_pile(pool):
     narrows to nothing: on a target that is a creature the spell cannot be
     aimed at, rather than one it reaches past the printed clause.
     """
-    from engine.handlers._common import permanent_matches_filter
+    from engine.handlers._filters import permanent_matches_filter
     from engine.pt import add_pt_modifier
 
     lions = Permanent(card=pool["Savannah Lions"])   # 2/1

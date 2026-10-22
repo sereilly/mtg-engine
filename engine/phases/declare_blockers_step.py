@@ -2657,7 +2657,7 @@ class DeclareBlockersStepMixin:
         pair, which is what the two printed sentences say.
 
         ``blocked_permanent_ids`` carries the **partner** under the key
-        ``handlers/_common.block_pair_permanents`` already reads, so the effect
+        ``handlers/_targets.block_pair_permanents`` already reads, so the effect
         resolves the other half of the pair through the one reader every other
         block-pair effect goes through. ``target_permanent_id`` carries it too,
         for the stack item, the log and CR 400.7's identity.

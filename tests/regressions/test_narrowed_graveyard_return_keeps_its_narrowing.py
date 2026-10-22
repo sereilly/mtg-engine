@@ -37,7 +37,7 @@ from collections import Counter
 from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units
-from engine.handlers.zones import _GRAVEYARD_NARROWING_KEYS
+from engine.handlers.returns import _GRAVEYARD_NARROWING_KEYS
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from tests.helpers import resolve_stack

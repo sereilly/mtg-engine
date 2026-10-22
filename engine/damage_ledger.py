@@ -366,7 +366,7 @@ def last_cast_that_damaged_seat(game, seat: int, described: dict) -> CastEntry |
     the effect it admits disagreeing about which spell the sentence names is
     the failure both of them exist to prevent.
     """
-    from .handlers._common import _card_matches_filter
+    from .handlers._filters import _card_matches_filter
 
     for cast in reversed(casts_that_damaged_seat(game, seat)):
         if _card_matches_filter(_cast_as_it_was(game, cast), described):

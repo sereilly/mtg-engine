@@ -1,6 +1,6 @@
 """What a printed noun phrase means, tested against one permanent.
 
-``engine/handlers/_common.py``'s ``permanent_matches_filter`` is the pure half of
+``engine/handlers/_filters.py``'s ``permanent_matches_filter`` is the pure half of
 that question: every key it answers is readable off the permanent alone, so it
 needs no game and every filter reader in the engine already shares it. Three
 keys are not readable that way — a keyword is a layer-6 question (CR 613.1f),
@@ -30,12 +30,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .handlers._common import (CHOSEN_CARD_TYPE, _comparison_holds,
-                               _resolve_chosen_card_type, _resolve_chosen_color,
-                               evaluate_count,
-                               _resolve_chosen_keyword,
-                               _resolve_chosen_subtype,
-                               permanent_matches_filter)
+from .handlers._amounts import evaluate_count
+from .handlers._chosen import (CHOSEN_CARD_TYPE, _resolve_chosen_card_type,
+                               _resolve_chosen_color, _resolve_chosen_keyword,
+                               _resolve_chosen_subtype)
+from .handlers._filters import _comparison_holds, permanent_matches_filter
 from .search_filters import name_key
 
 if TYPE_CHECKING:
@@ -258,7 +257,7 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     #
     # It arrived here late, and the lateness is the finding: the matcher has
     # answered the key since the Legends pinger cycle
-    # (``handlers/_common.permanent_matches_filter``, through the same
+    # (``handlers/_filters.permanent_matches_filter``, through the same
     # ``state_holds`` table ``layer_bridge`` reads), and the *promise* was
     # simply never made — so every gate asking "are all these keys testable?"
     # refused a phrase the engine tests perfectly. That is this set's failure
@@ -712,7 +711,7 @@ def observer_source_filter(payload: dict) -> dict | None:
 #: ordinary ``CARD_ONLY_FILTER_KEYS`` before any matcher is asked — "a creature
 #: card **of the chosen type**" (Belbe's Portal). CR 614.1c records the word on
 #: the source as it entered, so no card in a zone can answer the key and
-#: ``_card_matches_filter`` refuses it; ``handlers/_common._resolve_chosen_subtype``
+#: ``_card_matches_filter`` refuses it; ``handlers/_chosen._resolve_chosen_subtype``
 #: is what replaces it with ``subtype_filter``. Only a caller whose handler does
 #: that may pass these as *carried_separately* below.
 SOURCE_RESOLVED_CARD_KEYS = frozenset({"chosen_creature_type", "chosen_land_type"})
@@ -750,7 +749,7 @@ def card_matches_any(card, alternatives) -> bool:
     No alternatives is no narrowing, which is the honest reading of "Discard a
     card": every card in hand pays it.
     """
-    from .handlers._common import _card_matches_filter
+    from .handlers._filters import _card_matches_filter
 
     if not alternatives:
         return True
@@ -1380,7 +1379,7 @@ def subject_matches(
     # never in combat itself, so with no host (CR 704.5m has already put such an
     # Aura in a graveyard) there is no relation to test and the answer is no.
     if described.get("blocking_attached_host"):
-        from .handlers._common import attached_host
+        from .handlers._targets import attached_host
 
         host = attached_host(game, source) if source is not None else None
         if host is None:
@@ -1445,7 +1444,7 @@ def subject_matches(
     # By identity off the live attachment record, not by value: a second copy of
     # the same creature card is a different permanent and a legal target.
     if described.get("other_than_attached_host"):
-        from .handlers._common import attached_host
+        from .handlers._targets import attached_host
 
         if source is not None and obj is attached_host(game, source, last_known=False):
             return False

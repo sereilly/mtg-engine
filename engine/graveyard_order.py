@@ -120,7 +120,7 @@ def positions_named(graveyard: list, spec: dict) -> list[int]:
     and an identity filter over the list would remove both. A caller removing
     several must delete from the highest index down.
     """
-    from .handlers._common import _card_matches_filter
+    from .handlers._filters import _card_matches_filter
 
     described = spec.get("filter")
     order = (

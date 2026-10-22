@@ -263,7 +263,7 @@ EVENT_CHOSEN_TARGETS = "event_chosen_targets"
 #: bare and left the pick to the handler (the standing convention), and a
 #: trigger whose target its handler finds for itself — and every resolver
 #: under them answers the empty case with a **scan** of the battlefield
-#: (``handlers/_common.pick_target_permanent``). The scan knows what the
+#: (``handlers/_targets.pick_target_permanent``). The scan knows what the
 #: sentence names and nothing about what may be targeted, so an "up to one
 #: target creature" that could legally name only nobody went on to act on a
 #: creature with shroud: Barrin, Tolarian Archmage and Roaming Ghostlight
@@ -274,7 +274,7 @@ EVENT_CHOSEN_TARGETS = "event_chosen_targets"
 #: Written by ``Game.record_no_target_named`` and read by
 #: :func:`named_no_target`; nothing else spells the key. Here rather than in
 #: ``engine/stack_targets.py``, whose subject it is, because the reader is a
-#: handler floor (``handlers/_common``) and that module sits above it in the
+#: handler floor (``handlers/_targets``) and that module sits above it in the
 #: import order — this file imports nothing from the engine.
 NAMED_NO_TARGET = "named_no_target"
 
@@ -1026,7 +1026,7 @@ _MANA_TOKEN_RE = re.compile(r"\{([^}]+)\}")
 #: Claw.)
 #:
 #: Permanent ids, and one record shape with the reanimation's
-#: (``handlers/zones.REANIMATED_PERMANENTS``) on purpose: a sentence reading
+#: (``handlers/reanimation.REANIMATED_PERMANENTS``) on purpose: a sentence reading
 #: "that creature" should not have to care which step put the permanent
 #: there, so both are members of ``lowering/_events._RECORDED_PERMANENTS``
 #: and every reader asks that set rather than a key.
@@ -1043,7 +1043,7 @@ EXILED_THIS_WAY = "exiled_this_way"
 #: "…until **you put a card into your hand**" (Tainted Pact). The cards a step
 #: of this effect put into a hand out of exile — a record because a hand does
 #: not say which of its cards an effect added. Here for ``EXILED_THIS_WAY``'s
-#: reason: ``handlers/zones.put_exiled_cards_into_zone`` writes it and a
+#: reason: ``handlers/linked_exile.put_exiled_cards_into_zone`` writes it and a
 #: lowering gates on it.
 PUT_INTO_HAND_THIS_WAY = "put_into_hand_this_way"
 
@@ -1152,7 +1152,8 @@ EXILED_BY_SEAT = "exiled_by_seat"
 #: vacuous while the amount reads an empty record.
 #:
 #: **Swept at VIS wave 4.** Five modules still spelled the string out — the
-#: mill handlers in ``handlers/zones.py``, the two condition readers in
+#: mill handlers in ``handlers/zones.py`` (``handlers/cards.py`` since the
+#: 2,000-line split), the two condition readers in
 #: ``handlers/control_flow.py`` and ``lowering/conditions.py``, the reanimation
 #: in ``lowering/cards.py``, and ``lowering/_records._PRODUCES`` — twelve
 #: occurrences, deferred once because three of those modules were open on other

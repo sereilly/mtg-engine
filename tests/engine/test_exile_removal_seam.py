@@ -368,7 +368,7 @@ _COMPUTED_ATTRIBUTE_WRITES: dict[str, str] = {
         "CR 903.9a's two dead zones — 'graveyard' or 'exile'. The exile branch "
         "calls take_card_from_exile; this is the graveyard one."
     ),
-    "engine/handlers/zones.py::_take_located_card": (
+    "engine/handlers/ownership.py::_take_located_card": (
         "_OWNERSHIP_ZONES — graveyard/hand/exile/library/ante. The exile branch "
         "calls take_card_from_exile; this is every other zone."
     ),
@@ -635,7 +635,7 @@ def test_an_ownership_move_out_of_exile_takes_the_record(catalog_by_name):
     """Timmerian Fiends' "put this card **from anywhere** into that player's
     graveyard" (CR 701.12a). The locator returns a zone *name*, so the write
     went through ``getattr(player, zone).pop(at)`` — invisible to the scan."""
-    from engine.handlers.zones import _give_card_to_graveyard
+    from engine.handlers.ownership import _give_card_to_graveyard
 
     lotus = catalog_by_name["Black Lotus"]
     game, player = _game([lotus])

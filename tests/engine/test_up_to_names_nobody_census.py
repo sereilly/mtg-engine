@@ -4,7 +4,7 @@ CR 601.2c lets an announcement that prints "up to" choose **zero** targets, and
 CR 115.6 says what that makes the object: not targeted. So the effect has
 nothing to act on. This engine kept the first half and not the second: the
 object went on the stack with empty target fields, and the scan under every
-single-target handler (``handlers/_common.pick_target_permanent``) read "no
+single-target handler (``handlers/_targets.pick_target_permanent``) read "no
 target recorded" as "find one". With nothing on the table but a creature the
 ability could not legally name, Barrin, Tolarian Archmage and Roaming
 Ghostlight returned it to its owner's hand, Feline Sovereign destroyed it, and

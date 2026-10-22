@@ -216,7 +216,7 @@ def announce_destroyed(game: "Game", permanent: "Permanent", cause=RESOLVING) ->
     if causer is not None:
         # "…destroy target permanent **that opponent** controls": the player
         # the condition named, under the one key every "that player" is read
-        # from (``handlers/_common._THAT_PLAYER_CONTEXT_KEYS``).
+        # from (``handlers/_targets._THAT_PLAYER_CONTEXT_KEYS``).
         payload["event_subject_player"] = causer
     event = Event(kind=PERMANENT_DESTROYED, payload=payload, subject=permanent)
     ledger = game.destruction

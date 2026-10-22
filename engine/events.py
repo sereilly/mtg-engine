@@ -435,7 +435,7 @@ def _card_put_into_graveyard_filter(
             return True
         # …and the phrase, where the sentence printed one ("a **land** card"):
         # Energy Field's "a card" carries none and returned above.
-        from .handlers._common import _card_matches_filter
+        from .handlers._filters import _card_matches_filter
 
         card = event.subject
         return card is not None and _card_matches_filter(
@@ -469,7 +469,7 @@ def _card_put_into_graveyard_filter(
             if watcher is None or owner is None or watcher == owner:
                 return False
         if described:
-            from .handlers._common import _card_matches_filter
+            from .handlers._filters import _card_matches_filter
 
             card = event.subject
             if card is None or not _card_matches_filter(
@@ -812,7 +812,7 @@ def _revealed_drawn_card_filter(
     described = trig.condition.payload.get("revealed_filter")
     if not described:
         return True
-    from .handlers._common import _card_matches_filter
+    from .handlers._filters import _card_matches_filter
 
     return _card_matches_filter(card, dict(described))
 

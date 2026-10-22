@@ -17,8 +17,8 @@ from ..mana_payment import mana_cost_label, total_pips
 from ..oracle_types import (COUNTERED_ABILITY_SOURCE, COUNTERED_SPELL_CONTROLLER,
                             COUNTERED_SPELL_NAME)
 from ..resumption import run_resumable
-from ._common import (_card_matches_filter, count_from_payload, resolve_amount,
-                      triggering_spell)
+from ._common import _card_matches_filter, count_from_payload, resolve_amount
+from ._targets import triggering_spell
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -1049,7 +1049,7 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
         bound = instruction.payload.get("mana_value")
         if bound:
             from ..targeting import stack_object_mana_value
-            from ._common import _comparison_holds
+            from ._filters import _comparison_holds
 
             target_mv = stack_object_mana_value(target)
             if not _comparison_holds(bound, target_mv):

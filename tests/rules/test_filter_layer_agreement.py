@@ -39,7 +39,7 @@ def test_613_1d_a_filter_reads_the_layer_4_subtype_not_the_printed_line():
     unreachable — and would have shipped as a live bug with the first card that
     did.
     """
-    from engine.handlers._common import permanent_matches_filter
+    from engine.handlers._filters import permanent_matches_filter
 
     player, opponent = PlayerState(name="A"), PlayerState(name="B")
     island = Permanent(card=_land_card("Island"))

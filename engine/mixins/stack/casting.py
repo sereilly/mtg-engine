@@ -52,7 +52,7 @@ from ...cost_modifiers import (
 )
 from ...flashback import is_flashback
 from ...game_types import SimulationResult, StackItem, chosen_damage_source
-from ...handlers._common import graveyard_card_matches
+from ...handlers._filters import graveyard_card_matches
 from ...models import CardDefinition, Permanent, PlayerState
 from ...oracle import _COLOR_WORD_TO_SYMBOL, compile_card_oracle
 from ...oracle_types import (carries_x_bound, substitute_x_bounds,
@@ -345,7 +345,7 @@ def permanent_matches_enchant_noun(permanent: Permanent, noun: str) -> bool:
     # sweep then puts the Aura in the graveyard if that made it illegal.
     noun, colours, colours_excluded = enchant_subject_colours(noun)
     if colours:
-        from ...handlers._common import permanent_effective_colors
+        from ...handlers._filters import permanent_effective_colors
 
         present = permanent_effective_colors(permanent) & set(colours)
         if bool(present) is colours_excluded:
@@ -394,7 +394,7 @@ def _divided_total(payload: dict, x_value: int | None) -> int:
     Shower's "X **plus 1**" bonus — read here so CR 601.2d's "the division must
     total this" is checked against the number the spell will really deal.
     """
-    from ...handlers._common import resolve_amount
+    from ...handlers._amounts import resolve_amount
 
     # ``count`` for a distributed *counter* placement (Spoils of War) and
     # ``amount`` for damage: one sentence in CR 601.2d covers both, and the two
@@ -421,7 +421,7 @@ def _card_divided_target_count(targets: dict, x_value: int | None) -> int | None
     that number exists. Its own key rather than the ``count`` a several-targets
     description carries -- see ``card_divided_target_description``.
     """
-    from ...handlers._common import resolve_amount
+    from ...handlers._amounts import resolve_amount
 
     count = targets.get("target_count")
     if count is None or isinstance(count, bool):
@@ -3479,7 +3479,7 @@ class SpellCastingMixin:
         that admitted this clause gated it on exactly the keys that function can
         answer.
         """
-        from ...handlers._common import _card_matches_filter
+        from ...handlers._filters import _card_matches_filter
 
         described = dict(cost.exile_graveyard_filter or {})
         return [

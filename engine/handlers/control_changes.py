@@ -22,12 +22,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..oracle_types import CONTROL_EXCHANGED_PERMANENTS, LAST_TARGET_CONTROLLER
-from ._common import (recorded_permanent_ids, one_recorded_permanent_id, attached_host,
-                      defending_player_seat, frozen_that_player_seat,
-                      permanent_matches_filter,
-                      resolve_role_permanent, resolve_role_player,
-                      resolve_target_permanent,
-                      resolve_target_slots, roles_still_legal)
+from ._filters import permanent_matches_filter
+from ._targets import (recorded_permanent_ids, one_recorded_permanent_id,
+                       attached_host, defending_player_seat,
+                       frozen_that_player_seat, resolve_role_permanent,
+                       resolve_role_player, resolve_target_permanent,
+                       resolve_target_slots, roles_still_legal)
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -635,7 +635,8 @@ def steal_target_linked_to_source(game: Game, instruction: OracleInstruction, co
         # here against a seat this call does not name would refuse every
         # candidate rather than narrow the set.
         # Imported here rather than at module scope: ``subject_filters`` reads
-        # this package's ``_common``, so a module-level import closes the cycle
+        # this package's floors (``_filters`` and the rest), so a module-level
+        # import closes the cycle
         # through ``engine/handlers/__init__.py`` — the same reason
         # ``handlers/stack.py`` imports ``control_flow`` inside its function.
         from ..subject_filters import subject_matches

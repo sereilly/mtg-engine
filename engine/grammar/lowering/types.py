@@ -208,7 +208,7 @@ def _animation_payload(node: ast.BecomeCreature) -> dict[str, object]:
         # "…an Illusion creature with power and toughness each equal to that
         # spell’s mana value." (Veiled Sentry.) The size is the *event’s*, so
         # it travels as the count spec every other resolution-time quantity
-        # uses (`handlers/_common.count_from_payload`) rather than as a second
+        # uses (`handlers/_amounts.count_from_payload`) rather than as a second
         # vocabulary only the animation understands — `triggering_spell` is the
         # object the cast fire site froze on the trigger’s context.
         payload["pt_count"] = {

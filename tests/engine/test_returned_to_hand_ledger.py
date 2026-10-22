@@ -111,7 +111,7 @@ def test_every_way_back_to_a_hand_goes_through_the_counting_seam():
     assert len(ways) >= 9, ways
     for sighting in (
         "handlers/_common.py::return_permanent_to_owners_hand",
-        "handlers/zones.py::return_all_owned_artifacts_to_hand",
+        "handlers/returns.py::return_all_owned_artifacts_to_hand",
         "mixins/turn_management.py::_return_tapped_land_to_hand",
         "replacements.py::_return_to_hand_instead_of_dying",
     ):

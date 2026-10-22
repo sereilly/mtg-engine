@@ -1227,7 +1227,7 @@ class PermanentStateMixin:
             if counted is None:
                 continue
             kind, spec = counted
-            from ..handlers._common import evaluate_count
+            from ..handlers._amounts import evaluate_count
 
             seat = self.controller_index_of(permanent)
             owner = self.players[seat if seat is not None else 0]
@@ -1993,7 +1993,7 @@ class PermanentStateMixin:
         the source untaps, the source leaves the battlefield (its record leaves
         with it), or the pumped permanent leaves (its id no longer resolves).
         """
-        from ..handlers._common import permanent_matches_filter
+        from ..handlers._filters import permanent_matches_filter
         from ..handlers.pump import PUMP_WHILE_TAPPED_KEY
 
         for source in all_permanents:
@@ -2366,7 +2366,7 @@ class PermanentStateMixin:
         a client offering the whole graveyard would otherwise turn "X creature
         cards" into "X cards".
         """
-        from ..handlers._common import _card_matches_filter
+        from ..handlers._filters import _card_matches_filter
 
         described = dict(choice.data.get("filter") or {})
         graveyard = self.players[choice.player_index].graveyard
@@ -3051,7 +3051,7 @@ class PermanentStateMixin:
     def _effective_colors(self, permanent: Permanent) -> set[str]:
         """The color symbols a permanent currently has (honoring color overrides
         and copied colors). Delegates to the shared handler helper."""
-        from ..handlers._common import permanent_effective_colors
+        from ..handlers._filters import permanent_effective_colors
 
         return permanent_effective_colors(permanent)
 
@@ -4720,7 +4720,7 @@ class PermanentStateMixin:
         here rather than left to the prompt, so the two spellings of one
         printed entry cost reach the same arming code.
         """
-        from ..handlers._common import _card_matches_filter, permanent_matches_filter
+        from ..handlers._filters import _card_matches_filter, permanent_matches_filter
 
         if not described:
             return max(0, int(self.players[seat].life))

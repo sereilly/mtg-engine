@@ -1582,7 +1582,7 @@ def test_a_divided_spell_naming_no_target_at_all_is_refused(set_pool):
 # Suffocation was declined by W3G5 naming four missing parts, and two of them
 # were already built. ``engine/damage_ledger.py`` has kept every damage event of
 # the turn beside the cast that dealt it since Backdraft, and
-# ``subject_filters.card_only_filter`` + ``handlers/_common._card_matches_filter``
+# ``subject_filters.card_only_filter`` + ``handlers/_filters._card_matches_filter``
 # are the printed-face matcher a spell needs (CR 613.1 gives a spell no computed
 # characteristics). So the card is a *reader* of two existing records plus the
 # grammar that points at them, which is why it landed at the gate rather than

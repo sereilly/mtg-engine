@@ -46,7 +46,7 @@ from .search_filters import card_has_type
 
 #: The scratchpad key ``choose_opponent`` writes and "an opponent" reads here —
 #: the literal ``grammar/lowering/_record_keys.CHOSEN_PLAYER`` declares, which
-#: the engine side does not import from (``handlers/_common`` spells it the
+#: the engine side does not import from (``handlers/_targets`` spells it the
 #: same way and says why).
 _CHOSEN_PLAYER = "chosen_player"
 
@@ -174,7 +174,7 @@ def _apnap(game, seats) -> list[int]:
 def _owners(game, session: PileSession) -> list[int] | None:
     """The seats whose objects are separated, or None when the word names
     nobody (and the effect ends rather than reaching the wrong board)."""
-    from .handlers._common import frozen_that_player_seat
+    from .handlers._targets import frozen_that_player_seat
 
     whose = session.payload.get("whose")
     context = session.context
@@ -209,7 +209,7 @@ def _items(game, session: PileSession, owner: int) -> list:
         return list(player.library[: int(payload.get("count", 0))])
     described = dict(payload.get("filter") or {})
     if session.what == "graveyard":
-        from .handlers._common import _card_matches_filter
+        from .handlers._filters import _card_matches_filter
 
         return [
             index for index, card in enumerate(player.graveyard)

@@ -437,7 +437,7 @@ class OracleExecutionContext:
     # target_permanent_index may be a single int or a list of ints for multi-target spells
     target_permanent_index: int | list[int] | None = None
     # The target(s) by stable identity, carried over from the stack item (see
-    # StackItem.target_permanent_id). ``engine/handlers/_common.py`` prefers it
+    # StackItem.target_permanent_id). ``engine/handlers/_targets.py`` prefers it
     # over the index, which is why a handler needs no new code to stop being
     # positional — it already asks ``resolve_target_permanent``.
     target_permanent_id: int | list[int | None] | None = None
@@ -511,7 +511,7 @@ class OracleExecutionContext:
     # owed target was named by its caller or defaulted from the picker's own
     # list as it was announced (``engine/bare_announcements.py``). So what the
     # object did not name, nothing names: the target resolver
-    # (``handlers/_common.pick_target_permanent``) answers with the announced
+    # (``handlers/_targets.pick_target_permanent``) answers with the announced
     # permanent or with nobody, and never looks along a battlefield for
     # another.
     #
