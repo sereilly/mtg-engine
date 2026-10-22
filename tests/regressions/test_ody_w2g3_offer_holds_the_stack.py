@@ -201,7 +201,7 @@ def test_one_place_builds_a_prompt_and_one_site_names_its_own_object():
                 own_object.append(relative)
 
     assert files >= 150, files
-    assert built == ["mixins/stack/choices.py"]
+    assert built == ["mixins/stack/choices/queue.py"]
     # Phantasmal Terrain's land type, armed as the Aura enters: the game waits
     # and there is no finished object to hold (the registration says so).
     # And CR 603.3b's order (round 4): triggers are put on the stack after the

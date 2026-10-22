@@ -197,8 +197,8 @@ def optional_pay_options(entry: dict) -> list[dict]:
     One reader, because three of them ask — "can they pay?", "pay it", and the
     prompt that renders the choice — and a second spelling of "the printed one
     and its alternatives" is a fourth answer waiting to disagree. Here rather
-    than in ``mixins/stack/choices.py`` because ``web/prompts.py`` asks too, and
-    this module already imports nothing from the engine.
+    than in ``mixins/stack/choices/optional_pay.py`` because ``web/prompts.py``
+    asks too, and this module already imports nothing from the engine.
     """
     return [
         dict(entry.get("cost") or {}),

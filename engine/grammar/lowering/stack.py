@@ -82,9 +82,9 @@ _COUNTER_UNLESS_PAYS_X = (("X", 1),)
 
 # Penalties for declining that cost which the counter flow performs while it
 # counters (engine/card_hooks.py ON_SPELL_COUNTERED, run from
-# mixins/stack/choices._resolve_mana_payment). Declared here so a penalty the
-# engine does not perform refuses instead of riding along unimplemented; the
-# matching parse-coverage claim lives in HANDLER_CLAIMS in
+# mixins/stack/choices/payments._resolve_mana_payment). Declared here so a
+# penalty the engine does not perform refuses instead of riding along
+# unimplemented; the matching parse-coverage claim lives in HANDLER_CLAIMS in
 # scripts/parse_coverage.py.
 _COUNTER_PERFORMED_PENALTIES = frozenset({"tap_lands_and_empty_pool"})
 

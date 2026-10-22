@@ -14,7 +14,11 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from engine.mixins.stack.choices import CHOICE_SPECS
+# The registry lives in engine.pending_choices and is filled when the prompt
+# table is imported: without that import, CHOICE_SPECS could be empty here and
+# every test below would pass over nothing.
+import engine.mixins.stack.choices.table  # noqa: F401
+from engine.pending_choices import CHOICE_SPECS
 
 APP_JS = Path(__file__).resolve().parents[2] / "web" / "static" / "app.js"
 

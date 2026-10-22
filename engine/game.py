@@ -15,6 +15,20 @@ from .mixins import (
     AbilityActivationMixin,
     StackResolutionMixin,
     PendingChoicesMixin,
+    ReplacementChoicesMixin,
+    LibrarySearchChoicesMixin,
+    LibraryChoicesMixin,
+    HandChoicesMixin,
+    PileChoicesMixin,
+    ValueChoicesMixin,
+    CardNameChoicesMixin,
+    NumberChoicesMixin,
+    PermanentChoicesMixin,
+    PaymentChoicesMixin,
+    OptionalPayChoicesMixin,
+    TriggerChoicesMixin,
+    SpellChoicesMixin,
+    SacrificeChoicesMixin,
     OracleInstructionsMixin,
     PermanentStateMixin,
     EffectsMixin,
@@ -82,6 +96,22 @@ class Game(
     AbilityActivationMixin,
     StackResolutionMixin,
     PendingChoicesMixin,
+    # The prompt families, split out of PendingChoicesMixin and composed
+    # immediately after it (engine/mixins/stack/choices/__init__.py).
+    ReplacementChoicesMixin,
+    LibrarySearchChoicesMixin,
+    LibraryChoicesMixin,
+    HandChoicesMixin,
+    PileChoicesMixin,
+    ValueChoicesMixin,
+    CardNameChoicesMixin,
+    NumberChoicesMixin,
+    PermanentChoicesMixin,
+    PaymentChoicesMixin,
+    OptionalPayChoicesMixin,
+    TriggerChoicesMixin,
+    SpellChoicesMixin,
+    SacrificeChoicesMixin,
     OracleInstructionsMixin,
     PermanentStateMixin,
     EffectsMixin,
@@ -314,7 +344,7 @@ class Game(
     # per card: ``kind`` selects the spec in engine/pending_choices.py that says
     # how to answer it, what a non-interactive seat does instead, and how the web
     # layer renders and gates it. The ``pending_<name>`` views the web layer and
-    # the tests read are derived from this list (engine/mixins/stack/choices.py).
+    # the tests read are derived from this list (engine/mixins/stack/choices/queue.py).
     pending_choices: list = field(default_factory=list)
     # CR 616.1e answers, keyed by (event kind, choosing seat): the order a player
     # picked for the effects contending over one event. Written when an
@@ -325,7 +355,7 @@ class Game(
     effect_order_answers: dict = field(default_factory=dict)
     # ``effect_suspended`` — whether a loop that was running an event has to stop
     # because a decision is owed — is *not* a field. It is derived from
-    # ``pending_choices`` (engine/mixins/stack/choices.py), because a boolean
+    # ``pending_choices`` (engine/mixins/stack/choices/queue.py), because a boolean
     # cannot say that two seats owe a decision at once: "each opponent discards
     # two cards" arms one prompt per opponent, and the first answer lifted a
     # suspension the rest of them were still holding. See engine/resumption.py.

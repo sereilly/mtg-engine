@@ -89,7 +89,7 @@ and dropped whatever followed) is deleted. See "Grammar front end" below.
 | `engine/phases/` | One mixin per turn phase and per step within a phase (CR 500–514): `beginning_phase` + `untap_step`/`upkeep_step`/`draw_step`, `precombat_main_phase`, `combat_phase` + its five step modules, `postcombat_main_phase`, `ending_phase` + `end_step`/`cleanup_step`. Each is composed onto `Game`. See `engine/phases/__init__.py` for the full taxonomy. |
 | `engine/mixins/` | Cross-cutting game flow not tied to a single phase: turn-structure navigation and priority (`phase_steps`), per-turn/pregame management (`turn_management`), state-based actions, effects, helpers. Consumes compiled programs; should never parse oracle text itself. |
 | **The turn's phase plan** (`phase_steps`) | `Game.turn_phases_remaining` is the phases this turn still has to take, in order — CR 500.1's five at the start of every turn (`begin_turn_bookkeeping`), CR 500.8's extras *inserted* into it (`add_extra_phase`), each entry spent as its phase is entered (`_set_phase_and_step`, the line every entry point already passes through). **No driver names its own successor**: `next_unskipped_phase_after` peeks and `enter_next_turn_phase` / `enter_turn_phase` enter, and the headless flow, the combat phase and `web/game_flow._advance_phase` all go through them. A *list* rather than a dict keyed by phase name, because a repeated phase is two entries — an extra combat phase and the turn's own one have the same name, and a name-keyed record cannot tell them apart. Adding a phase means adding an entry point in `enter_turn_phase`; `tests/rules/test_turn_phases.py` fails if a phase the plan can hold has none. |
-| `engine/mixins/stack/` | The stack (CR 405), one mixin per stage of an object's life on it: `casting` (CR 601), `activation` (CR 602), `resolution` (CR 603/608), and `choices` — the `pending_choices` queue every part-way-through decision uses, plus the table registering them. |
+| `engine/mixins/stack/` | The stack (CR 405), one mixin per stage of an object's life on it: `casting` (CR 601), `activation` (CR 602), `resolution` (CR 603/608), and `choices` — a package: the `pending_choices` queue every part-way-through decision uses (`queue.py`), one mixin per family of prompt beside it, and the table registering them (`table.py`). |
 
 ## Adding support for a new card
 
@@ -351,8 +351,10 @@ Every other decision a seat owes part-way through a spell, an ability or a turn
 step — a library search, a discard, Balance's removals, Power Sink's payment,
 Word of Command's borrowed card — is a `PendingChoice` on
 `Game.pending_choices`, with a `ChoiceSpec` registered in
-`engine/pending_choices.py` (the table itself lives at the bottom of
-`engine/mixins/stack/choices.py`).
+`engine/pending_choices.py` (the table itself is
+`engine/mixins/stack/choices/table.py`, one row per kind in the order the
+queue is read; each family's arm / confirm / resolve / default methods are a
+mixin of their own beside it).
 
 A prompt has five parts: something arms it, a **resolver**, a **default** for
 non-interactive seats, a **renderer**, and an **action** that answers it. The

@@ -338,7 +338,7 @@ PRINTED_COLOR_BASELINE: dict[str, int] = {
     # nor the pile's owner, and `_exile_search_matches` is a staticmethod. Both
     # want the seat threaded to them, which is its own round.
     "handlers/_common.py": 1,   # graveyard_card_matches takes no game or owner yet
-    "mixins/stack/choices.py": 1,  # _exile_search_matches is a staticmethod
+    "mixins/stack/choices/search.py": 1,  # _exile_search_matches is a staticmethod
 }
 
 

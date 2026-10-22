@@ -10,8 +10,9 @@ step (Lunge, Crooked Scales). Two paths ran a step *without* that narrowing:
 * the offer itself: a ``may`` names no role of its own, so "its controller"
   was read off the unscoped list — the first target's controller, not the
   creature the toll is about;
-* an offer answered through its prompt: ``choices._run_optional_steps`` ran
-  the branch against the context it froze, again unscoped.
+* an offer answered through its prompt:
+  ``choices/optional_pay._run_optional_steps`` ran the branch against the
+  context it froze, again unscoped.
 
 The second was live on a shipped card. Crooked Scales ("If you lose the flip,
 destroy target creature you control unless you pay {3} and repeat this

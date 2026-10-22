@@ -29,7 +29,7 @@ either prompt may stop to ask an interactive seat and the rest of the procedure
 has to be there when the answer arrives.
 
 The two prompts are ``pile_split`` and ``pile_choice``
-(``engine/mixins/stack/choices.py`` registers them). Both are face up: every
+(``engine/mixins/stack/choices/table.py`` registers them). Both are face up: every
 player sees what is in each pile, which is the difference from Phyrexian
 Portal's ``library_pile_split`` / ``pile_exile_choice`` pair, whose chooser may
 be shown two numbers and nothing else (CR 406.3).
