@@ -411,7 +411,7 @@ def choose_cards_in_hand(game: Game, instruction: OracleInstruction, context: Or
     """
     payload = instruction.payload
     if payload.get("actor") == "each_player":
-        from .control_flow import _offered_seats
+        from .offers import _offered_seats
 
         result_key = str(payload.get("result_key") or "chosen_hand_cards")
         by_seat: dict[int, list] = {}

@@ -1548,7 +1548,7 @@ def test_bone_dancer_finds_nothing_in_a_graveyard_with_no_creature_card(set_pool
     nothing *and* still set ``assigns_no_combat_damage_until_eot`` — the
     "if you do" rider firing on an action that did not happen, which the round
     recorded in SET_PLAYBOOK.md's Known gaps rather than fixing.
-    ``control_flow._action_is_takeable`` now answers for this kind, so CR 601.2
+    ``offers._action_is_takeable`` now answers for this kind, so CR 601.2
     never offers a choice nobody could take and ``confirm_optional_pay`` finds
     no prompt to answer. The subject of the test is unchanged: the narrowing is
     read, and the land stays where it is.

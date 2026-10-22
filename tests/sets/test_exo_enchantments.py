@@ -663,7 +663,7 @@ def test_w1g2_pandemonium_landed_at_w2g2(set_pool):
        missing was one word in it (``event_subject_controller``) and the carry
        of the key onto CR 115.4's ``any`` kind;
     3. a bite whose **biter** is the entering permanent;
-    4. ``handlers/damage.source_bites_target`` reading that biter, which had
+    4. ``handlers/bites.source_bites_target`` reading that biter, which had
        exactly one value, ``"attached"``;
     5. that handler biting a **player**, which ``resolve_target_permanent``
        cannot.

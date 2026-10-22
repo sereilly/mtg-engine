@@ -973,7 +973,7 @@ def remove_ability_keyword(
 ) -> None:
     """Layer 6: *perm* loses a **line-derived** keyword ability.
 
-    The mirror of ``handlers/pump._grant_one_keyword``'s line grant, and the
+    The mirror of ``handlers/keywords._grant_one_keyword``'s line grant, and the
     mirror for the same reason: CR 702.25a *defines* flanking as a triggered
     ability, so the compiler builds it out of the printed line and layer 6's
     word set is not where its reader looks. Granting one grants the line;

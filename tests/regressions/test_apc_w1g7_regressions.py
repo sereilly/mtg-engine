@@ -5,7 +5,7 @@ Each test names the shipped card it is about and asserts what a game showed.
 """
 
 from engine import Game, PlayerState
-from engine.handlers.control_flow import _best_creature_type_to_sweep
+from engine.handlers.value_choices import _best_creature_type_to_sweep
 from engine.models import Permanent
 from tests.helpers import resolve_stack
 

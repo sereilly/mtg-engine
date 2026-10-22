@@ -36,7 +36,7 @@ from itertools import combinations
 
 from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_paths
-from engine.handlers.board_misc import keep_slots_sized
+from engine.handlers.sacrifices import keep_slots_sized
 from engine.models import Permanent
 from engine.oracle import compiled_units
 from engine.oracle_types import RETURN_CHOSEN_TO_HAND

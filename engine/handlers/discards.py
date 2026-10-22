@@ -505,7 +505,7 @@ def discard_all_matching_cards(game: Game, instruction: OracleInstruction, conte
         # what *it* chose: ``spared_from`` names the per-seat record the pick in
         # front of this step wrote. An absent record spares nothing — which is
         # what "all other" means of a player who chose no card.
-        from .control_flow import _offered_seats
+        from .offers import _offered_seats
 
         victims = [
             game.players[seat]

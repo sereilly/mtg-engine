@@ -38,7 +38,8 @@ from engine.auras import attach_aura
 from engine.card_loader import load_catalog
 from engine.copies import become_copy
 from engine.global_statics import record_stack_statics
-from engine.handlers.board_misc import _animation_record, _record_set_card_types
+from engine.handlers.animation import _animation_record
+from engine.handlers.types import _record_set_card_types
 from engine.keywords import (grant_ability_line, remove_ability_keyword,
                              remove_ability_line, remove_all_abilities)
 from engine.land_types import change_land_type

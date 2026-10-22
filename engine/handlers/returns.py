@@ -1063,7 +1063,7 @@ def return_recorded_permanents_to_hand(game: Game, instruction: OracleInstructio
     Raiding Party's reader wants them). That the channel carries three shapes is
     SET_PLAYBOOK's standing "``permanents_from`` carries two arities" gap, now
     measurably three; normalising here is the local half of it, as
-    ``handlers/pump.py`` already says of itself.
+    ``handlers/counters.py`` already says of itself.
     """
     recorded = (context.results or {}).get(
         str(instruction.payload.get("permanents_from", ""))

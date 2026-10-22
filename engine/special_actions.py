@@ -407,7 +407,7 @@ def permanent_special_action_in_line(
     A Licid's offer is the last sentence of an activated ability's line, so the
     line is split here and every sentence asked. The reader the *effect* uses
     when it records what it will let its controller pay to end
-    (``handlers/board_misc``), so what the sentence table says and what the
+    (``handlers/types``), so what the sentence table says and what the
     offer costs cannot describe different words.
     """
     for sentence in _split_sentences(line):

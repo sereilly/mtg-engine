@@ -573,7 +573,7 @@ def reveal_hand(game: Game, instruction: OracleInstruction, context: OracleExecu
         # living seat's, in APNAP order (CR 101.4) — one reveal apiece through
         # the same feed, and one record of everything shown: "revealed this
         # way" behind this step is all of it.
-        from .control_flow import _offered_seats
+        from .offers import _offered_seats
 
         shown: list = []
         for seat in _offered_seats(game, "each_player", context):

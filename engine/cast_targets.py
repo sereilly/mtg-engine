@@ -85,7 +85,7 @@ def _kicker_gate_holds(gate: dict, paid) -> bool:
     """Whether a ``was_kicked`` condition will hold for a cast that paid the
     kicker costs *paid*.
 
-    The picker's reading of ``handlers/control_flow``'s evaluator, one branch
+    The picker's reading of ``handlers/_record_conditions``' evaluator, one branch
     each: the unqualified question is "any of them" (CR 702.33d), and one
     carrying ``kicker`` -- "kicked with its {1}{G} kicker", CR 702.33f -- is
     about that one cost.

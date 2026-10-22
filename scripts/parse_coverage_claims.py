@@ -683,7 +683,7 @@ CHANNELS: tuple[tuple[str, object], ...] = (
 # ---------------------------------------------------------------------------
 
 HANDLER_CLAIMS: dict[str, tuple[str, ...]] = {
-    # handlers/board_misc balance flow: hand/creature balancing is one resolution.
+    # handlers/sacrifices balance flow: hand/creature balancing is one resolution.
     "balance_resources": ("players discard cards and sacrifice creatures the same way",),
     # handlers/pump.berserk_pump arms destroy_if_attacked_eot.
     "berserk_pump": ("at the beginning of the next end step, destroy that creature if it attacked this turn",),
@@ -728,7 +728,7 @@ HANDLER_CLAIMS: dict[str, tuple[str, ...]] = {
     "left_right_combat_division": (
         'then, for each attacking creature you control, choose "left" or "right." that creature can\'t be blocked this combat except by creatures with flying and creatures in a pile with the chosen label',
     ),
-    # handlers/pump grant_flying_and_delayed_destruction arms destroy_at_next_end_step.
+    # handlers/keywords grant_flying_and_delayed_destruction arms destroy_at_next_end_step.
     "grant_flying_and_delayed_destruction": ("destroy that creature at the beginning of the next end step",),
     # handlers/pump add_variable_power_counters_to_self enforces the seven cap.
     "add_variable_power_counters_to_self": (

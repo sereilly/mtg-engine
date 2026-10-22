@@ -109,7 +109,7 @@ def _may_cost_payload(node: ast.May) -> dict[str, object]:
 
 
 #: The player references an offer can be made to. Held to what
-#: ``handlers/control_flow._offered_seats`` can actually name: "you" is the
+#: ``handlers/offers._offered_seats`` can actually name: "you" is the
 #: ability's controller, the two "each" references are a set of seats,
 #: "that player"/"they" is the seat the resolution already recorded, and
 #: "defending player" is the seat the *combat* recorded — admitted only under an

@@ -82,7 +82,7 @@ def _lower_for_each_player(
 
 
 #: The player references that name a *set* of seats a loop can walk. The same
-#: two ``handlers/control_flow._offered_seats`` enumerates, and deliberately no
+#: two ``handlers/offers._offered_seats`` enumerates, and deliberately no
 #: more: a reference naming one seat is not a loop.
 _LOOPED_SEAT_SETS = frozenset({"each_player", "each_opponent"})
 

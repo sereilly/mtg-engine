@@ -94,7 +94,7 @@ _PER_SEAT_NUMBER_RECORDS = frozenset({SECRET_NUMBERS_BY_SEAT, MANA_PAID_BY_SEAT}
 #: The described seats a life loss may name that are answered by the secret
 #: numbers: the one player whose number is strictly the least, and — with the
 #: card's tie sentence folded in — every player whose number is the least.
-#: ``handlers/control_flow._offered_seats`` answers both.
+#: ``handlers/offers._offered_seats`` answers both.
 _REVEALED_FEWEST_SEATS = frozenset({"revealed_fewest", "each_revealed_fewest"})
 
 
@@ -643,7 +643,7 @@ def _lower_pay_life(node: ast.PayLife) -> tuple[OracleInstruction, ...]:
 
     Its own kind rather than a life loss with a flag, for the reason
     ``ast.PayLife`` gives: a payment is something a player has to be *able* to
-    make, and ``handlers/control_flow._action_is_takeable`` is where that is
+    make, and ``handlers/offers._action_is_takeable`` is where that is
     asked of every alternative before it is offered. A loss lowered onto the
     same kind would start answering that question about sentences that never
     pose it.

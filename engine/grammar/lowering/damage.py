@@ -648,7 +648,7 @@ def _lower_damage_shape(
     if sweep is not None:
         # The sweep handlers read a printed number, an announced X, the
         # counters on the ability's own source, or a scratchpad record
-        # (`handlers/damage._sweep_amount`, the one reader all four share).
+        # (`handlers/damage_sweeps._sweep_amount`, the one reader all four share).
         # Every *other* computed amount would be dropped here and dealt as
         # zero — visible nowhere, since the card would still report supported —
         # so it refuses instead.

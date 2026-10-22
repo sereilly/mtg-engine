@@ -862,7 +862,7 @@ def _most_permanents_ban_sources(game: "Game", seat: int):
     two players' permanents to discover that nobody printed the sentence is a
     tally taken on every board that has never seen the card.
     """
-    from .handlers.control_flow import most_permanents_seat
+    from .handlers._conditions import most_permanents_seat
 
     sources = [
         (permanent, banned)
@@ -942,7 +942,7 @@ def _line_prints_the_escape_hatch(line: str) -> bool:
 
 def _ignore_board_static_offer(game, permanent):
     """What *permanent* is offering the leading player right now, or None."""
-    from .handlers.control_flow import most_permanents_seat
+    from .handlers._conditions import most_permanents_seat
     from .special_actions import SpecialActionOffer
 
     if not any(

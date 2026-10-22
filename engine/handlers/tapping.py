@@ -1117,7 +1117,7 @@ def tap_any_number_matching(game: Game, instruction: OracleInstruction, context:
     from ..oracle_types import (PER_OBJECT_SEAT_RECORDS, TAPPED_THIS_WAY,
                                 TAPPED_THIS_WAY_OBJECTS)
     from ..resumption import run_resumable
-    from .control_flow import _offered_seats
+    from .offers import _offered_seats
 
     payload = instruction.payload
     context.results.setdefault(TAPPED_THIS_WAY_OBJECTS, [])

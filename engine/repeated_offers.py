@@ -12,7 +12,7 @@ repeated this way are named here, once, and both readers ask this table:
 
 * ``engine/grammar/lowering/game.py`` refuses to compile a repeat clause over
   anything else, so a card printing one is unsupported rather than looping;
-* ``engine/handlers/control_flow.py`` counts the records under
+* ``engine/handlers/repeats.py`` counts the records under
   :data:`OFFER_TAKEN_RESULTS` to decide whether the round happens again.
 
 A list of kinds rather than a predicate on the handler because the record is a

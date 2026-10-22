@@ -733,7 +733,7 @@ def _attach_tied_reveals_unchanged(
     :func:`_attach_superlative_tie_break`'s reason one screen up: the offer in
     front of it is made to "the player who reveals the card with the greatest
     mana value", a described seat that is *strict* by construction (a tie names
-    nobody — ``handlers/control_flow._revealed_mana_value_leader``), and an
+    nobody — ``handlers/offers._revealed_mana_value_leader``), and an
     offer made to nobody changes nothing. So what these words say is exactly
     what that offer already does.
 

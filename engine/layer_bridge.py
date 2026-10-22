@@ -958,7 +958,7 @@ def collect_own_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect
     # Both animation records again, for the reason the keyword collector above
     # reads both: the layer-4 contribution an animation makes does not depend on
     # when it ends. The cleanup sweep clears the first key and never hears of
-    # the second (``handlers/board_misc.ANIMATE_INDEFINITELY``), which is the
+    # the second (``handlers/animation.ANIMATE_INDEFINITELY``), which is the
     # whole of the difference between them.
     # …and the third (Jade Statue), for the reason the second is read here:
     # what an animation contributes to its layer does not depend on when it
@@ -991,7 +991,7 @@ def collect_own_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect
                 replace_card_types=replaces,
                 replace_subtypes=replaces and bool(subtypes),
                 # CR 613.7b: the stamp the effect was created with
-                # (``handlers/board_misc._animation_record``, the one writer).
+                # (``handlers/animation._animation_record``, the one writer).
                 # It mattered first for a replacement — Opal Acrolith turns
                 # itself back into an enchantment and then animates again —
                 # and an addition carries one for the same reason one layer

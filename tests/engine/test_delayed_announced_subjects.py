@@ -82,7 +82,7 @@ def _delays_of(card) -> list[OracleInstruction]:
 
 def _fired(game: Game, card, delay: OracleInstruction, about: Permanent) -> StackItem:
     """The stack object *delay*'s entry becomes when it fires, built the way
-    ``handlers/board_misc.create_delayed_trigger`` arms it and
+    ``handlers/delayed.create_delayed_trigger`` arms it and
     ``delayed_triggers.fire_delayed_triggers`` announces it."""
     payload = delay.payload
     binds_object = any(payload.get(key) for key in (

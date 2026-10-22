@@ -12,7 +12,7 @@ aggregates and enforces them, so new restriction cards never touch it.
 from ..auras import aura_restriction_active
 from ..replacements import apply_replacements
 from ..subject_filters import subject_matches
-from ..handlers.board_misc import LAND_TYPE_UNTIL_UNTAP
+from ..handlers.types import LAND_TYPE_UNTIL_UNTAP
 from ..handlers.tapping import (SKIP_NEXT_UNTAP_SEAT,
                                 UNTAP_BLOCKED_WHILE_COUNTERS_KEY,
                                 UNTAP_LOCK_WHILE_PRESENT_KEY,

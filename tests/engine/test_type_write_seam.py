@@ -3,8 +3,8 @@
 CR 613.7 orders the effects in a layer by timestamp, and a resolved effect's is
 "the time it's created" (CR 613.7b). Five sites wrote a permanent's gained or
 lost types by appending a dict to a metadata list — four handlers in
-``handlers/board_misc.py`` and one in ``handlers/zones.py`` (``reanimation.py``
-since the 2,000-line split) — and none of them
+``handlers/board_misc.py`` (``types.py`` since the 2,000-line split) and one in
+``handlers/zones.py`` (``reanimation.py`` since the same split) — and none of them
 recorded when. The layer bridge had nothing to order by and gave both lists the
 constant 0, additions in front of removals: a Snow-Covered Forest thawed by
 Arcum's Weathervane and then frozen again was not snow, and a land frozen under
@@ -67,7 +67,7 @@ _NAME_IMPORTERS: dict[str, tuple] = {}
 #: directions: a count that rose is a new type-writing effect (welcome — it is
 #: stamped — but worth a look), one that fell a stale row.
 _WRITER_USES = {
-    "engine/handlers/board_misc.py": {
+    "engine/handlers/types.py": {
         "gain_types": (
             4,
             "become_aura_with_enchant, gain_type, change_supertype's gaining "

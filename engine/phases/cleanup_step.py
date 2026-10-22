@@ -22,7 +22,7 @@ from ..keywords import (clear_granted_ability_lines,
                         clear_removed_ability_lines,
                         clear_all_abilities_removals)
 from ..control import end_until_eot_control_changes
-from ..handlers.board_misc import LAND_TYPE_UNTIL_EOT
+from ..handlers.types import LAND_TYPE_UNTIL_EOT
 from ..handlers.control_changes import TAP_WHEN_CONTROL_LOST
 from ..land_types import end_land_type_changes_from
 from ..type_changes import end_type_changes

@@ -245,7 +245,7 @@ def _lower_lose_keyword(
         # keyword is recorded and ``Permanent.effective_card`` strikes its part
         # out of the keyword line, so the compiler never makes the trigger.
         # Which channel a word goes on is the *handler's* decision
-        # (``handlers/pump._remove_one_keyword``), exactly as it is on the
+        # (``handlers/keyword_removal._remove_one_keyword``), exactly as it is on the
         # granting side — so nothing here has to know the difference.
     if node.duration.kind is None:
         # "When this creature blocks, **it loses defender**." (Elder Land

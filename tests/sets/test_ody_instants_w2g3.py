@@ -13,7 +13,7 @@ every test asserts what a game showed.
 
 What the card needed and no card before it had: a loop whose stopping clauses
 are asked when the round is **over**, where the round ends in an offer — so
-"over" is after the answer (`handlers/control_flow.repeat_process_until`,
+"over" is after the answer (`handlers/repeats.repeat_process_until`,
 `end_process_round`). The interactive tests go through `pass_priority`, the
 path a person takes: CR 608.2 keeps the spell on the stack until its last
 prompt is answered, and headless `resolve_top_of_stack()` deliberately does

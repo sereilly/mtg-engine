@@ -427,7 +427,7 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
             #
             # The two directions are one production because they are one
             # sentence with one word changed, and the word rides the comparison
-            # rather than the kind — the evaluator (`handlers/control_flow.
+            # rather than the kind — the evaluator (`handlers/_conditions.
             # _compare_count`) already answers "le" and always did; nothing had
             # ever printed the word that reaches it.
             bound: tuple[str, int] | None = None

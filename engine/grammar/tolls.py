@@ -291,7 +291,7 @@ def _accept_price_action(
     # cost mana cannot express, and it is the *same* three words the two other
     # readers of the phrase read — ``prices._parse_pay_life``, asked rather
     # than described, so the offer, the takeability gate
-    # (``control_flow._action_is_takeable`` asks ``can_pay_life``) and the
+    # (``offers._action_is_takeable`` asks ``can_pay_life``) and the
     # charge cannot come to disagree about what the card asks for.
     #
     # Read **before** the mana spelling, exactly as the sacrifice family's own

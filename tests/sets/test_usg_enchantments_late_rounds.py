@@ -1193,7 +1193,7 @@ def test_w2g2_a_replaced_arrival_fires_planar_void_at_all(set_pool):
 # delayed sacrifice bound to that same permanent (CR 603.7c). The last two are
 # riders on an offer, so the empty-hand direction is tested too: a rider that
 # fired on an action that did not happen is the failure
-# `handlers/control_flow._action_is_takeable` exists for.
+# `handlers/offers._action_is_takeable` exists for.
 import pytest
 
 from engine import Game, PlayerState

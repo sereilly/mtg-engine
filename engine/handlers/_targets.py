@@ -462,7 +462,7 @@ def frozen_that_player_seat(game: Game, context: OracleExecutionContext) -> int 
     # was none rather than a new winner where there already was one.
     # The literal every handler that writes this key spells; it is declared in
     # ``grammar/lowering/_record_keys.CHOSEN_PLAYER``, which the handler layer
-    # does not import from (``handlers/board_misc.py`` records the same).
+    # does not import from (``handlers/delayed.py`` records the same).
     chosen = (context.results or {}).get("chosen_player")
     if isinstance(chosen, int) and 0 <= chosen < len(game.players):
         return chosen
@@ -535,7 +535,7 @@ def stack_target_controller_seat(
       once a named spell has left (CR 608.2b), and the top of the stack for a
       headless caller that named none.
 
-    The offer actor (``control_flow._offered_seats``) and every recipient key
+    The offer actor (``offers._offered_seats``) and every recipient key
     that names this seat ask here, so "its controller" cannot be one player
     when it is asked and another when it is charged.
 
@@ -759,7 +759,7 @@ def recorded_permanent_ids(context, key) -> tuple[int, ...]:
     about shape: a reanimation, a sweep and a tap write a *list* of ids, while a
     choose-one prompt and a targeting steal write a bare id. Twenty reader sites
     across eight ``handlers/`` files each made their own assumption, and two of
-    them — ``pump.add_counter_to_target`` and ``prevention``'s shield grant —
+    them — ``counters.add_counter_to_target`` and ``prevention``'s shield grant —
     had grown a local normalisation whose own comment called itself "the local
     half of a wider question". Nothing was broken, but only because no
     list-producer happened to feed a scalar reader; three sets in a row added

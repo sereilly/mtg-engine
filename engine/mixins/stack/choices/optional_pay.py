@@ -268,7 +268,7 @@ class OptionalPayChoicesMixin:
         ran = self._run_optional_branch(entry, "_on_accept")
         # What the payment buys when it is not the payer's own action: "Then if
         # any player pays {2}, discard three cards" (Rhystic Scrying) — the
-        # controller discards, whoever paid (`handlers/control_flow
+        # controller discards, whoever paid (`handlers/offers
         # .unless_player_pays`).
         ran = self._run_optional_branch(entry, "_on_paid") or ran
         # What *this* option bought (Winter's Chill's {1}). Beside the accept
@@ -598,7 +598,7 @@ class OptionalPayChoicesMixin:
         The same predicate the offer narrows through, so what may be accepted
         and what may be offered cannot come apart.
         """
-        from ....handlers.control_flow import _narrow_to_takeable_actions
+        from ....handlers.offers import _narrow_to_takeable_actions
 
         # "…may pay **that spell's mana cost**" (Ice Cave). The price was read
         # off a spell, and a spell that has since left the stack has no mana

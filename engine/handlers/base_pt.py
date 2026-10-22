@@ -18,19 +18,23 @@ CR 611.2a's "permanently" — and the one that does prints the words (Sworn
 Defender's "until end of turn"), which is why the duration is payload rather
 than a property of the family.
 
-Its own module rather than more of ``pump.py``: that file sits at the
-thousand-line boundary the grammar's size guard names as the stop-absorbing
-signal, and these handlers share a subject (the rewrite template) rather than
-a duration with the until-end-of-turn setters there.
+Its own module rather than more of ``pump.py``, which sat at the thousand-line
+boundary the grammar's size guard named as the stop-absorbing signal. The two
+until-end-of-turn setters stayed there — a target's base power and toughness
+(Sorceress Queen, Singing Tree) and every creature its controller controls
+(Jolrael) — on the argument that they shared a duration with the pumps more
+than a template with these. They came here at the 2,000-line cap's split
+round: what they write is the same layer-7b base that is this module's
+subject, and their duration is payload like Sworn Defender's.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..oracle_types import OracleInstruction
+from ..oracle_types import BASE_PT_SET_PERMANENTS, OracleInstruction
 from ..pt import set_base_pt
-from ._amounts import count_from_payload
+from ._amounts import count_from_payload, resolve_amount
 from ._targets import resolve_target_permanent
 from .registry import effect_handler
 
@@ -184,4 +188,130 @@ def set_base_pt_of_creatures_that_damaged_source(
         )
     if rewritten == 0:
         game.log.append(f"{context.card.name}: nothing dealt damage to it this turn")
+    return True, "resolved"
+
+
+@effect_handler("set_base_pt_target_until_eot")
+def set_base_pt_target_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Sorceress Queen ("has base power and toughness 0/2") / Singing Tree
+    ("has base power 0", toughness untouched). ``payload["toughness"]`` is
+    None when the ability only sets power."""
+    card = context.card
+    source_permanent = context.source_permanent
+    exclude_self = bool(instruction.payload.get("exclude_self"))
+    attacking_only = bool(instruction.payload.get("attacking_only"))
+    flying_only = bool(instruction.payload.get("flying_only"))
+
+    from ..subject_filters import subject_matches
+
+    # The narrowings the picker applied, re-asked at resolution through the
+    # one reader of a printed noun phrase: CR 608.2b asks a target's legality
+    # again, and a restriction enforced only by the picker is one a
+    # non-interactive seat walks straight past.
+    described = {
+        key: value
+        for key, value in instruction.payload.items()
+        if key in ("controller", "cast_by_you_this_turn")
+    }
+    observer = (
+        game.players.index(context.caster)
+        if context.caster in game.players else None
+    )
+
+    def _eligible(perm: Permanent) -> bool:
+        if not perm.is_creature:
+            return False
+        if exclude_self and source_permanent is not None and perm is source_permanent:
+            return False
+        if attacking_only and not perm.attacking:
+            return False
+        if flying_only and not game._has_keyword(perm, "flying"):
+            return False
+        if described and not subject_matches(
+            game, perm, described, observer=observer, source=source_permanent,
+        ):
+            return False
+        return True
+
+    target_perm = resolve_target_permanent(game, context, predicate=_eligible)
+    if target_perm is None:
+        game.log.append(f"{card.name}: no valid creature target")
+        return True, "resolved"
+
+    power = instruction.payload.get("power")
+    toughness = instruction.payload.get("toughness")
+    # "…**until your next upkeep**" (Cycle of Life). A different moment, not a
+    # different layer, so it rides the persistent 7b channel with the stamp the
+    # upkeep step's sweep reads — and the seat is CR 109.5's controller of the
+    # ability, never the affected permanent's, which is the rule every other
+    # `your_next_upkeep` sweep already follows.
+    # What the rewrite chose, for the sentence behind it — a delayed ability a
+    # turn later, which names "that creature" and picks nothing itself. Written
+    # for every duration, because which one the card printed is not something
+    # the later sentence can see.
+    context.results[BASE_PT_SET_PERMANENTS] = [target_perm.permanent_id]
+    duration = instruction.payload.get("duration")
+    if duration == "your_next_upkeep":
+        caster = context.caster
+        seat = game.players.index(caster) if caster in game.players else 0
+        set_base_pt(
+            target_perm, power, toughness,
+            reverts_at_next_upkeep_of=seat, turn=game.turn,
+        )
+        game.log.append(
+            f"{card.name}: {target_perm.card.name} has base power and toughness "
+            f"{power}/{toughness} until {caster.name}'s next upkeep"
+        )
+        return True, "resolved"
+    set_base_pt(target_perm, power, toughness, until_eot=True)
+    # The log names the half the card printed. "…has base **toughness** 1"
+    # (Chariot of the Sun) leaves the power standing, which ``set_base_pt``'s
+    # None already expresses — reading the pair unconditionally printed a
+    # "None/1" nobody could have cast.
+    if toughness is None:
+        game.log.append(f"{card.name}: {target_perm.card.name} has base power {power} until end of turn")
+    elif power is None:
+        game.log.append(
+            f"{card.name}: {target_perm.card.name} has base toughness {toughness} until end of turn"
+        )
+    else:
+        game.log.append(
+            f"{card.name}: {target_perm.card.name} has base power and toughness {power}/{toughness} until end of turn"
+        )
+    return True, "resolved"
+
+
+@effect_handler("set_team_base_pt_until_eot")
+def set_team_base_pt_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Until end of turn, creatures you control have base power and toughness
+    X/X, where X is the number of cards in your hand." (Jolrael, Mwonvuli
+    Recluse.)
+
+    CR 613 layer 7b applied to a *set* rather than to a chosen permanent, which
+    is why it is its own kind: the targeted handler beside it asks a picker which
+    permanent, and this one asks the board which permanents.
+
+    **X is fixed once, as the ability resolves.** CR 608.2's value is calculated
+    on resolution and does not track the hand afterwards — drawing a card later
+    in the turn does not grow the team, and a continuous recompute would say it
+    does. That is the whole reason the amount is resolved here and stamped,
+    rather than carried as a spec for the layer refresh to re-evaluate.
+
+    The set is snapshotted for the same reason: a creature entering after this
+    resolves was never affected (CR 611.2c).
+    """
+    x_value = context.x_value
+    x_count = instruction.payload.get("x_from_count")
+    if x_count is not None:
+        x_value = count_from_payload(game, context, x_count)
+    power = resolve_amount(instruction.payload.get("power", 0), x_value)
+    toughness = resolve_amount(instruction.payload.get("toughness", 0), x_value)
+    seat = game.players.index(context.caster)
+    affected = [perm for perm in game.controlled_by(seat) if perm.is_creature]
+    for perm in affected:
+        set_base_pt(perm, power, toughness, until_eot=True)
+    game.log.append(
+        f"{context.card.name}: {len(affected)} creature(s) have base power and "
+        f"toughness {power}/{toughness} until end of turn"
+    )
     return True, "resolved"

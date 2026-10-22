@@ -31,6 +31,14 @@ Which permanents may be chosen is :func:`permanent_choice_candidates`, and it is
 one rule with three callers — the arming above, the liveness re-check when the
 answer arrives, and the web renderer's offered list. A second copy of it is how
 a client comes to offer a permanent the engine then refuses, or worse, accepts.
+
+**And its targeted twin.** "Choose target creature." (Reincarnation, Glyph of
+Life) is a choice made at the cast (CR 601.2c), with nothing left to do when
+the spell resolves: ``choose_target_permanent`` and ``choose_target_permanents``
+exist so ``engine/targeting.py`` reads the picker off the compiled program and
+the next sentence reads the chosen object back (``CHOSEN_TARGET_PERMANENTS``).
+The seat form, "choose target opponent", is ``player_choices.py``'s. They came
+here from ``board_misc.py`` at the 2,000-line cap's split round.
 """
 
 from __future__ import annotations
@@ -38,7 +46,11 @@ from __future__ import annotations
 import dataclasses
 from typing import TYPE_CHECKING
 
+from ..oracle_types import CHOSEN_TARGET_PERMANENTS
 from ._amounts import count_from_payload
+from ._filters import permanent_matches_filter
+from ._targets import (described_target_predicate, resolve_target_permanent,
+                       resolve_target_permanents)
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -669,5 +681,104 @@ def choose_permanent(
         candidates=candidates,
         optional=bool(payload.get("optional")),
         remainder_key=(None if remainder_key is None else str(remainder_key)),
+    )
+    return True, "resolved"
+
+
+@effect_handler("choose_target_permanent")
+def choose_target_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Choose target creature." (Reincarnation, Glyph of Life.)
+
+    Nothing is *chosen* here, and nothing should be: the target was chosen as
+    the spell was cast (CR 601.2c), and this sentence prints no effect. The
+    instruction exists so ``engine/targeting.py`` can see what the spell targets
+    in the compiled program — the sentence that *uses* the chosen creature is
+    the next one, which reads the same context.
+
+    What it does do is **record**, exactly as the plural beside it records: the
+    permanent it announced, and the seat that controls it. Both under the keys
+    every other "the objects this effect chose" and "the player this effect
+    chose" are written under, so a later sentence needs no reader of its own.
+    ``context`` is not always enough on its own — "You choose target creature an
+    opponent controls, **and that opponent chooses target creature**" (Mogg
+    Assassin) arms a second, resolution-time pick, and ``context.target`` is one
+    slot for two answers.
+
+    It still refuses when the target is gone (CR 608.2b), so the log says the
+    spell found nothing rather than saying nothing at all.
+
+    **The chosen object is whatever the printed noun phrase admits.** "Choose
+    target **permanent** you control." (Samite Elder.) The resolver's default
+    asks for a creature — every card that printed this sentence before named
+    one — so an artifact or a land the player chose failed it, fell through to
+    the scan, and the first creature on that battlefield was recorded in its
+    place: the Elder's team got protection from the Elder's own colour whatever
+    was aimed at. A description that names no creature is therefore resolved
+    against itself, through ``subject_matches``; one that does keeps the
+    default, so no shipped card's resolution moves.
+    """
+    chosen = resolve_target_permanent(
+        game, context,
+        predicate=described_target_predicate(game, instruction, context),
+    )
+    if chosen is None:
+        game.log.append(f"{context.card.name} had no legal target")
+        return True, "no target"
+    context.results[CHOSEN_TARGET_PERMANENTS] = (chosen.permanent_id,)
+    seat = game.controller_index_of(chosen)
+    if seat is not None:
+        # The literal every other handler that writes this key spells; it is
+        # declared in ``grammar/lowering/_record_keys.CHOSEN_PLAYER``, which the
+        # handler layer does not import from.
+        context.results["chosen_player"] = seat
+    return True, "resolved"
+
+
+@effect_handler("choose_target_permanents")
+def choose_target_permanents(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Choose X target attacking creatures." (Winter's Chill.)
+
+    The plural of :func:`choose_target_permanent`, and it records where that one
+    does not have to: the sentence behind a single choice reads the target off
+    the context the way every handler does, and a *set* has nowhere to be read
+    from — nothing about a board says which attacking creatures a spell named,
+    and by the time the loop runs one of them may no longer be attacking.
+
+    Each slot is re-checked against the printed noun phrase, which is CR 608.2b
+    at resolution: a creature that has left combat is no longer a legal target
+    and simply is not in the set. An empty set is a legal outcome (every target
+    illegal is refused above the instructions, in ``legality``), and the loop
+    behind this walks nothing.
+    """
+    described = dict((instruction.payload.get("targets") or {}).get("filter") or {})
+    chosen = resolve_target_permanents(
+        game, context,
+        predicate=lambda perm: permanent_matches_filter(perm, described),
+    )
+    context.results[CHOSEN_TARGET_PERMANENTS] = chosen
+    if (instruction.payload.get("targets") or {}).get("same_controller"):
+        # "…**controlled by the same opponent**. **That player** chooses and
+        # sacrifices one of those creatures." (Retribution.) The sentence names
+        # a player, and this step is the only one that can say which: the
+        # relation is what makes the answer a single seat, and by the sentence
+        # after it one of the creatures is on its way to a graveyard. Written
+        # under the key every other "the player this effect chose" is written
+        # under (`_chooser_seat`'s ``chosen_player``), so the prompt behind it
+        # needs no reader of its own.
+        seats = {game.controller_index_of(perm) for perm in chosen}
+        if len(seats) == 1:
+            seat = seats.pop()
+            if seat is not None:
+                # The literal every other handler that writes this key spells
+                # (`control_changes`, `damage`); it is declared in
+                # `grammar/lowering/_events.CHOSEN_PLAYER`, which the handler
+                # layer does not import from.
+                context.results["chosen_player"] = seat
+    if not chosen:
+        game.log.append(f"{context.card.name} had no legal targets")
+        return True, "no target"
+    game.log.append(
+        f"{context.card.name} chose "
+        + ", ".join(perm.card.name for perm in chosen)
     )
     return True, "resolved"
