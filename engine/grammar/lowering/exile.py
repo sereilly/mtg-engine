@@ -564,7 +564,7 @@ def _lower_exile(
             # is announced: the caster's own, and "a single graveyard", which
             # is whichever pile the named cards are in — on a spell, an
             # activated ability and a triggered one alike.
-            # ``targeting._graveyard_exile_pile_spec`` derives the picker from
+            # ``payload_target_specs._graveyard_exile_pile_spec`` derives the picker from
             # it and the handler resolves the announced slots. A pile a firing
             # *event* froze a seat for (Rysorian Badger's "defending player's")
             # carries no description and keeps its resolution prompt.

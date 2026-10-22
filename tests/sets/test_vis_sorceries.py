@@ -567,7 +567,7 @@ def test_w3g2_a_trailing_delayed_trigger_needs_the_record_it_reads():
     """The two halves meet only at the splitter, so the producer gate lives
     there: a back-reference with no mill in front of it would read an empty
     record and pump nothing while the card reported supported."""
-    from engine.oracle import _split_trailing_delayed_trigger
+    from engine.ability_lines import _split_trailing_delayed_trigger
 
     assert _split_trailing_delayed_trigger(
         "Mill four cards. Whenever a creature attacks this turn, it gets +1/+0 "

@@ -102,11 +102,11 @@ from engine.auras import (  # noqa: E402
     aura_cost_reduction_sentences,
 )
 from engine.oracle import (  # noqa: E402
-    _parse_delayed_attack_trigger,
     compile_card_oracle,
-    modal_head_line,
     normalize_creature_line,
 )
+from engine.ability_lines import (  # noqa: E402
+    _parse_delayed_attack_trigger, modal_head_line)
 
 
 #: "Rather than the attacking player, you assign …" and the sentence behind it.

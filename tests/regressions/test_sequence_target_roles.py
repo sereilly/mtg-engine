@@ -5,7 +5,7 @@ at a time.
 player or planeswalker." Two instances of the word "target", so CR 601.2c
 announces two objects. The line lowered to a ``sequence`` of two ordinary
 ``deal_damage`` steps carrying one target description each, and
-``targeting._from_instructions`` answers with the *first* spec any step
+``instruction_targets._from_instructions`` answers with the *first* spec any step
 describes — so the caster was asked for a creature, the seat was never
 announced at all, and the second step resolved against the target the first one
 was still holding. The log read "Shower of Sparks dealt 1 damage to Grizzly

@@ -49,7 +49,7 @@ def _spell_target_description(subject: ast.TargetSpec, node) -> dict[str, object
     ``{"quantifier": "target", "kind": "spell"}`` is the spelling every lowering
     that names a spell already emits (the counter, ``exile_target_spell``); this
     adds the printed card types beside it — "target **instant or sorcery**
-    spell" (Vodalian Mystic) — under the key ``targeting._from_targets_payload``
+    spell" (Vodalian Mystic) — under the key ``target_descriptions._from_targets_payload``
     hands the stack enumeration, so the picker offers exactly the spells the
     phrase names. Absent when the phrase names no type, which keeps the bare
     description byte-identical to what it was.
@@ -75,7 +75,7 @@ def _spell_or_permanent_description(
     One chosen object in one of two zones (CR 115.1: a target is an object, a
     player or a zone, and the phrase names two kinds of object). The kind says
     so in the description's own words — ``spell`` for the stack, ``object`` for
-    the battlefield — and ``targeting._from_targets_payload`` turns it into the
+    the battlefield — and ``target_descriptions._from_targets_payload`` turns it into the
     ``spell_or_permanent`` picker the Lace cycle's kind row has always answered
     with, so the union has one spec whichever way a card reaches it.
 
@@ -391,7 +391,7 @@ def _lower_become_color(
         # and the counter lowering already emit, rather than a third spelling.
         #
         # Described here so the spec stops coming from the instruction *kind*.
-        # ``recolor_target_from_text``'s row in ``targeting._KIND_TO_SPEC`` is
+        # ``recolor_target_from_text``'s row in ``instruction_targets._KIND_TO_SPEC`` is
         # ``spell_or_permanent``, which is right for the Lace cycle and wrong
         # for this card by exactly one zone: with no description the shared kind
         # answered for both, and Ersatz Gnomes' ability could be aimed at a
@@ -406,7 +406,7 @@ def _lower_become_color(
         payload["targets"] = _spell_target_description(node.subject, node)
     else:
         # Otherwise the Lace cycle's "target **spell or permanent**", and
-        # nothing else: the kind's own row in ``targeting._KIND_TO_SPEC`` is the
+        # nothing else: the kind's own row in ``instruction_targets._KIND_TO_SPEC`` is the
         # ``spell_or_permanent`` picker, so an undescribed instruction *is*
         # that union. It was reached by every phrase that fell this far —
         # "target creature becomes red" would have lowered here and been

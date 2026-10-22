@@ -1577,7 +1577,7 @@ def test_pentagram_of_the_ages_shields_against_the_chosen_source_only(set_pool):
     The choice is CR 609.7a's — a source of damage, chosen when the effect is
     created — and the handler has always honoured one. What was missing was the
     picker: the ability's instruction kind had no entry in
-    ``targeting._KIND_TO_SPEC_FROM_PAYLOAD``, so the client was never offered a
+    ``payload_target_specs._KIND_TO_SPEC_FROM_PAYLOAD``, so the client was never offered a
     source, and with nothing chosen the handler fell through to a shield
     answering to **every** source. The card was strictly stronger than printed.
 

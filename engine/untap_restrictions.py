@@ -579,8 +579,8 @@ def _collapse_self_name(line: str, card_name: str | None) -> str:
     the same references to one SELF token; this is that rule for a registry
     that matches on raw text. The forms are the full name and — for a
     legendary name with a comma — the short name before it (CR 201.5c), the
-    same two ``engine/oracle.py``'s ``_self_name_forms`` reads; a copy here
-    rather than an import because oracle.py imports this module.
+    same two ``engine/self_reference.py``'s ``_self_name_forms`` reads; a copy
+    here rather than an import because the support gate imports this module.
     """
     if not card_name:
         return line

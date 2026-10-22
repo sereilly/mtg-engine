@@ -798,7 +798,7 @@ def test_a_legendary_card_may_name_itself_by_its_short_name(catalog_by_name):
     without a comma has no short form to take — asserted here so the narrowing
     is a decision on the record rather than an accident of the regex.
     """
-    from engine.oracle import _self_name_forms
+    from engine.self_reference import _self_name_forms
 
     assert _self_name_forms("Ugin, the Spirit Dragon") == (
         "ugin, the spirit dragon", "ugin")

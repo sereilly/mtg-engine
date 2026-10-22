@@ -296,8 +296,9 @@ class CreateEmblem:
     """"You get an emblem with "<ability>"." (CR 114.2, the planeswalker
     ultimates.) The quoted ability rides as raw text: an emblem's ability is
     compiled when it fires, through the same compiler every card goes through,
-    and the support gate in engine/oracle.py refuses the walker when that text
-    cannot be read — so the string here is never a silent promise."""
+    and the loyalty-ability gate in engine/line_classification.py refuses the
+    walker when that text cannot be read — so the string here is never a
+    silent promise."""
     text: str
 
 

@@ -244,7 +244,7 @@ _PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
     #
     # Left out, it was the same **false refusal** the six fields above were each
     # added to end, and it cost a whole trigger condition rather than a
-    # narrowing: `subject_filter_payload` refused, so `engine/oracle.py`'s
+    # narrowing: `subject_filter_payload` refused, so `engine/trigger_conditions.py`'s
     # `_resolve_subject_groups` refused the condition, so No Quarter's two lines
     # compiled to no trigger at all. A caller with no source refuses every
     # permanent (`_source_relative_bound_holds` answers False), which is the
@@ -592,7 +592,7 @@ def chargeable_card_filter(filt: ast.ObjectFilter) -> dict | None:
 
     The one gate both readers of a card phrase run through — the grammar, which
     decides whether to admit "Discard a land card or Shrine card" as a cost, and
-    ``engine/oracle.py``, which reads the same clause into the cost that is
+    ``engine/chargeable_costs.py``, which reads the same clause into the cost that is
     actually charged. Two readers of one phrase drift, and the direction a cost
     drifts in is a cost charged more widely than the card prints; they do not
     drift when the answer comes from here.
@@ -688,7 +688,7 @@ def graveyard_position_payload(
     or None to refuse it.
 
     The one gate every reader of that phrase runs through — the grammar's cost
-    parser, ``engine/oracle.py``'s charger, the effect lowering and the
+    parser, ``engine/chargeable_costs.py``'s charger, the effect lowering and the
     alternative/additional cost tables — for ``chargeable_card_filter``'s stated
     reason directly above: two readers of one printed phrase drift, and the
     direction a *cost* drifts in is a price charged more widely, or not at all,
@@ -735,7 +735,7 @@ def chargeable_tap_filter(filt: "ast.ObjectFilter") -> dict | None:
     """The payload a "Tap N <noun phrase>" cost charges, or None to refuse it.
 
     The one gate both readers of the clause run through — the grammar, which
-    admits the line, and ``engine/oracle.py``, which reads what is actually
+    admits the line, and ``engine/chargeable_costs.py``, which reads what is actually
     charged. Two readers of one phrase drift, and the direction a cost drifts in
     is a cost nobody pays.
 

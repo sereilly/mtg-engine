@@ -147,25 +147,28 @@ def test_the_aura_claim_is_what_holds_those_cards_up():
     still green" proves nothing on its own. So it is withdrawn here and the
     cards it names must fall over.
     """
+    import engine.derived_static_claims as derived_static_claims
     import engine.oracle as oracle
 
     sample = ["Pacifism", "Armor of Thorns", "Animate Wall", "Wild Growth"]
     catalog = {c.name: c for c in load_catalog()}
 
-    # Patched on ``oracle``, not on ``auras``: the gate binds the name at import
-    # (``from .auras import aura_claim``), so patching the defining module
-    # leaves the bound reference untouched and nothing falls over — which is
-    # how the first draft of this test passed while proving nothing.
-    original = oracle.aura_claim
+    # Patched on ``derived_static_claims`` (the gate's module, which was
+    # ``oracle`` until the 2,000-line split), not on ``auras``: the gate
+    # binds the name at import (``from .auras import aura_claim``), so
+    # patching the defining module leaves the bound reference untouched and
+    # nothing falls over — which is how the first draft of this test passed
+    # while proving nothing.
+    original = derived_static_claims.aura_claim
     try:
-        oracle.aura_claim = lambda *a, **k: None
+        derived_static_claims.aura_claim = lambda *a, **k: None
         oracle._compile_card_oracle.cache_clear()
         fell_over = [
             name for name in sample
             if not compile_card_oracle(catalog[name]).supported
         ]
     finally:
-        oracle.aura_claim = original
+        derived_static_claims.aura_claim = original
         oracle._compile_card_oracle.cache_clear()
 
     assert sorted(fell_over) == sorted(sample), (

@@ -511,7 +511,7 @@ def _lower_chosen_source_redirect_between_targets(
 
     The two roles are what make the sentence safe to lower at all. The slots are
     differently narrowed — "you control" against a bare "another" — so
-    ``targeting._slot_roles_spec`` turns the description into ordered roles, and
+    ``target_descriptions._slot_roles_spec`` turns the description into ordered roles, and
     a shared candidate list would have let the caster move their own creature's
     damage onto a second creature of their own while the printed "you control"
     was enforced by nothing. CR 601.2c's distinctness comes out of the same
@@ -589,7 +589,7 @@ def _lower_chosen_source_redirect_between_targets(
             #
             # Kor Chant is safe today by accident and not by this key: its two
             # noun phrases differ ("you control" against a bare creature), so
-            # ``targeting._slot_roles_spec`` converts the pair to a roles walk,
+            # ``target_descriptions._slot_roles_spec`` converts the pair to a roles walk,
             # which gets distinctness free. A card printing the word over two
             # *identical* phrases would fall back to the shared-list reading
             # with nothing forbidding the repeat, which is the silence this

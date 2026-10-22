@@ -238,7 +238,7 @@ _EVENT_SUBJECT_CONTROLLERS: frozenset[str] = frozenset({
 #: somebody other than the controller as the mode's chooser (CR 700.2e:
 #: "An opponent chooses one —"). It is not a trigger condition and never reaches
 #: `emit`; it is the name the *position* has, exactly as `activated` and
-#: `condition_kind` name a line's position in `engine/oracle.py`. What it buys
+#: `condition_kind` name a line's position in `engine/front_ends.py`. What it buys
 #: is one reading of "that player" across the three families that read it.
 OPPONENT_CHOSE_MODE = "mode_chosen_by_opponent"
 

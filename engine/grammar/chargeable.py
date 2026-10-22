@@ -5,7 +5,7 @@ The three gates the cost clause asks before it admits a "Sacrifice <noun>",
 they are one question asked in three zones: *can the charger actually enumerate
 what this phrase names, and hold the payment to every narrowing it prints?*
 
-Each of them answers by calling ``engine/oracle.py``'s own reader rather than
+Each of them answers by calling ``engine/chargeable_costs.py``'s own reader rather than
 re-deriving a reduction here. That is the whole design: the two halves of a
 cost — this one, which decides whether to admit the line, and the charger,
 which collects it — must give the same answer, and they give it by being one
@@ -38,7 +38,7 @@ def _is_chargeable_sacrifice(filt: ast.ObjectFilter) -> bool:
     still reporting supported, which is the dropped-rider bug class.
 
     Which riders those are is **not** decided here. This asks the charger's own
-    reader (``engine/oracle.py``'s ``_chargeable_sacrifice_filter``, through the
+    reader (``engine/chargeable_costs.py``'s ``_chargeable_sacrifice_filter``, through the
     filter-key set it gates on), because two readers of one clause drift and the
     direction they drift in is a cost nobody pays. The word "another" is left in
     the filter: the charger has the ability's source and compares by identity.
@@ -91,7 +91,7 @@ def _is_chargeable_exile(filt: ast.ObjectFilter) -> bool:
     """Whether the payment path can actually collect this exile cost.
 
     :func:`_is_chargeable_sacrifice` one zone wider, and the same rule: the
-    charger's own reader decides (``engine/oracle.py``'s
+    charger's own reader decides (``engine/chargeable_costs.py``'s
     ``chargeable_exile_payload``), so the two halves cannot answer differently.
 
     Two zones and no others. The battlefield is a permanent the payer controls;

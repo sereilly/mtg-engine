@@ -7,7 +7,7 @@ the one the module already had in its own shape — a couple of hundred lines of
 phrase-to-event data followed by the productions that walk a stream against it.
 
 Pure data, no imports from the reading side, which is what makes this a layer
-below ``triggers`` rather than a second half of it. ``engine/oracle.py`` keeps
+below ``triggers`` rather than a second half of it. ``engine/trigger_conditions.py`` keeps
 its own pattern table for the same events and the two are held equal by
 ``tests/engine/test_trigger_tables.py`` — that guard is why the file is named
 what it is.
@@ -31,7 +31,7 @@ from . import ast
 #: while this one did not. "When **this Aura** is put into a graveyard from the
 #: battlefield" therefore fell past the long-dies loop to the *subject-led*
 #: death reader, which named a different event (``permanent_dies``, watching
-#: every permanent that matches a filter) than ``engine/oracle.py`` did -- and
+#: every permanent that matches a filter) than ``engine/trigger_conditions.py`` did -- and
 #: the engine dispatches on that one.
 _DAMAGER_NOUNS = (
     "creature", "artifact", "enchantment", "land", "aura", "permanent",
@@ -46,7 +46,7 @@ _DAMAGER_NOUNS = (
 #: itself, which class of object did the targeting, and whose it was — multiply
 #: to forty-five spellings of **one** condition, and a hand-written list of
 #: forty-five is forty-four chances to leave one out; the narrowings themselves
-#: are payload on ``engine/oracle.py``'s row and are dispatched from there.
+#: are payload on ``engine/trigger_conditions.py``'s row and are dispatched from there.
 #:
 #: Ordered longest-first on every axis, which is this table's own rule: matched
 #: the other way round "a spell" would claim a line that said "a spell or
@@ -77,7 +77,7 @@ _BECOMES_TARGET_CONTROLLERS: tuple[tuple[str, ...], ...] = (
 #: that is not a self-reference: it spans a *player* and a set of permanents at
 #: once, which is a third dispatch scope for this event rather than a third
 #: spelling of the first — `engine/events.py` is where the three are told apart,
-#: and `engine/oracle.py`'s marker group is what tells them.
+#: and `engine/trigger_conditions.py`'s marker group is what tells them.
 #:
 #: It joins the axes rather than getting a production of its own because that is
 #: what the axes are for: the card printing this subject about "a spell an
@@ -104,7 +104,7 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # (Planar Void.) A card rather than a permanent, out of no named zone and
     # into anybody's pile — so nothing on a battlefield is watched, and the
     # subject-led death reader below could not name it either. Carried here as
-    # well as in ``engine/oracle.py``'s table for the reason this file's
+    # well as in ``engine/trigger_conditions.py``'s table for the reason this file's
     # docstring gives: a condition only one front end reads leaves the other
     # refusing the effect behind it, and the engine dispatches on the compiler's.
     ("card_put_into_graveyard",
@@ -122,7 +122,7 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("creature_dealt_damage_by_self_dies",
      ("a", "creature", "dealt", "damage", "by", "this", "creature", "this", "turn", "dies")),
     # The attached spelling of the row above (Vampiric Embrace), and its own
-    # kind for the reason `engine/oracle.py`'s twin row states: the fire site
+    # kind for the reason `engine/trigger_conditions.py`'s twin row states: the fire site
     # reaches the observer by a different route. Both attachment words, because
     # CR 301.5f makes them one rule.
     ("creature_dealt_damage_by_attached_dies",
@@ -134,7 +134,7 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("creature_dies", ("a", "creature", "dies")),
     # "Whenever you discard a card" (Necropotence) and "whenever an opponent
     # discards a card" (Megrim). One event, two printed seats — the narrowing
-    # is payload on ``engine/oracle.py``'s row and is dispatched from the
+    # is payload on ``engine/trigger_conditions.py``'s row and is dispatched from the
     # discard seam, exactly as ``land_played``'s and ``draws_card``'s are.
     ("discards_card", ("you", "discard", "a", "card")),
     ("discards_card", ("an", "opponent", "discards", "a", "card")),
@@ -142,7 +142,7 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # no seat narrowed away.
     ("discards_card", ("a", "player", "discards", "a", "card")),
     # "Whenever a spell or ability an opponent controls causes you to discard a
-    # card" (Spiritual Focus). Carried here as well as in `engine/oracle.py`'s
+    # card" (Spiritual Focus). Carried here as well as in `engine/trigger_conditions.py`'s
     # table for this file's standing reason: a condition only one front end
     # reads leaves the other refusing the effect behind it, and the engine
     # dispatches on the compiler's. Its "when" printing (Psychic Purge) is read
@@ -181,7 +181,7 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # "attacks **alone**" (Reckless Ogre; CR 506.5) — before the bare "attacks"
     # it is a prefix of, for this table's standing reason. One kind with the
     # bare row, because it is one event: which declarations announce it is a
-    # narrowing `engine/oracle.py`'s condition table carries as payload and the
+    # narrowing `engine/trigger_conditions.py`'s condition table carries as payload and the
     # declare-attackers step reads, and this side has no dispatcher to tell.
     # Listed all the same, because a word left unclaimed here refuses the whole
     # line and the effect behind it goes with it.
@@ -197,7 +197,7 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("creature_becomes_blocked", ("this", "creature", "becomes", "blocked")),
     # "…is dealt **combat** damage" (Wall of Essence, Wall of Souls). One kind
     # with the bare row below, because the narrowing is payload on the
-    # compiler's side (`damage_combat` in engine/oracle.py) and this table has
+    # compiler's side (`damage_combat` in engine/trigger_conditions.py) and this table has
     # only to agree about *which event* the words name — the arrangement the
     # upkeep and draw-step rows already use.
     ("creature_dealt_damage",
@@ -231,7 +231,7 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
      ("a", "player", "chooses", "one", "or", "more", "targets")),
     ("spell_cast", ("a", "player", "casts", "a", "spell")),
     # "Whenever a player **kicks** a spell" (Saproling Infestation). The cast
-    # event under CR 702.33d's narrowing; `engine/oracle.py`'s pattern table
+    # event under CR 702.33d's narrowing; `engine/trigger_conditions.py`'s pattern table
     # carries the marker the dispatcher reads, exactly as it carries every
     # other cast narrowing this table's bare phrases cannot.
     ("spell_cast", ("a", "player", "kicks", "a", "spell")),
@@ -247,7 +247,7 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
       "than", "their", "hand")),
     # "…that targets you or a creature you control" (Reparations). The clause
     # narrows what the *dispatcher* admits rather than what the sentence means,
-    # so the parse side carries the words and `engine/oracle.py`'s table carries
+    # so the parse side carries the words and `engine/trigger_conditions.py`'s table carries
     # the marker the cast filter reads. Above the bare row for this table's
     # standing reason: the shorter phrase is a prefix, and matching it would
     # strand the rest of the condition and fail the line.
@@ -287,19 +287,19 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # only one front end reads is a card the other refuses.
     # "When an opponent plays a **nonbasic** land" (Hidden Herd) — the same
     # event with a supertype narrowing the other front end carries as payload
-    # (``engine/oracle.py``'s ``played_land_supertype`` group), exactly as
+    # (``engine/trigger_conditions.py``'s ``played_land_supertype`` group), exactly as
     # ``other_land`` below is. Above the bare phrase, which is its strict
     # prefix and would strand the word.
     ("land_played", ("an", "opponent", "plays", "a", "nonbasic", "land")),
     ("land_played", ("an", "opponent", "plays", "a", "land")),
     # "Whenever **a player** plays a land" (Horn of Greed) — the unnarrowed
-    # spelling of the same event. The seat is payload on ``engine/oracle.py``'s
+    # spelling of the same event. The seat is payload on ``engine/trigger_conditions.py``'s
     # row; here it is one more phrase for one kind.
     ("land_played", ("a", "player", "plays", "a", "land")),
     # "When you play **another** land, sacrifice this land." (City of
     # Traitors.) The same event with the printed exclusion as the trigger's own
     # narrowing, which the *other* front end carries as payload
-    # (``engine/oracle.py``'s ``other_land`` group, compared against the played
+    # (``engine/trigger_conditions.py``'s ``other_land`` group, compared against the played
     # permanent's id by ``engine/events._land_played_filter``) — this table has
     # only to agree about which event the words name, the arrangement the seat
     # rows above already use. Above the bare phrase it is not a prefix of, so
@@ -311,14 +311,14 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("draws_second_card", ("you", "draw", "your", "second", "card", "each", "turn")),
     ("draws_card", ("you", "draw", "a", "card")),
     # The same event asked of another seat (Underworld Dreams). One kind, as in
-    # engine/oracle.py's table: which seat drew is the event's, and the
+    # engine/trigger_conditions.py's table: which seat drew is the event's, and the
     # condition payload the regex there captures is what the event filter
     # narrows on. Both spellings are listed here because both are printed, and
     # a line only one front end reads is a card refused by the other.
     ("draws_card", ("an", "opponent", "draws", "a", "card")),
     # "Whenever **a player** draws a card" (Phyrexian Tyranny) — the unnarrowed
     # spelling of the same event, listed for the row above's reason: the seat
-    # word is payload on ``engine/oracle.py``'s row, and a line only one front
+    # word is payload on ``engine/trigger_conditions.py``'s row, and a line only one front
     # end reads is a card refused by the other.
     ("draws_card", ("a", "player", "draws", "a", "card")),
     # "When **the chosen player draws a card with the chosen name**, …" (Booby
@@ -354,7 +354,7 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
 
 # Events whose subject is an object *filter* the trigger carries, keyed by the
 # fixed words printed in front of it. The mirror of the `_subject`-group
-# patterns in engine/oracle.py's table: one printed phrase, read by the same
+# patterns in engine/trigger_conditions.py's table: one printed phrase, read by the same
 # noun parser on both sides of the pipeline, and held equal by
 # `test_a_narrowed_trigger_reads_the_same_subject_on_both_sides`.
 
@@ -369,7 +369,7 @@ _FILTERED_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
      "creature_blocks_or_blocked_by"),
     # The same joined event watched by an Aura rather than by the creature
     # itself (Infinite Authority). One kind, because it is one event: whose
-    # ability is watching is the narrowing, and `engine/oracle.py`'s table is
+    # ability is watching is the narrowing, and `engine/trigger_conditions.py`'s table is
     # what records it (`combatant_attached`) for the two combat dispatchers.
     # What this side has to read is the *pair* noun phrase, which is the
     # subject both halves are narrowed by — so it is a row of this table and
@@ -389,7 +389,7 @@ _FILTERED_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
     # action as an event: the fixed words name who did it and what was done,
     # and the noun phrase behind them is the permanent it was done to — this
     # table's shape exactly, so it is a row and not a production. Whose spell
-    # or ability it was is payload on `engine/oracle.py`'s row
+    # or ability it was is payload on `engine/trigger_conditions.py`'s row
     # (`destroyed_cause`), as every seat narrowing in this file is.
     #
     # No collision with the two "…an opponent controls **causes**…" readings
@@ -442,7 +442,7 @@ _BOARD_WIDE_BLOCK_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
 #:
 #: Read **after** the table above, because each phrase here is a strict prefix
 #: of the matching row there — the same specific-before-generic order
-#: ``engine/oracle.py``'s rows keep, and for the same reason: read first, the
+#: ``engine/trigger_conditions.py``'s rows keep, and for the same reason: read first, the
 #: partner phrase is left on the stream and the line fails full consumption.
 _BARE_BOARD_WIDE_BLOCK_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
     (("becomes", "blocked"), "matching_creature_becomes_blocked"),
@@ -452,7 +452,7 @@ _BARE_BOARD_WIDE_BLOCK_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
 
 _SUBJECT_LED_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
     # "Whenever **a creature** attacks or blocks, …" (Powerstone Minefield).
-    # The board-wide union, under the kind `engine/oracle.py`'s table gives it
+    # The board-wide union, under the kind `engine/trigger_conditions.py`'s table gives it
     # and announced at both combat fire sites. First, because "attacks" below
     # is its strict prefix: read there, "or blocks" is left on the stream and
     # the line dies on the effect's subject.
@@ -463,12 +463,12 @@ _SUBJECT_LED_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
     # "Whenever **a nontoken creature** leaves the battlefield, …" (Dual
     # Nature). CR 603.6c's event about a permanent the source is neither nor
     # attached to, so the subject leads and the phrase is the narrowing — the
-    # entry rows' shape, read in `engine/oracle.py`'s table under the same kind.
+    # entry rows' shape, read in `engine/trigger_conditions.py`'s table under the same kind.
     (("leaves", "the", "battlefield"), "matching_permanent_leaves_battlefield"),
     # "Whenever **a permanent** is returned to a player's hand, …" (Warped
     # Devotion.) The departure above with its destination named: one zone
     # change, both ends printed. Subject-led for the row above's reason, and
-    # read under the same kind `engine/oracle.py`'s table gives it.
+    # read under the same kind `engine/trigger_conditions.py`'s table gives it.
     (("is", "returned", "to", "a", "player", "'s", "hand"),
      "permanent_returned_to_hand"),
     # "Whenever **a creature** is dealt damage, destroy it." (Death Pits of
@@ -493,7 +493,7 @@ _AT_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("upkeep_each", ("the", "beginning", "of", "each", "upkeep")),
     # "each **opponent's** upkeep" (Psychic Allergy). The same kind, because the
     # narrowing is payload on the compiler's side (see `upkeep_scope` in
-    # engine/oracle.py) and this table only has to agree about *which event* the
+    # engine/trigger_conditions.py) and this table only has to agree about *which event* the
     # words name — idiom 1's rule that a condition narrowed on one side only is
     # a card firing on the wrong event.
     ("upkeep_each", ("the", "beginning", "of", "each", "opponent", "'s", "upkeep")),
@@ -513,7 +513,7 @@ _AT_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("draw_step_each", ("the", "beginning", "of", "each", "player", "'s", "draw", "step")),
     # "each **opponent's** draw step" (Malignant Growth). The same kind, for the
     # reason the upkeep row one screen up gives: the narrowing is payload on the
-    # compiler's side (`draw_step_scope` in engine/oracle.py) and this table has
+    # compiler's side (`draw_step_scope` in engine/trigger_conditions.py) and this table has
     # only to agree about *which event* the words name.
     ("draw_step_each", ("the", "beginning", "of", "each", "opponent", "'s", "draw", "step")),
     # CR 505.1a — the precombat main phase, the only one that is "first". Both
@@ -554,15 +554,15 @@ _AT_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # The narrowed form precedes its own prefix, per the rule above.
     ("combat_your_turn", ("the", "beginning", "of", "combat", "on", "your", "turn")),
     # "…on **each opponent's** turn" (Fight or Flight) — the same step's other
-    # narrowing, for the reason engine/oracle.py's table states beside it.
+    # narrowing, for the reason engine/trigger_conditions.py's table states beside it.
     ("combat_opponent_turn",
      ("the", "beginning", "of", "combat", "on", "each", "opponent", "'s", "turn")),
     # "…of **each** combat" (Goblin Flotilla) — one event, two spellings, for
-    # the reason engine/oracle.py's table states beside the same pair.
+    # the reason engine/trigger_conditions.py's table states beside the same pair.
     ("combat", ("the", "beginning", "of", "each", "combat")),
     ("combat", ("the", "beginning", "of", "combat")),
     # "At end of combat, …" (The Wretched) — CR 511.1. Read here as well as in
-    # engine/oracle.py's table, because both front ends see the whole line and
+    # engine/trigger_conditions.py's table, because both front ends see the whole line and
     # a condition only one of them reads leaves the other refusing the effect
     # behind it.
     ("end_of_combat", ("end", "of", "combat")),

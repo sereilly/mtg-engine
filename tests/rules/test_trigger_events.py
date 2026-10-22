@@ -374,7 +374,8 @@ def test_a_subject_the_engine_cannot_test_refuses_the_whole_condition():
     apply would make the trigger fire on a strictly larger set than the card
     prints, so the *condition* refuses at compile time — the card is honestly
     unsupported instead."""
-    from engine.oracle import _parse_trigger_condition, normalize_creature_line
+    from engine.oracle import normalize_creature_line
+    from engine.trigger_conditions import _parse_trigger_condition
 
     readable, _ = _parse_trigger_condition(normalize_creature_line(
         "Whenever a creature you control with flying attacks, you gain 1 life."

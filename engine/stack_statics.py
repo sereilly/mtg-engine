@@ -181,7 +181,7 @@ def _global_static(clause: str):
 def stack_static_claims_line(line: str, card_name: str | None) -> bool:
     """Whether *line* is, in full, a stack static this engine carries out.
 
-    The support gate (``oracle._derived_static_claims``) and the parse-coverage
+    The support gate (``derived_static_claims._derived_static_claims``) and the parse-coverage
     census both ask this, so what the engine implements and what it claims to
     have read cannot drift.
     """

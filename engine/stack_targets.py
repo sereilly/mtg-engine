@@ -124,7 +124,7 @@ class ChosenTarget:
 
 _REMINDER_TEXT = re.compile(r"\([^)]*\)")
 _TARGET_WORD = re.compile(r"\btargets?\b")
-#: Both quote pairs, for ``targeting._QUOTED_ABILITY``'s reason: ingested oracle
+#: Both quote pairs, for ``picker_probes._QUOTED_ABILITY``'s reason: ingested oracle
 #: text prints the curly ones and a hand-written fixture the straight.
 _QUOTED_ABILITY = re.compile("[\"“][^\"”]*[\"”]")
 

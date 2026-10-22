@@ -489,7 +489,7 @@ def lower_ability(
     *event* names the **position** the line occupies when that position froze a
     seat or an object the sentence can refer back to. A trigger reads its own
     from ``node.event.kind``; an effect line has none of its own, and the one
-    caller that supplies one is the modal assembly in ``engine/oracle.py``,
+    caller that supplies one is the modal assembly in ``engine/ability_lines.py``,
     where CR 700.2e's "an opponent chooses one —" makes the mode's "that
     player" name the chooser (``lowering/_events.OPPONENT_CHOSE_MODE``). It is
     ignored for every other node kind, which carry their own or none.

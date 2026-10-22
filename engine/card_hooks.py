@@ -17,7 +17,7 @@ Prefer that route before adding a registry entry here.
 Hook registries:
 - CARD_LINE_INSTRUCTIONS — the instruction one printed *line* of one card
                         compiles to, when that line is a single card's text
-                        rather than a template. Read by engine/oracle.py.
+                        rather than a template. Read by engine/front_ends.py.
 - ON_SELF_RESOLVED    — fired when the named instant/sorcery itself resolves
                         (keyed by the resolving card's own name), for bespoke
                         effects the single compiled instruction can't express.
@@ -77,7 +77,7 @@ LeaveBattlefieldHook = Callable[["Game", "PlayerState", "Permanent"], None]
 # **The entry bar is that no second card, real or plausibly printable, shares
 # the shape.** A sentence two cards could carry belongs in `engine/grammar/`,
 # where the second card gets it for free. When a line here grows a production,
-# its entry goes: the grammar is consulted first (engine/oracle.py), so a stale
+# its entry goes: the grammar is consulted first (engine/front_ends.py), so a stale
 # entry would be dead rather than wrong — and `tests/engine/test_card_lines.py`
 # fails on one, because an entry that stops being load-bearing is an entry
 # nobody would notice was lying.

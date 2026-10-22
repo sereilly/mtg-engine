@@ -474,7 +474,7 @@ def _is_landwalk(keyword: str) -> bool:
     "islandwalk", "snow forestwalk", "nonbasic landwalk" — so the set of names
     is open and no frozenset can hold it. `engine/landwalk.py` is the reader
     that decides whether a quality is one the block check can test, and it is
-    already the gate `engine/oracle.py` asks about a printed keyword *line*.
+    already the gate `engine/keyword_lines.py` asks about a printed keyword *line*.
     A grant asking a different question is how "gains landwalk of the chosen
     type" comes to work for five types and refuse the other thirteen.
     """

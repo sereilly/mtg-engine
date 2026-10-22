@@ -3,7 +3,7 @@ INV W1G8, driving Temporal Distortion).
 
 "Whenever a permanent becomes tapped, put a wind counter on it." (Freyalise's
 Winds.) The lowering marks the instruction ``on_event_subject`` and the handler
-reads the id the fire site froze — but ``targeting._from_instruction`` still
+reads the id the fire site froze — but ``instruction_targets._from_instruction`` still
 answered the kind table's ``{"kind": "creature"}`` for it, so the trigger was
 announced as one that chooses a target creature:
 

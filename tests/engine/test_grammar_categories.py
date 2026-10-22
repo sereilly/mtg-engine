@@ -7,7 +7,7 @@ reviewed steps.
 
 With the legacy registry deleted there is nothing underneath. A category left
 out no longer routes its lines anywhere — ``CompiledLine.usable`` goes False,
-``engine/oracle.py`` falls through to the card hooks and then to nothing, and
+``engine/front_ends.py`` falls through to the card hooks and then to nothing, and
 the cards holding those lines are reported **unsupported**. The omission still
 fails loudly (that is invariant 1 working), but it fails at the far end, in a
 support report, rather than where the mistake was made.

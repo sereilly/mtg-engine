@@ -579,7 +579,7 @@ def _lower_choose_permanent(
 #: The two chooser words that are *announced* rather than resolved at
 #: resolution, and the picker each one means. A description written here for
 #: the reason every other ``targets`` payload in this package is written where
-#: it is: ``targeting._from_targets_payload`` reads it, and an ability that
+#: it is: ``target_descriptions._from_targets_payload`` reads it, and an ability that
 #: names a target and describes none derives no picker at all.
 _ANNOUNCED_CHOOSERS: dict[str, dict] = {
     "target_player": {"quantifier": "target", "kind": "player"},

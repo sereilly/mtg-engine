@@ -11,7 +11,7 @@ and the duration have since left it the same way, for ``prices`` and
 
 Which keywords the engine implements is **not** decided here. That is
 ``vocabulary.IMPLEMENTED_KEYWORDS``, one frozenset, read by this module and by
-``engine/oracle.py``'s keyword-line classifier alike — a second list would be a
+``engine/keyword_lines.py``'s keyword-line classifier alike — a second list would be a
 second answer, and CLAUDE.md's lifelink precedent is what it costs.
 """
 

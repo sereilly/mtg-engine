@@ -76,15 +76,15 @@ from engine.auras import (  # noqa: E402
 )
 from engine.oracle import (  # noqa: E402
     _is_supported_keyword_line,
-    _is_supported_static_creature_line,
     _parse_activated_ability,
-    _parse_loyalty_ability,
     trigger_condition_of_line,
     _parse_triggered_ability,
     compile_card_oracle,
     expand_ability_lines,
     normalize_creature_line,
 )
+from engine.line_classification import _parse_loyalty_ability  # noqa: E402
+from engine.static_line_support import _is_supported_static_creature_line  # noqa: E402
 #: The shipped pool, and the measured sets beside it. Both are analysed; only
 #: the shipped half gates. A measured set is ingested so its numbers can be read
 #: *before* the work of supporting it is done, and a **supported** card in one is

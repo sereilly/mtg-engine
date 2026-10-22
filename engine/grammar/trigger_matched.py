@@ -83,7 +83,7 @@ def _accept_land_tapped_for_mana_by_a_player(
     # accepts rather than a kind of its own.
     #
     # **Which** seat is not decided here. This front end supplies the *effect*
-    # half of a triggered ability and `engine/oracle.py`'s pattern table
+    # half of a triggered ability and `engine/trigger_conditions.py`'s pattern table
     # supplies the condition; the seat rides there as an empty named group and
     # is tested at the tap seam. A phrase only one front end reads is a card
     # whose two halves watch different sets, which is the whole reason this
@@ -129,7 +129,7 @@ def _accept_card_put_into_graveyard_from_anywhere(
     noun phrase, and Compost prints one.
 
     **The subject is not carried on the event.** This front end supplies the
-    *effect* half of a triggered ability and ``engine/oracle.py``'s pattern
+    *effect* half of a triggered ability and ``engine/trigger_conditions.py``'s pattern
     table supplies the condition, and the filter this phrase describes is about
     a card in a pile — a different testable set from anything a
     :class:`ObjectFilter` on a battlefield subject would be matched against. So
@@ -169,7 +169,7 @@ def _accept_card_put_into_graveyard_from_anywhere(
         return None
     # The phrase rides the event as its subject, which is what
     # `test_a_narrowed_trigger_reads_the_same_subject_on_both_sides` holds both
-    # front ends to: `engine/oracle.py`'s table delimits the same words and
+    # front ends to: `engine/trigger_conditions.py`'s table delimits the same words and
     # reads them into `graveyard_card_filter`, and a grammar that consumed them
     # and recorded nothing would let the dispatcher test one set while the parse
     # claimed another. Nothing lowers it — the narrowing is enforced from the
@@ -258,7 +258,7 @@ def _accept_subject_becomes_target(
     The two axes after the noun are the table's own, reused rather than
     respelled — a card printing this subject about "an Aura spell" or "a spell
     an opponent controls" is read for free, and the narrowing itself rides
-    ``engine/oracle.py``'s condition payload the way every trigger clause does.
+    ``engine/trigger_conditions.py``'s condition payload the way every trigger clause does.
     """
     mark = stream.mark()
     # "Whenever **another** permanent you control becomes the target …" (Cloud
@@ -306,7 +306,7 @@ def _parse_matched_event(
     Weatherlight cards found it: "**When** another creature enters" (Timid
     Drake) and "**When** an opponent casts a creature spell" (Straw Golem) were
     both refused while the same clauses under "whenever" were read, and
-    ``engine/oracle.py``'s regex table reads both words for either — so what
+    ``engine/trigger_conditions.py``'s regex table reads both words for either — so what
     the two front ends disagreed about was not the condition but which cards
     have one at all.
 
@@ -385,7 +385,7 @@ def _parse_matched_event(
             # quantified one because a bare plural is a different reading of
             # the noun ("Orcs" is a kind, "an Orc" is one of them) and the
             # number in front is what says how many. CR 509.3e is what the
-            # count means; `engine/oracle.py`'s table is where it lands as
+            # count means; `engine/trigger_conditions.py`'s table is where it lands as
             # the condition's payload, and this side has only to agree that
             # the words describe a subject.
             counted = stream.mark()
@@ -515,7 +515,7 @@ def _parse_matched_event(
     # "Whenever **a spell or ability an opponent controls causes** a land to be
     # put into your graveyard from the battlefield" (Sacred Ground). The same
     # event with a causation clause in front of it, so the words are consumed
-    # here and the narrowing rides `engine/oracle.py`'s condition payload —
+    # here and the narrowing rides `engine/trigger_conditions.py`'s condition payload —
     # exactly as "whose graveyard" does below. Consumed rather than skipped: a
     # production must take every token of its line or refuse it.
     caused = stream.accept_phrase(
@@ -539,7 +539,7 @@ def _parse_matched_event(
         dying = None
     # "…is put into **a**/**your**/**an opponent's** graveyard from the
     # battlefield". Whose graveyard is a narrowing on the condition, which
-    # this front end does not carry — `engine/oracle.py`'s table supplies the condition and this
+    # this front end does not carry — `engine/trigger_conditions.py`'s table supplies the condition and this
     # one supplies the effect. The word still has to be *consumed* or the
     # line fails full-token consumption and the card loses its ability.
     dying_grave = (
@@ -710,7 +710,7 @@ def _accept_board_wide_block_event(
     this creature becomes blocked by a creature without flanking" carries the
     blocker there — so these do too, and the combatant travels as the
     ``combatant`` narrowing under the same stem
-    ``engine/oracle.py``'s ``combatant_subject`` group gives it.
+    ``engine/trigger_conditions.py``'s ``combatant_subject`` group gives it.
     ``test_a_narrowed_trigger_reads_the_same_subject_on_both_sides`` is what
     holds the two front ends to that pairing.
 

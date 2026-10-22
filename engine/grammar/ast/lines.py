@@ -64,7 +64,7 @@ class TriggerEvent:
     word: str = "whenever"        # whenever | when | at
     subject: ObjectFilter | PlayerRef | None = None
     #: Noun phrases the condition carries **beyond** its subject, each under the
-    #: stem ``engine/oracle.py``'s pattern table gives its ``<stem>_subject``
+    #: stem ``engine/trigger_conditions.py``'s pattern table gives its ``<stem>_subject``
     #: group — "…that doesn't share a color with **a creature you control**"
     #: (Invoke Prejudice) is ``("unshared_color", <that phrase>)``.
     #:

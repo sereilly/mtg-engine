@@ -46,7 +46,7 @@ def _parse_state_trigger_event(
     than a copy per branch, which is how one spelling ends up read and the
     other refusing.
 
-    Read here as well as in `engine/oracle.py`'s table because both front ends
+    Read here as well as in `engine/trigger_conditions.py`'s table because both front ends
     see the whole line, and a condition only one of them reads leaves the other
     refusing the effect behind it.
 
@@ -63,11 +63,11 @@ def _parse_state_trigger_event(
     # printings are one production.
     #
     # The threshold is consumed and dropped, exactly as the counter branch below
-    # drops its own: `engine/oracle.py`'s table is the front end that supplies
+    # drops its own: `engine/trigger_conditions.py`'s table is the front end that supplies
     # the condition (and its payload) to the dispatcher, and this one supplies
     # the effect. A number carried here would be a second copy of it.
     # "When **a player doesn't pay this enchantment's cumulative upkeep**, …"
-    # (Thought Lash.) Read on this front end as well as in `engine/oracle.py`'s
+    # (Thought Lash.) Read on this front end as well as in `engine/trigger_conditions.py`'s
     # table, for the reason stated above: both see the whole line, and a
     # condition only one of them reads leaves the other refusing the effect.
     # "When **a player has no cards in hand**, …" (Veiled Crocodile.) CR 603.8
@@ -76,7 +76,7 @@ def _parse_state_trigger_event(
     # and a condition only one of them reads leaves the other refusing the
     # effect behind it. The seat is not narrowed — the card says "a player",
     # which is every seat — so the phrase carries no payload and
-    # ``engine/oracle.py``'s row is the one that names the kind.
+    # ``engine/trigger_conditions.py``'s row is the one that names the kind.
     if stream.accept_phrase("a", "player", "has", "no", "cards", "in", "hand"):
         return ast.TriggerEvent("player_has_no_cards_in_hand", word)
 
@@ -87,7 +87,7 @@ def _parse_state_trigger_event(
     # one of them reads leaves the other refusing the effect behind it.
     #
     # The threshold **and the seat** are both consumed and dropped, exactly
-    # as the power branch below drops its own: `engine/oracle.py`'s table is
+    # as the power branch below drops its own: `engine/trigger_conditions.py`'s table is
     # the front end that supplies the condition and its payload to the
     # dispatcher, and a copy of either carried here would be free to
     # disagree with it. Both spellings of the number are accepted because
@@ -137,7 +137,7 @@ def _parse_state_trigger_event(
     # condition only one of them reads leaves the other refusing the effect.
     #
     # The keyword is consumed and dropped, exactly as the threshold above is:
-    # `engine/oracle.py`'s table is the front end that supplies the condition
+    # `engine/trigger_conditions.py`'s table is the front end that supplies the condition
     # and its payload to the dispatcher, and a copy carried here would be free
     # to disagree with it. It is *checked* against the vocabulary rather than
     # skipped, so "has three heads" refuses the line instead of claiming it.
@@ -147,10 +147,10 @@ def _parse_state_trigger_event(
     # condition only one of them reads leaves the other refusing the effect.
     #
     # Above the keyword branch, whose vocabulary test would refuse "no" and
-    # rewind — the same order `engine/oracle.py`'s table takes for the same
+    # rewind — the same order `engine/trigger_conditions.py`'s table takes for the same
     # pair, so the two front ends read the sentence the same way round.
     #
-    # The counter kind is consumed and dropped: `engine/oracle.py`'s table
+    # The counter kind is consumed and dropped: `engine/trigger_conditions.py`'s table
     # supplies the payload the sweep dispatches on, and a copy carried here
     # would be free to disagree with it.
     empty_mark = stream.mark()
@@ -175,7 +175,7 @@ def _parse_state_trigger_event(
     # Squad.) The threshold state of the last branch below, asked of *another*
     # permanent rather than of the source — so the noun is **carried**, for the
     # reason the "no lands on the battlefield" branch carries its own: it is a
-    # subject, ``engine/oracle.py``'s row reads the same words as a
+    # subject, ``engine/trigger_conditions.py``'s row reads the same words as a
     # ``countered_subject`` group, and the sweep tests every permanent against
     # the filter that comes of it. It is also what makes the effect's "it" and
     # "that creature" name the watched permanent
@@ -229,7 +229,7 @@ def _parse_state_trigger_event(
         #
         # The noun is carried rather than dropped, which is the opposite of
         # what the threshold and the keyword above do — and the difference is
-        # that this one is a **subject**. `engine/oracle.py`'s row reads it as
+        # that this one is a **subject**. `engine/trigger_conditions.py`'s row reads it as
         # an `absent_subjects` group and `_resolve_subject_groups` turns it into
         # the payload the dispatcher tests, so a phrase only one front end read
         # would be a card whose two halves watch different sets. That equality
@@ -249,7 +249,7 @@ def _parse_state_trigger_event(
             # the scope is required (a card printing "when there are no
             # creatures" alone is a different sentence and refuses) and then
             # stripped, which is also what keeps the phrase this front end
-            # carries identical to the one `engine/oracle.py`'s row reads out of
+            # carries identical to the one `engine/trigger_conditions.py`'s row reads out of
             # its `absent_subjects` group.
             if described is not None and described.on_the_battlefield:
                 return ast.TriggerEvent(

@@ -3,7 +3,7 @@
 The rule writes a triggered ability as "[When/Whenever/At] [trigger condition],
 [effect]" and says nothing else about the choice — the difference is how often
 the ability triggers while it exists, never *what* triggers it, and no fire site
-in this engine reads the word. `engine/oracle.py`'s regex table already acts on
+in this engine reads the word. `engine/trigger_conditions.py`'s regex table already acts on
 that: a "when" line its own table misses is asked of the whenever table with the
 word swapped, rather than by copying rows between the two.
 
@@ -113,7 +113,7 @@ def test_the_long_dies_spelling_reads_any_permanent_noun_and_either_article():
 
 
 def test_both_front_ends_name_one_condition_over_both_manifest_roles():
-    """The grammar's trigger kind must equal `engine/oracle.py`'s, for a
+    """The grammar's trigger kind must equal `engine/trigger_conditions.py`'s, for a
     **measured** set as well as a shipped one.
 
     `test_every_executed_trigger_agrees_with_the_legacy_condition_table` asks

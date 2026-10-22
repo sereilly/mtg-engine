@@ -35,6 +35,7 @@ from __future__ import annotations
 import pytest
 
 from engine.faces import compilation_units
+import engine.line_rewrites as line_rewrites
 import engine.oracle as oracle
 from engine.card_hooks import CARD_LINE_INSTRUCTIONS
 from engine.card_loader import load_cards, manifest_set_paths
@@ -73,7 +74,7 @@ def _printed_lines(card) -> list[str]:
     text = expand_short_self_references(
         card.oracle_text or "", card.name, legendary=card.is_legendary
     )
-    text = oracle.expand_modal_activated_lines(text)
+    text = line_rewrites.expand_modal_activated_lines(text)
     return [line.strip() for line in text.splitlines() if line.strip()]
 
 

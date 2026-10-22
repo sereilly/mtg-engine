@@ -190,8 +190,8 @@ def test_an_aura_flashed_in_is_sacrificed_at_the_next_cleanup(set_pool):
 
 # --- Round 5: the Enchant clause's fourth quality (CR 702.5) ---
 
-from engine.targeting import (enchant_clause_nouns, enchant_line_subject,
-                              enchant_subject_spec)
+from engine.targeting import enchant_clause_nouns, enchant_line_subject
+from engine.enchant_targets import enchant_subject_spec
 
 
 def _r5_cast(set_pool, aura_name: str, host_name: str):

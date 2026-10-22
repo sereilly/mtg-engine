@@ -22,7 +22,7 @@ from __future__ import annotations
 import pytest
 
 from engine.faces import compilation_units
-from engine import oracle
+from engine import line_rewrites
 from engine.card_loader import load_catalog, load_cards, manifest_set_paths
 from engine.grammar import ast as grammar_ast, compile_line
 from engine.grammar.derived import TABLES, derived_instruction_for_line
@@ -44,7 +44,7 @@ def pool_lines():
     """
     lines = []
     for card in compilation_units(load_cards(manifest_set_paths(include_measured=True))):
-        text = oracle.expand_modal_activated_lines(card.oracle_text or "")
+        text = line_rewrites.expand_modal_activated_lines(card.oracle_text or "")
         for raw in text.splitlines():
             line = raw.strip()
             if line:

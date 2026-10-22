@@ -5,7 +5,7 @@ The three cast scopes ("a player casts", "an opponent casts", "you cast")
 print the same narrowings, and ``events._cast_narrowing_admits`` is the one
 reader of them. The two board-wide scopes have gone through it since Urza's
 Chalice; ``_controller_cast_filter`` kept four tests of its own inline and
-asked the helper for nothing else — so a narrowing ``engine/oracle.py``'s
+asked the helper for nothing else — so a narrowing ``engine/trigger_conditions.py``'s
 table carried on the "you" scope and only the helper read was **dropped**:
 
     Whenever you cast a multicolored spell, …
@@ -83,7 +83,7 @@ def test_a_you_cast_trigger_fires_on_exactly_the_spells_it_prints(
 
 
 def test_the_colour_narrowings_are_condition_payload_not_a_subtype():
-    """``engine/oracle.py``'s table reads a colour word, and its negation,
+    """``engine/trigger_conditions.py``'s table reads a colour word, and its negation,
     before the row that takes any word for a creature type: "nonred" compiled
     as a trigger narrowed to a *subtype* called "nonred", which no spell has."""
     def payload(text):

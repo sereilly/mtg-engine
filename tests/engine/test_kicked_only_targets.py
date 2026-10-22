@@ -13,7 +13,7 @@ keyed on a name, a set or on the cost being a sacrifice.
 Two lowerings, told apart by what the slot can be:
 
 * **an object** ("another target creature", "another target nonland
-  permanent") is an ordered-roles announcement, and `targeting._as_kicked`
+  permanent") is an ordered-roles announcement, and `cast_targets._as_kicked`
   drops the role no surviving step spends;
 * **"any target"** may be a seat or an object, which a role cannot say, so the
   pair is rewritten to the sentence it means — the amount to each of two

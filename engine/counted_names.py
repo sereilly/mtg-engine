@@ -21,7 +21,7 @@ neither does a count taken by anything but a Flame Burst.
 
 **Text-keyed**, like ``combat_restrictions`` and ``cast_restrictions``: both
 names are payload, so a card printing the sentence of another spell needs no
-registration. The support gate (``oracle._derived_static_claims``), the
+registration. The support gate (``derived_static_claims._derived_static_claims``), the
 grammar's claim (``grammar/registries``) and the count
 (``handlers/_filters._card_matches_filter``) all read :func:`counts_as_line`,
 so what is claimed and what is counted are one table.

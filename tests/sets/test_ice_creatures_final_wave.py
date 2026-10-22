@@ -1352,7 +1352,7 @@ def test_goblin_ski_patrol_sacrifices_itself_and_not_the_opponents_board(set_poo
 
 # --- G4 (Fallen Empires wave): a tap cost that charged nothing --------------
 #
-# ``oracle._chargeable_tap_cost`` reads the printed count through
+# ``chargeable_costs._chargeable_tap_cost`` reads the printed count through
 # ``oracle_types._NUMBER_WORDS``, which knew "a" and not "an" -- so "Tap **an**
 # untapped snow land you control" charged 0 taps while the grammar's own amount
 # reader read the same word as one and admitted the line. Two shipped cards had

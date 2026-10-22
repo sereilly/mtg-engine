@@ -178,7 +178,7 @@ def test_the_long_spelling_of_dies_is_the_same_trigger_condition():
     makes the pair one event.
     """
     from engine.grammar import parse_line
-    from engine.oracle import _parse_trigger_condition
+    from engine.trigger_conditions import _parse_trigger_condition
 
     short = "when this creature dies"
     long = "when this creature is put into your graveyard from the battlefield"

@@ -11,7 +11,7 @@ the seam is the moment an ability is put onto the stack.
 
 Everything below is derived from the printed sentence, so a differently-named
 card with the same template needs no code at all. The **support gate reads this
-same table** (``oracle._derived_static_claims``), so a wording it does not
+same table** (``derived_static_claims._derived_static_claims``), so a wording it does not
 understand cannot be admitted as supported and then silently unenforced — the
 lesson `land_play_allowance.py` records at length.
 

@@ -23,6 +23,7 @@ from __future__ import annotations
 import pytest
 
 from engine.faces import compilation_units
+import engine.front_ends as front_ends
 import engine.oracle as oracle
 from engine.card_loader import load_cards, load_catalog, manifest_set_paths
 from engine.effect_labels import (
@@ -66,12 +67,12 @@ def _abilities_of(cards):
         for ability in program.activated_abilities:
             if ability.instruction is None:
                 continue
-            if oracle._grammar_instruction(ability.source_line, card.name, activated=True):
+            if front_ends._grammar_instruction(ability.source_line, card.name, activated=True):
                 activated.append((card.name, ability.instruction.kind, ability.effect_kind))
         for trig in program.triggered_abilities:
             if trig.instruction is None:
                 continue
-            if oracle._grammar_instruction(
+            if front_ends._grammar_instruction(
                 trig.source_line, card.name, condition_kind=trig.condition.kind
             ):
                 triggered.append(

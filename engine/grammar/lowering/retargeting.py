@@ -227,7 +227,7 @@ def _lower_change_target(node: ast.ChangeTarget) -> tuple[OracleInstruction, ...
         # decide the target is **mandatory** (CR 602.2b): without it the
         # activation gate treats the ability as targeting nothing, and the {X}
         # and the tap are paid on an empty stack for no effect. The spec itself
-        # still comes from the kind table in ``engine/targeting.py``, which is
+        # still comes from the kind table in ``engine/payload_target_specs.py``, which is
         # consulted first — this says *that* it targets, not what.
         OracleInstruction(
             "change_target_spell_target", "",

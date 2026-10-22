@@ -931,7 +931,7 @@ _NUMBER_WORDS = {
     # "Tap **an** untapped Swamp you control" (Hecatomb), "Tap **an** untapped
     # snow land you control" (Karplusan Giant). The same article as "a" before
     # a vowel, and its absence was not a missing spelling but three **free
-    # abilities**: `oracle._chargeable_tap_cost` reads the count through this
+    # abilities**: `chargeable_costs._chargeable_tap_cost` reads the count through this
     # table, got 0, and charged no tap at all — while the grammar's own amount
     # reader had always read "an" as one and admitted the line.
     "an": 1,
@@ -974,7 +974,7 @@ _ABILITY_WORD_DASHES = ("—", "–", "-")
 def strip_ability_word(line: str) -> str:
     """*line* without a leading ability word (CR 207.2c), if it has one.
 
-    Read by both front ends — ``engine/oracle.py``'s line normalizer and
+    Read by both front ends — ``engine/line_normalization.py``'s line normalizer and
     ``engine/grammar``'s line parser — because a word stripped on one side only
     is a line the two halves of the pipeline disagree about.
     """
@@ -1147,7 +1147,7 @@ EXILED_BY_SEAT = "exiled_by_seat"
 #:
 #: Declared here for ``EXILED_THIS_WAY``'s reason: the count spec
 #: ``lowering/characteristics`` writes and the producer gate
-#: ``oracle._records_the_delay_reads`` asks sit at opposite ends of the
+#: ``ability_lines._records_the_delay_reads`` asks sit at opposite ends of the
 #: pipeline, and a second spelling between them is how a producer gate goes
 #: vacuous while the amount reads an empty record.
 #:
@@ -1495,7 +1495,7 @@ CHOSEN_TARGET_PERMANENTS = "chosen_target_permanents"
 #: Blind Seer): one chosen object in one of two zones. Beside ``"spell"`` (the
 #: stack) and ``"object"`` (the battlefield), which are the description's words
 #: for the two halves. Here because three ends of the pipeline spell it — the
-#: lowering that writes it, ``targeting._from_targets_payload`` that turns it
+#: lowering that writes it, ``target_descriptions._from_targets_payload`` that turns it
 #: into the ``spell_or_permanent`` picker, and the handler that asks which half
 #: the announcement named.
 SPELL_OR_OBJECT_TARGET = "spell_or_object"
@@ -1699,7 +1699,7 @@ PER_OBJECT_SEAT_RECORDS: dict[str, str] = {
 # ---------------------------------------------------------------------------
 #
 # Turning the grammar off and back on is a thing the engine genuinely does —
-# `tests/engine/test_front_end_safety.py` swaps `oracle._grammar_instruction`
+# `tests/engine/test_front_end_safety.py` swaps `front_ends._grammar_instruction`
 # for a stub to measure what the card hooks would read on their own. That swap
 # is only reversible if every cache holding a *compiled* answer is emptied on
 # the way in and on the way out, and clearing `_compile_card_oracle` alone is

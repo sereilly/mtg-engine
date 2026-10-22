@@ -127,8 +127,8 @@ def _lower_pump_per_milled(node: ast.Pump) -> tuple[OracleInstruction, ...]:
 
     The producer gate is **not** here, and that is the one thing this lowering
     cannot check: the sentence is compiled on its own by
-    ``oracle._parse_delayed_attack_trigger``, which never sees the "Mill four
-    cards." in front of it. ``oracle._split_trailing_delayed_trigger`` is where
+    ``ability_lines._parse_delayed_attack_trigger``, which never sees the "Mill four
+    cards." in front of it. ``ability_lines._split_trailing_delayed_trigger`` is where
     the two halves meet and is where the record is required to exist.
     """
     if node.duration.kind is None:

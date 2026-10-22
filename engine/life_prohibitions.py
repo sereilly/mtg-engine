@@ -24,7 +24,7 @@ half it recognised.
 
 And the reader is asked by three callers, for the reason every other text-keyed
 table in this engine is: the seam that enforces it, the support gate that decides
-whether the card is implemented (``oracle._derived_static_claims``), and the
+whether the card is implemented (``derived_static_claims._derived_static_claims``), and the
 parse-coverage report that decides whether the sentence was read. A permanent
 whose only ability is one of these produces no instruction, so without the claim
 it would report unsupported however well the ban works.

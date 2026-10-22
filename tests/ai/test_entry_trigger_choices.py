@@ -1,7 +1,7 @@
 """Pool-wide: what an AI seat chooses for a permanent's own entry trigger.
 
 This engine names an entry trigger's target as the permanent is cast (the
-standing approximation ``targeting._cast_target_spec`` documents), so for a
+standing approximation ``cast_targets._cast_target_spec`` documents), so for a
 creature spell the cast's announcement *is* the trigger's choice — and the
 spell-side choosers were written for spells. Three families, each found by
 driving a Planeshift card and each already wrong on a shipped one:

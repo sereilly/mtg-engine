@@ -980,7 +980,7 @@ def grant_whole_prevention_shield(game: Game, instruction: OracleInstruction, co
         # the very permanent it protects, which answers only to damage that
         # permanent deals and prevents nothing the card is played for. The
         # announcement's own ``chosen_source`` field carries it instead — the
-        # second prompt `targeting._whole_prevention_shield_spec` asks for, and
+        # second prompt `payload_target_specs._whole_prevention_shield_spec` asks for, and
         # the one Jade Monolith has run for its two choices all along.
         #
         # Charm Peddler prints the same shield over "target **creature**", so

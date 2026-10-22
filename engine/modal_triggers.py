@@ -35,7 +35,7 @@ from .oracle_types import OracleInstruction
 from .targeting import derive_instruction_spec
 
 #: The instruction kind a "Choose one —" head lowers to. Named once rather than
-#: spelled at each reader: `engine/oracle.py` builds it, the enqueue path
+#: spelled at each reader: `engine/ability_lines.py` builds it, the enqueue path
 #: detects it, and `handlers/control_flow.py` still executes the *non-modal*
 #: form (a "gains flying or first strike" alternative inside an effect), which
 #: is a different question at a different time.
@@ -56,7 +56,7 @@ MODAL_INSTRUCTION_KIND = "choose_one"
 #: Read off the kind, the push path took all nine shipped abilities of the
 #: second shape as modal and asked at activation, so a player who saw the
 #: response could not answer it with the other alternative. Only
-#: ``oracle._modal_trigger_ability`` writes the key — the one place a bulleted
+#: ``ability_lines._modal_trigger_ability`` writes the key — the one place a bulleted
 #: head is assembled — so an alternative the grammar lowers is unmodal by
 #: construction rather than by a list.
 MODAL_HEAD_KEY = "modal"
@@ -76,7 +76,7 @@ MODAL_HEAD_KEY = "modal"
 #: entry site itself, and ``stack_targets``' two questions about a permanent
 #: spell — which in this engine *carries its entry trigger's target*, announced
 #: as the permanent is cast (the standing approximation
-#: ``targeting._cast_target_spec`` documents; CR 603.3d would choose it as the
+#: ``cast_targets._cast_target_spec`` documents; CR 603.3d would choose it as the
 #: trigger is put on the stack).
 ENTRY_TRIGGER_CONDITIONS = frozenset({"enters_battlefield", "enters_or_dies"})
 

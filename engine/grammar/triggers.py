@@ -64,7 +64,7 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
         # unsafe half is on the regex side, where an unanchored bare row reads
         # them as nothing at all.
         #
-        # The narrowing itself is `engine/oracle.py`'s payload and the death
+        # The narrowing itself is `engine/trigger_conditions.py`'s payload and the death
         # fire site's to enforce; what is owed here is reading the same
         # sentence, so a line one front end claims is not a card the other
         # refuses.
@@ -109,7 +109,7 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
             return named_tap
         # "**When** enchanted creature is dealt damage, destroy it." (Mortal
         # Wound.) Blight's argument one production over, and the asymmetry it
-        # closes was invisible from either side alone: `engine/oracle.py`'s
+        # closes was invisible from either side alone: `engine/trigger_conditions.py`'s
         # table reads this condition under **both** printed words — it falls
         # back to the whenever table for any "when" line — while this front end
         # read it under one. So the condition parsed, the *effect* behind it
@@ -120,7 +120,7 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
         if attached is not None:
             return attached
         # "When you remove the last intervention counter from this enchantment"
-        # (Divine Intervention). Read here as well as in `engine/oracle.py`'s
+        # (Divine Intervention). Read here as well as in `engine/trigger_conditions.py`'s
         # table for the reason stated above the threshold trigger: both front
         # ends see the whole line, and a condition only one of them reads leaves
         # the other refusing the effect behind it.
@@ -142,7 +142,7 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
         # Mine). The passive voice of the branch above and the same event: a
         # counter removal is one event whoever performed it (CR 122.1), and the
         # sweep that announces it reads the record every removal path writes.
-        # Read on this front end as well as in `engine/oracle.py`'s table, for
+        # Read on this front end as well as in `engine/trigger_conditions.py`'s table, for
         # the reason the active voice is: a condition only one of them reads
         # leaves the other refusing the effect behind it.
         mark_passive = stream.mark()
@@ -242,7 +242,7 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
         # different sets — the narrowing has to be the same phrase on both.
         # "When **an opponent** controls a creature with power 4 or greater"
         # (Hidden Predators) is the same condition asked of another seat, and
-        # the seat is payload on ``engine/oracle.py``'s row rather than a kind
+        # the seat is payload on ``engine/trigger_conditions.py``'s row rather than a kind
         # of its own; this side has only to read the words. Both spellings in
         # one branch, so a card printing either gets the same noun parser.
         mark_controls = stream.mark()
@@ -323,7 +323,7 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
         # a narrowed cast, a subject-led entry, a quantified tap. Timid Drake
         # ("When another creature enters") and Straw Golem ("When an opponent
         # casts a creature spell") are the two Weatherlight cards that name it,
-        # and `engine/oracle.py`'s regex table reads both words for either — so
+        # and `engine/trigger_conditions.py`'s regex table reads both words for either — so
         # the disagreement was never about the condition, only about which
         # cards have one.
         return _parse_matched_event(stream, "when")

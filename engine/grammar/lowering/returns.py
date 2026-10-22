@@ -713,7 +713,7 @@ def _lower_return_to_zone(
                 to_hand["any_graveyard"] = True
             if subject_names_another(subject):
                 # The printed "another", on the key the picker
-                # (``targeting._graveyard_return_spec``), the announcement gate
+                # (``payload_target_specs._graveyard_return_spec``), the announcement gate
                 # and the handler all read through one predicate
                 # (``handlers/_filters.excluded_graveyard_slot``). Its own key
                 # rather than the ``exclude_self`` a *permanent* narrowing

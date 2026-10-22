@@ -9,7 +9,7 @@ for the identical reason: a keyword whose definition **is** a sentence gets one
 reader — the rewrite — rather than a second path beside every seam an activated
 ability already passes through. :func:`expand_cycling_lines` turns the printed
 line into that sentence before the compiler classifies anything, and from there
-the grammar reads the effect, ``engine/oracle.py``'s cost parser reads the
+the grammar reads the effect, ``engine/activation_costs.py``'s cost parser reads the
 "Discard this card" cost, ``engine/activation_zones.py`` reads CR 113.6j off
 that cost, and the web layer offers it like any other hand-activatable ability.
 Nothing downstream knows the word.

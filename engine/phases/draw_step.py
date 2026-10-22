@@ -38,7 +38,7 @@ DRAW_STEP_EACH_CONDITION = "draw_step_each"
 
 #: The payload key narrowing ``draw_step_each`` to a set of seats — "each
 #: **opponent's** draw step" (Malignant Growth). Named here for
-#: ``DRAW_STEP_INTERVENING_IF``'s reason below: `engine/oracle.py`'s pattern
+#: ``DRAW_STEP_INTERVENING_IF``'s reason below: `engine/trigger_conditions.py`'s pattern
 #: table writes it and this step reads it, and a channel spelled at both ends
 #: is a channel that can be renamed at one.
 DRAW_STEP_SCOPE = "draw_step_scope"

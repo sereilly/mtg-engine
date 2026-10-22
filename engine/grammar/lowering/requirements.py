@@ -169,7 +169,7 @@ def _lower_force_chosen_creature_to_attack(
                 },
             },
             # The **declined** branch, which is where the target lives:
-            # `targeting._from_instructions` reads an offer's `otherwise` last
+            # `instruction_targets._from_instructions` reads an offer's `otherwise` last
             # and for exactly this reason — CR 601.2c picks the creature as the
             # ability is activated, before anyone is offered the payment.
             "otherwise": (requirement,),
@@ -189,7 +189,7 @@ def _lower_attacks_this_turn_if_able(
     attacks this turn if able." (Boiling Blood) names one the caster chose, and
     the note that used to stand here — "a targeted spelling would need a
     picker" — was the work item rather than the reason: the picker falls out of
-    the ``targets`` description, because ``targeting._from_targets_payload``
+    the ``targets`` description, because ``target_descriptions._from_targets_payload``
     reads a description into a spec for any kind that carries one.
 
     Two kinds rather than one with an optional target, because the two answer

@@ -3,7 +3,7 @@
 CR 603.4's condition is attached by ``lower_ability`` to every *top-level*
 instruction a line lowers to. A line that lowers to two of them — "put a +1/+1
 counter on this creature **and** untap it" — is then wrapped in a single
-``sequence`` by ``engine/oracle.py``, and the wrapper is the new top level. Both
+``sequence`` by ``engine/front_ends.py``, and the wrapper is the new top level. Both
 readers of the gate look at the top level: the end step's scan decides whether to
 enqueue the trigger at all, and ``mixins/stack/resolution.py`` re-checks it as
 the ability resolves. A wrapper that did not carry the gate therefore put the

@@ -80,7 +80,7 @@ _ROADMAPPED_REASONS = {
     #
     # "modal line" went the same way. `engine/grammar/effects/stack.py` reads
     # the head ("Choose one —", with or without an activation cost or a trigger
-    # in front of it) and `engine/oracle.py` groups it with the bullets below
+    # in front of it) and `engine/ability_lines.py` groups it with the bullets below
     # it, so the reason no longer exists to be scheduled. What is left of it in
     # the backlog is honest: a count the engine cannot carry out refuses at
     # *lowering*, and says so.
