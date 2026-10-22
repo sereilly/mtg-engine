@@ -166,7 +166,7 @@ def _attach_chosen_to_chosen(
     falling off — dropping it would put it in a graveyard on the next
     state-based check for a card that never said to destroy it.
     """
-    from ..auras import attach_aura, aura_attach_refusal, detach_aura
+    from ..aura_attachment import attach_aura, aura_attach_refusal, detach_aura
 
     card_name = getattr(context.card, "name", "")
     target_id = context.target_permanent_id

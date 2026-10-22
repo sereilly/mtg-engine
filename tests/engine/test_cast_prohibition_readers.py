@@ -40,7 +40,7 @@ from fastapi.testclient import TestClient
 
 from engine import Game, PlayerState, ai_cast_gates, ai_casts
 from engine import cast_prohibitions
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.cast_prohibitions import (CAST_PROHIBITIONS, LAND, SPELL,
                                       cast_prohibition)
@@ -480,8 +480,8 @@ def _row_predicate_names() -> set[str]:
     names: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom) and node.module in (
-            "auras", "cast_restrictions", "cast_bans", "spell_prohibitions",
-            "legality",
+            "aura_restrictions", "cast_restrictions", "cast_bans",
+            "spell_prohibitions", "legality",
         ):
             names.update(alias.name for alias in node.names)
         if isinstance(node, ast.Attribute) and node.attr == "_set_lockout_banning_card":

@@ -39,7 +39,7 @@ from __future__ import annotations
 import pytest
 
 from engine import Game, PlayerState
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.mana_payment import is_mana_ability
 from engine.models import Permanent

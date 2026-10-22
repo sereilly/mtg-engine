@@ -145,9 +145,9 @@ def parse_comparison(stream: TokenStream) -> ast.Comparison:
 #: as one back-reference: an Aura says "the enchanted creature's" (Ironclaw
 #: Curse) and a creature printing the same sentence about itself says "this
 #: creature's". The Aura's line reaches this reader *unrewritten* —
-#: ``auras.aura_combat_restriction`` rewrites only the sentence's leading
-#: subject — which is why the enchanted spelling has to be here rather than
-#: normalized away upstream.
+#: ``aura_restrictions.aura_combat_restriction`` rewrites only the sentence's
+#: leading subject — which is why the enchanted spelling has to be here rather
+#: than normalized away upstream.
 _SOURCE_POSSESSIVES: tuple[tuple[str, ...], ...] = (
     ("the", "enchanted", "creature", "'s"),
     ("this", "creature", "'s"),

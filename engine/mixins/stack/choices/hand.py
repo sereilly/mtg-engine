@@ -865,7 +865,7 @@ class HandChoicesMixin:
         # so nothing is re-checked here that could leave the Aura unattached.
         host_id = (choice.data.get("_payload") or {}).get("attach_to_permanent_id")
         if isinstance(host_id, int):
-            from ....auras import attach_aura
+            from ....aura_attachment import attach_aura
 
             host = self.permanent_by_id(host_id)
             if host is not None:

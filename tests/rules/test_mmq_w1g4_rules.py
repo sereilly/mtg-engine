@@ -10,7 +10,7 @@ enters under, and when a computed cost is counted.
 import pytest
 
 from engine import Game, PlayerState
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.card_loader import load_cards, manifest_set_path
 from engine.game_types import OracleExecutionContext
 from engine.handlers.control_flow import evaluate_condition

@@ -224,7 +224,7 @@ def test_no_acknowledgement_has_gone_stale():
 #
 #   * the layer machinery itself has to start from the printed shape;
 #   * an effect that asks "is this *not* already a creature?" before animating
-#     it must not see the type it is about to add (engine/auras.py);
+#     it must not see the type it is about to add (engine/aura_grants.py);
 #   * the state-based sweep matches Aura / Equipment / Saga / Role shapes.
 #     Supertypes used to be listed here too and no longer are: "Legendary" and
 #     "World" are copiable values (CR 707.2), so the legend and world rules
@@ -260,7 +260,7 @@ PRINTED_READ_BASELINE: dict[str, int] = {
     # Asking the computed type here would include the type this very effect is
     # about to add, so the answer would depend on whether it had already been
     # asked — a self-reference, not a shortcut. Both sites say so in place.
-    "auras.py": 1,
+    "aura_grants.py": 1,
     "mixins/board_statics.py": 1,  # the same self-reference, for global statics
     # Card shapes this engine models on the printed line alone. The supertype
     # sweeps that used to be covered by this entry read the effective card now.

@@ -379,7 +379,7 @@ def test_arcades_sabboth_buffs_only_untapped_non_attacking_creatures(set_pool):
 
 def test_rabid_wombat_grows_with_every_aura_on_it(set_pool):
     """"This creature gets +2/+2 for each Aura attached to it." Printed 0/1."""
-    from engine.auras import attach_aura, detach_aura
+    from engine.aura_attachment import attach_aura, detach_aura
 
     def _aura(name: str) -> CardDefinition:
         return CardDefinition(

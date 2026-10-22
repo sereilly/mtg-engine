@@ -981,7 +981,8 @@ def test_irini_sengirs_line_is_claimed_by_the_table_that_charges_it(set_pool):
     """A clause claimed by a pattern that then produces no modifier is a card
     reporting supported with its sentence dropped, so the claim and the charge
     are one reader."""
-    from engine.cost_modifiers import cost_modifier_claims_line, cost_modifiers_for
+    from engine.cost_modifiers import cost_modifier_claims_line
+    from engine.cost_modifier_lines import cost_modifiers_for
 
     sengir = set_pool("HML")["Irini Sengir"]
     assert compile_card_oracle(sengir).supported
@@ -999,7 +1000,7 @@ def test_the_conjunction_split_leaves_a_printed_type_list_alone(catalog_by_name)
     half and leave "instant" reading as nothing, which is why the split is
     guarded on the word the subject ends with.
     """
-    from engine.cost_modifiers import cost_modifiers_for
+    from engine.cost_modifier_lines import cost_modifiers_for
 
     (modifier,) = cost_modifiers_for(
         catalog_by_name["Mana Matrix"].oracle_text.lower()

@@ -434,7 +434,7 @@ def test_gauntlets_of_chaos_destroys_the_auras_on_both_halves(set_pool):
     """"If those permanents are exchanged this way, destroy all Auras attached to
     them." The rider is executed, and it reads the two exchanged permanents —
     an Aura on a third permanent survives."""
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     pool = set_pool("LEG")
     gauntlets = Permanent(card=pool["Gauntlets of Chaos"])
@@ -465,7 +465,7 @@ def test_gauntlets_of_chaos_destroys_the_auras_on_both_halves(set_pool):
 def test_gauntlets_of_chaos_leaves_no_aura_destruction_when_nothing_is_exchanged(set_pool):
     """The rider is conditioned on the exchange having happened, and the
     condition is the binding rather than a second reading of the board."""
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     pool = set_pool("LEG")
     gauntlets = Permanent(card=pool["Gauntlets of Chaos"])

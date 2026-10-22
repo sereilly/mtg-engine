@@ -87,7 +87,7 @@ def test_chimeric_staff_stops_being_a_creature_at_cleanup(set_pool):
 
 # --- W1G5: the two artifacts that reported supported and did nothing ---
 from engine import Game, PlayerState
-from engine.enter_effects import LIFE_PAID_AS_ENTERED
+from engine.entry_choices import LIFE_PAID_AS_ENTERED
 from engine.models import Permanent
 from engine.named_counters import add_counters
 from tests.helpers import _mk_creature_card, resolve_stack

@@ -339,9 +339,9 @@ class CastTargetSpecMixin:
         # every divided spell, so Captain's Maneuver's two targets were taxed a
         # mana its card does not charge and its X stopped one short of what the
         # pool could pay. The table the cast path charges from
-        # (``cost_modifiers.self_per_target_tax``), reported rather than
+        # (``self_cost_modifiers.self_per_target_tax``), reported rather than
         # mirrored; absent where no such line is printed.
-        from .cost_modifiers import self_per_target_tax
+        from .self_cost_modifiers import self_per_target_tax
 
         per_target = self_per_target_tax(card.oracle_text or "")
         if per_target is not None:

@@ -1305,7 +1305,8 @@ def test_a_blocking_exception_clause_fails_full_consumption():
     tokens makes the line fail loudly and fall back instead.
 
     Invisibility prints the same shape and is deliberately *not* here: its
-    exception is modelled, by ``auras.aura_restriction_active``, so the line is
+    exception is modelled, by ``aura_restrictions.aura_restriction_active``, so
+    the line is
     claimed rather than refused (see the test below)."""
     result = compile_line("This creature can't be blocked by Walls.", card_name="Juggernaut")
 
@@ -2917,8 +2918,9 @@ def test_both_discard_costs_the_engine_charges_are_accepted():
 
     A counted "discard two cards" refused here until Prophecy's spellshapers:
     the charger had always taken a count, and its reader now reads the printed
-    one (``cast_costs.read_discard_clause``), so the line parses *and* charges
-    two. An "X" count still refuses — nothing announces a discarded X on an
+    one (``cast_cost_clauses.read_discard_clause``), so the line parses *and*
+    charges two. An "X" count still refuses — nothing announces a discarded X
+    on an
     activation."""
     from engine.oracle import parse_activated_ability_cost
 

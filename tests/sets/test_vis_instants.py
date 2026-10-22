@@ -33,7 +33,7 @@ from engine.models import Permanent as _W2G1Permanent
 from engine.card_loader import load_cards as _w2g1_load, manifest_set_path as _w2g1_path
 from engine.oracle import compile_card_oracle as _w2g1_compile
 from engine.alternative_costs import alternative_cost_for_line as _w2g1_alt_line
-from engine.cast_costs import additional_cost_for_line as _w2g1_add_line
+from engine.cast_cost_clauses import additional_cost_for_line as _w2g1_add_line
 from engine import Game as _W2G5Game, PlayerState as _W2G5Player
 from engine.grammar import compile_line as _w2g5_compile
 from engine.grammar.errors import GrammarError as _W2G5GrammarError

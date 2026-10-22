@@ -183,7 +183,7 @@ def _printed_permission(game, seat, source, ability):
 def _aura_nonmana_shut_off(game, seat, source, ability):
     # "…and its activated abilities can't be activated unless they're mana
     # abilities." (Faith's Fetters.)
-    from .auras import aura_restriction_active
+    from .aura_restrictions import aura_restriction_active
 
     if not aura_restriction_active(source, "activated_abilities_shut_off"):
         return None
@@ -195,7 +195,7 @@ def _aura_nonmana_shut_off(game, seat, source, ability):
 def _aura_all_shut_off(game, seat, source, ability):
     # "…and its activated abilities can't be activated." (Volrath's Curse.)
     # The clause above with CR 605.1a's exception **not** printed.
-    from .auras import aura_restriction_active
+    from .aura_restrictions import aura_restriction_active
 
     if not aura_restriction_active(source, "all_activated_abilities_shut_off"):
         return None

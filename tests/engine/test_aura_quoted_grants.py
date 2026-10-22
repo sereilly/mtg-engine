@@ -33,8 +33,9 @@ else — and the tests under it hold the gate itself.
 from __future__ import annotations
 
 from engine import Game, PlayerState
-from engine.auras import (attach_aura, aura_granted_ability_lines,
-                          aura_quoted_grants, quoted_grant_readable)
+from engine.aura_attachment import attach_aura
+from engine.aura_grants import (aura_granted_ability_lines, aura_quoted_grants,
+                                quoted_grant_readable)
 from engine.faces import compilation_units
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.granted_abilities import (bind_granter, granted_ability_supported,

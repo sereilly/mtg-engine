@@ -527,9 +527,9 @@ class UpkeepEffectsMixin:
         Nothing interactive: one counter of the named kind comes off the
         enchanted creature, and when the last one goes the untap restriction
         the counter conditions simply stops answering
-        (auras.aura_restriction_active reads the count at ask time) — so the
-        creature untaps again on its controller's next untap step with nothing
-        to clear.
+        (aura_restrictions.aura_restriction_active reads the count at ask time)
+        — so the creature untaps again on its controller's next untap step with
+        nothing to clear.
         """
         from ..named_counters import counters_on, remove_counters
 

@@ -250,7 +250,7 @@ def test_a_per_each_bonus_is_the_printed_number_times_the_count():
     the shared count spec passes for Rabid Wombat's symmetrical numbers and
     gets this one wrong in both directions.
     """
-    from engine.auras import attach_aura, detach_aura
+    from engine.aura_attachment import attach_aura, detach_aura
 
     beast = Permanent(card=_per_each_creature(
         "Invented Beast", "This creature gets +1/+3 for each Aura attached to it."
@@ -282,7 +282,7 @@ def test_a_per_each_bonus_counts_attachments_whoever_controls_them():
     permanent is recorded on that permanent, which is why the count is not a
     battlefield scan scoped to one seat — an opponent's Pacifism on your
     creature is attached to your creature."""
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     beast = Permanent(card=_per_each_creature(
         "Invented Beast", "This creature gets +1/+3 for each Aura attached to it."
@@ -302,7 +302,7 @@ def test_a_per_each_bonus_counts_attachments_whoever_controls_them():
 def test_a_per_each_bonus_counts_only_what_the_noun_phrase_names():
     """A non-Aura enchantment on the board is not attached to anything, and an
     Aura attached to something else is not attached to *it*."""
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     beast = Permanent(card=_per_each_creature(
         "Invented Beast", "This creature gets +1/+3 for each Aura attached to it."

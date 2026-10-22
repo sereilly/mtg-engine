@@ -170,7 +170,7 @@ def permanent_choice_candidates(game, payload: dict, context, among=None) -> lis
         if payload.get("legal_host_for_relative"):
             # CR 303.4j, asked before the move so an illegal pick is never
             # offered — the same predicate the attach itself re-asks.
-            from ..auras import aura_attach_refusal
+            from ..aura_attachment import aura_attach_refusal
 
             if anchor is None or aura_attach_refusal(game, anchor, perm) is not None:
                 continue
@@ -180,7 +180,7 @@ def permanent_choice_candidates(game, payload: dict, context, among=None) -> lis
             # time this resolves is a card in a graveyard rather than a
             # permanent. Asked of the card-shaped half of the one predicate,
             # never of a second copy of the enchant clause.
-            from ..auras import enchant_card_refusal
+            from ..aura_attachment import enchant_card_refusal
 
             if enchant_card_refusal(
                 game, context.card, seat, perm
@@ -196,7 +196,7 @@ def permanent_choice_candidates(game, payload: dict, context, among=None) -> lis
             # arms the prompt does
             # (``handlers/reanimation.return_all_cards_from_graveyard``), and
             # the liveness re-check reads it back.
-            from ..auras import enchant_card_refusal
+            from ..aura_attachment import enchant_card_refusal
 
             controller = payload.get("host_controller", seat)
             if enchant_card_refusal(game, aura_card, controller, perm) is not None:

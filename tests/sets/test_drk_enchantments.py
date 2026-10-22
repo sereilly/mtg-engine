@@ -6,7 +6,7 @@ See tests/sets/README.md for the convention.
 from __future__ import annotations
 
 from engine import Game, PlayerState
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.models import Permanent
 from engine.named_counters import counters_on
 from engine.models import CardDefinition, Permanent

@@ -127,7 +127,7 @@ def _cost_modifiers(clause: str) -> tuple:
     claimed here and charged by nobody, which is the silent half-implementation
     this seam exists to prevent.
     """
-    from .cost_modifiers import cost_modifiers_for
+    from .cost_modifier_lines import cost_modifiers_for
 
     modifiers = cost_modifiers_for(clause)
     if not modifiers:

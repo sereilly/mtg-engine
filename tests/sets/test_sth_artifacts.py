@@ -406,9 +406,9 @@ import pytest
 
 from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_path
-from engine.cost_modifiers import (cost_modifier_claims_line,
-                                   cost_modifier_reduction_sentences,
-                                   cost_modifiers_for)
+from engine.cost_modifiers import cost_modifier_claims_line
+from engine.cost_modifier_lines import (cost_modifier_reduction_sentences,
+                                        cost_modifiers_for)
 from engine.models import Permanent
 
 _G4_ATQ = {c.name: c for c in load_cards(manifest_set_path("ATQ"))}

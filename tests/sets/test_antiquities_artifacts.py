@@ -529,7 +529,7 @@ def test_the_return_is_delayed_not_immediate(set_pool):
 
 
 def _coffin_board(set_pool, *, aura=True, counters=2):
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
     from engine.pt import add_plus1_counters
 
     pool = set_pool("ATQ")
@@ -562,7 +562,7 @@ def test_artifact_ward_stops_the_artifact_coffin_from_targeting_the_creature(set
     artifact sources." Tawnos's Coffin is an artifact, so its exile ability
     can't be activated at a warded creature (CR 702.16, 602.2b) — the activation
     gate refuses it before any cost, the same answer the target picker gives."""
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     pool = set_pool("ATQ")
     coffin = Permanent(card=pool["Tawnos's Coffin"])

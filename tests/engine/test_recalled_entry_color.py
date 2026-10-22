@@ -15,7 +15,7 @@ Grail) relies on too.
 from __future__ import annotations
 
 from engine.card_loader import load_cards, manifest_set_paths
-from engine.enter_effects import CHOSEN_COLOR_KEY, entry_choices_of
+from engine.entry_choices import CHOSEN_COLOR_KEY, entry_choices_of
 from engine.oracle import compile_card_oracle
 from tests.helpers import _mk_card
 

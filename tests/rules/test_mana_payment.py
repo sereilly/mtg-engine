@@ -215,7 +215,7 @@ def test_118_7b_a_coloured_reduction_never_inflates_the_mana_noted_as_spent_on_x
     No card in the pool prints a coloured reduction yet; the reader that would
     build one does, so this pins the arithmetic before the card arrives.
     """
-    from engine.cost_modifiers import CostReduction
+    from engine.cost_modifier_lines import CostReduction
 
     game, p0, _p1 = _soul_burn_seat(pool, {"B": 6})
     card = pool["Soul Burn"]

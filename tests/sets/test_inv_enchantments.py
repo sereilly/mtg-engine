@@ -480,7 +480,8 @@ def test_w1g4_a_conditional_grant_the_engine_cannot_read_is_not_claimed():
     the compiler refuses, or a criterion the matcher cannot test, leaves the
     line unclaimed and the card unsupported — never admitted and inert.
     """
-    from engine.auras import aura_conditional_ability_grants, aura_continuous_claim
+    from engine.auras import aura_continuous_claim
+    from engine.aura_grants import aura_conditional_ability_grants
 
     printed = (
         'As long as enchanted permanent is red or green, it has "At the '

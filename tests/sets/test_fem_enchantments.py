@@ -155,7 +155,7 @@ def test_goblin_kites_refuses_a_creature_the_phrase_excludes(set_pool):
 # together: one condition production reads both.
 
 from engine import Game
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.cast_restrictions import check_cast_timing
 from engine.models import Permanent, PlayerState
 from engine.named_counters import counters_on
@@ -839,7 +839,7 @@ def test_a_chant_fires_on_its_own_controllers_land_too(set_pool):
 
 
 # --- G3: combat triggers, block restrictions and damage substitution ---
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.game import Game
 from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle

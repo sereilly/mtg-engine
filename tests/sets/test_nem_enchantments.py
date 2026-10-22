@@ -29,7 +29,7 @@ a prompt.
 # --- W1G3: combat restrictions and triggers ---
 
 from engine import Game, PlayerState
-from engine.auras import attach_aura, detach_aura
+from engine.aura_attachment import attach_aura, detach_aura
 from engine.models import CardDefinition, Permanent
 
 from tests.helpers import resolve_stack

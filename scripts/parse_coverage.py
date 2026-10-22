@@ -69,19 +69,18 @@ from parse_coverage_claims import (  # noqa: E402
     HANDLER_CLAIMS,
     _sentences,
 )
-from engine.cost_modifiers import cost_modifiers_for  # noqa: E402
-from engine.auras import (  # noqa: E402
-    aura_quoted_grants,
-    quoted_grant_readable,
-)
+from engine.cost_modifier_lines import cost_modifiers_for  # noqa: E402
+from engine.aura_grants import aura_quoted_grants, quoted_grant_readable  # noqa: E402
 from engine.oracle import (  # noqa: E402
     _is_supported_keyword_line,
-    _parse_activated_ability,
     trigger_condition_of_line,
-    _parse_triggered_ability,
     compile_card_oracle,
     expand_ability_lines,
     normalize_creature_line,
+)
+from engine.ability_lines import (  # noqa: E402
+    _parse_activated_ability,
+    _parse_triggered_ability,
 )
 from engine.line_classification import _parse_loyalty_ability  # noqa: E402
 from engine.static_line_support import _is_supported_static_creature_line  # noqa: E402
@@ -375,7 +374,7 @@ def _quoted_grant_sentences(card) -> set[str]:
     a bare "you draw a card" with a closing quote on the end.
 
     The reader that carries the grant out never sees fragments.
-    ``auras.aura_quoted_grants`` matches the whole line and
+    ``aura_grants.aura_quoted_grants`` matches the whole line and
     ``quoted_grant_readable`` compiles the whole quote **on the host**, through
     the ordinary ability parser — whose productions consume every token or
     refuse — so "readable" already means both sentences were read. Asked of the

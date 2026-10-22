@@ -199,7 +199,7 @@ def test_the_aura_grant_vocabulary_is_the_keyword_registry():
     They are the same three ``lord_buffs.grantable_keywords`` excludes, and this
     asserts the two agree rather than re-listing them.
     """
-    from engine.auras import _grantable_keywords
+    from engine.aura_vocabulary import _grantable_keywords
     from engine.lord_buffs import grantable_keywords
 
     assert set(_grantable_keywords()) == set(grantable_keywords())

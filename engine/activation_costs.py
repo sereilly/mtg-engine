@@ -25,7 +25,7 @@ from __future__ import annotations
 import re
 
 from .oracle_types import ActivatedAbilityCost, _MANA_TOKEN_RE, _NUMBER_WORDS
-from .cast_costs import read_discard_clause
+from .cast_cost_clauses import read_discard_clause
 from .grammar.readers import _SELF_NOUNS
 from .self_reference import _collapse_self_references
 from .chargeable_costs import (_chargeable_counter_target,
@@ -861,9 +861,10 @@ def parse_activated_ability_cost(
     # a printed count, and the regex admits a leading number word beside the
     # article. What the whole phrase means — the count off the front, "at
     # random" off the back, the noun phrase through
-    # `_chargeable_discard_filters` — is `cast_costs.read_discard_clause`, the
-    # reader Forbid's identically printed buyback is charged through, so the
-    # count is one answer on both sides of CR 602.2b's "as 601.2b–h".
+    # `_chargeable_discard_filters` — is
+    # `cast_cost_clauses.read_discard_clause`, the reader Forbid's identically
+    # printed buyback is charged through, so the count is one answer on both
+    # sides of CR 602.2b's "as 601.2b–h".
     discarded = (
         None if discard_last_drawn
         else re.search(r"\bdiscard ((?:an?|\w+) [^,:]+?)\s*(?=,|$)", cost_lower)

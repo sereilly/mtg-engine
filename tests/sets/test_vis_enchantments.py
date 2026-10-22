@@ -6,7 +6,7 @@ Split by the printed type of the card each test names
 
 from __future__ import annotations
 from engine import Game, PlayerState
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.models import CardDefinition, Permanent
@@ -22,7 +22,7 @@ from engine.oracle import compile_card_oracle as _w2g1e_compile
 from engine import Game as _W2G5EGame, PlayerState as _W2G5EPlayer
 from engine.models import Permanent as _W2G5EPermanent
 from engine.oracle import compile_card_oracle as _w2g5e_program
-from engine.auras import attach_aura as _w2g3_attach
+from engine.aura_attachment import attach_aura as _w2g3_attach
 from engine.card_loader import load_cards as _w2g3_load, manifest_set_paths as _w2g3_paths
 from engine.models import Permanent as _W2G3Permanent
 from engine.pt import add_pt_modifier as _w2g3_pump
@@ -64,7 +64,7 @@ from engine.models import Permanent as _W3G3EPermanent
 from engine.oracle import compile_card_oracle as _w3g3e_compile
 # --- W4G1: Necromancy, the enchantment that becomes an Aura ---
 from engine import Game as _W4G1Game, PlayerState as _W4G1Player  # noqa: E402
-from engine.auras import (  # noqa: E402
+from engine.aura_attachment import (  # noqa: E402
     PUT_ONTO_BATTLEFIELD_BY as _W4G1_ORIGIN,
     aura_attach_refusal as _w4g1_attach_refusal,
 )
@@ -372,7 +372,7 @@ def test_teferis_realm_leaves_an_aura_alone_under_the_non_aura_option(set_pool):
     """"…or **non-Aura** enchantment." The printed exclusion travels with the
     option, so an Aura is not one of the permanents the sweep names — and the
     Realm itself, a plain enchantment, is."""
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     lea = set_pool("LEA")
     realm = Permanent(card=set_pool("VIS")["Teferi's Realm"])
@@ -1028,7 +1028,7 @@ def test_vampirisms_counted_grant_is_not_also_read_as_a_flat_one(set_pool):
     the reader rather than through a board, because that is where the two
     answers would disagree.
     """
-    from engine.auras import aura_static_pt_grant
+    from engine.aura_grants import aura_static_pt_grant
 
     assert aura_static_pt_grant(set_pool("VIS")["Vampirism"].oracle_text) is None
 def test_death_watch_reads_the_creature_as_it_last_existed(set_pool, catalog_by_name):
@@ -1112,7 +1112,7 @@ def test_mob_mentality_grants_trample_while_attached(set_pool, catalog_by_name):
     """The Aura's other line, and the one that says the whole card is read: a
     keyword grant derived from the Aura's text while it is attached, which ends
     by the Aura ceasing to be attached rather than by a remembered delta."""
-    from engine.auras import detach_aura
+    from engine.aura_attachment import detach_aura
 
     game, _alice, _bob = _w2g3_rig()
     bear = _w2g3_enters(game, 0, catalog_by_name["Grizzly Bears"])
@@ -1861,10 +1861,10 @@ def test_necromancy_with_no_creature_card_anywhere_reanimates_nothing(set_pool):
 def test_a_quoted_grant_this_engine_cannot_test_keeps_refusing():
     """The production reads exactly one enchant quality — a head noun plus
     CR 201.5's self-reference — because that is the one
-    ``auras.enchant_card_refusal`` can test. Any other quoted clause keeps the
-    quote guard's refusal rather than being admitted with its restriction
-    dropped, which is the failure a permissive enchant matcher would make
-    silent.
+    ``aura_attachment.enchant_card_refusal`` can test. Any other quoted clause
+    keeps the quote guard's refusal rather than being admitted with its
+    restriction dropped, which is the failure a permissive enchant matcher
+    would make silent.
     """
     admitted = _w4g1_compile_line(
         'When this enchantment enters, it becomes an Aura with "enchant '

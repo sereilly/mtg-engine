@@ -22,8 +22,9 @@ from .text_changes import (TEXT_CHANGE_EFFECTS, apply_text_changes,
                            has_text_changes, text_changes)
 
 # …and the modules that are *not* safe here: ``keywords``, ``global_statics``,
-# ``auras``, ``layer_bridge`` and the rest load long after this one, and
-# importing them at the top would change the order the package loads in. Read
+# ``aura_attachment``, ``aura_grants``, ``layer_bridge`` and the rest load long
+# after this one, and importing them at the top would change the order the
+# package loads in. Read
 # through ``_late``, which imports each on first use and is an attribute lookup
 # after that — a function-level import is the import machinery on every call,
 # and the accessors below are the most-called functions in the engine
@@ -502,8 +503,8 @@ class Permanent:
     # hand in a test still has an order), **re-stamped as the permanent enters
     # the battlefield** (``Game._put_permanent_onto_battlefield``; CR 400.7
     # makes a returning permanent a new object) and again each time an Aura or
-    # Equipment becomes attached (CR 613.7e, ``auras.attach_aura``). Not
-    # re-stamped by phasing in: CR 702.26d says phasing changes no zone.
+    # Equipment becomes attached (CR 613.7e, ``aura_attachment.attach_aura``).
+    # Not re-stamped by phasing in: CR 702.26d says phasing changes no zone.
     #
     # ``compare=False`` and last, for the two reasons the id is.
     timestamp: int = field(default_factory=next_timestamp, compare=False)
@@ -732,9 +733,9 @@ class Permanent:
         # arrived, so detaching it takes the ability away with nothing to undo
         # (CR 611.3b). Read off the Aura's *effective* card, because a text
         # change rewrites what the Aura says before anything reads it.
-        auras = _late.auras
+        attachments, grants = _late.aura_attachment, _late.aura_grants
 
-        for aura in auras.auras_attached_to(self):
+        for aura in attachments.auras_attached_to(self):
             # An Aura's or Equipment's effect is stamped when it became
             # attached (CR 613.7e), and one older than the loss is taken.
             if not _kept(int(aura.metadata.get("aura_timestamp", aura.timestamp))):
@@ -743,7 +744,7 @@ class Permanent:
             # Aura means the object granting it, so the name and the id of the
             # attachment go with the text.
             aura_card = aura.effective_card
-            granted.extend(auras.aura_granted_ability_lines(
+            granted.extend(grants.aura_granted_ability_lines(
                 aura_card.oracle_text, granter_name=aura_card.name,
                 granter_id=aura.permanent_id,
             ))
@@ -753,7 +754,7 @@ class Permanent:
             # Same channel, same fold, and the same reason the quoted ones are
             # derived here rather than recorded at attach time.
             granted.extend(
-                auras.aura_granted_line_derived_lines(aura.effective_card.oracle_text)
+                grants.aura_granted_line_derived_lines(aura.effective_card.oracle_text)
             )
         # …and layer 6's other half (CR 613.1f): an ability an effect has taken
         # away. Dropped *before* the grants are appended, so a card that loses a

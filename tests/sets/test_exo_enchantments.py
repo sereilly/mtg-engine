@@ -509,7 +509,7 @@ def test_a_printed_chooser_beside_target_opponent_refuses(set_pool):
 
 from engine import Game, PlayerState, load_cards
 from engine.card_loader import manifest_set_path
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from tests.helpers import resolve_stack
@@ -690,7 +690,7 @@ def test_w1g2_pandemonium_landed_at_w2g2(set_pool):
 # --- W1G3: combat ---
 
 from engine import Game, PlayerState
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
 from tests.helpers import resolve_stack
@@ -860,7 +860,7 @@ def test_reconnaissance_pulls_an_attacker_out_of_combat_and_untaps_it(set_pool):
 import pytest
 
 from engine import Game as _G4eGame, PlayerState as _G4ePlayer
-from engine.auras import attach_aura as _g4e_attach
+from engine.aura_attachment import attach_aura as _g4e_attach
 from engine.models import Permanent as _G4ePerm
 
 from tests.helpers import resolve_stack as _g4e_resolve
@@ -1426,7 +1426,7 @@ def test_w2g2_any_target_without_the_phrase_still_announces_normally():
 # --- Phase 4: the printed subject of a damage sentence ---
 
 from engine import Game as _P4Game, PlayerState as _P4PlayerState
-from engine.auras import attach_aura as _p4_attach
+from engine.aura_attachment import attach_aura as _p4_attach
 from engine.models import CardDefinition as _P4CardDefinition
 from engine.models import Permanent as _P4Permanent
 from engine.oracle import compile_card_oracle as _p4_compile

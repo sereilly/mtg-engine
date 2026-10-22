@@ -12,14 +12,15 @@ match its addition compounds on every recompute, and CR 611.3a means the
 recompute runs constantly.
 
 It is now derived from the Aura's own text on every recompute
-(``auras.aura_static_pt_grant``, collected by ``layer_bridge`` at layer 7c), so
-detaching the Aura is simply ceasing to contribute.
+(``aura_grants.aura_static_pt_grant``, collected by ``layer_bridge`` at layer
+7c), so detaching the Aura is simply ceasing to contribute.
 """
 
 import pytest
 
 from engine import Game, PlayerState
-from engine.auras import aura_static_pt_grant, auras_attached_to
+from engine.aura_grants import aura_static_pt_grant
+from engine.aura_attachment import auras_attached_to
 from engine.card_loader import load_catalog
 from engine.models import CardDefinition, Permanent
 from tests.helpers import resolve_stack
@@ -192,7 +193,7 @@ def test_613_1f_a_granted_quoted_ability_is_not_claimed_as_a_keyword(catalog):
     """Farmstead grants an ability in quotes and the Wards grant protection.
     Neither is a keyword, and claiming them here would say the layer-6 grant
     carries them when it does not."""
-    from engine.auras import aura_keyword_grants
+    from engine.aura_grants import aura_keyword_grants
 
     assert aura_keyword_grants(catalog["Farmstead"].oracle_text) == ()
     assert aura_keyword_grants(catalog["White Ward"].oracle_text) == ()
@@ -270,10 +271,10 @@ def test_702_16c_protection_granted_outside_an_aura_still_counts(catalog):
 
 @pytest.mark.cr("502.1")
 def test_502_1_paralyze_untap_restriction_is_read_from_the_aura(catalog):
-    from engine.auras import aura_restriction_active
+    from engine.aura_restrictions import aura_restriction_active
 
     assert "doesnt_untap" in __import__(
-        "engine.auras", fromlist=["aura_restrictions"]
+        "engine.aura_restrictions", fromlist=["aura_restrictions"]
     ).aura_restrictions(catalog["Paralyze"].oracle_text)
 
     bear = Permanent(card=catalog["Grizzly Bears"], tapped=True)
@@ -421,13 +422,13 @@ def test_613_1d_an_artifact_creature_is_not_animated_again(catalog):
     """"As long as enchanted artifact *isn't a creature*". The condition reads
     the printed type line: asking whether it is currently a creature would
     include the type this very effect adds."""
-    from engine.auras import animating_auras
+    from engine.aura_grants import animating_auras
 
     creature_artifact = Permanent(card=catalog["Clockwork Beast"])
     player = PlayerState(name="P1", battlefield=[creature_artifact])
     Game(players=[player, PlayerState(name="P2")])
 
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     aura = Permanent(card=catalog["Animate Artifact"])
     attach_aura(aura, creature_artifact)
@@ -459,7 +460,7 @@ def test_613_1d_an_aura_adds_a_subtype_without_replacing_the_printed_ones():
     """"…in addition to its other types" is layer 4 *addition*. A land-type
     change (CR 305.7) replaces; this does not, and the two therefore cannot
     share a contribution."""
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     beast = Permanent(card=CardDefinition(
         name="Bear", mana_cost="{1}{G}", cmc=2.0, type_line="Creature — Bear",
@@ -481,7 +482,7 @@ def test_613_1d_an_aura_adds_a_subtype_without_replacing_the_printed_ones():
 @pytest.mark.cr("611.3")
 def test_611_3_the_added_subtype_ends_with_the_aura():
     """Derived every recompute, so nothing has to find and undo it."""
-    from engine.auras import attach_aura, detach_aura
+    from engine.aura_attachment import attach_aura, detach_aura
 
     beast = Permanent(card=CardDefinition(
         name="Bear", mana_cost="{1}{G}", cmc=2.0, type_line="Creature — Bear",
@@ -516,7 +517,8 @@ def test_502_3_counter_conditioned_untap_reads_the_counter_on_the_creature(catal
     """Venarian Gold's template, proven on an invented card: the restriction
     is active exactly while the named counter sits on the enchanted creature,
     and the counter's kind is payload."""
-    from engine.auras import attach_aura, aura_restriction_active
+    from engine.aura_attachment import attach_aura
+    from engine.aura_restrictions import aura_restriction_active
 
     aura = Permanent(card=_invented_aura(
         "Test Slumber",
@@ -538,7 +540,8 @@ def test_502_3_counter_conditioned_untap_reads_the_counter_on_the_creature(catal
 def test_502_3_counter_conditioned_untap_reads_the_counter_on_the_aura(catalog):
     """Cocoon's spelling: one word apart ("if **this Aura** has"), and the
     condition reads the Aura's own counters rather than the creature's."""
-    from engine.auras import attach_aura, aura_restriction_active
+    from engine.aura_attachment import attach_aura
+    from engine.aura_restrictions import aura_restriction_active
 
     aura = Permanent(card=_invented_aura(
         "Test Chrysalis",
@@ -623,7 +626,7 @@ def test_611_3_a_quoted_ability_granted_beside_a_pt_bonus_is_granted(catalog):
     card."" (Infernal Scarring.) One line, two channels — and the quoted-grant
     pattern was anchored without the P/T prefix, so the card applied the +2/+0
     and granted nothing at all while reporting supported."""
-    from engine.auras import attach_aura, detach_aura
+    from engine.aura_attachment import attach_aura, detach_aura
     from engine.oracle import compile_card_oracle
 
     bear = Permanent(card=catalog["Grizzly Bears"])
@@ -651,8 +654,8 @@ def test_611_3_a_quoted_ability_granted_beside_a_pt_bonus_is_granted(catalog):
 
 # --- W1G4 (EXO wave 1): the control change an attachment derives ------------
 
-from engine.auras import attach_aura as _g4c_attach
-from engine.auras import detach_aura as _g4c_detach
+from engine.aura_attachment import attach_aura as _g4c_attach
+from engine.aura_attachment import detach_aura as _g4c_detach
 from engine.models import Permanent as _G4cPerm
 
 

@@ -26,7 +26,7 @@ share a file, so a mechanical union has nothing to splice.
 import pytest
 
 from engine import Game, PlayerState
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.card_loader import load_cards, manifest_set_path
 from engine.models import CardDefinition, Permanent
 from tests.helpers import resolve_stack
@@ -120,7 +120,7 @@ def test_702_5_an_enchant_subtype_clause_is_enforced_and_not_merely_offered():
     here, and both read CR 613 layer 4 - so CR 305.7's Swamp-turned-Island stops
     being a legal host.
     """
-    from engine.auras import aura_attach_refusal
+    from engine.aura_attachment import aura_attach_refusal
     from engine.mixins.stack.casting import permanent_matches_enchant_noun
     from engine.oracle import compile_card_oracle
     from engine.targeting import derive_cast_spec

@@ -26,7 +26,7 @@ absent, so the pool cannot exercise the empty case at all.
 import pytest
 
 from engine import Game, PlayerState
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
 from tests.helpers import resolve_stack

@@ -665,7 +665,7 @@ def steal_target_linked_to_source(game: Game, instruction: OracleInstruction, co
     # the target — a creature nobody has enchanted is a legal target the ability
     # simply does nothing to, rather than one it steals for the instant before
     # the sweep hands it back.
-    from ..auras import auras_attached_to
+    from ..aura_attachment import auras_attached_to
 
     if "target_remains_enchanted" in conditions and not auras_attached_to(target_perm):
         game.log.append(
@@ -781,7 +781,7 @@ def exchange_control_of_targets(game: Game, instruction: OracleInstruction, cont
     stamp a layer-2 effect that says what was already true — visible the moment
     something else ends one of them.
     """
-    from ..auras import auras_attached_to
+    from ..aura_attachment import auras_attached_to
     from ..control import change_control
 
     card = context.card

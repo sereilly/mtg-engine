@@ -29,7 +29,7 @@ import dataclasses
 import pytest
 
 from engine import Game, PlayerState
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.models import Permanent
 from tests.helpers import _mk_card, _nosick, resolve_stack
 

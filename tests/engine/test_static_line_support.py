@@ -79,8 +79,8 @@ IMPLEMENTED_ELSEWHERE: dict[str, str] = {
     "as long as this creature is untapped, all damage that would be dealt to you":
         "phases/combat_damage_step.py (Veteran Bodyguard)",
     "as this creature enters, it becomes your choice of":
-        "enter_effects.choosable_bodies, applied by "
-        "entry_choices._apply_chosen_body (Primal Clay)",
+        "entry_choices.choosable_bodies, applied by "
+        "mixins/entry_choices._apply_chosen_body (Primal Clay)",
     "protection from ":
         "handlers/_filters.py protection checks",
 }

@@ -334,7 +334,7 @@ def test_w1g4_a_counted_self_reduction_refuses_what_it_cannot_count():
     per-each reader and refuses when that refuses: a count on another seat's
     board, a coloured pip repeated per object, and a multiplier beside a gate
     are all a cheaper spell than any card prints."""
-    from engine.cost_modifiers import self_cost_reduction
+    from engine.self_cost_modifiers import self_cost_reduction
 
     counted = self_cost_reduction(
         "This spell costs {2} less to cast for each artifact you control."
@@ -1871,7 +1871,8 @@ def _w1g7_split_card(set_pool):
 
 def test_w1g7_meddling_mage_is_supported_by_both_of_its_lines(set_pool):
     from engine.cast_bans import chosen_name_ban_row
-    from engine.enter_effects import chooses_card_name_on_enter, enter_effect_line
+    from engine.enter_effects import enter_effect_line
+    from engine.entry_choices import chooses_card_name_on_enter
 
     mage = set_pool("PLS")["Meddling Mage"]
     program = _w1g7_compile(mage)

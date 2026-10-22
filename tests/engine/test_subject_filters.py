@@ -789,7 +789,7 @@ _COVERED_ELSEWHERE = {
 
 
 def _r30_attach(aura, host):
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     attach_aura(aura, host)
 
@@ -1107,7 +1107,7 @@ def test_blocking_attached_host_reads_the_relation_one_hop_from_the_source(pool)
     no, which refuses the sweep rather than handing it every blocker on the
     board.
     """
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     host = Permanent(card=pool["Grizzly Bears"])
     other_attacker = Permanent(card=pool["Grizzly Bears"])
@@ -1240,7 +1240,7 @@ def test_other_than_attached_host_excludes_one_permanent_by_identity(pool):
     said any of this — the source is the Aura, and no creature is ever it, so
     that key would have excluded nothing at all.
     """
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     host = Permanent(card=pool["Grizzly Bears"])
     look_alike = Permanent(card=pool["Grizzly Bears"])
@@ -2370,7 +2370,7 @@ def test_usg_w1g5_put_onto_the_battlefield_with_names_one_reanimation(pool):
     A caller that dropped the narrowing instead would exile every creature on
     the table when the enchantment left.
     """
-    from engine.auras import PUT_ONTO_BATTLEFIELD_BY
+    from engine.aura_attachment import PUT_ONTO_BATTLEFIELD_BY
 
     servitude = Permanent(card=pool["Grizzly Bears"])
     other = Permanent(card=pool["Grizzly Bears"])

@@ -24,7 +24,7 @@ from __future__ import annotations
 import pytest
 
 from engine import Game, PlayerState
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.equipment import attachment_refusal, equip_refusal
 from engine.models import CardDefinition, Permanent
 
@@ -132,7 +132,7 @@ def test_a_cost_relative_target_restriction_is_answered_before_the_cost():
     phrase outright unless the ability's cost is the one that taps the attached
     permanent, and the filter then names that permanent.
     """
-    from engine.oracle import _parse_activated_ability
+    from engine.ability_lines import _parse_activated_ability
 
     ability = _parse_activated_ability(
         "tap enchanted creature: target creature other than the creature "

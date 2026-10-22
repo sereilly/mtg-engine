@@ -1481,7 +1481,7 @@ _J6_HELPER_KINDS = {"_return_planned_cards": "return_all_cards_from_graveyard"}
 def _j6_ordered_static_sources():
     """Every pool permanent card that is the source of a static whose place in
     a timestamp order is observable — layer 4 or layer 5 — by primary type."""
-    from engine import auras, global_statics
+    from engine import aura_grants, global_statics
     from engine.card_loader import load_cards, manifest_set_paths
     from engine.land_animation import LAND_ANIMATION_KIND
     from engine.land_types import STATIC_LAND_TYPE_KIND, STATIC_SUPERTYPE_REMOVAL_KIND
@@ -1506,11 +1506,11 @@ def _j6_ordered_static_sources():
             )
         )
         attached = bool(
-            auras.aura_animates_artifact(text)
-            or auras.aura_color_grants(text)
-            or (auras.aura_land_animation(text) or {}).get("colors")
-            or auras.aura_type_grants(text)
-            or auras.aura_card_type_grants(text)
+            aura_grants.aura_animates_artifact(text)
+            or aura_grants.aura_color_grants(text)
+            or (aura_grants.aura_land_animation(text) or {}).get("colors")
+            or aura_grants.aura_type_grants(text)
+            or aura_grants.aura_card_type_grants(text)
         )
         if ordered or attached:
             found.setdefault(card.primary_type, set()).add(card.name)

@@ -6,7 +6,7 @@ See tests/sets/README.md for the convention.
 from __future__ import annotations
 
 from engine import Game, PlayerState
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.damage_events import deal_damage
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
@@ -740,7 +740,7 @@ def test_spiritual_sanctuary_asks_about_that_player_not_about_anybody(set_pool):
 
 def _anti_magic(set_pool):
     """Anti-Magic Aura attached to a Grizzly Bears on seat 0."""
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     bear = Permanent(card=set_pool("LEA")["Grizzly Bears"])
     aura = Permanent(card=set_pool("LEG")["Anti-Magic Aura"])
@@ -779,7 +779,7 @@ def test_anti_magic_aura_bins_another_aura_on_the_same_creature(set_pool):
     graveyard (CR 704.5m). This clause is such an effect, so the other Aura is
     illegally attached — the half a targeting-only reading would have missed,
     since Holy Strength was already attached and never targeted anything."""
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     game, bear, aura = _anti_magic(set_pool)
     holy = Permanent(card=set_pool("LEA")["Holy Strength"])
@@ -1815,7 +1815,7 @@ def test_spectral_cloak_shroud_actually_stops_a_spell(set_pool):
 def test_spectral_cloak_takes_shroud_with_it(set_pool):
     """Removal is the Aura ceasing to be attached; there is no remembered
     delta, which is why nothing has to undo the grant."""
-    from engine.auras import detach_aura
+    from engine.aura_attachment import detach_aura
 
     game, host, aura = _r27_aura_on_a_bear(set_pool, "Spectral Cloak")
     assert host.has_keyword("shroud")

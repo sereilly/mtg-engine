@@ -28,7 +28,8 @@ from __future__ import annotations
 # --- W1G3: Aura effect templates ---
 
 from engine import Game, PlayerState
-from engine.auras import attach_aura, aura_static_pt_grant, detach_aura
+from engine.aura_attachment import attach_aura, detach_aura
+from engine.aura_grants import aura_static_pt_grant
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
 from engine.targeting import derive_activation_spec
@@ -504,7 +505,7 @@ def test_thought_lash_prevention_ability_charges_its_library_cost(set_pool):
 import pytest
 
 from engine import Game, PlayerState
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 
@@ -538,11 +539,11 @@ def test_awesome_presence_is_supported_through_the_aura_subject_rewrite(set_pool
     each creature they control that's blocking it."
 
     One ``combat_restrictions.py`` row, reached the way Brainwash's
-    pay-to-attack twin is: ``auras.aura_combat_restriction`` rewrites the
-    printed subject and asks the same table, so the Aura and a creature
-    printing the sentence about itself are one template.
+    pay-to-attack twin is: ``aura_restrictions.aura_combat_restriction``
+    rewrites the printed subject and asks the same table, so the Aura and a
+    creature printing the sentence about itself are one template.
     """
-    from engine.auras import aura_combat_restriction
+    from engine.aura_restrictions import aura_combat_restriction
 
     card = set_pool("ALL")["Awesome Presence"]
     assert compile_card_oracle(card).supported

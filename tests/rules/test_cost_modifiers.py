@@ -14,9 +14,10 @@ invented wordings — a test naming Gloom could pass against a lookup keyed by
 
 import pytest
 
-from engine.cost_modifiers import (
-    CostModifier, CostReduction, cost_modifiers_for, reduce_cost, self_cost_reduction,
-)
+from engine.cost_modifiers import reduce_cost
+from engine.cost_modifier_lines import (CostModifier, CostReduction,
+                                        cost_modifiers_for)
+from engine.self_cost_modifiers import self_cost_reduction
 
 
 def _only(text: str) -> CostModifier:
@@ -321,10 +322,8 @@ def test_601_2f_a_conjunct_that_cannot_be_read_refuses_the_whole_clause():
 
 from engine import Game as _w4g1c_Game, PlayerState as _w4g1c_PlayerState  # noqa: E402
 from engine.card_loader import load_catalog as _w4g1c_load  # noqa: E402
-from engine.cost_modifiers import (  # noqa: E402
-    cost_modifier_claims_line as _w4g1c_claims,
-    self_per_target_tax as _w4g1c_tax,
-)
+from engine.cost_modifiers import cost_modifier_claims_line as _w4g1c_claims  # noqa: E402
+from engine.self_cost_modifiers import self_per_target_tax as _w4g1c_tax  # noqa: E402
 from engine.models import Permanent as _w4g1c_Permanent  # noqa: E402
 
 _W4G1C_CATALOG = {card.name: card for card in _w4g1c_load()}

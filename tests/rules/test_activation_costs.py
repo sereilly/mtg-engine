@@ -454,7 +454,7 @@ def test_a_counter_placing_cost_names_its_counter_in_symbols():
 # A cost that names the permanent the source is attached to (W2G1)
 # ---------------------------------------------------------------------------
 
-from engine.auras import attach_aura as _w2g1_attach
+from engine.aura_attachment import attach_aura as _w2g1_attach
 from engine.card_loader import load_cards as _w2g1_load
 from engine.card_loader import manifest_set_path as _w2g1_path
 from tests.helpers import resolve_stack

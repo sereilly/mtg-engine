@@ -42,7 +42,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable
 
-from .auras import detach_aura
+from .aura_attachment import detach_aura
 from .models import next_permanent_id
 from .oracle_types import OracleInstruction
 from .mana_payment import generic_cost, total_pips

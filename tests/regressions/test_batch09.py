@@ -143,7 +143,7 @@ class TestLureAttackPolicy:
         # now (engine/auras.py), so stamping an internal flag no longer means
         # anything — and a test that stamps one stops describing any real board.
         lure = Permanent(card=cards["Lure"])
-        from engine.auras import attach_aura
+        from engine.aura_attachment import attach_aura
         attach_aura(lure, attacker)
         p1 = PlayerState(name="P1", battlefield=[attacker, lure])
         # A big blocker that would normally make the AI decline the attack.

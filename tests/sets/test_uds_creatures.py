@@ -29,7 +29,7 @@ a prompt.
 # --- W1G3: being enchanted, and enchantments that become creatures ---
 
 from engine import Game, PlayerState
-from engine.auras import attach_aura, auras_attached_to, detach_aura
+from engine.aura_attachment import attach_aura, auras_attached_to, detach_aura
 from engine.equipment import attach_equipment
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
@@ -255,7 +255,7 @@ def test_iridescent_drake_ignores_a_creature_card_in_the_graveyard(set_pool):
 import pytest
 
 from engine import Game
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.models import CardDefinition, Permanent, PlayerState
 from engine.oracle import compile_card_oracle
 

@@ -59,7 +59,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable
 
-from .auras import controller_cast_ban
+from .aura_restrictions import controller_cast_ban
 from .cast_bans import (chosen_name_ban, combat_play_ban,
                         global_cast_ban, global_play_timing,
                         last_cast_color_ban, most_permanents_cast_ban,

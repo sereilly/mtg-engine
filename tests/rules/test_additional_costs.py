@@ -308,7 +308,7 @@ def test_601_2b_a_life_cost_is_read_beside_the_two_that_were_written_out():
     card had no other blocker, so the moment its second line parsed it would
     have compiled supported and cast for free.
     """
-    from engine.cast_costs import additional_cost_for_line
+    from engine.cast_cost_clauses import additional_cost_for_line
 
     cost = additional_cost_for_line(
         "As an additional cost to cast this spell, pay 3 life."
@@ -325,7 +325,7 @@ def test_601_2b_both_sentences_that_list_costs_read_one_vocabulary():
     addition to paying its other costs" list the same cost in two grammatical
     forms. Two clause tables would be two answers to what this engine can
     charge, and the one that grew slower would decide which cards were free."""
-    from engine.cast_costs import additional_cost_for_line
+    from engine.cast_cost_clauses import additional_cost_for_line
 
     printed = additional_cost_for_line(
         "As an additional cost to cast this spell, pay 3 life."
@@ -363,7 +363,7 @@ def test_601_2b_a_clause_the_engine_cannot_charge_leaves_the_line_unread():
     collect, which is the caster's own battlefield, and a phrase it cannot
     enumerate must leave the line unread rather than be charged as the part of
     it that was."""
-    from engine.cast_costs import additional_cost_for_line
+    from engine.cast_cost_clauses import additional_cost_for_line
 
     assert additional_cost_for_line(
         "As an additional cost to cast this spell, exile a creature card from "
@@ -384,7 +384,7 @@ def test_601_2h_an_x_life_cost_is_charged_the_announced_x():
     The amount is not printed on the card at all — it is the X the caster
     announces — so the gate and the charge have to read the same number, which
     is what ``AdditionalCost.life_charged`` is for."""
-    from engine.cast_costs import additional_cost_for_line
+    from engine.cast_cost_clauses import additional_cost_for_line
 
     cost = additional_cost_for_line(
         "As an additional cost to cast this spell, pay X life."
@@ -405,10 +405,8 @@ from engine.alternative_costs import (
     unread_alternative_cost_sentence as _w2g1_unread_alt,
 )
 from engine.card_loader import manifest_set_paths as _w2g1_paths
-from engine.cast_costs import (
-    additional_cost_for_line,
-    unread_cost_sentence as _w2g1_unread_add,
-)
+from engine.cast_costs import unread_cost_sentence as _w2g1_unread_add
+from engine.cast_cost_clauses import additional_cost_for_line
 from engine.oracle import (
     chargeable_sacrifice_payload as _w2g1_chargeable,
     compile_card_oracle as _w2g1_compile,

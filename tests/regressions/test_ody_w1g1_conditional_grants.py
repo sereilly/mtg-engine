@@ -293,9 +293,9 @@ def test_an_auras_conditional_grant_lands_on_its_host(catalog_by_name):
         ))
 
     # Never a flat +1/+1 underneath the conditional one: the Aura text table
-    # (``auras.aura_static_pt_grant``) answers the words "gets +1/+1" wherever
-    # it finds them, and used to decline a condition only when it was printed
-    # straight after the numbers.
+    # (``aura_grants.aura_static_pt_grant``) answers the words "gets +1/+1"
+    # wherever it finds them, and used to decline a condition only when it was
+    # printed straight after the numbers.
     assert seen == [((2, 2), False), ((3, 3), True), ((2, 2), False)]
 
 
@@ -304,7 +304,7 @@ def test_the_aura_tables_do_not_answer_half_of_a_conditional_sentence():
     to answer in part: a flat delta under a condition printed behind another
     clause or in front of the sentence, and a keyword granted for good beside
     a restriction nothing read."""
-    from engine.auras import aura_keyword_grants, aura_static_pt_grant
+    from engine.aura_grants import aura_keyword_grants, aura_static_pt_grant
 
     assert aura_static_pt_grant(
         f"Enchanted creature gets +1/+1 and can't block as long as {_THRESHOLD}."
@@ -371,8 +371,9 @@ def test_a_conditional_grant_does_not_take_a_line_another_reader_owns(
     catalog_by_name,
 ):
     """Essence Leak's "As long as enchanted permanent is red or green, **it**
-    has "…"" is the Aura front end's (``auras.conditional_ability_lines_for``),
-    whose pronoun names the host. The grammar's conditional-grant production
+    has "…"" is the Aura front end's
+    (``aura_grants.conditional_ability_lines_for``), whose pronoun names the
+    host. The grammar's conditional-grant production
     refuses the pronoun, so the card keeps exactly the program it had."""
     program = compile_card_oracle(catalog_by_name["Essence Leak"])
 

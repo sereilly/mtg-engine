@@ -61,7 +61,7 @@ def _scarab_board(set_pool, scarab_name: str, opponent_permanent: str | None):
     under test is the continuous effect while attached (CR 611.3a) — recomputed
     on every read, never applied once at attachment.
     """
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     pool = set_pool("ICE")
     bear = Permanent(card=pool["Balduvian Bears"])  # a vanilla 2/2, no text at all
@@ -101,7 +101,7 @@ def test_scarab_condition_is_measured_from_the_auras_controller(set_pool):
     creature must see P1's board as "you", find no *opponent* with a black
     permanent, and grant nothing.
     """
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     pool = set_pool("ICE")
     black_bear = Permanent(card=pool["Moor Fiend"])
@@ -138,7 +138,7 @@ def test_wings_of_aesthir_grants_both_keywords_and_the_bonus(set_pool):
     two would have shipped giving half of what it prints — and matched, so
     nothing would have said so.
     """
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     pool = set_pool("ICE")
     bear = Permanent(card=pool["Balduvian Bears"])
@@ -156,7 +156,7 @@ def test_imposing_visage_grants_menace(set_pool):
     not list. `auras` kept a hand-written copy of the keyword registry; it is
     derived now, so what an Aura may grant and what the engine implements are
     one fact."""
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     pool = set_pool("ICE")
     bear = Permanent(card=pool["Balduvian Bears"])
@@ -232,7 +232,7 @@ def test_spectral_shield_grants_toughness_and_target_immunity(set_pool):
     "gets ±N/±N and" prefix, and made in the one place both the support gate and
     the runtime reader go through.
     """
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     pool = set_pool("ICE")
     bear = Permanent(card=pool["Balduvian Bears"])
@@ -249,7 +249,7 @@ def test_errantry_lets_its_creature_attack_only_alone(set_pool):
     read as a restriction on the *declaration* — a per-creature predicate has no
     way to say "and nobody else", which is why the attack cap beside it is
     checked over the declared set too."""
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     pool = set_pool("ICE")
     lone = Permanent(card=pool["Balduvian Bears"])
@@ -649,7 +649,7 @@ def test_the_upkeep_prompt_quotes_a_cost_that_is_not_mana(set_pool):
     assert entry["cost"] == {"mana": {"B": 1}, "life": 1}
 # --- Round 32: a shield that narrows nothing, and one around the enchanted creature ---
 def _fylgja_on_a_bear(set_pool, counters: int = 4):
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
     from engine.named_counters import add_counters
 
     bear = Permanent(card=set_pool("ICE")["Balduvian Bears"])
@@ -935,7 +935,7 @@ def test_mudslide_reads_the_complement_of_the_same_phrase(set_pool):
 # --- W1G2: combat relations and end of combat ---
 def _w1g2_earthlore(set_pool):
     """Earthlore on a Forest, with an attacker and a blocker in combat."""
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     pool = set_pool("ICE")
     forest = _nosick(Permanent(card=pool["Snow-Covered Forest"]))
@@ -1029,7 +1029,7 @@ def _w1g5_brand_board(set_pool, catalog_by_name):
     controller" is the controller of the *creature* (CR 109.5), not of the Aura,
     so the seat the Aura shuts down is not the seat that played it.
     """
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     bear = catalog_by_name["Grizzly Bears"]
     host = Permanent(card=bear)
@@ -1049,7 +1049,8 @@ def _w1g5_brand_board(set_pool, catalog_by_name):
 def test_brand_of_ill_omen_compiles_with_both_of_its_lines_claimed(set_pool):
     """Cumulative upkeep is the keyword the engine already implements; the
     second line is the new one. The card was unsupported on that line alone."""
-    from engine.auras import aura_controller_cast_ban, unclaimed_aura_lines
+    from engine.auras import unclaimed_aura_lines
+    from engine.aura_restrictions import aura_controller_cast_ban
     from engine.oracle import normalize_creature_line
 
     brand = set_pool("ICE")["Brand of Ill Omen"]
@@ -1190,7 +1191,7 @@ def test_freyalises_winds_claims_both_of_its_lines(set_pool):
 # --- W1G1: prevention and damage shields ---
 def _w1g1_attach(set_pool, aura_name: str):
     """A game with *aura_name* on seat 1 attached to seat 0's creature."""
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     pool = set_pool("ICE")
     bears = Permanent(card=pool["Balduvian Bears"])
@@ -1272,7 +1273,7 @@ def test_power_leak_still_reduces_its_damage_after_losing_its_hook(
     """The card the hook was written for, reading the same production now. Its
     condition names an enchantment rather than a creature, which is the only
     difference between the two printings."""
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     pool = set_pool("ICE")
     host = Permanent(card=pool["Errant Minion"])
@@ -1296,7 +1297,7 @@ def test_prismatic_ward_prevents_only_the_chosen_colour(set_pool):
     The colour is the **Aura's**, recorded as it entered; the enchanted creature
     has none of its own.
     """
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     pool = set_pool("ICE")
     bears = Permanent(card=pool["Balduvian Bears"])
@@ -1348,7 +1349,7 @@ def test_a_ward_that_recorded_no_colour_shields_nothing(set_pool):
     """A property nobody recorded is not a property CR 615.9 can recheck, so the
     shield names no source — the opposite of the widest reading, which would
     stop every point of damage in the game."""
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     pool = set_pool("ICE")
     bears = Permanent(card=pool["Balduvian Bears"])
@@ -1446,7 +1447,7 @@ def test_chromatic_armors_x_is_the_counters_on_it(set_pool):
     the board decides, not one the activator announces (CR 601.2b's exception)
     — and the noun the card calls itself by is data: the reader listed the card
     types and this printing reached nothing at all."""
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
     from engine.named_counters import add_counters
 
     pool = set_pool("ICE")
@@ -1475,7 +1476,7 @@ def test_chromatic_armors_ability_records_a_new_colour(set_pool):
     """"…and choose a color." The re-choice writes the same metadata key the
     entry state does — two keys would be a permanent with two chosen colours
     and a shield reading whichever one its author remembered."""
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     pool = set_pool("ICE")
     bears = Permanent(card=pool["Balduvian Bears"])

@@ -278,7 +278,7 @@ def test_w1g4_lure_does_not_compel_a_hollow_warrior_to_pay(set_pool):
     """CR 509.1c's last clause: a player is not required to pay a cost to
     block, even to obey a requirement. Under Lure the defender may keep the
     Warrior home rather than tap a creature for it."""
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     pcy, lea = set_pool("PCY"), set_pool("LEA")
     game = _w1g4_duel()
@@ -851,7 +851,7 @@ def test_w1g2_a_trailing_and_a_fronted_condition_together_refuse(set_pool):
     """One sentence, two conditions — a conjunction no reader here was asked
     to read, and either half alone is a cheaper spell than the card. The line
     refuses rather than keeping one."""
-    from engine.cost_modifiers import self_cost_reduction
+    from engine.self_cost_modifiers import self_cost_reduction
 
     assert self_cost_reduction(
         "If you have 3 or less life, this spell costs {6} less to cast if an "

@@ -10,7 +10,7 @@ again — a coin flip at double the stake (Game of Chaos) and a process repeated
 
 from __future__ import annotations
 
-from ....enter_effects import LIFE_PAID_AS_ENTERED
+from ....entry_choices import LIFE_PAID_AS_ENTERED
 from ....oracle_types import BIDDING_WINNER, DREW_BY_SEAT, MANA_PAID_BY_SEAT
 from ....pending_choices import PendingChoice
 from ....mana_payment import generic_cost, plan_payment

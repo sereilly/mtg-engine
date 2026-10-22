@@ -78,8 +78,7 @@ from .cast_targets import (_as_kicked, _cast_cost_picker, _cast_target_spec,
 # importers were being split by other groups in the same round — and new code
 # may import a name from the module that defines it.
 from .enchant_targets import (_ENCHANT_LAND_SUBTYPES, enchant_clause_nouns,
-                              enchant_graveyard_line, enchant_line_subject,
-                              enchant_subject_colours,
+                              enchant_line_subject, enchant_subject_colours,
                               enchant_subject_keyword_exclusion,
                               enchant_subject_seat)
 from .target_roles import (ROLES_TARGET_KIND, ROLE_SEATS, SEAT_ROLE_KINDS,

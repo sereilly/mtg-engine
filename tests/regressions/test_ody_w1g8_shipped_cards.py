@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import pytest
 
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.named_counters import add_counters
 from tests.sets import ody_w1g8_helpers as w1g8
 

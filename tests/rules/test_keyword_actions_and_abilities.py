@@ -298,7 +298,7 @@ def test_702_26g_an_attached_aura_phases_out_with_its_host():
     """"When a permanent phases out, any Auras … attached to that permanent
     phase out at the same time", and phase back in with it rather than on their
     own account."""
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     aura_card = CardDefinition(
         name="Test Aura", mana_cost="", cmc=0.0,
@@ -849,7 +849,7 @@ def test_702_26g_an_attached_aura_phases_out_with_its_host_and_stays_attached(se
     unattached is one CR 704.5m puts into a graveyard, so every phase-out of an
     enchanted creature quietly destroyed its Auras.
     """
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     aura = Permanent(card=set_pool("VIS")["Vanishing"])
     host = Permanent(card=_creature("Host"))

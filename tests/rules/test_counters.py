@@ -325,7 +325,7 @@ def test_122_1a_the_upkeep_decay_reads_its_pair_off_the_counter_name():
     ``add_minus1_counter_to_enchanted``, spelled one pair into its own name and
     was reached by a card-name hook that spelled it again.
     """
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     host = Permanent(card=_mk_creature("Host", 3, 3))
     aura = Permanent(card=_r32_decay_aura("Test Decay", "-0/-2"))

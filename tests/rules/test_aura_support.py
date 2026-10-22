@@ -160,7 +160,7 @@ def test_the_two_bespoke_entry_texts_are_still_claimed():
 def _moving_board(set_pool):
     """A game with one Aura on a creature, plus a land and a second creature."""
     from engine import Game, PlayerState
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
     from engine.models import Permanent
 
     catalog = {**set_pool("LEA"), **set_pool("LEG")}
@@ -181,7 +181,7 @@ def _moving_board(set_pool):
 def test_303_4j_an_aura_is_not_moved_onto_an_illegal_host(set_pool):
     """"Enchant creature" is asked of the *new* host too, so a land is never a
     legal answer — and the refusal is the Aura staying put, not falling off."""
-    from engine.auras import aura_attach_refusal
+    from engine.aura_attachment import aura_attach_refusal
 
     game, aura, host, twin, land = _moving_board(set_pool)
 

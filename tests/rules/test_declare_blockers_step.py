@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 
 from engine import Game
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.models import CardDefinition, Permanent, PlayerState
 
 

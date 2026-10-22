@@ -175,7 +175,7 @@ def _w2g4_hakim(set_pool, graveyard=(), attached=None):
     game.enforce_mana_costs = False
     game.interactive_seats = set()
     if attached is not None:
-        from engine.auras import attach_aura
+        from engine.aura_attachment import attach_aura
 
         aura = Permanent(card=set_pool("MIR")[attached])
         game.players[0].battlefield.append(aura)
@@ -224,10 +224,10 @@ def test_hakim_leaves_an_aura_he_cannot_legally_enchant_in_the_graveyard(set_poo
 
     Wellspring is an Aura card, so the picker offers it and the activation gate
     admits it — the refusal has to come at the move, from the same predicate
-    every other attach path asks (``auras.aura_attach_refusal``): "Enchant
-    **land**" is not a Wizard. Putting it onto the battlefield unattached would
-    be strictly worse than not resolving, because the CR 704.5m sweep would bin
-    it and the card would be gone from the game.
+    every other attach path asks (``aura_attachment.aura_attach_refusal``):
+    "Enchant **land**" is not a Wizard. Putting it onto the battlefield
+    unattached would be strictly worse than not resolving, because the CR
+    704.5m sweep would bin it and the card would be gone from the game.
     """
     game, hakim = _w2g4_hakim(set_pool, graveyard=["Wellspring"])
     game.current_step = "upkeep"
@@ -255,7 +255,7 @@ def test_hakim_destroys_only_the_auras_on_himself(set_pool):
     game, hakim = _w2g4_hakim(set_pool, attached="Soar")
     theirs = Permanent(card=set_pool("MIR")["Zhalfirin Knight"])
     game.players[1].battlefield.append(theirs)
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     their_aura = Permanent(card=set_pool("MIR")["Soar"])
     game.players[1].battlefield.append(their_aura)

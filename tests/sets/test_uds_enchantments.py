@@ -29,7 +29,8 @@ a prompt.
 # --- W1G3: being enchanted, and enchantments that become creatures ---
 
 from engine import Game, PlayerState
-from engine.auras import attach_aura, aura_protection_colors
+from engine.aura_attachment import attach_aura
+from engine.aura_grants import aura_protection_colors
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
 
@@ -508,7 +509,7 @@ def test_goblin_festival_asks_which_opponent_at_three_seats(set_pool):
 
 # --- W2G5: Archery Training, an ability that names the Aura granting it ---
 from engine import Game as _W2G5Game, PlayerState as _W2G5Player
-from engine.auras import attach_aura as _w2g5_attach
+from engine.aura_attachment import attach_aura as _w2g5_attach
 from engine.granted_abilities import granter_phrase as _w2g5_granter_phrase
 from engine.models import Permanent as _W2G5Perm
 from engine.named_counters import add_counters as _w2g5_add_counters

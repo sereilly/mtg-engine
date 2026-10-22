@@ -594,7 +594,7 @@ def test_w2g2_the_each_spell_quantifier_needs_its_verb_to_agree():
     is charged in `mixins/stack/` instead. Widening the noun to `spells?` makes
     the second *match* this pattern part-way through, so the agreement check is
     the only thing between it and a tax on every spell in the game."""
-    from engine.cost_modifiers import cost_modifiers_for
+    from engine.cost_modifier_lines import cost_modifiers_for
 
     assert cost_modifiers_for(
         "this spell costs {1} more to cast for each target beyond the first"

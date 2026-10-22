@@ -42,7 +42,7 @@ convention SET_PLAYBOOK.md sets for a parallel wave), so neither half lost one.
 import pytest
 
 from engine import Game, PlayerState
-from engine.auras import attach_aura, detach_aura
+from engine.aura_attachment import attach_aura, detach_aura
 from engine.models import CardDefinition, Permanent
 from tests.helpers import resolve_stack
 
@@ -133,7 +133,7 @@ def test_w1g4_spreading_algae_only_enchants_a_swamp(set_pool):
     """Both halves of the Roots lesson: the picker offers Swamps alone, and the
     attach check refuses anything else rather than taking the permissive
     fallback that a noun with no matcher row would reach."""
-    from engine.auras import aura_attach_refusal
+    from engine.aura_attachment import aura_attach_refusal
     from engine.mixins.stack.casting import permanent_matches_enchant_noun
     from engine.oracle import compile_card_oracle
     from engine.targeting import derive_cast_spec
@@ -791,7 +791,7 @@ import dataclasses
 import pytest
 
 from engine import Game, PlayerState
-from engine.auras import PUT_ONTO_BATTLEFIELD_BY
+from engine.aura_attachment import PUT_ONTO_BATTLEFIELD_BY
 from engine.models import Permanent
 from engine.named_counters import add_counters
 from engine.oracle import compile_card_oracle

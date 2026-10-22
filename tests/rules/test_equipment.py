@@ -489,7 +489,7 @@ def test_704_5n_equipment_on_a_permanent_that_is_no_longer_a_creature_is_unattac
     game = _game(p1, PlayerState(name="P2"))
     # Written by hand: the legal attach path would refuse this, which is the
     # point — the sweep is what catches a record an effect *made* illegal.
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
     attach_aura(sword, rock)
     assert rock.metadata["attached_auras"] == [sword]
 

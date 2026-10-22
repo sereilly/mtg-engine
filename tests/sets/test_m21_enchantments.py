@@ -13,7 +13,7 @@ from __future__ import annotations
 import pytest
 
 from engine import Game
-from engine.auras import detach_aura
+from engine.aura_attachment import detach_aura
 from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
 from engine.shields import add_shield, make_numeric_pool
@@ -128,7 +128,8 @@ def test_an_invented_creature_type_refuses_the_whole_line(set_pool):
     """The gate and the grant read the same vocabulary. A type outside it would
     be claimed here and granted nothing — the hollow-support shape this module
     exists to prevent — so the line is unclaimed instead."""
-    from engine.auras import aura_effect_claim, aura_type_grants
+    from engine.auras import aura_effect_claim
+    from engine.aura_grants import aura_type_grants
     from engine.oracle import normalize_creature_line
 
     real = normalize_creature_line(
@@ -539,7 +540,7 @@ def test_a_reduction_over_an_untestable_noun_phrase_is_not_claimed():
     answer would be counted over a wider set than the card names â€” a bigger
     discount than the card gives. It records no reduction, and the line is then
     not claimed at all."""
-    from engine.cost_modifiers import ability_self_reduction
+    from engine.self_cost_modifiers import ability_self_reduction
 
     assert ability_self_reduction(
         "This ability costs {1} less to activate for each Shrine you control."
@@ -956,7 +957,7 @@ def test_faiths_fetters_attaches_to_any_permanent(set_pool):
     "does this answer the enchant clause?" from the noun it was written for. A
     sixth noun therefore needed a sixth branch, and without one the Aura entered
     play unattached and went straight to the graveyard."""
-    from engine.auras import auras_attached_to
+    from engine.aura_attachment import auras_attached_to
 
     game, _, _, victim = _fetters_board(set_pool)
 
@@ -1028,7 +1029,7 @@ def test_a_fettered_permanent_may_still_use_a_mana_ability(set_pool):
     _fetter(game)
     # The control: the Aura really is attached. Without it this holds on any
     # engine where Faith's Fetters never attaches and restricts nothing.
-    from engine.auras import auras_attached_to
+    from engine.aura_attachment import auras_attached_to
     assert [a.card.name for a in auras_attached_to(elf)] == ["Faith's Fetters"]
 
     result = game.activate_permanent_ability(1, "Mana Elf")
@@ -1048,7 +1049,7 @@ def test_a_fettered_land_still_taps_for_mana(set_pool):
     _fetter(game)
     # The control: the Aura really is attached. Without it this holds on any
     # engine where Faith's Fetters never attaches and restricts nothing.
-    from engine.auras import auras_attached_to
+    from engine.aura_attachment import auras_attached_to
     land = next(iter(game.controlled_by(1)))
     assert [a.card.name for a in auras_attached_to(land)] == ["Faith's Fetters"]
 
@@ -1117,7 +1118,7 @@ def test_demonic_embrace_from_hand_costs_no_extra(set_pool):
     """One card with two prices. The additional cost names a *zone*, so it
     cannot be a property of the card alone — from the hand this is an ordinary
     Aura."""
-    from engine.auras import auras_attached_to
+    from engine.aura_attachment import auras_attached_to
 
     game, p1, victim = _embrace_board(set_pool, in_graveyard=False)
 
@@ -1132,7 +1133,7 @@ def test_demonic_embrace_from_the_graveyard_pays_life_and_a_card(set_pool):
     (CR 113.6f — an ability modifying what zones the object may be cast from)
     — nothing grants it and nothing takes it away, so it is derived
     from the text rather than stored on ``game.cast_permissions``."""
-    from engine.auras import auras_attached_to
+    from engine.aura_attachment import auras_attached_to
 
     game, p1, victim = _embrace_board(set_pool, in_graveyard=True)
 
@@ -1196,7 +1197,7 @@ def test_a_cost_clause_the_table_cannot_charge_refuses_the_whole_line():
     """A clause outside the set makes the sentence unread, so the card reports
     unsupported rather than castable from the graveyard for less than it
     prints."""
-    from engine.cast_costs import additional_cost_for_line
+    from engine.cast_cost_clauses import additional_cost_for_line
 
     assert additional_cost_for_line(
         "You may cast this card from your graveyard by paying 3 life and "

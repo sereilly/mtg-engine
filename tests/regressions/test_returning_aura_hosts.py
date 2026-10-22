@@ -125,7 +125,7 @@ def test_cleansing_meditation_puts_its_returned_auras_back_on_creatures(pool):
         pool, hand0=["Cleansing Meditation"], gy0=["Forest"] * 7,
         bf0=["Grizzly Bears"], bf1=["Hill Giant"],
     )
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     bears = next(p for p in game.controlled_by(0) if p.card.name == "Grizzly Bears")
     strength = Permanent(card=pool["Holy Strength"])
@@ -244,7 +244,7 @@ def test_a_seat_answered_for_lands_where_an_unasked_seat_would(pool):
 def test_cleansing_meditation_asks_too(pool):
     """The threshold arm is the same sweep: its returned Aura's host is asked
     of an interactive caster, among the creatures that survived the destroy."""
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     game = _table(
         pool, hand0=["Cleansing Meditation"], gy0=["Forest"] * 7,

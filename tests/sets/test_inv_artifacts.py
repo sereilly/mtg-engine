@@ -28,7 +28,7 @@ a prompt.
 
 # --- W1G5: colour relations ---
 from engine import Game as _W1G5ArtGame, PlayerState as _W1G5ArtPlayer
-from engine.cost_modifiers import cost_modifiers_for as _w1g5_cost_modifiers_for
+from engine.cost_modifier_lines import cost_modifiers_for as _w1g5_cost_modifiers_for
 from engine.cost_modifiers import cost_reduction_for_cast as _w1g5_reduction_for_cast
 from engine.models import Permanent as _W1G5ArtPermanent
 from engine.oracle import compile_card_oracle as _w1g5_art_compile

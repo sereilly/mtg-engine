@@ -1469,7 +1469,7 @@ def test_a_typed_cast_ban_reads_only_the_window_it_can_keep(line, supported):
 # --- Aura Graft: take an Aura and move it to something else it can enchant --
 
 def _w1g9_enchant(game, set_pool, seat, aura_name, host):
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     pool = {**set_pool("LEA"), **set_pool("ODY")}
     aura = _w1g9_Permanent(card=pool[aura_name])

@@ -1669,7 +1669,7 @@ def test_psychic_venom_fires_when_the_land_is_tapped_by_anything(all_cards):
     """Not "tapped for mana" — "becomes tapped". A land tapped by an opponent's
     Icy Manipulator never reaches the mana path, and the printed trigger has
     nothing to say about how the tap happened."""
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     venom = _get(all_cards, "Psychic Venom")
     island = _get(all_cards, "Island")
@@ -1697,7 +1697,7 @@ def test_psychic_venom_damages_the_lands_controller_not_the_opponent(all_cards):
     to a `target_player` recipient (a choice this card never offers) instead of
     the seat the tap froze.
     """
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     venom = _get(all_cards, "Psychic Venom")
     forest = _get(all_cards, "Forest")

@@ -149,12 +149,13 @@ class AlternativeCost:
     """One printed alternative cost (CR 118.9a).
 
     ``exile_from_hand`` is the alternatives a card exiled to pay must answer, in
-    the same tuple-of-payloads vocabulary ``cast_costs.AdditionalCost``'s
-    ``discard_filters`` and ``ActivatedAbilityCost.discard_filters`` carry, read
-    by the same function and tested by the same matcher
-    (``subject_filters.card_matches_any``). ``None`` means "no card leaves the
-    hand", never "any card": an empty *tuple* already means "any card", which is
-    a different and much cheaper cost.
+    the same tuple-of-payloads vocabulary
+    ``cast_cost_clauses.AdditionalCost``'s ``discard_filters`` and
+    ``ActivatedAbilityCost.discard_filters`` carry, read by the same function
+    and tested by the same matcher (``subject_filters.card_matches_any``).
+    ``None`` means "no card leaves the hand", never "any card": an empty
+    *tuple* already means "any card", which is a different and much cheaper
+    cost.
     """
 
     phrase: str
@@ -194,11 +195,12 @@ class AlternativeCost:
     shares_color_with_spell: bool = False
     #: "You may **sacrifice two Mountains** rather than pay this spell's mana
     #: cost." (Fireblast, and the same cycle's Snuff Out one colour over.) The
-    #: same ``(filter, count)`` pair ``cast_costs.AdditionalCost`` carries, read
-    #: by the same function (``cast_costs.read_sacrifice_clause``) and tested by
-    #: the same matcher — CR 601.2b's additional cost and CR 118.9's
-    #: alternative one print this clause identically, so what may pay it is one
-    #: answer wherever it is printed.
+    #: same ``(filter, count)`` pair ``cast_cost_clauses.AdditionalCost``
+    #: carries, read by the same function
+    #: (``cast_cost_clauses.read_sacrifice_clause``) and tested by the same
+    #: matcher — CR 601.2b's additional cost and CR 118.9's alternative one
+    #: print this clause identically, so what may pay it is one answer wherever
+    #: it is printed.
     #:
     #: ``None`` means "no sacrifice", never "anything": an empty filter would
     #: let the payment be a land the card never named, and the *count* is what
@@ -225,12 +227,12 @@ class AlternativeCost:
     exile_graveyard_position: dict | None = None
     #: "You may **return two Islands you control to their owner's hand** rather
     #: than pay this spell's mana cost." (Gush, Thwart, Tidal Bore.) The same
-    #: ``(filter, count)`` pair ``cast_costs.AdditionalCost`` carries for the
-    #: identically printed clause (Infernal Harvest), read by the same function
-    #: (``cast_costs.read_return_clause``) and enumerated by the same candidate
-    #: scan -- CR 601.2b's additional cost and CR 118.9's alternative one print
-    #: this clause word for word, so what may pay it is one answer wherever it
-    #: is printed.
+    #: ``(filter, count)`` pair ``cast_cost_clauses.AdditionalCost`` carries
+    #: for the identically printed clause (Infernal Harvest), read by the same
+    #: function (``cast_cost_clauses.read_return_clause``) and enumerated by
+    #: the same candidate scan -- CR 601.2b's additional cost and CR 118.9's
+    #: alternative one print this clause word for word, so what may pay it is
+    #: one answer wherever it is printed.
     #:
     #: ``None`` means "no return", never "anything", and the *count* is what
     #: makes such a cost unpayable at all: one Island is no more a payment of a
@@ -404,9 +406,9 @@ class AlternativeCost:
 
 #: "You may <clauses> rather than pay this spell's mana cost." (CR 118.9's first
 #: printed spelling.) A preamble plus a clause vocabulary, for the reason
-#: ``cast_costs._ADDITIONAL_COST_PREAMBLE`` is one: a table of whole phrases
-#: writes the preamble out once per card and then cannot read a clause nobody
-#: listed.
+#: ``cast_cost_clauses._ADDITIONAL_COST_PREAMBLE`` is one: a table of whole
+#: phrases writes the preamble out once per card and then cannot read a clause
+#: nobody listed.
 #:
 #: CR 118.9's *second* spelling — "You may cast this spell without paying its
 #: mana cost" — is deliberately not here. That sentence grants a permission
@@ -497,9 +499,9 @@ _PAY_LIFE = re.compile(r"^pay (\d+) life$")
 #: Tidal Bore.) The destination is part of the clause and not an afterthought:
 #: this is the only zone the payment can reach, and a sentence naming another
 #: one must refuse rather than be charged against the hand. Delimiting only --
-#: the noun phrase is read by ``cast_costs.read_return_clause``, the reader the
-#: identically printed *additional* cost already uses. The apostrophe is either
-#: kind because the ingested text prints the curly one.
+#: the noun phrase is read by ``cast_cost_clauses.read_return_clause``, the
+#: reader the identically printed *additional* cost already uses. The
+#: apostrophe is either kind because the ingested text prints the curly one.
 _RETURN_TO_HAND = re.compile(
     r"^return (?P<noun>.+) to (?:their|its) "
     r"owner(?:s(?:'|’)|(?:'|’)s)? hands?$"
@@ -736,13 +738,13 @@ def _read_cost_clauses(costs: str) -> dict | None:
     """The fields the clauses of one alternative-cost sentence fill, or None.
 
     **Every** clause must be read or the whole sentence is refused, which is
-    ``cast_costs._read_cost_clauses``'s rule and is here for a sharper version
-    of its reason: a dropped clause in an *additional* cost is a spell cast for
-    less than it prints, and a dropped clause in an alternative cost is a spell
-    cast for **nothing** — the mana cost has already been replaced by whatever
-    was read.
+    ``cast_cost_clauses._read_cost_clauses``'s rule and is here for a sharper
+    version of its reason: a dropped clause in an *additional* cost is a spell
+    cast for less than it prints, and a dropped clause in an alternative cost
+    is a spell cast for **nothing** — the mana cost has already been replaced
+    by whatever was read.
     """
-    from .cast_costs import read_sacrifice_clause
+    from .cast_cost_clauses import read_sacrifice_clause
     from .oracle import _chargeable_discard_filters
 
     fields: dict = {
@@ -817,7 +819,7 @@ def _read_cost_clauses(costs: str) -> dict | None:
         # table claims and the cast path cannot collect.
         returned = _RETURN_TO_HAND.match(clause)
         if returned is not None:
-            from .cast_costs import read_return_clause
+            from .cast_cost_clauses import read_return_clause
 
             if fields["return_filter"] is not None:
                 # Two return clauses would need two filters and one field
@@ -959,8 +961,8 @@ def alternative_cost_for_line(line: str) -> AlternativeCost | None:
     """The alternative cost *line* states, or None when it states none.
 
     Matched on the line's whole text (minus a trailing period) rather than as a
-    substring, for the reason ``cast_costs.additional_cost_for_line`` is: a
-    substring match is how a whitelist comes to claim things it does not
+    substring, for the reason ``cast_cost_clauses.additional_cost_for_line``
+    is: a substring match is how a whitelist comes to claim things it does not
     implement.
     """
     normalized = " ".join(line.strip().lower().split()).rstrip(".")
@@ -1038,8 +1040,9 @@ def granted_alternative_cost(oracle_text: str) -> "AlternativeCost | None":
     Cached on the text, which is immutable on a ``CardDefinition``, because
     this is asked of **every permanent on every battlefield** for every card in
     every hand on every poll -- the same arrangement and the same reason
-    ``cost_modifiers.cost_modifiers_for`` states, down to the substring test
-    that answers for the whole pool but one card without matching anything.
+    ``cost_modifier_lines.cost_modifiers_for`` states, down to the substring
+    test that answers for the whole pool but one card without matching
+    anything.
     """
     if "rather than pay the mana cost" not in (oracle_text or "").lower():
         return None

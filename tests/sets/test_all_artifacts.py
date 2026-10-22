@@ -467,7 +467,7 @@ def test_w2g4_bauble_moves_the_cards_and_the_owner_draws_next_upkeep(set_pool):
 # attachment host the sweep could describe but not choose.
 
 from engine import Game, PlayerState, load_cards
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.card_loader import manifest_set_path
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle

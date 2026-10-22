@@ -480,7 +480,7 @@ def test_702_16m_redundant_instance_still_protects_when_one_removed(all_cards):
 def test_702_16n_self_granting_aura_is_not_removed(all_cards):
     """702.16n: White Ward grants protection from white and says the effect
     doesn't remove this Aura, so it stays attached despite being white."""
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     creature = Permanent(card=_mk_creature("Goblin", 2, 2, colors=("R",)))
     ward = Permanent(card=_get(all_cards, "White Ward"))  # white Aura, prot from white
@@ -513,7 +513,7 @@ def test_702_16n_other_instance_affects_other_auras(all_cards):
             "Holy Strength", "Enchant creature\nEnchanted creature gets +1/+2.", colors=("W",)
         )
     )
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     # The Ward's own derived grant is the only protection here — see the test
     # above for why nothing is stamped on the creature.
@@ -542,7 +542,7 @@ def test_702_16n_another_instance_of_the_protection_removes_the_exempt_aura(all_
     The sweep used to exempt on the printed phrase alone, whatever the source
     of the protection. The two tests above passed against that reading only
     because their harness stamped the Ward's grant as a second instance."""
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     creature = Permanent(card=_mk_creature("Goblin", 2, 2, colors=("R",)))
     ward = Permanent(card=_get(all_cards, "White Ward"))

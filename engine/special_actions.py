@@ -80,7 +80,7 @@ def special_action_line(line: str) -> str | None:
     """The special action *line* grants, as its kind, or None.
 
     Matched on the whole sentence rather than as a substring, for the reason
-    `cast_costs.additional_cost_for_line` is: a substring match is how a
+    `cast_cost_clauses.additional_cost_for_line` is: a substring match is how a
     whitelist comes to claim text it does not implement.
 
     Read by the support gate **and** by `scripts/parse_coverage.py`, so what
@@ -324,10 +324,12 @@ class PermanentSpecialAction:
 
 #: Registered by the modules that create the effects these offers end — never
 #: here, because whether an offer still stands is a question only the module
-#: owning that effect's record can answer. `engine/auras.py` holds the two
-#: attached ones: it owns the record a became-an-Aura permanent carries, so it
-#: is the only place that can say whether the effect is still running or take
-#: it back. `engine/cast_bans.py` holds the board-wide one (Damping
+#: owning that effect's record can answer. `engine/auras.py` registers the two
+#: attached ones, and each offer lives with the record it reads: the one a
+#: became-an-Aura permanent carries in `engine/aura_attachment.py`, the turn
+#: bought off an Aura's restriction in `engine/aura_restrictions.py`, the only
+#: places that can say whether the effect is still running or take it back.
+#: `engine/cast_bans.py` holds the board-wide one (Damping
 #: Engine), for the same reason one zone out: it owns the prohibition and the
 #: record of who has bought a turn off it.
 PERMANENT_SPECIAL_ACTIONS: dict[str, PermanentSpecialAction] = {}

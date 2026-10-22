@@ -18,7 +18,7 @@ from __future__ import annotations
 import pytest
 
 from engine.ai_policy import choose_cast_action
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.game import Game
 from engine.models import Permanent, PlayerState
 

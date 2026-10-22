@@ -19,7 +19,7 @@ from engine.board_payment import tap_alone_symbols
 from engine.color_changes import spell_color_change
 from engine.cost_modifiers import spell_cost_tax
 from engine.divided_damage import DIVIDED_TARGETS, divided_entry
-from engine.enter_effects import chosen_as_entered
+from engine.entry_choices import chosen_as_entered
 from engine.faces import combined_oracle_text, face_cards, is_face, whole_card
 from engine.legality import activation_target_obligation, cast_target_kind
 from engine.models import Permanent, PlayerState
@@ -626,7 +626,7 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         # a spell fizzle. The fifth ``web/`` site of the display-list class
         # (shadow, protection from a card type, ``is_aura``, the noncreature
         # badges), and derived for that reason: read off
-        # ``enter_effects.ENTRY_CHOICES``, the engine's own table of what an
+        # ``entry_choices.ENTRY_CHOICES``, the engine's own table of what an
         # entry records, never off a list of keys kept here. Public by rule —
         # these choices are made in the open as the permanent enters — so every
         # viewer is sent them.
@@ -893,8 +893,8 @@ def _required_zone_cost(card, game, caster_index, from_zone: str) -> str | None:
     if game is None or caster_index is None or from_zone != "graveyard":
         return None
     from engine.cast_permissions import permission_for
-    from engine.cost_modifiers import (CostReduction, keyword_cost_modifiers,
-                                       reduce_cost)
+    from engine.cost_modifiers import keyword_cost_modifiers, reduce_cost
+    from engine.cost_modifier_lines import CostReduction
     from engine.mana_payment import mana_cost_from_symbols, mana_cost_label
 
     permission = permission_for(game, caster_index, card, from_zone)

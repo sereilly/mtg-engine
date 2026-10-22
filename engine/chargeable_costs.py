@@ -176,9 +176,9 @@ def cost_object_is_chargeable(carried: dict | None) -> bool:
     The one reader of a question three cost tables were each answering with
     their own spelling: ``grammar/costs._is_chargeable_sacrifice`` asked
     ``card_types or subtypes or named``, ``_is_chargeable_exile`` asked
-    ``card_types or subtypes``, and ``cast_costs._chargeable_object`` asked
-    ``type_filter or subtype_filter``. Three answers to one question is the
-    second-copy shape this repo refuses, and here the copies had already
+    ``card_types or subtypes``, and ``cast_cost_clauses._chargeable_object``
+    asked ``type_filter or subtype_filter``. Three answers to one question is
+    the second-copy shape this repo refuses, and here the copies had already
     drifted: "Sacrifice a token named Wood" (Jungle Patrol) was chargeable as
     an *activation* cost and would have been refused as an additional one, on
     a phrase that pins the object harder than any type could.

@@ -31,7 +31,7 @@ from __future__ import annotations
 import pytest
 
 from engine import Game, PlayerState
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.mana_payment import plan_payment, untapped_mana_lands
 from engine.models import Permanent
 from tests.helpers import resolve_stack

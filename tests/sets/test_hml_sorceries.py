@@ -100,7 +100,7 @@ def test_leeches_deals_nothing_to_an_unpoisoned_player(set_pool):
 # --- W1G2: counted amounts ---
 
 from engine import Game, PlayerState
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.models import CardDefinition, Permanent
 
 

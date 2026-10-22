@@ -223,7 +223,7 @@ def test_each_ability_of_a_multi_ability_permanent_answers_for_itself(by_name):
 def test_the_two_prompts_a_multi_ability_permanent_raises_are_different(by_name):
     """And the same thing on a real board, through the index the UI sends back:
     mode 1 offers the Aura on a land, mode 2 offers the lands themselves."""
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     pyramids = _nosick(Permanent(card=by_name["Pyramids"]))
     mountain = _nosick(Permanent(card=_C["Mountain"]))

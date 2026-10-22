@@ -25,7 +25,7 @@ from engine import Game, PlayerState
 from engine import Game as _W2G1sGame, PlayerState as _W2G1sPlayerState
 from engine.models import Permanent as _W2G1sPermanent
 from engine.card_loader import load_cards as _w2g1s_load, manifest_set_path as _w2g1s_path
-from engine.cast_costs import additional_cost_for_line as _w2g1s_add_line
+from engine.cast_cost_clauses import additional_cost_for_line as _w2g1s_add_line
 from engine import Game as _W2G2Game, PlayerState as _W2G2PlayerState
 from engine.card_loader import load_cards as _w2g2_load
 from engine.card_loader import manifest_set_paths as _w2g2_paths

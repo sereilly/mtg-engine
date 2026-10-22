@@ -57,7 +57,7 @@ def test_the_three_printed_subjects_are_one_becomes_tapped_condition():
     tap seam and fired on all of them. All three are the same condition now,
     narrowed by payload, so the dispatcher cannot be told apart by the wording.
     """
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     aura = Permanent(card=_card(
         "Watcher Aura",
@@ -668,7 +668,7 @@ def test_an_upkeep_auras_that_player_is_the_hosts_controller_not_a_bystander(set
     aura = Permanent(card=_w2g4_pool(set_pool, "LEA", "Cursed Land"))
     land = Permanent(card=_card("Bog", "", "Land"))
     game = _w2g4_three_seats([aura], [], [land])
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     attach_aura(aura, land)
     game._settle()

@@ -32,7 +32,7 @@ from __future__ import annotations
 # --- Round 1: flanking (CR 702.25) ---
 
 from engine import Game, PlayerState
-from engine.auras import attach_aura, detach_aura
+from engine.aura_attachment import attach_aura, detach_aura
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
 
@@ -503,9 +503,9 @@ def test_without_the_chaosphere_neither_half_applies(set_pool):
 # --- W1G5: the statics / characteristics / control family ---
 
 from engine import Game, PlayerState
-from engine.auras import (
-    attach_aura, aura_combat_restriction, aura_keyword_grants, detach_aura,
-)
+from engine.aura_attachment import attach_aura, detach_aura
+from engine.aura_restrictions import aura_combat_restriction
+from engine.aura_grants import aura_keyword_grants
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
 
@@ -1759,10 +1759,8 @@ import pytest as _w4g4_pytest  # noqa: E402
 from engine import Game as _w4g4_Game, PlayerState as _w4g4_PlayerState  # noqa: E402
 from engine.card_loader import (load_cards as _w4g4_load,  # noqa: E402
                                 manifest_set_path as _w4g4_path)
-from engine.enter_effects import (  # noqa: E402
-    choose_one_of_two_on_enter as _w4g4_two_options,
-    enter_effect_line as _w4g4_entry_line,
-)
+from engine.enter_effects import enter_effect_line as _w4g4_entry_line  # noqa: E402
+from engine.entry_choices import choose_one_of_two_on_enter as _w4g4_two_options  # noqa: E402
 from engine.grammar import subject_filter_payload as _w4g4_subject_payload  # noqa: E402
 from engine.models import Permanent as _w4g4_Permanent  # noqa: E402
 from engine.oracle import compile_card_oracle as _w4g4_compile  # noqa: E402
@@ -2262,7 +2260,7 @@ def test_w4g4_the_drew_this_way_count_names_bare_cards_and_nothing_narrower():
 # not (CR 702.26d: phasing is not a zone change).
 
 from engine import Game, PlayerState
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.models import CardDefinition, Permanent
 
 

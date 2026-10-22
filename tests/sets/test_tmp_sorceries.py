@@ -146,7 +146,7 @@ def test_w2g5_winds_of_rath_spares_only_the_enchanted(set_pool):
     game.enforce_mana_costs = False
     game._sync_control()
 
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     attach_aura(aura, enchanted)
     regenerator.regeneration_shield = 1

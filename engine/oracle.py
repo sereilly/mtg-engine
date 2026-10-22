@@ -101,8 +101,6 @@ from .chargeable_costs import (_chargeable_discard_filters,
                                cost_object_is_chargeable)
 from .activation_costs import parse_activated_ability_cost
 from .self_reference import _collapse_self_references
-from .ability_lines import (_bullets_after, _modal_trigger_ability,
-                            _parse_activated_ability, _parse_triggered_ability)
 from .line_rewrites import expand_card_lines
 from .line_classification import LOYALTY_ANY_TIME_STATIC, compile_emblem_text
 

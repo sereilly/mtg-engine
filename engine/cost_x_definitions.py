@@ -107,7 +107,7 @@ COST_X_DEFINITIONS: tuple[tuple[re.Pattern[str], Callable[..., int]], ...] = (
         # Equipment an artifact (CR 205.3), but the printed word is the subtype
         # — Chromatic Armor says "on this **Aura**" and reached nothing at all
         # while this alternation listed only the card types, which is the same
-        # one-word gap `enter_effects.chooses_color_on_enter` had.
+        # one-word gap `entry_choices.chooses_color_on_enter` had.
         re.compile(
             r"^x is the number of ([a-z]+) counters on this "
             r"(?:artifact|aura|creature|enchantment|equipment|land|permanent)$"

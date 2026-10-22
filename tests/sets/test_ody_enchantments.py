@@ -436,7 +436,7 @@ def test_w1g8_that_players_turn_needs_an_event_that_names_a_player():
 
 def _w1g8_vines(set_pool, interactive=(), lands=True):
     """Seat 0's Steam Vines on seat 1's Forest, on seat 1's turn."""
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     game = _w1g8.table(set_pool, interactive=interactive)
     forest = _w1g8.put(game, set_pool, 1, "Forest")

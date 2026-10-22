@@ -49,7 +49,7 @@ from engine import Game, PlayerState
 from engine import destruction_events
 from engine import events as events_module
 from engine import faces
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.destruction_events import (DELAYED_CAUSE_SUFFIX,
                                        NO_SPELL_OR_ABILITY,

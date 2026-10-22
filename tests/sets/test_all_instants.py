@@ -178,10 +178,11 @@ def test_contagion_no_longer_declines_on_the_bounded_target_count(set_pool):
 
 def test_undergrowth_no_longer_declines_on_its_optional_mana_cost(set_pool):
     """Was the decline, and both named parts landed in W3G1: an optional mana
-    clause in ``cast_costs._COST_CLAUSES`` with the count carried to resolution,
-    and a prevention that can be narrowed by the damage's source. What this
-    keeps is the pairing — the cost is read *and* the effect reads it back, on
-    one card. The behaviour is in the W3G1 block at the bottom of this file and
+    clause in ``cast_cost_clauses._COST_CLAUSES`` with the count carried to
+    resolution, and a prevention that can be narrowed by the damage's source.
+    What this keeps is the pairing — the cost is read *and* the effect reads it
+    back, on one card. The behaviour is in the W3G1 block at the bottom of this
+    file and
     in ``tests/rules/test_optional_additional_costs.py``."""
     assert compile_card_oracle(set_pool("ALL")["Undergrowth"]).supported
     (cost,) = additional_costs(set_pool("ALL")["Undergrowth"])

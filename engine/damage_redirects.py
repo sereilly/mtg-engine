@@ -440,7 +440,7 @@ def attached_static_redirects(game, recipient) -> list[DamageRedirect]:
     # Late, and inside the function, for `class_redirects`' reason: this module
     # is what a redirect *is*, and reading an Aura's printed text is a question
     # about the engine's objects.
-    from .auras import aura_redirects_all_damage
+    from .aura_grants import aura_redirects_all_damage
 
     found: list[DamageRedirect] = []
     for aura in game.controlled_by(seat):
@@ -496,8 +496,8 @@ def _host_static_redirects(game, recipient) -> list[DamageRedirect]:
     seat = game.controller_index_of(recipient)
     if seat is None:
         return []
-    from .auras import (aura_redirects_host_damage_to_controller,
-                        auras_attached_to)
+    from .aura_grants import aura_redirects_host_damage_to_controller
+    from .aura_attachment import auras_attached_to
 
     controller = game.players[seat]
     found: list[DamageRedirect] = []
