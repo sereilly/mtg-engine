@@ -15,13 +15,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Four shards, each a parallel run on the runner's four cores, each with
-  # its own budget — see the 2026-10-20 notes above the timed step for why
-  # the suite stopped being one serial run, and why tests/ai is two shards.
-  # A shard is a set of tests/ folders and, optionally, a marker expression;
-  # tests/engine/test_ci_shards.py fails unless every folder is covered
-  # exactly once: by one shard with no markers, or by two whose markers are
-  # an expression and its negation.
+  # Four shards, each a parallel run (`-n 4 --dist worksteal`) on the runner's
+  # four cores, each with its own budget. A shard is a set of tests/ folders
+  # and, optionally, a marker expression; tests/engine/test_ci_shards.py fails
+  # unless every folder is covered exactly once: by one shard with no markers,
+  # or by two whose markers are an expression and its negation (tests/ai is
+  # `slow` and `not slow`, so marking a test slow moves it between them).
   test:
     name: test (${{ matrix.shard }})
     runs-on: ubuntu-latest
@@ -60,258 +59,30 @@ jobs:
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
 
-      # A fast suite is a property worth defending, not an accident: it is what
-      # makes the large refactors on the roadmap feasible. The budget catches a
-      # *step change* — a test that starts a server, an accidental O(cards^2)
-      # sweep — which is why it sits well above the current time rather than
-      # tight against it. A tight budget on a shared runner fails on runner
-      # weather, and a budget that fails on weather gets raised without anyone
-      # reading the number.
+      # The time budget. A fast suite is what makes large refactors feasible,
+      # so it is defended, not assumed.
       #
-      # BASELINE is what the suite actually takes — ~6,845 tests measure at a
-      # steady 40s — recorded so the headroom is visible instead of guessed, and
-      # printed as a percentage on every run. The gate catches the cliff; the
-      # percentage is what shows the creep. That distinction is the lesson from
-      # letting it drift 9s -> 17s unnoticed across four phases, with the gate
-      # green the whole way.
+      # * BUDGET catches a *step change* (a test that starts a server, an
+      #   accidental O(cards^2) sweep), so it sits at ~2x BASELINE rather than
+      #   tight against it: a tight budget on a shared runner fails on runner
+      #   weather, and a budget that fails on weather gets raised unread.
+      # * BASELINE is the shard's own reading from this step's output line on
+      #   a runner — never a local timing (the local/runner multiplier has
+      #   measured anywhere from 1.0x to 1.9x). The percentage printed on every
+      #   run is the creep signal; the 1.5x-BASELINE warning is the alarm.
+      # * The runner is drawn per job, and the slow draw (AMD EPYC 7763) takes
+      #   about twice the fast one (9V45). Read the CPU on the line before
+      #   reading a percentage; baselines are the slower readings so far.
+      # * A single run is weather: two runs of one tree have read 2x apart on
+      #   one shard. Read several before moving a number.
+      # * Raising BUDGET is a decision, taken when a reading presses against
+      #   it and recorded in the commit that raises it, with the run id. To
+      #   take a reading: `gh workflow run CI --ref <branch>`, then
+      #   `gh run view <id> --log | grep "suite wall time"`.
       #
-      # A note on variance, since it nearly caused a wrong conclusion: two
-      # back-to-back local runs on one clean tree once measured 43.98s and
-      # 16.79s, which read as a runner-weather problem. It did not reproduce —
-      # three consecutive runs later landed on 23s exactly. Treat a single slow
-      # run as noise and read the printed percentages across several before
-      # touching anything.
-      #
-      # 60 -> 120 (2026-08-21): Runs on Github take significantly longer than local runs
-      #
-      # 120 -> 240, BASELINE 40 -> 110 (2026-08-28, before the 4ED ingest). The
-      # arithmetic never added up because BASELINE was recorded from a *local*
-      # run and compared against ELAPSED, which is measured here on the runner —
-      # two different machines in one ratio. Reading actual runs settles it:
-      # this step took 60s at run 7 (2026-08-20, pre-Legends), 106s at run 11
-      # and 112s at run 12 (both 2026-08-27, 9,110 tests). Against the ~82s the
-      # same suite measures locally that is a ~1.3x multiplier, not the 2-3x the
-      # 120 was sized on — so the multiplier was wrong *and* the budget was
-      # tight: 112 of 120 is 93%, and a set ingest adds several hundred tests.
-      # BASELINE is now a runner-measured number, so the creep warning compares
-      # like with like; BUDGET sits at ~2x it, which is the headroom this gate
-      # was always documented to want.
-      #
-      # BASELINE 110 -> 180 (2026-08-31, after the ICE promotion). Four runner
-      # readings at 10,821 tests: 172s, 186s, 163s, 205s. The move is a record
-      # of growth, per this gate's own rule — but note the shape: +19% tests
-      # took +64% wall time (a local machine measured the same super-linearity,
-      # +40%), so the growth is not proportional and per-test cost rose during
-      # ICE's waves. The latest run sits at 85% of BUDGET with an ingest ahead;
-      # raising BUDGET is a decision, not maintenance, and it has not been
-      # taken here. Two ways to avoid having to take it: read `--durations` on
-      # a runner run before assuming the ingest forces it, and remember `-m
-      # "not slow"` exists if the batch tests are the growth.
-      # BUDGET 240 -> 500 and BASELINE 180 -> 260 (2026-09-02, after the
-      # Homelands promotion). The fourth budget raise, taken as a decision
-      # rather than as maintenance, and **both numbers are runner readings of
-      # this tree**: run 33644611682 on branch `homelands` reported
-      # `suite wall time: 260s` at 11,923 tests.
-      #
-      # Why it was due. The last run before the set, 33564882929 on commit
-      # 1a294522, read **217s** — already 90% of the old 240. Homelands added
-      # ~750 tests on top of that, and 260s against 240 is a gate that fails on
-      # arithmetic rather than on a step change.
-      #
-      # BUDGET is ~2x BASELINE, which is the headroom this gate has always been
-      # documented to want, and it is deliberately not another doubling: the
-      # 60 -> 120 -> 240 pattern reads as reflexive escalation, and a budget
-      # with too much slack stops catching the thing it exists for. A step
-      # change — a test that starts a server, an accidental O(cards^2) sweep —
-      # is a multiple, not a 10%. At 500 the creep warning (1.5x BASELINE =
-      # 390s) sits ~22% below the gate, so the warning can actually fire first,
-      # which is the design. An interim 400 was committed before this run and
-      # left the two only 10s apart — a warning band that narrow is not a
-      # warning.
-      #
-      # **The method note, which cost a commit to learn.** BASELINE is compared
-      # against an ELAPSED the runner measures, so a local timing entering it
-      # directly is a missing term rather than an approximation — that is what
-      # left these two wrong in opposite directions for three sets. The fix is
-      # not to refuse local timings but to make the multiplier measurable: time
-      # a commit this workflow has already run, and divide. Doing that here gave
-      # 217/126 = 1.72 on commit 1a294522, which projected 138s local to ~237s.
-      # **The truth was 260s.** So even a multiplier measured on the immediately
-      # preceding commit under-predicted by 10%, because the multiplier itself
-      # grows with the suite (1.72 at 11,176 tests, 1.88 at 11,923) — the runner
-      # degrades faster than a local machine does. A measured multiplier is
-      # good enough to size a *budget*; it is not good enough to set BASELINE,
-      # which wants the step's own output. Getting it is one dispatch:
-      #   gh workflow run CI --ref <branch>
-      #   gh run view <id> --log | grep "suite wall time"
-      #
-      # One run, not two (2026-09-02). This step used to sit *after* a plain
-      # `python -m pytest` step and re-run the whole suite with output discarded,
-      # purely to time it — ~260s of duplication on every CI cycle. The
-      # correctness run and the timed run are now the same run: ELAPSED is still
-      # the serial runner wall time of `python -m pytest`, unchanged in meaning.
-      # Two side effects, both deliberate: the timed run now includes first-run
-      # .pyc compilation the discarded run used to absorb (a few seconds, well
-      # inside the 1.5x warning band), and a red suite exits with pytest's own
-      # status before the budget is consulted — a failing suite's duration says
-      # nothing about a step change. BASELINE stays 260 until the next runner
-      # reading of this step, per the method note above.
-      # BUDGET 500 -> 940 and BASELINE 260 -> 470 (2026-09-05, after the
-      # Visions promotion). The fifth raise, and both numbers are the step's
-      # own output: run 33977035005 on the promotion commit read
-      # `suite wall time: 470s` at 14,670 tests — 94% of the old budget, with
-      # the creep warning (1.5x = 390s) already firing. Weatherlight's ingest
-      # adds several hundred tests, so at 500 the next Phase 1 would go red for
-      # a reason unrelated to the set. BUDGET is ~2x BASELINE, the headroom this
-      # gate has always been documented to want.
-      #
-      # The `--durations` reading the ICE note asked for, taken locally (the
-      # runner step does not pass the flag): no single culprit. The top item is
-      # `test_parse_coverage`'s 27s setup, then one 17s AI simulation, then a
-      # long tail of pool-wide guards at 2-6s each — the sweeps that walk every
-      # card scale with the pool, and that is what grew. `-m "not slow"` would
-      # not help, because the batch tests are not the growth.
-      # BASELINE 470 -> 571, BUDGET unchanged (2026-09-07, the Phase 0 before
-      # Stronghold). Run 34081047302 on the Tempest retrospective commit read
-      # `suite wall time: 571s` at 16,780 tests. The suite grew 14.4% in tests
-      # and 21.5% in runner wall time since the 470s reading, so the
-      # super-linearity the ICE note found is still there and still mild.
-      #
-      # **BUDGET is deliberately not raised**, and the trigger is why. Every
-      # previous raise was taken with the suite near the gate — HML's at 90% of
-      # the old budget, VIS's at 94%. This run is **60%** of 940 and the creep
-      # warning did not fire. Raising a budget nothing is pressing against would
-      # be raising the number instead of obeying it (idiom 13), so it waits for
-      # a reading that needs it.
-      #
-      # What that costs, recorded so the next reader does not have to re-derive
-      # it: BUDGET is now 1.65x BASELINE rather than the ~2x this gate is
-      # documented to want, which puts the creep warning (1.5x = 857s) only 9%
-      # below the gate instead of ~22%. The warning still fires first, so the
-      # ordering holds, but the room between them is thin. **The next raise
-      # takes BUDGET to ~1,140 to restore the 2x**, and should be taken on the
-      # reading that pushes the suite past ~750s rather than on a set boundary.
-      #
-      # And the method note gets a data point that cuts against its own caution.
-      # The local serial wall on the same commit was 569s against this runner's
-      # 571s — a 1.00 multiplier, where HML measured 1.72 and 1.88. The
-      # discipline still stands (BASELINE takes the step's own output, and one
-      # coincidence is not a calibration), but the runner is no longer slower
-      # than this local machine, so a local reading is no longer the
-      # *conservative* estimate the note assumes it is. It can now under- or
-      # over-state, which is a second reason not to feed it in.
-      # BASELINE 571 -> 677, BUDGET unchanged (2026-09-09, the 6ED promotion —
-      # owed by Phase 0 and taken late). Run 34296564407 on main read
-      # `suite wall time: 677s` at ~19,533 tests, 72% of budget. The suite grew
-      # 16.4% in tests and 18.6% in runner wall time since the 571s reading, so
-      # the mild super-linearity ICE found is still the whole story.
-      #
-      # **Three adjacent readings on main were 540s, 625s and 677s**, which is
-      # new evidence and cuts both ways. A 25% spread across three commits days
-      # apart is mostly runner weather, so it is an argument for the headroom
-      # this gate has always kept — and it is an argument against reading any
-      # single number as the suite's true cost. BASELINE takes the latest, per
-      # the method note, which happens to be the high one; that is the
-      # conservative direction for a gate and the wrong direction for a warning.
-      #
-      # **Which is the cost to record: the ordering has inverted.** BUDGET is now
-      # 1.39x BASELINE, so the creep warning (1.5x = 1,016s) sits *above* the
-      # 940s gate and can no longer fire first. Until the next raise the
-      # percentage line is the only creep signal — which is the instrument this
-      # file has always said matters ("the gate catches the cliff; the percentage
-      # is what shows the creep"), so the loss is the secondary alarm rather than
-      # the signal. BUDGET is deliberately still not raised: at 72% nothing is
-      # pressing against it, and raising a number nothing is pressing against is
-      # raising it instead of obeying it (idiom 13). **The next raise takes
-      # BUDGET to ~1,140 and is now owed on the earlier of ~750s or the ordering
-      # staying inverted for another set**, rather than on the 750s threshold
-      # alone — that threshold was written when the ratio was 1.65x and the
-      # warning still fired first.
-      #
-      # THREE PARALLEL SHARDS (2026-10-20, after round 4). The serial suite
-      # stopped being a number this gate could hold, and every note above is
-      # about a serial wall time that no longer exists. The record:
-      #
-      # The gate fired on a step change at Invasion, which is what it is for.
-      # The last green run (34781813841, Mercadian Masques' close) took 9m15s
-      # for the whole job. The next completed run, at Planeshift's close, read
-      # `suite wall time: 2791s`, and every push after it was red on this step
-      # alone, with the suite itself passing: 4,698s, 4,253s, 6,312s, then
-      # **17,103s** (run 39354486029, 30,751 tests, 1,819% of budget). The
-      # growth is the pool-wide censuses and the AI's whole-game simulations
-      # (SET_PLAYBOOK records sixty tests as ~41% of worker time at APC). The
-      # decision the playbook said was owed (raise BUDGET, or split the job)
-      # was taken here by the owner: split, and run in parallel.
-      #
-      # Why not raise BUDGET and stay serial: GitHub kills a job at 6 hours,
-      # and 17,103s is 79% of that. Round 4's speedups bring HEAD down to an
-      # estimated ~5,300s serial, which is still 90 minutes a push, and the
-      # suite grows by a set's worth of censuses every set.
-      #
-      # What the numbers mean now. ELAPSED is one shard's wall time under
-      # `-n 4 --dist worksteal` (the runner has 4 vCPUs; worksteal because a
-      # few items run for minutes beside thousands that run in milliseconds).
-      # It is **not comparable** with any reading above, and the method note
-      # still applies: BASELINE is the step's own output, per shard. Shards
-      # are whole tests/ folders, so no plugin is needed and a module's
-      # fixtures are never set up in two jobs. tests/ai is its own shard
-      # because it holds 664 tests and over a third of the suite's time.
-      #
-      # The first readings, run 39516321557 on branch `ci/parallel-suite`
-      # (main's round-4 close plus this change, 30,835 tests), all green:
-      #   ai      686 tests  `suite wall time [ai]: 1629s`
-      #   engine  14,187     `suite wall time [engine]: 862s`
-      #   rest    15,962     `suite wall time [rest]: 940s`
-      # BASELINE is each reading. BUDGET is ~2x it, the headroom this gate has
-      # always been documented to want, which also puts the 1.5x creep warning
-      # back below the gate (the serial numbers had inverted that). The
-      # matrix values are where these live; a raise is still a decision.
-      #
-      # The confirming run, 39519405262 with these budgets, read ai 1663s,
-      # engine 860s and **rest 470s**: half of rest's first reading, on an
-      # identical tree. Two runs, one shard, a 2x spread. That is runner
-      # weather, and it is why the baselines were left at the first readings
-      # rather than lowered to the second. A budget sized on the fast run
-      # would have failed the slow one.
-      #
-      # TESTS/AI IS TWO SHARDS (2026-10-20, the same day). It was the long
-      # pole on all three runs above: under 3% of the tests, and a wall time
-      # as long as the other two shards' put together (1629s, 1663s, then 803s
-      # on a faster runner beside 485s and 513s). The `slow` marker already
-      # cut it almost in half. It means "long AI-simulation batch tests", and
-      # locally its 22 items in tests/ai took 1,271s against 1,098s for the
-      # other 664. So `ai-sims` runs `-m slow` and `ai` runs `-m "not slow"`.
-      # An expression and its negation are a partition by construction, and
-      # the guard holds the two shards to exactly that. Marking a test slow
-      # moves it between them, and that is the one way this balance drifts.
-      #
-      # Readings, all green, from runs 39525972550 and 39532394012 on branch
-      # `ci/split-ai-shard`: ai-sims 536s then 928s (22 tests), ai 711s then
-      # 497s (664), engine 868s then 870s, rest 766s then 948s. **The runner
-      # is drawn per job, not per run**: in one run the engine shard read a
-      # slow runner's 868s while ai-sims read a fast one's 536s. Each shard's
-      # BASELINE is therefore its slower reading so far, and its BUDGET ~2x.
-      # The timed line now names the CPU each job ran on, so the next
-      # reader compares like with like instead of inferring it, and
-      # `--durations=15` lists each shard's slowest items. On the slower
-      # runners the job's wall time went from ~1,660s (the old ai shard) to
-      # ~950s, and no single shard is the long pole any more.
-      #
-      # Run 39534117983, the first to name its CPUs, says what the spread is:
-      # engine 466s and ai-sims 474s on an AMD EPYC 9V45, rest 834s on a
-      # 9V74, ai 706s on a 7763. The 7763 is the slow draw at about twice the
-      # 9V45's time, and ai's 706s beside its 711s baseline says the
-      # baselines are 7763-class readings, which is the side to budget for.
-      # Read the CPU before reading a percentage.
-      #
-      # The sims half is bounded by its largest item,
-      # test_no_urzas_block_simulation_leaves_a_cycle_on_the_stack[ULG]: 428s
-      # locally, where its USG and UDS twins took ~60s each. Ten seeded games
-      # of Urza's Legacy are costly games, not one runaway: one of them is a
-      # third of the run, and nearly all of it is CR 613 layer reads.
-      # `_folded_card` derived each permanent's board-wide statics twice per
-      # fold; deriving them once made those ten games ~19% faster with every
-      # seeded log byte-identical (ROADMAP, standing invariant 2).
+      # The history of every reading and raise (serial 40s in 2026-08 to
+      # 17,103s at Planeshift, then the split into shards on 2026-10-20) is in
+      # `git log -p .github/workflows/ci.yml`.
       - name: Run the test suite, enforcing the time budget
         env:
           SHARD: ${{ matrix.shard }}
@@ -386,16 +157,10 @@ jobs:
 
       # Regenerating the trackers must be a no-op on a clean tree; a diff here
       # means someone changed behavior without refreshing the generated docs.
-      # The five tracker scripts' --check now makes that comparison itself
-      # (2026-09-02): each renders the report from the analysis it already ran
-      # and fails "stale report" on a mismatch, so re-running them here was the
-      # same work twice — parse_coverage's ~15s deletion probe most of all.
-      # This step keeps the two generators that have no --check of their own:
-      # SET_PROGRESS.md renders from the cached set_progress.json (no
-      # network), and CARD_VERIFICATION.md is a projection of
-      # card_verification.json — both joined this step after the M21
-      # promotion showed their staleness cost: the roadmap read "19
-      # untested cards" for a week while the true number was 299.
+      # The five tracker scripts' --check makes that comparison itself, so this
+      # step runs only the two generators with no --check of their own:
+      # SET_PROGRESS.md (from the cached set_progress.json, no network) and
+      # CARD_VERIFICATION.md (a projection of card_verification.json).
       - name: Generated trackers are up to date
         run: |
           python scripts/set_progress.py > /dev/null
