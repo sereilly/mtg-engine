@@ -56,7 +56,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 SCANNED = ("engine", "web")
 
 # The one module allowed to shorten an exile pile: it *is* the transition.
-SEAM = "engine/mixins/helpers.py"
+SEAM = "engine/mixins/zone_funnels.py"
 
 
 # ---------------------------------------------------------------------------
@@ -226,7 +226,7 @@ def test_a_record_for_another_seat_is_left_alone(catalog_by_name):
 # naming a function that no longer writes an exile pile is a comment nobody
 # re-reads and silently widens to whatever else that name comes to mean.
 _EXILE_WRITE_EXEMPTIONS: dict[str, str] = {
-    "engine/mixins/helpers.py::take_card_from_exile": "this is the transition",
+    "engine/mixins/zone_funnels.py::take_card_from_exile": "this is the transition",
     # The same exemption the battlefield guard carries for the same function:
     # the Debug Menu replaces a whole board from a supplied payload. Nothing
     # "leaves" — the game state is being rebuilt, register and all.

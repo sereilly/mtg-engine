@@ -11,7 +11,7 @@ opponent's look-alike instead.
 stable for as long as the object is on the battlefield, and — because CR 400.7
 makes a permanent that leaves and returns a *new object* — replaced when it
 comes back. The lookup lives on the control seam
-(``engine/mixins/helpers.py``) beside ``all_permanents`` and friends, so
+(``engine/mixins/control_seam.py``) beside ``all_permanents`` and friends, so
 "resolve this id" has one implementation rather than one per caller.
 """
 

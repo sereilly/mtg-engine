@@ -161,7 +161,7 @@ _AURA_STATIC_PATTERNS = (
     re.compile(r"^return enchanted creature card to the battlefield under your control"),
     # Animate Artifact's animation clause (oracle_instructions.py:465).
     re.compile(r"^as long as enchanted artifact isn't a creature, it's an artifact creature"),
-    # Aspect of Wolf's CDA bonus (permanent_state.py:301).
+    # Aspect of Wolf's CDA bonus (dynamic_creatures._refresh_aspect_of_wolf).
     re.compile(r"^enchanted creature gets \+x/\+y, where x is half the number of forests"),
 )
 
@@ -172,13 +172,13 @@ _MIXIN_TEXT_SCANS = (
     # on_short={"kind": "lose"})` in effects.py IS the "if you can't" half — the
     # forced-sacrifice flow loses the game for a player who cannot pay.
     "if you can't, you lose the game",
-    # helpers.py:461 — the leave-the-battlefield loss, matched on this phrase.
+    # control_seam.remove_all_from_battlefield — the leave-the-battlefield loss, matched on this phrase.
     "when this enchantment is put into a graveyard from the battlefield, you lose the game",
     "whenever you're dealt damage, put that many vitality counters on this aura",  # upkeep_step vitality flow (Living Artifact)
     "you don't lose the game for having 0 or less life",                 # game_ending.py (Lich)
     "as this enchantment enters, you lose life equal to your life total",  # permanent_state.py:195 (Lich)
     "you have no maximum hand size",                                     # permanent_state.py:189 (Library of Leng)
-    "you may spend white mana as though it were red mana",               # permanent_state.py:192 (Sunglasses of Urza)
+    "you may spend white mana as though it were red mana",               # dynamic_creatures._refresh_mana_spending (Sunglasses of Urza)
     "doesn't untap during your untap step",                              # untap_step.py (Time Vault, Basalt Monolith)
     "you may choose not to untap this creature during your untap step",  # untap_step.py (Old Man of the Sea)
     "if you would begin your turn while this artifact is tapped, you may skip that turn instead",  # beginning_phase.py (Time Vault)

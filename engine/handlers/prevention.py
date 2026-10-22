@@ -375,7 +375,7 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
     if divided and (instruction.payload.get("targets") or {}).get("kind") == "divided":
         # Each entry is resolved through the seam rather than by indexing a
         # battlefield: a shield armed on the slot a dead permanent used to hold
-        # would protect whoever slid into it (`engine/mixins/helpers.py`).
+        # would protect whoever slid into it (`engine/mixins/control_seam.py`).
         live = []
         for entry in divided:
             seat, index, _share = divided_entry(entry)

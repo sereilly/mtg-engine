@@ -70,7 +70,7 @@ Elf is the same action on a Bear and on a Bear Knight — so no layer-4 effect
 depends on another through it. That leaves the scope, which is exactly what a
 type-scoped static has and a per-object effect has not.
 
-``engine/mixins/permanent_state.py`` gathers the statics (it owns what each
+``engine/mixins/board_statics.py`` gathers the statics (it owns what each
 scope means) and writes the results; this module owns the order.
 """
 

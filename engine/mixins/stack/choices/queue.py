@@ -89,7 +89,7 @@ class PendingChoicesMixin:
         #
         # A prompt a *draw* armed says so (CR 121.2): the draws behind that one
         # wait for it, whichever queue it sits on — see
-        # ``EffectsMixin._draw_prompt_open``.
+        # ``DrawsAndDiscardsMixin._draw_prompt_open``.
         stamp_draw_of(self, choice)
         self.pending_choices.append(choice)
         return choice

@@ -14,7 +14,7 @@ state-based action put there are the same card in the same graveyard, and CR
 
 So destruction is announced where it is *decided* — the two destroy paths,
 ``mixins/effects._destroy_target_permanent`` and
-``mixins/helpers._destroy_swept_permanents``, once indestructibility
+``mixins/deaths._destroy_swept_permanents``, once indestructibility
 (CR 702.12b), a regeneration shield (CR 701.8c) and a land's destruction shield
 have each declined to replace it — and nowhere else. It is the discard seam's
 arrangement one zone over (``Game._discard_card``), for the discard seam's

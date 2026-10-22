@@ -36,7 +36,7 @@ WRITES = {"append", "insert", "extend"}
 #: ``file:function`` for the one place a graveyard may still be written
 #: directly: the seam itself, which is what runs the replacements.
 ALLOWED = {
-    "mixins/helpers.py:put_card_into_graveyard",
+    "mixins/zone_funnels.py:put_card_into_graveyard",
 }
 
 

@@ -48,7 +48,7 @@ _DOESNT_UNTAP_LINE = "this creature doesn't untap during your untap step"
 #: a creature's static lines have been gated by the whitelist below since the
 #: compiler was written, and opening that gate to every production at once is a
 #: change with its own blast radius. What is here is what the CR 613 refresh in
-#: engine/mixins/permanent_state.py dispatches on.
+#: engine/mixins/ (``dynamic_creatures.py``, ``lords.py``) dispatches on.
 #:
 #: ``lord_buff`` joined for the anthem shapes only the grammar can read — a
 #: "named <card name>" restriction (Rohgahh of Kher Keep) and an "as long as"

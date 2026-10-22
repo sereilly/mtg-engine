@@ -621,9 +621,9 @@ def test_the_census_sees_a_seam_that_stopped_announcing(pool, by_name, monkeypat
 
     monkeypatch.setattr(destruction_events, "announce_destroyed", lambda *a, **k: None)
     import engine.mixins.effects as effects_module
-    import engine.mixins.helpers as helpers_module
+    import engine.mixins.deaths as deaths_module
     monkeypatch.setattr(effects_module, "announce_destroyed", lambda *a, **k: None)
-    monkeypatch.setattr(helpers_module, "announce_destroyed", lambda *a, **k: None)
+    monkeypatch.setattr(deaths_module, "announce_destroyed", lambda *a, **k: None)
 
     silent, _ = _sweep(pool, by_name, interactive=False, only=_BACKWARD_SLICE)
     faults = _faults(silent)
@@ -1290,7 +1290,7 @@ def _calls(attribute: str) -> set[tuple[str, str]]:
 def test_only_the_two_destroy_seams_announce_a_destruction():
     assert _calls("announce_destroyed") == {
         ("effects.py", "_do_destroy"),
-        ("helpers.py", "_destroy_swept_permanents"),
+        ("deaths.py", "_destroy_swept_permanents"),
     }
 
 
@@ -1302,8 +1302,8 @@ def test_every_other_road_to_a_graveyard_is_one_this_file_has_read():
     kind; the discard seam found seven."""
     expected = {
         ("effects.py", "_do_destroy"),
-        ("helpers.py", "_destroy_swept_permanents"),
-        ("helpers.py", "_permanent_to_graveyard"),    # its own docstring names it
+        ("deaths.py", "_destroy_swept_permanents"),
+        ("deaths.py", "_permanent_to_graveyard"),    # its own docstring names it
     }
     callers = _calls("_permanent_to_graveyard")
     by_function = {function for _path, function in callers}

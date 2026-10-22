@@ -33,10 +33,10 @@ ENGINE = Path(__file__).resolve().parents[2] / "engine"
 #: below the draw seam (``test_draw_seam.py`` owns who may call it, and the
 #: diversion above runs over its result).
 ALLOWED = {
-    "mixins/helpers.py:put_card_into_hand",
-    "mixins/helpers.py:put_card_into_library",
+    "mixins/zone_funnels.py:put_card_into_hand",
+    "mixins/zone_funnels.py:put_card_into_library",
     "commander.py:commander_declines_zone_change",
-    "mixins/effects.py:_divert_drawn_commanders",
+    "mixins/draws_and_discards.py:_divert_drawn_commanders",
     "models.py:draw",
 }
 

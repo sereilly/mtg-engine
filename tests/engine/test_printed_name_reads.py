@@ -29,10 +29,10 @@ were live bugs a shipped card demonstrates, fixed in the same commit and held
 by ``tests/rules/test_copy_effects.py``'s "copied name" section:
 
   * the ``same_name`` P/T count (a Clone of Plague Rats neither was one nor
-    counted, ``mixins/permanent_state.py``);
+    counted, ``mixins/dynamic_creatures.py``);
   * the Guardian Beast untapped-protector check (``mixins/effects.py``);
   * the ``ON_LEAVE_BATTLEFIELD`` hook lookup (a Clone of Gaea's Liege left
-    its Forests standing, ``mixins/helpers.py``);
+    its Forests standing, ``mixins/deaths.py``);
   * Goblin Artisans' "another creature named ~" rival scan
     (``handlers/stack.py``).
 
@@ -57,7 +57,7 @@ The rest are ratcheted below rather than fixed, because no card in the pool
 can demonstrate a wrong answer for them — this repo's rule is that a fix with
 no card to verify it is a guess. They fall into two families:
 
-  * **Wire/test addressing** (``mixins/helpers.py``'s
+  * **Wire/test addressing** (``mixins/control_seam.py``'s
     ``_find_controlled_permanent``, ``phases/beginning_phase.py``,
     ``web/action_helpers.py``): a client or a test names a permanent by the
     printed name serialization gave it. Same protocol both ways.
@@ -155,7 +155,7 @@ PRINTED_NAME_DISPATCH_BASELINE: dict[str, int] = {
     # `upkeep_effects.py` and 7 in `upkeep_step.py`. Both reached zero when the
     # protocol moved to permanent ids — see the docstring above.
     # Wire/test addressing by the printed name serialization handed out.
-    "engine/mixins/helpers.py": 2,
+    "engine/mixins/control_seam.py": 2,
     "engine/phases/beginning_phase.py": 2,
     "web/action_helpers.py": 2,
     # Island Sanctuary (an enchantment nothing in the pool can copy/rename).
@@ -238,8 +238,21 @@ def test_the_fixed_sites_stay_fixed():
     claim while they are at zero: the fix was to *leave* the printed face,
     not to move the read around inside the file."""
     for module in (
+        # ``mixins/permanent_state.py`` and ``mixins/effects.py`` were split by
+        # subject at the 2,000-line cap; every module their code went to is
+        # held here, so the pin still reads all of it. ``deaths.py`` is where
+        # the ``ON_LEAVE_BATTLEFIELD`` lookup above went, out of
+        # ``helpers.py``'s baseline and at zero.
         "engine/mixins/permanent_state.py",
+        "engine/mixins/entry_choices.py",
+        "engine/mixins/board_statics.py",
+        "engine/mixins/dynamic_creatures.py",
+        "engine/mixins/lords.py",
+        "engine/mixins/protection.py",
         "engine/mixins/effects.py",
+        "engine/mixins/draws_and_discards.py",
+        "engine/mixins/stack/choices/replacements.py",
+        "engine/mixins/deaths.py",
         "engine/handlers/stack.py",
     ):
         path = ROOT / module

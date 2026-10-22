@@ -261,7 +261,7 @@ PRINTED_READ_BASELINE: dict[str, int] = {
     # about to add, so the answer would depend on whether it had already been
     # asked — a self-reference, not a shortcut. Both sites say so in place.
     "auras.py": 1,
-    "mixins/permanent_state.py": 1,  # the same self-reference, for global statics
+    "mixins/board_statics.py": 1,  # the same self-reference, for global statics
     # Card shapes this engine models on the printed line alone. The supertype
     # sweeps that used to be covered by this entry read the effective card now.
     #
@@ -273,7 +273,10 @@ PRINTED_READ_BASELINE: dict[str, int] = {
     # `_unattach_illegal_auras` and its callers are the CR 704.5m/n sweep and
     # changing what it matches is a rules round, not a guard one.
     "mixins/game_ending.py": 5,   # 3 Aura (Licid-class debt), Saga, Role
-    "mixins/helpers.py": 2,       # both Aura — Licid-class debt, see above
+    # both Aura — Licid-class debt, see above: the leave transition and the
+    # move to a graveyard, which were one module (`mixins/helpers.py`).
+    "mixins/control_seam.py": 1,
+    "mixins/deaths.py": 1,
     # `mixins/stack/casting.py` used to be exempt here, on the reason "an object
     # on the stack is not a permanent and has no layers applied to it". The
     # first half is true and the second was the mistake this list is meant to
@@ -418,7 +421,7 @@ PRIMARY_TYPE_BASELINE: dict[str, int] = {
     # approximation: a land an animator had made a creature dies unrecorded.
     # Its fix is a "was a creature" stamp at the removal seam, not a
     # different read here.
-    "mixins/helpers.py": 1,
+    "mixins/deaths.py": 1,
 }
 
 
@@ -513,7 +516,7 @@ _PRINTED_COMPILES = re.compile(r"compile_card_oracle\(\s*[\w\.]+\.card\s*\)")
 PRINTED_COMPILE_BASELINE: dict[str, int] = {
     # A spell on the stack: the stack item's card is the object being asked.
     "counter_conditions.py": 1,
-    "mixins/helpers.py": 1,
+    "mixins/target_announcements.py": 1,
     # …and a modal spell's announced mode (``arm_modal_mode_targets``) and a
     # spell cast from a graveyard's own card target (Odyssey).
     "mixins/stack/casting.py": 2,

@@ -671,7 +671,7 @@ class OracleInstructionsMixin:
             if any("protection from" in instr.value for instr in program.instructions if instr.kind == "spell_pattern") or ("has protection from" in text):
                 # Parse the specific color and stamp metadata on the creature
                 # The colour is read off the Aura by
-                # permanent_state._protection_colors while it is attached, so
+                # protection._protection_colors while it is attached, so
                 # nothing is stamped on the creature and nothing has to be
                 # unstamped when the Aura leaves.
                 self.log.append(f"{target_creature.card.name} gains protection from aura")

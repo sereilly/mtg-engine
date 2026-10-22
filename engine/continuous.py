@@ -20,8 +20,9 @@ layers and dependency exist to settle. The order is a property of the *rules*
 here, not of the order code happens to run in.
 
 This module is pure: it computes characteristics from a set of effects and
-never touches game state. ``engine/mixins/permanent_state.py`` collects the
-effects and writes the results back.
+never touches game state. The recompute's mixins
+(``engine/mixins/board_statics.py``, ``dynamic_creatures.py``, ``lords.py``)
+collect the effects and write the results back.
 """
 
 from __future__ import annotations

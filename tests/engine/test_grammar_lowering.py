@@ -3230,9 +3230,17 @@ def test_the_entry_phrases_have_exactly_one_spelling():
 
     from engine import enter_effects
 
-    mixin_source = (
-        pathlib.Path(enter_effects.__file__).with_name("mixins") / "permanent_state.py"
-    ).read_text(encoding="utf-8")
+    # The mixin was one module, ``mixins/permanent_state.py``, until it was
+    # split by subject at the 2,000-line cap; every module it became is read,
+    # so the guard still sees all of the code it saw.
+    mixins = pathlib.Path(enter_effects.__file__).with_name("mixins")
+    modules = (
+        "permanent_state.py", "entry_choices.py", "board_statics.py",
+        "dynamic_creatures.py", "lords.py", "protection.py",
+    )
+    mixin_source = "\n".join(
+        (mixins / module).read_text(encoding="utf-8") for module in modules
+    )
     for name in enter_effects.__all__:
         phrase = getattr(enter_effects, name)
         if not isinstance(phrase, str):

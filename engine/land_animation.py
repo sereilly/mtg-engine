@@ -13,7 +13,7 @@ exists:
   the land type out (``animate_all_swamps`` / ``animate_all_forests``). A card
   printed "All Mountains are 1/1 red creatures that are still lands" matched
   neither literal and compiled **unsupported** — the false-negative failure.
-* The **dispatch** (``mixins/permanent_state._refresh_dynamic_creatures``)
+* The **dispatch** (``mixins/dynamic_creatures._refresh_dynamic_creatures``)
   matched ``perm.card.name == "Kormus Bell"``. A differently-named card with
   Kormus Bell's *exact* text therefore compiled **supported** and then animated
   nothing at all — the silent-wrongness failure, measured before this table was

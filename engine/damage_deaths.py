@@ -13,7 +13,7 @@ because a card is the only part of a dead creature that survives (CR 400.7) and
 because "put **that card** onto the battlefield" is exactly what the sentence
 behind the condition does with it.
 
-Written where the death happens (``mixins/helpers._permanent_to_graveyard``) and
+Written where the death happens (``mixins/deaths._permanent_to_graveyard``) and
 swept at cleanup with the record it mirrors (``mixins/_constants``): the two are
 halves of one turn-scoped fact, and a ledger that outlived the damage record
 would reanimate a creature on a turn nothing had died on.

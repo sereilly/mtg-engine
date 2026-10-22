@@ -245,7 +245,7 @@ def protection_quality(word: str) -> tuple[str, str] | None:
     printing an unmet type can tell you it happened.
 
     Here rather than beside its consumer for :func:`keyword_ability_name`'s
-    reason exactly: both sides of the grant need it. ``permanent_state``
+    reason exactly: both sides of the grant need it. ``mixins/protection``
     reads it to turn a printed clause into the quality a shield answers to,
     and the two front ends that *admit* a "have protection from X" anthem —
     ``lord_buffs.lord_buff_for`` and ``grammar/statics.py``'s lowering — read
@@ -898,7 +898,7 @@ def abilities_lost_at(perm: Permanent, *, board_statics=None) -> int | None:
 
 def grant_protection_flag(perm: Permanent, word: str) -> None:
     """Layer 6: *perm* has protection from *word* on the metadata channel
-    (``mixins/permanent_state._protection_qualities``), stamped.
+    (``mixins/protection._protection_qualities``), stamped.
 
     The flag is what every reader of the channel reads and what the cleanup
     sweep clears; the stamp beside it (:data:`PROTECTION_GRANT_STAMPS`) is for
@@ -917,7 +917,7 @@ def protection_removals(perm: Permanent) -> dict[tuple[str, str], int]:
     (Cephalid Snitch.) ``remove_keyword`` records the removal like any other
     keyword's, but protection is not read off layer 6's word set: it is a
     keyword carrying a quality (CR 702.16), gathered from every source by
-    ``mixins/permanent_state._protection_qualities``. So that reader asks
+    ``mixins/protection._protection_qualities``. So that reader asks
     this, and keeps a quality only where some source granted it **after**
     the removal (CR 613.7: the later effect wins) — which no printed line
     ever did.

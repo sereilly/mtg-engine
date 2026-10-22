@@ -212,7 +212,7 @@ _LAND_TYPE_AGGREGATE = "distinct_basic_land_types"
 
 #: ``Permanent.metadata`` key holding the landwalks a permanent's own text
 #: currently names off the board, as a tuple of words. Written by
-#: ``mixins/permanent_state._refresh_dynamic_creatures`` (cleared and rebuilt on
+#: ``mixins/dynamic_creatures._refresh_dynamic_creatures`` (cleared and rebuilt on
 #: every pass, behind that pass's layer-4 refreshes) and read by
 #: ``layer_bridge.collect_ability_effects`` as a layer-6 grant. A derived value
 #: and never a record: nothing may write it but that refresh.

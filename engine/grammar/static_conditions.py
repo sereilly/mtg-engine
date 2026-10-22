@@ -560,10 +560,10 @@ def _lower_self_conditional_static(
         # The bonus goes to the permanent this one is attached to, and so does
         # every "it" in the condition: "enchanted creature has first strike as
         # long as **it's** blocking" is about the creature, not about the Aura,
-        # which never blocks. Both halves are read by ``permanent_state`` — the
-        # P/T by ``_refresh_dynamic_creatures`` and the keywords by
-        # ``_recalculate_lord_buffs``'s conditional-self-grant step — and both
-        # read this one key.
+        # which never blocks. Both halves are read by the state mixins — the
+        # P/T by ``dynamic_creatures._refresh_dynamic_creatures`` and the
+        # keywords by ``lords._recalculate_lord_buffs``'s conditional-self-grant
+        # step — and both read this one key.
         payload["subject"] = "attached"
         payload["condition"] = _condition_about_the_host(condition)
     if node.otherwise is not None:

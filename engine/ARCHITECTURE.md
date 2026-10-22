@@ -87,7 +87,7 @@ and dropped whatever followed) is deleted. See "Grammar front end" below.
 | `engine/hand_size.py` | CR 402.2's seven and the printed lines that change it, read by the cleanup step, the support gate and the parse-coverage report. |
 | `engine/named_counters.py` / `engine/text_changes.py` / `engine/land_types.py` | Single write APIs: counters with no rules meaning of their own (CR 122), text-changing effects (layer 3), basic-land-type changes (layer 4). |
 | `engine/phases/` | One mixin per turn phase and per step within a phase (CR 500–514): `beginning_phase` + `untap_step`/`upkeep_step`/`draw_step`, `precombat_main_phase`, `combat_phase` + its five step modules, `postcombat_main_phase`, `ending_phase` + `end_step`/`cleanup_step`. Each is composed onto `Game`. See `engine/phases/__init__.py` for the full taxonomy. |
-| `engine/mixins/` | Cross-cutting game flow not tied to a single phase: turn-structure navigation and priority (`phase_steps`), per-turn/pregame management (`turn_management`), state-based actions, effects, helpers. Consumes compiled programs; should never parse oracle text itself. |
+| `engine/mixins/` | Cross-cutting game flow not tied to a single phase: turn-structure navigation and priority (`phase_steps`), per-turn/pregame management (`turn_management`), state-based actions (`game_ending`); a permanent's entry state (`permanent_state`, `entry_choices`) and its recompute (`board_statics`, `dynamic_creatures`, `lords`, `protection`); effects (`effects`, `draws_and_discards`); the control seam (`control_seam`), the zone funnels (`zone_funnels`), deaths (`deaths`), the stack push and its target announcements (`target_announcements`), and the general helpers (`helpers`). Consumes compiled programs; should never parse oracle text itself. |
 | **The turn's phase plan** (`phase_steps`) | `Game.turn_phases_remaining` is the phases this turn still has to take, in order — CR 500.1's five at the start of every turn (`begin_turn_bookkeeping`), CR 500.8's extras *inserted* into it (`add_extra_phase`), each entry spent as its phase is entered (`_set_phase_and_step`, the line every entry point already passes through). **No driver names its own successor**: `next_unskipped_phase_after` peeks and `enter_next_turn_phase` / `enter_turn_phase` enter, and the headless flow, the combat phase and `web/game_flow._advance_phase` all go through them. A *list* rather than a dict keyed by phase name, because a repeated phase is two entries — an extra combat phase and the turn's own one have the same name, and a name-keyed record cannot tell them apart. Adding a phase means adding an entry point in `enter_turn_phase`; `tests/rules/test_turn_phases.py` fails if a phase the plan can hold has none. |
 | `engine/mixins/stack/` | The stack (CR 405), one mixin per stage of an object's life on it: `casting` (CR 601), `activation` (CR 602), `resolution` (CR 603/608), and `choices` — a package: the `pending_choices` queue every part-way-through decision uses (`queue.py`), one mixin per family of prompt beside it, and the table registering them (`table.py`). |
 
@@ -307,8 +307,10 @@ unconditionally.
 
 All writes go through `engine/pt.py`;
 characteristic-defining P/T (layer 7a) is registry-driven via
-`engine.mixins.permanent_state.DYNAMIC_PT` (instruction kind → count
-function) — a new CDA card is one table entry, not a new branch.
+one `dynamic_pt_count` instruction whose payload says what to count
+(`engine/characteristic_defining.py`), tallied by
+`engine/mixins/dynamic_creatures.py` — a new CDA card is a payload, not a
+new branch.
 
 ## Replacement effects
 

@@ -34,7 +34,7 @@ ENGINE = Path(__file__).resolve().parents[2] / "engine"
 #: the pregame draws — each named with its reason in this module's docstring, so
 #: an entry can only be added by someone who wrote one down.
 ALLOWED = {
-    "mixins/effects.py:_draw_with_replacements",
+    "mixins/draws_and_discards.py:_draw_with_replacements",
     "mixins/turn_management.py:deal_opening_hands",
     "mixins/turn_management.py:take_mulligan",
     "mixins/turn_management.py:pregame_mulligan_draw",

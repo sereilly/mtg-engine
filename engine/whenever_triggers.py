@@ -210,7 +210,7 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # battlefield watching its controller's discards. One kind, told apart by
     # the marker, which is this table's standing rule — the event is the same
     # discard and the same seam announces it
-    # (`mixins/effects._announce_discard_triggers`).
+    # (`mixins/draws_and_discards._announce_discard_triggers`).
     #
     # **Not** the row above, whose narrowing is only *who discarded*: this one
     # additionally asks what **caused** it (CR 109.5, read off `resolving_seats`
@@ -794,8 +794,9 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # itself — one kind, with `targeted_attached` saying which permanent's
     # ability is watching, exactly as `damaged_attached` does for the damage
     # event and `tapped_attached` for the tap. The fire site is the same one
-    # (`mixins/helpers._announce_targeting`); what tells the two dispatch scopes
-    # apart is this group, read by `events._self_becomes_target_filter`.
+    # (`mixins/target_announcements._announce_targeting`); what tells the two
+    # dispatch scopes apart is this group, read by
+    # `events._self_becomes_target_filter`.
     #
     # Above the self spelling, in the order this table's own note asks for.
     ("self_becomes_target",

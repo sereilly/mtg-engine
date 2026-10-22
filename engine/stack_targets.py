@@ -10,8 +10,8 @@ different half of it:
 * ``legality_resolution.illegal_targets_refusal`` has to know an object's targets to say
   they are all illegal, and declined every object that may target a player
   (it asks this module now: :func:`announcement_targets`);
-* ``mixins/helpers._announce_targeting`` reads the stamped ids and believes a
-  seat only when the derived spec is a player kind.
+* ``mixins/target_announcements._announce_targeting`` reads the stamped ids
+  and believes a seat only when the derived spec is a player kind.
 
 A :class:`~engine.game_types.StackItem` records an announcement across several
 channels — two scalar fields that double as a *battlefield* beside a permanent

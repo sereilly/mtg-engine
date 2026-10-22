@@ -31,8 +31,18 @@ from .mixins import (
     SacrificeChoicesMixin,
     OracleInstructionsMixin,
     PermanentStateMixin,
+    EntryChoicesMixin,
+    BoardStaticsMixin,
+    DynamicCreaturesMixin,
+    LordBuffsMixin,
+    ProtectionMixin,
     EffectsMixin,
+    DrawsAndDiscardsMixin,
     GameHelpersMixin,
+    ControlSeamMixin,
+    ZoneFunnelsMixin,
+    DeathsMixin,
+    TargetAnnouncementsMixin,
 )
 from .ante import AnteMixin
 from .commander import CommanderMixin
@@ -114,8 +124,22 @@ class Game(
     SacrificeChoicesMixin,
     OracleInstructionsMixin,
     PermanentStateMixin,
+    # Split out of PermanentStateMixin and composed immediately after it
+    # (engine/mixins/permanent_state.py's docstring).
+    EntryChoicesMixin,
+    BoardStaticsMixin,
+    DynamicCreaturesMixin,
+    LordBuffsMixin,
+    ProtectionMixin,
     EffectsMixin,
+    DrawsAndDiscardsMixin,  # split out of EffectsMixin
     GameHelpersMixin,
+    # Split out of GameHelpersMixin and composed immediately after it
+    # (engine/mixins/helpers.py's docstring).
+    ControlSeamMixin,
+    ZoneFunnelsMixin,
+    DeathsMixin,
+    TargetAnnouncementsMixin,
     LegalityMixin,
     CastTargetSpecMixin,
     RoleTargetsMixin,
