@@ -315,7 +315,7 @@ def _lower_look_at_library_top(
         # in any order." (Soothsaying.) The announced X (CR 601.2b via
         # CR 602.2b), which is not a number until the ability is on the stack —
         # so it travels as the string every amount in this engine travels as
-        # and ``handlers/_common.resolve_amount`` turns it into one at
+        # and ``handlers/_amounts.resolve_amount`` turns it into one at
         # resolution, which the handler already asks it to do.
         #
         # This refused outright before, and the refusal was invisible: the

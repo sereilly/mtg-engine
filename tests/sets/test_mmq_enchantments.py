@@ -1700,7 +1700,7 @@ def test_war_cadence_taxes_the_attacking_seat_with_nothing(set_pool):
 
 # --- W2G5: a chosen creature type, on the battlefield and off it ---
 from engine import Game, PlayerState
-from engine.handlers._common import _card_matches_filter as _w2g5e_card_matches
+from engine.handlers._filters import _card_matches_filter as _w2g5e_card_matches
 from engine.layer_bridge import computed_types as _w2g5e_computed_types
 from engine.models import Permanent
 from engine.object_creature_types import card_creature_types as _w2g5e_card_types

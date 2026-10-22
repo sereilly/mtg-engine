@@ -1488,7 +1488,7 @@ def test_w3g2_a_discard_a_mill_and_a_resolved_spell_are_all_exiled(set_pool):
     A rule written "from anywhere" fails by working on the path its author
     tested. These are the three that reach a different module each: the
     discard seam in ``mixins/effects.py``, the mill handler in
-    ``handlers/zones.py``, and the stack's leave-the-stack transition in
+    ``handlers/cards.py``, and the stack's leave-the-stack transition in
     ``mixins/stack/resolution.py``.
     """
     lea = _w3g2c_lea()
@@ -1605,7 +1605,7 @@ from engine import Game as _dawn_Game, PlayerState as _dawn_PlayerState  # noqa:
 from engine.card_loader import (load_cards as _dawn_load,  # noqa: E402
                                 manifest_set_path as _dawn_path)
 from engine.models import Permanent as _dawn_Permanent  # noqa: E402
-from engine.handlers._common import _card_matches_filter as _dawn_matches  # noqa: E402
+from engine.handlers._filters import _card_matches_filter as _dawn_matches  # noqa: E402
 from engine.search_filters import search_matches as _dawn_search  # noqa: E402
 
 

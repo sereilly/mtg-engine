@@ -512,7 +512,7 @@ def board_count_spec_for(phrase: str) -> dict | None:
 
     **Only a count of the battlefield, scoped to "you".** The caller is a
     static ability: nothing resolved, so there is no scratchpad, no announced X,
-    no target and no firing event, and ``handlers/_common.evaluate_count`` is
+    no target and no firing event, and ``handlers/_amounts.evaluate_count`` is
     handed nothing but the board and the permanent's controller. A definition
     that needs any of those — a record, a cost channel, "that player" — is one
     this spec would answer wrongly rather than refuse, so it is refused here.

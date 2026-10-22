@@ -6,20 +6,14 @@ from ..combat_assignment import MAY_ASSIGN_AS_UNBLOCKED
 from ..destruction_events import mark_delayed_destruction
 from ..models import Permanent
 from ..pt import add_pt_modifier, set_base_pt
-from ._common import (divided_target_permanent, recorded_permanent_ids, 
-    apply_temp_pt_boost,
-    bound_permanent,
-    block_pair_permanents,
-    attached_host,
-    defending_player_seat,
-    frozen_that_player_seat,
-    permanent_matches_filter,
-    resolve_amount,
-    resolve_target_permanent,
-    resolve_target_permanents,
-    resolve_target_slots,
-    count_from_payload,
-)
+from ._amounts import resolve_amount, count_from_payload
+from ._common import apply_temp_pt_boost
+from ._filters import permanent_matches_filter
+from ._targets import (divided_target_permanent, recorded_permanent_ids,
+                       bound_permanent, block_pair_permanents, attached_host,
+                       defending_player_seat, frozen_that_player_seat,
+                       resolve_target_permanent, resolve_target_permanents,
+                       resolve_target_slots)
 from .registry import effect_handler
 from ..keywords import grant_keyword, grant_protection_flag, remove_keyword
 from ..oracle_types import (ATTACHED_PERMANENT_CONTROLLER, BASE_PT_SET_PERMANENTS,
@@ -822,8 +816,9 @@ def add_loyalty_counters_to_chosen(game: Game, instruction: OracleInstruction, c
     name an empty set and the ability still resolves.
     """
     # Imported here rather than at module scope: engine/subject_filters.py
-    # imports handlers._common, so a module-level import would close the cycle
-    # through engine/handlers/__init__.py. Same reason engine/oracle.py imports
+    # imports the handler floors (handlers._filters and the rest), so a
+    # module-level import would close the cycle through
+    # engine/handlers/__init__.py. Same reason engine/oracle.py imports
     # it inside _resolve_subject_groups.
     from ..subject_filters import subject_matches
 
@@ -1111,7 +1106,7 @@ def add_counter_to_target(game: Game, instruction: OracleInstruction, context: O
     # **The channel is a sequence, and that is now the channel's own answer.**
     # This handler used to normalise here and say so, calling itself "the local
     # half of a wider question"; the question is settled in
-    # ``_common.recorded_permanent_ids``, which every reader of
+    # ``_targets.recorded_permanent_ids``, which every reader of
     # ``permanents_from`` in the engine now goes through — a producer writing a
     # bare id (a choose-one prompt: Thelon's Chant, Tourach's Chant) and one
     # writing a list (a reanimation, which could return several) reach every
@@ -1150,7 +1145,7 @@ def add_counter_to_target(game: Game, instruction: OracleInstruction, context: O
         # object is read through the one function that knows how each of the two
         # fire sites binds it. The named-counter handler beside this one reads
         # the same key for the same printed pronoun.
-        from ._common import block_pair_permanents
+        from ._targets import block_pair_permanents
 
         wanted = instruction.payload.get("filter") or {}
         creature = next(
@@ -1914,7 +1909,7 @@ def move_chosen_keyword_between_targets(game: Game, instruction: OracleInstructi
     governs both halves of the one sentence.
     """
     from ..subject_filters import subject_matches
-    from ._common import CHOSEN_ABILITY
+    from ._chosen import CHOSEN_ABILITY
 
     card = context.card
     source = context.source_permanent
@@ -2045,7 +2040,7 @@ def grant_target_ability_text(game: Game, instruction: OracleInstruction, contex
         # sites bind it — on the *blocks* half the stack item's target is the
         # blocker itself, so the ordinary target resolution below would grant
         # the abilities to the source.
-        from ._common import block_pair_permanents
+        from ._targets import block_pair_permanents
 
         granted = 0
         for permanent in block_pair_permanents(game, context):
@@ -2721,7 +2716,7 @@ def grant_enchanted_keyword_until_eot(game: Game, instruction: OracleInstruction
     the Aura still knows whose creature it was (CR 603.10) — the same fallback
     Cocoon needs one family over.
     """
-    from ._common import attached_host
+    from ._targets import attached_host
 
     card = context.card
     enchanted = attached_host(game, context.source_permanent)

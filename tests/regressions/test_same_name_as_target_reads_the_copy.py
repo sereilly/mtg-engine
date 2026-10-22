@@ -1,7 +1,7 @@
 """Regression: "a card with the same name as target creature" reads the
 target's **effective** name.
 
-``handlers/zones._search_restrictions`` turned the chosen target into the
+``handlers/search._search_restrictions`` turned the chosen target into the
 search's ``named`` restriction off ``chosen.card.name`` — the printed face. CR
 707.2 lists the name first among the copiable values, so a Clone copying Serra
 Angel *is named* Serra Angel, and Mask of the Mimic aimed at it searched the

@@ -123,7 +123,7 @@ def test_flowstone_flood_declined_charges_neither_half(set_pool):
 # unless they pay {1}." The sentence iterates **creatures** and charges their
 # **controllers**, so a player with three creatures answers three times — and
 # the seat asked is the iteration's own object's, which is the innermost
-# binding (``handlers/_common.bound_permanent``) rather than anything the firing
+# binding (``handlers/_targets.bound_permanent``) rather than anything the firing
 # event or the spell's target froze.
 
 from engine import Game, PlayerState, load_cards

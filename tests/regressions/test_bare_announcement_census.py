@@ -17,7 +17,7 @@ Mask):
   and CR 608.2b had nothing to re-check. 87 more activations carried a seat
   their picker does not offer;
 * **497** resolved through a handler's fall-through scan
-  (``handlers/_common.pick_target_permanent``'s last step);
+  (``handlers/_targets.pick_target_permanent``'s last step);
 * **528** changed a permanent or a player their own picker does not offer and
   that the same announcement *naming* the picker's first entry leaves alone —
   341 activations and 187 casts. Giant Growth, Disenchant and Shatter landed
@@ -60,7 +60,7 @@ import zlib
 
 import pytest
 
-import engine.handlers._common as common
+import engine.handlers._targets as handler_targets
 import engine.mixins.stack.activation as activation_path
 import engine.mixins.stack.casting as casting_path
 from engine import Game, PlayerState
@@ -468,12 +468,12 @@ def _the_tree_as_it_was(monkeypatch) -> None:
     monkeypatch.setattr(
         casting_path, "default_cast_target", lambda *a, **k: (None, False)
     )
-    real = common.pick_target_permanent
+    real = handler_targets.pick_target_permanent
 
     def scanning(*args, announced=False, **kwargs):
         return real(*args, **kwargs)
 
-    monkeypatch.setattr(common, "pick_target_permanent", scanning)
+    monkeypatch.setattr(handler_targets, "pick_target_permanent", scanning)
 
 
 def test_the_sweep_finds_the_defect_on_the_tree_as_it_was(

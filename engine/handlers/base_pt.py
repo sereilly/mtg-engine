@@ -30,7 +30,8 @@ from typing import TYPE_CHECKING
 
 from ..oracle_types import OracleInstruction
 from ..pt import set_base_pt
-from ._common import count_from_payload, resolve_target_permanent
+from ._amounts import count_from_payload
+from ._targets import resolve_target_permanent
 from .registry import effect_handler
 
 if TYPE_CHECKING:

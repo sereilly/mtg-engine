@@ -180,7 +180,7 @@ def _read_yields(
     as, and the planner's hook (:func:`tap_alone_symbols`) must not mistake
     one for an ability that makes no mana.
     """
-    from .handlers._common import count_from_payload
+    from .handlers._amounts import count_from_payload
     from .handlers.control_flow import evaluate_condition
     from .mana_could_produce import ability_colors_on_offer
     from .named_counters import counters_on

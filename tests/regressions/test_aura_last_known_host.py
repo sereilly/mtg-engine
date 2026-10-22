@@ -12,7 +12,7 @@ trigger resolves still untaps that land.
 The engine clears the Aura's live ``attached_to`` record as part of its
 teardown, so seven handlers that read the live record did nothing in that
 window. W1G1 fixed ``destroy_attached_permanent`` by routing it through
-``handlers/_common.attached_host``, which keeps the last-known host, and listed
+``handlers/_targets.attached_host``, which keeps the last-known host, and listed
 the rest unmeasured. Measured at W2G2 (``scratch/w2g2/aura_census.py``): 41
 (card, kind) pairs over both manifest roles; 30 of them were wrong on the
 pre-fix tree, the 10 ``destroy_attached_permanent`` rows were already right, and
@@ -34,7 +34,7 @@ import pytest
 from engine import Game, PlayerState
 from engine.auras import attach_aura, detach_aura
 from engine.card_loader import load_cards, manifest_set_paths
-from engine.handlers._common import attached_host
+from engine.handlers._targets import attached_host
 from engine.layer_bridge import computed_colors
 from engine.models import Permanent
 from tests.helpers import resolve_stack

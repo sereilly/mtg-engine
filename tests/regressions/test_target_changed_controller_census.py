@@ -8,7 +8,7 @@ illegal by itself.
 
 This engine records an announced permanent twice — its id, and the seat whose
 battlefield it stood on (``target_player_index``) — and at resolution looked
-the id up **on that seat** (``handlers/_common.pick_target_permanent``'s step
+the id up **on that seat** (``handlers/_targets.pick_target_permanent``'s step
 0, ``bare_announcements.announced_slots``). So a target that had changed hands
 was "not there": Boomerang cast at the opponent's Grizzly Bears, with control
 of the Bears taken in response, logged "nothing was returned"; Unsummon "No

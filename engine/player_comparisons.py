@@ -18,7 +18,7 @@ writes the description refuses any comparison this cannot take
 the gate that admits the card and by the enforcement that answers it, which is
 the arrangement ``activation_restrictions.py`` states for a timing clause.
 
-The count itself is **not** re-implemented here. ``handlers/_common``'s
+The count itself is **not** re-implemented here. ``handlers/_amounts``'
 ``evaluate_count`` is the engine's one evaluator for "how many of these does
 this player have", taken over a spec the ordinary count lowering wrote — so
 "more creatures" counts what "the number of creatures you control" counts, and
@@ -70,7 +70,7 @@ def player_comparison_holds(
     graveyard than you do" compares two graveyards read the same way, where two
     specs could have compared a graveyard against a battlefield.
     """
-    from .handlers._common import evaluate_count
+    from .handlers._amounts import evaluate_count
 
     count = described.get("count") or {}
     mine = evaluate_count(game, game.players[seat], dict(count))

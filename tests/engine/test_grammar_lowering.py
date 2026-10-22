@@ -988,7 +988,7 @@ def test_the_printed_colour_and_supertype_reach_the_graveyard_return():
     The other half of the guard above, and the reason it is a pair: a narrowing
     a reader *can* test must be carried, not refused, or the card is
     unsupported for no reason. Both keys are ones
-    ``handlers/_common.graveyard_card_matches`` already reads, so the picker,
+    ``handlers/_filters.graveyard_card_matches`` already reads, so the picker,
     the announcement gate and the handler ask one question — and Revive's line
     has no *other* narrowing at all, which makes the colour the whole card.
     """

@@ -2535,7 +2535,7 @@ class GameHelpersMixin:
         if entry.get("tapped"):
             arrival.tapped = True
         if entry.get("counters"):
-            from ..handlers.zones import restore_noted_counters
+            from ..handlers.linked_exile import restore_noted_counters
 
             restore_noted_counters(self, arrival, entry["counters"])
         return arrival
@@ -3136,7 +3136,7 @@ class GameHelpersMixin:
 
         So the index the caller chose is stamped into an id *here*, at the
         boundary, while it is still known to mean what it said. Resolution
-        reads the id (``engine/handlers/_common.py``) and only falls back to
+        reads the id (``engine/handlers/_targets.py``) and only falls back to
         the index when the id no longer resolves, which is exactly the
         situation the old code was already in.
 
@@ -3206,7 +3206,7 @@ class GameHelpersMixin:
             # announcement carrying ids and no seat is complete — but every
             # reader downstream defaults the missing seat to the *opponent*
             # (`_ability_execution_context`, `_resolve_card`), and
-            # `handlers/_common.pick_target_permanent` scopes the id lookup to
+            # `handlers/_targets.pick_target_permanent` scopes the id lookup to
             # that player on purpose. So an id naming a permanent the activator
             # controls was rejected by the very resolver that was handed it,
             # and the fallback scan below it picked whichever permanent it met
@@ -3241,7 +3241,7 @@ class GameHelpersMixin:
         Downstream, though, "no seat named" is not "no seat". Every reader of
         ``StackItem.target_player_index`` supplies the *opposing* seat as its
         default (:meth:`_ability_execution_context`, ``_resolve_card``), and
-        ``handlers/_common.pick_target_permanent`` scopes its id lookup to
+        ``handlers/_targets.pick_target_permanent`` scopes its id lookup to
         exactly that player — on purpose, so that widening a target's
         battlefield is never something a resolver does by itself. Each half is
         defensible; together they discard the announcement. Every activated

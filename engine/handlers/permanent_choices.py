@@ -38,7 +38,7 @@ from __future__ import annotations
 import dataclasses
 from typing import TYPE_CHECKING
 
-from ._common import count_from_payload
+from ._amounts import count_from_payload
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -181,8 +181,9 @@ def permanent_choice_candidates(game, payload: dict, context, among=None) -> lis
             # the same predicate, asked of *that* card under the seat that will
             # control it — which is not the effect's controller when "each
             # player returns" it. No lowering writes this key; the handler that
-            # arms the prompt does (``handlers/zones.return_all_cards_from_
-            # graveyard``), and the liveness re-check reads it back.
+            # arms the prompt does
+            # (``handlers/reanimation.return_all_cards_from_graveyard``), and
+            # the liveness re-check reads it back.
             from ..auras import enchant_card_refusal
 
             controller = payload.get("host_controller", seat)

@@ -149,7 +149,7 @@ def _toll_reduction_payload(node: ast.SacrificeUnlessPay) -> dict[str, object]:
     off the printed price when the trigger resolves (CR 608.2h).
 
     ``generic`` is one repetition and ``count`` is the ordinary count spec
-    ``handlers/_common.evaluate_count`` answers for every other sentence that
+    ``handlers/_amounts.evaluate_count`` answers for every other sentence that
     spends one — so "basic land type among lands you control" means here what
     it means on Wayfaring Giant, layers included.
 

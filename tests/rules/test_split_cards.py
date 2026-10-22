@@ -418,15 +418,25 @@ def test_every_chosen_name_comparison_over_a_zone_asks_for_either_name():
     """The census behind the test above: Petra Sphinx is one of six places a
     chosen card name is compared against cards in a hand, a library or a
     graveyard, and the other five are reached by other cards."""
+    import importlib
     import inspect
+    import pkgutil
 
-    from engine.handlers import zones
+    import engine.handlers as handlers
     from engine.mixins.stack import choices
 
     # The census half: every chosen-name comparison over a zone asks
     # ``has_name``. A raw ``card.name == named`` matches neither half's name
     # against "Burn // Grow" and so misses a card the rule says is named that.
-    for module in (zones, choices):
+    # Every handler module rather than ``zones`` alone: the comparisons it held
+    # went to the modules it was split into at the 2,000-line cap, and a census
+    # over a list of modules is blind to whatever the next split moves out.
+    modules = [
+        importlib.import_module(f"{handlers.__name__}.{info.name}")
+        for info in pkgutil.iter_modules(handlers.__path__)
+    ]
+    assert len(modules) > 30, [module.__name__ for module in modules]
+    for module in (*modules, choices):
         source = inspect.getsource(module)
         assert ".name == named" not in source, module.__name__
         assert ".name != named" not in source, module.__name__

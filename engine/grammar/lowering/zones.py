@@ -222,7 +222,7 @@ def _lower_put_on_library_top(
 
 
 #: What a bottomed graveyard card may be narrowed by: exactly the printed
-#: characteristics ``handlers/_common.graveyard_card_matches`` reads off a card
+#: characteristics ``handlers/_filters.graveyard_card_matches`` reads off a card
 #: in a graveyard (CR 613.1 leaves it nothing else), which is the one predicate
 #: the picker, the activation gate and the handler all ask.
 _BOTTOMING_HONOURED_FIELDS = frozenset({

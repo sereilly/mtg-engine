@@ -51,7 +51,8 @@ def attach_source_to_target(
         return _attach_source_to_recorded(game, instruction, context, str(host_key))
 
     # Function-level, as every handler that asks it does: subject_filters
-    # imports handlers._common, so the package cannot import it at the top.
+    # imports the handler floors (handlers._filters and the rest), so the
+    # package cannot import it at the top.
     from ..subject_filters import subject_matches
 
     equipment = context.source_permanent
@@ -128,7 +129,7 @@ def _attach_source_to_recorded(
     nothing — the graveyard held no creature card — attaches nothing, which is
     the effect doing as much as it can rather than a failure.
     """
-    from ._common import one_recorded_permanent_id
+    from ._targets import one_recorded_permanent_id
 
     card_name = getattr(context.card, "name", "")
     attachment = context.source_permanent

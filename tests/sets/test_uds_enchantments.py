@@ -668,7 +668,7 @@ def test_w2g5_archery_training_takes_the_ability_with_it(set_pool):
     leaves, the creature has no ability left to activate — and the count an
     ability already activated would read is of an object that is gone, which
     is zero arrows rather than some other Archery Training's."""
-    from engine.handlers._common import evaluate_count
+    from engine.handlers._amounts import evaluate_count
 
     game, archer, (aura,), giant, _idle = _w2g5_archery_board(set_pool)
     _w2g5_add_counters(aura, "arrow", 3)

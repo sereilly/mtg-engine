@@ -695,7 +695,7 @@ def test_primitive_justice_is_one_announcement_sized_by_the_payment(set_pool):
     """One ``destroy_target_permanent`` over a list, not three destroys.
 
     Three targeted destroys lowered as three steps all resolve through
-    ``handlers/_common._one_choice``, which reads the *first* entry of the
+    ``handlers/_targets._one_choice``, which reads the *first* entry of the
     target list -- the card would compile supported and destroy one artifact
     three times, which is what ``_refuse_unfused_distinctness`` refused for. So
     the clauses fuse (``lowering/fusions._fused_cost_repeated_destroys``),

@@ -53,7 +53,7 @@ from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units
 from engine.game_types import OracleExecutionContext, StackItem
-from engine.handlers import _common
+from engine.handlers import _targets
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.stack_targets import announcement_targets, chosen_targets
@@ -182,7 +182,7 @@ def test_the_resolution_reads_each_role_s_own_seat():
     payload = {"targets": _TWO_SEATS}
 
     resolved = [
-        _common.resolve_role_player(game, context, payload, role["role"])
+        _targets.resolve_role_player(game, context, payload, role["role"])
         for role in _TWO_SEATS["roles"]
     ]
 
@@ -200,7 +200,7 @@ def test_the_resolution_still_refuses_two_seat_roles_announced_on_one_scalar():
     payload = {"targets": _TWO_SEATS}
 
     assert [
-        _common.resolve_role_player(game, context, payload, role["role"])
+        _targets.resolve_role_player(game, context, payload, role["role"])
         for role in _TWO_SEATS["roles"]
     ] == [None, None]
 

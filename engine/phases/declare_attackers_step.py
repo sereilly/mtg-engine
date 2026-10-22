@@ -24,7 +24,7 @@ from ..combat_restrictions import (declaration_company_required,
 from ..mana_payment import mana_cost_label, plan_payment
 from ..subject_filters import subject_matches
 from ..events import emit
-from ..handlers._common import evaluate_count
+from ..handlers._amounts import evaluate_count
 from ..models import Permanent, PlayerState
 from ..oracle import compile_card_oracle
 from ..oracle_types import X_FROM_COUNT

@@ -3,9 +3,8 @@ from __future__ import annotations
 import dataclasses
 from typing import TYPE_CHECKING
 
-from ._common import (bound_permanent, count_from_payload,
-                      per_recipient_amount, resolve_amount,
-                      stack_target_controller_seat)
+from ._amounts import count_from_payload, per_recipient_amount, resolve_amount
+from ._targets import bound_permanent, stack_target_controller_seat
 from ..exiled_records import source_object
 from ..life_prohibitions import life_gain_banned
 from ..named_counters import counters_on
@@ -810,7 +809,7 @@ def end_the_turn(game: Game, instruction: OracleInstruction, context: OracleExec
 #: ``grammar/lowering/_events.py`` rather than imported across the seam — a
 #: handler importing the grammar closes an import cycle — and held to it by
 #: ``lowering/_records._PRODUCES``, which is the same arrangement
-#: ``zones.REANIMATED_PERMANENTS`` has.
+#: ``reanimation.REANIMATED_PERMANENTS`` has.
 EXTRA_TURN_GRANTED = "extra_turn_granted"
 
 

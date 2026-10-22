@@ -1493,7 +1493,7 @@ BECAME_AURA_ENCHANT = "became_aura_enchant"
 #: the ability was activated, and CR 400.7 makes what arrived a new object, so
 #: nothing on the board or on the stack records where it came from.
 #:
-#: Stamped by ``handlers/zones.reanimate_creature``, read by
+#: Stamped by ``handlers/reanimation.reanimate_creature``, read by
 #: :func:`enchant_card_refusal`. Beside the record above rather than in the
 #: handler that writes it, for ``tokens.CREATED_WITH_PERMANENT_ID``'s reason:
 #: the writer and the reader sit at opposite ends of the pipeline.
@@ -1918,7 +1918,7 @@ def detach_aura(aura, target) -> None:
         # that resolves after the Aura has left — or a later step of the same
         # resolution that removed it, Cocoon's "sacrifice it, put a +1/+1
         # counter on **enchanted creature**" — still knows which creature that
-        # was. `handlers/_common.attached_host` reads this back, and only
+        # was. `handlers/_targets.attached_host` reads this back, and only
         # while the host itself is still on the battlefield.
         aura.metadata["last_attached_to"] = target
 

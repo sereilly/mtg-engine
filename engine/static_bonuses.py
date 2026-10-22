@@ -112,7 +112,7 @@ _HAS_PLUS1_CONDITION = re.compile(r"^it has a \+1/\+1 counter on it$")
 # "you control a creature with power 4 or greater" (Drowsing Tyrannodon). The
 # threshold is data, and the noun phrase is lowered to the *same* filter payload
 # the grammar produces for Turret Ogre's intervening-if — so the phrase has one
-# meaning in the engine (``handlers/_common.permanent_matches_filter``'s ``power``
+# meaning in the engine (``handlers/_filters.permanent_matches_filter``'s ``power``
 # comparison) rather than a second regex that happens to agree today.
 _CONTROLS_POWER_CONDITION = re.compile(
     r"^you control a creature with power (?P<power>\d+) or greater$"
@@ -484,7 +484,8 @@ def conditional_static_holds(
     # `handlers/control_flow.evaluate_condition` gives an intervening-if — so
     # the phrase means one thing in the engine.
     if kind == "is_state":
-        from .handlers._common import attached_host, permanent_state_holds
+        from .handlers._filters import permanent_state_holds
+        from .handlers._targets import attached_host
 
         subject = source
         if condition.get("subject") == "attached":
@@ -536,7 +537,7 @@ def conditional_static_holds(
         # source itself otherwise. Colourless shares nothing (CR 105.2), and a
         # board with no coloured permanent has no most common colour.
         from .color_census import shares_most_common_color
-        from .handlers._common import attached_host
+        from .handlers._targets import attached_host
 
         subject = source
         if condition.get("subject") == "attached":
@@ -581,7 +582,7 @@ def conditional_static_holds(
         # a land Conversion has turned into a Plains stops being a Mountain and
         # the anthem switches off with nothing to undo, and a nonbasic land
         # Blood Moon has made a Mountain is still not a *basic* one.
-        from .handlers._common import attached_host
+        from .handlers._targets import attached_host
         from .subject_filters import subject_matches
 
         # The live record, not last-known information: this answers a
@@ -635,7 +636,7 @@ def conditional_static_holds(
         # the other printed sentence about a graveyard ("**an opponent has**
         # eight or more cards in **their** graveyard"), whose existential seat
         # this payload cannot say.
-        from .handlers._common import evaluate_count
+        from .handlers._amounts import evaluate_count
         from .handlers.control_flow import _compare_count
 
         return _compare_count(
@@ -679,7 +680,7 @@ def conditional_static_holds(
         # the one.
         pivot = source
         if condition.get("subject") == "attached":
-            from .handlers._common import attached_host
+            from .handlers._targets import attached_host
 
             pivot = attached_host(game, source, last_known=False)
             if pivot is None:

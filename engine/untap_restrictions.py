@@ -138,7 +138,7 @@ def _printed_type_options(phrase: str) -> tuple[str, ...] | None:
     unreadable item leaves the line unclaimed and its card unsupported, rather
     than admitting a sentence whose answer nothing could test.
     """
-    from .handlers._common import chosen_card_type_filter
+    from .handlers._chosen import chosen_card_type_filter
 
     words: list[str] = []
     for part in phrase.replace(" or ", ", ").split(","):

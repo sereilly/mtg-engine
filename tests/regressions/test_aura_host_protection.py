@@ -207,18 +207,18 @@ _CALLERS = {
     ("engine/handlers/permanent_choices.py", "permanent_choice_candidates"),
     # Iridescent Drake (the filter is nested in the reanimation, and a nested
     # call is found under both names)
-    ("engine/handlers/zones.py", "card_filter"),
-    ("engine/handlers/zones.py", "reanimate_creature"),
+    ("engine/handlers/reanimation.py", "card_filter"),
+    ("engine/handlers/reanimation.py", "reanimate_creature"),
     # Hakim, Loreweaver
-    ("engine/handlers/zones.py", "reanimate_aura_onto_source"),
+    ("engine/handlers/reanimation.py", "reanimate_aura_onto_source"),
     # Takklemaggot's return attached
-    ("engine/handlers/zones.py", "return_source_card_to_battlefield"),
+    ("engine/handlers/reanimation.py", "return_source_card_to_battlefield"),
     # Academy Researchers
-    ("engine/handlers/zones.py", "put_from_hand_candidates"),
+    ("engine/handlers/hand.py", "put_from_hand_candidates"),
     # Replenish, Cleansing Meditation: the hosts offered, and asked once more
     # as each Aura enters
-    ("engine/handlers/zones.py", "_legal_returning_aura_hosts"),
-    ("engine/handlers/zones.py", "_return_planned_cards"),
+    ("engine/handlers/reanimation.py", "_legal_returning_aura_hosts"),
+    ("engine/handlers/reanimation.py", "_return_planned_cards"),
 }
 
 

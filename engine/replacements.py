@@ -1365,12 +1365,12 @@ def _source_is_a_spell(game, source) -> bool:
 def _unblocked_attacker(source) -> bool:
     """Whether *source* is an unblocked attacking creature (CR 509.1h).
 
-    Delegated to ``handlers/_common.unblocked_attacker``, which is the same word
+    Delegated to ``handlers/_filters.unblocked_attacker``, which is the same word
     the ``unblocked_only`` filter key answers to — Kjeldoran Royal Guard prints
     Veteran Bodyguard's source class with a duration on it, so the static read
     here and the recorded redirect's filter must not be two readings.
     """
-    from .handlers._common import unblocked_attacker
+    from .handlers._filters import unblocked_attacker
 
     return unblocked_attacker(source)
 
@@ -2740,7 +2740,7 @@ def _applies_unpayable_entry_cost(game, payload: dict) -> bool:
     event that *would* happen, and the permanent is on no battlefield yet to
     have a controller derived for it.
     """
-    from .handlers._common import _card_matches_filter
+    from .handlers._filters import _card_matches_filter
 
     required = _entry_exile_requirement(game, payload)
     if required is None:
@@ -2860,7 +2860,7 @@ def _discard_or_graveyard_instead_of_entering(
     lists the hand cards the phrase admits, plus declining. Two prompts would be
     two chances for a seat to answer half.
     """
-    from .handlers._common import _card_matches_filter
+    from .handlers._filters import _card_matches_filter
 
     permanent = payload["permanent"]
     controller_index = int(payload["controller_index"])
@@ -3174,7 +3174,7 @@ def _remove_counters_instead_of_untapping(
 
 
 def _applies_return_instead_of_untapping(game, payload: dict) -> bool:
-    from .handlers.zones import RETURN_AT_NEXT_UNTAP_SEAT
+    from .handlers.returns import RETURN_AT_NEXT_UNTAP_SEAT
 
     permanent = payload.get("permanent")
     if permanent is None:
@@ -3209,7 +3209,7 @@ def _return_to_hand_instead_of_untapping(
     nothing carries it forward.
     """
     from .handlers._common import return_permanent_to_owners_hand
-    from .handlers.zones import RETURN_AT_NEXT_UNTAP_SEAT
+    from .handlers.returns import RETURN_AT_NEXT_UNTAP_SEAT
 
     permanent = payload["permanent"]
     permanent.metadata.pop(RETURN_AT_NEXT_UNTAP_SEAT, None)
@@ -3414,7 +3414,7 @@ def discarded_onto_battlefield(game, player, card, cause_seat) -> bool:
     The whole effect in one place, because a card is discarded through two
     seams and both must agree: ``Game._discard_card`` reaches this through the
     ``discard`` event below, and the chosen-discard seam
-    (``handlers/zones._resolve_one_discard``) calls it directly, since that one
+    (``handlers/discards._resolve_one_discard``) calls it directly, since that one
     offers Library of Leng's destination itself and never raises the event.
 
     The card has **still been discarded** (the card's ruling of 2022-12-08):

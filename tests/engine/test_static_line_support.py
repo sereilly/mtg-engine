@@ -84,7 +84,7 @@ IMPLEMENTED_ELSEWHERE: dict[str, str] = {
         "enter_effects.choosable_bodies, applied by "
         "permanent_state._apply_chosen_body (Primal Clay)",
     "protection from ":
-        "handlers/_common.py protection checks",
+        "handlers/_filters.py protection checks",
 }
 
 

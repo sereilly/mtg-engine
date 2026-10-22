@@ -11,7 +11,7 @@ from ..cast_costs import kicked
 from ..events import emit
 from ..game_types import OracleExecutionContext, OracleStateMachine
 from ..handlers import EFFECT_HANDLERS
-from ..handlers._common import count_from_payload
+from ..handlers._amounts import count_from_payload
 from ..oracle_types import X_FROM_COUNT, substitute_x_bounds
 from ..models import CardDefinition, Permanent, PlayerState
 from ..auras import (AURA_REANIMATION_PHRASES, AURA_REANIMATION_TAPPED,
@@ -250,7 +250,7 @@ class OracleInstructionsMixin:
 
         *item* is the spell's own stack object, and it rides every event whose
         trigger may act on **that spell** as ``cast_item`` — see
-        ``handlers._common.triggering_spell`` for why the card beside it cannot
+        ``handlers._targets.triggering_spell`` for why the card beside it cannot
         say which spell that is.
         """
         # "When **you cast this spell**, counter it unless you sacrifice a land."

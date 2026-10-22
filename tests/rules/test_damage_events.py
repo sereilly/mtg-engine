@@ -631,7 +631,7 @@ def test_a_halved_amount_rounds_the_way_the_card_says():
     round, and the words ride the computed amount rather than the card. Read
     through the one evaluator every computed quantity uses, so the rounding
     cannot be honoured at one return site and dropped at another."""
-    from engine.handlers._common import count_from_payload
+    from engine.handlers._amounts import count_from_payload
     from engine.game_types import OracleExecutionContext
 
     game, p1, p2 = _ledger_board()
@@ -649,7 +649,7 @@ def test_an_undetermined_amount_is_zero():
     """CR 107.2: a number that cannot be determined is 0. "The damage dealt by
     one of those sorcery spells this turn" with no such spell names nothing,
     and the reader answers 0 rather than raising or guessing."""
-    from engine.handlers._common import count_from_payload
+    from engine.handlers._amounts import count_from_payload
     from engine.game_types import OracleExecutionContext
 
     game, p1, p2 = _ledger_board()

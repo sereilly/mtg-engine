@@ -424,7 +424,7 @@ from engine.ai_simulator import SimulationReport as _W3g4Report
 from engine.ai_simulator import _play_activations as _w3g4_play_activations
 from engine.ai_simulator import _play_one_cast as _w3g4_play_one_cast
 from engine.ai_valuation import source_becomes_an_aura as _w3g4_becomes_aura
-from engine.handlers._common import attached_host as _w3g4_attached_host
+from engine.handlers._targets import attached_host as _w3g4_attached_host
 from engine.mixins.stack import aura_enchant_noun as _w3g4_enchant_noun
 from engine.named_counters import add_counters as _w3g4_add_counters
 from engine.targeting import derive_activation_spec as _w3g4_activation_spec

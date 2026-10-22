@@ -105,7 +105,7 @@ _COST_PRODUCES: dict[type, str] = {
 
 
 #: Each payment channel's record, as the ``x_from_count`` key the resolution
-#: evaluator (``handlers._common.count_from_payload``) reads it under and the
+#: evaluator (``handlers._amounts.count_from_payload``) reads it under and the
 #: characteristics that evaluator can actually answer off it. A sacrificed or a
 #: tapped permanent is carried as the ``Permanent``, so its computed P/T is
 #: there (CR 608.2h's last-known information for the sacrifice; a plain read for

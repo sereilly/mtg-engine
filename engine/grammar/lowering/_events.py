@@ -512,7 +512,7 @@ def _back_reference_payload(
 # **Which** half fired decides how the handler finds the creature, and the two
 # fire sites answer differently: the becomes-blocked half makes it the stack
 # item's target, the blocks half puts it in `blocked_permanent_ids` and targets
-# the blocker itself. `handlers/_common.block_pair_permanents` is the one reader
+# the blocker itself. `handlers/_targets.block_pair_permanents` is the one reader
 # of both, so an effect added here does not have to rediscover the difference.
 _BLOCK_PAIR_EVENTS = frozenset({
     "creature_blocks_or_blocked_by",           # Thicket Basilisk, Cockatrice,
@@ -533,7 +533,7 @@ _BLOCK_PAIR_EVENTS = frozenset({
 
 #: For each printed combat role, the events under which that role names the
 #: **partner** — the other half of the pair the firing is about, which
-#: ``handlers/_common.block_pair_permanents`` resolves.
+#: ``handlers/_targets.block_pair_permanents`` resolves.
 #:
 #: The mirror of ``rebinding._ROLE_EVENT_SUBJECTS``, which says when a role names
 #: the event's *own* subject; between them they are the two objects a block event

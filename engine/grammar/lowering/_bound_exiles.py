@@ -69,7 +69,7 @@ def _entering_counter_payload(
 
     The count is a printed number or the cast's X, and ``ast.Var`` is how the
     parse spells the second (CR 107.3). It becomes the *string* ``"x"`` here
-    because that is the one spelling ``handlers/_common.resolve_amount`` reads,
+    because that is the one spelling ``handlers/_amounts.resolve_amount`` reads,
     and a payload carrying an AST node would be a second answer to "what is this
     number" that no handler asks.
 

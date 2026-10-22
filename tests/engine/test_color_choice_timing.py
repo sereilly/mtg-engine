@@ -249,9 +249,9 @@ def test_an_unresolved_colour_of_this_resolution_matches_nothing():
     """Fail closed: a matcher holding no resolution answers False for the key,
     for a permanent and for a card alike — the direction that counts (or
     sweeps) nothing rather than the whole board."""
-    from engine.handlers._common import (_card_matches_filter,
-                                         permanent_matches_filter,
-                                         resolve_color_chosen_in_resolution)
+    from engine.handlers._chosen import resolve_color_chosen_in_resolution
+    from engine.handlers._filters import (_card_matches_filter,
+                                          permanent_matches_filter)
 
     catalog = _w3g2_catalog()
     bears = Permanent(card=catalog["Grizzly Bears"])

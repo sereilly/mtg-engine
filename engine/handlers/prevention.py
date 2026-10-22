@@ -33,11 +33,11 @@ from ..divided_damage import DIVIDED_TARGETS, EVENLY, divide, divided_entry
 from ..next_damage import (DAMAGE_DOUBLED_NEXT, DAMAGE_PREVENTED_NEXT, arm,
                            rider_key)
 from ..oracle_types import single_chosen_id
-from ._common import (default_announced_permanent, divided_target_permanent,
-                      names_a_target_list,
-                      recorded_permanent_ids, attached_host, bound_permanent,
-                      resolve_amount, resolve_target_permanent,
-                      resolve_target_permanents)
+from ._amounts import resolve_amount
+from ._targets import (default_announced_permanent, divided_target_permanent,
+                       names_a_target_list, recorded_permanent_ids,
+                       attached_host, bound_permanent,
+                       resolve_target_permanent, resolve_target_permanents)
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -114,7 +114,7 @@ def apply_prevention_shield(
     *object_only* is a printed target that is an object and never a player
     ("target creature"): with no creature to shield, nobody is shielded.
     *permanent* is the caller's own answer for an announcement that named none
-    (``handlers/_common.default_announced_permanent``), used only when nothing
+    (``handlers/_targets.default_announced_permanent``), used only when nothing
     was announced.
     """
     chosen_id = (

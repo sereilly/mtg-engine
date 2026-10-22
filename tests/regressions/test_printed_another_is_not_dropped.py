@@ -17,8 +17,8 @@ the card compiles supported the whole way through.
 
 The fix is both ends: the lowering carries ``exclude_source_card``, and the
 picker (``legality._enumerate_graveyard_creatures``) and the handler
-(``handlers/zones.return_creature_from_graveyard_to_hand``) resolve it through
-one reader, ``handlers/_common.excluded_graveyard_slot``. Every zone pair that
+(``handlers/returns.return_creature_from_graveyard_to_hand``) resolve it through
+one reader, ``handlers/_filters.excluded_graveyard_slot``. Every zone pair that
 cannot read it refuses the line instead.
 """
 

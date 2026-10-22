@@ -65,7 +65,7 @@ def card_colors(card, *, game=None, owner=None) -> frozenset[str]:
     own that aren't on the battlefield" (Celestial Dawn) is a colour a card in a
     library has that is not printed on it, and ``engine/object_colors.py`` is
     the one reader of that — this function, ``_stack_item_colors`` and
-    ``handlers/_common`` all ask it, so a fourth reader cannot spell it a fourth
+    ``handlers/_filters`` all ask it, so a fourth reader cannot spell it a fourth
     way. A caller with no game or no seat gets the printed answer, which is what
     every caller got before the sentence existed.
 
@@ -148,7 +148,7 @@ def search_matches(card, data: dict, *, game=None, owner=None) -> bool:
     # *supertype* exclusion, beside the type exclusion above rather than under
     # ``restrictions`` because it is the same kind of key those two are: a
     # narrowing the revealed-hand picker carries flat, spelled the way
-    # ``handlers/_common.permanent_matches_filter`` already spells the identical
+    # ``handlers/_filters.permanent_matches_filter`` already spells the identical
     # phrase for a permanent.
     #
     # Distinct from ``exclude_basic_lands`` directly above, which is CR 205.4a's
@@ -227,7 +227,7 @@ def search_matches(card, data: dict, *, game=None, owner=None) -> bool:
     if named is not None and name_key(card.name) != name_key(named):
         return False
     # "a card **with the same name as target nontoken creature**" (Mask of the
-    # Mimic). ``handlers/zones._search_restrictions`` turns the question into an
+    # Mimic). ``handlers/search._search_restrictions`` turns the question into an
     # ordinary ``named`` as the search is armed; the key surviving *without* one
     # means the target was gone by then (CR 608.2b), and a search whose name
     # nothing supplied finds nothing rather than everything. Read here so a
@@ -241,7 +241,7 @@ def search_matches(card, data: dict, *, game=None, owner=None) -> bool:
     if restrictions.get("named_from_event") and named is None:
         return False
     # "…a card **with the same name as that card**" (Assembly Hall). The same
-    # rule one referent over again: ``handlers/zones._search_restrictions`` turns
+    # rule one referent over again: ``handlers/search._search_restrictions`` turns
     # the record into a ``named`` as the search is armed, and the key surviving
     # without one means the step in front of it revealed nothing — so the search
     # finds no card rather than every card.

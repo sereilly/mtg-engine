@@ -40,7 +40,7 @@ import pytest
 from engine.faces import compilation_units
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.game import Game
-from engine.handlers._common import permanent_matches_filter
+from engine.handlers._filters import permanent_matches_filter
 from engine.models import PlayerState, Permanent
 from engine.oracle import compile_card_oracle
 from engine.subject_filters import subject_matches

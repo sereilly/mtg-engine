@@ -1742,7 +1742,7 @@ def ability_self_reduction_amount(game, controller_index: int, source) -> int:
     on what it currently is — the same rule ``ability_cost_tax`` follows one
     function above.
     """
-    from .handlers._common import permanent_matches_filter
+    from .handlers._filters import permanent_matches_filter
 
     total = 0
     # Split into *sentences*, not lines: the reduction is printed inside an
@@ -1789,7 +1789,7 @@ class SelfCostReduction:
     gate: dict | None = None
     #: "This spell costs {1} less to cast **for each basic land type among
     #: lands you control**." (Stratadon; {2} on Draco.) The count ``reduction``
-    #: is taken **once per**: the spec ``handlers/_common.evaluate_count``
+    #: is taken **once per**: the spec ``handlers/_amounts.evaluate_count``
     #: answers for every other sentence that spends one, read off the caster's
     #: board through the layers at CR 601.2f. A spec rather than a row of
     #: ``_SELF_REDUCTION_COUNTS`` because the phrase is an ordinary noun phrase
@@ -2046,7 +2046,7 @@ def self_cost_reduction_for_cast(game, caster_index: int, card) -> CostReduction
     # Draco's {16} and five off Stratadon's {10}, and a reduction larger than
     # the generic component simply stops there.
     if described.per_each is not None:
-        from .handlers._common import evaluate_count
+        from .handlers._amounts import evaluate_count
 
         repetitions = evaluate_count(game, caster, described.per_each)
         return CostReduction(described.reduction.generic * max(0, repetitions))

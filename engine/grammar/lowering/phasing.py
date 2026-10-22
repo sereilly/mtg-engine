@@ -197,7 +197,7 @@ def _lower_phase_out(
     # other half of the block CR 509.3a-d announced, which the trigger froze —
     # the same referent `pump_block_pair` and `grant_keyword_to_block_pair`
     # already act on, and read by the one function that knows how the two fire
-    # sites bind it (`handlers/_common.block_pair_permanents`).
+    # sites bind it (`handlers/_targets.block_pair_permanents`).
     #
     # `binds_block_pair` rather than the kind alone, for the reason that helper
     # exists: a *bare* becomes-blocked firing has several blockers and no way to

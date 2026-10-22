@@ -16,13 +16,11 @@ from ..oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                             OracleInstruction, PER_OBJECT_SEAT_RECORDS,
                             named_no_target)
 from ..resumption import run_resumable
-from ._common import (one_recorded_permanent_id,
-    attached_host,
-    block_pair_permanents,
-    frozen_that_player_seat,
-    permanent_matches_filter, resolve_role_permanent,
-    resolve_target_permanent, resolve_target_permanents,
-)
+from ._filters import permanent_matches_filter
+from ._targets import (one_recorded_permanent_id, attached_host,
+                       block_pair_permanents, frozen_that_player_seat,
+                       resolve_role_permanent, resolve_target_permanent,
+                       resolve_target_permanents)
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -485,7 +483,7 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
     # The lowering's gate is the same key set this answers, which is what stops
     # a phrase arriving here that would be dropped: a dropped narrowing on a
     # sweep is not a card that does less, it is one that takes the board.
-    # Late import: ``subject_filters`` imports this package's ``_common``, so
+    # Late import: ``subject_filters`` imports this package's floors, so
     # the edge is taken at call time rather than at module load — the same
     # reason ``bounce_target_creature`` takes it late.
     from ..subject_filters import subject_matches
@@ -1639,7 +1637,7 @@ def destroy_attached_permanent(game: Game, instruction: OracleInstruction, conte
     is the window CR 303.4c's state-based action has not closed yet.
 
     "When this Aura leaves the battlefield, destroy enchanted creature."
-    (Parallax Dementia.) Read through ``_common.attached_host`` rather than the
+    (Parallax Dementia.) Read through ``_targets.attached_host`` rather than the
     live ``attached_to`` slot, because by the time a leaves-the-battlefield
     ability resolves the Aura's teardown has cleared that slot — and CR 608.2h
     says an effect reading an object that has left uses its last known

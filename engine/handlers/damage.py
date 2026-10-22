@@ -13,16 +13,15 @@ from ..dexterity import flip_lands_on
 from ..models import Permanent
 from ..named_counters import counters_on
 from ..resumption import run_resumable
-from ._common import (divided_target_permanent, recorded_permanent_ids, 
-    apply_damage_to_creature, apply_temp_pt_boost, attached_host,
-    damage_dealer, defending_player_seat, evaluate_count,
-    flip_coin,
-    frozen_that_player_seat, per_recipient_amount, permanent_matches_filter,
-    resolve_amount,
-    resolve_target_permanent, resolve_target_permanents, resolve_target_slots,
-    seats_controlling,
-    seats_matching_deed,
-)
+from ._amounts import evaluate_count, per_recipient_amount, resolve_amount
+from ._common import (apply_damage_to_creature, apply_temp_pt_boost,
+                      damage_dealer, flip_coin)
+from ._filters import (permanent_matches_filter, seats_controlling,
+                       seats_matching_deed)
+from ._targets import (divided_target_permanent, recorded_permanent_ids,
+                       attached_host, defending_player_seat,
+                       frozen_that_player_seat, resolve_target_permanent,
+                       resolve_target_permanents, resolve_target_slots)
 from ..oracle_types import single_chosen_id
 from ..oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                            EVENT_SUBJECT_LAST_KNOWN,
@@ -3208,7 +3207,7 @@ def deal_damage_each_matching(
     which is what the key's name says and what the ``source=perm`` below hands
     over.
     """
-    from ..handlers._common import evaluate_count
+    from ._amounts import evaluate_count
     from ..subject_filters import subject_matches
 
     card = context.card

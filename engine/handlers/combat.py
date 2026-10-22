@@ -3,19 +3,12 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
-from ._common import (recorded_permanent_ids, 
-    attached_host,
-    bound_permanent,
-    block_pair_permanents,
-    flip_coin,
-    flip_coin_for,
-    resolve_own_combatant,
-    resolve_role_permanent,
-    resolve_target_permanent,
-    names_a_target_list as _names_a_list,
-    resolve_target_permanents,
-    roles_still_legal,
-)
+from ._common import flip_coin, flip_coin_for
+from ._targets import (recorded_permanent_ids, attached_host, bound_permanent,
+                       block_pair_permanents, resolve_own_combatant,
+                       resolve_role_permanent, resolve_target_permanent,
+                       names_a_target_list as _names_a_list,
+                       resolve_target_permanents, roles_still_legal)
 from .registry import effect_handler
 from ..keywords import grant_keyword
 from ..destruction_events import mark_delayed_destruction

@@ -147,7 +147,7 @@ def test_several_targets_keep_their_own_slots_across_a_renumbering(set_pool):
     stopped answering is dropped (CR 608.2b).
     """
     from engine.game_types import OracleExecutionContext
-    from engine.handlers._common import resolve_target_permanents
+    from engine.handlers._targets import resolve_target_permanents
 
     game = _game(PlayerState(name="A"), PlayerState(name="B"))
     doomed = _put(game, 0, "Grizzly Bears")

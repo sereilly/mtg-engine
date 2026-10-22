@@ -30,7 +30,7 @@ from engine.grammar import ast, board_count_spec_for, compile_line
 from engine.grammar.errors import LoweringError
 from engine.grammar.lowering._amounts import count_spec
 from engine.grammar.lowering._common import _filter_payload
-from engine.handlers._common import evaluate_count
+from engine.handlers._amounts import evaluate_count
 from engine.land_types import change_land_type
 from engine.legality import _activated_lines, _cast_lines
 from engine.models import Permanent

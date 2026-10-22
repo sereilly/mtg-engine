@@ -155,7 +155,7 @@ class GainKeyword:
     # and this says where the word comes from. A boolean rather than a record
     # name because there is one place an activation's choice is kept, on the
     # ability's own source, and naming it here would be a second spelling of
-    # ``handlers/_common.CHOSEN_ABILITY``.
+    # ``handlers/_chosen.CHOSEN_ABILITY``.
     chosen_ability: bool = False
 
 
@@ -395,7 +395,7 @@ class BecomeCreature:
     #: "{X}: This artifact becomes an **X/X** Construct artifact creature until
     #: end of turn." (Chimeric Staff.) The type is *widened* rather than
     #: repurposed: every node built before this held an int and still does, so
-    #: no golden and no ratchet entry moves. ``handlers/_common.resolve_amount``
+    #: no golden and no ratchet entry moves. ``handlers/_amounts.resolve_amount``
     #: is what turns the word into the number the activation paid, exactly as it
     #: does for every other amount a card spells with an X.
     power: "int | str"

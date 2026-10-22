@@ -45,8 +45,8 @@ from ...mana_payment import (answer_color_choices, is_mana_ability,
 from ...events import emit
 from ...game_types import (OracleExecutionContext, OracleStateMachine,
                            SimulationResult, StackItem, chosen_damage_source)
-from ...handlers._common import (CHOSEN_ABILITY, _card_matches_filter,
-                                 attached_host, evaluate_count)
+from ...handlers._chosen import CHOSEN_ABILITY
+from ...handlers._common import _card_matches_filter, attached_host, evaluate_count
 from ...oracle import LOYALTY_ANY_TIME_STATIC, OracleInstruction, compile_card_oracle
 from ...subject_filters import card_matches_any, filter_head_noun, subject_matches
 
@@ -510,7 +510,7 @@ class AbilityActivationMixin:
         the activation is refused.
 
         The reader that would see a leftover is
-        ``handlers/_common._resolve_chosen_keyword``, which turns "with the
+        ``handlers/_chosen._resolve_chosen_keyword``, which turns "with the
         chosen ability" into a keyword filter off exactly this key. That it is
         reached today only from a resolution — which always follows a fresh
         announcement — is a fact about which cards the pool prints, not a
@@ -802,7 +802,7 @@ class AbilityActivationMixin:
         # question — "which battlefield does a bare index count into" — which
         # has to have an answer even when nothing named one.
         # ``StackItem.target_player_index`` is read as "which seat is this
-        # object pointed at", and ``handlers/_common.pick_target_permanent``
+        # object pointed at", and ``handlers/_targets.pick_target_permanent``
         # scopes an announced id to exactly that player. So where the activator
         # named ids and no seat, this function's working default stood in front
         # of a choice somebody had made, and every id on the activator's own

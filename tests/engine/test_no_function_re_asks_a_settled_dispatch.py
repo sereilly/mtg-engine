@@ -7,7 +7,7 @@ git unions them, so the second silently wins. It looks for a repeated
 down: two branches each rewrote the same *function*, the union kept both
 bodies, and the second copy sits after a ``return`` that always fires.
 
-``engine/handlers/zones.discard_hand`` was carrying one. It had **two**
+``engine/handlers/discards.discard_hand`` was carrying one. It had **two**
 ``if instruction.payload.get("who") == "each_player":`` blocks, and the first
 returned unconditionally. Nothing could see it: the module defines the name
 once, the function compiles, every test passes, and the dead half was a near

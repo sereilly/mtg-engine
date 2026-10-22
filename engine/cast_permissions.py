@@ -201,7 +201,7 @@ def _covers(
     if permission.position == "top":
         # CR 400.5 keeps a graveyard ordered, and this engine keeps the top as
         # the *end* of the list: every path that bins a card appends
-        # (``handlers/zones.graveyard_top_to_library`` states the same
+        # (``handlers/library.graveyard_top_to_library`` states the same
         # convention). A library is the other way round: its top is
         # ``library[0]``, which is what every draw, mill and reveal in this
         # engine reads — so which end "top" names is the *zone's* answer and

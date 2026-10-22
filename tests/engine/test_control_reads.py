@@ -76,7 +76,7 @@ SEAM = "engine/mixins/helpers.py"
 # with the reason it cannot ask the seam. Kept small on purpose: every entry is
 # a site that would have to be revisited to finish layer 2.
 ACKNOWLEDGED: dict[str, str] = {
-    "engine/handlers/_common.py::pick_target_permanent": (
+    "engine/handlers/_targets.py::pick_target_permanent": (
         "Positional. The web protocol addresses a permanent by its *slot* on a "
         "controller's battlefield, and this is the function that honours that "
         "index; it takes a PlayerState and no Game, so there is no seam to ask."
@@ -306,7 +306,10 @@ def test_no_acknowledgement_has_gone_stale(entry):
 # from a client. They convert together or not at all.
 POSITIONAL_BASELINE: dict[str, int] = {
     "engine/ai_policy.py": 11,
-    "engine/handlers/_common.py": 2,
+    # Both moved from `_common.py` with the functions holding them when that
+    # module was split at the 2,000-line cap: `pick_target_permanent` (the
+    # acknowledged slot read above) and `resolve_own_combatant`.
+    "engine/handlers/_targets.py": 2,
     # `engine/handlers/board_misc.py` left this table in the round after
     # Seventh Edition. Its two reads were one handler, `mark_text_modified`,
     # taking a text change's target by battlefield slot and falling back to
@@ -314,6 +317,10 @@ POSITIONAL_BASELINE: dict[str, int] = {
     # announced by id named no slot, so it rewrote whichever permanent stood
     # first (tests/regressions/test_text_change_target_identity.py).
     "engine/handlers/combat.py": 2,
+    # Both moved from `zones.py` with their handlers when that module was
+    # split at the 2,000-line cap: `exile_target_creature_until_eot` and
+    # `exile_creature_gain_life_equal_to_power`.
+    "engine/handlers/exile.py": 2,
     # `engine/handlers/damage.py` left this table at Weatherlight's second
     # wave. Its one read was the divided-damage list resolving a target by
     # battlefield slot -- and it was not a combat map, it was the bug this
@@ -325,7 +332,6 @@ POSITIONAL_BASELINE: dict[str, int] = {
     # (Defender en-Vec, Samite Healer). It reads the id first now; the one read
     # left is the emblem path, which has no resolution context to carry an id.
     "engine/handlers/prevention.py": 1,
-    "engine/handlers/zones.py": 2,
     "engine/legality.py": 2,
     "engine/mixins/effects.py": 2,
     # `engine/mixins/permanent_state.py` gone at PCY W3G3: Clone's copy choice
@@ -691,7 +697,7 @@ def test_the_resolver_still_has_exactly_one_caller():
     """
     callers = list(_leadb_calls_to("pick_target_permanent"))
 
-    assert [module for module, _, _ in callers] == ["engine/handlers/_common.py"], (
+    assert [module for module, _, _ in callers] == ["engine/handlers/_targets.py"], (
         "the id-aware resolver grew a caller outside its own module — route it "
         f"through resolve_target_permanent instead: {callers}"
     )

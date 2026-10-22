@@ -169,7 +169,7 @@ def test_roles_still_legal_asks_a_spell_role_whether_its_spell_is_still_there(
     on the stack and still one the role's own description admits — the stack
     picker's list for that slot, asked again."""
     from engine.game_types import OracleExecutionContext
-    from engine.handlers._common import roles_still_legal
+    from engine.handlers._targets import roles_still_legal
 
     game, _djinn, bears = _table(catalog_by_name)
     bolt = game.stack[-1]

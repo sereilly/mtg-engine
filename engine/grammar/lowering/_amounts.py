@@ -648,7 +648,7 @@ def recorded_count_spec(
     reason ``lower_where_x`` unwraps it: "two counters **for each** card" is one
     number, and a factor honoured by one spender and dropped by the next is the
     dropped-rider bug with an arithmetic face. It lands on ``multiplier``, which
-    ``handlers/_common._scaled`` already applies to every aggregate — so the
+    ``handlers/_amounts._scaled`` already applies to every aggregate — so the
     arithmetic is the same one place that halves a count and offsets it.
 
     **The words must name their producer, and a step of this effect must be it.**
@@ -911,7 +911,7 @@ def _stamp_x_from_count(
 
 #: Amount-payload keys whose *value* is a printed constant and whose meaning is
 #: an arithmetic on X. Named rather than inferred from a suffix, because what
-#: makes a key one of these is that ``handlers/_common.resolve_amount`` reads
+#: makes a key one of these is that ``handlers/_amounts.resolve_amount`` reads
 #: the X for it — and a key added here that resolver does not read is an
 #: instruction reporting itself computed and resolving to a literal.
 _X_ARITHMETIC_KEYS = frozenset({"times_x", "plus_x", "minus_x"})

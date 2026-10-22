@@ -797,7 +797,7 @@ import pytest as _w1g7_pytest
 
 from engine import Game as _w1g7_Game, PlayerState as _w1g7_PlayerState
 from engine.hand_size import maximum_hand_size as _w1g7_maximum_hand_size
-from engine.handlers._common import permanent_effective_colors as _w1g7_colors
+from engine.handlers._filters import permanent_effective_colors as _w1g7_colors
 from engine.models import Permanent as _w1g7_Permanent
 from engine.oracle import compile_card_oracle as _w1g7_compile
 from tests.helpers import _mk_card as _w1g7_mk_card

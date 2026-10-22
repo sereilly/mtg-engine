@@ -1165,7 +1165,7 @@ class StackResolutionMixin:
             spec["defending_player_index"] = defending
         # "That player" travels the same way and for the same rule, read
         # through the *same key list* the resolution reads it through
-        # (`handlers/_common._THAT_PLAYER_CONTEXT_KEYS`). One list, because the
+        # (`handlers/_targets._THAT_PLAYER_CONTEXT_KEYS`). One list, because the
         # picker and the handler must agree about which seat the words name:
         # a second copy here would be a picker offering one board while
         # `subject_matches` tested another, and the difference would show as an
@@ -1497,13 +1497,13 @@ class StackResolutionMixin:
         """The seat *item*'s printed "that player" names, or None if the firing
         event froze none.
 
-        The picker's half of ``handlers/_common.frozen_that_player_seat``, and
+        The picker's half of ``handlers/_targets.frozen_that_player_seat``, and
         deliberately reading that module's key tuple rather than a list of its
         own: the two answer the same question at two moments, and a phrase the
         picker resolved differently from the resolution is an ability offered
         one board and applied to another.
         """
-        from ...handlers._common import _THAT_PLAYER_CONTEXT_KEYS
+        from ...handlers._targets import _THAT_PLAYER_CONTEXT_KEYS
 
         frozen = item.trigger_context or {}
         for key in _THAT_PLAYER_CONTEXT_KEYS:
@@ -2160,7 +2160,7 @@ class StackResolutionMixin:
         # a spell had none to carry until CR 700.2e gave one a seat nobody on a
         # board can name — "**an opponent** chooses one —", and then "that
         # player" in the mode they chose. Same key, same reader
-        # (`handlers/_common.frozen_that_player_seat`), so the phrase has one
+        # (`handlers/_targets.frozen_that_player_seat`), so the phrase has one
         # answer whether a trigger or a mode choice bound it.
         trigger_context: dict | None = None,
         # CR 108.3: who owns the card, when that is not its caster — see

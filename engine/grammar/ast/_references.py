@@ -450,7 +450,7 @@ class ObjectFilter:
     #: "…**put onto the battlefield with this enchantment**" (Diabolic
     #: Servitude, and the enchant clause Necromancy prints as a quoted line).
     #: The permanent this one's own ability reanimated, read off the record
-    #: ``handlers/zones.reanimate_creature`` stamps.
+    #: ``handlers/reanimation.reanimate_creature`` stamps.
     #:
     #: Beside ``created_with_source`` and for its reason exactly: a fact about
     #: the object's *history*, which nothing about its characteristics can

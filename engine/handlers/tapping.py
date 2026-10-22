@@ -3,17 +3,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..oracle_types import TAPPED_THIS_WAY_OBJECTS, X_FROM_COUNT
-from ._common import (recorded_permanent_ids,
-    attached_host,
-    block_pair_permanents,
-    defending_player_seat,
-    frozen_that_player_seat,
-    permanent_matches_filter,
-    resolve_amount,
-    resolve_chosen_card_type_in_resolution,
-    resolve_target_permanent,
-    resolve_target_permanents,
-)
+from ._amounts import resolve_amount
+from ._chosen import resolve_chosen_card_type_in_resolution
+from ._filters import permanent_matches_filter
+from ._targets import (recorded_permanent_ids, attached_host,
+                       block_pair_permanents, defending_player_seat,
+                       frozen_that_player_seat, resolve_target_permanent,
+                       resolve_target_permanents)
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -1174,7 +1170,7 @@ def untap_up_to_matching(game: Game, instruction: OracleInstruction, context: Or
             return False, "no seat was frozen for 'that player'"
         seat = frozen
     # Imported here rather than at module scope: `engine/subject_filters.py`
-    # imports this package's `_common`, so a top-level import would close the
+    # imports this package's floors, so a top-level import would close the
     # cycle at load time.
     from ..subject_filters import subject_matches
 

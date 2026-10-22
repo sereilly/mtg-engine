@@ -478,7 +478,7 @@ def _combat_count_board(third_seat_blocks: bool):
 
 def _blocking_count(game, source, marton) -> int:
     from engine.game_types import OracleExecutionContext
-    from engine.handlers._common import count_from_payload
+    from engine.handlers._amounts import count_from_payload
     from engine.oracle import compile_card_oracle
 
     program = compile_card_oracle(marton)

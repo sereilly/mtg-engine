@@ -22,7 +22,7 @@ from ..control import LINKED_CONTROL_CONDITIONS
 from ..named_counters import counters_on
 from ..turn_state import record_turn_start_states
 from ..turn_state import attacked_during_seats_last_turn
-from ..handlers._common import CHOSEN_CARD_TYPE, chosen_card_type_filter
+from ..handlers._chosen import CHOSEN_CARD_TYPE, chosen_card_type_filter
 from ..untap_restrictions import (
     LIMITED_SCOPES,
     SELF_DOESNT_UNTAP_PHRASE,

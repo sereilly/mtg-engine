@@ -1322,7 +1322,7 @@ def global_static_type_effect(
     replaced: frozenset[str] = frozenset()
     if static.sets_creature_type:
         # Read late rather than at module scope: this module is pulled in
-        # by ``handlers/_common`` long before ``engine.grammar`` finishes
+        # by ``handlers/_filters`` long before ``engine.grammar`` finishes
         # importing, and a top-level import of the vocabulary closes a cycle
         # through the grammar package.
         CREATURE_TYPES = _late_grammar.vocabulary.CREATURE_TYPES

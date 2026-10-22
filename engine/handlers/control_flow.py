@@ -46,10 +46,9 @@ from ..oracle_types import (EVENT_SPELL_MANA_COST,
 from ..turn_state import started_the_turn
 from ..repeated_offers import OFFER_TAKEN_RESULTS
 from ..resumption import run_resumable
-from ._common import (CHOSEN_CARD_TYPE, _card_matches_filter, attached_host,
-                      defending_player_seat, flip_coin, flip_coin_for,
-                      permanent_matches_filter, permanent_state_holds,
-                      triggering_spell)
+from ._common import CHOSEN_CARD_TYPE, flip_coin, flip_coin_for
+from ._filters import _card_matches_filter, permanent_matches_filter, permanent_state_holds
+from ._targets import attached_host, defending_player_seat, triggering_spell
 from .registry import effect_handler
 from ..mana_payment import mana_cost_label
 
@@ -140,7 +139,7 @@ def _antecedent_scoped(
     accident: the Wall sits on the other battlefield, the resolver declined
     it, and its fall-through scan took the first creature on the seat it was
     looking at. An announced object has no scan
-    (``_common.pick_target_permanent``), so the antecedent is said here
+    (``_targets.pick_target_permanent``), so the antecedent is said here
     instead: a step with no ``targets`` and no steps of its own, behind a step
     that spent a role, is about that role's object.
 
@@ -204,7 +203,7 @@ def _role_scoped(
     """
     from ..targeting import (payload_own_role, payload_role_slot, role_is_seat,
                              spec_roles)
-    from ._common import resolve_role_permanent, resolve_role_player
+    from ._targets import resolve_role_permanent, resolve_role_player
 
     payload = step.payload
     role = payload_own_role(payload)
@@ -739,7 +738,7 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             # CR 707.2 makes a copy's name the copied one. "Another" is
             # identity, never value: two Grizzly Bears are equal objects to a
             # dataclass comparison and are exactly the board this asks about.
-            from ._common import resolve_target_permanent
+            from ._targets import resolve_target_permanent
 
             target = resolve_target_permanent(
                 game, context,
@@ -1373,7 +1372,7 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         bound = int(payload.get("count", 0))
         counted = payload.get("count_from")
         if isinstance(counted, dict):
-            from ._common import count_from_payload
+            from ._amounts import count_from_payload
 
             bound = count_from_payload(game, context, counted)
         return _comparison_holds(
@@ -1529,7 +1528,7 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         # kinds because the two are admitted in different places (a cast-time
         # cost gate reads piles, never a seat an event froze), one branch
         # because nothing about answering them differs.
-        from ._common import count_from_payload
+        from ._amounts import count_from_payload
 
         return _compare_count(
             count_from_payload(game, context, dict(payload.get("count") or {})),
@@ -1703,7 +1702,8 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
                 else ()
             )
         else:
-            from ._common import permanent_effective_colors, resolve_target_permanent
+            from ._filters import permanent_effective_colors
+            from ._targets import resolve_target_permanent
 
             target = resolve_target_permanent(
                 game, context,
@@ -1737,7 +1737,7 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         # branch and the effect beside it must mean one permanent. A target
         # that is gone shares a colour with nothing.
         from ..color_census import shares_most_common_color
-        from ._common import resolve_target_permanent
+        from ._targets import resolve_target_permanent
 
         target = resolve_target_permanent(
             game, context,
@@ -1760,7 +1760,7 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         # a colourless object on either side shares nothing, and so does a
         # choice that was never made or whose permanent has gone.
         from ..object_colors import share_a_color
-        from ._common import resolve_target_permanent
+        from ._targets import resolve_target_permanent
 
         target = resolve_target_permanent(
             game, context,
@@ -1837,7 +1837,7 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         # happen. The clause is printed behind "unless", where "they differ" is
         # the answer under which nothing is destroyed — the survivor is not
         # destroyed alone on the strength of a comparison nobody could make.
-        from ._common import resolve_target_slots
+        from ._targets import resolve_target_slots
 
         first, second = resolve_target_slots(game, context, 2)
         if (
@@ -1879,7 +1879,7 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         # CR 608.2c: read while the instruction is followed, not when the target
         # was chosen. An object that is gone answers no to both readings — the
         # same call the two clauses either side of this one make.
-        from ._common import resolve_target_permanent
+        from ._targets import resolve_target_permanent
 
         target = resolve_target_permanent(
             game, context,
@@ -1907,7 +1907,7 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         # so the branch and the effect cannot disagree about which creature the
         # pronoun meant. Layer 6 is what answers (CR 613.1f): a creature *given*
         # rampage has it, exactly as a printed one does.
-        from ._common import resolve_target_permanent
+        from ._targets import resolve_target_permanent
 
         target = resolve_target_permanent(
             game, context, fallback_on_invalid_choice=False
@@ -2708,7 +2708,7 @@ def choose_number(game: Game, instruction: OracleInstruction, context: OracleExe
             game.log.append(f"{context.card.name}: nobody to choose a number")
             return True, "resolved"
         seat = game.players.index(context.caster)
-        from ._common import count_from_payload
+        from ._amounts import count_from_payload
 
         high = max(low, count_from_payload(game, context, dict(ceiling), instruction))
         # The policy for a seat nobody asks is the whole offer — the one
@@ -2968,7 +2968,7 @@ def choose_color(game: Game, instruction: OracleInstruction, context: OracleExec
     # same ``targets`` description the lowering copies onto both steps: two
     # readings of one announcement is how a chooser and a grantee come apart.
     if chooser == "target_controller":
-        from ._common import resolve_target_permanent
+        from ._targets import resolve_target_permanent
         from .pump import granted_target_legal
 
         chosen = resolve_target_permanent(
@@ -3280,7 +3280,7 @@ def _fewest_own_permanents_type(game: Game, seat: int, options: list[str]) -> st
     depend on.
     """
     from ..subject_filters import subject_matches
-    from ._common import chosen_card_type_filter
+    from ._chosen import chosen_card_type_filter
 
     best, best_score = options[0], None
     for word in options:
@@ -3342,7 +3342,7 @@ def _own_pile_can_supply(player, payload: dict, context) -> bool:
     card, which is what this gate asked of every pick before it counted: an
     offer over a pile holding nothing it names is a question with one answer.
     """
-    from ._common import graveyard_slots_matching
+    from ._filters import graveyard_slots_matching
 
     owed = 1 if payload.get("up_to") else max(1, int(payload.get("count", 1) or 1))
     return len(graveyard_slots_matching(
@@ -3376,7 +3376,7 @@ def _action_is_takeable(
     it and does not get it answers True, which is the direction that keeps an
     offer the card makes.
     """
-    from ._common import _card_matches_filter
+    from ._filters import _card_matches_filter
 
     if instruction.kind == "sacrifice_matching_permanent":
         exclude = source if instruction.payload.get("exclude_self") else None
@@ -3514,7 +3514,7 @@ def _action_is_takeable(
     # picker collects the slots and its own floor decides, exactly as the
     # permanent-set price one screen up leaves the count to the prompt.
     if instruction.kind == "return_creature_from_graveyard_to_hand":
-        from ._common import graveyard_card_matches
+        from ._filters import graveyard_card_matches
 
         if instruction.payload.get("targets"):
             return True
@@ -3528,7 +3528,7 @@ def _action_is_takeable(
     # the rider runs anyway. Only the unannounced pick from the offered seat's
     # own pile; every other spelling keeps its offer.
     if instruction.kind == "exile_cards_from_graveyard":
-        from ._common import graveyard_card_matches
+        from ._filters import graveyard_card_matches
 
         pile_owner = instruction.payload.get("graveyard_owner")
         if pile_owner == "damaged_player" and not instruction.payload.get("up_to"):
@@ -3734,7 +3734,7 @@ def _action_is_takeable(
     # the same candidate list its prompt offers, so the seat is not asked a
     # question whose only honest answer is no.
     if instruction.kind == "exile_chosen_card_from_hand":
-        from .zones import exile_from_hand_candidates
+        from .hand import exile_from_hand_candidates
 
         return bool(exile_from_hand_candidates(game, instruction.payload, player))
     return True
@@ -3790,7 +3790,7 @@ def _resolved_life_cost(game, printed, context: OracleExecutionContext) -> int:
     if not printed:
         return 0
     if isinstance(printed, dict):
-        from ._common import count_from_payload
+        from ._amounts import count_from_payload
 
         return max(0, count_from_payload(game, context, printed))
     return max(0, int(printed))
@@ -4083,7 +4083,7 @@ def _offered_seats(
         # "for each of those creatures, **its controller** may pay {1} or {2}"
         # (Winter's Chill) the possessive names the creature the iteration is
         # on, and the resolution's own target list is all of them at once.
-        from ._common import bound_permanent
+        from ._targets import bound_permanent
 
         perm = bound_permanent(game, context, predicate=lambda p: True)
         if perm is None:
@@ -4096,7 +4096,7 @@ def _offered_seats(
         # is the object the trigger's own condition named — read off the
         # attachment rather than off the resolution's target, which for this
         # ability is the creature being *bitten* and belongs to the other side.
-        from ._common import attached_host
+        from ._targets import attached_host
 
         host = attached_host(game, context.source_permanent)
         seat = game.controller_index_of(host) if host is not None else None
@@ -4119,8 +4119,8 @@ def _offered_seats(
         # headless caller that named none.
         #
         # One reader with the recipients that name the same seat after the
-        # counter has run (``_common.stack_target_controller_seat``).
-        from ._common import stack_target_controller_seat
+        # counter has run (``_targets.stack_target_controller_seat``).
+        from ._targets import stack_target_controller_seat
 
         seat = stack_target_controller_seat(game, context, spells_only=True)
         if seat is None or game.players[seat].lost:
@@ -4362,7 +4362,7 @@ def _offer_to_seat(
     # read "no cost" off emptiness.
     per_each = instruction.payload.get("cost_per")
     if per_each is not None and cost:
-        from ._common import count_from_payload
+        from ._amounts import count_from_payload
 
         times = max(0, count_from_payload(game, context, dict(per_each)))
         cost = {symbol: amount * times for symbol, amount in cost.items()}
@@ -4700,7 +4700,7 @@ def _event_spell_and_cost(game: Game, context: OracleExecutionContext):
 
     The spell is the one the trigger fired on, found on the stack by the
     object the event recorded — the lookup "counter it" one handler over makes
-    (``_common.triggering_spell``), so the price and the counter behind it are
+    (``_targets.triggering_spell``), so the price and the counter behind it are
     read off one object, and off *that* object: two Fireballs cast for
     different X are one card and two prices. The cost is
     ``mana_payment.spell_mana_cost``: printed symbols, the announced X, None

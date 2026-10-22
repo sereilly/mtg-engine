@@ -47,12 +47,12 @@ _NOT_A_BATTLEFIELD_EXIT = {
     # owner's hand" reaches whichever zone the object is in, and this arm is
     # the one where it is already in a graveyard (CR 608.2). The battlefield
     # arm above it passes the keyword.
-    ("handlers/zones.py", "return_source_card_to_owners_hand"),
+    ("handlers/returns.py", "return_source_card_to_owners_hand"),
     # "Return target spell or creature to its owner's hand" (Unsubstantiate).
     # ``chosen`` is a StackItem, so ``chosen.card`` is a spell on the stack —
     # not a permanent, and not a battlefield exit. Its creature half goes
     # through ``_bounce_target_creature``, which does pass the keyword.
-    ("handlers/zones.py", "return_spell_or_creature_to_hand"),
+    ("handlers/returns.py", "return_spell_or_creature_to_hand"),
     # "…put it on top of its owner's library instead of into that player's
     # graveyard" (Memory Lapse). ``countered`` is a StackItem for the same
     # reason as the row above: a countered spell is an object on the stack
@@ -66,7 +66,7 @@ _NOT_A_BATTLEFIELD_EXIT = {
     # one holds the card, and this arm is the one where it is already in a
     # graveyard (CR 404.1 put it there before the death trigger resolved). Its
     # battlefield arm passes the keyword.
-    ("handlers/zones.py", "shuffle_source_card_into_library"),
+    ("handlers/shuffles.py", "shuffle_source_card_into_library"),
     # The *graveyard* branch of ``put_source_card_on_library_top`` — the same
     # row again with a third destination: "you may put **it** on top of its
     # owner's library" (Avenging Angel) names no source zone, so the handler

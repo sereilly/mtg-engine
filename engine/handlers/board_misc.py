@@ -13,10 +13,12 @@ from ..layer_bridge import SET_CARD_TYPES
 from ..type_changes import gain_types, lose_types
 from ..oracle_types import _COLOR_WORD_TO_SYMBOL
 from ..models import CardDefinition, Permanent
-from ..oracle_types import (CHOSEN_COLOR_THIS_WAY, CHOSEN_TARGET_PERMANENTS,
+from ..oracle_types import (BLOCK_PAIR_SUBJECT, CHOSEN_COLOR_THIS_WAY,
+                            CHOSEN_TARGET_PERMANENTS,
                             COUNTERS_REMOVED,
                             EVENT_SUBJECT_LAST_KNOWN, LAST_TARGET_CONTROLLER,
                             SPELL_OR_OBJECT_TARGET,
+                            SUBJECT_FROM_TRIGGER,
                             X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT,
                             OracleInstruction)
 from ..exiled_records import source_object
@@ -27,18 +29,15 @@ from ..tokens import (CHOSEN_TOKEN_RECORDS, CREATED_TOKEN_RESULT_KEY,
                       CREATED_TOKENS_RESULT_KEY,
                      CREATED_WITH_PERMANENT_ID, default_token_name,
                      make_token_card, tokens_created_with)
-from ._common import (BLOCK_PAIR_SUBJECT, COLOR_CHOSEN_THIS_WAY_KEY,
-                      SUBJECT_FROM_TRIGGER,
-                      attached_host, resolve_color_chosen_in_resolution,
-                      block_pair_permanents, bound_permanent, evaluate_count,
-                      one_recorded_permanent_id,
-                      per_recipient_amount,
-                      permanent_matches_filter,
-                      count_from_payload, count_spec_in_resolution,
-                      resolve_amount,
-                      resolve_target_permanent,
-                      resolve_target_permanents, seats_matching_deed,
-                      described_target_predicate)
+from ._amounts import (evaluate_count, per_recipient_amount,
+                       count_from_payload, resolve_amount)
+from ._chosen import (COLOR_CHOSEN_THIS_WAY_KEY,
+                      resolve_color_chosen_in_resolution,
+                      count_spec_in_resolution)
+from ._filters import permanent_matches_filter, seats_matching_deed
+from ._targets import (attached_host, block_pair_permanents, bound_permanent,
+                       one_recorded_permanent_id, resolve_target_permanent,
+                       resolve_target_permanents, described_target_predicate)
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -2413,9 +2412,9 @@ def add_named_counter_to_target(game: Game, instruction: OracleInstruction, cont
     """
     from ..named_counters import add_counters
     from ..subject_filters import subject_matches
-    from ._common import resolve_role_permanent, roles_still_legal
+    from ._targets import resolve_role_permanent, roles_still_legal
 
-    from ._common import permanent_matches_filter
+    from ._filters import permanent_matches_filter
 
     observer = game.players.index(context.caster)
     source = context.source_permanent
@@ -2431,7 +2430,7 @@ def add_named_counter_to_target(game: Game, instruction: OracleInstruction, cont
         #
         # Nothing recorded is a legal outcome (the card was no longer in a
         # graveyard), not an error.
-        from ._common import recorded_permanent_ids
+        from ._targets import recorded_permanent_ids
 
         placed = 0
         for permanent_id in recorded_permanent_ids(context, recorded_key):
@@ -2477,7 +2476,7 @@ def add_named_counter_to_target(game: Game, instruction: OracleInstruction, cont
         # the two fire sites bind it: on the *blocks* half the stack item's
         # target is the blocker itself, so the ordinary target resolution below
         # would put the counters on the source.
-        from ._common import block_pair_permanents
+        from ._targets import block_pair_permanents
 
         wanted = instruction.payload.get("filter") or {}
         target = next(
@@ -2605,7 +2604,7 @@ def add_named_counter_to_attached(game: Game, instruction: OracleInstruction, co
     Aura at cast and threaded to its enters trigger by the fire site.
     """
     from ..named_counters import add_counters
-    from ._common import attached_host
+    from ._targets import attached_host
 
     attached = attached_host(game, context.source_permanent)
     if attached is None:
@@ -3130,7 +3129,7 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
         # takeability gate, the inline resolution and the queued prompt all get
         # it for free — and through ``attached_host``, which answers the
         # last-known-information case (CR 603.10) the Aura may already be in.
-        from ._common import attached_host
+        from ._targets import attached_host
 
         exclude = attached_host(game, context.source_permanent)
     who = instruction.payload.get("who")
@@ -3179,7 +3178,7 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
         # Nobody to ask is nobody charged, which is the honest outcome the
         # frozen-seat branches below already give: a permanent that has left
         # by the time this runs has no controller to name.
-        from ._common import bound_permanent
+        from ._targets import bound_permanent
 
         perm = bound_permanent(game, context, predicate=lambda _p: True)
         seat = game.controller_index_of(perm) if perm is not None else None
@@ -3213,7 +3212,7 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
         # "Whenever this creature becomes blocked, **defending player**
         # sacrifices a land of their choice." (Thresher Beast.) CR 506.2's
         # seat, through the one reader of it; None is nobody asked.
-        from ._common import defending_player_seat
+        from ._targets import defending_player_seat
 
         seat = defending_player_seat(game, context)
         if seat is None:

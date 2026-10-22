@@ -22,7 +22,7 @@ than ten cards:
   the zone hoisted in front of the noun.
 
 Every quantity is a printed noun phrase read by the caller's own filter parser
-and counted by ``handlers/_common.evaluate_count``, so a card printed about
+and counted by ``handlers/_amounts.evaluate_count``, so a card printed about
 artifacts or about a library is this clause with one word changed. Life is the
 one exception and it is named rather than described: a life total is not a pile
 to scan.
@@ -47,7 +47,7 @@ from .stream import TokenStream
 
 #: The quantity that is **named** rather than described, and the only one.
 #:
-#: `handlers/_common.evaluate_count` answers it under ``board_count`` for the
+#: `handlers/_amounts.evaluate_count` answers it under ``board_count`` for the
 #: reason that node's own docstring gives: a life total is not a set of objects
 #: in a zone, so no noun phrase describes it and no filter counts it. A closed
 #: table so that a printing naming some other bare quantity refuses the line

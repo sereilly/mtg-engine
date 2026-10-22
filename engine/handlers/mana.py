@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from ..oracle_types import MANA_COLOR_OF_CHOICE
 from .registry import effect_handler
-from ._common import count_from_payload, resolve_amount
+from ._amounts import count_from_payload, resolve_amount
 
 if TYPE_CHECKING:
     from ..game import Game
@@ -1193,7 +1193,8 @@ def produce_mana_instead(game: Game, instruction: OracleInstruction, context: Or
     makes a land that leaves and returns a new object, and the effect named the
     old one.
     """
-    from ._common import resolve_target_permanent, permanent_matches_filter
+    from ._filters import permanent_matches_filter
+    from ._targets import resolve_target_permanent
 
     # The filter the lowering recorded for the picker, read here too — the
     # ability's legality gate asks the same question of the same dict, so a
