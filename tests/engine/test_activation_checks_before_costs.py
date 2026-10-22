@@ -26,6 +26,7 @@ import ast
 from pathlib import Path
 
 import engine.mixins.stack.activation as activation_module
+import engine.mixins.stack.activation_payment as payment_module
 
 #: Calls that move game state as a cost is paid. A call to one of these above
 #: the mana payment is a cost paid before the activation is known to be legal.
@@ -110,9 +111,11 @@ def test_no_refusal_is_written_below_the_mana_payment():
         and _called_name(node) == "unpayable_activation_cost"
     ]
     assert gate_calls and max(gate_calls) < _hinge_line(method), gate_calls
+    # The gate went to ``activation_payment.py`` when ``activation.py`` split
+    # at the 2,000-line cap; it is read where it is defined.
     gate = next(
         node for node in ast.walk(
-            ast.parse(Path(activation_module.__file__).read_text(encoding="utf-8"))
+            ast.parse(Path(payment_module.__file__).read_text(encoding="utf-8"))
         )
         if isinstance(node, ast.FunctionDef) and node.name == "unpayable_activation_cost"
     )

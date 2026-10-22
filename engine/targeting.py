@@ -77,11 +77,8 @@ from .cast_targets import (_as_kicked, _cast_cost_picker, _cast_target_spec,
 # each went). This module stays their import path — several of their
 # importers were being split by other groups in the same round — and new code
 # may import a name from the module that defines it.
-from .enchant_targets import (_ENCHANT_LAND_SUBTYPES, enchant_clause_nouns,
-                              enchant_graveyard_line, enchant_line_subject,
-                              enchant_subject_colours,
-                              enchant_subject_keyword_exclusion,
-                              enchant_subject_seat)
+from .enchant_targets import (enchant_clause_nouns, enchant_graveyard_line,
+                              enchant_line_subject)
 from .target_roles import (ROLES_TARGET_KIND, ROLE_SEATS, SEAT_ROLE_KINDS,
                            payload_own_role, payload_role_slot,
                            recorded_role_seats, role_dependency, role_is_seat,
@@ -978,7 +975,7 @@ def single_player_target(game, item) -> int | None:
 #: comes from a kind table that fills in a default where the line said nothing.
 #:
 #: ``up_to`` is "**up to** N target …" — the same printed word with a ceiling
-#: in front of it (``resolution._target_is_up_to`` reads the same quantifier
+#: in front of it (``trigger_targets._target_is_up_to`` reads the same quantifier
 #: for CR 601.2c's "zero is a legal announcement"). It was missing, so "you
 #: may tap up to two target creatures" (Cho-Arrim Bruiser) answered False:
 #: its attack trigger kept the reference to itself that the declare-attackers

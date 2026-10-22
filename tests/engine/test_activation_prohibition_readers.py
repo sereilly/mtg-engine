@@ -410,8 +410,11 @@ _ROW_PREDICATES = frozenset({
 #: here: its choosers still ask four of the predicates beside the one call,
 #: which is redundant rather than wrong and is that file's owner's to remove.
 _READERS = {
-    "engine/mixins/stack/activation.py": (
-        "_activate_onto_stack", "activate_from_hand", "activate_from_graveyard",
+    "engine/mixins/stack/activation.py": ("_activate_onto_stack",),
+    # The hand and graveyard roads, split out of ``activation.py`` at the
+    # 2,000-line cap.
+    "engine/mixins/stack/card_activation.py": (
+        "activate_from_hand", "activate_from_graveyard",
     ),
     "engine/board_payment.py": ("source_tap_yields",),
     "web/serialization.py": None,

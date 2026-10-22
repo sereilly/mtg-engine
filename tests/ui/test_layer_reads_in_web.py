@@ -67,7 +67,7 @@ _RECEIVER = re.compile(
 #: Receivers that are **not** permanents, so no layer has been applied to them
 #: and the card is the only answer there is. An object on the stack is a spell
 #: or an ability (CR 111 / CR 113), not a permanent — the same exemption
-#: ``engine/mixins/stack/casting.py`` carries one package over. Named receivers
+#: ``engine/mixins/stack/cast_target_validation.py`` carries one package over. Named receivers
 #: rather than an exempt file, so ``web/serialization.py`` — where three of the
 #: seven historical sites lived — stays fully guarded around them.
 STACK_RECEIVERS = frozenset({"item", "stack_item", "target_item"})

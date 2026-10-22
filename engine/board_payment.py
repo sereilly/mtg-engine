@@ -2,7 +2,7 @@
 
 CR 601.2h asks what a player is *able* to pay. For a cast, producing the mana
 is the player's own separate action — they tap, then the cast spends the pool
-(``mixins/stack/casting._pay_mana_cost``) — so the question a *preview* of a
+(``mixins/stack/pool_payment._pay_mana_cost``) — so the question a *preview* of a
 cast has to answer is "is there a way to tap these lands that leaves a pool the
 payment accepts". This module answers it, for the one reader that shows a
 player the answer before they act: the castable highlight

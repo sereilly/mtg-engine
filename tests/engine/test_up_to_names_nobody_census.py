@@ -37,7 +37,7 @@ from engine import Game, PlayerState
 from engine.cast_costs import kicker_costs
 from engine.faces import compilation_units
 from engine.legality import targeting_instruction
-from engine.mixins.stack.resolution import _target_is_up_to
+from engine.mixins.stack.trigger_targets import _target_is_up_to
 from engine.models import CardDefinition, Permanent
 from engine.named_counters import add_counters
 from engine.oracle import compile_card_oracle

@@ -298,7 +298,7 @@ def test_w1g3_fumarole_names_two_targets_and_pays_for_them(set_pool):
     engine has carried an ordered **roles** target description since Glyph of
     Delusion: ``target_descriptions.roles_spec`` answers with a list rather than one
     ``kind``, ``legality_roles.role_target_options`` enumerates role *n* with roles
-    0…n−1 settled, ``casting._validate_cast_targets`` gates the whole
+    0…n−1 settled, ``cast_target_validation._validate_cast_targets`` gates the whole
     announcement, and the wire's ``target_permanent_ids`` is already the
     ordered cross-battlefield channel. Only the *union parse* refused, and its
     stated reason — "the cast picker asks a spell for one target" — had stopped

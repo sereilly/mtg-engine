@@ -91,8 +91,8 @@ from .line_classification import (_noncreature_line_instructions,
 # pulled from ``engine.oracle``. Three are ``__all__``'s; the rest are pulled
 # by modules other groups were splitting in the same round (``auras``,
 # ``cast_costs``, ``enter_effects``, ``prevention``,
-# ``activation_restrictions``, ``events``, ``mixins/permanent_state``,
-# ``mixins/stack/activation``), whose import lines were left alone. New code
+# ``activation_restrictions``, ``events``, ``mixins/permanent_state``), whose
+# import lines were left alone. New code
 # imports a name from the module that defines it.
 from .trigger_conditions import trigger_condition_of_line
 from .chargeable_costs import (_chargeable_discard_filters,
@@ -104,7 +104,7 @@ from .self_reference import _collapse_self_references
 from .ability_lines import (_bullets_after, _modal_trigger_ability,
                             _parse_activated_ability, _parse_triggered_ability)
 from .line_rewrites import expand_card_lines
-from .line_classification import LOYALTY_ANY_TIME_STATIC, compile_emblem_text
+from .line_classification import compile_emblem_text
 
 
 __all__ = [

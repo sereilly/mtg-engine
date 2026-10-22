@@ -261,6 +261,7 @@ def test_the_sweep_names_the_defect_with_the_old_defaults_restored(monkeypatch):
     saw it. A sweep that read clean here would be a sweep that reads nothing."""
     from engine import ai_valuation
     from engine.mixins.stack import activation as activation_path
+    from engine.mixins.stack import card_activation as card_activation_path
     from engine.mixins.stack import casting as casting_path
 
     monkeypatch.setattr(
@@ -272,9 +273,12 @@ def test_the_sweep_names_the_defect_with_the_old_defaults_restored(monkeypatch):
     # since R3 is the picker's first entry in standing order — the opposing
     # pile first — rather than the handler's scan in seat order. Left on, it
     # puts the denial in the right pile whatever the policy does.
-    monkeypatch.setattr(
-        activation_path, "default_activation_target", lambda *a, **k: None
-    )
+    # Asked on both activation roads: a permanent's and a graveyard card's
+    # (``card_activation.activate_from_graveyard``).
+    for path in (activation_path, card_activation_path):
+        monkeypatch.setattr(
+            path, "default_activation_target", lambda *a, **k: None
+        )
     monkeypatch.setattr(
         casting_path, "default_cast_target", lambda *a, **k: (None, False)
     )

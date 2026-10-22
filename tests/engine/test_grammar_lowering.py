@@ -1929,7 +1929,7 @@ def test_other_does_not_swallow_the_postmodifier_wording():
 )
 def test_aura_enchant_lines_are_accounted_for_by_the_targeting_registry(line, card):
     """An Aura's attachment restriction is not an effect and never becomes one:
-    ``mixins/stack/casting.aura_enchant_noun`` reads it to decide which
+    ``mixins/stack/cast_target_validation.aura_enchant_noun`` reads it to decide which
     permanents the Aura may be cast onto, and ``targeting.derive_cast_target``
     reads it to tell the UI what to offer. An instruction here would duplicate a
     restriction the engine already applies at cast time."""

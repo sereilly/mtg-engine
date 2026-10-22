@@ -121,7 +121,7 @@ def test_702_5_an_enchant_subtype_clause_is_enforced_and_not_merely_offered():
     being a legal host.
     """
     from engine.auras import aura_attach_refusal
-    from engine.mixins.stack.casting import permanent_matches_enchant_noun
+    from engine.mixins.stack.cast_target_validation import permanent_matches_enchant_noun
     from engine.oracle import compile_card_oracle
     from engine.targeting import derive_cast_spec
 

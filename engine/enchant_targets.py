@@ -11,7 +11,7 @@ card in a graveyard" (Animate Dead) is not this: it chooses a card, and
 :func:`enchant_graveyard_line` is how a reader tells the two apart.
 
 One reading of the line for every reader of it — the cast picker, the cast
-path's enchant gate (``mixins/stack/casting``), ``engine/auras.py`` and the
+path's enchant gate (``mixins/stack/cast_target_validation``), ``engine/auras.py`` and the
 grammar's registry claim. Split out of ``engine/targeting.py`` at the
 2,000-line cap; ``engine.targeting`` still exports the names its callers pull.
 """
@@ -58,7 +58,7 @@ _ENCHANT_LAND_SUBTYPES: tuple[str, ...] = tuple(
 _ENCHANT_NOUNS = ("creature", "land", "artifact", "enchantment", "wall",
                   "permanent") + _ENCHANT_LAND_SUBTYPES
 #: A printed **negated** noun ("Enchant non-Wall creature", Aggression). The
-#: exclusion is enforced by `mixins/stack/casting.aura_enchant_noun`, which
+#: exclusion is enforced by `mixins/stack/cast_target_validation.aura_enchant_noun`, which
 #: reads the whole printed subject; what the picker needs from it is the head
 #: noun, so the candidate list is the right *kind* and the gate then refuses
 #: the excluded ones. Admitting the prefix here rather than a second noun per
@@ -195,7 +195,7 @@ def enchant_subject_keyword_exclusion(subject: str) -> tuple[str, str | None]:
 # absent here and present on the spell-side reanimation below.
 _ENCHANT_GRAVEYARD_LINE = re.compile(r"^enchant creature card in a graveyard\b", re.MULTILINE)
 
-# Reminder text, stripped exactly as mixins/stack/casting.aura_enchant_noun
+# Reminder text, stripped exactly as mixins/stack/cast_target_validation.aura_enchant_noun
 # strips it — "Enchant creature (Target a creature as you cast this. …)" is the
 # same restriction as a bare "Enchant creature", and two consumers of one line
 # must not read it differently.
@@ -214,7 +214,7 @@ def enchant_line_subject(line: str) -> str | None:
 
     The trailing ``$`` is load-bearing: it keeps "Enchant creature card in a
     graveyard" (Animate Dead) out. Neither derivation here nor
-    ``mixins/stack/casting.aura_enchant_noun`` implements that line — both
+    ``mixins/stack/cast_target_validation.aura_enchant_noun`` implements that line — both
     deliberately refuse it, because it names a graveyard card rather than a
     battlefield permanent — so claiming it would report a reanimation Aura's
     attachment rule as handled while nothing handles it.
@@ -288,7 +288,7 @@ def card_enchant_subject(oracle_text: str) -> str | None:
     asks whether the line is claimed - so what the picker offers and what the
     parse-coverage gate calls accounted for are one reading. The line is
     *found*, not assumed to be the first: Capture Sphere prints "Flash" above
-    it (see ``stack/casting.aura_enchant_noun``, which learned the same lesson).
+    it (see ``stack/cast_target_validation.aura_enchant_noun``, which learned the same lesson).
     """
     for line in (oracle_text or "").splitlines():
         subject = enchant_line_subject(line)

@@ -12,8 +12,16 @@ from .mixins import (
     TurnManagementMixin,
     PhaseStepsMixin,
     SpellCastingMixin,
+    AdditionalCastCostsMixin,
+    AlternativeCastCostsMixin,
+    CastTargetValidationMixin,
+    PoolPaymentMixin,
     AbilityActivationMixin,
+    ActivationPaymentMixin,
+    CardActivationMixin,
     StackResolutionMixin,
+    TriggerTargetsMixin,
+    TriggeredAbilitiesMixin,
     PendingChoicesMixin,
     ReplacementChoicesMixin,
     LibrarySearchChoicesMixin,
@@ -90,11 +98,20 @@ class Game(
     # Cross-cutting flow and supporting machinery
     TurnManagementMixin,
     PhaseStepsMixin,
-    # The stack (CR 405): one mixin per stage of an object's life on it.
+    # The stack (CR 405): one mixin per stage of an object's life on it,
+    # each followed by the parts split out of it at the 2,000-line cap.
     # See engine/mixins/stack/__init__.py.
     SpellCastingMixin,
+    AdditionalCastCostsMixin,
+    AlternativeCastCostsMixin,
+    CastTargetValidationMixin,
+    PoolPaymentMixin,
     AbilityActivationMixin,
+    ActivationPaymentMixin,
+    CardActivationMixin,
     StackResolutionMixin,
+    TriggerTargetsMixin,
+    TriggeredAbilitiesMixin,
     PendingChoicesMixin,
     # The prompt families, split out of PendingChoicesMixin and composed
     # immediately after it (engine/mixins/stack/choices/__init__.py).
@@ -504,14 +521,14 @@ class Game(
     # stack so they can go on the stack *above* it. None means "not casting" —
     # every other announcement goes straight onto the stack, which is why this
     # is a nullable buffer rather than a queue that is always drained.
-    # See ``StackResolutionMixin.deferring_triggers``.
+    # See ``TriggeredAbilitiesMixin.deferring_triggers``.
     deferred_triggers: list | None = None
     # CR 603.3b: the triggered objects put on the stack while a window is open
     # around one unit of the game that sets triggers off (a batch, a
     # resolution, a state-based sweep, a turn-based action). When the
     # outermost window closes, a seat that put two or more there is asked to
     # order them. None means no window is open. See ``engine/trigger_order.py``
-    # and ``StackResolutionMixin.putting_triggers_on_stack``.
+    # and ``TriggeredAbilitiesMixin.putting_triggers_on_stack``.
     collected_triggers: list | None = None
     # CR 603.7 delayed triggered abilities created by a resolving spell or
     # ability ("Whenever one or more nontoken creatures attack this turn, …" —

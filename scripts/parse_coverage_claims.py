@@ -662,7 +662,7 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # because this table is asked per sentence — the cost table reads them
     # together (`cast_costs.x_one_of_each_color_line`), folds the pair onto the
     # card's {X} offer and the payment sets the colours aside
-    # (`casting._pay_cast_cost`); a card printing either alone, or over an X no
+    # (`pool_payment._pay_cast_cost`); a card printing either alone, or over an X no
     # offer carries, is refused by the support gate and never reaches here.
     ("x spend one of each color (cast_costs.py)", x_one_of_each_color_sentence),
     ("ante boilerplate (deck construction, not gameplay)", lambda s: s.startswith("remove this card from your deck before playing")),

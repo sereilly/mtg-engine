@@ -42,10 +42,10 @@ from ..models import Permanent
 # ``engine/ai_valuation.py``, ``engine/activation_restrictions.py``,
 # ``engine/cast_restrictions.py``), mostly from inside functions that round was
 # moving, so the import lines could not move with this split without a merge
-# conflict on every one. Four modules ``tests/engine/test_module_size.py``
+# conflict on every one. Three modules ``tests/engine/test_module_size.py``
 # still holds at their size pull some of them from here too
 # (``engine/handlers/control_flow.py``, ``engine/handlers/stack.py``,
-# ``engine/mixins/permanent_state.py``, ``engine/mixins/stack/activation.py``):
+# ``engine/mixins/permanent_state.py``):
 # one import statement there would have become several, and a held module may
 # not grow. Each name goes when its last importer is repointed — the import
 # hygiene guard fails a re-export nobody pulls.

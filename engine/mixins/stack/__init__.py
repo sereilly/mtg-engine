@@ -10,6 +10,19 @@ mixin each, composed onto :class:`~engine.game.Game` the same way
     choices      PendingChoicesMixin     the arm / confirm / auto-resolve queue
                  (+ one mixin per prompt family; a package, see its __init__)
 
+The first three outgrew one module each at the 2,000-line cap, and each part
+split out of one is a mixin ``Game`` composes immediately after it:
+
+    casting      cast_additional_costs   CR 601.2b/f–h — additional costs
+                 cast_alternative_costs  CR 118.9 — the alternative cost
+                 cast_target_validation  CR 601.2c — the target gate
+                 pool_payment            CR 601.2g–h — spending the pool, and X
+    activation   activation_payment      CR 602.2b — what pays the cost
+                 card_activation         an ability of a card in a hand or
+                                         a graveyard (CR 113.6)
+    resolution   trigger_targets         CR 603.3c–d — a trigger's mode, targets
+                 triggered_abilities     CR 603.3 — triggers onto the stack
+
 The split is along "what stage of the object's life is this?", which is why
 ``choices`` exists as its own module rather than staying inside the two that arm
 its prompts: a pending choice belongs to no single stage, and the arm/confirm/
@@ -23,13 +36,19 @@ family of prompt beside it is a mixin ``Game`` composes immediately after it.
 """
 
 from .activation import AbilityActivationMixin
-from .casting import (
-    SpellCastingMixin,
+from .activation_payment import ActivationPaymentMixin
+from .card_activation import CardActivationMixin
+from .casting import SpellCastingMixin
+from .cast_additional_costs import AdditionalCastCostsMixin
+from .cast_alternative_costs import AlternativeCastCostsMixin
+from .cast_target_validation import (
+    CastTargetValidationMixin,
     aura_enchant_noun,
     enchant_noun_seat,
     enchant_seat_satisfied,
     permanent_matches_enchant_noun,
 )
+from .pool_payment import PoolPaymentMixin
 from .choices import (
     PendingChoicesMixin,
     ReplacementChoicesMixin,
@@ -48,9 +67,13 @@ from .choices import (
     SacrificeChoicesMixin,
 )
 from .resolution import StackResolutionMixin
+from .trigger_targets import TriggerTargetsMixin
+from .triggered_abilities import TriggeredAbilitiesMixin
 
 __all__ = [
     "AbilityActivationMixin",
+    "ActivationPaymentMixin",
+    "CardActivationMixin",
     "PendingChoicesMixin",
     "ReplacementChoicesMixin",
     "LibrarySearchChoicesMixin",
@@ -67,7 +90,13 @@ __all__ = [
     "SpellChoicesMixin",
     "SacrificeChoicesMixin",
     "SpellCastingMixin",
+    "AdditionalCastCostsMixin",
+    "AlternativeCastCostsMixin",
+    "CastTargetValidationMixin",
+    "PoolPaymentMixin",
     "StackResolutionMixin",
+    "TriggerTargetsMixin",
+    "TriggeredAbilitiesMixin",
     "aura_enchant_noun",
     "enchant_noun_seat",
     "enchant_seat_satisfied",

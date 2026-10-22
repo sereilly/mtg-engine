@@ -18,7 +18,7 @@ targeted mode of a triggered ability has no picker".
 This is the picker's half. It is deliberately **one** function, asked at two
 moments that must not disagree:
 
-* the enqueue path (`mixins/stack/resolution._choose_trigger_mode`) asks it to
+* the enqueue path (`mixins/stack/trigger_targets._choose_trigger_mode`) asks it to
   decide whether the ability can go on the stack at all, and
 * the prompt it arms offers exactly what the same call returned.
 
@@ -63,7 +63,7 @@ MODAL_HEAD_KEY = "modal"
 
 
 #: The conditions of a permanent's **own entry trigger** — what
-#: ``stack/resolution._apply_self_enters_battlefield_triggers`` announces as the
+#: ``stack/triggered_abilities._apply_self_enters_battlefield_triggers`` announces as the
 #: permanent enters (CR 603.6a) and puts on the stack (CR 603.3).
 #:
 #: ``enters_or_dies`` (Goblin Marshal, Hunting Moa) is here for its **entry**

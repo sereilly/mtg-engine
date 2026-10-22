@@ -134,7 +134,7 @@ def test_w1g4_spreading_algae_only_enchants_a_swamp(set_pool):
     attach check refuses anything else rather than taking the permissive
     fallback that a noun with no matcher row would reach."""
     from engine.auras import aura_attach_refusal
-    from engine.mixins.stack.casting import permanent_matches_enchant_noun
+    from engine.mixins.stack.cast_target_validation import permanent_matches_enchant_noun
     from engine.oracle import compile_card_oracle
     from engine.targeting import derive_cast_spec
 

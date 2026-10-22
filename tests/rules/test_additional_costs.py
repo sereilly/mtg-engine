@@ -359,7 +359,7 @@ def test_601_2b_a_clause_the_engine_cannot_charge_leaves_the_line_unread():
     rather than dropping.
 
     So what is left is a clause naming a **zone the payment path cannot
-    reach**: the table charges what ``engine/mixins/stack/casting.py`` can
+    reach**: the table charges what ``engine/mixins/stack/cast_additional_costs.py`` can
     collect, which is the caster's own battlefield, and a phrase it cannot
     enumerate must leave the line unread rather than be charged as the part of
     it that was."""

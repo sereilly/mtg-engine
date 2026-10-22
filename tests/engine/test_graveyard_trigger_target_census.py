@@ -20,7 +20,7 @@ asked, under a seat that is not, answered with a card that is not the default,
 and with the named card exiled in response. The table's two graveyards hold
 different cards, so which pile a card came out of is readable off its name.
 
-Validated backwards: with ``resolution._names_a_graveyard_target`` answering
+Validated backwards: with ``trigger_targets._names_a_graveyard_target`` answering
 False (no graveyard card is chosen on the stack, the tree as it was) eight of
 these ten tests fail. The defaulted-seat test names all eighteen triggers as
 choosing nothing; the cast-road response test names **all fourteen** entry

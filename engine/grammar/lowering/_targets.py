@@ -268,7 +268,7 @@ def _describe_targets(
 
     *announced_x_bound* is a lowering's claim that every announcement-time
     reader of its kind resolves an X bound: the cast gate
-    (``casting._validate_cast_targets``) substitutes the announced X before any
+    (``cast_target_validation._validate_cast_targets``) substitutes the announced X before any
     arm reads the description and the picker probes without it, and the
     handler re-asks it through the dispatcher's substitution (CR 601.2b, then
     601.2c, then 608.2b). Only a lowering whose handler re-checks its own

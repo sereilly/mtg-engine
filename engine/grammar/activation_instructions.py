@@ -104,7 +104,7 @@ def _parse_x_spend_restriction(stream: TokenStream) -> ast.ActivationRestriction
         # No colour read at all, or the "black **and/or** red" pair. The pair is
         # refused rather than charged as its first colour: splitting X between
         # two colours is the activator's CR 601.2h choice, and the machinery
-        # that makes it (``casting._x_color_allocations``) is on the spell path
+        # that makes it (``pool_payment._x_color_allocations``) is on the spell path
         # only. Charging the first colour alone would make the ability
         # *unpayable* from a pool the card allows — a restriction wrong in the
         # other direction, and still a restriction the card does not print.

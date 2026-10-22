@@ -87,18 +87,11 @@ from .activation_tallies import (
     _ONCE_ONLY_CLAUSE,
     _not_yet_activated_at_all,
 )
-# Re-exported for the modules that imported them from here before the
-# activation caps moved to ``activation_tallies`` (``mixins/stack/activation.py``,
-# ``handlers/control_flow.py``); new code imports them from there.
+# Re-exported for the module that imported it from here before the
+# activation caps moved to ``activation_tallies`` (``handlers/control_flow.py``);
+# new code imports it from there.
 from .activation_tallies import (  # noqa: F401
-    activations_allowed_each_turn,
     activations_this_turn,
-    at_activation_limit,
-    mark_activated_this_turn,
-    mark_once_only_activation,
-    printed_activation_caps,
-    prints_once_only_restriction,
-    reads_activation_tally,
 )
 
 if TYPE_CHECKING:
