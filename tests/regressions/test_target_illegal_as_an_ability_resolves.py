@@ -20,8 +20,8 @@ a game showed:
   it exchanged itself for a creature nobody chose.
 
 Every one of these failed on the tree before the gate
-(``legality.ability_targets_refusal``) and the blanking
-(``legality.blank_illegal_resolution_targets``).
+(``legality_resolution.ability_targets_refusal``) and the blanking
+(``legality_resolution.blank_illegal_resolution_targets``).
 """
 
 from __future__ import annotations

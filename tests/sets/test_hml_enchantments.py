@@ -540,7 +540,7 @@ def test_aether_storms_ban_is_claimed_by_the_table_that_enforces_it(set_pool):
     literal: a claim that does not go through the enforcing code is exactly the
     drift ``engine/grammar/registries.py`` exists to prevent.
     """
-    from engine.cast_restrictions import global_cast_ban_line
+    from engine.cast_bans import global_cast_ban_line
     from engine.grammar.registries import registry_for_line
 
     storm = set_pool("HML")["Aether Storm"]

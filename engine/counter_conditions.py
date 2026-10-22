@@ -230,13 +230,13 @@ def spell_cant_be_countered(card) -> bool:
 # (CR 113.6g) but of a permanent on the battlefield, naming every spell of a
 # card type — whoever is casting it, which is the whole of what separates this
 # from a "spells you control" wording that the row below does not read and
-# therefore refuses. It is to Scragnoth's line what ``cast_restrictions``'
+# therefore refuses. It is to Scragnoth's line what ``cast_bans``'
 # board-wide "Creature spells can't be cast." is to a spell's own timing gate,
 # and it is asked at the same moment as Scragnoth's: CR 608.2, as the counter
 # resolves, of the board as it stands then — a Herald that has left by then
 # protects nothing.
 #
-# The card **type** is payload, for ``cast_restrictions._GLOBAL_CAST_BAN``'s
+# The card **type** is payload, for ``cast_bans._GLOBAL_CAST_BAN``'s
 # reason: "Artifact spells can't be countered." is the same sentence and must
 # need no second row.
 _UNCOUNTERABLE_SPELL_TYPES = (

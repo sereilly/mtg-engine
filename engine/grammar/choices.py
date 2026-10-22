@@ -232,7 +232,7 @@ def _parse_choose_target(stream: TokenStream, parse_statement) -> "ast.ChooseTar
         # already says an activated ability's targets are chosen as it is
         # activated, so these words restate the rule rather than adding one —
         # and the engine enforces exactly that, through
-        # `legality.activation_target_refusal` before any cost is paid. Read
+        # `legality_abilities.activation_target_refusal` before any cost is paid. Read
         # rather than left, because a production must consume every token of
         # its line; consumed only *after* a comparison, so a sentence that
         # printed the words alone is still nobody's.

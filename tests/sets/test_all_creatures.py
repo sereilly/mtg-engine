@@ -378,7 +378,7 @@ def test_whip_vine_holds_only_the_flier_it_is_blocking(set_pool):
     blocking" (one relation, CR 509.1a, printed from either end), and the
     demonstrative back-reference the linked untap lock accepted only as "it".
     """
-    from engine.legality import usable_activated_abilities
+    from engine.targeting import usable_activated_abilities
 
     pool = set_pool("ALL")
     vine = Permanent(card=pool["Whip Vine"])
@@ -425,7 +425,7 @@ def test_whip_vine_refuses_a_creature_it_is_not_blocking(set_pool):
     """The narrowing enforced, which is the half a parsed-and-dropped rider
     would lose: the ability would tap the source for nothing and hold down a
     creature the card never names."""
-    from engine.legality import usable_activated_abilities
+    from engine.targeting import usable_activated_abilities
 
     pool = set_pool("ALL")
     vine = Permanent(card=pool["Whip Vine"])

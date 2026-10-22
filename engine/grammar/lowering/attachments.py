@@ -432,7 +432,7 @@ def _lower_announced_choice(
     Life) rather than to a prompt at resolution.
 
     Which matters in both directions. The picker offers the printed noun phrase
-    at activation, so ``legality.activation_target_refusal`` can decline an
+    at activation, so ``legality_abilities.activation_target_refusal`` can decline an
     ability with no legal target **before the tap cost is paid** — and Mogg
     Assassin taps as its cost, so a refusal after the fact is a real loss. And
     the narrowing a resolution-time prompt could not carry ("an opponent

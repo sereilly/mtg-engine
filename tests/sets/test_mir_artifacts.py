@@ -517,7 +517,7 @@ def test_cursed_totem_shuts_off_a_creatures_mana_ability(set_pool, catalog_by_na
     """"Activated abilities of creatures can't be activated."
 
     The *board* half of CR 602.5, and the exact mirror of
-    ``cast_restrictions.global_cast_ban`` one rule over: not a clause the
+    ``cast_bans.global_cast_ban`` one rule over: not a clause the
     ability prints about itself but a prohibition one permanent imposes on
     everybody, so it is read off the board at every activation.
     ``activation_denial`` is handed one printed line and rightly asks only

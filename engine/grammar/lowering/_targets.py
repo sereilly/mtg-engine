@@ -399,7 +399,7 @@ def _describe_several_card_targets(
 def _player_comparison_payload(
     comparison: "ast.PlayerComparison", node,
 ) -> dict[str, object]:
-    """The description ``legality``'s seat loop reads for "…who controls more
+    """The description ``legality_enumeration``'s seat loop reads for "…who controls more
     creatures than they do".
 
     The counted quantity goes through :func:`_amounts.count_spec` — the same
@@ -507,7 +507,7 @@ def _targets_payload(
             if recipient.attacked_this_turn:
                 # "…**who attacked this turn**" (Fire and Brimstone). Carried
                 # into the description the picker reads, because the picker is
-                # what enforces it (engine/legality.py's seat loop). A
+                # what enforces it (engine/legality_enumeration.py's seat loop). A
                 # restriction the enumerator never sees is a restriction nobody
                 # applies — and unenforced, the card hits any seat at all, which
                 # is wrong in the caster's favour and silent.

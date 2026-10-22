@@ -201,7 +201,7 @@ def _announcements_on_the_activators_own_side():
             spec, _ = _activation_spec([ability])
             if spec.get("kind") in (None, "none", "modal", "hand_card"):
                 continue
-            # The same four flags ``legality.activation_target_refusal`` returns
+            # The same four flags ``legality_abilities.activation_target_refusal`` returns
             # None for. A cost payment (Diamond Valley's sacrificed creature), a
             # discarded card and a chosen *source* (Jade Monolith) are CR 601.2b
             # choices, not CR 601.2c targets — the enumeration offers them all

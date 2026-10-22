@@ -8,7 +8,7 @@
     they're illegal."
 
 The engine asked that of instants and sorceries only
-(``legality.illegal_targets_refusal``). An **activated** ability was left to its
+(``legality_resolution.illegal_targets_refusal``). An **activated** ability was left to its
 handlers, each of which re-checked what it happened to re-check — whether the
 permanent was still there, sometimes the printed noun, never whether it could
 still be *targeted* — and then ran everything printed behind the targeted
@@ -40,7 +40,7 @@ The same file holds the rule's other half and its two neighbours:
 
 * **per target** — a spell or ability with several targets still resolves
   while one is legal, and the illegal ones are blanked out of the announcement
-  first (``legality.blank_illegal_resolution_targets``). Driven over every
+  first (``legality_resolution.blank_illegal_resolution_targets``). Driven over every
   multi-target instant and sorcery, where 42 of 48 acted on a target given
   shroud in response (Reckless Spite destroyed the creature given protection
   from black);
@@ -79,7 +79,7 @@ from engine.stack_targets import _target_instances, chosen_targets
 from engine.targeting import spec_is_a_cost, usable_activated_abilities
 from tests.helpers import _mk_card, _nosick, resolve_stack
 
-#: What the gate logs for an ability (``legality.ability_targets_refusal``),
+#: What the gate logs for an ability (``legality_resolution.ability_targets_refusal``),
 #: for a graveyard target (``vanished_graveyard_target_refusal``) and for a
 #: printed comparison (``stale_comparison_refusal``): the object "was removed
 #: from the stack" by CR 608.2b.

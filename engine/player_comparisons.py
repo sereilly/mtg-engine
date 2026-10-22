@@ -12,7 +12,7 @@ is enforced nowhere: an ability whose narrowing is dropped is one that works
 *more often than the card allows* — wrong in its controller's favour and
 silent, because nothing crashes and nothing is missing. So the clause is
 parsed into the ``targets`` description the enumerator reads
-(``engine/legality.py``'s seat loop) and answered here, and the lowering that
+(``engine/legality_enumeration.py``'s seat loop) and answered here, and the lowering that
 writes the description refuses any comparison this cannot take
 (``grammar/lowering/_targets.player_comparison_payload``) — one table, read by
 the gate that admits the card and by the enforcement that answers it, which is
@@ -97,9 +97,9 @@ def seat_answers_comparison(
     three would be enforcing two thirds of a printed restriction.
 
     **One function because there are now two moments.** CR 601.2c asks it while
-    the target is being chosen (``legality``'s seat loop, the list the picker
+    the target is being chosen (``legality_enumeration``'s seat loop, the list the picker
     and the announcement gate share) and CR 608.2b asks it again as the object
-    resolves (``legality.stale_comparison_refusal``). A restriction whose
+    resolves (``legality_resolution.stale_comparison_refusal``). A restriction whose
     picker and whose re-check were separate readings is this repo's recurring
     defect; here the *only* way to change what the clause means is to change it
     where both look.

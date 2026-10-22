@@ -12,7 +12,7 @@ destroyed nothing and drew two; Disenchant â€” the same first sentence, alone â€
 was refused. The browser's picker and the AI's proposal filter both declined
 these, which is how a rule comes to be enforced on two callers and not in the
 engine: every headless caller, and every test, could cast them.
-``legality.no_legal_cast_target_refusal`` is the one predicate now, and the
+``legality_cast_gates.no_legal_cast_target_refusal`` is the one predicate now, and the
 AI and the castable highlight ask it.
 
 **An Aura named by ``permanent_id`` alone is a complete announcement.** Every
@@ -247,10 +247,10 @@ def test_w2g7_no_spell_in_the_pool_is_cast_bare_at_an_empty_board_unless_its_tex
 def test_w2g7_the_sweep_sees_the_defect_when_the_gate_is_switched_off(monkeypatch):
     """The census validated backwards: without the gate, the same question
     names the known shape. A sweep that cannot fail is not a guard."""
-    from engine.legality import LegalityMixin
+    from engine.legality_cast_gates import CastTargetGatesMixin
 
     monkeypatch.setattr(
-        LegalityMixin, "no_legal_cast_target_refusal",
+        CastTargetGatesMixin, "no_legal_cast_target_refusal",
         lambda self, *args, **kwargs: None,
     )
     game = _w2g7_empty_board(_W2G7_TWO_SENTENCES)

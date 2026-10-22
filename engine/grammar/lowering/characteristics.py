@@ -773,7 +773,7 @@ def _lower_change_text(node: ast.ChangeText) -> tuple[OracleInstruction, ...]:
     For the Lace cycle's own wording no ``targets`` description is emitted: the
     vocabulary has no way to say "a spell on the stack *or* a permanent", so
     describing it at all would drop one of the two zones from the picker, and
-    ``engine/legality.py`` keeps answering ``spell_or_permanent``.
+    ``engine/legality_enumeration.py`` keeps answering ``spell_or_permanent``.
 
     A **narrowed** subject is the opposite case. "Change the text of target
     white enchantment you control that doesn't have cumulative upkeep"

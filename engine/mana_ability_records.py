@@ -15,7 +15,7 @@ cannot be written.
 **A turn stamp, not a swept flag.** ``begin_turn_bookkeeping`` clears a dozen
 per-turn records and every one of them is a chance to forget the thirteenth;
 stamping the turn instead makes "this turn" a comparison rather than a sweep,
-which is exactly what ``activation_restrictions.ACTIVATION_TALLY_MARK`` does for
+which is exactly what ``activation_tallies.ACTIVATION_TALLY_MARK`` does for
 CR 602.5's "only once each turn" and for the same reason. A permanent that left
 and came back is a new object (CR 400.7) with no metadata, which is also the
 rule rather than a shortcut: what returned is a different permanent, so its

@@ -297,7 +297,7 @@ def test_w1g3_fumarole_names_two_targets_and_pays_for_them(set_pool):
     Three of the four pieces W1G3 named turned out to be already built. The
     engine has carried an ordered **roles** target description since Glyph of
     Delusion: ``targeting.roles_spec`` answers with a list rather than one
-    ``kind``, ``legality.role_target_options`` enumerates role *n* with roles
+    ``kind``, ``legality_roles.role_target_options`` enumerates role *n* with roles
     0…n−1 settled, ``casting._validate_cast_targets`` gates the whole
     announcement, and the wire's ``target_permanent_ids`` is already the
     ordered cross-battlefield channel. Only the *union parse* refused, and its

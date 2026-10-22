@@ -7,7 +7,7 @@ different half of it:
   target?" and refuses everything modal, divided, graveyard-borne or aimed at
   the stack;
 * ``targeting.spell_targets`` answers for a spell and never for an ability;
-* ``legality.illegal_targets_refusal`` has to know an object's targets to say
+* ``legality_resolution.illegal_targets_refusal`` has to know an object's targets to say
   they are all illegal, and declined every object that may target a player
   (it asks this module now: :func:`announcement_targets`);
 * ``mixins/helpers._announce_targeting`` reads the stamped ids and believes a
@@ -546,7 +546,7 @@ def announcement_targets(
     channel *spec* says they are in.
 
     :func:`chosen_targets` for a caller that already holds the announcement —
-    ``legality.illegal_targets_refusal`` walks a spell one chosen mode at a
+    ``legality_resolution.illegal_targets_refusal`` walks a spell one chosen mode at a
     time, each with the spec the cast gate derived for it, and has to read
     each mode's targets against **that** spec rather than re-derive one. It
     is the same reader (:func:`_read`), which is the point: whether
@@ -701,10 +701,10 @@ def _candidates(
     change must never be offered from.
 
     An **activated** ability is enumerated for its source's *effective* card,
-    which is the card ``legality.activation_target_refusal`` enumerated its
+    which is the card ``legality_abilities.activation_target_refusal`` enumerated its
     announcement for (a Clone's abilities are the copied creature's, CR
     707.2). The rule that re-asks this list as the ability resolves (CR
-    608.2b, ``legality.ability_target_verdicts``) reads it here, and has to be
+    608.2b, ``legality_resolution.ability_target_verdicts``) reads it here, and has to be
     asking about the same card the announcement was.
     """
     from .legality import targeting_instruction
@@ -772,7 +772,7 @@ def _candidates(
 #: The channels :func:`apply_target_change` can rewrite. A **role** (two
 #: different descriptions in one announcement — Donate, Goblin Welder) is not
 #: among them: each role has its own candidate walk and relation test
-#: (``legality._role_target_walk``), and a flat re-enumeration would compare the
+#: (``legality_roles._role_target_walk``), and a flat re-enumeration would compare the
 #: second role's target against the first role's list.
 _CHANGEABLE_CHANNELS = frozenset({"item", "player", "divided", "graveyard", "stack"})
 

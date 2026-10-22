@@ -585,7 +585,7 @@ def grant_ability_line(
     # use budget brings a fresh budget with it. Cleared here rather than at the
     # sweep that ends the grant, because a line printed on the card itself is
     # never granted and must keep the budget it has spent.
-    from .activation_restrictions import clear_once_only_tally
+    from .activation_tallies import clear_once_only_tally
 
     clear_once_only_tally(perm, line)
     lines = perm.metadata.setdefault(GRANTED_ABILITY_LINES, [])

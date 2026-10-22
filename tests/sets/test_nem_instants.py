@@ -268,7 +268,7 @@ def _w1g2i_table(set_pool, hand, mine=(), theirs=()):
 
 def _w1g2i_alternative_offers(game, card):
     """The alternative-cost offers the cast picker shows seat 0, as label and
-    payability — what `legality.cast_cost_offers` hands the client."""
+    payability — what `legality_cast_spec.cast_cost_offers` hands the client."""
     return [
         (offer["label"], offer["payable"])
         for offer in game.cast_cost_offers(0, card, spell_hand_index=0)

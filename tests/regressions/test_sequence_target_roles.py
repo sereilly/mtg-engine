@@ -184,7 +184,7 @@ def test_soldevi_heretic_shields_the_creature_not_the_named_seat(catalog_by_name
 
 def test_soldevi_heretic_names_two_roles_not_one_creature(catalog_by_name):
     """The activation's derived spec, which is what
-    ``legality.activation_target_refusal`` gates the whole announcement
+    ``legality_abilities.activation_target_refusal`` gates the whole announcement
     through. It used to be ``{"kind": "creature"}`` — the first step's — so the
     seat was never part of the announcement at all."""
     ability = compile_card_oracle(

@@ -19,7 +19,7 @@ def grant_regeneration_to_target_creature(game: Game, instruction: OracleInstruc
     Graveyard), "target black creature" (Horror of Horrors).
 
     The printed narrowing arrives as the ordinary filter payload and is tested
-    by the one matcher, so what this accepts is what ``legality.py``'s picker
+    by the one matcher, so what this accepts is what ``legality_enumeration.py``'s picker
     offered. ``fallback_on_invalid_choice=False`` because an explicitly chosen
     illegal target fizzles (CR 608.2b) rather than sliding onto whatever else is
     on the battlefield.

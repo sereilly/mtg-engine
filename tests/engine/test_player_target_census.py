@@ -1,7 +1,7 @@
 """Census: a target named **without an id** is held to the picker's list.
 
 CR 601.2c: "The player announces their choice of an appropriate object or
-player for each target the spell requires." ``legality.cast_target_refusal``
+player for each target the spell requires." ``legality_cast_gates.cast_target_refusal``
 compared a named *permanent* and a named graveyard slot with the list
 ``_enumerate_targets`` hands the picker, and compared nothing else. Two
 channels carry a target with no ``permanent_id`` and were read by nobody:

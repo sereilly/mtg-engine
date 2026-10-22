@@ -4,7 +4,7 @@ CR 601.2c (and CR 602.2b, which sends an activation through it): "the player
 announces their choice of an appropriate object or player for each target the
 spell requires." A person at a client is asked — the browser cannot send the
 action without an answer, and the wire refuses one that tries
-(``legality.unannounced_activation_target``). A **headless** caller — a test, a
+(``legality_abilities.unannounced_activation_target``). A **headless** caller — a test, a
 scripted duel, the AI simulator — may leave the target out, and for the life of
 this engine that omission was answered at *resolution*, by whichever handler
 ran: each one scanned a battlefield with its own predicate and took the first
@@ -212,7 +212,7 @@ def default_cast_target(
         optional_cost_payments=optional_cost_payments, mode_index=mode_index,
     )
     # …as the cast picker presents it under a Flagbearer's requirement
-    # (``LegalityMixin._under_target_requirements``), for the activation
+    # (``CastTargetSpecMixin._under_target_requirements``), for the activation
     # side's reason.
     offered = game._under_target_requirements(
         caster_index, card, {**spec, "valid_targets": offered}, True, mode_index,

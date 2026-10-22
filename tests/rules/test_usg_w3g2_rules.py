@@ -4,7 +4,7 @@ Four of them, and each is a rule the engine already implemented for one shape
 and reached by only one route:
 
 * **CR 608.2b** — the all-targets-illegal fizzle, and the exception an object
-  may print on itself. `legality.illegal_targets_refusal` declines two whole
+  may print on itself. `legality_resolution.illegal_targets_refusal` declines two whole
   classes of object before it asks the rule at all (a triggered ability, and
   anything that is not an instant or a sorcery), so the printed exception is
   asserted against a card that is *neither* excluded — otherwise the branch

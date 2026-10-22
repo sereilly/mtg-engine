@@ -208,7 +208,7 @@ def test_the_id_is_what_makes_it_work_not_the_index():
 # (CR 400.7).
 #
 # Every probe below drives an **activated** ability, because
-# ``legality.illegal_targets_refusal`` (CR 608.2b) is instants and sorceries
+# ``legality_resolution.illegal_targets_refusal`` (CR 608.2b) is instants and sorceries
 # only: it returns None for every ability, so the fizzle has to happen at the
 # resolver or not at all. The Ice Age Talisman cycle reaches one of these tails
 # off a *trigger* and is the live case — it is tested on the card, in
@@ -414,7 +414,7 @@ def test_royal_assassin_does_not_kill_the_creature_that_inherited_the_slot():
     creature as though it had been named.
 
     Royal Assassin is one of 28 activated and triggered abilities reaching this
-    handler, none of which ``legality.illegal_targets_refusal`` covers. The 55
+    handler, none of which ``legality_resolution.illegal_targets_refusal`` covers. The 55
     spells that reach it were never exposed, which is why this went unnoticed.
     """
     game, decoy, intended = _leadb_assassin(depart=True)

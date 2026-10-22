@@ -330,7 +330,7 @@ EVENT_SUBJECT_LAST_KNOWN = "event_subject_last_known"
 #
 # Here rather than beside any one of its readers: the grammar's lowering writes
 # it, ``engine/targeting.py`` turns it into a picker spec and
-# ``engine/legality.py`` gates the announcement against it. Three copies of two
+# ``engine/legality_cast_gates.py`` gates the announcement against it. Three copies of two
 # dict keys is exactly the drift this module exists to prevent, and the quiet
 # direction of that drift is a spell whose targets nobody counted.
 COST_TARGET_BASE = "base"

@@ -53,7 +53,7 @@ from ._delays import (_BOUND_OBJECT_DELAYED_EVENTS)
 #:
 #: Each of these is a question about a seat, which is exactly what the pure
 #: matcher the steal handlers re-ask at resolution cannot answer — and exactly
-#: what ``legality._enumerate_targets`` answers before the target is ever
+#: what ``legality_enumeration._enumerate_targets`` answers before the target is ever
 #: named (``own_only``, ``opponent_only``, ``defending_player_only``). Listing
 #: the three rather than waving `controller` through is the claim that the
 #: picker really does carry them out: a fourth spelling refuses here instead of
@@ -598,7 +598,7 @@ def _lower_gain_control(
         described = _filter_payload(subject.filter)
         # "…target artifact **defending player controls**" (Kukemssa Pirates).
         # A seat, which the pure matcher the handler re-asks at resolution
-        # cannot answer and which `legality._enumerate_targets` answers before
+        # cannot answer and which `legality_enumeration._enumerate_targets` answers before
         # the target is ever named — the claim `_PICKER_ENFORCED_CONTROLLERS`
         # states above, made here as well. The linked-duration branch has
         # carried it since Scarwood Bandits; the permanent steal refused it, so

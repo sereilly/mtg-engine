@@ -22,7 +22,7 @@ Both ends read one list now, ``Game._trigger_target_candidates`` — the list th
 same trigger offers when its permanent enters *without* being cast, which was
 right all along. This holds three statements about it over the pool:
 
-1. **the picker is that list** (``legality.entry_trigger_cast_targets``),
+1. **the picker is that list** (``legality_cast_spec.entry_trigger_cast_targets``),
    compared against the prompt the trigger arms on the "put" road;
 2. **whatever a cast names, the stack object carries only what the trigger
    could choose** — the named target where it is legal, and otherwise one the

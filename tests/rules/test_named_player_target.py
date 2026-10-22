@@ -1,6 +1,6 @@
 """A player is a target like any other (CR 601.2c, CR 608.2b).
 
-``legality.cast_target_refusal`` held a named *permanent* to the list the
+``legality_cast_gates.cast_target_refusal`` held a named *permanent* to the list the
 picker offers and never read a named *player*: the seat rides one field with
 the battlefield a permanent target sits on, so the gate left it alone. Every
 narrowing a player phrase prints was therefore the picker's and nobody else's.

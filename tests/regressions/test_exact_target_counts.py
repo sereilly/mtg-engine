@@ -6,7 +6,7 @@ two; "up to two" and "any number of" make fewer legal. The grammar has told
 the two apart since it parsed them (``quantifier: "exactly"``) and the spec
 carries it to the picker (``exact_targets``), where the browser's confirm has
 always waited for the printed number — but the engine's own gate treated every
-count as a ceiling. ``legality.cast_target_refusal`` said so in its docstring:
+count as a ceiling. ``legality_cast_gates.cast_target_refusal`` said so in its docstring:
 "there is no ``min_targets`` in this engine".
 
 So an announcement that fell short was a legal cast that did less:

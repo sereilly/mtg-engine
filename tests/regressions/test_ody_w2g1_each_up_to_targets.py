@@ -18,7 +18,7 @@ board where it would deal 2. ``divide`` never read it for ``EACH`` (the amount
 is the resolving instruction's, CR 608.2h), so the stamp said nothing true and
 was asked nothing: it is no longer written. And the picker's
 ``division_total`` — what the AI and a client are told each target takes — is
-the arm the board selects now (``legality._size_conditional_division``).
+the arm the board selects now (``legality_cast_spec._size_conditional_division``).
 
 ``oracle_diff`` is blind to all of it; the census below is over every card in
 either manifest role whose spell divides, with a floor.

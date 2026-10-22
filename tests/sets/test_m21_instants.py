@@ -999,7 +999,7 @@ def test_rangers_guile_grants_hexproof_only_to_a_creature_you_control(set_pool):
     game.enforce_mana_costs = False
 
     # Naming the opponent's creature is refused as the spell is cast now
-    # (CR 601.2c, `legality.cast_target_refusal`) rather than resolving into a
+    # (CR 601.2c, `legality_cast_gates.cast_target_refusal`) rather than resolving into a
     # grant the handler then declines to make. Both halves are asserted: the
     # announcement is refused, and nothing was granted by way of it.
     refused = game.cast_from_hand(

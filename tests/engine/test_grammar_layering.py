@@ -2529,7 +2529,7 @@ FAMILY_SHARED = {
     # docstring: that module holds CR 601.2b-d — how many objects a sentence
     # announces and how a division is shared out — and this one holds "which of
     # several slots is asked for first", whose readers are a *walk*
-    # (`legality.role_target_options`, the announcement gate, the CR 608.2b
+    # (`legality_roles.role_target_options`, the announcement gate, the CR 608.2b
     # re-check) rather than the handler that acts on one chosen object.
     # A floor rather than a family, like `_targets` above it: three lowering
     # families read a builder from here through `_common`.

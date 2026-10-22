@@ -580,12 +580,12 @@ class GameActionRequest(BaseModel):
     # …and which permanents pay its sacrifice / return / tap half ("you may
     # sacrifice a creature rather than pay this spell's mana cost", Mind
     # Swords), by id. Absent is the engine's deterministic pick; the choices
-    # are `legality.cast_cost_offers`' `permanent_choices`.
+    # are `legality_cast_spec.cast_cost_offers`' `permanent_choices`.
     alternative_cost_permanent_ids: list[int] | None = None
     # …and which further cards in hand pay its "and another card" ("You may
     # discard an Island card and another card …", Foil), by hand position.
     # Absent is the engine's deterministic pick; the choices are
-    # `legality.cast_cost_offers`' `other_hand_choices`.
+    # `legality_cast_spec.cast_cost_offers`' `other_hand_choices`.
     alternative_cost_other_hand_indices: list[int] | None = None
     # CR 601.2b's *optional* additional cost, and how many times each offer was
     # taken: ``{"{1}{R}": 2}``. Its own field beside the two above for their
@@ -597,7 +597,7 @@ class GameActionRequest(BaseModel):
     # Absent declines every offer, which is what "may" means and the only
     # default that cannot charge a player for a price they did not accept.
     #
-    # The picker that fills it is `legality.cast_cost_offers` and the prompt
+    # The picker that fills it is `legality_cast_spec.cast_cost_offers` and the prompt
     # that reads it is `startCastOfferPrompt` in `web/static/app.js`.
     # `_cost_picker_spec` still models only a *mandatory* cost — the one the
     # caster will certainly pay — which is why an offer needed a shape of its

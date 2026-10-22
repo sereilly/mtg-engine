@@ -5,11 +5,11 @@ sentence and three ways of choosing a graveyard card, so the question is asked
 of every card in both manifest roles that chooses one:
 
 * a **spell** and an **activated ability** name their target through
-  ``legality._enumerate_graveyard_creatures`` — the one enumeration of
+  ``legality_enumeration._enumerate_graveyard_creatures`` — the one enumeration of
   graveyard targets, where the Seal is asked — so the picker offers nothing,
   and CR 601.2c / 602.2b refuse the announcement with nothing paid;
 * a **triggered ability** has no picker for a card in a graveyard: its handler
-  scans the pile as it resolves. ``legality.sealed_graveyard_target_refusal``
+  scans the pile as it resolves. ``legality_resolution.sealed_graveyard_target_refusal``
   removes it from the stack instead (CR 603.3d), on the evidence of its own
   printed line saying "target" once.
 

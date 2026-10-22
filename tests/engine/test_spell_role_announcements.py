@@ -5,7 +5,7 @@ to target creature") is a *spell*, and its tests are in
 ``tests/sets/test_apc_instants.py``. The lowering that makes its two targets
 roles is asked of every printed line, though — an activated ability printing
 the same sentence gets the same description — and the activation path fills a
-roles announcement through its own reader (``legality.named_role_objects``).
+roles announcement through its own reader (``legality_roles.named_role_objects``).
 A path the lowering can reach and nothing drives is how a supported card comes
 to do nothing, so it is driven here on an invented card: the bar SET_PLAYBOOK
 sets for a general mechanism is that a card printing the words works.

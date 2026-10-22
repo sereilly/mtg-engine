@@ -1870,7 +1870,7 @@ def _w1g7_split_card(set_pool):
 
 
 def test_w1g7_meddling_mage_is_supported_by_both_of_its_lines(set_pool):
-    from engine.cast_restrictions import chosen_name_ban_row
+    from engine.cast_bans import chosen_name_ban_row
     from engine.enter_effects import chooses_card_name_on_enter, enter_effect_line
 
     mage = set_pool("PLS")["Meddling Mage"]
@@ -1940,7 +1940,7 @@ def test_w1g7_meddling_mage_stops_one_half_of_a_split_card_and_not_the_other(
     """CR 201.4b names a split card by one half; CR 709.3a evaluates only the
     half being cast. Naming the first half leaves the second castable, and the
     joined spelling is the name of no spell and is refused as an answer."""
-    from engine.cast_restrictions import chosen_name_ban
+    from engine.cast_bans import chosen_name_ban
     from engine.faces import face_cards
 
     whole, first, second = _w1g7_split_card(set_pool)

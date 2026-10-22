@@ -1205,7 +1205,7 @@ def test_kor_chant_lowers_once_the_cast_can_announce_its_source(set_pool):
 # now nothing did — so a Keeper activated against a player who was ahead paid
 # out anyway once that player fell behind in response. The ability is not a
 # spell, so the engine's general 608.2b gate deliberately does not reach it;
-# `legality.stale_comparison_refusal` covers exactly this printed clause and
+# `legality_resolution.stale_comparison_refusal` covers exactly this printed clause and
 # says so.
 
 from engine import Game as _G5Game, PlayerState as _G5PlayerState

@@ -194,7 +194,7 @@ def _parse_activation_restriction(stream: TokenStream) -> ast.ActivationRestrict
     # gate and the grammar disagree about which cards are readable — so both
     # sides say `_SELF_SUBJECT`, the enforcement path by collapsing the name and
     # this one by never having it.
-    from ..activation_restrictions import _SELF_SUBJECT
+    from ..activation_clauses import _SELF_SUBJECT
 
     while not stream.exhausted and not stream.at_punct("."):
         token = stream.next()

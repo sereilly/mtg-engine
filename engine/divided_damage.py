@@ -229,7 +229,7 @@ def division_refusal(
     """Why *entries*' announced division is illegal, or None (CR 601.2d).
 
     Asked at announcement, beside the target check and before any cost is paid,
-    for the reason ``legality.cast_target_refusal`` is: an illegal announcement
+    for the reason ``legality_cast_gates.cast_target_refusal`` is: an illegal announcement
     returns the game to the moment before the spell was proposed (CR 601.2e),
     and a division checked at resolution would already have spent the mana.
 
@@ -332,7 +332,7 @@ def division_refusal(
         # never a claim that the others were exempt. The looseness it named out
         # loud ("any number of targets" is one instance of the word too, and
         # nothing here checks it) is closed by the same sentence that closes it
-        # for the flat family in ``legality._repeated_target_refusal``: one
+        # for the flat family in ``legality_abilities._repeated_target_refusal``: one
         # printed instance, however many slots it opens, may not be filled twice
         # by one object. Elven Rite and Contagion are :data:`CHOSEN` and were
         # the cards it was costing.
@@ -463,7 +463,7 @@ def conditional_division(instructions):
 
     The pair :func:`_divided_in_both_arms` reads, handed out whole for the one
     reader that must not take either arm on trust: the picker's
-    ``division_total`` (``legality.cast_target_spec``), which says how much each
+    ``division_total`` (``legality_cast_spec.cast_target_spec``), which says how much each
     target is dealt and can only say it of the arm the board selects *now*.
     :func:`divided_instruction` returns the replacing arm because the list is
     the same in both; the amount is not.

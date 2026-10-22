@@ -56,7 +56,7 @@ def test_eternal_flame_offers_no_seat_but_the_opponent(set_pool):
     the picker offered the caster.
 
     Asked of the picker rather than of a cast: a spell that can target a player
-    is one of the shapes `legality.cast_target_refusal` deliberately declines
+    is one of the shapes `legality_cast_gates.cast_target_refusal` deliberately declines
     today (ROADMAP.md), so the enumeration is where the narrowing bites.
     """
     from engine.oracle import compile_card_oracle

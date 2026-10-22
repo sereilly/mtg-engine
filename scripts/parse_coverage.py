@@ -70,17 +70,17 @@ from engine.cast_permissions import (board_free_cast_line,  # noqa: E402
                                      board_graveyard_play_line)
 from engine.cast_restrictions import (CAST_RESTRICTIONS,  # noqa: E402
                                       cast_absence_line, cast_condition_line,
-                                      combat_play_ban_line,
                                       cast_damage_source_line,
                                       cast_opponent_cast_line,
-                                      cast_own_cast_line,
-                                      chosen_name_ban_line,
-                                      same_name_as_permanent_ban_line,
-                                      global_cast_ban_line,
-                                      global_play_timing_line)
-from engine.cast_restrictions import (most_permanents_play_ban_sentence,  # noqa: E402
-                                      last_cast_color_ban_line,
-                                      spell_cap_line)
+                                      cast_own_cast_line)
+from engine.cast_bans import (combat_play_ban_line,  # noqa: E402
+                              chosen_name_ban_line,
+                              same_name_as_permanent_ban_line,
+                              global_cast_ban_line,
+                              global_play_timing_line)
+from engine.cast_bans import (most_permanents_play_ban_sentence,  # noqa: E402
+                              last_cast_color_ban_line,
+                              spell_cap_line)
 from engine.combat_assignment import defender_assigns_line  # noqa: E402
 from engine.counter_conditions import (uncounterable_class_line,  # noqa: E402
                                        uncounterable_line)
@@ -388,19 +388,19 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # The *other* board half of CR 601.3a — "Creature spells can't be cast."
     # (Aether Storm.) Not a gate the casting card prints about itself but a
     # prohibition a permanent imposes on every player, enforced by
-    # `cast_restrictions.global_cast_ban` from `mixins/stack/casting.py`. Its
+    # `cast_bans.global_cast_ban` from `mixins/stack/casting.py`. Its
     # own channel, asking the reader that answers it.
     ("cast_restrictions.py (board-wide ban)",
      lambda s: global_cast_ban_line(s) is not None),
     # "Each player can't cast more than one spell each turn." (Arcane
     # Laboratory.) CR 601.3a counting casts rather than naming a type, enforced
-    # by `cast_restrictions.spell_cap_ban` from `mixins/stack/casting.py`. Its
+    # by `cast_bans.spell_cap_ban` from `mixins/stack/casting.py`. Its
     # own channel beside the ban above, asking the reader that answers it.
     ("cast_restrictions.py (per-turn spell cap)",
      lambda s: spell_cap_line(s) is not None),
     # "Players can't cast spells that share a color with the spell most
     # recently cast this turn." (Mana Maze.) CR 601.3a comparing two spells,
-    # enforced by `cast_restrictions.last_cast_color_ban` from
+    # enforced by `cast_bans.last_cast_color_ban` from
     # `mixins/stack/casting.py`. Its own channel, asking the reader that
     # answers it.
     ("cast_restrictions.py (last-cast colour ban)",
@@ -436,7 +436,7 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # "A player who controls more permanents than each other player can't play
     # lands or cast artifact, creature, or enchantment spells." (Damping
     # Engine.) CR 601.3a over a seat the board names rather than the sentence,
-    # enforced by `cast_restrictions.most_permanents_cast_ban` from
+    # enforced by `cast_bans.most_permanents_cast_ban` from
     # `mixins/stack/casting.py` and by `most_permanents_land_ban` from
     # `Game._land_play_refusal`.
     #
@@ -456,7 +456,7 @@ CHANNELS: tuple[tuple[str, object], ...] = (
      lambda s: global_activation_ban_line(s) is not None),
     # The **timing** half of both rules at once — "Players can cast spells and
     # activate abilities only during their own turns." (City of Solitude.) One
-    # printed sentence read by `cast_restrictions.global_play_timing` from both
+    # printed sentence read by `cast_bans.global_play_timing` from both
     # `mixins/stack/casting.py` and `mixins/stack/activation.py`, so it gets one
     # channel asking that one reader: a claim split over two would be free to
     # survive the removal of either gate.

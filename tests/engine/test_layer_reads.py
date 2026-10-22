@@ -520,8 +520,9 @@ PRINTED_COMPILE_BASELINE: dict[str, int] = {
     "stack_targets.py": 1,
     # The resolving spell CR 608.2b re-asks (``resolving_targets_all_legal``)
     # and the stack item whose graveyard target Ground Seal made untargetable
-    # (``sealed_graveyard_target_refusal``).
-    "legality.py": 2,
+    # (``sealed_graveyard_target_refusal``) — both CR 608.2b's, which is
+    # where they went when ``legality.py`` split.
+    "legality_resolution.py": 2,
     # CR 707.9: a copier's *own* exceptions ("except it's an enchantment in
     # addition to its other types") are read off the copier as printed, before
     # the copy that would replace its text is recorded.

@@ -204,7 +204,7 @@ _PERMISSION_SHAPE = re.compile(
 def _sentences(text: str) -> list[str]:
     """Every printed sentence of *text*, normalized as the rows match them.
 
-    Split the way ``activation_restrictions._clauses`` splits, and for the same
+    Split the way ``activation_clauses._clauses`` splits, and for the same
     reason: the permission is the tail of an ability line, so a line-level
     reader would never see it alone.
     """

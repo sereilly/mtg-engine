@@ -1021,7 +1021,7 @@ def test_the_record_is_per_permanent_and_not_per_card(set_pool):
 # Both derive their whole spec from the compiled program
 # (`engine/targeting.py`), and both are asked through
 # `Game.activation_target_spec` — the list the web picker shows and the list
-# `legality.activation_target_refusal` gates on are the same call, so a test
+# `legality_abilities.activation_target_refusal` gates on are the same call, so a test
 # that asked the derivation alone would not be asking what a player sees.
 # ---------------------------------------------------------------------------
 

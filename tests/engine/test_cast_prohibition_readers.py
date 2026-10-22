@@ -480,7 +480,8 @@ def _row_predicate_names() -> set[str]:
     names: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom) and node.module in (
-            "auras", "cast_restrictions", "spell_prohibitions", "legality",
+            "auras", "cast_restrictions", "cast_bans", "spell_prohibitions",
+            "legality",
         ):
             names.update(alias.name for alias in node.names)
         if isinstance(node, ast.Attribute) and node.attr == "_set_lockout_banning_card":

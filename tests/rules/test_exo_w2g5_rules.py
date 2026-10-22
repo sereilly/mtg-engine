@@ -1,7 +1,7 @@
 """A player who has left the game is not a legal target (EXO wave 2, W2G5).
 
 `Game.opponents_of` has excluded a departed seat since free-for-all arrived
-(CR 800.4a), and `legality._enumerate_targets`' own seat loop never asked it —
+(CR 800.4a), and `legality_enumeration._enumerate_targets`' own seat loop never asked it —
 so the list the picker hands the browser, and the list the announcement gate
 checks a named seat against, both went on offering a player who is no longer in
 the game.

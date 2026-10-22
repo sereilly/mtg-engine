@@ -48,7 +48,7 @@ one spell, which it did for as long as the cap was asked of every card.
   readers (``_may_play_another_land``);
 * *when* a card may be cast — its own printed clause (``check_cast_timing``),
   sorcery timing and flash (``cast_timing``). A permission, not a prohibition;
-* whether a legal *target* exists (``legality.no_legal_cast_target_refusal``,
+* whether a legal *target* exists (``legality_cast_gates.no_legal_cast_target_refusal``,
   CR 601.2c). The one targeting row that **is** here is Peace Talks' standing
   ban (CR 113.3c), because it sits in the cast path's run of refusals and is an
   effect forbidding the cast rather than a board with nothing to aim at.
@@ -60,11 +60,11 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable
 
 from .auras import controller_cast_ban
-from .cast_restrictions import (chosen_name_ban, combat_play_ban,
-                                global_cast_ban, global_play_timing,
-                                last_cast_color_ban, most_permanents_cast_ban,
-                                own_cast_ban, same_name_as_permanent_ban,
-                                spell_cap_ban)
+from .cast_bans import (chosen_name_ban, combat_play_ban,
+                        global_cast_ban, global_play_timing,
+                        last_cast_color_ban, most_permanents_cast_ban,
+                        own_cast_ban, same_name_as_permanent_ban,
+                        spell_cap_ban)
 from .search_filters import card_has_type
 from .spell_prohibitions import casting_forbidden_this_turn
 

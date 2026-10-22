@@ -2,7 +2,7 @@
 
 CR 608.2b is the fizzle: as a spell or ability begins to resolve, its targets
 are checked, and if **every** one of them is illegal the object leaves the stack
-without resolving. `legality.illegal_targets_refusal` is where this engine asks
+without resolving. `legality_resolution.illegal_targets_refusal` is where this engine asks
 that question.
 
 Some objects print the exception:

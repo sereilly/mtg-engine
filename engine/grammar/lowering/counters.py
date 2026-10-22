@@ -422,7 +422,7 @@ def _lower_put_counter(
     # The in-combat relation is the same one Sentinel's rewrite carries and is
     # carried the same way — stripped from the target description, because no
     # read of the chosen creature alone can answer it, and re-asked by
-    # `legality.py` at activation and by the handler at resolution.
+    # `legality_enumeration.py` at activation and by the handler at resolution.
     if (
         is_pt_counter(node.counter)
         and node.counter != "+1/+1"

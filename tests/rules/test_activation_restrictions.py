@@ -293,7 +293,7 @@ def test_602_5_once_each_turn_standing_alone_is_a_row_of_its_own():
     table -- one fact with two representations. Both halves ask
     `activations_allowed_each_turn` now, over the state the permanent carries.
     """
-    from engine.activation_restrictions import (
+    from engine.activation_tallies import (
         activations_allowed_each_turn,
         mark_activated_this_turn,
     )
@@ -315,7 +315,7 @@ def test_602_5_the_once_each_turn_tail_is_still_read_as_the_same_clause():
     """Instill Energy prints the limit as a *tail* on a timing clause. The
     reader the stamp uses has to see all three printed spellings, or a card ends
     up stamped and never refused, or refused and never stamped."""
-    from engine.activation_restrictions import activations_allowed_each_turn
+    from engine.activation_tallies import activations_allowed_each_turn
 
     assert activations_allowed_each_turn(
         "{0}: Untap enchanted creature. Activate only during your turn and only "
@@ -342,8 +342,8 @@ def test_602_5_a_printed_cap_above_one_is_the_same_clause_with_a_number():
     frequency this module cannot read leaves the clause unmatched, which is what
     keeps the card unsupported rather than uncapped.
     """
-    from engine.activation_restrictions import (
-        activation_restriction_line,
+    from engine.activation_restrictions import activation_restriction_line
+    from engine.activation_tallies import (
         activations_allowed_each_turn,
         mark_activated_this_turn,
     )
@@ -389,7 +389,7 @@ def test_602_5_a_conjoined_clause_is_every_restriction_it_names():
     the sentence and a card can only demonstrate the pairing it happens to
     print.
     """
-    from engine.activation_restrictions import _conjuncts
+    from engine.activation_clauses import _conjuncts
 
     assert _conjuncts(
         "activate only during combat and only if defending player controls a snow land"
@@ -418,7 +418,8 @@ def test_602_5_a_comma_that_does_not_start_a_new_restriction_is_not_a_join():
     before", where `_clauses` splits the printed text and keeps "turn, before".
     Both must reach the same row.
     """
-    from engine.activation_restrictions import _conjuncts, activation_restriction_line
+    from engine.activation_clauses import _conjuncts
+    from engine.activation_restrictions import activation_restriction_line
 
     printed = "activate only during an opponent's turn, before attackers are declared"
     tokenised = "activate only during an opponent's turn , before attackers are declared"

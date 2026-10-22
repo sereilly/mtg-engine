@@ -155,7 +155,7 @@ BLOCKED_WITHOUT_BLOCKERS = "blocked_without_blockers_this_combat"
 #: printing it about artifacts, or on an artifact instead of an enchantment,
 #: is this rule with nothing added.
 #: The claim name the support gate and ``engine/grammar/registries.py`` use for
-#: the rule below. Its own, for ``cast_restrictions.OWN_CAST_BAN_CLAIM``'s
+#: the rule below. Its own, for ``cast_bans.OWN_CAST_BAN_CLAIM``'s
 #: reason: every other claim in this engine says what a *card* may do, and this
 #: one says who makes a decision the rules otherwise give to somebody else.
 DEFENDER_ASSIGNS_CLAIM = "defender_assigns"
@@ -169,7 +169,7 @@ _DEFENDER_ASSIGNS = (
 def defender_assigns_line(line: str) -> bool:
     """Whether *line* substitutes CR 510.1c's assigner for the defending player.
 
-    One reader, three callers, the arrangement ``cast_restrictions``' board bans
+    One reader, three callers, the arrangement ``cast_bans``' board bans
     have: ``engine/grammar/registries.py`` asks it so the printed line is
     *claimed*, ``engine/oracle.py``'s support gate asks it so the card is
     admitted on the strength of a rule that exists, and
