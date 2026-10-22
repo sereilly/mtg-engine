@@ -217,11 +217,11 @@ count** in `SimulationReport` (`interaction_count`, `lands_played`,
 `rehearsals_raised`, the combat counts). A run that cast nothing exits 1. A
 new piece of the turn arrives with its count.
 
-- **Casting**: every cast site goes through `ai_policy.cast_announcement` (an
+- **Casting**: every cast site goes through `ai_actions.cast_announcement` (an
   AST test fails a site that spells a cast keyword itself); the mode chooser
-  loops `Game.announceable_modes`; `ai_valuation.permitted_casts` is the one
+  loops `Game.announceable_modes`; `ai_weighed_cast.permitted_casts` is the one
   reader of what `cast_permissions` opens (`CastAction.from_zone`).
-- **Mana**: one exact matching (`ai_policy._PaymentPlanner`, also asked by the
+- **Mana**: one exact matching (`ai_payment._PaymentPlanner`, also asked by the
   web's auto-tap) over lands, then tap-only non-land sources
   (`ai_valuation.planned_mana_yield`), then a self-sacrificing source only when
   the lands cannot pay and the spell is worth more. `tap_planned_lands` binds
@@ -231,23 +231,26 @@ new piece of the turn arrives with its count.
   a table with an interactive seat, and in the untap step. The simulator
   answers with `choose_combat_instant_cast_action` and
   `choose_instant_speed_activation` (one executor, `cast_chosen_instant`).
-- **Rehearsal**: `ai_valuation.rehearse` deep-copies the game, casts the
+- **Rehearsal**: `ai_rehearsal.rehearse` deep-copies the game, casts the
   candidate on the copy, resolves on defaults and reads `seat_standing` (life,
   cards, `permanent_worth` through the layers) right after and at the end of
   the turn — what lasts counts in full, what ends this turn a quarter. A cast
   that moves nothing, or leaves its caster worse off, is not proposed. A
   precombat cast whose good is gone by the end of the turn is rehearsed through
   the fight (`through_combat=True`).
-- **A copy sees what its seat sees** (`ai_valuation.conceal_from`, CR 400.2):
+- **A copy sees what its seat sees** (`ai_rehearsal.conceal_from`, CR 400.2):
   libraries reshuffled and other hands redealt before anything is cast on it.
   Held by `tests/ai/test_ai_hidden_information_census.py`.
-- **A rehearsal that raises is counted** (`ai_valuation.REHEARSALS_RAISED`), each
+- **A rehearsal that raises is counted** (`ai_rehearsal.REHEARSALS_RAISED`), each
   distinct one is an issue, and the script exits 1 — otherwise it is a card
   silently never cast.
 - One decision's no-cast baseline is read once (`with deliberating():`). A
   class-level spy on `Game` sees rehearsal copies too (which run the end step
   and the next turn's bookkeeping), so guard a spy with
-  `ai_valuation.rehearsing()`.
+  `ai_rehearsal.rehearsing()`. The AI is two families of modules: the
+  choosers (`ai_policy` and the `ai_*` modules it fronts) and what a card or a
+  position is worth (`ai_valuation`, `ai_rehearsal`, `ai_weighed_cast`,
+  `ai_target_sides`, `ai_prompt_readers`).
 
 What the simulator does not do yet is in ROADMAP.
 
@@ -325,12 +328,12 @@ entries, not editing dispatch**.
   a category left off costs its cards their support. Vocabulary (creature types,
   keywords) is data in `data/vocabulary/` — never hardcode a type list.
 - **Implemented keywords are one frozenset**, `vocabulary.IMPLEMENTED_KEYWORDS`,
-  which `engine/oracle.py`'s keyword-line classifier reads. Adding one means the
+  which the keyword-line classifier (`engine/keyword_lines.py`) reads. Adding one means the
   set plus behaviour that covers **everywhere the CR says it applies** (lifelink
   is CR 702.15b damage, not combat damage: one rule in
   `damage_events.lifelink_life_gained` with three callers). Held by
   `tests/engine/test_keyword_registry.py`, which checks behaviour, not two lists.
-- **Rewrite keywords** are expanded by `oracle.expand_ability_lines` before any
+- **Rewrite keywords** are expanded by `line_rewrites.expand_ability_lines` before any
   line is classified, so the word is not in `IMPLEMENTED_KEYWORDS`: equip
   (CR 702.6a), buyback (702.27a), kicker (702.33a), flashback (702.34). Every
   reader of a card's lines (`legality.py`, `parse_coverage.py`,
@@ -339,7 +342,7 @@ entries, not editing dispatch**.
   in both front ends. Threshold is one condition ("seven or more cards are in
   your graveyard", `cards_in_zones`) asked where each printing already has a
   seam: a conditional static, an activation restriction row, and a spell's
-  "instead" (`oracle.expand_instead_paragraph_lines`).
+  "instead" (`line_rewrites.expand_instead_paragraph_lines`).
 - `engine/effect_labels.py` — the `effect_kind` *label* an ability reports. Never
   dispatch: it feeds `SimulationResult`, the support report's buckets and the
   `triggered_` prefix the web turns into `is_triggered`. Held to the pool both
@@ -352,14 +355,15 @@ entries, not editing dispatch**.
   is the only sanctioned place to key behaviour on a card name, enforced across
   `engine/` by `tests/engine/test_card_name_reads.py` (a name in a comparison is
   dispatch; in a log line or a fixture it is data) — AI heuristics included:
-  which cards a weight reaches is derived from the compiled program in
-  `engine/ai_valuation.py`. Before writing a name, give an invented card the
+  which cards a weight reaches is derived from the compiled program in the
+  valuation modules (`engine/ai_valuation.py` and its family). Before writing a name, give an invented card the
   same text and see whether it works. **A hook writes the end state directly, so
   it is a place a general rule can be skipped in silence**; the pile is measured
   by `scripts/hook_reliance.py` against ceilings
   (`scripts/hook_reliance_ratchet.json`, `--accept` only after deciding a rise
   was worth it), over supported cards.
-- **Trigger conditions**: `engine/oracle.py`'s pattern table delimits a printed
+- **Trigger conditions**: the pattern tables (`engine/whenever_triggers.py`,
+  `engine/trigger_conditions.py`) delimit a printed
   noun phrase as `<name>_subject` (`_subjects` when counted) and a number as
   `<name>_count`, so a different tribe or number needs no code; two rows may
   share a kind when only the question differs. **A condition needs a dispatcher,
@@ -373,9 +377,14 @@ entries, not editing dispatch**.
 
 - `engine/handlers/` — `@effect_handler(kind)` functions, registered into
   `EFFECT_HANDLERS` and dispatched by dict lookup; a new handler module joins
-  the import list in `engine/handlers/__init__.py`. `handlers/_common.py` holds
-  shared helpers (target resolution, filter matching, damage application).
-- `engine/handlers/control_flow.py` — `sequence`, `if_then`, `may`, `for_each`.
+  the import list in `engine/handlers/__init__.py`. The helpers handlers share
+  are floors: `_targets.py` (target resolution, `pick_target_permanent`, roles),
+  `_filters.py` (filter matching), `_amounts.py` (counts and amounts),
+  `_chosen.py` ("the chosen ..." words), and `_common.py` (shared actions,
+  damage application).
+- `engine/handlers/control_flow.py` — `sequence`, `if_then`, `may`, `for_each`
+  (its conditions are in `_conditions.py`, `_record_conditions.py`,
+  `_color_conditions.py`).
   Compose effects through these, never a fused kind
   (`deal_damage_and_gain_life` is two steps in a `sequence`); values pass
   through `OracleExecutionContext.results`.
@@ -404,11 +413,12 @@ entries, not editing dispatch**.
 
 **Replacement, prevention and the CR 616 process**
 
-- `engine/replacements.py` — CR 614 interceptors by event kind, each a pure
+- `engine/replacements/` — CR 614 interceptors, one module per kind of event,
+  each a pure
   `applies` predicate plus the effect and an explicit `order`. An interceptor
   produces no instruction, so a permanent whose only ability is one is held up
-  by `REPLACEMENT_LINES` (read by the grammar's parse claim and the support
-  gate) — adding an interceptor means adding its line there.
+  by `REPLACEMENT_LINES` (`replacements/lines.py`; read by the grammar's parse
+  claim and the support gate) — adding an interceptor means adding its line there.
 - `engine/turn_replacements.py` — a replacement **a resolving spell creates for
   the turn**: a `TurnReplacement` record with a lifetime and a CR 614.5 key,
   ended by one `clear_turn_replacements` at cleanup. A new one adds a field or
@@ -416,7 +426,7 @@ entries, not editing dispatch**.
 - `engine/replacement_choices.py` — an optional replacement offers a
   `ReplacementChoice`; a `@replacement_choice(kind)` resolver finishes it, for
   an interactive seat (queued) and every other seat (default) alike.
-- `engine/prevention.py` — CR 615 shields, `@prevention_effect(order, applies=…)`
+- `engine/prevention/` — CR 615 shields, `@prevention_effect(order, applies=…)`
   over one `{recipient, amount, source, combat}` event (recipient a player or a
   permanent). A new "prevent …" card is an entry here, never a branch in a
   damage path. `engine/shields.py` is the state they read: one `Shield`
@@ -442,7 +452,8 @@ entries, not editing dispatch**.
 
 **Zones, draws, discards, mana**
 
-- **Drawing is one seam.** `Game._draw_with_replacements` is where a draw becomes
+- **Drawing is one seam.** `Game._draw_with_replacements`
+  (`mixins/draws_and_discards.py`) is where a draw becomes
   a CR 614 event; `PlayerState.draw` underneath is banned outside it by
   `tests/engine/test_draw_seam.py` (only pregame draws are allowed). **Draws are
   made one at a time** (CR 616.1f): a prompt armed during a seat's draw is
@@ -454,12 +465,14 @@ entries, not editing dispatch**.
   (`discard_cause_seat`), because "a spell or ability an opponent controls causes
   you to discard" is a question about the cause.
 - **Every "put into a hand / a library"** goes through `Game.put_card_into_hand`
+  (`mixins/zone_funnels.py`)
   / `put_card_into_library` (CR 903.9b has no single fire site).
 - **Leaving a hand is one transition**: `Game.take_card_from_hand(owner, card)`
   removes exactly one copy by identity — every copy of a card in a hand is the
   same `CardDefinition` object. Guarded by `tests/engine/test_hand_removal_seam.py`.
 - `engine/mana_payment.py` — whether a cost can be paid, and how. Casting and
-  activating spend the *pool* (`_pay_mana_cost`); an effect's "you may pay"
+  activating spend the *pool* (`_pay_mana_cost`, `mixins/stack/pool_payment.py`);
+  an effect's "you may pay"
   gives no priority window, so it taps lands **for mana**, one at a time,
   through `Game._pay_planned_cost`. `plan_payment` is an exact matching over
   `Game.payment_lands`, told who is paying (`payer=`, so a CR 106.6 spending
@@ -497,15 +510,16 @@ entries, not editing dispatch**.
   / `KICKED_WITH`, since a card may print two kickers, CR 702.33b/f), and a cast
   trigger (`cast_kicked`); `target_was_kicked` asks it of the *targeted* spell.
   A permanent named to pay a cost pays it or the spell is not cast (CR 601.2h,
-  `casting._named_cast_cost_refusal`). An alternative cost or waiver still owes
+  `cast_additional_costs._named_cast_cost_refusal`). An alternative cost or
+  waiver still owes
   what a tax adds (CR 118.9d, `Game.alternative_cost_mana`).
 - `engine/flashback.py` — flashback (CR 702.34): a graveyard cast permission
   that requires an alternative cost (`CastPermission.cost`) and a destination as
   the card leaves the stack (`leaves_stack_to_exile`). `StackItem.flashback`
   says a cast was one; `has_flashback` takes the game (a grant counts).
 - `engine/madness.py` — madness (CR 702.35): the keyword line compiles to a
-  trigger (`oracle.keyword_line_triggers`), the static half is a discard
-  destination (`replacements.DISCARD_INTO_EXILE`), and the trigger casts the
+  trigger (`keyword_lines.keyword_line_triggers`), the static half is a discard
+  destination (`replacements/registry.DISCARD_INTO_EXILE`), and the trigger casts the
   card during its own resolution (CR 608.2g, `madness_cast`).
 - `engine/cast_prohibitions.py` — **may this card be cast at all** (CR 601.3):
   one ordered table behind `cast_prohibition(game, seat, card)`, asked by the
@@ -523,7 +537,8 @@ entries, not editing dispatch**.
   Ordered tables keyed by the printed clause, read by the path **and the support
   gate**, so a clause cannot be admitted and ignored. An unenforced restriction
   is an ability that works more often than the card allows — nothing crashes.
-- `engine/cost_modifiers.py` — text-keyed cost taxes and reductions (CR 601.2f).
+- `engine/cost_modifiers.py` (with `cost_modifier_lines.py` and
+  `self_cost_modifiers.py`) — text-keyed cost taxes and reductions (CR 601.2f).
   Both directions are live; a reduction touches only generic mana and spills an
   excess coloured reduction onto generic (CR 118.7a–d) — `reduce_cost`, in one
   place.
@@ -535,9 +550,12 @@ entries, not editing dispatch**.
   ability, one kind→spec table. Returns None rather than guessing; the guards in
   `tests/engine/test_targeting.py` / `test_activation_targeting.py` ratchet what
   still needs `legality.py`'s one text fallback. A modal spell is held to the
-  mode it announces (`targeting.announced_mode_instructions`, read by both gates,
+  mode it announces (`cast_targets.announced_mode_instructions`, read by both
+  gates,
   the picker and `Game.announceable_modes`).
-- **The gates, in `engine/legality.py`, all over the picker's own list**
+- **The gates, in `engine/legality.py` and the `legality_*.py` modules beside it
+  (`_cast_gates`, `_abilities`, `_stack`, `_resolution`), all over the picker's
+  own list**
   (`_enumerate_targets`), so the engine and the picker agree:
   - `no_legal_cast_target_refusal` — a spell that must target cannot be cast
     with nothing to name (CR 601.2c);
@@ -554,7 +572,7 @@ entries, not editing dispatch**.
     (`StackItem.activated`) and triggers with a chosen target
     (`StackItem.targets_chosen`).
   Both announcement and resolution ask the same predicate,
-  `LegalityMixin._described_cast_target_slots`, and read targets by
+  `CastTargetGatesMixin._described_cast_target_slots`, and read targets by
   `permanent_id`, never index. A named player is a target like any other
   (`stack_targets.announcement_targets`).
 - **A headless announcement that names no target is answered once, as it is
@@ -568,8 +586,9 @@ entries, not editing dispatch**.
 - Roles: "counter target spell and … target creature" is a roles announcement
   with a stack role (`targeting.role_is_stack`, `target_role_refs` with a
   `stack_index`); "target spell or permanent" is one slot in either zone; a
-  slot list of printed targets is a count (`slot_list_is_exact`); "up to N
-  target cards from a single graveyard" is `targeting.SINGLE_GRAVEYARD`; two
+  slot list of printed targets is a count
+  (`target_descriptions.slot_list_is_exact`); "up to N
+  target cards from a single graveyard" is `target_descriptions.SINGLE_GRAVEYARD`; two
   players may be two roles (`choices["role_seats"]`). `Game.stack_target_seat`
   is the controller of a targeted spell ("its controller").
 - `engine/target_requirements.py` — a target an opponent **must** choose (the
@@ -590,13 +609,14 @@ entries, not editing dispatch**.
   trigger's, never the spell's (a creature spell targets nothing, CR 115.1;
   `stack_targets.permanent_spell_targets_nothing`), and is held to what the
   trigger itself could choose (CR 603.3d,
-  `LegalityMixin.entry_trigger_cast_targets`). A source can leave before its own
+  `CastTargetSpecMixin.entry_trigger_cast_targets`). A source can leave before
+  its own
   entry trigger resolves, so a handler moving something "until this leaves the
   battlefield" asks `linked_exile.until_leaves_has_ended` (CR 610.3b; a
   phased-out source has not left). Censuses:
   `test_entry_trigger_stack_census.py`, `test_entry_trigger_source_leaves_census.py`.
 - **A cast trigger's "it" is a stack object, not a card** — the cast events carry
-  `cast_item`, read by `handlers/_common.triggering_spell`.
+  `cast_item`, read by `handlers/_targets.triggering_spell`.
 - `engine/state_triggers.py` — a state trigger about another permanent, and CR
   603.8's latch both ways (no retrigger while on the stack; retrigger once it
   left without resolving).
@@ -612,11 +632,13 @@ entries, not editing dispatch**.
 
 - `engine/pending_choices.py` — every other decision a seat owes part-way
   through a spell, an ability or a step: one `PendingChoice` queue on
-  `Game.pending_choices` and one `ChoiceSpec` per kind, registered at the bottom
-  of `engine/mixins/stack/choices.py` (how it is answered, what a
+  `Game.pending_choices` and one `ChoiceSpec` per kind, registered in
+  `engine/mixins/stack/choices/table.py`, in an order that is behaviour (how it is answered, what a
   non-interactive seat does, which action answers it, how the web renders and
-  gates it). **Adding a prompt is one `register_choice` + one renderer in
-  `web/prompts.py` + the code that arms it** — never a new `Game` field.
+  gates it). **Adding a prompt is one `register_choice` row + its answer in the family
+  module of `engine/mixins/stack/choices/` + one renderer in
+  `web/prompt_cards.py`, `prompt_board.py` or `prompt_values.py` (by what the
+  prompt is answered with) + the code that arms it** — never a new `Game` field.
 - **While a prompt is owed, the game waits** (CR 608.2, 117.3b): a prompt armed
   mid-resolution records its stack object, which stays on the stack until its
   last prompt (including one armed by answering an earlier one) is answered.
@@ -628,7 +650,8 @@ entries, not editing dispatch**.
   last answer before acting (`new_keep_batch` / `finish_keep_batch`).
 - `engine/enter_effects.py` — entry-state phrases `_initialize_permanent_state`
   carries out; `enter_effect_line` is read by the support gate *and* the grammar.
-  `ENTRY_CHOICES` is what a permanent may choose as it enters, and
+  `ENTRY_CHOICES` (`engine/entry_choices.py`) is what a permanent may choose
+  as it enters, and
   `web/serialization` derives `entry_choices` from it. **The client must be able
   to answer the prompt**: `tests/ui/test_entry_choice_prompt_ui_api.py` enters
   every chooser under an interactive seat.
@@ -680,7 +703,7 @@ entries, not editing dispatch**.
 - `engine/control.py` — CR 613 layer 2. A control change is a **contribution**
   (`change_control(permanent, seat, source=…)`) with a timestamp, ended by
   `end_control_change`; `base_controller_index` is never rewritten.
-- **The control seam on `Game`** (`engine/mixins/helpers.py`):
+- **The control seam on `Game`** (`engine/mixins/control_seam.py`):
   `all_permanents()`, `permanents_with_controller()`, `controlled_by(seat)`,
   `permanents_matching(pred)`, `controller_index_of(perm)`, `controls(seat,
   perm)`, `is_on_battlefield(perm)`. **Never iterate `player.battlefield`
@@ -701,15 +724,17 @@ entries, not editing dispatch**.
   - Combat maps are index-keyed but follow their creatures
     (`_renumber_combat_after_removal`); a new combat map is added there.
 - `engine/auras.py` — what an Aura's effect lines say and whether they are
-  implemented (the support gate), and its continuous effects while attached. Use
-  `attach_aura` / `detach_aura`. The templates read "enchanted" and "equipped"
+  implemented (the support gate); its continuous effects while attached are
+  `aura_grants.py` and `aura_restrictions.py`. Use `attach_aura` / `detach_aura`
+  (`aura_attachment.py`). The templates read "enchanted" and "equipped"
   alike (CR 301.5f).
 - `engine/equipment.py` — Equipment (CR 301.5), equip as a rewrite, attach
   (CR 701.3); `equip_refusal` is the one legality predicate, also asked by the
   CR 704.5n sweep. An Equipment is supported only if its equip ability compiles
   and every effect line is claimed.
 - Text-keyed derivation tables (parameters are payload, and the support gate
-  reads the same table the dispatch does): `combat_restrictions.py` (CR 506),
+  reads the same table the dispatch does): `combat_restrictions.py` (CR 506; its
+  rows in `combat_restriction_table.py`),
   `untap_restrictions.py` / `draw_step_modifiers.py` (CR 502/504),
   `land_animation.py`, `land_play_allowance.py` (CR 305.2), `landwalk.py`,
   `mana_could_produce.py`, `counter_conditions.py`. A table joins the grammar's
@@ -722,21 +747,29 @@ entries, not editing dispatch**.
 **Turn structure**
 
 - `engine/phases/` — one mixin per phase and step (CR 500–514), composed onto
-  `Game`; phase/step turn-based logic goes here.
+  `Game`; phase/step turn-based logic goes here. The declaration steps have
+  `attack_legality.py`, `block_legality.py` and `block_triggers.py` beside them.
 - `engine/mixins/` — cross-cutting flow not tied to one step: priority and step
   navigation (`phase_steps`), per-turn and pregame management, state-based
   actions, effects, helpers. Consumes compiled programs; must never parse oracle
   text. **A step does not end on an empty stack alone**:
   `_resolve_priority_window` makes the state check before closing and goes round
   again if it put something on the stack, and **the check is made between
-  resolutions** (`_check_between_resolutions`, CR 704.3).
-- `engine/mixins/stack/` — the stack (CR 405), one mixin per stage: `casting`
-  (CR 601), `activation` (CR 602), `resolution` (CR 603/608) and `choices` (the
-  prompt queue and its registry).
+  resolutions** (`PhaseStepsMixin._check_between_resolutions`, CR 704.3).
+- `engine/mixins/stack/` — the stack (CR 405), one family of mixins per stage:
+  `casting` with `cast_announcement`, `cast_additional_costs`,
+  `cast_alternative_costs`, `cast_target_validation` and `pool_payment`
+  (CR 601; `_cast_onto_stack` calls one helper per CR 601.2 step); `activation`
+  with `activation_checks`, `activation_payment`, `activation_charges` and
+  `card_activation` (CR 602); `resolution` with `trigger_targets` and
+  `triggered_abilities` (CR 603/608); and the `choices` package (the prompt
+  queue, one module per prompt family, and `table.py`).
 
-`engine/oracle.py` is the compiler (tokenize → classify lines as
-keyword/triggered/activated/static → delegate effect clauses to `engine.grammar`,
-then to the card hooks). `engine/oracle_types.py` holds shared dataclasses and
+`engine/oracle.py` is the compiler: the per-card cache and the gates every card
+passes. It tokenizes, rewrites lines (`line_rewrites`), classifies them as
+keyword/triggered/activated/static (`line_classification`, `ability_lines`,
+`keyword_lines`) and delegates effect clauses to `engine.grammar`, then to the
+card hooks (`front_ends`). `engine/oracle_types.py` holds shared dataclasses and
 imports nothing from the engine.
 
 ### Ordering
@@ -759,7 +792,7 @@ Work top-down and stop at the first step that covers it (recipe in
 3. New effect → invent an instruction kind (verb_object naming), give it an entry
    in `INSTRUCTION_CATEGORIES` *and* `GRAMMAR_CATEGORIES`, add an
    `@effect_handler`. Tokens → `create_token`; P/T → `engine/pt.py`; "would
-   happen, instead" → `engine/replacements.py`.
+   happen, instead" → `engine/replacements/`.
 4. Bespoke behaviour → a hook in `card_hooks.py` keyed by name (or a
    `cast_restrictions.py` entry for a textual timing gate). Last resort.
 5. Add a focused test in `tests/sets/`, in the file for that set and the card's
@@ -801,7 +834,9 @@ and a module may import only from an earlier one
 | `payment_plan.py` | the auto-tap: which permanents pay for an action, planned and tapped by the server |
 | `action_helpers.py`, `action_*.py` | the shared cast plumbing, then one module of registered handlers per group of `ActionKind`s |
 | `actions.py` | the one dispatch over `ActionKind` |
-| `prompts.py` | every interactive prompt's presentation (below) |
+| `prompt_registry.py` | `PromptContext` and the renderer table |
+| `prompt_cards.py`, `prompt_board.py`, `prompt_values.py` | one renderer per prompt kind, by what the prompt is answered with (cards; permanents, players or spells; a value) |
+| `prompts.py` | the three loops over every prompt (below) |
 
 The card pool is `CARD_PATHS` from `engine.card_loader.manifest_set_paths()`,
 loaded once at startup into `CARD_CATALOG` (`runtime.py`). **Adding a set means
@@ -815,8 +850,8 @@ is encoded as one moment (`web.runtime.one_request_at_a_time`). Session `mode` i
 one of `human_vs_ai`, `ai_vs_ai`, `human_vs_human`, `free_for_all` (3–4 seats,
 configured per seat via `seats`).
 
-`web/prompts.py` owns every prompt's presentation: one renderer per kind plus
-the three loops that render the prompts a viewer may see, refuse the actions a
+`web/prompts.py` and the renderer modules beside it own every prompt's
+presentation: one renderer per kind plus the three loops that render the prompts a viewer may see, refuse the actions a
 pending prompt blocks, and answer AI-owned prompts with their defaults — all
 reading the registry, so a new prompt is covered by construction. **The client
 keeps no copy of that registry**: the payload carries `waiting_on_prompt`, which
