@@ -235,7 +235,8 @@ def test_w2g5_a_named_self_reference_reads_as_this_creature(set_pool):
 # --- W2G1: the Licid cycle, and the two Rootwater merfolk -------------------
 
 from engine import Game as _W2G1Game, PlayerState as _W2G1Player
-from engine.auras import attach_aura as _w2g1_attach, detach_aura as _w2g1_detach
+from engine.aura_attachment import (attach_aura as _w2g1_attach,
+                                    detach_aura as _w2g1_detach)
 from engine.card_loader import load_cards as _w2g1_load
 from engine.card_loader import manifest_set_path as _w2g1_path
 from engine.cast_timing import casts_at_instant_speed as _w2g1_flash

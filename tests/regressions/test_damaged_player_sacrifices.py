@@ -11,7 +11,7 @@ triggers in the pool, this was the only sacrifice reading that seat.
 """
 
 from engine import Game, PlayerState
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.card_loader import load_cards, manifest_set_path
 from engine.models import Permanent
 from tests.helpers import _mk_card, resolve_stack

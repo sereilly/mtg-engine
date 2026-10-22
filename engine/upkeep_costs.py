@@ -12,9 +12,9 @@ prompt now hold.
 **A cost is not a mana cost.** CR 702.24a admits *any* cost after the keyword,
 and Ice Age uses the licence: "—Pay 2 life" (Glacial Chasm), "—Pay {B} and 1
 life" (Infernal Darkness), "—Sacrifice a land" (Polar Kraken). The field names
-are ``cast_costs.AdditionalCost``'s deliberately — CR 601.2b's additional cost,
-CR 602.2b's activation cost and this one are the same act, and a cost this
-engine can collect should not be described three ways.
+are ``cast_cost_clauses.AdditionalCost``'s deliberately — CR 601.2b's
+additional cost, CR 602.2b's activation cost and this one are the same act, and
+a cost this engine can collect should not be described three ways.
 
 **The phrase reader consumes all of it or refuses it**, which is the grammar's
 own hard invariant carried into a derivation table. Not a precaution: the cost
@@ -44,7 +44,7 @@ class UpkeepCost:
     "printed" type would be a second vocabulary for one thing.
 
     ``sacrifice`` is the noun phrase a sacrifice must match, in the payload
-    vocabulary ``cast_costs.AdditionalCost.sacrifice_filter`` and the
+    vocabulary ``cast_cost_clauses.AdditionalCost.sacrifice_filter`` and the
     forced-sacrifice prompt already use. ``None`` means "no sacrifice", never
     "anything": an empty filter would let the payment be any permanent at all.
     """
@@ -271,7 +271,8 @@ def _reduced_toll_instruction(game, permanent, instruction):
     """
     from dataclasses import replace
 
-    from .cost_modifiers import CostReduction, reduce_cost
+    from .cost_modifiers import reduce_cost
+    from .cost_modifier_lines import CostReduction
     from .handlers._amounts import evaluate_count
 
     payload = dict(instruction.payload)

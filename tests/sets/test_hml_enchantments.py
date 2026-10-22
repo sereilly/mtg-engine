@@ -27,7 +27,7 @@ from __future__ import annotations
 # --- W1G4: filtered statics and block triggers ---
 
 from engine import Game, PlayerState
-from engine.auras import attach_aura, detach_aura
+from engine.aura_attachment import attach_aura, detach_aura
 from engine.keywords import grant_keyword, remove_keyword
 from engine.models import CardDefinition, Permanent
 
@@ -293,7 +293,7 @@ def test_an_zerrin_ruins_stops_restricting_when_it_leaves(set_pool):
 # --- W1G5: upkeep, counters and forced sacrifice ---
 
 from engine import Game, PlayerState, load_cards
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.card_loader import manifest_set_path
 from engine.models import Permanent
 from engine.named_counters import counters_on
@@ -613,7 +613,7 @@ def test_aether_storms_ban_ends_with_the_enchantment(set_pool, catalog_by_name):
 import pytest
 
 from engine import Game, PlayerState
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.keywords import grant_keyword
 from engine.mixins.stack.casting import permanent_matches_enchant_noun
 from engine.models import Permanent

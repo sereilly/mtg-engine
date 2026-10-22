@@ -316,7 +316,7 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     # "This token can't be enchanted." (Tetravus's Tetravites.) Asked of the
     # reader both attachment predicates use, so the claim and the enforcement
     # are one rule.
-    from .auras import self_cant_be_enchanted_line
+    from .aura_restrictions import self_cant_be_enchanted_line
 
     if self_cant_be_enchanted_line(normalized):
         return True
@@ -368,7 +368,8 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     # (Primal Clay). Carried out by _initialize_permanent_state, which reads the
     # bodies from this same parser — so what is claimed here and what is applied
     # cannot describe different cards.
-    from .enter_effects import choosable_bodies, enter_effect_line
+    from .enter_effects import enter_effect_line
+    from .entry_choices import choosable_bodies
 
     if choosable_bodies(normalized):
         return True

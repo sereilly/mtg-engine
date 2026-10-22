@@ -177,10 +177,11 @@ def enchant_subject_keyword_exclusion(subject: str) -> tuple[str, str | None]:
 
     The third half of CR 702.5's [quality], separated for exactly the reason
     :func:`enchant_subject_seat` separates the second: the picker, the cast
-    gate, ``auras.aura_attach_refusal`` and the CR 704.5m sweep all need it, and
-    four ``" without " in noun`` tests between them is four chances to read the
-    clause differently. Ask for the seat first — this is anchored at the end of
-    the string and a seat clause left on would swallow the keyword.
+    gate, ``aura_attachment.aura_attach_refusal`` and the CR 704.5m sweep all
+    need it, and four ``" without " in noun`` tests between them is four
+    chances to read the clause differently. Ask for the seat first — this is
+    anchored at the end of the string and a seat clause left on would swallow
+    the keyword.
     """
     match = _ENCHANT_WITHOUT.match(subject)
     if match is None:

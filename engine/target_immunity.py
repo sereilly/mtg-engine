@@ -67,7 +67,7 @@ from functools import lru_cache
 # check. ``oracle`` is still loading when this module is (it imports this
 # one), so it is read through ``_late`` (``engine/late_modules.py``).
 from . import fast_paths
-from .auras import auras_attached_to
+from .aura_attachment import auras_attached_to
 from .grammar import subject_filter_payload
 from .late_modules import LateModules
 from .subject_filters import subject_matches
@@ -396,11 +396,12 @@ def _clauses(line: str) -> list[str]:
     if not text:
         return []
     # "Enchanted creature **gets +0/+2 and** can't be the target of spells"
-    # (Spectral Shield). The P/T half belongs to `auras.aura_static_pt_grant`
-    # and is read there; dropped here, what is left is the restriction this file
-    # implements, printed exactly as every other card prints it.
+    # (Spectral Shield). The P/T half belongs to
+    # `aura_grants.aura_static_pt_grant` and is read there; dropped here, what
+    # is left is the restriction this file implements, printed exactly as every
+    # other card prints it.
     #
-    # The same split `auras._KEYWORD_GRANT` makes with its optional "gets
+    # The same split `aura_grants._KEYWORD_GRANT` makes with its optional "gets
     # ±N/±N and" prefix, and in the one place both the support gate and the
     # runtime reader go through — a prefix stripped in only one of them is a
     # card that compiles supported and protects nobody.

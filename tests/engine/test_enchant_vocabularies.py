@@ -11,7 +11,7 @@ files, for three different questions:
   into the target spec ``_enumerate_targets`` offers hosts from.
 * ``mixins/stack/casting._ENCHANT_TARGET_MATCHERS`` — the **gate**. It answers
   "is this permanent a legal host", for the cast check (CR 601.2c), for
-  ``auras.aura_attach_refusal`` and for the CR 704.5m sweep.
+  ``aura_attachment.aura_attach_refusal`` and for the CR 704.5m sweep.
 
 A noun in the first two and not the third used to be a **supported, deckable
 Aura whose printed restriction nothing tested**: the matcher's fallback

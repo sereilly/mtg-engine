@@ -14,7 +14,7 @@ from ..cast_timing import expire_end_of_turn as expire_end_of_turn_flash
 from ..cast_timing import CAST_AT_INSTANT_SPEED
 from ..hand_size import maximum_hand_size
 from ..models import Permanent
-from ..auras import clear_ignored_restrictions
+from ..aura_restrictions import clear_ignored_restrictions
 from ..cast_bans import clear_ignored_play_bans
 from ..keywords import (clear_granted_ability_lines,
                         clear_granted_keywords,

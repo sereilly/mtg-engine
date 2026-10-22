@@ -268,7 +268,7 @@ def test_heat_of_battle_says_nothing_about_an_unblocked_attack(set_pool):
 # no instrument in this repo can see.
 
 from engine import Game, PlayerState
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.card_loader import load_cards, manifest_set_path
 from engine.models import Permanent
 from engine.named_counters import counters_on
@@ -812,7 +812,7 @@ armed an entry about nothing while the card compiled clean.
 import pytest
 
 from engine import Game, PlayerState
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.grammar import GrammarError, parse_line
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
@@ -990,7 +990,7 @@ def test_an_attached_attack_trigger_reads_the_same_event_on_both_front_ends():
     production in the grammar alone compiles an instruction the fire sites never
     reach. Both are asked here, of the same printed sentence.
     """
-    from engine.oracle import _parse_triggered_ability
+    from engine.ability_lines import _parse_triggered_ability
 
     line = "whenever enchanted creature attacks, tap it"
     parsed = _parse_triggered_ability(line, "Test")

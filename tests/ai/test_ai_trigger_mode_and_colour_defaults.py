@@ -23,7 +23,7 @@ import pytest
 
 from engine import Game, PlayerState
 from engine.ai_valuation import chosen_color_sweeps, color_most_worth_sweeping
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units
 from engine.handlers import EFFECT_HANDLERS

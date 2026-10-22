@@ -36,8 +36,8 @@ from engine import Game as _G5aGame
 from engine.card_loader import (load_catalog as _g5a_catalog,
                                 load_cards as _g5a_load,
                                 manifest_set_path as _g5a_path)
-from engine.cost_modifiers import (buyback_cost_reduction as _g5a_reduction,
-                                   cost_modifiers_for as _g5a_modifiers)
+from engine.cost_modifiers import buyback_cost_reduction as _g5a_reduction
+from engine.cost_modifier_lines import cost_modifiers_for as _g5a_modifiers
 from engine.models import PlayerState as _G5aPlayer, Permanent as _G5aPermanent
 from engine.oracle import compile_card_oracle as _g5a_compile
 from tests.helpers import resolve_stack as _g5a_drain

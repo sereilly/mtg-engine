@@ -1046,7 +1046,7 @@ def test_704_5p_reads_the_layer_4_answer_to_is_this_an_aura():
     p1 = PlayerState(name="P1", battlefield=[host, became])
     game = Game(players=[p1, PlayerState(name="P2")])
     game._sync_control()
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     attach_aura(became, host)
 

@@ -169,7 +169,7 @@ def test_w2g3_an_aura_on_the_land_adds_what_the_tap_adds():
     controller adds an additional {G}." The seam adds it on every tap, so one
     enchanted Forest pays for Grizzly Bears — and the old sum, which read the
     land alone, left it dark."""
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     sid, game = _w2g3_session(["Forest"], ["Grizzly Bears"], others=["Wild Growth"])
     forest, growth = game.players[0].battlefield

@@ -1365,7 +1365,8 @@ def test_discontinuity_costs_less_during_your_turn(set_pool):
     """The other line, which was already implemented and is checked here so the
     card is covered rather than half-covered: "During your turn, this spell
     costs {2}{U}{U} less to cast." reduces {3}{U}{U}{U} to {1}{U}."""
-    from engine.cost_modifiers import CostReduction, cost_reduction_for_cast
+    from engine.cost_modifiers import cost_reduction_for_cast
+    from engine.cost_modifier_lines import CostReduction
 
     pool = set_pool("M21")
     p1 = PlayerState(name="P1", hand=[pool["Discontinuity"]])

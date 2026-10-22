@@ -1476,15 +1476,15 @@ def subject_matches(
             return False
     # "…**put onto the battlefield with this enchantment**" (Diabolic
     # Servitude). The permanent the source's own reanimation made, by the id it
-    # stamped — the same record ``auras.enchant_card_refusal`` reads for
-    # Necromancy's enchant clause, so what one card may legally enchant and what
-    # the other's triggers name are one question with one answer.
+    # stamped — the same record ``aura_attachment.enchant_card_refusal`` reads
+    # for Necromancy's enchant clause, so what one card may legally enchant and
+    # what the other's triggers name are one question with one answer.
     #
     # By id and not by identity for ``created_with_source``'s reason: a source
     # that left and returned is a new object (CR 400.7) and did not put anything
     # onto the battlefield.
     if described.get("put_onto_battlefield_by_source"):
-        from .auras import PUT_ONTO_BATTLEFIELD_BY
+        from .aura_attachment import PUT_ONTO_BATTLEFIELD_BY
 
         if source is None:
             return False

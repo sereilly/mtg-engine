@@ -1,17 +1,17 @@
 """A host being chosen for an Aura asks protection (CR 702.16c).
 
 "A permanent or player with protection can't be enchanted by Auras that have
-the stated quality." ``auras.enchant_card_refusal`` — the one predicate every
-door that attaches an Aura, enters one attached or offers it a host asks —
-read the enchant ability and CR 303.4's "can't be enchanted" effects and never
-this sentence. So a black Aura card against a White Knight came back legal:
-Takklemaggot's pick offered the Knight, Hakim, Iridescent Drake and Academy
-Researchers each put an Aura onto a creature protected from it, and the
-CR 702.16c state-based action then put the card into a graveyard the rules
-say it never left (CR 303.4i: it "remains in its current zone"; CR 701.3b: an
-attach to a host it can't be attached to "doesn't move" it). Measured by
-Torment's wave 1 (W1G2) on Takklemaggot and the attach-to-source reanimation;
-fixed in wave 2 (W2G2).
+the stated quality." ``aura_attachment.enchant_card_refusal`` — the one
+predicate every door that attaches an Aura, enters one attached or offers it a
+host asks — read the enchant ability and CR 303.4's "can't be enchanted"
+effects and never this sentence. So a black Aura card against a White Knight
+came back legal: Takklemaggot's pick offered the Knight, Hakim, Iridescent
+Drake and Academy Researchers each put an Aura onto a creature protected from
+it, and the CR 702.16c state-based action then put the card into a graveyard
+the rules say it never left (CR 303.4i: it "remains in its current zone"; CR
+701.3b: an attach to a host it can't be attached to "doesn't move" it).
+Measured by Torment's wave 1 (W1G2) on Takklemaggot and the attach-to-source
+reanimation; fixed in wave 2 (W2G2).
 
 **What the predicate is not.** CR 702.16c's second sentence — an Aura already
 attached is put into its owner's graveyard — is a state-based action with an
@@ -34,7 +34,7 @@ from pathlib import Path
 import pytest
 
 from engine import Game, PlayerState
-from engine.auras import attach_aura, auras_attached_to
+from engine.aura_attachment import attach_aura, auras_attached_to
 from engine.models import Permanent
 from tests.helpers import resolve_stack
 
@@ -175,7 +175,8 @@ def test_an_aura_exempt_from_its_own_protection_stays_but_another_cannot_join(by
     Aura still can't become attached (CR 702.16c's first sentence), which is
     the predicate's question; and asked of the Ward on its own host, the
     predicate does not call the Ward illegal there."""
-    from engine.auras import aura_attach_refusal, enchant_card_refusal
+    from engine.aura_attachment import (aura_attach_refusal,
+                                        enchant_card_refusal)
 
     bears = Permanent(card=by_name["Grizzly Bears"])
     game = _game([bears], [])
@@ -198,7 +199,7 @@ def test_an_aura_exempt_from_its_own_protection_stays_but_another_cannot_join(by
 #: it: the state-based sweep's is CR 702.16n's, and it has its own.
 _CALLERS = {
     # the predicate's own two halves
-    ("engine/auras.py", "aura_attach_refusal"),
+    ("engine/aura_attachment.py", "aura_attach_refusal"),
     # an Aura with an attach ability, or a Licid becoming one (CR 701.3)
     ("engine/equipment.py", "attachment_refusal"),
     # Enchantment Alteration's attach

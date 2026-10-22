@@ -1316,7 +1316,7 @@ def test_w1g6_pedantic_learning_ignores_every_other_arrival(set_pool):
 # counters on it" (2005-08-01).
 
 def _w1g6_plague(set_pool, theirs=("Hill Giant", "Grizzly Bears"), mine=("Craw Wurm",)):
-    from engine.auras import attach_aura as _w1g6_attach
+    from engine.aura_attachment import attach_aura as _w1g6_attach
 
     lea, ody = set_pool("LEA"), set_pool("ODY")
     game = _w1g6_game(

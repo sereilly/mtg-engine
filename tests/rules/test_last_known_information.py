@@ -399,7 +399,7 @@ def test_the_bystander_is_not_a_legal_target_for_the_blocked_creature_clause():
 
 # --- W1G1 (NEM): an Aura's own host, read after the Aura has left ---
 
-from engine.auras import attach_aura as _w1g1_attach_aura
+from engine.aura_attachment import attach_aura as _w1g1_attach_aura
 
 from tests.helpers import resolve_stack as _w1g1_resolve_stack
 

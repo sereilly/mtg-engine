@@ -518,7 +518,7 @@ def test_sadistic_glee_grows_its_host_when_a_creature_dies(set_pool):
     because that dispatcher scans `permanents_with_controller()`, so an Aura
     watching the whole board is enqueued exactly like a creature watching it.
     """
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
     from engine import load_cards
     from engine.card_loader import manifest_set_path
 
@@ -727,9 +727,9 @@ def test_w1g5_recycle_sets_its_controllers_maximum_hand_size(set_pool):
 import pytest as _w2g1_pytest
 
 from engine import Game as _W2G1EGame, PlayerState as _W2G1EPlayer
-from engine.auras import (IGNORED_RESTRICTIONS as _W2G1_IGNORED,
-                          attach_aura as _w2g1e_attach,
-                          aura_restriction_active as _w2g1e_restricted)
+from engine.aura_restrictions import (IGNORED_RESTRICTIONS as _W2G1_IGNORED,
+                                      aura_restriction_active as _w2g1e_restricted)
+from engine.aura_attachment import attach_aura as _w2g1e_attach
 from engine.card_loader import load_cards as _w2g1e_load
 from engine.card_loader import manifest_set_path as _w2g1e_path
 from engine.models import Permanent as _W2G1EPerm

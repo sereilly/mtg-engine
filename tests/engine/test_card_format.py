@@ -286,7 +286,7 @@ def test_pool_variable_pt_cards_are_flagged():
 
     for name in flagged:
         card = next(c for c in load_catalog() if c.name == name)
-        from engine.enter_effects import choosable_bodies
+        from engine.entry_choices import choosable_bodies
 
         # Two legitimate sources of a variable printed P/T: a
         # characteristic-defining rule that counts something, or a body chosen

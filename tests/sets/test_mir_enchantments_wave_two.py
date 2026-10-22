@@ -22,7 +22,7 @@ from __future__ import annotations
 # — a target to protect and a source to protect it from.
 
 from engine import Game as _w2g3e_Game, PlayerState as _w2g3e_PlayerState  # noqa: E402
-from engine.auras import attach_aura as _w2g3e_attach  # noqa: E402
+from engine.aura_attachment import attach_aura as _w2g3e_attach  # noqa: E402
 from engine.card_loader import (load_cards as _w2g3e_load,  # noqa: E402
                                 manifest_set_path as _w2g3e_path)
 from engine.models import Permanent as _w2g3e_Permanent  # noqa: E402
@@ -528,7 +528,8 @@ def test_the_zone_possessive_names_the_recipient_too():
 # --- W2G2: upkeep, delayed triggers and counters ---
 
 from engine import Game, PlayerState
-from engine.auras import attach_aura, aura_color_grants, detach_aura
+from engine.aura_attachment import attach_aura, detach_aura
+from engine.aura_grants import aura_color_grants
 import pytest
 
 from engine.land_mana_swaps import swapped_symbol
@@ -1279,7 +1280,7 @@ def test_bazaar_of_wonders_ignores_a_token_of_the_same_name(set_pool):
 import pytest
 
 from engine import Game, PlayerState
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
 

@@ -490,7 +490,7 @@ def test_208_2_every_star_printed_creature_in_the_pool_is_one_of_the_two_forms()
     turn this into a test of the other.
     """
     from engine.card_loader import load_catalog
-    from engine.enter_effects import choosable_bodies
+    from engine.entry_choices import choosable_bodies
 
     defining, entering = [], []
     for card in compilation_units(load_catalog()):

@@ -326,7 +326,7 @@ def test_heart_of_bogardan_raises_one_picker_for_one_printed_target(set_pool):
 # --- W1G1: the top of a graveyard as a cost ---
 
 from engine import Game, PlayerState
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.models import CardDefinition, Permanent
 
 
@@ -579,7 +579,7 @@ def test_the_board_reader_refuses_the_two_subjects_the_relational_one_owns():
 
 # --- W2G2: damage divided, doubled and prevented ---
 from engine import Game, PlayerState
-from engine.auras import attach_aura as _w2g2_attach
+from engine.aura_attachment import attach_aura as _w2g2_attach
 from engine.models import CardDefinition as _w2g2_card
 from engine.models import Permanent as _w2g2_permanent
 from engine.oracle import compile_card_oracle as _w2g2_compile
@@ -809,7 +809,7 @@ def test_ancestral_knowledge_exiles_nothing_for_a_non_interactive_seat(set_pool)
 
 # --- W2G1: costs charged and permissions granted ---
 from engine import Game, PlayerState
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.models import Permanent
 from engine.named_counters import add_counters
 from engine.oracle import parse_activated_ability_cost
@@ -1001,7 +1001,7 @@ def test_goblin_bomb_needs_all_five_counters(set_pool):
 
 from engine import Game as _W2G5Game, PlayerState as _W2G5PlayerState  # noqa: E402
 from engine.models import Permanent as _W2G5Permanent  # noqa: E402
-from engine.cost_modifiers import cost_modifiers_for  # noqa: E402
+from engine.cost_modifier_lines import cost_modifiers_for  # noqa: E402
 from tests.helpers import _mk_card as _w2g5_mk_card, resolve_stack
 
 
@@ -1198,7 +1198,7 @@ def test_teferis_veil_leaves_an_opponents_attacker_alone(set_pool):
 def _w2g3_coils_combat(set_pool):
     """Coils of the Medusa on an attacker, blocked by a Wall and a non-Wall,
     with a second attack-and-block pair beside it as the control."""
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     def _c(name, power, toughness, subtype="Test"):
         return CardDefinition(
@@ -1346,7 +1346,7 @@ def test_heat_stroke_destroys_both_sides_of_every_block(set_pool):
 # supported and the untap happening.
 
 from engine import Game as _exow1g1_Game, PlayerState as _exow1g1_PlayerState  # noqa: E402
-from engine.auras import attach_aura as _exow1g1_attach  # noqa: E402
+from engine.aura_attachment import attach_aura as _exow1g1_attach  # noqa: E402
 from engine.models import (CardDefinition as _exow1g1_CardDefinition,  # noqa: E402
                            Permanent as _exow1g1_Permanent)
 from tests.helpers import resolve_stack as _exow1g1_resolve  # noqa: E402

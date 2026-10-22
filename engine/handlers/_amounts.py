@@ -1028,7 +1028,7 @@ def evaluate_count(
     if attached_to is not None:
         if attached_to != "source" or source is None:
             return 0
-        from ..auras import auras_attached_to
+        from ..aura_attachment import auras_attached_to
 
         return _scaled(
             len([

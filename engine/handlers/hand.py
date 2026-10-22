@@ -241,7 +241,7 @@ def put_from_hand_candidates(game, payload: dict, player) -> list[int]:
     # then the permanent may have moved (CR 400.7 — an index is not an
     # identity). A host that has gone leaves nothing legal to pick, which is the
     # direction that offers nothing rather than the whole hand.
-    from ..auras import enchant_card_refusal
+    from ..aura_attachment import enchant_card_refusal
 
     host_id = payload.get("attach_to_permanent_id")
     host = game.permanent_by_id(host_id) if isinstance(host_id, int) else None

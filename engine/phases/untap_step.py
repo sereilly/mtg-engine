@@ -9,7 +9,7 @@ derived from oracle text by engine/untap_restrictions.py — this module only
 aggregates and enforces them, so new restriction cards never touch it.
 """
 
-from ..auras import aura_restriction_active
+from ..aura_restrictions import aura_restriction_active
 from ..replacements import apply_replacements
 from ..subject_filters import subject_matches
 from ..handlers.board_misc import LAND_TYPE_UNTIL_UNTAP

@@ -50,7 +50,7 @@ Everything else that reaches layer 5 is derived where it is read
 a board-wide static and a permanent's own "is the chosen color" by
 ``Permanent.timestamp`` (CR 613.7a, 613.7d), an Aura by the moment it became
 attached (CR 613.7e) — which is that same field, re-stamped by
-``auras.attach_aura``.
+``aura_attachment.attach_aura``.
 
 A spell is an object too
 ------------------------

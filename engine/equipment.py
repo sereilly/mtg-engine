@@ -29,11 +29,12 @@ Three rules, one module, because each is written in terms of the others:
   Equipment's bonus orders correctly against other layer-7c effects.
 
 Attachment *state* is the same record an Aura uses — ``attached_to`` on the
-attachment, ``attached_auras`` on the host (``engine/auras.py``) — and the
-layer bridge derives the Equipment's P/T grant, keyword grants and restrictions
-off its own text exactly as it does an Aura's. CR 301.5f is why that sharing is
-correct rather than a shortcut: "equipped creature" means whatever creature the
-permanent is attached to, and ``engine/auras.py``'s templates read both words.
+attachment, ``attached_auras`` on the host (``engine/aura_attachment.py``) —
+and the layer bridge derives the Equipment's P/T grant, keyword grants and
+restrictions off its own text exactly as it does an Aura's. CR 301.5f is why
+that sharing is correct rather than a shortcut: "equipped creature" means
+whatever creature the permanent is attached to, and ``engine/auras.py``'s
+templates read both words.
 
 What differs from an Aura is what happens when the attachment goes wrong. An
 Aura attached to nothing legal is put into the graveyard (704.5m); an Equipment
@@ -52,7 +53,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
-from .auras import attach_aura, auras_attached_to, detach_aura
+from .aura_attachment import attach_aura, auras_attached_to, detach_aura
 
 if TYPE_CHECKING:
     from .game import Game
@@ -177,7 +178,8 @@ def attachment_refusal(
 
     * an Equipment attaches by :func:`equip_refusal` (a creature, never itself,
       never through protection);
-    * an Aura attaches by ``auras.aura_attach_refusal``, which reads the
+    * an Aura attaches by ``aura_attachment.aura_attach_refusal``, which reads
+    the
       **enchant ability** (CR 702.5) — the noun it names, the seat clause, and
       CR 303.4's protection half.
 
@@ -205,7 +207,7 @@ def attachment_refusal(
     itself, and the host has to exist), and leaves the rest to the arm that
     will be right.
     """
-    from .auras import aura_attach_refusal
+    from .aura_attachment import aura_attach_refusal
 
     if attachment.has_type("aura"):
         return aura_attach_refusal(game, attachment, host)
@@ -285,8 +287,9 @@ def attach_equipment(game: "Game", equipment: "Permanent", creature: "Permanent"
       unattached from the old host.
     * Illegal host: it doesn't move (701.3b, 301.5b).
 
-    The record written is the Aura one (``engine/auras.py``), and
-    :func:`auras.attach_aura` stamps the fresh timestamp CR 613.7e requires.
+    The record written is the Aura one (``engine/aura_attachment.py``), and
+    :func:`aura_attachment.attach_aura` stamps the fresh timestamp CR 613.7e
+    requires.
 
     **The legality is asked of whichever kind of Attachment this is.** CR 701.3
     is one action and an Aura can be its subject: Kjeldoran Pride's "{2}{U}:

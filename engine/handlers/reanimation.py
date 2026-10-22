@@ -17,7 +17,7 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
-from ..auras import PUT_ONTO_BATTLEFIELD_BY
+from ..aura_attachment import PUT_ONTO_BATTLEFIELD_BY
 from ..keywords import grant_keyword
 from ..models import Permanent
 from ..replacements import EXILE_ON_LEAVING_BATTLEFIELD
@@ -210,7 +210,7 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
             return True, "resolved"
     card_filter = None
     if spec or attach_host is not None:
-        from ..auras import enchant_card_refusal
+        from ..aura_attachment import enchant_card_refusal
 
         caster_seat = (
             game.players.index(caster) if caster in game.players else None
@@ -274,10 +274,10 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
     # relation that clause is about, stamped by the step that performs it
     # because nothing else can say so: the ability's target was a *card* in a
     # graveyard, and CR 400.7 makes what arrived a new object with no history on
-    # the board. `auras.enchant_card_refusal` reads it back. Unconditional: a
-    # permanent nobody asks the question about carries a spare id, where a
-    # permanent the question *is* asked about and that was not stamped would be
-    # a legal host the card never allowed.
+    # the board. `aura_attachment.enchant_card_refusal` reads it back.
+    # Unconditional: a permanent nobody asks the question about carries a spare
+    # id, where a permanent the question *is* asked about and that was not
+    # stamped would be a legal host the card never allowed.
     if reanimated is not None and context.source_permanent is not None:
         reanimated.metadata[PUT_ONTO_BATTLEFIELD_BY] = (
             context.source_permanent.permanent_id
@@ -292,7 +292,7 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
     # is never an unattached one for CR 704.5m to find. Through ``attach_aura``,
     # which stamps the CR 613.7e timestamp and records both directions.
     if reanimated is not None and attach_host is not None:
-        from ..auras import attach_aura
+        from ..aura_attachment import attach_aura
 
         attach_aura(reanimated, attach_host)
     gains = tuple(instruction.payload.get("gains") or ())
@@ -355,14 +355,14 @@ def reanimate_aura_onto_source(game: Game, instruction: OracleInstruction, conte
     (CR 608.2b) — and picking some other creature would be an Aura landing
     where the card never said.
 
-    Legality is ``auras.aura_attach_refusal``, the one predicate the cast gate,
-    the CR 704.5m sweep and the two other resolutions ask. CR 303.4j: an
-    attachment that would be illegal simply does not happen, and here that
-    means the card stays in the graveyard — putting it onto the battlefield
-    unattached would be strictly worse than not resolving, since the sweep
-    would bin it and the card would be gone.
+    Legality is ``aura_attachment.aura_attach_refusal``, the one predicate the
+    cast gate, the CR 704.5m sweep and the two other resolutions ask. CR
+    303.4j: an attachment that would be illegal simply does not happen, and
+    here that means the card stays in the graveyard — putting it onto the
+    battlefield unattached would be strictly worse than not resolving, since
+    the sweep would bin it and the card would be gone.
     """
-    from ..auras import attach_aura, aura_attach_refusal
+    from ..aura_attachment import attach_aura, aura_attach_refusal
 
     caster = context.caster
     host = context.source_permanent
@@ -533,7 +533,7 @@ def return_source_card_to_battlefield(game: Game, instruction: OracleInstruction
     one answer to "what is this permanent now?" — which is the whole reason the
     non-Aura half is not a flag the sweep checks for itself.
     """
-    from ..auras import attach_aura, aura_attach_refusal
+    from ..aura_attachment import attach_aura, aura_attach_refusal
     from ..keywords import grant_ability_line, remove_ability_line
     from ..type_changes import lose_types
 
@@ -1063,7 +1063,7 @@ def _return_planned_cards(
     object" is about the moment of entry — and an Aura without one stays in
     the graveyard (CR 303.4g).
     """
-    from ..auras import attach_aura, enchant_card_refusal
+    from ..aura_attachment import attach_aura, enchant_card_refusal
 
     returned = 0
     for seat, entries in plans:
@@ -1157,7 +1157,7 @@ def _legal_returning_aura_hosts(game, seat: int, card, already_there) -> list:
     permanent, any other on its controller's — which is also that prompt's
     default (``default_prefers: "returning_aura_host"``).
     """
-    from ..auras import enchant_card_refusal
+    from ..aura_attachment import enchant_card_refusal
 
     return [
         host for host in already_there

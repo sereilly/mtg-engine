@@ -1504,7 +1504,8 @@ def test_a_caster_who_cannot_pay_the_life_cannot_cast(set_pool):
 def test_a_life_tax_is_not_counted_as_mana(set_pool):
     """It is a different resource and a different rule. Counted by the mana
     scan it would be added to the generic cost."""
-    from engine.cost_modifiers import cost_modifiers_for, spell_cost_tax
+    from engine.cost_modifiers import spell_cost_tax
+    from engine.cost_modifier_lines import cost_modifiers_for
 
     (modifier,) = cost_modifiers_for(
         "Spells your opponents cast that target this creature cost an "

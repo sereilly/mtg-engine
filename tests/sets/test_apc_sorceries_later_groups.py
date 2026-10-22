@@ -186,7 +186,7 @@ def test_false_dawn_reaches_a_triggered_mana_ability_its_caster_controls(
 ):
     """Wild Growth's "adds an additional {G}" is an ability of the Aura, which
     its controller controls — so it adds {W} too."""
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     game, p0, p1 = _w1g7_sorcery_duel()
     forest = _w1g7_sorcery_put(game, 0, catalog_by_name["Forest"])
@@ -300,7 +300,7 @@ def test_tranquil_path_destroys_every_enchantment_and_draws_a_card(
 ):
     """"Destroy all enchantments. / Draw a card." Both players', Auras
     included; nothing that is not an enchantment is touched."""
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     game, p0, p1 = _w1g7_sorcery_duel()
     _w1g7_sorcery_put(game, 0, set_pool("APC")["Unnatural Selection"])

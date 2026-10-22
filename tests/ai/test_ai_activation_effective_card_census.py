@@ -56,7 +56,7 @@ import pytest
 from engine import Game, PlayerState
 from engine import ai_simulator
 from engine.ai_policy import choose_activation_action
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.mixins.stack.casting import aura_enchant_noun
 from engine.copies import become_copy
 from engine.models import Permanent

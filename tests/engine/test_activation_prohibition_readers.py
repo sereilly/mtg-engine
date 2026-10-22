@@ -44,7 +44,7 @@ from engine import Game, PlayerState, ai_policy
 from engine import activation_prohibitions
 from engine.activation_prohibitions import (ACTIVATION_PROHIBITIONS,
                                             activation_prohibition)
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.card_loader import load_catalog
 from engine.faces import compilation_units
 from engine.models import Permanent

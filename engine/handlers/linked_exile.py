@@ -638,7 +638,7 @@ def exile_until_leaves_or_untaps(
     the time the return runs the permanent is long gone, and the object that
     comes back is a new one (CR 400.7) with no counters at all.
     """
-    from ..auras import auras_attached_to
+    from ..aura_attachment import auras_attached_to
 
     source = context.source_permanent
     if source is None:

@@ -23,7 +23,7 @@ import re
 import pytest
 
 from engine import Game, PlayerState
-from engine.auras import auras_attached_to
+from engine.aura_attachment import auras_attached_to
 from engine.card_loader import load_catalog
 from engine.faces import compilation_units, whole_card
 from engine.models import Permanent

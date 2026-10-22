@@ -1499,7 +1499,8 @@ def test_the_reduction_is_the_total_power_you_control(set_pool):
     """"{X} less to cast, where X is …" — the reduction is generic and its size
     is not in the text, which is why a bare {X} was refused outright: an amount
     this cannot compute is not an amount of zero."""
-    from engine.cost_modifiers import CostReduction, cost_reduction_for_cast
+    from engine.cost_modifiers import cost_reduction_for_cast
+    from engine.cost_modifier_lines import CostReduction
 
     game, _, pool = _salvo_board(set_pool)
     assert cost_reduction_for_cast(game, 0, pool["Volcanic Salvo"])[0] == CostReduction(0)
@@ -1547,7 +1548,7 @@ def test_volcanic_salvo_hits_each_of_the_two_it_names(set_pool):
 def test_a_clause_the_table_cannot_compute_still_refuses(set_pool):
     """The refusal side, unchanged: a "where X is …" naming a count this table
     does not know leaves the card unsupported rather than quietly free."""
-    from engine.cost_modifiers import self_cost_reduction
+    from engine.self_cost_modifiers import self_cost_reduction
 
     assert self_cost_reduction(
         "This spell costs {X} less to cast, where X is the total power of "

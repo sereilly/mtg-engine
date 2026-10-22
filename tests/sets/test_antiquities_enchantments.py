@@ -107,7 +107,7 @@ def test_artifact_possession_fires_only_for_the_artifact_it_enchants(set_pool):
     """"Whenever **enchanted artifact** becomes tapped…" is an identity
     question, not a class one — and identity rather than equality, because two
     Ornithopters compare equal by value and the Aura is on exactly one."""
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     pool = set_pool("ATQ")
     aura = Permanent(card=pool["Artifact Possession"])
@@ -138,7 +138,7 @@ def test_the_tap_triggers_damage_the_artifacts_controller(set_pool):
     artifact, and Artifact Possession's is the Aura on an artifact its own
     controller has.
     """
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     pool = set_pool("ATQ")
     wind = Permanent(card=pool["Haunting Wind"])
@@ -272,7 +272,7 @@ def test_the_untap_prompt_names_artifacts(set_pool):
 
 
 def _tome_with_power_artifact(set_pool, mana, attached=True):
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     pool = set_pool("ATQ")
     tome = Permanent(card=pool["Jalum Tome"])  # "{2}, {T}: Draw a card, then discard a card."
@@ -326,7 +326,7 @@ def test_without_the_aura_the_ability_costs_what_it_prints(set_pool):
 
 def _warded(set_pool, *, attached=True):
     """A creature on P2's battlefield, enchanted by P1's Artifact Ward."""
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     pool = set_pool("ATQ")
     ward = Permanent(card=pool["Artifact Ward"])

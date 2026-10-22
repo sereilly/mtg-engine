@@ -338,7 +338,7 @@ def test_primal_clay_bodies_are_parsed_from_the_text(catalog):
     literal, which is what makes "a 1/6 **Wall** artifact creature" a Wall for
     the twelve shipped cards that ask.
     """
-    from engine.enter_effects import choosable_bodies
+    from engine.entry_choices import choosable_bodies
 
     assert choosable_bodies(_clay(catalog).oracle_text) == (
         {"power": 3, "toughness": 3, "keyword": "", "subtypes": ()},

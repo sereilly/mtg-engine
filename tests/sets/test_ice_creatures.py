@@ -31,7 +31,7 @@ import pytest
 
 from engine import Game
 from engine.control import change_control
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.cumulative_upkeep import cumulative_upkeep_cost
 from engine.models import Permanent, PlayerState
 from engine.named_counters import counters_on

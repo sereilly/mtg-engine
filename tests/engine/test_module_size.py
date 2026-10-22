@@ -69,11 +69,6 @@ OVERSIZED: dict[str, int] = {
     "engine/mixins/helpers.py": 4386,
     "engine/mixins/effects.py": 2209,
     # --- S10 ---
-    "engine/auras.py": 3773,
-    "engine/cast_costs.py": 2410,
-    "engine/enter_effects.py": 2267,
-    "engine/combat_restrictions.py": 2187,
-    "engine/cost_modifiers.py": 2178,
     # --- S11 ---
     "web/prompts.py": 2892,
     "engine/phases/declare_blockers_step.py": 2830,

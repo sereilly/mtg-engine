@@ -262,9 +262,10 @@ def _lower_become_aura(node: ast.BecomeAura) -> tuple[OracleInstruction, ...]:
 
     The enchant restriction is carried, never dropped: ``origin`` says the host
     must be a permanent this one put onto the battlefield, which is what
-    ``auras.enchant_card_refusal`` tests and what stops the Aura being moved
-    onto a creature it never reanimated. The parse admits no other quality, so
-    there is no shape here that reaches the handler with a rider nothing reads.
+    ``aura_attachment.enchant_card_refusal`` tests and what stops the Aura
+    being moved onto a creature it never reanimated. The parse admits no other
+    quality, so there is no shape here that reaches the handler with a rider
+    nothing reads.
 
     A Licid prints the same sentence with **no** rider and two extra facts: the
     card type it becomes (CR 205.1a — an "Aura enchantment" stops being a

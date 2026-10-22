@@ -11,7 +11,8 @@ from ..control import (
     control_changes,
     end_control_change,
 )
-from ..auras import aura_grants_control, auras_attached_to
+from ..aura_grants import aura_grants_control
+from ..aura_attachment import auras_attached_to
 from ..equipment import is_equipment, unattach_illegal_equipment
 from ..models import Permanent, PlayerState
 from ..oracle import compile_card_oracle

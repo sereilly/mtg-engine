@@ -739,7 +739,7 @@ def test_w2g4_no_colour_effect_in_the_pool_can_depend_on_another():
     the permanent it is attached to, and a resolved recolour's set of objects
     was fixed as it resolved (CR 611.2c). So timestamp order is the whole of
     the order, which is what the matrix above assumes."""
-    from engine import auras, global_statics
+    from engine import aura_grants, global_statics
     from engine.land_animation import LAND_ANIMATION_KIND, land_animation_from_payload
     from engine.oracle import compiled_units
 
@@ -752,8 +752,8 @@ def test_w2g4_no_colour_effect_in_the_pool_can_depend_on_another():
             static.sets_colors is not None or static.sets_chosen_color
         ):
             statics[card.name] = static
-        if auras.aura_color_grants(text) or (
-            auras.aura_land_animation(text) or {}
+        if aura_grants.aura_color_grants(text) or (
+            aura_grants.aura_land_animation(text) or {}
         ).get("colors"):
             aura_cards.add(card.name)
         for instruction in program.instructions:

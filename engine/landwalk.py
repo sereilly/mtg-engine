@@ -188,12 +188,13 @@ def land_satisfies(permanent: "Permanent", requirement: LandwalkRequirement) -> 
 # The third way this pool builds a landwalk's name out of something other than
 # a printed word, after the land a cost ate (Excavator —
 # :func:`landwalk_abilities_of`) and the type an Aura chose as it entered
-# (Traveler's Cloak — ``auras.chosen_landwalk_grants``), and it follows the
-# second one's arrangement exactly: **one reader, two callers**. The support
-# gate and the grammar's registry claim ask :func:`landwalk_per_type_spec`
-# whether a line is one this can carry out, and the layer-6 pass asks
-# :func:`board_named_landwalks`, which reads the same lines through the same
-# function — so a line claimed here is a line granted here.
+# (Traveler's Cloak — ``aura_grants.chosen_landwalk_grants``), and it follows
+# the second one's arrangement exactly: **one reader, two callers**. The
+# support gate and the grammar's registry claim ask
+# :func:`landwalk_per_type_spec` whether a line is one this can carry out, and
+# the layer-6 pass asks :func:`board_named_landwalks`, which reads the same
+# lines through the same function — so a line claimed here is a line granted
+# here.
 #
 # What the types are counted *among* is an ordinary noun phrase in an ordinary
 # count position, so it is read by the grammar's own per-each reader

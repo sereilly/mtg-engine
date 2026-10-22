@@ -10,7 +10,7 @@ See tests/sets/README.md for the convention.
 from __future__ import annotations
 
 from engine import Game, PlayerState
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
 from tests.helpers import resolve_stack
@@ -283,7 +283,7 @@ def test_the_granted_ability_goes_away_with_the_aura(set_pool):
     forest = Permanent(card=_p4_land())
     _game, _p1, _p2 = _p4_aura_game(equinox, forest)
 
-    from engine.auras import detach_aura
+    from engine.aura_attachment import detach_aura
 
     detach_aura(equinox, forest)
 

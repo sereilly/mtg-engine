@@ -470,7 +470,7 @@ def _is_enchanted(perm) -> bool:
     Beside the table it answers rather than inside the lambda so the Equipment
     exclusion has somewhere to be written down.
     """
-    from ..auras import auras_attached_to
+    from ..aura_attachment import auras_attached_to
 
     return any(
         attachment.has_type("aura") for attachment in auras_attached_to(perm)

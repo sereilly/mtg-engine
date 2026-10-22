@@ -32,7 +32,7 @@ from __future__ import annotations
 import pytest
 
 from engine import Game, PlayerState
-from engine.auras import attach_aura, detach_aura
+from engine.aura_attachment import attach_aura, detach_aura
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.handlers._targets import attached_host
 from engine.layer_bridge import computed_colors

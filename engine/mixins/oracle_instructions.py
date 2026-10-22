@@ -15,8 +15,9 @@ from ..handlers._amounts import count_from_payload
 from ..oracle_types import X_FROM_COUNT, substitute_x_bounds
 from ..models import CardDefinition, Permanent, PlayerState
 from ..auras import (AURA_REANIMATION_PHRASES, AURA_REANIMATION_TAPPED,
-                     attach_aura, aura_animates_artifact, aura_keyword_grants,
                      aura_land_type_change)
+from ..aura_attachment import attach_aura
+from ..aura_grants import aura_animates_artifact, aura_keyword_grants
 from ..auras import aura_enchant_clause, aura_enchants
 from ..mixins.stack import aura_enchant_noun, permanent_matches_enchant_noun
 from ..oracle import OracleInstruction, compile_card_oracle
@@ -601,7 +602,7 @@ class OracleInstructionsMixin:
                 # Animate Dead's "-1/-0" is **not** applied here. It is an
                 # ordinary Aura static (CR 613 layer 7c), derived from the
                 # attached Aura's own text on every recompute by
-                # `auras.aura_static_pt_grant` — and this branch has just
+                # `aura_grants.aura_static_pt_grant` — and this branch has just
                 # attached the Aura, so adding a second copy by hand made the
                 # reanimated creature two power smaller than the card says.
                 # Dance of the Dead's "+1/+1" was already going through the
@@ -642,7 +643,7 @@ class OracleInstructionsMixin:
             # ability is activated — not when the Aura is attached.
             # The grant is NOT applied here. It is derived from the Aura's own
             # text every time characteristics are computed
-            # (auras.aura_static_pt_grant, collected by
+            # (aura_grants.aura_static_pt_grant, collected by
             # layer_bridge.collect_pt_effects at layer 7c with the Aura's
             # attach timestamp). Adding it into the enchanted creature's
             # power_bonus meant removal had to subtract a remembered delta —
@@ -657,10 +658,10 @@ class OracleInstructionsMixin:
             # 611.3a) rather than being locked in at cast time. No flat bonus here.
 
             # Landwalk is a keyword like any other and reaches layer 6 through
-            # auras.aura_keyword_grants, so nothing is stamped here. It used to
-            # write a `has_<walk>` flag straight onto the creature, which meant
-            # the grant lived outside the layer system and had to be undone by
-            # name when the Aura left.
+            # aura_grants.aura_keyword_grants, so nothing is stamped here. It
+            # used to write a `has_<walk>` flag straight onto the creature,
+            # which meant the grant lived outside the layer system and had to
+            # be undone by name when the Aura left.
             if aura_keyword_grants(aura_permanent.effective_card.oracle_text):
                 self.log.append(
                     f"{target_creature.card.name} gains "
@@ -691,9 +692,9 @@ class OracleInstructionsMixin:
             # Reach: e.g. Web's "Enchanted creature gets +0/+2 and has reach."
 
             # "Can attack as though it had haste" is a restriction derived from
-            # the Aura (auras.aura_restrictions), not a haste grant — granting
-            # the keyword also let a summoning-sick creature use its {T}
-            # abilities, which CR 302.6/702.10b do not permit.
+            # the Aura (aura_restrictions.aura_restrictions), not a haste grant
+            # — granting the keyword also let a summoning-sick creature use its
+            # {T} abilities, which CR 302.6/702.10b do not permit.
             if "can attack as though it had haste" in text:
                 self.log.append(
                     f"{target_creature.card.name} can attack as though hasty "
@@ -727,19 +728,20 @@ class OracleInstructionsMixin:
             # Gold, whose sleep counters it would have quietly dropped. The
             # untap restriction half was never this branch's to enforce: the
             # untap step derives it from the attached Aura's own text
-            # (auras.aura_restriction_active).
+            # (aura_restrictions.aura_restriction_active).
 
             # The control effect is no longer read here. "You control enchanted
             # creature" is a CR 613 layer-2 contribution *derived from the
             # attachment* on every state-based pass
-            # (`auras.aura_grants_control`, swept in `mixins/game_ending.py`),
-            # which is what it always was in the rules and what this branch
-            # could only approximate: it fired when an Aura **spell** resolved,
-            # so a Licid — which becomes an Aura through an activated ability
-            # and attaches through `attach_source_to_target` — reached it not at
-            # all, and an Aura that changed hands kept naming the seat that cast
-            # it. The sweep answers both, in both directions, and this
-            # substring test would now record the same contribution twice.
+            # (`aura_grants.aura_grants_control`, swept in
+            # `mixins/game_ending.py`), which is what it always was in the
+            # rules and what this branch could only approximate: it fired when
+            # an Aura **spell** resolved, so a Licid — which becomes an Aura
+            # through an activated ability and attaches through
+            # `attach_source_to_target` — reached it not at all, and an Aura
+            # that changed hands kept naming the seat that cast it. The sweep
+            # answers both, in both directions, and this substring test would
+            # now record the same contribution twice.
 
             # P/T is no longer recorded here: it is derived from the Aura on
             # every recompute, so removal has nothing to subtract. What remains
@@ -880,20 +882,21 @@ class OracleInstructionsMixin:
 
             # The control effect is no longer read here either. Steal Artifact
             # is Control Magic's sentence one noun over, and it goes through the
-            # same derived sweep (`auras.aura_grants_control`, swept in
+            # same derived sweep (`aura_grants.aura_grants_control`, swept in
             # `mixins/game_ending.py`) — see the note where the creature branch
             # used to make this call. Two substring tests recording one
             # contribution is what a sweep replaces, not what it sits beside.
 
             # Animation is NOT applied here. Animate Artifact adds the
             # creature type at CR 613 layer 4 and sets P/T at layer 7b, both
-            # derived from the attached Aura (engine/auras.animating_auras,
-            # collected by layer_bridge). This used to rebuild the artifact's
-            # CardDefinition with "Creature" spliced into its type line and P/T
-            # baked into raw, swap it onto the permanent, and stash the original
-            # to restore on removal — remember-and-undo applied to the object's
-            # identity, and it clamped a mana value of 0 up to 1/1 so an
-            # animated Mox never died to CR 704.5f.
+            # derived from the attached Aura
+            # (engine/aura_grants.animating_auras, collected by layer_bridge).
+            # This used to rebuild the artifact's CardDefinition with
+            # "Creature" spliced into its type line and P/T baked into raw,
+            # swap it onto the permanent, and stash the original to restore on
+            # removal — remember-and-undo applied to the object's identity, and
+            # it clamped a mana value of 0 up to 1/1 so an animated Mox never
+            # died to CR 704.5f.
             if aura_animates_artifact(aura_permanent.effective_card.oracle_text):
                 self.log.append(
                     f"{aura_permanent.card.name} animated {target_artifact.card.name} "

@@ -21,7 +21,8 @@ import pytest
 
 from engine import Game, PlayerState, load_cards
 from engine.card_loader import manifest_set_path
-from engine.cast_costs import additional_cost_for_line, additional_costs
+from engine.cast_costs import additional_costs
+from engine.cast_cost_clauses import additional_cost_for_line
 from engine.models import Permanent
 
 _ALL = {

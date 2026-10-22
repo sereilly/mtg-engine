@@ -144,8 +144,11 @@ def test_116_1_a_special_action_makes_its_card_supported():
 
 # --- W2G1: CR 116.2c / 116.2d — the offers a *permanent* makes ---------------
 
-from engine.auras import (IGNORED_RESTRICTIONS, attach_aura,  # noqa: E402
-                          aura_restriction_active)
+from engine.aura_restrictions import (  # noqa: E402
+    IGNORED_RESTRICTIONS,
+    aura_restriction_active,
+)
+from engine.aura_attachment import attach_aura  # noqa: E402
 from engine.card_loader import manifest_set_path as _w2g1_set_path  # noqa: E402
 from engine.models import Permanent  # noqa: E402
 from engine.special_actions import (  # noqa: E402

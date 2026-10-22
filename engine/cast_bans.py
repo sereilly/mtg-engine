@@ -47,12 +47,13 @@ if TYPE_CHECKING:
 # So it is a scan of the battlefields rather than a scan of the spell, and its
 # own reader for that reason.
 #
-# The card **type** is payload, for `auras.aura_controller_cast_ban`'s reason:
-# "Artifact spells can't be cast." is the same sentence and must need no second
-# row. That reader is deliberately *not* widened into this one — what differs
-# between them is the **scope**, and a scope taken from the wrong half of a
-# sentence bans the wrong players. Aether Storm's ban reaches its own
-# controller; Brand of Ill Omen's reaches only the enchanted creature's.
+# The card **type** is payload, for
+# `aura_restrictions.aura_controller_cast_ban`'s reason: "Artifact spells can't
+# be cast." is the same sentence and must need no second row. That reader is
+# deliberately *not* widened into this one — what differs between them is the
+# **scope**, and a scope taken from the wrong half of a sentence bans the wrong
+# players. Aether Storm's ban reaches its own controller; Brand of Ill Omen's
+# reaches only the enchanted creature's.
 _BANNABLE_SPELL_TYPES = (
     r"(?:artifact|creature|enchantment|instant|sorcery|planeswalker|battle)"
 )
@@ -65,12 +66,13 @@ _GLOBAL_CAST_BAN = re.compile(
 def global_cast_ban_line(line: str) -> str | None:
     """The card type *line* forbids anybody from casting, or None.
 
-    One reader, two callers, exactly as :func:`auras.aura_controller_cast_ban`
-    has: ``engine/grammar/registries.py`` asks it so the printed line is
-    *claimed*, and ``mixins/stack/casting.py`` asks it at CR 601.2 so the line
-    is *enforced*. A restriction that is claimed and not enforced is an
-    enchantment that reports supported and lets every creature through, which is
-    the one failure this seam exists to make impossible.
+    One reader, two callers, exactly as
+    :func:`aura_restrictions.aura_controller_cast_ban` has:
+    ``engine/grammar/registries.py`` asks it so the printed line is *claimed*,
+    and ``mixins/stack/casting.py`` asks it at CR 601.2 so the line is
+    *enforced*. A restriction that is claimed and not enforced is an
+    enchantment that reports supported and lets every creature through, which
+    is the one failure this seam exists to make impossible.
     """
     match = _GLOBAL_CAST_BAN.match(line.strip().lower().rstrip("."))
     return match.group("type") if match is not None else None
@@ -82,10 +84,10 @@ def global_cast_ban_line(line: str) -> str | None:
 #: **whom the sentence binds**, and a scope taken from the wrong half of a
 #: sentence bans the wrong players. Aether Storm's "Creature spells can't be
 #: cast" binds everybody; Brand of Ill Omen's binds the enchanted creature's
-#: controller (``auras.aura_controller_cast_ban``); this one binds the seat that
-#: controls the permanent printing it, and nobody else — an opponent who steals
-#: the Golem is stopped and its former controller is freed, which is exactly what
-#: CR 109.5 makes of the word "you".
+#: controller (``aura_restrictions.aura_controller_cast_ban``); this one binds
+#: the seat that controls the permanent printing it, and nobody else — an
+#: opponent who steals the Golem is stopped and its former controller is freed,
+#: which is exactly what CR 109.5 makes of the word "you".
 #:
 #: The card type is payload for the reason every printed word in this table is
 #: one: "…can't cast artifact spells" is the same sentence and must need no
@@ -745,8 +747,8 @@ def spell_cap_ban(game: "Game", caster_index: int) -> str | None:
 #: (Damping Engine). Any number of alternatives with any of the printed
 #: separators, because the count and the punctuation are facts about one card
 #: rather than about the template -- the reading
-#: ``cost_modifiers._TYPE_LIST`` already makes of the same English one file
-#: over.
+#: ``cost_modifier_lines._TYPE_LIST`` already makes of the same English one
+#: file over.
 _BANNABLE_TYPE_LIST = (
     rf"{_BANNABLE_SPELL_TYPES}(?:,? (?:and |or )?{_BANNABLE_SPELL_TYPES})*"
 )
@@ -909,10 +911,11 @@ def most_permanents_land_ban(game: "Game", seat: int) -> str | None:
 # --- CR 116.2d: what the player who is ahead may do about it ----------------
 
 #: The kind of battlefield special action the offer below registers.
-#: ``auras.py`` holds the *attached* twin ("that creature's controller may
-#: sacrifice…", Volrath's Curse); this is the board-wide one, and they are two
-#: kinds rather than one because what makes the offer is different — an Aura
-#: asks its host who controls it, and this asks the board who is ahead.
+#: ``aura_restrictions.py`` holds the *attached* twin ("that creature's
+#: controller may sacrifice…", Volrath's Curse); this is the board-wide one,
+#: and they are two kinds rather than one because what makes the offer is
+#: different — an Aura asks its host who controls it, and this asks the board
+#: who is ahead.
 IGNORE_BOARD_STATIC = "ignore_board_static_until_eot"
 
 
@@ -956,7 +959,7 @@ def _ignore_board_static_offer(game, permanent):
     if seat in (permanent.metadata.get(IGNORED_PLAY_BAN_SEATS) or ()):
         # Already bought this turn. Offering it again would let a seat pay
         # twice for one turn's relief, which the printed duration does not do —
-        # ``auras._ignore_static_offer``'s rule, and the same one.
+        # ``aura_restrictions._ignore_static_offer``'s rule, and the same one.
         return None
     # "…**a permanent** of their choice", which is CR 110.1's whole noun: an
     # empty filter is every permanent, and a narrower phrase on a later card is
@@ -976,9 +979,9 @@ def _take_ignore_board_static(game, seat: int, permanent) -> None:
 def clear_ignored_play_bans(permanent) -> bool:
     """CR 514.2's cleanup: an "until end of turn" suspension ends.
 
-    Beside ``auras.clear_ignored_restrictions`` in the same sweep, because that
-    is what the printed duration is and the two records are one rule bought in
-    two shapes. Returns whether anything was cleared.
+    Beside ``aura_restrictions.clear_ignored_restrictions`` in the same sweep,
+    because that is what the printed duration is and the two records are one
+    rule bought in two shapes. Returns whether anything was cleared.
     """
     return permanent.metadata.pop(IGNORED_PLAY_BAN_SEATS, None) is not None
 

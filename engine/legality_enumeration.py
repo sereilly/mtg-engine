@@ -67,7 +67,8 @@ def _type_line(card: CardDefinition) -> str:
 def _cant_be_enchanted_by_auras(perm) -> bool:
     """Aura-derived, printed on the permanent itself, or flagged; one question,
     every source."""
-    from .auras import aura_restriction_active, cant_be_enchanted_by_own_text
+    from .aura_restrictions import (aura_restriction_active,
+                                    cant_be_enchanted_by_own_text)
 
     return (
         bool(perm.metadata.get("cant_be_enchanted_by_auras"))

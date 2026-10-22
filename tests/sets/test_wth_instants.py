@@ -264,7 +264,7 @@ def test_choking_vines_blocks_the_creatures_it_names_and_damages_those(set_pool)
 
 # --- W2G1: costs charged and permissions granted ---
 from engine import Game, PlayerState
-from engine.cast_costs import additional_cost_for_line
+from engine.cast_cost_clauses import additional_cost_for_line
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 

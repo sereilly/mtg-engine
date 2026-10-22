@@ -38,7 +38,7 @@ import pytest
 
 from engine import Game, PlayerState
 from engine.activation_prohibitions import ACTIVATION_PROHIBITIONS
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.board_payment import board_can_pay
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.models import Permanent

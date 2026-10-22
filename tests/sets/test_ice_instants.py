@@ -1088,7 +1088,7 @@ def test_word_of_undoing_returns_the_creature_and_only_the_white_auras(set_pool)
     that creature. Regeneration is green, so it is left behind and CR 704.5m
     puts it in the graveyard — which is the trade the card is printed for.
     """
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     pool = set_pool("ICE")
     bear = Permanent(card=pool["Balduvian Bears"])
@@ -1111,7 +1111,7 @@ def test_word_of_undoing_returns_the_creature_and_only_the_white_auras(set_pool)
 def test_word_of_undoing_leaves_a_white_aura_on_another_creature_alone(set_pool):
     """"Attached to **it**" is the whole narrowing, and a sweep's dropped rider
     does not do less — it takes the board."""
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     pool = set_pool("ICE")
     bear = Permanent(card=pool["Balduvian Bears"])
@@ -1135,7 +1135,7 @@ def test_word_of_undoing_leaves_a_white_aura_on_another_creature_alone(set_pool)
 def test_word_of_undoing_spares_an_aura_you_do_not_own(set_pool):
     """"Auras **you own**" — CR 108.3 ownership, not control. An opponent's
     white Aura on your creature is not yours to take back."""
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     pool = set_pool("ICE")
     bear = Permanent(card=pool["Balduvian Bears"])

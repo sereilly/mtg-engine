@@ -21,26 +21,18 @@ from typing import TYPE_CHECKING
 from . import fast_paths
 from .oracle_types import compilation_cache
 from .banding import band_quality
-from .auras import (
-    animating_auras,
-    aura_color_grants,
-    aura_conditional_grant_holds,
-    aura_conditional_keyword_grants,
-    aura_keyword_grants,
-    aura_keyword_removals,
-    aura_land_animation,
-    aura_pt_grant_per_counter,
-    aura_static_pt_grant,
-    aura_card_type_grants,
-    aura_creature_type_sets,
-    aura_type_grants,
-    auras_attached_to,
-    chosen_landwalk_grants,
-)
+from .aura_grants import (animating_auras, aura_card_type_grants,
+                          aura_color_grants, aura_conditional_grant_holds,
+                          aura_conditional_keyword_grants,
+                          aura_creature_type_sets, aura_keyword_grants,
+                          aura_keyword_removals, aura_land_animation,
+                          aura_pt_grant_per_counter, aura_static_pt_grant,
+                          aura_type_grants, chosen_landwalk_grants)
+from .aura_attachment import auras_attached_to
 from .color_changes import color_changes
 from .named_counters import counters_on
 from .control import control_changes, has_control_change
-from .enter_effects import CHOSEN_COLOR_KEY, own_chosen_color
+from .entry_choices import CHOSEN_COLOR_KEY, own_chosen_color
 from .global_statics import (STACK_STATIC_STAMPS_KEY, STACK_STATICS_KEY,
                              changes_types, global_static_sources,
                              removes_all_abilities, stack_statics_applying_to)

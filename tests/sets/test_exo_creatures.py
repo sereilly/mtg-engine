@@ -838,7 +838,7 @@ def test_w1g4_skyshroud_war_beast_counts_the_chosen_players_nonbasics(set_pool):
 
 # --- W1G4 (cont.): the two Exodus Licids ------------------------------------
 
-from engine.auras import attach_aura as _g4_attach
+from engine.aura_attachment import attach_aura as _g4_attach
 from engine.special_actions import (
     take_permanent_special_action as _g4_special_action,
 )

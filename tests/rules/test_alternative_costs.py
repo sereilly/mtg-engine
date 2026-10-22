@@ -323,7 +323,7 @@ def test_601_2h_a_narrowed_discard_with_no_answering_card_refuses_the_cast():
 # --- W2G1 (Visions): the sacrifice an alternative cost can name ---
 
 from engine.card_loader import manifest_set_path as _w2g1_path
-from engine.cast_costs import read_sacrifice_clause as _w2g1_read_sacrifice
+from engine.cast_cost_clauses import read_sacrifice_clause as _w2g1_read_sacrifice
 
 _VIS = {
     c.name: c

@@ -142,7 +142,7 @@ def test_time_elemental_never_offers_an_enchanted_permanent_as_a_bounce_target(s
     The Aura itself stays on the list — an Aura enchants, it is not enchanted —
     and so does the Elemental.
     """
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
     from engine.oracle import compile_card_oracle
     from engine.targeting import derive_activation_spec
 
@@ -1044,7 +1044,7 @@ def _p4_ramses_board(set_pool, lea_by_name):
         PlayerState(name="P1", battlefield=[ramses]),
         PlayerState(name="P2", battlefield=[enchanted, bare, aura]),
     ])
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     attach_aura(aura, enchanted)
     game.start_turn(0)

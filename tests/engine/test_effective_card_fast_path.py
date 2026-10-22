@@ -34,7 +34,7 @@ from types import SimpleNamespace
 import pytest
 
 from engine import Game, PlayerState, fast_paths, layer_bridge, models, target_immunity
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.card_loader import load_catalog
 from engine.copies import become_copy
 from engine.global_statics import record_stack_statics
@@ -261,7 +261,7 @@ def test_every_shortcut_answer_on_the_board_is_the_full_one(by_name, monkeypatch
     # (Agility's flanking, on the enchanted Bears, which the board then strikes
     # off them again), and every kept answer was read again here.
     assert fast_paths.CHECKED["aura_granted_line_derived_lines"] >= len(ACCESSORS) - 1
-    from engine.auras import aura_granted_line_derived_lines
+    from engine.aura_grants import aura_granted_line_derived_lines
 
     assert aura_granted_line_derived_lines(by_name["Agility"].oracle_text) == ("Flanking",)
 

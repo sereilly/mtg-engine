@@ -443,7 +443,7 @@ def test_a_permanents_second_upkeep_trigger_survives_the_first(set_pool):
     controller's while reporting itself supported. Maddening Wind prints the
     same pair and lost its damage the same way.
     """
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     pool = set_pool("ICE")
     wind = Permanent(card=pool["Maddening Wind"])
@@ -882,7 +882,7 @@ def test_seizures_offers_the_toll_to_the_creatures_controller(set_pool):
     was under, so the handler found no seat and this Aura did nothing at all,
     on every tap, since it was printed.
     """
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     pool = set_pool("ICE")
     seizures = Permanent(card=pool["Seizures"])
@@ -942,7 +942,7 @@ def test_cloak_of_confusion_lets_its_controller_trade_damage_for_a_discard(set_p
 
 def _cloak_board(set_pool):
     """P1's bear wearing Cloak of Confusion, with a card in P2's hand."""
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     pool = set_pool("ICE")
     bear = Permanent(card=pool["Balduvian Bears"])  # a vanilla 2/2, no text
@@ -991,7 +991,7 @@ def test_cloak_of_confusion_stops_being_a_trigger_once_it_is_detached(set_pool):
     is found by scanning the attacker's attachments, so detaching it is the
     whole of taking the ability away.
     """
-    from engine.auras import detach_aura
+    from engine.aura_attachment import detach_aura
 
     game, bear, cloak = _cloak_board(set_pool)
     detach_aura(cloak, bear)
@@ -1022,7 +1022,7 @@ def _aggression_board(set_pool):
     The trigger's seat is the *enchanted* creature's controller, not the Aura's,
     so putting the two on opposite sides is what the scoping is about.
     """
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     pool = set_pool("ICE")
     bear = Permanent(card=pool["Balduvian Bears"])
@@ -1083,7 +1083,7 @@ def test_aggression_fires_on_the_hosts_controllers_end_step_and_no_other(set_poo
 
 
 def test_a_detached_aggression_destroys_nothing(set_pool):
-    from engine.auras import detach_aura
+    from engine.aura_attachment import detach_aura
 
     game, bear, aggression = _aggression_board(set_pool)
     detach_aura(aggression, bear)
@@ -1099,7 +1099,7 @@ def test_a_detached_aggression_destroys_nothing(set_pool):
 
 def _snow_devil_board(set_pool, *, snow_land: bool):
     """P1's Snow Devil on P1's bear, with or without a snow land under P1."""
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     pool = set_pool("ICE")
     bear = Permanent(card=pool["Balduvian Bears"])
@@ -1174,7 +1174,7 @@ def test_snow_devil_asks_the_condition_on_every_recompute(set_pool):
 
 
 def test_a_detached_snow_devil_grants_neither_keyword(set_pool):
-    from engine.auras import detach_aura
+    from engine.aura_attachment import detach_aura
 
     game, bear, devil = _snow_devil_board(set_pool, snow_land=True)
     _block_with(game, bear)
@@ -1188,7 +1188,7 @@ def test_a_detached_snow_devil_grants_neither_keyword(set_pool):
 def test_snow_devils_snow_land_is_counted_on_the_auras_controllers_board(set_pool):
     """CR 109.5: "you" is the Aura's controller, so an Aura put on an
     opponent's creature still reads its own controller's lands."""
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     pool = set_pool("ICE")
     bear = Permanent(card=pool["Balduvian Bears"])
@@ -1217,7 +1217,7 @@ def test_snow_devils_snow_land_is_counted_on_the_auras_controllers_board(set_poo
 
 def _caribou_board(set_pool):
     """A Plains wearing Caribou Range, with {W}{W} in P1's pool."""
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     pool = set_pool("ICE")
     plains = Permanent(card=pool["Snow-Covered Plains"])
@@ -1244,7 +1244,7 @@ def test_caribou_range_grants_its_land_the_token_maker(set_pool):
     assert granted.cost.mana["W"] == 2
     assert granted.cost.requires_tap
 
-    from engine.auras import detach_aura
+    from engine.aura_attachment import detach_aura
 
     detach_aura(aura, plains)
     game._settle()
@@ -1350,7 +1350,7 @@ def test_breath_of_dreams_stops_granting_when_it_leaves(set_pool):
 
 def _snowblind_board(set_pool, *, mine: int, theirs: int):
     """P1's bear under P1's Snowblind, with snow lands on both sides."""
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     pool = set_pool("ICE")
     bear = Permanent(card=pool["Balduvian Bears"])  # a vanilla 2/2
@@ -1403,7 +1403,7 @@ def test_snowblind_counts_the_defending_players_snow_lands_while_attacking(set_p
 
 
 def test_a_detached_snowblind_takes_its_penalty_with_it(set_pool):
-    from engine.auras import detach_aura
+    from engine.aura_attachment import detach_aura
 
     game, bear, snowblind = _snowblind_board(set_pool, mine=2, theirs=0)
     assert bear.effective_power == 0
@@ -1418,7 +1418,7 @@ def test_snowblind_ignores_a_nonsnow_land(set_pool):
     """The noun phrase is read by the grammar's own parser and refused if the
     matcher cannot test it, so "snow" is a narrowing rather than decoration —
     dropped, the card would count every land on the board."""
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     pool = set_pool("ICE")
     bear = Permanent(card=pool["Balduvian Bears"])
@@ -1441,7 +1441,7 @@ def test_aggression_cannot_be_put_on_a_wall(set_pool, catalog_by_name):
     missed the table and the permissive fallback said yes — so the restriction
     the card prints was enforced by nothing at all.
     """
-    from engine.auras import enchant_card_refusal
+    from engine.aura_attachment import enchant_card_refusal
 
     pool = set_pool("ICE")
     wall = Permanent(card=catalog_by_name["Wall of Stone"])
@@ -2412,7 +2412,7 @@ def test_fylgja_shields_its_own_host_without_a_picker(set_pool):
     for every printing of the kind that did not say ``to_self`` or
     ``to_source``. Fylgja is the printing that says ``to_attached``.
     """
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     pool = set_pool("ICE")
     host = Permanent(card=set_pool("LEA")["Grizzly Bears"])

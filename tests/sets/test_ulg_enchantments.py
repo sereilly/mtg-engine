@@ -650,7 +650,7 @@ def test_g1_subversion_gains_the_table_total_not_the_printed_one(set_pool):
 # its entry line alone while its only effect sentence went unread, and
 # Multani's Presence is the shape `test_trigger_dispatchers.py` exists for.
 from engine import Game, PlayerState
-from engine.auras import attach_aura, detach_aura
+from engine.aura_attachment import attach_aura, detach_aura
 from engine.control import change_control
 from engine.game_types import CardDefinition
 from engine.models import Permanent

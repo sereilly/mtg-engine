@@ -396,8 +396,8 @@ def _conditional_ability_lines(
     for text in effect.abilities:
         # An Aura's quote is compiled on its *host*, where the Aura's own name
         # means nothing until it is bound to the one object granting it
-        # (CR 201.5a) — the binding ``auras.aura_granted_ability_lines`` makes
-        # for the unconditional quote, asked here with the probe id.
+        # (CR 201.5a) — the binding ``aura_grants.aura_granted_ability_lines``
+        # makes for the unconditional quote, asked here with the probe id.
         probe = bind_granter(text, effect.self_name) if attached else text
         if not derived_line_supported(
             probe, None if attached else effect.self_name

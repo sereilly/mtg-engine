@@ -57,9 +57,11 @@ from engine.replacements import replacement_claims_line  # noqa: E402
 from engine.life_prohibitions import life_gain_ban_line  # noqa: E402
 from engine.target_requirements import must_choose_claims_line  # noqa: E402
 from engine.counted_names import counts_as_claims_line  # noqa: E402
-from engine.cost_modifiers import (cost_modifier_claims_line,  # noqa: E402
-                                  cost_modifier_reduction_sentences,
-                                  cost_modifiers_for)
+from engine.cost_modifiers import cost_modifier_claims_line  # noqa: E402
+from engine.cost_modifier_lines import (  # noqa: E402
+    cost_modifier_reduction_sentences,
+    cost_modifiers_for,
+)
 from engine.draw_step_modifiers import (  # noqa: E402
     draw_step_bonus_for, draw_step_skip_line,
 )
@@ -70,7 +72,8 @@ from engine.targeting import (  # noqa: E402
     enchant_graveyard_line, enchant_line_subject,
 )
 from engine.lord_buffs import sacrifice_state_trigger  # noqa: E402
-from engine.auras import aura_effect_claim, aura_static_pt_grant  # noqa: E402
+from engine.auras import aura_effect_claim  # noqa: E402
+from engine.aura_grants import aura_static_pt_grant
 from engine.activation_restrictions import (  # noqa: E402
     activation_restriction_line,
 )
@@ -97,7 +100,7 @@ from engine.untap_restrictions import (  # noqa: E402
 from engine.draw_reveals import reveals_first_draw_line  # noqa: E402
 from engine.hand_size import hand_size_line  # noqa: E402
 from engine.lethal_damage import single_source_lethal_line  # noqa: E402
-from engine.auras import (  # noqa: E402
+from engine.aura_grants import (  # noqa: E402
     aura_board_counted_penalty_sentences,
     aura_cost_reduction_sentences,
 )

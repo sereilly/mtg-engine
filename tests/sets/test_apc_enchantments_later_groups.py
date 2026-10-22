@@ -1138,7 +1138,7 @@ def test_w1g9_a_quoted_duration_is_not_the_grants_own(set_pool):
     """The reader, asked directly, in both directions: a duration inside the
     quote does not make the grant temporary, and a duration outside it still
     does."""
-    from engine.auras import aura_static_pt_grant
+    from engine.aura_grants import aura_static_pt_grant
 
     assert aura_static_pt_grant(set_pool("APC")["Foul Presence"].oracle_text) == (-1, -1)
     assert aura_static_pt_grant(

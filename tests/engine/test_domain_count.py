@@ -283,7 +283,7 @@ def _census(cards):
             # Treefolk — the count's *set* is the grant). Both carry the spec
             # the evaluator will be handed, so the question is still whether
             # the phrase was read as types.
-            from engine.cost_modifiers import self_cost_reduction
+            from engine.self_cost_modifiers import self_cost_reduction
             from engine.landwalk import landwalk_per_type_spec
 
             carried = _specs(self_cost_reduction(card.oracle_text or "")) + [

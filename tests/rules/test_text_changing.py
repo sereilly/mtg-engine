@@ -25,7 +25,7 @@ import pytest
 
 from engine import Game, PlayerState
 from engine.card_loader import load_catalog
-from engine.cost_modifiers import cost_modifiers_for
+from engine.cost_modifier_lines import cost_modifiers_for
 from engine.models import Permanent
 from engine.text_changes import (
     change_color_word,

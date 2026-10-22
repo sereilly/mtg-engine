@@ -1990,7 +1990,7 @@ def test_w4g1_a_singular_sacrifice_cost_still_eats_exactly_one(set_pool):
     one-permanent cost by a different route — or, worse, into a plural noun
     phrase the parser refuses, which would leave the whole sentence unread and
     the spell free."""
-    from engine.cast_costs import additional_cost_for_line
+    from engine.cast_cost_clauses import additional_cost_for_line
 
     for printed, count in (
         ("as an additional cost to cast this spell, sacrifice a creature", 1),

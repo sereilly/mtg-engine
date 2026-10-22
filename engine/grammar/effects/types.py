@@ -133,9 +133,9 @@ def _parse_becomes_aura_enchantment(
     The enchant clause is Necromancy's, read by
     ``quoted_lines._parse_becomes_aura_line`` from inside quotation marks and
     here from the bare words. Same node, same handler, same
-    ``auras.BECAME_AURA_ENCHANT`` record — a Licid's "enchant creature" is not a
-    printed ``Enchant`` line, so it cannot be read off the card's text and has
-    to be a record either way.
+    ``aura_attachment.BECAME_AURA_ENCHANT`` record — a Licid's "enchant
+    creature" is not a printed ``Enchant`` line, so it cannot be read off the
+    card's text and has to be a record either way.
 
     The subject must be the ability's own source. "This creature loses this
     ability" is CR 201.5's self-reference; a sentence saying it of anything else

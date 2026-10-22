@@ -109,7 +109,7 @@ _BECOMES_AURA_SENTENCE_RE = re.compile(
 #: battlefield with Necromancy"). The rider is the whole sentence — it is what
 #: stops the Aura being moved onto a creature it never reanimated — so a quality
 #: naming anything else refuses here rather than being admitted with the rider
-#: dropped. `engine/auras.enchant_card_refusal` is what tests it.
+#: dropped. `engine/aura_attachment.enchant_card_refusal` is what tests it.
 _BECOMES_AURA_QUALITY_RE = re.compile(
     r'^(?P<noun>[a-z]+) put onto the battlefield with (?P<owner>.+?)\.?$',
     re.IGNORECASE,

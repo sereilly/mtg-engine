@@ -844,10 +844,10 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
                 # "Discard **two** cards" (Prophecy's five spellshapers) is the
                 # same cost counted: the charger has always taken a number, and
                 # its reader in ``engine/activation_costs.py`` goes through
-                # ``cast_costs.read_discard_clause`` — the reader Forbid's
-                # counted buyback already uses — so the two halves read one
-                # count. Only a printed number of two or more; an X here would
-                # be a quantity nothing announces.
+                # ``cast_cost_clauses.read_discard_clause`` — the reader
+                # Forbid's counted buyback already uses — so the two halves
+                # read one count. Only a printed number of two or more; an X
+                # here would be a quantity nothing announces.
                 counted = _accept_cost_count(stream)
                 narrowed = _parse_card_alternatives(stream)
                 if narrowed is None:

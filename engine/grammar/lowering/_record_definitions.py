@@ -170,7 +170,7 @@ def _lower_where_x_life_paid(
     reason: a cost is paid as *this* ability is activated and a count is taken
     as it resolves, while this was settled before either happened.
     """
-    from ...enter_effects import LIFE_PAID_AS_ENTERED
+    from ...entry_choices import LIFE_PAID_AS_ENTERED
 
     if not _mentions_x(inner):
         raise LoweringError("a where-clause defined an X nothing reads", node=node)

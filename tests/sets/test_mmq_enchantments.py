@@ -29,7 +29,7 @@ a prompt.
 # --- W1G3: prevention shields and damage redirection ---
 from engine import Game as _G3Game
 from engine import PlayerState as _G3PlayerState
-from engine.auras import attach_aura as _g3_attach
+from engine.aura_attachment import attach_aura as _g3_attach
 from engine.models import CardDefinition as _G3Card
 from engine.models import Permanent as _G3Permanent
 from tests.helpers import _damage_dealt as _g3_dealt
@@ -320,7 +320,7 @@ def test_righteous_indignation_pumps_the_blocker_not_what_it_blocked(set_pool):
 # lowering could not resolve rather than on anything the parser could not read.
 
 from engine import Game, PlayerState
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.models import CardDefinition, Permanent
 from tests.helpers import _nosick, resolve_stack
 
@@ -570,7 +570,7 @@ def test_foster_digs_to_the_first_creature_card(set_pool):
 # --- W1G5: board-wide statics, cast permissions and control ---
 
 from engine import Game, PlayerState
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.cast_timing import casts_at_instant_speed
 from engine.combat_restrictions import combat_restriction_for
 from engine.damage_events import deal_damage

@@ -452,8 +452,8 @@ def test_g4_mask_of_the_mimic_tutors_the_targets_name(set_pool):
     creature, put that card onto the battlefield, then shuffle."
 
     The cost sentence was already read — the census' refusal site for it was
-    the *grammar's*, and ``cast_costs.additional_cost_for_line`` claims that
-    line in full. What nothing read was the search's noun phrase: a name
+    the *grammar's*, and ``cast_cost_clauses.additional_cost_for_line`` claims
+    that line in full. What nothing read was the search's noun phrase: a name
     comparison against an object the same sentence **chooses**, so the name is
     not knowable until the spell is cast and what the payload carries is the
     question rather than the answer.

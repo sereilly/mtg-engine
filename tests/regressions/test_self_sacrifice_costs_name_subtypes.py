@@ -38,7 +38,7 @@ from __future__ import annotations
 import pytest
 
 from engine import Game, PlayerState
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle, parse_activated_ability_cost
 

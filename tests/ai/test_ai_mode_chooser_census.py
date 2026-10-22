@@ -86,7 +86,7 @@ from engine.ai_valuation import (CARD_WORTH, combat_is_still_to_come,
                                  same_position, scratch_copy,
                                  several_target_slot_sides, standing_swing,
                                  standings, swing_worth)
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units
 from engine.models import Permanent

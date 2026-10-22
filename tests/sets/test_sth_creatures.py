@@ -136,7 +136,7 @@ def test_convulsing_licid_stops_its_host_blocking_once_attached(set_pool):
     through, so it ends when the Licid stops being attached and nothing has to
     undo it.
     """
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     licid = set_pool("STH")["Convulsing Licid"]
     program = compile_card_oracle(licid)
@@ -164,7 +164,7 @@ def test_corrupting_licid_grants_fear_through_the_attachment(set_pool):
     the assertion here is both halves - the card is supported **and** the
     keyword reaches the host.
     """
-    from engine.auras import attach_aura
+    from engine.aura_attachment import attach_aura
 
     licid = set_pool("STH")["Corrupting Licid"]
     assert compile_card_oracle(licid).supported

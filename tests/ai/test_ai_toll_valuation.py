@@ -16,7 +16,7 @@ from __future__ import annotations
 from engine import Game, PlayerState
 from engine.ai_policy import toll_decline_is_smaller_loss
 from engine.ai_valuation import TollLoss, toll_branch_loss
-from engine.auras import attach_aura
+from engine.aura_attachment import attach_aura
 from engine.models import Permanent
 from engine.oracle import OracleInstruction
 from tests.helpers import resolve_stack

@@ -260,7 +260,8 @@ def test_the_highlight_prices_every_cast_modifier_the_engine_knows():
     printed with one of its templates needs no edit here. A hardcoded name
     covers exactly one of these.
     """
-    from engine.cost_modifiers import cost_modifiers_for, self_cost_reduction
+    from engine.cost_modifier_lines import cost_modifiers_for
+    from engine.self_cost_modifiers import self_cost_reduction
 
     modifiers = {
         card.name

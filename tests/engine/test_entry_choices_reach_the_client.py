@@ -9,7 +9,7 @@ name, type or player, so a player facing an opponent's Voice of All learned its
 colour by having a spell fizzle. Forty-seven permanents across the pool make
 such a choice and for most of them it is the whole of what the card does.
 
-``enter_effects.ENTRY_CHOICES`` is the engine's table of what an entry records,
+``entry_choices.ENTRY_CHOICES`` is the engine's table of what an entry records,
 built from that module's own readers of the printed sentence, and
 ``chosen_as_entered`` is what the permanent payload carries
 (``entry_choices``). This file holds the table to the writer **in both
@@ -34,7 +34,7 @@ import pytest
 
 from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_paths
-from engine.enter_effects import (ENTRY_CHOICES, LIFE_PAID_AS_ENTERED,
+from engine.entry_choices import (ENTRY_CHOICES, LIFE_PAID_AS_ENTERED,
                                   chosen_as_entered, entry_choices_of)
 from engine.faces import compilation_units
 from engine.models import Permanent
