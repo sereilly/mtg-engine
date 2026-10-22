@@ -59,7 +59,7 @@ class CastTargetGatesMixin:
         with nothing named, asked by the three callers that pick a mode before
         any target: the web's castable highlight, the mode list the client is
         sent (a mode that cannot be announced is not offered), and the AI's
-        mode chooser. The same gates ``_cast_onto_stack`` runs for a named
+        mode chooser. The same gates the cast runs (``_mode_target_refusal``) for a named
         announcement, with nothing named, so a mode this passes is one some
         cast of it will not be refused for want of a target:
 
@@ -576,7 +576,7 @@ class CastTargetGatesMixin:
         * a **divided** spell — each entry of the division is its own target,
           a face where its slot is None, and the scalar seat beside the list
           names nothing. Without a list, a seat alone is the lawful one-target
-          announcement ``casting._named_divided_targets`` counts;
+          announcement ``cast_target_validation._named_divided_targets`` counts;
         * a spec that offers no player at all (``spec_offers_a_player``: "…among
           any number of target **creatures**") — the seat is the one every cast
           carries, and is not compared;

@@ -29,7 +29,7 @@ Folding them into one flag would make "can't cast instants" also stop every
 activated ability, which is a different and much larger card.
 
 **Where they are read** is the two gates CR names: ``mixins/stack/casting.py``
-at CR 601.2 beside the board-scanned cast bans, and ``mixins/stack/activation.py``
+at CR 601.2 beside the board-scanned cast bans, and ``mixins/stack/activation_checks.py``
 at CR 602.5 beside the printed activation restrictions. A prohibition that is
 recorded and not asked is an effect that resolves, logs itself, and changes
 nothing — which is the failure this module exists to make impossible, so each

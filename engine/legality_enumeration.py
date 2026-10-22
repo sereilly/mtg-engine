@@ -46,7 +46,7 @@ def _cast_from_graveyard_slot(spec: dict, graveyard, spell) -> int | None:
     of one card in one graveyard are one ``CardDefinition`` object, so
     excluding by identity would take both where the cast takes one. The first
     matching slot is the one the cast path itself takes
-    (``_cast_onto_stack`` walks the pile from the bottom).
+    (``_spell_source`` walks the pile from the bottom).
 
     The card as the zone holds it: a split card is held whole and cast as a
     half (CR 709.4), so the half is widened before it is looked for.

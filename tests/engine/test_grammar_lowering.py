@@ -2858,7 +2858,7 @@ def test_discard_last_drawn_cost_lets_its_effect_through():
 
 
 def test_costs_never_become_instructions():
-    """A cost is paid by mixins/stack/activation from ``ActivatedAbilityCost``,
+    """A cost is paid by mixins/stack/activation_charges from ``ActivatedAbilityCost``,
     which the *legacy* compiler parses off the same line. If a cost also
     lowered to an instruction the ability would charge it twice — most visibly
     for Jandor's Ring, which would discard on activation and again on

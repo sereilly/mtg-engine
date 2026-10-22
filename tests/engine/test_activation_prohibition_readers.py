@@ -421,6 +421,22 @@ _READERS = {
     "web/state_view.py": None,
 }
 
+#: ``reader file -> {file: functions}`` read *with* the reader: the steps
+#: ``_activate_onto_stack`` calls in its order, each moved out of it whole at
+#: the 2,000-line cap. The table is asked in one of them (the window), and a
+#: row's predicate called in any of them would be a list of the path's own.
+_STEPS_OF = {
+    "engine/mixins/stack/activation.py": {
+        "engine/mixins/stack/activation_checks.py": (
+            "_activation_source", "_chosen_activated_ability",
+            "_settled_activation_division", "_activation_window",
+        ),
+        "engine/mixins/stack/activation_charges.py": (
+            "_choose_activation_cost_payers", "_pay_activation_costs",
+        ),
+    },
+}
+
 
 def _calls_in(node) -> set[str]:
     found = set()
@@ -443,6 +459,14 @@ def test_no_reader_calls_a_rows_predicate_itself(path):
         assert {node.name for node in scopes} == set(wanted), (
             f"{path} no longer defines {sorted(set(wanted) - {n.name for n in scopes})}"
         )
+    for step_path, steps in _STEPS_OF.get(path, {}).items():
+        step_tree = ast.parse((ROOT / step_path).read_text(encoding="utf-8"))
+        found = [
+            node for node in ast.walk(step_tree)
+            if isinstance(node, ast.FunctionDef) and node.name in steps
+        ]
+        assert {node.name for node in found} == set(steps), (step_path, steps)
+        scopes += found
     calls = set().union(*(_calls_in(scope) for scope in scopes))
     assert "activation_prohibition" in calls, f"{path} does not ask the table"
     assert not calls & _ROW_PREDICATES, (

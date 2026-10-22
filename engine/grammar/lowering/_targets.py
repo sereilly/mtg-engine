@@ -200,7 +200,7 @@ def card_divided_shares_payload(effects) -> dict[str, object] | None:
       instruction that has one of each.
 
     ``amount`` is the **sum**, which is what every reader that sizes a divided
-    spell already asks for (``casting._divided_total``, the AI's valuation) and
+    spell already asks for (``cast_target_validation._divided_total``, the AI's valuation) and
     is honest: it is what the spell deals in total. The per-target numbers ride
     the ``shares`` list, and the stamping at announcement is what pins each one
     to its target.

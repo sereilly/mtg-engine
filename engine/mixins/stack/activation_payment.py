@@ -8,9 +8,9 @@ candidate lists beside it are what each chosen cost may be paid with ("Tap two
 untapped Spirits you control", "Sacrifice a creature") — one list for the
 gate and for the payment's own pick — and ``_named_cost_refusal`` refuses a
 permanent the payer *named* that no list holds, rather than paying with
-another. The chosen exile (City of Shadows, Necropolis) is chosen and paid
-here (``_choose_exile_cost``, ``_pay_exile_cost``), the payment only once the
-mana payment has gone through.
+another. The chosen exile (City of Shadows, Necropolis) is chosen here
+(``_choose_exile_cost``) and paid by ``activation_charges``, once the mana
+payment has gone through.
 
 The module functions price what CR 601.2f computes as the ability is
 activated — ``activation_life_cost``, ``activation_mana_per_counter`` and
@@ -38,7 +38,7 @@ from ...subject_filters import card_matches_any, filter_head_noun, subject_match
 # (CR 608.2h, last-known information). Charging the cost generically as well
 # would sacrifice two creatures for one activation. Kinds here pay it
 # themselves; everything else pays through the activation path's cost
-# payment (``activation._activate_onto_stack``).
+# payment (``activation_charges._pay_activation_costs``).
 #: Instruction kinds whose *handler* performs the sacrifice itself, so the
 #: activation path must not also pay it — two creatures for one ability.
 #:
@@ -412,7 +412,7 @@ class ActivationPaymentMixin:
 
     # The candidate lists a chosen cost is paid from. One list per cost for
     # the gate above and for the payment's own pick in
-    # ``_activate_onto_stack``, so the two cannot count different sets.
+    # ``_choose_activation_cost_payers``, so the two cannot count different sets.
 
     @staticmethod
     def _discard_cost_payable(cost, controller) -> list:
@@ -823,67 +823,3 @@ class ActivationPaymentMixin:
             if not any(found is option for option in candidates):
                 return f"{source_name}: {found.card.name} cannot pay its cost"
         return None
-
-    def _pay_exile_cost(
-        self, choice, controller, controller_index: int, permanent
-    ) -> list:
-        """Move what :meth:`_choose_exile_cost` chose into exile, returning the
-        cards it ate.
-
-        Called below the activation's last refusal, so a payment here is always
-        for an activation that happens. The pile is read back by slot **and**
-        checked by identity: nothing between the choice and this call moves a
-        card, and if that ever stops being true the slot that no longer holds
-        the chosen object is found again rather than trusted, because a slot is
-        not an address.
-        """
-        zone, pile, slots, objects = choice
-        if zone == "hand":
-            # Through ``take_card_from_hand``, not a filter over the list: a
-            # deck repeats one immutable ``CardDefinition`` per copy, so every
-            # copy of a card in a hand is the same Python object and an identity
-            # filter removes all of them where this cost eats exactly one.
-            for card in objects:
-                self.take_card_from_hand(controller, card)
-                controller.exile.append(card)
-            self.log.append(
-                f"{controller.name} exiled "
-                + ", ".join(card.name for card in objects)
-                + f" from their hand to activate {permanent.card.name}"
-            )
-            return list(objects)
-        if zone == "graveyard":
-            # Highest slot first: every pop renumbers the slots behind it.
-            located = []
-            for slot, card in zip(slots, objects):
-                if not (0 <= slot < len(pile.graveyard)) or pile.graveyard[slot] is not card:
-                    slot = next(
-                        index for index, held in enumerate(pile.graveyard)
-                        if held is card and index not in located
-                    )
-                located.append(slot)
-            for slot in sorted(located, reverse=True):
-                pile.graveyard.pop(slot)
-            controller.exile.extend(objects)
-            self.log.append(
-                f"{controller.name} exiled "
-                + ", ".join(card.name for card in objects)
-                + f" from the graveyard of {pile.name} to activate "
-                f"{permanent.card.name}"
-            )
-            return list(objects)
-        taken = []
-        for chosen in objects:
-            owner_index = self.owner_index_of(chosen)
-            card = chosen.card
-            self.remove_from_battlefield(chosen)
-            self.players[
-                owner_index if owner_index is not None else controller_index
-            ].exile.append(card)
-            taken.append(card)
-        self.log.append(
-            f"{controller.name} exiled "
-            + ", ".join(card.name for card in taken)
-            + f" to activate {permanent.card.name}"
-        )
-        return taken

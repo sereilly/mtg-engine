@@ -61,7 +61,7 @@ _LOYALTY_LINE_RE = re.compile(r"^\s*[+\-−]?\s*(?:\d+|[xX])\s*:")
 # CR 306.5d relaxed by the card itself: "You may activate loyalty abilities of
 # <name> on any player's turn any time you could cast an instant." (Teferi,
 # Master of Time — a template several Teferi printings share). Stored as this
-# canonical static line; the activation gate in mixins/stack/activation.py
+# canonical static line; the activation gate in mixins/stack/activation_checks.py
 # reads it back from OracleProgram.static_lines.
 LOYALTY_ANY_TIME_STATIC = (
     "you may activate loyalty abilities of this planeswalker on any player's "

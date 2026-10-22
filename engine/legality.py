@@ -898,8 +898,8 @@ def cast_may_name_no_target(
 
 #: Spec kinds :func:`activation_target_obligation` does not answer for:
 #: ``none`` / ``modal`` / ``hand_card`` choose no target, and a **divided**
-#: announcement is CR 601.2d's (``divided_damage.division_refusal``, asked in
-#: ``_activate_onto_stack`` beside the target gate).
+#: announcement is CR 601.2d's (``divided_damage.division_refusal``, asked by
+#: ``_activate_onto_stack``'s division step just after the target gate).
 _UNOBLIGED_ACTIVATION_KINDS = frozenset({"none", "modal", "hand_card", "divided"})
 
 #: Spec flags that make an activation's picker **a choice and not a target**

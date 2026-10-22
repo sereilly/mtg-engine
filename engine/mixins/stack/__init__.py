@@ -13,13 +13,21 @@ mixin each, composed onto :class:`~engine.game.Game` the same way
 The first three outgrew one module each at the 2,000-line cap, and each part
 split out of one is a mixin ``Game`` composes immediately after it:
 
-    casting      cast_additional_costs   CR 601.2b/f–h — additional costs
+    casting      cast_announcement       CR 601.2a–c — where from, modes,
+                                         each mode's targets
+                 cast_additional_costs   CR 601.2b/f–h — additional costs
                  cast_alternative_costs  CR 118.9 — the alternative cost
-                 cast_target_validation  CR 601.2c — the target gate
+                 cast_target_validation  CR 601.2c–d — the target gate
                  pool_payment            CR 601.2g–h — spending the pool, and X
-    activation   activation_payment      CR 602.2b — what pays the cost
+    activation   activation_checks       CR 602.2a–b, 602.5 — before any cost
+                 activation_payment      CR 602.2b — can the cost be paid, by what
+                 activation_charges      CR 601.2h — the payers chosen, the payment
                  card_activation         an ability of a card in a hand or
                                          a graveyard (CR 113.6)
+
+``_cast_onto_stack`` and ``_activate_onto_stack`` each call their steps in
+CR order from those modules; the hinge between refusing and paying (the mana
+payment) stays in the method itself.
     resolution   trigger_targets         CR 603.3c–d — a trigger's mode, targets
                  triggered_abilities     CR 603.3 — triggers onto the stack
 
@@ -38,6 +46,8 @@ family of prompt beside it is a mixin ``Game`` composes immediately after it.
 from .activation import AbilityActivationMixin
 from .activation_payment import ActivationPaymentMixin
 from .card_activation import CardActivationMixin
+from .activation_checks import ActivationChecksMixin
+from .activation_charges import ActivationChargesMixin
 from .casting import SpellCastingMixin
 from .cast_additional_costs import AdditionalCastCostsMixin
 from .cast_alternative_costs import AlternativeCastCostsMixin
@@ -49,6 +59,7 @@ from .cast_target_validation import (
     permanent_matches_enchant_noun,
 )
 from .pool_payment import PoolPaymentMixin
+from .cast_announcement import CastAnnouncementMixin
 from .choices import (
     PendingChoicesMixin,
     ReplacementChoicesMixin,
@@ -74,6 +85,8 @@ __all__ = [
     "AbilityActivationMixin",
     "ActivationPaymentMixin",
     "CardActivationMixin",
+    "ActivationChecksMixin",
+    "ActivationChargesMixin",
     "PendingChoicesMixin",
     "ReplacementChoicesMixin",
     "LibrarySearchChoicesMixin",
@@ -94,6 +107,7 @@ __all__ = [
     "AlternativeCastCostsMixin",
     "CastTargetValidationMixin",
     "PoolPaymentMixin",
+    "CastAnnouncementMixin",
     "StackResolutionMixin",
     "TriggerTargetsMixin",
     "TriggeredAbilitiesMixin",

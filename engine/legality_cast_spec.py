@@ -503,7 +503,7 @@ class CastTargetSpecMixin:
         (CR 608.2b) and what a retarget and a trigger choose from, none of
         which the card binds.
 
-        *announcements* is ``casting._mode_announcements``' rows — one per
+        *announcements* is ``cast_announcement._mode_announcements``' rows — one per
         announced mode — and *divided_targets* CR 601.2d's list; between them
         they are everything the cast named. "If able" is measured against the
         picker's own un-narrowed list for each row, so a Flagbearer the spell

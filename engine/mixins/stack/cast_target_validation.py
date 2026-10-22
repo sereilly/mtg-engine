@@ -5,7 +5,9 @@ through (``engine/legality.py``), so a target the picker offers is one
 resolution will accept. Beside it: a roles announcement read in role order
 (``_named_role_targets``), the noun phrase a "destroy target …" names
 (``_destroy_target_legal``), and the X a "with mana value X" target fixes
-(``_x_implied_by_target``).
+(``_x_implied_by_target``). ``_settled_cast_division`` is the step of
+``_cast_onto_stack`` that counts the named targets and checks the division
+once X is a number (CR 601.2c–d), over ``_divided_total`` and its siblings.
 
 The Aura enchant-noun helpers live here because an Aura chooses what it
 attaches to as it is cast (CR 303.4a). ``permanent_matches_enchant_noun`` is
@@ -41,6 +43,14 @@ from ...enchant_targets import (_ENCHANT_LAND_SUBTYPES,
 from ...targeting import (derive_cast_spec, role_is_stack, spec_roles,
                           targets_mana_value_x)
 from ...target_roles import role_is_seat
+from ...cost_x_definitions import defines_cast_x
+from ...divided_damage import (
+    CARD_DIVIDED, EACH, EVENLY, FIXED, card_shares, divided_description,
+    division_refusal, stamp_card_shares,
+)
+from ...game_types import SimulationResult
+from ...targeting import instructions_as_announced
+from .cast_announcement import _mode_announcements
 
 
 # Maps an "enchant X" noun to a predicate matching legal battlefield targets.
@@ -219,6 +229,89 @@ def permanent_matches_enchant_noun(permanent: Permanent, noun: str) -> bool:
     if excluded is not None and permanent.has_type(excluded):
         return False
     return matcher(permanent)
+
+
+def _divided_total(payload: dict, x_value: int | None) -> int:
+    """How much a divided instruction has to divide, as announced.
+
+    The same two keys the handler adds together — the amount and Meteor
+    Shower's "X **plus 1**" bonus — read here so CR 601.2d's "the division must
+    total this" is checked against the number the spell will really deal.
+    """
+    from ...handlers._amounts import resolve_amount
+
+    # ``count`` for a distributed *counter* placement (Spoils of War) and
+    # ``amount`` for damage: one sentence in CR 601.2d covers both, and the two
+    # instruction families spell their quantity with the words their own
+    # handlers read. Named here rather than normalized at the lowering, because
+    # renaming one would be a payload key changed for the gate's convenience.
+    quantity = payload.get("amount", payload.get("count", 0))
+    return int(resolve_amount(quantity, x_value)) + int(
+        payload.get("amount_bonus", 0) or 0
+    )
+
+
+def _card_divided_target_count(targets: dict, x_value: int | None) -> int | None:
+    """How many targets a card-dictated division prints, or None.
+
+    None for every spell whose target count is open — which is every divided
+    spell in the pool before Weatherlight — so the caller may ask
+    unconditionally and treat None as "CR 601.2c prints no number here".
+
+    ``target_count`` is a literal (Cone of Flame's three) or the string ``"x"``
+    (Firestorm's "each of **X** targets"). Resolved through the announced X
+    rather than off the card, because CR 107.3a's announcement is the only place
+    that number exists. Its own key rather than the ``count`` a several-targets
+    description carries -- see ``card_divided_target_description``.
+    """
+    from ...handlers._amounts import resolve_amount
+
+    count = targets.get("target_count")
+    if count is None or isinstance(count, bool):
+        return None
+    if isinstance(count, int):
+        return count
+    if count == "x":
+        return max(0, int(resolve_amount(count, x_value)))
+    return None
+
+
+def _named_divided_targets(
+    card: CardDefinition, from_zone: str, target_player_index,
+    target_permanent_index, target_permanent_ids,
+) -> int:
+    """How many targets a divided spell's caster named *outside* the division.
+
+    CR 601.2d asks for a division "among one or more targets", and the division
+    list is not the only way to name one: every scripted duel, most of this
+    engine's own tests and the four "any target" burn spells still announce
+    through ``target_permanent_index`` / ``target_player_index``, which is a
+    lawful one-target announcement (that target takes the whole amount). So the
+    floor in :func:`division_refusal` refuses a caster who named *nothing*
+    rather than one who named a target the older way.
+
+    **Whether a seat is a target at all is the spec's answer, not this
+    function's.** "…among any number of **target creatures**" (Fire Covenant,
+    Pyrokinesis) and "…among all creatures target opponent controls" (Dwarven
+    Catapult) name no player, so a `target_player_index` on one of those is the
+    seat every cast carries rather than a target — read through the same
+    ``creatures_only`` / ``land_filter`` narrowing ``legality._enumerate_targets``
+    consults before it offers a face, so the gate and the picker cannot
+    disagree about what a legal target is.
+    """
+    named = len([pid for pid in (target_permanent_ids or []) if isinstance(pid, int)])
+    if isinstance(target_permanent_index, list):
+        named += len([i for i in target_permanent_index if isinstance(i, int)])
+    elif isinstance(target_permanent_index, int):
+        named += 1
+    if named or target_player_index is None:
+        return named
+    spec = derive_cast_spec(
+        card, compile_card_oracle(card), from_zone=from_zone
+    ) or {}
+    if spec.get("creatures_only") or spec.get("land_filter"):
+        return 0
+    return 1
 
 
 class CastTargetValidationMixin:
@@ -1087,3 +1180,184 @@ class CastTargetValidationMixin:
                 return False, f"no valid target for {card.name}"
 
         return True, "valid"
+
+    def _settled_cast_division(
+        self, *, announced_x, card, caster_index, chosen_modes, classification,
+        divided_targets, from_zone, mode_index, named_no_division_targets,
+        optional_paid, resolved_x_value, target_permanent_ids,
+        target_permanent_index, target_player_index, target_stack_item,
+        x_value,
+    ):
+        """CR 601.2c's count and CR 601.2d's division, once X is a number.
+
+        Each announced mode names as many targets as it prints; a spell that
+        divides nothing refuses a division; a divided spell's shares are
+        checked against its total, an "up to" division that named nobody is
+        written down as that, and a card's printed shares are stamped onto the
+        announcement.
+
+        A step of ``_cast_onto_stack``, moved out of it whole and called from
+        it in its place: "above" and "below" in its comments are places in the
+        cast as that method runs it.
+
+        Returns the refusal, or ``(divided_targets, target_player_index)``.
+        """
+        # CR 601.2d, after X is announced (601.2b) and before any cost is paid:
+        # the division is part of *proposing* the spell, and CR 601.2e returns
+        # the game to the moment before a proposal that turns out to be illegal.
+        # Below the X resolution because a division of X cannot be measured
+        # until X is a number — the same ordering CR 601.2 puts them in, and the
+        # same lesson Fire Covenant's "pay X life" taught the cost gate below.
+        #
+        # **Asked of every divided spell, not only of one that announced a
+        # division.** The gate used to run under `if divided_targets is not
+        # None`, so a caster who announced *nothing* — no division, no target —
+        # walked past it: Contagion and Bounty of the Hunt were castable with
+        # both battlefields empty, and Spoils of War, shipped, with them.
+        # CR 601.2d divides "among one or more targets", so that is an illegal
+        # proposal, and the refusal has to be here rather than at resolution
+        # because CR 601.2e returns the game to before a proposal and a
+        # resolution-time answer would already have spent the mana.
+        #
+        # **Of the steps this announcement will run** (CR 702.33g): a kicked
+        # Magma Burst divides over two targets and an unkicked one names one
+        # the ordinary way, and Pollen Remedy's shares total 3 or 6 — so which
+        # divided step is the spell's is CR 601.2b's answer, read through the
+        # same view the picker's spec is.
+        # CR 601.2c's **count**, here because here is where X is a number:
+        # "two target creatures" names two and "Tap X target creatures" names
+        # X (`legality.cast_target_count_refusal`). Once per announced mode,
+        # like the gates above. An X the caller announced (or the card
+        # defined) is counted; one this function inferred from the pool a few
+        # lines up is not — the caster never said it.
+        counted_x = (
+            resolved_x_value
+            if x_value is not None or announced_x is not None
+            or defines_cast_x(card.oracle_text)
+            else None
+        )
+        for (
+            announced_mode, mode_seat, mode_slot, mode_ids, _mode_stack_item,
+        ) in _mode_announcements(
+            chosen_modes, mode_index, target_player_index,
+            target_permanent_index, target_permanent_ids, target_stack_item,
+        ):
+            miscounted = self.cast_target_count_refusal(
+                caster_index, card,
+                target_player_index=mode_seat,
+                target_permanent_index=mode_slot,
+                target_permanent_ids=mode_ids,
+                x_value=counted_x,
+                optional_cost_payments=optional_paid,
+                mode_index=announced_mode,
+            )
+            if miscounted is not None:
+                self.log.append(miscounted)
+                return SimulationResult(
+                    card.name, False, classification.effect_kind, miscounted,
+                )
+
+        found = divided_description(
+            instructions_as_announced(
+                card, compile_card_oracle(card), optional_paid,
+                mode_index=mode_index,
+            )
+        )
+        if found is None and divided_targets:
+            # CR 601.2d is about a spell that **divides or distributes**. A
+            # division announced for one that does not is not an announcement
+            # this spell can make — and it was accepted: nothing above looks at
+            # the list unless a divided step exists, while every damage handler
+            # reads `choices["divided_targets"]` whenever it is present. So
+            # `cast_from_hand(0, "Lightning Bolt", divided_targets=[(1, None),
+            # (0, None)])` split its 3 between two faces, and 483 of the pool's
+            # 910 non-divided instants and sorceries took the list the same
+            # way. Neither the client nor the AI sends one; the engine's own
+            # announcement API was laxer than the rule. Of the steps this
+            # announcement will run, so a division printed only in a kicked
+            # arm or in one mode belongs to that cast alone.
+            refusal = f"{card.name} divides nothing among targets (CR 601.2d)"
+            self.log.append(refusal)
+            return SimulationResult(
+                card.name, False, classification.effect_kind, refusal,
+            )
+        if found is not None:
+            division = found[1].get("division", EVENLY)
+            total = _divided_total(found[0], resolved_x_value)
+            # "…to **each of X targets**" (Firestorm), "…and 3 damage to a third
+            # target" (Cone of Flame). How many targets the card prints, which
+            # for Firestorm is the X the caster has just announced — so it is
+            # resolved here, one step after CR 601.2b and one before the
+            # CR 601.2c check that reads it.
+            exact = (
+                _card_divided_target_count(found[1], resolved_x_value)
+                if division in CARD_DIVIDED else None
+            )
+            named_outside = _named_divided_targets(
+                card, from_zone, target_player_index,
+                target_permanent_index, target_permanent_ids,
+            )
+            refusal = division_refusal(
+                total,
+                divided_targets or (),
+                division=division,
+                max_targets=found[1].get("max_targets"),
+                named_targets=named_outside,
+                exact_targets=exact,
+                # The announcement of no targets is written down just below
+                # and read at resolution (``announced_no_targets``).
+                carries_no_targets=True,
+            )
+            if refusal is not None:
+                self.log.append(f"{card.name}: {refusal}")
+                return SimulationResult(
+                    card.name, False, classification.effect_kind, refusal,
+                )
+            # "…to each of **up to** three targets" (Shower of Coals), cast
+            # naming nobody (CR 115.6). Written onto the announcement as the
+            # empty list it is — and an *explicit* empty list is that
+            # announcement whatever seat the cast also carries, because every
+            # cast over the wire carries one. Without the mark the resolution
+            # could not tell "nobody" from "nothing said", and a spell that
+            # targets nothing went looking for the default opponent's face.
+            #
+            # The seat is dropped with it: a spell that chose no target has
+            # none (CR 115.6 — "targeted only if one or more targets have been
+            # chosen"), and a seat left on the stack object would be read back
+            # as a player it targets. A *permanent* named outside the list is
+            # a target and keeps the announcement what it was.
+            names_a_permanent = bool(target_permanent_ids) or (
+                target_permanent_index is not None
+            )
+            if (
+                division == EACH
+                and found[1].get("max_targets") is not None
+                and not divided_targets
+                and not names_a_permanent
+                and (named_no_division_targets or not named_outside)
+            ):
+                divided_targets = []
+                target_player_index = None
+            # The card's own shares, written onto the announcement now that it
+            # is known to be legal. Here rather than at resolution because the
+            # share has to ride its target: a target that has left is dropped
+            # from the list (CR 608.2b), and a share read by position after that
+            # would slide Cone of Flame's 3 onto the creature it assigned 2.
+            #
+            # **Printed shares only** (:data:`FIXED`). An :data:`EACH` entry
+            # was stamped too, with "the whole amount" — a number the
+            # resolution settles, not the announcement (CR 608.2h): Shower of
+            # Coals deals 2 or 4 by the graveyard it finds, and its entries
+            # read 4 on a board where it would deal 2. ``divide`` has never
+            # read the stamp for ``EACH``, so the number said nothing true and
+            # nothing was asked of it; an entry with no amount is what "the
+            # card supplies it as it resolves" looks like.
+            if division == FIXED and divided_targets:
+                divided_targets = stamp_card_shares(
+                    divided_targets,
+                    card_shares(
+                        total, len(divided_targets),
+                        division=division, shares=found[1].get("shares"),
+                    ),
+                )
+        return divided_targets, target_player_index

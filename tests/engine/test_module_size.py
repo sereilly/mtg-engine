@@ -51,8 +51,6 @@ OVERSIZED: dict[str, int] = {
     # --- S4 ---
     # --- S5 ---
     # --- S6 ---
-    "engine/mixins/stack/casting.py": 2432,
-    "engine/mixins/stack/activation.py": 2973,
     # --- S7 ---
     "engine/handlers/control_flow.py": 5470,
     "engine/handlers/board_misc.py": 4089,

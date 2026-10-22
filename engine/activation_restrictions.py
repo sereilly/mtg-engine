@@ -1032,8 +1032,8 @@ def restriction_functions_from(
 #: is not one of the ``ACTIVATION_RESTRICTIONS`` rows above: every one of those
 #: is answered from the game state alone, and this one is answered from a
 #: number the activator has just named — so it cannot be reached through
-#: ``activation_denial``'s signature and is enforced beside the {X} payment in
-#: ``mixins/stack/activation.py``.
+#: ``activation_denial``'s signature and is enforced by the activation's window
+#: (``mixins/stack/activation_checks.py``).
 _X_CANT_BE_ZERO = re.compile(r"^x can'?t be 0$")
 
 
@@ -1163,7 +1163,7 @@ def global_activation_ban_line(line: str) -> str | None:
 
     One reader, two callers, exactly as ``global_cast_ban_line`` has:
     ``engine/grammar/registries.py`` asks it so the printed line is *claimed*,
-    and ``mixins/stack/activation.py`` asks it at CR 602.2 so the line is
+    and ``mixins/stack/activation_checks.py`` asks it at CR 602.2 so the line is
     *enforced*. A prohibition that is claimed and not enforced is an artifact
     reporting supported while every ability it names keeps working — the
     failure this file's docstring opens on.

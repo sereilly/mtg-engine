@@ -3,28 +3,32 @@ modes and X, and paid its cost.
 
 Everything here runs *before* the spell resolves. ``cast_from_hand`` is the
 entry point and ``queue_from_hand`` does the work, through
-``_cast_onto_stack``: CR 601.2a–i in order, every refusal before any payment.
-The modes a cast announces (CR 700.2) are chosen here too, beside the
-announcement that reads them.
+``_cast_onto_stack``: CR 601.2a–i in order, every refusal before any payment,
+and the push that finishes the cast (CR 601.2i).
 
 What the cast asks on the way is a mixin each, composed onto ``Game``
-directly after this one:
+directly after this one, and ``_cast_onto_stack`` calls its steps there in
+CR order — each moved out of it whole at the 2,000-line cap:
 
+* ``cast_announcement`` — where the spell is cast from and under what
+  permission (CR 601.2a, 601.3), its modes (CR 601.2b, 700.2) and each
+  announced mode's target gates (CR 601.2c);
 * ``cast_additional_costs`` — the printed additional costs (CR 601.2b,
-  601.2f–h), the optional ones a cast announces (kicker, buyback) and the
-  sacrifices a board tax adds (Drought);
+  601.2f–h), the optional ones a cast announces (kicker, buyback), the
+  sacrifices a board tax adds (Drought), and whether every cost of the cast
+  can be paid;
 * ``cast_alternative_costs`` — the printed alternative cost (CR 118.9);
-* ``cast_target_validation`` — the target gate (CR 601.2c) and the Aura
-  enchant-noun helpers;
-* ``pool_payment`` — spending the mana pool (CR 601.2g–h) and the X it can
-  pay for (CR 107.3).
+* ``cast_target_validation`` — the target gate (CR 601.2c), the count and
+  the division (CR 601.2d), and the Aura enchant-noun helpers;
+* ``pool_payment`` — the X a cast is for (CR 107.3) and the mana payment
+  (CR 601.2g–h).
 """
 
 from __future__ import annotations
 
 import re
 
-from ...cast_permissions import consume as consume_permission, permission_for
+from ...cast_permissions import consume as consume_permission
 from ...bare_announcements import (announced_fields, default_cast_target,
                                    names_an_object, seat_of_unseated_slot)
 from ...cast_costs import (additional_costs, buyback_cost, cast_announces_x,
@@ -33,147 +37,25 @@ from ...cast_prohibitions import cast_prohibition
 from ...cast_restrictions import check_cast_timing
 from ...cast_timing import (CAST_AT_INSTANT_SPEED, a_sorcery_could_be_cast,
                             sacrifices_at_cleanup_if_cast_at_instant_speed)
-from ...cost_x_definitions import (caps_cast_x, cast_x_ceiling, cast_x_floor,
-                                   cast_x_value, defines_cast_x, floors_cast_x)
 from ...damage_ledger import record_cast
 from ...counter_conditions import spend_next_spell_promises
-from ...divided_damage import (
-    CARD_DIVIDED, EACH, EVENLY, FIXED, card_shares, divided_description,
-    divided_entry, division_refusal, stamp_card_shares, stamped_entry,
-)
-from ...hand_locks import hand_lock_reason, playable_hand_index
-from ...faces import choose_a_face_refusal, holds_spell_named, spell_named
+from ...divided_damage import divided_entry, stamped_entry
+from ...faces import choose_a_face_refusal, spell_named
 from ...classifier import classify_card
-from ...cost_modifiers import (
-    CostReduction, buyback_cost_reduction, cost_reduction_for_cast,
-    keyword_cost_modifiers, reduce_cost,
-    sacrifice_taxes, self_per_target_tax, spell_cost_tax, spell_life_tax,
-    spell_symbol_tax,
-)
+from ...cost_modifiers import (CostReduction, buyback_cost_reduction,
+                               cost_reduction_for_cast, reduce_cost,
+                               self_per_target_tax, spell_cost_tax,
+                               spell_life_tax, spell_symbol_tax)
 from ...flashback import is_flashback
 from ...game_types import SimulationResult, StackItem, chosen_damage_source
 from ...models import CardDefinition
 from ...oracle import _COLOR_WORD_TO_SYMBOL, compile_card_oracle
-from ...oracle_types import x_spend_colors_from_text
-from ...targeting import (graveyard_target_spec, derive_cast_spec,
-                          instructions_as_announced)
+from ...targeting import graveyard_target_spec, derive_cast_spec
 from ...target_roles import ROLE_SEATS
 from .cast_additional_costs import (_optional_cost_announcement,
                                     _optional_cost_totals, _taken_offers,
                                     optional_cost_taken)
-
-
-def _divided_total(payload: dict, x_value: int | None) -> int:
-    """How much a divided instruction has to divide, as announced.
-
-    The same two keys the handler adds together — the amount and Meteor
-    Shower's "X **plus 1**" bonus — read here so CR 601.2d's "the division must
-    total this" is checked against the number the spell will really deal.
-    """
-    from ...handlers._amounts import resolve_amount
-
-    # ``count`` for a distributed *counter* placement (Spoils of War) and
-    # ``amount`` for damage: one sentence in CR 601.2d covers both, and the two
-    # instruction families spell their quantity with the words their own
-    # handlers read. Named here rather than normalized at the lowering, because
-    # renaming one would be a payload key changed for the gate's convenience.
-    quantity = payload.get("amount", payload.get("count", 0))
-    return int(resolve_amount(quantity, x_value)) + int(
-        payload.get("amount_bonus", 0) or 0
-    )
-
-
-
-def _card_divided_target_count(targets: dict, x_value: int | None) -> int | None:
-    """How many targets a card-dictated division prints, or None.
-
-    None for every spell whose target count is open — which is every divided
-    spell in the pool before Weatherlight — so the caller may ask
-    unconditionally and treat None as "CR 601.2c prints no number here".
-
-    ``target_count`` is a literal (Cone of Flame's three) or the string ``"x"``
-    (Firestorm's "each of **X** targets"). Resolved through the announced X
-    rather than off the card, because CR 107.3a's announcement is the only place
-    that number exists. Its own key rather than the ``count`` a several-targets
-    description carries -- see ``card_divided_target_description``.
-    """
-    from ...handlers._amounts import resolve_amount
-
-    count = targets.get("target_count")
-    if count is None or isinstance(count, bool):
-        return None
-    if isinstance(count, int):
-        return count
-    if count == "x":
-        return max(0, int(resolve_amount(count, x_value)))
-    return None
-
-
-def _named_divided_targets(
-    card: CardDefinition, from_zone: str, target_player_index,
-    target_permanent_index, target_permanent_ids,
-) -> int:
-    """How many targets a divided spell's caster named *outside* the division.
-
-    CR 601.2d asks for a division "among one or more targets", and the division
-    list is not the only way to name one: every scripted duel, most of this
-    engine's own tests and the four "any target" burn spells still announce
-    through ``target_permanent_index`` / ``target_player_index``, which is a
-    lawful one-target announcement (that target takes the whole amount). So the
-    floor in :func:`division_refusal` refuses a caster who named *nothing*
-    rather than one who named a target the older way.
-
-    **Whether a seat is a target at all is the spec's answer, not this
-    function's.** "…among any number of **target creatures**" (Fire Covenant,
-    Pyrokinesis) and "…among all creatures target opponent controls" (Dwarven
-    Catapult) name no player, so a `target_player_index` on one of those is the
-    seat every cast carries rather than a target — read through the same
-    ``creatures_only`` / ``land_filter`` narrowing ``legality._enumerate_targets``
-    consults before it offers a face, so the gate and the picker cannot
-    disagree about what a legal target is.
-    """
-    named = len([pid for pid in (target_permanent_ids or []) if isinstance(pid, int)])
-    if isinstance(target_permanent_index, list):
-        named += len([i for i in target_permanent_index if isinstance(i, int)])
-    elif isinstance(target_permanent_index, int):
-        named += 1
-    if named or target_player_index is None:
-        return named
-    spec = derive_cast_spec(
-        card, compile_card_oracle(card), from_zone=from_zone
-    ) or {}
-    if spec.get("creatures_only") or spec.get("land_filter"):
-        return 0
-    return 1
-
-
-def _mode_announcements(
-    chosen_modes, mode_index, target_player_index, target_permanent_index,
-    target_permanent_ids, target_stack_item,
-) -> list[tuple]:
-    """``(mode_index, seat, slot, ids, stack_item)`` for every announcement a
-    cast makes (CR 601.2b–c).
-
-    One row for an ordinary spell and for the single-mode ``mode_index=``
-    spelling, read off the cast's own target fields. One row **per chosen
-    mode** for a "choose one or more" cast (``mode_choices``), read off the
-    mode that named them: two modes of Sublime Epiphany may name two objects
-    on two boards, and the cast's own fields name neither. A mode's targets
-    travel as a slot beside its seat, never as ids — ``ChosenMode`` is stamped
-    with ids only as it reaches the stack.
-    """
-    if chosen_modes:
-        return [
-            (
-                mode.index, mode.target_player_index,
-                mode.target_permanent_index, None, mode.target_stack_item,
-            )
-            for mode in chosen_modes
-        ]
-    return [(
-        mode_index, target_player_index, target_permanent_index,
-        target_permanent_ids, target_stack_item,
-    )]
+from .cast_announcement import _mode_announcements
 
 
 class SpellCastingMixin:
@@ -322,189 +204,6 @@ class SpellCastingMixin:
         self._settle()
         self.clear_priority_window()
         return SimulationResult(queued.card_name, True, queued.effect_kind, "resolved")
-    def _arm_opponent_mode_choice(self, caster_index: int, card, spell_item) -> None:
-        """CR 700.2e: hand the mode choice to a player other than the caster.
-
-        Nothing is armed for an ordinary modal spell — the caster already named
-        its mode as part of the announcement — so this is a no-op for every card
-        but the three that print the head.
-
-        **Which opponent** is the caster's choice when there is more than one
-        (CR 700.2e's second sentence), and this takes the first living one
-        instead of asking. That is a decision the engine does not model yet and
-        it is recorded as such rather than hidden: in a duel, the rule's
-        "if there is more than one" clause never applies and the seat is the
-        only opponent there is.
-        """
-        program = compile_card_oracle(card)
-        if program.mode_chooser is None or not program.modes:
-            return
-        chooser = next(
-            (
-                seat for seat in self.opponents_of(caster_index)
-                if not self.players[seat].lost
-            ),
-            None,
-        )
-        if chooser is None:
-            # CR 700.2e names a player who has to exist; with none left the
-            # spell has nobody to ask and the first printed mode stands, which
-            # is the same stated policy the non-interactive default takes.
-            from ...game_types import ChosenMode
-
-            spell_item.chosen_mode_index = 0
-            spell_item.chosen_modes = (ChosenMode(index=0),)
-            return
-        self.arm_pending_choice(
-            "opponent_mode_choice", chooser,
-            card_name=card.name,
-            labels=[mode.label for mode in program.modes],
-            _item=spell_item,
-        )
-        self.log.append(
-            f"{self.players[chooser].name} chooses a mode for {card.name}"
-        )
-
-    def arm_modal_mode_targets(self, spell_item, chooser_seat: int) -> None:
-        """CR 601.2c for a mode somebody else chose (CR 700.2e).
-
-        The rules order is modes (601.2b) then targets (601.2c), and for these
-        spells the two belong to different players — so the caster cannot name a
-        target while casting: they do not yet know which mode they are naming it
-        for, and a mode the opponent then declines to pick would have published
-        the caster's intentions for nothing.
-
-        So the targets are asked for *after* the answer, and the prompt is armed
-        by that answer. The spell is on the stack by then, which is a departure
-        from the rules' internal order and not from anything observable:
-        `opponent_mode_choice` and this prompt both block every seat, so no
-        player has had priority between CR 601.2i and this — the whole
-        announcement is still one uninterruptible moment.
-
-        The picker is the one `legality._enumerate_targets` builds for every
-        other spell, with the chooser's seat supplied beside the
-        ``that_player_only`` flag the mode's own noun phrase produced ("up to
-        two target creatures **that player** controls"). Nothing else can supply
-        it: the seat came into existence when the mode was chosen.
-
-        A mode that targets nothing arms nothing, which is every mode of every
-        other card that prints this head.
-        """
-        from ...targeting import _from_instructions
-
-        program = compile_card_oracle(spell_item.card)
-        index = spell_item.chosen_mode_index
-        if index is None or not 0 <= index < len(program.modes):
-            return
-        instruction = program.modes[index].instruction
-        if instruction is None:
-            return
-        spec = _from_instructions((instruction,))
-        if spec is None:
-            return
-        if spec.get("that_player_only"):
-            spec = {**spec, "that_player_index": chooser_seat}
-        candidates = self._enumerate_targets(
-            spell_item.caster_index, spell_item.card, spec, for_cast=True,
-        )
-        offered = []
-        for candidate in candidates:
-            if candidate.get("kind") != "permanent":
-                continue
-            perm = self.permanent_at(candidate["seat"], candidate["index"])
-            if perm is None:
-                continue
-            offered.append({
-                "seat": candidate["seat"],
-                "permanent_index": candidate["index"],
-                "permanent_id": perm.permanent_id,
-                "name": perm.card.name,
-            })
-        if not offered:
-            # CR 601.2c names as many targets as the spell requires and no more.
-            # "**Up to** two" requires none, so a board with nothing to destroy
-            # is a legal announcement and not a refusal — the mode simply
-            # destroys nothing. A mode with a *mandatory* target and no legal
-            # one could not have been chosen at all (CR 700.2a), which is a
-            # gate on the choice rather than on this prompt; no card in the pool
-            # prints one, and the refusal it would need is named in ROADMAP.md.
-            self.log.append(
-                f"{spell_item.card.name}: the chosen mode has no legal target"
-            )
-            return
-        self.arm_pending_choice(
-            "modal_mode_targets", spell_item.caster_index,
-            card_name=spell_item.card.name,
-            mode_label=program.modes[index].label,
-            targets=offered,
-            max_targets=int(spec.get("max_targets") or 1),
-            _item=spell_item,
-        )
-
-    def _resolve_chosen_modes(
-        self, card, mode_choices: list[dict] | None
-    ) -> tuple[tuple, str | None]:
-        """The ``ChosenMode`` list for this cast, or a refusal naming the fault.
-
-        CR 601.2b: the modes are chosen as the spell is cast, and how many is
-        what the head printed. Three things are checked, because each is a way a
-        caller could otherwise get a spell the card does not describe:
-
-        * a card whose head is not "one **or more**" gets at most one mode —
-          otherwise any modal spell would perform every bullet;
-        * every index names a real mode of *this* card;
-        * no mode is chosen twice (CR 700.2d: the same mode may be chosen again
-          only if the card says so, and none in this pool does).
-
-        The list comes back in **printed** order whatever order it arrived in,
-        because that is the order the modes resolve in (CR 608.2c) — sorting
-        once here is what lets the resolution loop be a loop rather than a sort.
-        """
-        from ...game_types import ChosenMode
-
-        program = compile_card_oracle(card)
-        # "**An opponent** chooses one —" (CR 700.2e). The choice is made at the
-        # same moment (CR 601.2b) but by somebody else, so an announcement that
-        # names a mode is not a legal announcement — it is the caster taking the
-        # half of the card that suits them, which on all three cards printing
-        # this head is the opposite of what the card does. Refused rather than
-        # ignored: a dropped mode choice is a client quietly getting a different
-        # spell from the one it asked for.
-        if program.mode_chooser is not None:
-            if mode_choices:
-                return (), (
-                    f"{card.name}: an opponent chooses this spell's mode"
-                )
-            return (), None
-        if not mode_choices:
-            return (), None
-        if not program.modes:
-            return (), f"{card.name} has no modes to choose"
-        if len(mode_choices) > 1 and not program.modes_at_least:
-            return (), f"{card.name} chooses one mode, not {len(mode_choices)}"
-        seen: set[int] = set()
-        chosen: list[ChosenMode] = []
-        for entry in mode_choices:
-            index = entry.get("index")
-            if not isinstance(index, int) or not 0 <= index < len(program.modes):
-                return (), f"{card.name}: no mode {index!r}"
-            if index in seen:
-                return (), f"{card.name}: mode {index} was chosen twice"
-            seen.add(index)
-            stack_index = entry.get("target_stack_index")
-            stack_item = (
-                self.stack[stack_index]
-                if isinstance(stack_index, int) and 0 <= stack_index < len(self.stack)
-                else None
-            )
-            chosen.append(ChosenMode(
-                index=index,
-                target_player_index=entry.get("target_player_index"),
-                target_permanent_index=entry.get("target_permanent_index"),
-                target_stack_item=stack_item,
-            ))
-        chosen.sort(key=lambda mode: mode.index)
-        return tuple(chosen), None
 
     def queue_from_hand(self, *args, **kwargs) -> SimulationResult:
         """Cast a spell — CR 601, start to finish — leaving it on the stack.
@@ -645,139 +344,15 @@ class SpellCastingMixin:
             ) = self._role_announcement_stamps(target_role_refs)
             if role_seat is not None:
                 target_player_index = role_seat
-        # Casting from the hand is a rule; casting from anywhere else is an
-        # effect (CR 601.3), asked of the permission seam. The lookup prefers a
-        # covered occurrence so a duplicate without permission cannot shadow
-        # the copy that has it.
-        permission = None
-        # Whose pile ``source_zone`` turns out to be. The caster's on every
-        # path but one — Grinning Totem leaves the card in the *searched*
-        # player's exile — and the departure below needs the seat, not just the
-        # list, because leaving exile goes through a seam that takes one.
-        source_seat = caster_index
-        if from_zone == "hand":
-            source_zone = caster.hand
-            # A card in hand can be *held* and not playable — Firestorm Phoenix
-            # returns itself "revealed in their hand and can't play it" until
-            # its owner's next turn. The lookup asks for the first copy that may
-            # be played rather than the first copy at all, the same preference
-            # the permission lookup below makes and for the same reason: two
-            # copies of one card are indistinguishable, so a restriction on one
-            # of them is a restriction on how *many* may be played.
-            hand_index = playable_hand_index(self, caster_index, card_name)
-            if hand_index is None:
-                if not any(holds_spell_named(card, card_name) for card in caster.hand):
-                    raise ValueError(f"Card not in hand: {card_name}")
-                denial = hand_lock_reason(self, caster_index, card_name) or (
-                    f"{card_name} can't be played"
-                )
-                self.log.append(denial)
-                return SimulationResult(card_name, False, None, denial)
-        elif from_zone == "command":
-            # CR 903.8 is a *rule*, not an effect: "a player may cast a
-            # commander they own from the command zone". So it needs no
-            # CastPermission — the permission seam is CR 601.3's "an effect
-            # allows it", and asking it here would refuse the one cast the rules
-            # themselves grant. What it does need is the ownership test, which
-            # is the whole of the rule's restriction.
-            source_zone = caster.command_zone
-            hand_index = next(
-                (
-                    i for i, card in enumerate(source_zone)
-                    if holds_spell_named(card, card_name)
-                ),
-                None,
-            )
-            if hand_index is None:
-                raise ValueError(f"Card not in command zone: {card_name}")
-            if not self.may_cast_from_command_zone(caster_index, source_zone[hand_index]):
-                details = (
-                    f"{card_name} is not {caster.name}'s commander and cannot be cast "
-                    f"from the command zone (CR 903.8)"
-                )
-                self.log.append(details)
-                return SimulationResult(
-                    card_name, False,
-                    classify_card(source_zone[hand_index]).effect_kind, details,
-                )
-        else:
-            if from_zone not in ("graveyard", "exile", "library"):
-                raise ValueError(f"cannot cast from {from_zone!r}")
-            # "You may cast Goblin spells from the top of your library."
-            # (Conspicuous Snoop, since M21.) The permission seam has answered
-            # for the library since that card landed and this gate refused it,
-            # so the grant existed and nothing could ever spend it — the loud
-            # half of the same hole ``playable_from_zones`` had on the quiet
-            # side. The loop below needs no library branch of its own: every
-            # library permission is scoped to one card by identity
-            # (``library_top.top_castable`` compares ``library[0]``), so only
-            # the top card can match and the seat scan finds nothing in anybody
-            # else's deck.
-            # Whose copy of the zone. The caster's own on every grant but one:
-            # "Search target opponent's library for a card and exile it. … you
-            # may play that card" (Grinning Totem) leaves the card in the
-            # *searched* player's exile (CR 400.3) and gives the permission to
-            # the searcher, so the pile and the player come apart. Own pile
-            # first, so a card the caster could already play is still found in
-            # the order it was found before.
-            seats = [caster_index] + [
-                seat for seat in range(len(self.players)) if seat != caster_index
-            ]
-            source_zone = getattr(caster, from_zone)
-            hand_index = None
-            # **Which permission**, when a card is covered by more than one
-            # (CR 601.2b). A flashback card under Yawgmoth's Will may be cast
-            # for its mana cost under the Will or for its flashback cost under
-            # its own keyword, and those are two casts: the caster who
-            # announces an alternative cost is asking for the permission that
-            # *requires* one (CR 118.9b, `CastPermission.cost`), so that kind
-            # is looked for first and across every pile. Finding none, the
-            # announcement is about the card's own printed alternative cost
-            # (Force of Will out of an opened graveyard) and the ordinary
-            # lookup stands. A caster who announces nothing gets the first
-            # permission of either kind, which for a card only its own
-            # flashback covers is the flashback — there is no other way to
-            # cast it, so there is nothing to choose.
-            for wanted in ((True, None) if alternative_cost else (None,)):
-                for seat in seats:
-                    pile = getattr(self.players[seat], from_zone)
-                    for i, candidate in enumerate(pile):
-                        if not holds_spell_named(candidate, card_name):
-                            continue
-                        if hand_index is None and seat == caster_index:
-                            # The fallback that names the refusal below, and
-                            # only out of the caster's own pile: "no effect
-                            # allows playing that card from *your* exile" is
-                            # what the player asked about.
-                            hand_index = i
-                        grant = permission_for(
-                            self, caster_index, candidate, from_zone,
-                            as_land=candidate.primary_type == "land",
-                            # Judged as the spell it is being cast as — the
-                            # named half of a split card (CR 709.3a).
-                            spell=spell_named(candidate, card_name),
-                            costed=wanted,
-                        )
-                        if grant is not None and grant.zone_seat == seat:
-                            source_zone, hand_index, permission = pile, i, grant
-                            source_seat = seat
-                            break
-                    if permission is not None:
-                        break
-                if permission is not None:
-                    break
-            if hand_index is None:
-                raise ValueError(f"Card not in {from_zone}: {card_name}")
-            if permission is None:
-                details = (
-                    f"no effect allows playing {card_name} from "
-                    f"{caster.name}'s {from_zone} (CR 601.3)"
-                )
-                self.log.append(details)
-                return SimulationResult(
-                    card_name, False,
-                    classify_card(source_zone[hand_index]).effect_kind, details,
-                )
+
+        # CR 601.2a, 601.3: where the spell is cast from, and under what.
+        located = self._spell_source(
+            alternative_cost=alternative_cost, card_name=card_name,
+            caster=caster, caster_index=caster_index, from_zone=from_zone,
+        )
+        if isinstance(located, SimulationResult):
+            return located
+        hand_index, permission, source_seat, source_zone = located
 
         # **Which face is this spell** (CR 709.3), settled here and nowhere
         # else: "a player chooses which half of a split card they are casting
@@ -1295,127 +870,20 @@ class SpellCastingMixin:
         # needed there and one reading of `target_stack_index` is what keeps
         # the tax and the validation talking about the same object.
 
-        # **Once per announced mode** (CR 601.2b chooses the modes, then
-        # CR 601.2c chooses each mode's targets). An ordinary spell and the
-        # `mode_index=` spelling make one announcement, on the cast's own
-        # target fields; a "choose one or more" cast (`mode_choices`) makes one
-        # per chosen mode, each carrying the targets it named — which were
-        # checked by nobody, because every gate below was handed the cast's
-        # own (empty) fields beside the first chosen mode's index.
-        for (
-            announced_mode, mode_seat, mode_slot, mode_ids, mode_stack_item,
-        ) in _mode_announcements(
-            chosen_modes, mode_index, target_player_index,
-            target_permanent_index, target_permanent_ids, target_stack_item,
-        ):
-            target_ok, target_reason = self._validate_cast_targets(
-                card, caster_index, mode_seat, mode_slot, mode_stack_item,
-                mode_index=announced_mode, x_value=x_value,
-                target_permanent_ids=mode_ids,
-                # CR 601.2b is answered above; CR 702.33g makes the targets this
-                # gate counts depend on it.
-                optional_cost_payments=optional_paid,
-                # The cast's own announcement only: a "choose one or more"
-                # mode names its targets on the mode, which has one seat.
-                target_role_seats=None if chosen_modes else role_seats,
-            )
-            if not target_ok:
-                self.log.append(target_reason)
-                return SimulationResult(card.name, False, classification.effect_kind, target_reason)
-
-            # CR 601.2c's other half, asked before what was *named*: a spell that
-            # must announce a target cannot be cast while no legal target exists.
-            # The arms above ask it of the kinds they name; this asks it of every
-            # spell, through the list the picker is handed — so "Destroy target
-            # artifact or enchantment. Draw two cards." on an empty board is an
-            # illegal announcement rather than a two-mana cantrip. Nothing has been
-            # spent yet.
-            #
-            # **And of every mode**, by the mode announced: Chaos Charm's "deals
-            # 1 damage to target creature" was castable at an empty board, and
-            # Treva's Charm's "exile target attacking creature" outside combat.
-            unaimed = self.no_legal_cast_target_refusal(
-                caster_index, card,
-                optional_cost_payments=optional_paid, x_value=x_value,
-                mode_index=announced_mode,
-                # A spell cast out of a graveyard is not a card in it by the
-                # time targets are chosen (CR 601.2a), so it cannot be the
-                # legal target that lets itself be cast.
-                from_zone=from_zone,
-            )
-            if unaimed is None and no_target_answers_x:
-                # …and the one shape of "nothing to name" that list cannot
-                # show: entries, and an announced X none of them answers
-                # ("destroy target artifact with mana value X", Detonate, cast
-                # bare for an X no artifact has — `bare_announcements.
-                # default_cast_target`). It was accepted, paid for and
-                # resolved onto nothing.
-                unaimed = f"no valid target for {card.name}"
-            if unaimed is not None and mode_stack_item is None:
-                self.log.append(unaimed)
-                return SimulationResult(card.name, False, classification.effect_kind, unaimed)
-
-            # CR 601.2c for the target the caller *named*, beside the per-kind arms
-            # above rather than inside them: a spell whose primary instruction is a
-            # `sequence` wrapper reaches no arm at all, so "Destroy target artifact.
-            # You gain life equal to its mana value" could be cast on a Grizzly
-            # Bears — the destroy then found nothing and the life was gained anyway.
-            # Still before any mana leaves the pool.
-            named_refusal = self.cast_target_refusal(
-                caster_index, card,
-                target_player_index=mode_seat,
-                target_permanent_index=mode_slot,
-                target_permanent_ids=mode_ids,
-                from_zone=from_zone,
-                # CR 601.2b is announced above; CR 601.2c's target count follows
-                # from it for a spell that prints "for each additional <cost> you
-                # paid, … another target …". The gate is the only reader that can
-                # see both announcements at once.
-                optional_cost_payments=optional_paid,
-                mode_index=announced_mode,
-                # CR 601.2d's list, whose every entry is a target too — and it
-                # is the cast's own, never one mode's: a "choose one or more"
-                # mode names its targets on the mode (`_mode_announcements`).
-                divided_targets=None if chosen_modes else divided_targets,
-                # …and the two things that say whether a cast naming no player
-                # named *nothing* (a spell on the stack is a target) and whether
-                # it owed a target at all ("X target …" at an announced X).
-                target_stack_item=mode_stack_item,
-                x_value=x_value,
-            )
-            if named_refusal is not None:
-                self.log.append(named_refusal)
-                return SimulationResult(card.name, False, classification.effect_kind, named_refusal)
-            # …and the same rule for a target **on the stack**, which the gate
-            # above does not read (its slots are battlefield slots). One call
-            # where Invasion's first wave left two: see
-            # `legality.cast_stack_target_refusal`. Without it "counter target
-            # creature spell" was announceable at any spell, paid for, and then
-            # declined by its own handler — and a bare cast was accepted with
-            # nothing on the stack its phrase admits.
-            stack_refusal = self.cast_stack_target_refusal(
-                caster_index, card, mode_stack_item, from_zone=from_zone,
-                mode_index=announced_mode,
-            )
-            if stack_refusal is not None:
-                self.log.append(stack_refusal)
-                return SimulationResult(card.name, False, classification.effect_kind, stack_refusal)
-            # …and the rule's other side: a stack object named for an
-            # announcement that has no target there (a Lightning Bolt, a Terror,
-            # a Wrath of God), or beside a permanent for "target spell **or**
-            # permanent". It was accepted, recorded and ignored.
-            stray_refusal = self.stray_stack_target_refusal(
-                caster_index, card, mode_stack_item, from_zone=from_zone,
-                mode_index=announced_mode,
-                optional_cost_payments=optional_paid,
-                names_a_permanent=bool(
-                    [pid for pid in (mode_ids or ()) if isinstance(pid, int)]
-                    or mode_slot is not None
-                ),
-            )
-            if stray_refusal is not None:
-                self.log.append(stray_refusal)
-                return SimulationResult(card.name, False, classification.effect_kind, stray_refusal)
+        # CR 601.2c, once per announced mode: the target gates.
+        mode_refusal = self._mode_target_refusal(
+            card=card, caster_index=caster_index, chosen_modes=chosen_modes,
+            classification=classification, divided_targets=divided_targets,
+            from_zone=from_zone, mode_index=mode_index,
+            no_target_answers_x=no_target_answers_x,
+            optional_paid=optional_paid, role_seats=role_seats,
+            target_permanent_ids=target_permanent_ids,
+            target_permanent_index=target_permanent_index,
+            target_player_index=target_player_index,
+            target_stack_item=target_stack_item, x_value=x_value,
+        )
+        if mode_refusal is not None:
+            return mode_refusal
 
         # A divided spell's cross-seat target list: sanity-check every entry so a
         # stale battlefield index can't crash resolution.
@@ -1547,537 +1015,68 @@ class SpellCastingMixin:
             else:
                 extra_generic_tax += owed
 
-        x_colors = x_spend_colors_from_text(card.oracle_text)
-        # What the payment below actually put on X, per colour. Empty until
-        # then, and legitimately empty afterwards for a waived cast (CR
-        # 107.3b locks a waived X to 0) or a game not enforcing costs.
-        x_mana_spent: dict[str, int] = {}
-        resolved_x_value = x_value
-        # CR 107.3c: some spells define X themselves, and then the caster does
-        # not announce it — the definition wins over anything the wire sent, the
-        # way it does for an activated ability's cost one table over. A card
-        # that defines an X this cast cannot compute refuses, because the
-        # alternative is letting the caster pick a number the card fixed.
-        if defines_cast_x(card.oracle_text):
-            defined = cast_x_value(self, caster_index, card.oracle_text)
-            if defined is None:
-                refusal = f"{card.name}: X cannot be determined for this cast"
-                self.log.append(refusal)
-                return SimulationResult(
-                    card.name, False, classification.effect_kind, refusal,
-                )
-            resolved_x_value = defined
-        # CR 601.2b's other definition, the one printed as the tail of the
-        # sentence it sizes: "…, where X is the number of black permanents
-        # target opponent controls **as you cast this spell**" (Reap). It takes
-        # the announcement away from the caster exactly as the table above does,
-        # so it overrides whatever the wire sent — and it is *stamped on the
-        # stack item*, which is the half that matters: CR 601.2c fixes the
-        # number of targets from it and says the number does not change even if
-        # the board it was counted off does. Read through the one reader the
-        # picker and the target gate already asked, so the number the caster was
-        # offered, the number the announcement was checked against and the
-        # number the resolution spends are one number.
-        announced_x = self.announced_cast_x(caster_index, card, mode_index=mode_index)
-        if announced_x is not None:
-            resolved_x_value = announced_x
-        if resolved_x_value is None and "{X}" in card.mana_cost.upper():
-            # "…with mana value X" (Spell Blast, Detonate). The target and the X
-            # are announced together (CR 601.2b before 601.2c), and only one X
-            # makes the pair legal — so a caster who named the target and not the
-            # number named the number too. Inferring from the mana pool instead
-            # produced a legal cast that then did nothing, which is a spell
-            # spending its cost on the wrong value rather than on a choice.
-            resolved_x_value = self._x_implied_by_target(
-                card, target_player_index, target_permanent_index, target_stack_item,
-                target_permanent_ids,
-            )
-        if resolved_x_value is None and "{X}" in card.mana_cost.upper():
-            resolved_x_value = self._infer_x_value(
-                caster, card.mana_cost, extra_generic_tax, x_colors=x_colors,
-                reduction=cost_reduction, extra_pips=extra_pip_tax,
-            )
-
-        # CR 601.2b's *bound*: "X can't be greater than the number of snow
-        # lands you control." (Winter's Chill.) Unlike a definition the caster
-        # still announces X, so this is checked against whatever they announced
-        # — after the inference above, which is where an unstated X becomes a
-        # number, and before any cost is paid so CR 601.2e can return the game
-        # to the moment before an illegal proposal. A bound the board cannot be
-        # counted for refuses too, for the definition's reason one block up:
-        # the alternative is announcing past a limit the card prints.
-        if caps_cast_x(card.oracle_text):
-            bound = cast_x_ceiling(self, caster_index, card.oracle_text)
-            if bound is None or int(resolved_x_value or 0) > bound[0]:
-                allowed = "none" if bound is None else str(bound[0])
-                printed = "" if bound is None else f" ({bound[1]})"
-                refusal = (
-                    f"{card.name}: X can't be greater than {allowed}{printed}"
-                )
-                self.log.append(refusal)
-                return SimulationResult(
-                    card.name, False, classification.effect_kind, refusal,
-                )
-
-        # CR 601.2b's other bound: "X can't be 0." (Ertai's Meddling.) Beside
-        # the ceiling because it is the same rule read the other way, and
-        # **after** the inference above for the same reason — a caster who
-        # announced nothing has announced 0 here, which is exactly the
-        # value this sentence forbids. Refused here, before any cost is paid,
-        # so CR 601.2e returns the game to the moment before the proposal.
-        if floors_cast_x(card.oracle_text):
-            floor = cast_x_floor(card.oracle_text)
-            if floor is None or int(resolved_x_value or 0) < floor:
-                refusal = f"{card.name}: X can't be less than {floor or 1}"
-                self.log.append(refusal)
-                return SimulationResult(
-                    card.name, False, classification.effect_kind, refusal,
-                )
-
-        # CR 601.2d, after X is announced (601.2b) and before any cost is paid:
-        # the division is part of *proposing* the spell, and CR 601.2e returns
-        # the game to the moment before a proposal that turns out to be illegal.
-        # Below the X resolution because a division of X cannot be measured
-        # until X is a number — the same ordering CR 601.2 puts them in, and the
-        # same lesson Fire Covenant's "pay X life" taught the cost gate below.
-        #
-        # **Asked of every divided spell, not only of one that announced a
-        # division.** The gate used to run under `if divided_targets is not
-        # None`, so a caster who announced *nothing* — no division, no target —
-        # walked past it: Contagion and Bounty of the Hunt were castable with
-        # both battlefields empty, and Spoils of War, shipped, with them.
-        # CR 601.2d divides "among one or more targets", so that is an illegal
-        # proposal, and the refusal has to be here rather than at resolution
-        # because CR 601.2e returns the game to before a proposal and a
-        # resolution-time answer would already have spent the mana.
-        #
-        # **Of the steps this announcement will run** (CR 702.33g): a kicked
-        # Magma Burst divides over two targets and an unkicked one names one
-        # the ordinary way, and Pollen Remedy's shares total 3 or 6 — so which
-        # divided step is the spell's is CR 601.2b's answer, read through the
-        # same view the picker's spec is.
-        # CR 601.2c's **count**, here because here is where X is a number:
-        # "two target creatures" names two and "Tap X target creatures" names
-        # X (`legality.cast_target_count_refusal`). Once per announced mode,
-        # like the gates above. An X the caller announced (or the card
-        # defined) is counted; one this function inferred from the pool a few
-        # lines up is not — the caster never said it.
-        counted_x = (
-            resolved_x_value
-            if x_value is not None or announced_x is not None
-            or defines_cast_x(card.oracle_text)
-            else None
+        # CR 107.3, 601.2b: the X this cast is for.
+        x_settled = self._resolved_cast_x(
+            card=card, caster=caster, caster_index=caster_index,
+            classification=classification, cost_reduction=cost_reduction,
+            extra_generic_tax=extra_generic_tax, extra_pip_tax=extra_pip_tax,
+            mode_index=mode_index, target_permanent_ids=target_permanent_ids,
+            target_permanent_index=target_permanent_index,
+            target_player_index=target_player_index,
+            target_stack_item=target_stack_item, x_value=x_value,
         )
-        for (
-            announced_mode, mode_seat, mode_slot, mode_ids, _mode_stack_item,
-        ) in _mode_announcements(
-            chosen_modes, mode_index, target_player_index,
-            target_permanent_index, target_permanent_ids, target_stack_item,
-        ):
-            miscounted = self.cast_target_count_refusal(
-                caster_index, card,
-                target_player_index=mode_seat,
-                target_permanent_index=mode_slot,
-                target_permanent_ids=mode_ids,
-                x_value=counted_x,
-                optional_cost_payments=optional_paid,
-                mode_index=announced_mode,
-            )
-            if miscounted is not None:
-                self.log.append(miscounted)
-                return SimulationResult(
-                    card.name, False, classification.effect_kind, miscounted,
-                )
+        if isinstance(x_settled, SimulationResult):
+            return x_settled
+        announced_x, resolved_x_value, x_colors, x_mana_spent = x_settled
 
-        found = divided_description(
-            instructions_as_announced(
-                card, compile_card_oracle(card), optional_paid,
-                mode_index=mode_index,
-            )
+        # CR 601.2c–d, X now a number: the target count and the division.
+        divided = self._settled_cast_division(
+            announced_x=announced_x, card=card, caster_index=caster_index,
+            chosen_modes=chosen_modes, classification=classification,
+            divided_targets=divided_targets, from_zone=from_zone,
+            mode_index=mode_index,
+            named_no_division_targets=named_no_division_targets,
+            optional_paid=optional_paid, resolved_x_value=resolved_x_value,
+            target_permanent_ids=target_permanent_ids,
+            target_permanent_index=target_permanent_index,
+            target_player_index=target_player_index,
+            target_stack_item=target_stack_item, x_value=x_value,
         )
-        if found is None and divided_targets:
-            # CR 601.2d is about a spell that **divides or distributes**. A
-            # division announced for one that does not is not an announcement
-            # this spell can make — and it was accepted: nothing above looks at
-            # the list unless a divided step exists, while every damage handler
-            # reads `choices["divided_targets"]` whenever it is present. So
-            # `cast_from_hand(0, "Lightning Bolt", divided_targets=[(1, None),
-            # (0, None)])` split its 3 between two faces, and 483 of the pool's
-            # 910 non-divided instants and sorceries took the list the same
-            # way. Neither the client nor the AI sends one; the engine's own
-            # announcement API was laxer than the rule. Of the steps this
-            # announcement will run, so a division printed only in a kicked
-            # arm or in one mode belongs to that cast alone.
-            refusal = f"{card.name} divides nothing among targets (CR 601.2d)"
-            self.log.append(refusal)
-            return SimulationResult(
-                card.name, False, classification.effect_kind, refusal,
-            )
-        if found is not None:
-            division = found[1].get("division", EVENLY)
-            total = _divided_total(found[0], resolved_x_value)
-            # "…to **each of X targets**" (Firestorm), "…and 3 damage to a third
-            # target" (Cone of Flame). How many targets the card prints, which
-            # for Firestorm is the X the caster has just announced — so it is
-            # resolved here, one step after CR 601.2b and one before the
-            # CR 601.2c check that reads it.
-            exact = (
-                _card_divided_target_count(found[1], resolved_x_value)
-                if division in CARD_DIVIDED else None
-            )
-            named_outside = _named_divided_targets(
-                card, from_zone, target_player_index,
-                target_permanent_index, target_permanent_ids,
-            )
-            refusal = division_refusal(
-                total,
-                divided_targets or (),
-                division=division,
-                max_targets=found[1].get("max_targets"),
-                named_targets=named_outside,
-                exact_targets=exact,
-                # The announcement of no targets is written down just below
-                # and read at resolution (``announced_no_targets``).
-                carries_no_targets=True,
-            )
-            if refusal is not None:
-                self.log.append(f"{card.name}: {refusal}")
-                return SimulationResult(
-                    card.name, False, classification.effect_kind, refusal,
-                )
-            # "…to each of **up to** three targets" (Shower of Coals), cast
-            # naming nobody (CR 115.6). Written onto the announcement as the
-            # empty list it is — and an *explicit* empty list is that
-            # announcement whatever seat the cast also carries, because every
-            # cast over the wire carries one. Without the mark the resolution
-            # could not tell "nobody" from "nothing said", and a spell that
-            # targets nothing went looking for the default opponent's face.
-            #
-            # The seat is dropped with it: a spell that chose no target has
-            # none (CR 115.6 — "targeted only if one or more targets have been
-            # chosen"), and a seat left on the stack object would be read back
-            # as a player it targets. A *permanent* named outside the list is
-            # a target and keeps the announcement what it was.
-            names_a_permanent = bool(target_permanent_ids) or (
-                target_permanent_index is not None
-            )
-            if (
-                division == EACH
-                and found[1].get("max_targets") is not None
-                and not divided_targets
-                and not names_a_permanent
-                and (named_no_division_targets or not named_outside)
-            ):
-                divided_targets = []
-                target_player_index = None
-            # The card's own shares, written onto the announcement now that it
-            # is known to be legal. Here rather than at resolution because the
-            # share has to ride its target: a target that has left is dropped
-            # from the list (CR 608.2b), and a share read by position after that
-            # would slide Cone of Flame's 3 onto the creature it assigned 2.
-            #
-            # **Printed shares only** (:data:`FIXED`). An :data:`EACH` entry
-            # was stamped too, with "the whole amount" — a number the
-            # resolution settles, not the announcement (CR 608.2h): Shower of
-            # Coals deals 2 or 4 by the graveyard it finds, and its entries
-            # read 4 on a board where it would deal 2. ``divide`` has never
-            # read the stamp for ``EACH``, so the number said nothing true and
-            # nothing was asked of it; an entry with no amount is what "the
-            # card supplies it as it resolves" looks like.
-            if division == FIXED and divided_targets:
-                divided_targets = stamp_card_shares(
-                    divided_targets,
-                    card_shares(
-                        total, len(divided_targets),
-                        division=division, shares=found[1].get("shares"),
-                    ),
-                )
+        if isinstance(divided, SimulationResult):
+            return divided
+        divided_targets, target_player_index = divided
 
-        # The printed additional costs, checked now: CR 601.2h says an unpayable
-        # cost can't be paid, and the consequence is that the spell can't be
-        # cast at all — not that it is cast for free, which is what happened
-        # while the phrase lived in the spell-pattern whitelist.
-        #
-        # **Here** rather than beside the gathering above, and the move is the
-        # whole of Fire Covenant's fix: "pay X life" cannot be measured until X
-        # is announced (CR 601.2b, CR 107.3), and the gate used to run first —
-        # so the clause was left out of the cost table entirely and the card,
-        # already `supported` on its damage line, was cast for nothing. This is
-        # also where CR 601.2 puts the check: 601.2h is after 601.2b's
-        # announcements and 601.2c's targets, and nothing between the two
-        # positions spends anything, so a refusal here costs the caster exactly
-        # what a refusal above it did.
-        # Where the spell itself sits in the caster's own graveyard, when that
-        # is where it is being cast from (flashback, Yawgmoth's Will). CR
-        # 601.2a moves it to the stack before any cost is paid, so it is not
-        # one of the cards an "exile X cards from your graveyard" cost can
-        # take — and every slot above it is one lower by the time the cost is
-        # collected.
-        spell_graveyard_slot = (
-            hand_index
-            if from_zone == "graveyard" and source_seat == caster_index
-            else None
-        )
-        if resolved_x_value is None and any(
-            cost.choose_number is not None for cost in cast_costs
-        ):
-            # "…, choose a number between 0 and 5." (Liquid Fire.) An unmade
-            # announcement is 0, made explicit *here* so that the gate below
-            # judges the number the resolution will spend and the stack object
-            # shows it — the gate reads a missing number as "none yet", which
-            # is the question the castable highlight asks it.
-            resolved_x_value = 0
-        unpayable = self._unpayable_additional_cost(
-            caster_index, card, cast_costs, spell_hand_index=hand_index,
-            from_zone=from_zone, x_value=resolved_x_value,
-            # What the cost increases above will take before this cost is paid.
-            # Two life prices on one cast are each payable alone and not
-            # together, and the gate that could not see the other one would
-            # admit a cast that then took the caster below 0 (CR 119.4).
-            life_already_owed=life_owed,
-            # CR 601.2b's announcement, made above: an optional price is a
-            # price only for the caster who took it.
-            taken=optional_paid,
-            spell_graveyard_slot=spell_graveyard_slot,
-        )
-        if unpayable is not None:
-            self.log.append(unpayable)
-            return SimulationResult(card.name, False, classification.effect_kind, unpayable)
-
-        # …and a payment the caster *named* is the payment, or the cast is
-        # illegal (CR 601.2h: no partial payment, no unpayable one). Below the
-        # gate above so a board that cannot pay at all says so first, and
-        # beside it for the same reason: nothing has been spent.
-        unpayable = self._named_cast_cost_refusal(
-            caster_index, card, cast_costs,
+        # CR 601.2h: can every cost of this cast be paid? Nothing is spent yet.
+        costs_checked = self._checked_cast_costs(
+            card=card, cast_costs=cast_costs, caster_index=caster_index,
+            chosen_alternative=chosen_alternative,
+            classification=classification,
+            cost_graveyard_indices=cost_graveyard_indices,
             cost_permanent_ids=cost_permanent_ids,
-            cost_permanent_index=cost_permanent_index,
-            x_value=resolved_x_value, taken=optional_paid,
+            cost_permanent_index=cost_permanent_index, from_zone=from_zone,
+            hand_index=hand_index, life_owed=life_owed,
+            optional_paid=optional_paid, resolved_x_value=resolved_x_value,
+            source_seat=source_seat,
         )
-        if unpayable is None:
-            # …the same rule for the cards named out of a graveyard, which
-            # have no id to be named by: a set of slots, whole or refused.
-            unpayable = self._named_graveyard_cost_refusal(
-                caster_index, card, cast_costs, cost_graveyard_indices,
-                x_value=resolved_x_value, taken=optional_paid,
-                spell_graveyard_slot=spell_graveyard_slot,
-            )
-        if unpayable is not None:
-            self.log.append(unpayable)
-            return SimulationResult(card.name, False, classification.effect_kind, unpayable)
+        if isinstance(costs_checked, SimulationResult):
+            return costs_checked
+        owed, resolved_x_value, spell_graveyard_slot = costs_checked
 
-        # The announced alternative cost, checked in the same step and for the
-        # same rule (CR 601.2h). Below the additional costs only in source
-        # order; nothing between the two spends anything, so a refusal from
-        # either costs the caster the same nothing.
-        unpayable = self._unpayable_alternative_cost(
-            caster_index, card, chosen_alternative,
-            spell_hand_index=hand_index if from_zone == "hand" else None,
+        # CR 601.2g–h: the mana payment, or the waiver.
+        mana_paid = self._pay_cast_mana(
+            card=card, caster=caster, caster_index=caster_index,
+            chosen_alternative=chosen_alternative,
+            classification=classification, cost_reduction=cost_reduction,
+            extra_generic_tax=extra_generic_tax, extra_pip_tax=extra_pip_tax,
+            from_zone=from_zone, held=held,
+            offer_x_colorings=offer_x_colorings, permission=permission,
+            resolved_x_value=resolved_x_value,
+            use_free_permission=use_free_permission, x_colors=x_colors,
+            x_mana_spent=x_mana_spent,
         )
-        if unpayable is not None:
-            self.log.append(unpayable)
-            return SimulationResult(card.name, False, classification.effect_kind, unpayable)
-
-        # "Spells cost an additional "Sacrifice a Swamp" to cast for each black
-        # mana symbol in their mana costs." (Drought.) An additional cost
-        # imposed from a *board* rather than printed on the spell, so it is
-        # asked here beside the printed ones and at the same moment (CR 601.2f
-        # determines it, CR 601.2h pays it), and refused rather than clamped:
-        # CR 601.2h makes an unpayable cost an uncastable spell, not a free one.
-        sacrifice_demands = sacrifice_taxes(
-            self, caster_index, card.mana_cost or "", "cast"
-        )
-        owed = self._sacrifice_tax_victims(caster_index, sacrifice_demands)
-        if isinstance(owed, str):
-            details = f"{card.name} can't be cast: {owed} (CR 601.2h)"
-            self.log.append(details)
-            return SimulationResult(card.name, False, classification.effect_kind, details)
-
-        # A cost waiver ("cast spells from your hand without paying their mana
-        # costs", Chandra, Flame's Catalyst's −8). An X spell defaults to
-        # *paying*, because a waived {X} is locked to 0 (CR 107.3b) and paying
-        # for X=5 usually beats a free X=0 — an explicit request wins either way.
-        free_grant = permission if (permission is not None and permission.free) else None
-        if (
-            free_grant is None
-            and card.primary_type != "land"
-            and use_free_permission is not False
-            and (use_free_permission or "{X}" not in card.mana_cost.upper())
-            # CR 118.9a: "A player can't apply two alternative methods of
-            # casting or two alternative costs to a single spell." A cost waiver
-            # is an alternative cost (`CastPermission.free` cites the same rule),
-            # so a caster who announced the spell's own printed one is not also
-            # handed a waiver — which would otherwise make the printed cost a
-            # pure loss, paid on top of a spell that was already free.
-            and chosen_alternative is None
-        ):
-            waiver = permission_for(self, caster_index, held, "hand", spell=card)
-            if waiver is not None and from_zone == "hand":
-                free_grant = waiver
-                if permission is None:
-                    permission = waiver
-        if chosen_alternative is not None and card.primary_type != "land":
-            # CR 118.9: the alternative cost is paid **rather than** the mana
-            # cost, so the mana payment below is skipped whole. Not a reduction
-            # and not a waiver: the cost itself is charged just below, once the
-            # spell is off the hand, beside the additional costs CR 118.9d keeps
-            # in force.
-            #
-            # CR 118.9c is what this branch does *not* do: nothing here touches
-            # `card.mana_cost`, so the taxes above, the commander tax and every
-            # "with mana value X" reader still see the printed cost.
-            alternative_mana = chosen_alternative.mana
-            if "{X}" in card.mana_cost.upper() and "{X}" not in (
-                alternative_mana or ""
-            ).upper():
-                # CR 107.3b: X is 0 when neither the mana cost nor an
-                # alternative cost that includes X is paid. The one alternative
-                # cost that *does* include it is a granted flashback "equal to
-                # its mana cost" (Recoup) over an X spell, whose X is then the
-                # one the caster announced.
-                resolved_x_value = 0
-            if self.enforce_mana_costs:
-                # **An alternative cost paid in mana** (CR 702.34a: flashback's
-                # "by paying [cost] rather than paying its mana cost"). Charged
-                # where the mana cost would have been and by the same payment,
-                # because CR 118.9d keeps every additional cost, increase and
-                # reduction in force on top of it: the taxes and the discounts
-                # gathered above for this cast apply to *this* total — "start
-                # with the mana cost or alternative cost you're paying, add any
-                # cost increases, then apply any cost reductions".
-                #
-                # **And an alternative cost paid in something else** — a
-                # pitched card, life, a sacrifice (Force of Will, Fireblast,
-                # Dream Halls' grant). Its mana is nothing, and CR 118.9d says
-                # the same thing about it: the increases and the additional
-                # costs are "applied to that alternative cost", so the payment
-                # is this same one over an empty run of symbols. This branch
-                # charged mana only when the alternative cost itself printed
-                # some, which made a Sphere of Resistance, a per-target tax,
-                # the commander tax and the mana of a kicker or a buyback the
-                # caster had *announced* free for every such cast: 43 of 43
-                # pitch spells were cast under a Sphere with an empty pool,
-                # and Capsize came back to hand off a Dream Halls discard with
-                # its {3} unpaid.
-                if alternative_mana is not None and not alternative_mana.strip():
-                    # A flashback cost "equal to its mana cost" over a card
-                    # that has none (CR 118.6): unpayable, never free.
-                    details = (
-                        f"{card.name} has no mana cost, so its "
-                        f"{chosen_alternative.keyword or 'alternative'} cost "
-                        f"is unpayable (CR 118.6)"
-                    )
-                    self.log.append(details)
-                    return SimulationResult(
-                        card.name, False, classification.effect_kind, details,
-                    )
-                keyword_more, keyword_less, keyword_names = (
-                    keyword_cost_modifiers(
-                        self, caster_index, chosen_alternative.keyword
-                    )
-                )
-                paid = self._pay_cast_cost(
-                    caster, card, resolved_x_value, x_colors,
-                    extra_generic=extra_generic_tax + keyword_more,
-                    reduction=CostReduction(
-                        cost_reduction.generic + keyword_less,
-                        cost_reduction.colored,
-                    ),
-                    extra_pips=extra_pip_tax,
-                    offer_x_colorings=offer_x_colorings,
-                    mana_cost=alternative_mana or "",
-                )
-                if paid is None:
-                    details = (
-                        f"insufficient mana for {card.name}'s "
-                        f"{chosen_alternative.keyword or 'alternative'} cost "
-                        f"({alternative_mana})"
-                    )
-                    if alternative_mana is None:
-                        details = self._mana_still_owed_refusal(
-                            card,
-                            f"its alternative cost "
-                            f"({chosen_alternative.describe()})",
-                            extra_generic_tax, extra_pip_tax, cost_reduction,
-                        )
-                    self.log.append(details)
-                    return SimulationResult(
-                        card.name, False, classification.effect_kind, details,
-                    )
-                x_mana_spent = paid
-                if keyword_names:
-                    self.log.append(
-                        f"{card.name}'s {chosen_alternative.keyword} cost is "
-                        f"changed by {', '.join(sorted(set(keyword_names)))}"
-                    )
-            self.log.append(
-                f"{card.name} cast for its "
-                f"{chosen_alternative.keyword or 'alternative'} cost "
-                f"({chosen_alternative.describe()})"
-            )
-        elif free_grant is not None and card.primary_type != "land":
-            if "{X}" in card.mana_cost.upper():
-                resolved_x_value = 0  # CR 107.3b: the only legal choice for X
-            if self.enforce_mana_costs:
-                # "Without paying its mana cost" is an alternative cost
-                # (CR 118.9), and CR 118.9d keeps every additional cost and
-                # cost increase in force on top of one: what is waived is the
-                # mana cost and nothing else. So the payment still runs, over
-                # an empty run of symbols — the taxes, the commander tax and
-                # the mana of every optional cost this caster announced. It
-                # did not run at all, which made a kicker and a buyback free
-                # under any waiver (61 of 73 such cards were cast, kicked, with
-                # an empty pool) and Aluren a way round Sphere of Resistance.
-                x_mana_spent = self._pay_cast_cost(
-                    caster, card, resolved_x_value, x_colors,
-                    extra_generic=extra_generic_tax, reduction=cost_reduction,
-                    extra_pips=extra_pip_tax,
-                    offer_x_colorings=offer_x_colorings,
-                    mana_cost="",
-                )
-                if x_mana_spent is None:
-                    details = self._mana_still_owed_refusal(
-                        card, "cast without paying its mana cost",
-                        extra_generic_tax, extra_pip_tax, cost_reduction,
-                    )
-                    self.log.append(details)
-                    return SimulationResult(
-                        card.name, False, classification.effect_kind, details,
-                    )
-            self.log.append(
-                f"{card.name} cast without paying its mana cost"
-                + (f" ({free_grant.source_name})" if free_grant.source_name else "")
-            )
-        elif self.enforce_mana_costs and card.primary_type != "land":
-            # CR 118.6: an object with no mana cost (as opposed to {0}) has an
-            # unpayable cost — attempting to cast it is illegal. (118.6a: a
-            # waiver above is an alternative cost and may still be paid.)
-            if not card.mana_cost.strip():
-                details = f"{card.name} has no mana cost; the cost is unpayable (CR 118.6)"
-                self.log.append(details)
-                return SimulationResult(card.name, False, classification.effect_kind, details)
-            x_mana_spent = self._pay_cast_cost(
-                caster, card, resolved_x_value, x_colors,
-                extra_generic=extra_generic_tax, reduction=cost_reduction,
-                extra_pips=extra_pip_tax,
-                offer_x_colorings=offer_x_colorings,
-            )
-            if x_mana_spent is None:
-                details = f"insufficient mana for {card.name}"
-                if offer_x_colorings != ((),):
-                    details = (
-                        f"insufficient mana for {card.name} "
-                        f"(X={len(offer_x_colorings[0])} is paid with one "
-                        f"mana of each of that many colors)"
-                    )
-                elif x_colors:
-                    spelling = " and/or ".join(f"{{{sym}}}" for sym in x_colors)
-                    details = (
-                        f"insufficient mana for {card.name} "
-                        f"(X can be paid only with {spelling} mana)"
-                    )
-                self.log.append(details)
-                return SimulationResult(card.name, False, classification.effect_kind, details)
+        if isinstance(mana_paid, SimulationResult):
+            return mana_paid
+        permission, resolved_x_value, x_mana_spent = mana_paid
 
         # A card played out of exile leaves it deliberately (CR 400.7 makes it a
         # new object wherever it lands), so the record that said it was face

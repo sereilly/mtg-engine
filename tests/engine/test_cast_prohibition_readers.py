@@ -471,6 +471,21 @@ _READERS = {
     "web/state_view.py": "_card_castable_now",
 }
 
+#: ``reader file -> {file: functions}`` read with the reader: the steps
+#: ``_cast_onto_stack`` calls in its order, each moved out of it whole at the
+#: 2,000-line cap. The predicate is asked in the method itself; a row's own
+#: predicate called in any step would be a list of the cast path's own.
+_STEPS_OF = {
+    "engine/mixins/stack/casting.py": {
+        "engine/mixins/stack/cast_announcement.py": (
+            "_spell_source", "_mode_target_refusal",
+        ),
+        "engine/mixins/stack/cast_target_validation.py": ("_settled_cast_division",),
+        "engine/mixins/stack/cast_additional_costs.py": ("_checked_cast_costs",),
+        "engine/mixins/stack/pool_payment.py": ("_resolved_cast_x", "_pay_cast_mana"),
+    },
+}
+
 
 def _row_predicate_names() -> set[str]:
     """Every predicate the table's rows call, read off the table's own module:
@@ -500,9 +515,19 @@ def test_w2g3_the_readers_ask_the_predicate_and_keep_no_list_of_their_own():
             node for node in ast.walk(tree)
             if isinstance(node, ast.FunctionDef) and node.name == function
         )
+        bodies = [body]
+        for step_path, steps in _STEPS_OF.get(path, {}).items():
+            step_tree = ast.parse((ROOT / step_path).read_text(encoding="utf-8"))
+            found = [
+                node for node in ast.walk(step_tree)
+                if isinstance(node, ast.FunctionDef) and node.name in steps
+            ]
+            assert {node.name for node in found} == set(steps), (step_path, steps)
+            bodies += found
         called = {
             getattr(call.func, "id", None) or getattr(call.func, "attr", None)
-            for call in ast.walk(body) if isinstance(call, ast.Call)
+            for scope in bodies
+            for call in ast.walk(scope) if isinstance(call, ast.Call)
         }
         assert "cast_prohibition" in called, f"{path}::{function} does not ask"
         assert not called & predicates, (

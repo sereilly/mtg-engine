@@ -14,7 +14,9 @@ pay it at all (``_unpayable_additional_cost``), whether what the caster
 *named* to pay it can (``_named_cast_cost_refusal``,
 ``_named_graveyard_cost_refusal`` — CR 601.2h: a named payer pays, or the
 spell is not cast), and the payment, which returns what it ate for the
-resolution to read back (``_pay_additional_costs``).
+resolution to read back (``_pay_additional_costs``). ``_checked_cast_costs``
+is the step of ``_cast_onto_stack`` that asks every one of those gates — and
+the alternative cost's and the board tax's — before anything is paid.
 
 Split out of ``casting.py`` at the 2,000-line cap, and composed onto ``Game``
 with the other parts of ``SpellCastingMixin``, directly after it.
@@ -28,6 +30,8 @@ from ...cast_costs import AdditionalCost, OptionalManaCost, graveyard_card_noun
 from ...models import CardDefinition, Permanent
 from ...oracle import compile_card_oracle
 from ...subject_filters import card_matches_any, filter_head_noun, subject_matches
+from ...cost_modifiers import sacrifice_taxes
+from ...game_types import SimulationResult
 
 
 def _optional_cost_offers(
@@ -1151,3 +1155,126 @@ class AdditionalCastCostsMixin:
             "sacrificed_for_cost": sacrificed, "exiled_for_cost": exiled,
             "discarded_for_cost": discarded_cards,
         }
+
+    def _checked_cast_costs(
+        self, *, card, cast_costs, caster_index, chosen_alternative,
+        classification, cost_graveyard_indices, cost_permanent_ids,
+        cost_permanent_index, from_zone, hand_index, life_owed, optional_paid,
+        resolved_x_value, source_seat,
+    ):
+        """CR 601.2h before anything is paid: can every cost of this cast be
+        paid?
+
+        The printed additional costs (sized now that X is announced), the
+        payers the caster named for them — permanents, then graveyard cards —
+        the announced alternative cost, and the sacrifices a board tax adds
+        (Drought). Each is refused when it cannot be paid, never charged in
+        part.
+
+        A step of ``_cast_onto_stack``, moved out of it whole and called from
+        it in its place: "above" and "below" in its comments are places in the
+        cast as that method runs it.
+
+        Returns the refusal, or ``(owed, resolved_x_value,
+        spell_graveyard_slot)``.
+        """
+        # The printed additional costs, checked now: CR 601.2h says an unpayable
+        # cost can't be paid, and the consequence is that the spell can't be
+        # cast at all — not that it is cast for free, which is what happened
+        # while the phrase lived in the spell-pattern whitelist.
+        #
+        # **Here** rather than beside the gathering above, and the move is the
+        # whole of Fire Covenant's fix: "pay X life" cannot be measured until X
+        # is announced (CR 601.2b, CR 107.3), and the gate used to run first —
+        # so the clause was left out of the cost table entirely and the card,
+        # already `supported` on its damage line, was cast for nothing. This is
+        # also where CR 601.2 puts the check: 601.2h is after 601.2b's
+        # announcements and 601.2c's targets, and nothing between the two
+        # positions spends anything, so a refusal here costs the caster exactly
+        # what a refusal above it did.
+        # Where the spell itself sits in the caster's own graveyard, when that
+        # is where it is being cast from (flashback, Yawgmoth's Will). CR
+        # 601.2a moves it to the stack before any cost is paid, so it is not
+        # one of the cards an "exile X cards from your graveyard" cost can
+        # take — and every slot above it is one lower by the time the cost is
+        # collected.
+        spell_graveyard_slot = (
+            hand_index
+            if from_zone == "graveyard" and source_seat == caster_index
+            else None
+        )
+        if resolved_x_value is None and any(
+            cost.choose_number is not None for cost in cast_costs
+        ):
+            # "…, choose a number between 0 and 5." (Liquid Fire.) An unmade
+            # announcement is 0, made explicit *here* so that the gate below
+            # judges the number the resolution will spend and the stack object
+            # shows it — the gate reads a missing number as "none yet", which
+            # is the question the castable highlight asks it.
+            resolved_x_value = 0
+        unpayable = self._unpayable_additional_cost(
+            caster_index, card, cast_costs, spell_hand_index=hand_index,
+            from_zone=from_zone, x_value=resolved_x_value,
+            # What the cost increases above will take before this cost is paid.
+            # Two life prices on one cast are each payable alone and not
+            # together, and the gate that could not see the other one would
+            # admit a cast that then took the caster below 0 (CR 119.4).
+            life_already_owed=life_owed,
+            # CR 601.2b's announcement, made above: an optional price is a
+            # price only for the caster who took it.
+            taken=optional_paid,
+            spell_graveyard_slot=spell_graveyard_slot,
+        )
+        if unpayable is not None:
+            self.log.append(unpayable)
+            return SimulationResult(card.name, False, classification.effect_kind, unpayable)
+
+        # …and a payment the caster *named* is the payment, or the cast is
+        # illegal (CR 601.2h: no partial payment, no unpayable one). Below the
+        # gate above so a board that cannot pay at all says so first, and
+        # beside it for the same reason: nothing has been spent.
+        unpayable = self._named_cast_cost_refusal(
+            caster_index, card, cast_costs,
+            cost_permanent_ids=cost_permanent_ids,
+            cost_permanent_index=cost_permanent_index,
+            x_value=resolved_x_value, taken=optional_paid,
+        )
+        if unpayable is None:
+            # …the same rule for the cards named out of a graveyard, which
+            # have no id to be named by: a set of slots, whole or refused.
+            unpayable = self._named_graveyard_cost_refusal(
+                caster_index, card, cast_costs, cost_graveyard_indices,
+                x_value=resolved_x_value, taken=optional_paid,
+                spell_graveyard_slot=spell_graveyard_slot,
+            )
+        if unpayable is not None:
+            self.log.append(unpayable)
+            return SimulationResult(card.name, False, classification.effect_kind, unpayable)
+
+        # The announced alternative cost, checked in the same step and for the
+        # same rule (CR 601.2h). Below the additional costs only in source
+        # order; nothing between the two spends anything, so a refusal from
+        # either costs the caster the same nothing.
+        unpayable = self._unpayable_alternative_cost(
+            caster_index, card, chosen_alternative,
+            spell_hand_index=hand_index if from_zone == "hand" else None,
+        )
+        if unpayable is not None:
+            self.log.append(unpayable)
+            return SimulationResult(card.name, False, classification.effect_kind, unpayable)
+
+        # "Spells cost an additional "Sacrifice a Swamp" to cast for each black
+        # mana symbol in their mana costs." (Drought.) An additional cost
+        # imposed from a *board* rather than printed on the spell, so it is
+        # asked here beside the printed ones and at the same moment (CR 601.2f
+        # determines it, CR 601.2h pays it), and refused rather than clamped:
+        # CR 601.2h makes an unpayable cost an uncastable spell, not a free one.
+        sacrifice_demands = sacrifice_taxes(
+            self, caster_index, card.mana_cost or "", "cast"
+        )
+        owed = self._sacrifice_tax_victims(caster_index, sacrifice_demands)
+        if isinstance(owed, str):
+            details = f"{card.name} can't be cast: {owed} (CR 601.2h)"
+            self.log.append(details)
+            return SimulationResult(card.name, False, classification.effect_kind, details)
+        return owed, resolved_x_value, spell_graveyard_slot

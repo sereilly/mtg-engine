@@ -14,7 +14,7 @@ reason, and the parse halves of the two subjects had stayed in one file. What
 stays in ``records`` is a quantity an **instruction** recorded — a step of an
 effect, keyed by instruction kind; what moved is a quantity a **cost** recorded,
 which no instruction kind can key because a cost is charged by
-``engine/mixins/stack/activation.py`` and ``casting.py`` on the way to the stack
+``engine/mixins/stack/activation_charges.py`` and ``cast_additional_costs.py`` on the way to the stack
 (CR 601.2h, CR 602.2b) rather than by anything the dispatcher runs.
 
 Importers were pointed here rather than left going through ``records``, which is

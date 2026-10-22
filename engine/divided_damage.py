@@ -152,7 +152,7 @@ def announced_no_targets(entries, described) -> bool:
     "Shower of Coals deals 2 damage to each of **up to** three targets." CR
     115.6: "A spell or ability that requires targets may allow zero targets to
     be chosen." The cast path writes that announcement down as an empty list
-    (``casting._cast_onto_stack``, beside :func:`division_refusal`'s arm that
+    (``cast_target_validation._settled_cast_division``, beside :func:`division_refusal`'s arm that
     admits it), and this is the resolution's reader: an explicit ``[]`` on a
     description that is :data:`EACH` under a printed ceiling.
 

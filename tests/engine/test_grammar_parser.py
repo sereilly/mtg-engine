@@ -390,7 +390,7 @@ def test_trailing_activation_restriction_is_consumed_not_dropped():
     """"Activate only during your upkeep." belongs to the ability, not its
     effect. The grammar must account for the tokens — a line it cannot fully
     consume is refused outright — while enforcement stays where it already is,
-    on the raw ability text in mixins/stack/activation.py."""
+    on the raw ability text in mixins/stack/activation_checks.py."""
     from engine.grammar import compile_line
 
     result = compile_line(

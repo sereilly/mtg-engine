@@ -11,6 +11,10 @@ paid with ("Spend only black mana on X"); ``_infer_x_value`` is the largest X
 a seat that announced none can pay for; ``_parse_mana_cost`` turns a printed
 cost into the symbol dict all of them take.
 
+Two steps of ``_cast_onto_stack`` live here, moved out of it whole at the
+2,000-line cap: ``_resolved_cast_x`` (the X this cast is for, CR 601.2b) and
+``_pay_cast_mana`` (the waiver, then the mana the cast owes).
+
 Split out of ``casting.py`` at the 2,000-line cap, and composed onto ``Game``
 with the other parts of ``SpellCastingMixin``, directly after it.
 """
@@ -23,6 +27,14 @@ from .._constants import _MANA_SYMBOLS as _POOL_SYMBOLS
 from ...cost_modifiers import CostReduction, reduce_cost
 from ...models import PlayerState
 from ...restricted_mana import CAST, PaymentPurpose
+from ...cast_permissions import permission_for
+from ...cost_modifiers import keyword_cost_modifiers
+from ...cost_x_definitions import (
+    caps_cast_x, cast_x_ceiling, cast_x_floor, cast_x_value, defines_cast_x,
+    floors_cast_x,
+)
+from ...game_types import SimulationResult
+from ...oracle_types import x_spend_colors_from_text
 
 
 def _x_mana_actually_spent(
@@ -660,3 +672,321 @@ class PoolPaymentMixin:
 
         player.mana_pool = temp
         return True
+
+    def _resolved_cast_x(
+        self, *, card, caster, caster_index, classification, cost_reduction,
+        extra_generic_tax, extra_pip_tax, mode_index, target_permanent_ids,
+        target_permanent_index, target_player_index, target_stack_item,
+        x_value,
+    ):
+        """The X this cast is for (CR 107.3, CR 601.2b), before any cost is
+        paid.
+
+        Defined by the card, announced off the board ("…as you cast this
+        spell"), fixed by a target "with mana value X", or inferred from what
+        the pool can pay — then held to the card's printed bounds ("X can't be
+        greater than …", "X can't be 0"). Also the colours X must be paid with,
+        and the empty record of what the payment will put on it.
+
+        A step of ``_cast_onto_stack``, moved out of it whole and called from
+        it in its place: "above" and "below" in its comments are places in the
+        cast as that method runs it.
+
+        Returns the refusal, or ``(announced_x, resolved_x_value, x_colors,
+        x_mana_spent)``.
+        """
+        x_colors = x_spend_colors_from_text(card.oracle_text)
+        # What the payment below actually put on X, per colour. Empty until
+        # then, and legitimately empty afterwards for a waived cast (CR
+        # 107.3b locks a waived X to 0) or a game not enforcing costs.
+        x_mana_spent: dict[str, int] = {}
+        resolved_x_value = x_value
+        # CR 107.3c: some spells define X themselves, and then the caster does
+        # not announce it — the definition wins over anything the wire sent, the
+        # way it does for an activated ability's cost one table over. A card
+        # that defines an X this cast cannot compute refuses, because the
+        # alternative is letting the caster pick a number the card fixed.
+        if defines_cast_x(card.oracle_text):
+            defined = cast_x_value(self, caster_index, card.oracle_text)
+            if defined is None:
+                refusal = f"{card.name}: X cannot be determined for this cast"
+                self.log.append(refusal)
+                return SimulationResult(
+                    card.name, False, classification.effect_kind, refusal,
+                )
+            resolved_x_value = defined
+        # CR 601.2b's other definition, the one printed as the tail of the
+        # sentence it sizes: "…, where X is the number of black permanents
+        # target opponent controls **as you cast this spell**" (Reap). It takes
+        # the announcement away from the caster exactly as the table above does,
+        # so it overrides whatever the wire sent — and it is *stamped on the
+        # stack item*, which is the half that matters: CR 601.2c fixes the
+        # number of targets from it and says the number does not change even if
+        # the board it was counted off does. Read through the one reader the
+        # picker and the target gate already asked, so the number the caster was
+        # offered, the number the announcement was checked against and the
+        # number the resolution spends are one number.
+        announced_x = self.announced_cast_x(caster_index, card, mode_index=mode_index)
+        if announced_x is not None:
+            resolved_x_value = announced_x
+        if resolved_x_value is None and "{X}" in card.mana_cost.upper():
+            # "…with mana value X" (Spell Blast, Detonate). The target and the X
+            # are announced together (CR 601.2b before 601.2c), and only one X
+            # makes the pair legal — so a caster who named the target and not the
+            # number named the number too. Inferring from the mana pool instead
+            # produced a legal cast that then did nothing, which is a spell
+            # spending its cost on the wrong value rather than on a choice.
+            resolved_x_value = self._x_implied_by_target(
+                card, target_player_index, target_permanent_index, target_stack_item,
+                target_permanent_ids,
+            )
+        if resolved_x_value is None and "{X}" in card.mana_cost.upper():
+            resolved_x_value = self._infer_x_value(
+                caster, card.mana_cost, extra_generic_tax, x_colors=x_colors,
+                reduction=cost_reduction, extra_pips=extra_pip_tax,
+            )
+
+        # CR 601.2b's *bound*: "X can't be greater than the number of snow
+        # lands you control." (Winter's Chill.) Unlike a definition the caster
+        # still announces X, so this is checked against whatever they announced
+        # — after the inference above, which is where an unstated X becomes a
+        # number, and before any cost is paid so CR 601.2e can return the game
+        # to the moment before an illegal proposal. A bound the board cannot be
+        # counted for refuses too, for the definition's reason one block up:
+        # the alternative is announcing past a limit the card prints.
+        if caps_cast_x(card.oracle_text):
+            bound = cast_x_ceiling(self, caster_index, card.oracle_text)
+            if bound is None or int(resolved_x_value or 0) > bound[0]:
+                allowed = "none" if bound is None else str(bound[0])
+                printed = "" if bound is None else f" ({bound[1]})"
+                refusal = (
+                    f"{card.name}: X can't be greater than {allowed}{printed}"
+                )
+                self.log.append(refusal)
+                return SimulationResult(
+                    card.name, False, classification.effect_kind, refusal,
+                )
+
+        # CR 601.2b's other bound: "X can't be 0." (Ertai's Meddling.) Beside
+        # the ceiling because it is the same rule read the other way, and
+        # **after** the inference above for the same reason — a caster who
+        # announced nothing has announced 0 here, which is exactly the
+        # value this sentence forbids. Refused here, before any cost is paid,
+        # so CR 601.2e returns the game to the moment before the proposal.
+        if floors_cast_x(card.oracle_text):
+            floor = cast_x_floor(card.oracle_text)
+            if floor is None or int(resolved_x_value or 0) < floor:
+                refusal = f"{card.name}: X can't be less than {floor or 1}"
+                self.log.append(refusal)
+                return SimulationResult(
+                    card.name, False, classification.effect_kind, refusal,
+                )
+        return announced_x, resolved_x_value, x_colors, x_mana_spent
+
+    def _pay_cast_mana(
+        self, *, card, caster, caster_index, chosen_alternative,
+        classification, cost_reduction, extra_generic_tax, extra_pip_tax,
+        from_zone, held, offer_x_colorings, permission, resolved_x_value,
+        use_free_permission, x_colors, x_mana_spent,
+    ):
+        """The mana payment (CR 601.2g–h).
+
+        A cost waiver the cast may use (an X spell defaults to paying), then
+        whichever of three is owed: the alternative cost's mana, the taxes a
+        waived cast still owes (CR 118.9d), or the mana cost — each with every
+        increase and reduction gathered for this cast, and X paid in the
+        colours it must be.
+
+        A step of ``_cast_onto_stack``, moved out of it whole and called from
+        it in its place: "above" and "below" in its comments are places in the
+        cast as that method runs it.
+
+        Returns the refusal, or ``(permission, resolved_x_value,
+        x_mana_spent)``.
+        """
+        # A cost waiver ("cast spells from your hand without paying their mana
+        # costs", Chandra, Flame's Catalyst's −8). An X spell defaults to
+        # *paying*, because a waived {X} is locked to 0 (CR 107.3b) and paying
+        # for X=5 usually beats a free X=0 — an explicit request wins either way.
+        free_grant = permission if (permission is not None and permission.free) else None
+        if (
+            free_grant is None
+            and card.primary_type != "land"
+            and use_free_permission is not False
+            and (use_free_permission or "{X}" not in card.mana_cost.upper())
+            # CR 118.9a: "A player can't apply two alternative methods of
+            # casting or two alternative costs to a single spell." A cost waiver
+            # is an alternative cost (`CastPermission.free` cites the same rule),
+            # so a caster who announced the spell's own printed one is not also
+            # handed a waiver — which would otherwise make the printed cost a
+            # pure loss, paid on top of a spell that was already free.
+            and chosen_alternative is None
+        ):
+            waiver = permission_for(self, caster_index, held, "hand", spell=card)
+            if waiver is not None and from_zone == "hand":
+                free_grant = waiver
+                if permission is None:
+                    permission = waiver
+        if chosen_alternative is not None and card.primary_type != "land":
+            # CR 118.9: the alternative cost is paid **rather than** the mana
+            # cost, so the mana payment below is skipped whole. Not a reduction
+            # and not a waiver: the cost itself is charged just below, once the
+            # spell is off the hand, beside the additional costs CR 118.9d keeps
+            # in force.
+            #
+            # CR 118.9c is what this branch does *not* do: nothing here touches
+            # `card.mana_cost`, so the taxes above, the commander tax and every
+            # "with mana value X" reader still see the printed cost.
+            alternative_mana = chosen_alternative.mana
+            if "{X}" in card.mana_cost.upper() and "{X}" not in (
+                alternative_mana or ""
+            ).upper():
+                # CR 107.3b: X is 0 when neither the mana cost nor an
+                # alternative cost that includes X is paid. The one alternative
+                # cost that *does* include it is a granted flashback "equal to
+                # its mana cost" (Recoup) over an X spell, whose X is then the
+                # one the caster announced.
+                resolved_x_value = 0
+            if self.enforce_mana_costs:
+                # **An alternative cost paid in mana** (CR 702.34a: flashback's
+                # "by paying [cost] rather than paying its mana cost"). Charged
+                # where the mana cost would have been and by the same payment,
+                # because CR 118.9d keeps every additional cost, increase and
+                # reduction in force on top of it: the taxes and the discounts
+                # gathered above for this cast apply to *this* total — "start
+                # with the mana cost or alternative cost you're paying, add any
+                # cost increases, then apply any cost reductions".
+                #
+                # **And an alternative cost paid in something else** — a
+                # pitched card, life, a sacrifice (Force of Will, Fireblast,
+                # Dream Halls' grant). Its mana is nothing, and CR 118.9d says
+                # the same thing about it: the increases and the additional
+                # costs are "applied to that alternative cost", so the payment
+                # is this same one over an empty run of symbols. This branch
+                # charged mana only when the alternative cost itself printed
+                # some, which made a Sphere of Resistance, a per-target tax,
+                # the commander tax and the mana of a kicker or a buyback the
+                # caster had *announced* free for every such cast: 43 of 43
+                # pitch spells were cast under a Sphere with an empty pool,
+                # and Capsize came back to hand off a Dream Halls discard with
+                # its {3} unpaid.
+                if alternative_mana is not None and not alternative_mana.strip():
+                    # A flashback cost "equal to its mana cost" over a card
+                    # that has none (CR 118.6): unpayable, never free.
+                    details = (
+                        f"{card.name} has no mana cost, so its "
+                        f"{chosen_alternative.keyword or 'alternative'} cost "
+                        f"is unpayable (CR 118.6)"
+                    )
+                    self.log.append(details)
+                    return SimulationResult(
+                        card.name, False, classification.effect_kind, details,
+                    )
+                keyword_more, keyword_less, keyword_names = (
+                    keyword_cost_modifiers(
+                        self, caster_index, chosen_alternative.keyword
+                    )
+                )
+                paid = self._pay_cast_cost(
+                    caster, card, resolved_x_value, x_colors,
+                    extra_generic=extra_generic_tax + keyword_more,
+                    reduction=CostReduction(
+                        cost_reduction.generic + keyword_less,
+                        cost_reduction.colored,
+                    ),
+                    extra_pips=extra_pip_tax,
+                    offer_x_colorings=offer_x_colorings,
+                    mana_cost=alternative_mana or "",
+                )
+                if paid is None:
+                    details = (
+                        f"insufficient mana for {card.name}'s "
+                        f"{chosen_alternative.keyword or 'alternative'} cost "
+                        f"({alternative_mana})"
+                    )
+                    if alternative_mana is None:
+                        details = self._mana_still_owed_refusal(
+                            card,
+                            f"its alternative cost "
+                            f"({chosen_alternative.describe()})",
+                            extra_generic_tax, extra_pip_tax, cost_reduction,
+                        )
+                    self.log.append(details)
+                    return SimulationResult(
+                        card.name, False, classification.effect_kind, details,
+                    )
+                x_mana_spent = paid
+                if keyword_names:
+                    self.log.append(
+                        f"{card.name}'s {chosen_alternative.keyword} cost is "
+                        f"changed by {', '.join(sorted(set(keyword_names)))}"
+                    )
+            self.log.append(
+                f"{card.name} cast for its "
+                f"{chosen_alternative.keyword or 'alternative'} cost "
+                f"({chosen_alternative.describe()})"
+            )
+        elif free_grant is not None and card.primary_type != "land":
+            if "{X}" in card.mana_cost.upper():
+                resolved_x_value = 0  # CR 107.3b: the only legal choice for X
+            if self.enforce_mana_costs:
+                # "Without paying its mana cost" is an alternative cost
+                # (CR 118.9), and CR 118.9d keeps every additional cost and
+                # cost increase in force on top of one: what is waived is the
+                # mana cost and nothing else. So the payment still runs, over
+                # an empty run of symbols — the taxes, the commander tax and
+                # the mana of every optional cost this caster announced. It
+                # did not run at all, which made a kicker and a buyback free
+                # under any waiver (61 of 73 such cards were cast, kicked, with
+                # an empty pool) and Aluren a way round Sphere of Resistance.
+                x_mana_spent = self._pay_cast_cost(
+                    caster, card, resolved_x_value, x_colors,
+                    extra_generic=extra_generic_tax, reduction=cost_reduction,
+                    extra_pips=extra_pip_tax,
+                    offer_x_colorings=offer_x_colorings,
+                    mana_cost="",
+                )
+                if x_mana_spent is None:
+                    details = self._mana_still_owed_refusal(
+                        card, "cast without paying its mana cost",
+                        extra_generic_tax, extra_pip_tax, cost_reduction,
+                    )
+                    self.log.append(details)
+                    return SimulationResult(
+                        card.name, False, classification.effect_kind, details,
+                    )
+            self.log.append(
+                f"{card.name} cast without paying its mana cost"
+                + (f" ({free_grant.source_name})" if free_grant.source_name else "")
+            )
+        elif self.enforce_mana_costs and card.primary_type != "land":
+            # CR 118.6: an object with no mana cost (as opposed to {0}) has an
+            # unpayable cost — attempting to cast it is illegal. (118.6a: a
+            # waiver above is an alternative cost and may still be paid.)
+            if not card.mana_cost.strip():
+                details = f"{card.name} has no mana cost; the cost is unpayable (CR 118.6)"
+                self.log.append(details)
+                return SimulationResult(card.name, False, classification.effect_kind, details)
+            x_mana_spent = self._pay_cast_cost(
+                caster, card, resolved_x_value, x_colors,
+                extra_generic=extra_generic_tax, reduction=cost_reduction,
+                extra_pips=extra_pip_tax,
+                offer_x_colorings=offer_x_colorings,
+            )
+            if x_mana_spent is None:
+                details = f"insufficient mana for {card.name}"
+                if offer_x_colorings != ((),):
+                    details = (
+                        f"insufficient mana for {card.name} "
+                        f"(X={len(offer_x_colorings[0])} is paid with one "
+                        f"mana of each of that many colors)"
+                    )
+                elif x_colors:
+                    spelling = " and/or ".join(f"{{{sym}}}" for sym in x_colors)
+                    details = (
+                        f"insufficient mana for {card.name} "
+                        f"(X can be paid only with {spelling} mana)"
+                    )
+                self.log.append(details)
+                return SimulationResult(card.name, False, classification.effect_kind, details)
+        return permission, resolved_x_value, x_mana_spent

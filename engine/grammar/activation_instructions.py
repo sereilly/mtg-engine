@@ -121,7 +121,7 @@ def _parse_activation_restriction(stream: TokenStream) -> ast.ActivationRestrict
     sentence on an activated ability.
 
     Recorded on the AST and lowered to nothing. The restriction is *enforced*
-    from the raw ability text in ``mixins/stack/activation.py``, which reads
+    from the raw ability text in ``mixins/stack/activation_checks.py``, which reads
     ``ability.source_line`` -- so consuming the sentence here drops no behaviour,
     it only lets the line satisfy the grammar's full-consumption invariant.
 

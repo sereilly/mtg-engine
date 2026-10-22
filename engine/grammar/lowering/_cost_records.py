@@ -4,8 +4,8 @@ The other side of the colon from ``_records.py``, and split out of it at ULG
 wave 1 when that module reached one line under the size guard. The seam is the
 one its docstring has drawn since it was written: ``_PRODUCES`` is keyed by
 *instruction kind*, because a step of an effect is an instruction — and nothing
-here can be, because a cost is charged by ``engine/mixins/stack/activation.py``
-and ``casting.py`` on the way to the stack (CR 601.2h, CR 602.2b) rather than by
+here can be, because a cost is charged by ``engine/mixins/stack/activation_charges.py``
+and ``cast_additional_costs.py`` on the way to the stack (CR 601.2h, CR 602.2b) rather than by
 anything the dispatcher runs. One table keyed by a **cost node type**, three key
 names beside it, and the one function that spells a CR 601.2b optional cost the
 same way on both sides of the sentence that reads it.
@@ -27,7 +27,7 @@ from ..errors import LoweringError
 #: Which scratchpad key an activation **cost** writes when it is paid. The twin
 #: of ``_PRODUCES`` for the cost side of a colon, and separate from it for the
 #: same reason the two sides are separate: a cost is charged by
-#: ``engine/mixins/stack/activation.py`` rather than by an instruction, so there
+#: ``engine/mixins/stack/activation_charges.py`` rather than by an instruction, so there
 #: is no instruction kind to key it on. Land's Edge's "the discarded card" reads
 #: the record this names; a cost added here needs the activation path to record
 #: it under the same key, or the condition would compile and read nothing.
