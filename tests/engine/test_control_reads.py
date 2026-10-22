@@ -8,7 +8,7 @@ wired by changing one accessor because they were flags a reader consulted;
 layer 2 cannot, because there are no readers to change until the zone reads
 stop — which is what this guard holds.
 
-The seam lives on ``Game`` (``engine/mixins/helpers.py``):
+The seam lives on ``Game`` (``engine/mixins/control_seam.py``):
 
   * ``all_permanents()``           - every permanent on the battlefield
   * ``permanents_with_controller()`` - ditto, paired with the controlling seat
@@ -70,7 +70,7 @@ SCANNED = (ROOT / "engine", ROOT / "web")
 
 # The one module allowed to read zone membership: it *is* the seam. Wiring
 # layer 2 means changing these methods and nothing else.
-SEAM = "engine/mixins/helpers.py"
+SEAM = "engine/mixins/control_seam.py"
 
 # Genuine exceptions, by ``path::function`` so they survive line edits, each
 # with the reason it cannot ask the seam. Kept small on purpose: every entry is
@@ -232,7 +232,7 @@ def test_zone_membership_is_read_only_through_the_control_seam():
 
 def test_the_seam_still_owns_the_reads_it_claims():
     """The guard above is only worth anything while the seam actually reads the
-    zone. If ``helpers.py`` stopped touching ``player.battlefield``, the
+    zone. If ``control_seam.py`` stopped touching ``player.battlefield``, the
     exemption would be protecting nothing and every other file's compliance
     would be accidental."""
     seam = ROOT / SEAM
@@ -535,9 +535,9 @@ _BATTLEFIELD_WRITE_EXEMPTIONS = {
     # The projection of a derived controller change (CR 613 layer 2). The
     # permanent moves between two battlefields without leaving either zone, so
     # firing the leave transition here would be wrong.
-    "engine/mixins/helpers.py::_sync_control": "control change is a move, not a removal",
+    "engine/mixins/control_seam.py::_sync_control": "control change is a move, not a removal",
     # The choke point itself.
-    "engine/mixins/helpers.py::remove_all_from_battlefield": "this is the transition",
+    "engine/mixins/control_seam.py::remove_all_from_battlefield": "this is the transition",
     # Debug-menu raw-state injection replaces a whole battlefield wholesale;
     # nothing "leaves", the board is being rebuilt from a supplied payload.
     "web/debug_actions.py::_apply_raw_state": "wholesale board replacement",

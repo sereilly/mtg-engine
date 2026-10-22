@@ -1487,7 +1487,7 @@ def test_w3g2_a_discard_a_mill_and_a_resolved_spell_are_all_exiled(set_pool):
 
     A rule written "from anywhere" fails by working on the path its author
     tested. These are the three that reach a different module each: the
-    discard seam in ``mixins/effects.py``, the mill handler in
+    discard seam in ``mixins/draws_and_discards.py``, the mill handler in
     ``handlers/cards.py``, and the stack's leave-the-stack transition in
     ``mixins/stack/resolution.py``.
     """

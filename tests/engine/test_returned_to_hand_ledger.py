@@ -73,7 +73,7 @@ def test_the_ledger_has_one_writer_and_one_reset():
 
     assert found == {
         # The seam: where a permanent arriving in a hand is announced.
-        "mixins/helpers.py": ["_announce_permanent_returned_to_hand"],
+        "mixins/zone_funnels.py": ["_announce_permanent_returned_to_hand"],
         # The turn's reset.
         "mixins/turn_management.py": ["begin_turn_bookkeeping"],
     }, found

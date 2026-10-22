@@ -273,11 +273,11 @@ def test_every_qualifier_has_a_predicate_that_evaluates_it():
 
 
 def test_every_condition_has_a_predicate_that_evaluates_it():
-    from engine.mixins.permanent_state import PermanentStateMixin
+    from engine.mixins.lords import LordBuffsMixin
 
     for condition in CONDITIONS.values():
-        method = PermanentStateMixin._LORD_BUFF_CONDITIONS[condition]
-        assert callable(getattr(PermanentStateMixin, method))
+        method = LordBuffsMixin._LORD_BUFF_CONDITIONS[condition]
+        assert callable(getattr(LordBuffsMixin, method))
 
 
 def test_a_quoted_grant_is_admitted_only_when_the_compiler_reads_it():

@@ -4,7 +4,7 @@ CR 613.7 orders the effects in a layer by timestamp, and a resolved effect's is
 "the time it's created" (CR 613.7b). Eight sites wrote a permanent's colour by
 poking a metadata key — five handlers in ``handlers/board_misc.py``,
 ``mixins/effects.py``, ``mixins/stack/choices.py`` and the land-animation
-refresh in ``mixins/permanent_state.py`` — and none of them recorded when. The
+refresh now in ``mixins/board_statics.py`` — and none of them recorded when. The
 layer bridge had nothing to order by and ordered the *channels* by a constant
 instead, so under Darkest Hour a later "becomes white until end of turn" did
 nothing (``tests/rules/test_color_effects_timestamp_order.py`` is the census).

@@ -13,7 +13,7 @@ that source's text on every recompute. Nothing is materialised onto the
 affected object, so a source leaving the battlefield ends its effects by no
 longer being in the list — there is no flag to clear and no delta to subtract.
 
-``engine/mixins/permanent_state.py`` rebuilds the lists each refresh; this
+``engine/mixins/board_statics.py`` rebuilds the lists each refresh; this
 module owns *what the text means*.
 """
 
@@ -121,7 +121,7 @@ class GlobalStatic:
     sets_base_pt: tuple[int, int] = ()
     # "**Other** enchantments have "…"." (Aura Flux.) CR 109.5's exclusion of
     # the ability's own source, and the first template in this table to print
-    # the word — ``permanent_state._apply_global_statics`` says in as many words
+    # the word — ``board_statics._refresh_global_statics`` says in as many words
     # that "none of these templates says 'other'" and applies every one of them
     # to its own source on purpose. So the exclusion has to be *stated*: a
     # blanket skip would silently exempt the Pirate token Pursued Whale makes
@@ -443,7 +443,7 @@ def global_static_for(oracle_text: str) -> GlobalStatic | None:
     function of the text alone. The *object* is deliberately not kept: one
     built from a match is a new object each call, as it always was, and the
     refresh compares the statics it holds by identity
-    (``mixins/permanent_state._refresh_global_statics``). Under
+    (``mixins/board_statics._refresh_global_statics``). Under
     ``engine/fast_paths.py``'s checking mode every kept match is scanned
     again and compared.
     """

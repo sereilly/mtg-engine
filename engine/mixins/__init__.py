@@ -27,6 +27,21 @@ from .stack import (
     StackResolutionMixin,
 )
 from .oracle_instructions import OracleInstructionsMixin
+# A permanent's state, its board-wide statics and its recompute: one mixin
+# per subject (see permanent_state.py's docstring).
 from .permanent_state import PermanentStateMixin
+from .entry_choices import EntryChoicesMixin
+from .board_statics import BoardStaticsMixin
+from .dynamic_creatures import DynamicCreaturesMixin
+from .lords import LordBuffsMixin
+from .protection import ProtectionMixin
 from .effects import EffectsMixin
+from .draws_and_discards import DrawsAndDiscardsMixin
+# The general helpers, and the seams that came out of them (see helpers.py's
+# docstring): control and addressing, the zone funnels, deaths, and the stack
+# push with its target announcements.
 from .helpers import GameHelpersMixin
+from .control_seam import ControlSeamMixin
+from .zone_funnels import ZoneFunnelsMixin
+from .deaths import DeathsMixin
+from .target_announcements import TargetAnnouncementsMixin

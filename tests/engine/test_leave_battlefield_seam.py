@@ -199,9 +199,9 @@ def test_the_seams_accept_the_keyword(seam):
     one that forgot."""
     import inspect
 
-    from engine.mixins.helpers import GameHelpersMixin
+    from engine.mixins.zone_funnels import ZoneFunnelsMixin
 
-    parameter = inspect.signature(getattr(GameHelpersMixin, seam)).parameters[
+    parameter = inspect.signature(getattr(ZoneFunnelsMixin, seam)).parameters[
         "from_battlefield"
     ]
     assert parameter.kind is inspect.Parameter.KEYWORD_ONLY

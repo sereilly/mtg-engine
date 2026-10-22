@@ -155,9 +155,10 @@ _EVENT_SUBJECT_OBJECTS: frozenset[str] = frozenset({
     "matching_creature_becomes_blocked",
     # "Whenever a creature becomes the target of a spell or ability, **return
     # that creature** to its owner's hand." (Cowardice.) CR 603.2's event, whose
-    # one announcement seam (`mixins/helpers._announce_targeting`) freezes the
-    # targeted permanent's id — the object the words name, and the only one this
-    # event has: the ability's source is a third party watching the whole board.
+    # one announcement seam (`mixins/target_announcements._announce_targeting`)
+    # freezes the targeted permanent's id — the object the words name, and the
+    # only one this event has: the ability's source is a third party watching
+    # the whole board.
     #
     # Safe for the three narrower scopes of the same kind as well: under
     # "**this** creature becomes the target" the frozen id is the source's own,

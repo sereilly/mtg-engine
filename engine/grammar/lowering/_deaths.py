@@ -35,7 +35,7 @@ BOUND_CARD_EVENTS = frozenset({
     "permanent_dies",
     # "Whenever a creature dealt damage by this creature this turn dies, …"
     # (Seraph, Krovikan Vampire, Sengir Vampire). The scan in
-    # ``mixins/helpers._fire_creature_dies_triggers`` stamps the same
+    # ``mixins/deaths._fire_creature_dies_triggers`` stamps the same
     # ``dead_card`` its three sibling scans do — it did not until Seraph asked,
     # which is why the set is what says an event is admitted rather than the
     # condition table that merely names it.
@@ -50,7 +50,7 @@ BOUND_CARD_EVENTS = frozenset({
     "card_put_into_graveyard",
     # "Whenever **a creature** dies, … return the first card to the
     # battlefield …" (Lifeline). The board-wide death scan
-    # (``mixins/helpers._fire_creature_dies_triggers``) builds one
+    # (``mixins/deaths._fire_creature_dies_triggers``) builds one
     # ``died_context`` and hands it to every ability it announces — including
     # this condition, since the round that stopped dropping every instruction
     # kind but two. It has stamped ``dead_card`` all along; nothing had asked.

@@ -132,7 +132,7 @@ def _returns_its_own_source(
 
 
 #: The one event whose fire site freezes the seat "that creature's controller"
-#: names for an Aura's own return (``helpers.remove_all_from_battlefield``
+#: names for an Aura's own return (``control_seam.remove_all_from_battlefield``
 #: stamps ``event_subject_controller`` while the host still has one).
 _DEPARTING_HOST_EVENT = "attached_creature_leaves_battlefield"
 

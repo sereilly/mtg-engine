@@ -132,7 +132,7 @@ def _protection_clause_modelled(clause: str) -> bool:
 
     CR 702.16g/h: "protection from Demons **and from** Dragons" is shorthand for
     two protection abilities, so the clause is split exactly the way
-    ``permanent_state._protection_qualities`` splits it when it *builds* them.
+    ``protection._protection_qualities`` splits it when it *builds* them.
     Two spellings of that split is how a gate and a runtime come to read
     different sentences out of one printed line.
 

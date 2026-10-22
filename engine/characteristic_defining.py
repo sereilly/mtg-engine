@@ -13,7 +13,7 @@ Matching the subject loosely turns each into what it always was — one template
 with a parameter. The parameter (land type, excluded creature type, whose
 battlefield to count) rides on the payload, so one instruction kind,
 ``dynamic_pt_count``, covers all of them and
-``engine/mixins/permanent_state.py`` holds the single counter that reads it.
+``engine/mixins/dynamic_creatures.py`` holds the single counter that reads it.
 
 Payload vocabulary
 ------------------
@@ -234,7 +234,7 @@ def _life_total_count(match: re.Match) -> dict[str, object]:
 
     The seat is the ability's controller and is left off the spec on purpose:
     the CR 604.3 recompute hands the evaluator the *controlling* player
-    (``permanent_state``'s refresh loop reads the control seam for it), which is
+    (``dynamic_creatures``' refresh loop reads the control seam for it), which is
     exactly who "you" is (CR 109.5). Naming it would be a second answer, and a
     stolen Avatar would then read the thief's life total or the owner's
     depending on which answer won.

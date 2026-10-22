@@ -116,7 +116,7 @@ def _lower_pump(
         # refuses — but one on the ability's own source, with its size computed
         # from a spec the shared evaluator reads, is exactly the CR 613 layer 7c
         # contribution the P/T refresh already rebuilds every recompute
-        # (engine/mixins/permanent_state.py). What made it unreachable was not
+        # (engine/mixins/dynamic_creatures.py). What made it unreachable was not
         # the layer, it was having no way to say how big it is.
         if node.x_definition is not None and _is_source(node.subject):
             return (

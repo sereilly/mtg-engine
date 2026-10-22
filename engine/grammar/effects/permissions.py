@@ -801,7 +801,7 @@ def _parse_can_be_targeted_as_though(
     and abilities" is both kinds because CR 115.1a and CR 115.1c/d make them
     separately targeted and a card naming one of them is a narrower effect;
     and "shroud" is the one keyword whose restriction
-    ``permanent_state._can_be_targeted`` lifts through this record — hexproof
+    ``protection._can_be_targeted`` lifts through this record — hexproof
     is already seat-relative and protection asks about the source's qualities,
     so neither would be this rule with a word changed. What *does* vary is the
     player, which is why that is the field.

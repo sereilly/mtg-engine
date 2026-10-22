@@ -339,7 +339,7 @@ def test_the_census_names_a_loss_that_has_no_place_in_the_order(_by_name, monkey
     The census then names each channel's pinned card as outliving the loss."""
     import engine.keywords
     import engine.layer_bridge
-    import engine.mixins.permanent_state
+    import engine.mixins.protection
 
     real = engine.keywords.abilities_lost_at
 
@@ -350,7 +350,7 @@ def test_the_census_names_a_loss_that_has_no_place_in_the_order(_by_name, monkey
         return None if real(permanent, **known) is None else -1
 
     for module in (
-        engine.keywords, engine.layer_bridge, engine.mixins.permanent_state
+        engine.keywords, engine.layer_bridge, engine.mixins.protection
     ):
         monkeypatch.setattr(module, "abilities_lost_at", unordered)
 

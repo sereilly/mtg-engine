@@ -30,7 +30,6 @@ from typing import TYPE_CHECKING, Callable
 
 # Re-exported for the modules that imported them from here before the board
 # half of CR 601.3 moved to ``cast_bans`` (``oracle.py``'s support gates,
-# ``mixins/effects.py``, ``mixins/permanent_state.py``,
 # ``mixins/stack/choices.py``); new code imports them from there.
 from .cast_bans import (  # noqa: F401
     CHOSEN_CARD_NAMES,
@@ -45,7 +44,6 @@ from .cast_bans import (  # noqa: F401
     combat_play_ban_line,
     global_play_timing_line,
     last_cast_color_ban_line,
-    most_permanents_land_ban,
     most_permanents_play_ban_line,
     own_cast_ban_line,
     same_name_as_permanent_ban_line,

@@ -275,7 +275,8 @@ def test_negative_power_survives():
 
 def test_pool_variable_pt_cards_are_flagged():
     """These are the pool's characteristic-defining-ability creatures; each is
-    served by mixins.permanent_state.DYNAMIC_PT rather than printed digits."""
+    served by the ``dynamic_pt_count`` instruction (tallied in
+    ``mixins/dynamic_creatures.py``) rather than printed digits."""
     flagged = {card.name for card in load_catalog() if card.has_variable_pt}
     # Pool-relative: the set of CDA creatures grows with the manifest, and
     # pinning the exact names made this fail on the first ingested set rather
