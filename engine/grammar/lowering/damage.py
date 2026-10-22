@@ -761,7 +761,7 @@ def _lower_damage_shape(
         # "…among **one, two, or three** targets." (Arc Lightning.) CR 601.2c's
         # printed ceiling on a count the caster still chooses, carried under the
         # same ``max_targets`` key every other picker spec uses — the client,
-        # `legality.py`'s cast gate and `divided_damage.division_refusal` all
+        # `legality_cast_gates.py`'s cast gate and `divided_damage.division_refusal` all
         # already read it, and the last of those has cited Arc Lightning's
         # spelling in its docstring since Contagion arrived. A `None` here is
         # "among any number of", which is a different sentence rather than a

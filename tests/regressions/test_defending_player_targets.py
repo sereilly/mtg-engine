@@ -4,7 +4,7 @@ a spell printing it has to be held to it.
 CR 506.2 defines "defending player" only inside a combat phase, and CR 601.2c
 makes the printed noun phrase part of what may legally be chosen. The engine
 had the seat test — ``defending_player_only``, answered by
-``legality._enumerate_targets`` — and only a *trigger* ever reached it: the
+``legality_enumeration._enumerate_targets`` — and only a *trigger* ever reached it: the
 combat fire sites freeze the seat into the trigger's context (CR 603.10),
 because a trigger's combat may be over by the time it resolves, and nothing
 supplied a seat for a spell.

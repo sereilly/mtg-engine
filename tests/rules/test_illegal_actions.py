@@ -95,7 +95,7 @@ def test_an_activation_refused_for_want_of_a_target_pays_none_of_its_cost():
     """Silent Dart's cost is three payments — {4}, {T} and a sacrifice — and a
     refusal owes all three back.
 
-    The card is the reason ``legality.activation_target_refusal`` exists as one
+    The card is the reason ``legality_abilities.activation_target_refusal`` exists as one
     gate asked before any cost: an ability with a mandatory object target it
     cannot fill used to be activated anyway and sent at the face.
     """

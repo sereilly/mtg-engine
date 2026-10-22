@@ -773,7 +773,7 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
         #
         # Per role rather than all-or-nothing: CR 608.2b removes the spell from
         # the stack only when **every** target is illegal (which
-        # ``legality.illegal_targets_refusal`` answers above this), and an
+        # ``legality_resolution.illegal_targets_refusal`` answers above this), and an
         # illegal one among several is simply skipped. So a land that left is
         # not destroyed and the creature still is.
         #

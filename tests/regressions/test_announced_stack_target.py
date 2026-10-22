@@ -15,7 +15,7 @@ nothing in between, so the engine accepted the announcement:
 
 Not wrong in the caster's favour — nothing illegal is ever countered — but
 CR 601.2c makes that cast illegal, and an AI or a client that names the wrong
-spell pays for a card that does nothing. ``legality.cast_stack_target_refusal``
+spell pays for a card that does nothing. ``legality_stack.cast_stack_target_refusal``
 is the gate; this sweep holds it to every stack-targeting spell in the pool.
 
 **Validated backwards**, as a census has to be: with the gate switched off the

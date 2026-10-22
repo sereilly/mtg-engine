@@ -15,7 +15,7 @@ target that changed hands was "not there": Boomerang returned nothing, Terror
 logged its target gone, and a triggered ability that read the slot on the old
 battlefield hit whatever had slid into it. The seat is settled from the id
 again as the object resolves now, where the gate judged the target still legal
-(``LegalityMixin.resettle_announced_target_seats``). The census over the pool
+(``ResolutionTargetsMixin.resettle_announced_target_seats``). The census over the pool
 is ``tests/regressions/test_target_changed_controller_census.py``.
 """
 

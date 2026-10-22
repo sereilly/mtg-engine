@@ -162,7 +162,7 @@ def _parse_registry_claimed_sentence(stream: TokenStream) -> bool:
     # Drake.) The fourth sentence of a triggered ability's line, and not an
     # effect either: it says what the *rules* do with the object when it begins
     # to resolve (CR 608.2b), so there is nothing here for a production to lower
-    # and the sentence is consumed by the table `engine/legality.py` reads —
+    # and the sentence is consumed by the table `engine/legality_resolution.py` reads —
     # exactly as the cost reduction and the special action above are.
     if resolution_override_sentence(text) is not None:
         stream.accept_punct(".")

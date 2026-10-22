@@ -8,7 +8,7 @@ announcement, each of which needs no illegal announcement at all:
   one. The default is a target like any other, and nothing asked whether it was
   a legal one: with the opponent behind an Ivory Mask, 101 of 119 bare casts
   resolved on them anyway. Such a cast is refused now, and says who it could
-  not choose (``legality._cast_player_target_refusal``).
+  not choose (``legality_cast_gates._cast_player_target_refusal``).
 * **CR 608.2b.** "If the spell or ability specifies targets, it checks whether
   the targets are still legal. … If all its targets, for every instance of the
   word 'target,' are now illegal, the spell or ability doesn't resolve."

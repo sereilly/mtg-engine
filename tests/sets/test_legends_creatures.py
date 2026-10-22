@@ -1626,7 +1626,7 @@ def test_vampire_bats_pump_is_capped_at_twice_a_turn(set_pool):
     than twice each turn.**"
 
     The only clause in the pool that does not begin "Activate only", and it
-    slipped every reader: `activation_restrictions._clauses` collected by that
+    slipped every reader: `activation_clauses._clauses` collected by that
     prefix so the support gate had nothing to refuse, and the grammar's
     restriction production consumed the sentence verbatim without asking the
     table that enforces it. The ability was an uncapped {B} pump on a card that

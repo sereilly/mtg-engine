@@ -291,7 +291,7 @@ _BOARD_FREE_CAST = re.compile(
 )
 
 #: The claim name the support gate and ``engine/grammar/registries.py`` use for
-#: the row above. Its own, for ``cast_restrictions.GLOBAL_PLAY_TIMING_CLAIM``'s
+#: the row above. Its own, for ``cast_bans.GLOBAL_PLAY_TIMING_CLAIM``'s
 #: reason: it says what this *permanent* does for everybody, not when the card
 #: printing it may be cast.
 BOARD_FREE_CAST_CLAIM = "board_free_cast"
@@ -324,7 +324,7 @@ def board_free_cast(game, card) -> str | None:
     card it is, and the half a controller check would have silently dropped.
 
     ``effective_card`` rather than the printed face, for
-    ``cast_restrictions.global_cast_ban``'s reason: what a permanent says is
+    ``cast_bans.global_cast_ban``'s reason: what a permanent says is
     what layers 1 and 3 have made of it (CR 707.2, CR 612.1).
 
     ``card_has_type``, not ``primary_type``: CR 205.2a gives a card every type

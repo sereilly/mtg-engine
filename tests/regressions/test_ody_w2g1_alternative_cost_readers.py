@@ -6,7 +6,7 @@ under Sphere of Resistance owes {1} beside its card and its life
 census). Three other readers answer "could this be cast for its alternative
 cost right now?" before the cast is made:
 
-* ``legality.cast_cost_offers`` — the offer's ``payable``, which the cost
+* ``legality_cast_spec.cast_cost_offers`` — the offer's ``payable``, which the cost
   prompt greys the option by;
 * ``web/state_view`` — the castable highlight, which falls back to that flag
   when the mana cost cannot be paid;

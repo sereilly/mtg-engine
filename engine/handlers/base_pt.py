@@ -73,7 +73,7 @@ def set_source_base_pt_from_target(
     does (CR 608.2: the effect's values are determined as it resolves).
 
     The in-combat relation is checked here as well as at activation
-    (``legality.activation_target_refusal`` asks the same question through
+    (``legality_abilities.activation_target_refusal`` asks the same question through
     ``_ability_target_legal``), because CR 608.2b re-checks a target's
     legality on resolution — a creature that left combat in response makes
     the ability do nothing rather than read a bystander's power.

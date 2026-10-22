@@ -1179,7 +1179,7 @@ def test_601_2c_a_named_target_the_spell_cannot_describe_is_refused(set_pool):
     ``_validate_cast_targets`` checks the target of the instruction kinds it
     has an arm for, and Divine Offering's primary instruction is the
     ``sequence`` wrapping its two sentences, so it reached none of them. The
-    gate beside it (``legality.cast_target_refusal``) asks the same enumeration
+    gate beside it (``legality_cast_gates.cast_target_refusal``) asks the same enumeration
     the picker is built from, which is why the browser could never reach this
     and a test or the AI could.
     """

@@ -170,7 +170,7 @@ def _blocked_subject(phrase: str) -> dict | None:
     """A printed plural noun phrase as a filter payload, or None.
 
     Read by **the grammar's noun parser**, which is the same reader
-    `activation_restrictions._controlled_board_phrase` and
+    `activation_conditions._controlled_board_phrase` and
     `static_bonuses._controls_noun_condition` ask about the identical phrase --
     "red creatures" means one thing on this engine, and a second reader of it
     would be free to disagree. The payload must be one `subject_matches` can

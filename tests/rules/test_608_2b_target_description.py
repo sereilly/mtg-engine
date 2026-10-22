@@ -5,7 +5,7 @@ still legal. A target that's no longer in the zone it was in when it was
 targeted is illegal. Other changes to the game state may cause a target to no
 longer be legal; for example, its characteristics may have changed …"
 
-``legality.illegal_targets_refusal`` asked only the first half: is the target
+``legality_resolution.illegal_targets_refusal`` asked only the first half: is the target
 still on the battlefield, and still targetable. A target that stayed but stopped
 answering what the spell printed — "nonblack", "you control", "attacking",
 "blocking", "creature" — was legal to it, so the spell resolved:

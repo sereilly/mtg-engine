@@ -600,7 +600,7 @@ def read_condition(condition: str) -> "CostCondition | None":
 
     The noun phrases go through ``subject_filters.quantified_board_phrase``,
     the one reader the board conditions in ``cast_restrictions`` and
-    ``activation_restrictions`` also use, so what "a Plains" means is one answer
+    ``activation_conditions`` also use, so what "a Plains" means is one answer
     wherever a card prints it. A phrase carrying a key the matcher cannot test
     refuses rather than being approximated.
     """

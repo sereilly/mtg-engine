@@ -63,7 +63,7 @@ three rows that differ, each for a reason the card prints —
   cast out of;
 * *Aether Burst* names one target more: its X counts the cards named Aether
   Burst "in all graveyards as you cast this spell", and the engine counts the
-  one being cast (`legality.announced_cast_x` is not told the zone — CR 601.2a
+  one being cast (`legality_cast_spec.announced_cast_x` is not told the zone — CR 601.2a
   has already moved it to the stack). Reachable only with a graveyard opened
   by another effect; left as measured.
 

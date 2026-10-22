@@ -448,7 +448,7 @@ def test_angelic_curator_cannot_be_targeted_by_an_artifact_source(set_pool):
     totem = Permanent(card=_g4_prop("Test Totem", type_line="Enchantment"))
     game = _g4_duel([curator], [rod, totem])
 
-    # Both arguments, exactly as `legality._enumerate_targets` passes them: the
+    # Both arguments, exactly as `legality_enumeration._enumerate_targets` passes them: the
     # object says an *ability* is choosing, the card is what a spell would be.
     assert not game._can_be_targeted(
         curator, rod.card, caster_index=1, ability_source=rod

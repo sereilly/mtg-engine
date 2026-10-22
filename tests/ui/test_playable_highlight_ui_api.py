@@ -285,7 +285,7 @@ def test_the_highlight_prices_every_cast_modifier_the_engine_knows():
 # two-sentence spell ("Destroy target artifact. You gain life equal to its mana
 # value.") is a ``sequence`` first, reached no arm, and glowed on a board with
 # no artifact — and the click was then stopped by the picker. It asks
-# ``legality.no_legal_cast_target_refusal`` now, the predicate the cast path
+# ``legality_cast_gates.no_legal_cast_target_refusal`` now, the predicate the cast path
 # itself refuses with.
 
 
@@ -314,7 +314,7 @@ def test_w2g7_a_spell_that_may_name_no_target_keeps_its_highlight():
 # prints the two-name sentence.) The cast path has refused a named card since
 # Mirage, and the highlight never asked: it glowed over a card whose click the
 # engine then declined. Asked through the predicate the cast path refuses with
-# (`cast_restrictions.chosen_name_ban`), so the two cannot answer differently.
+# (`cast_bans.chosen_name_ban`), so the two cannot answer differently.
 
 
 def _w1g7_named_by(session_id: str, card_name: str, named: str):

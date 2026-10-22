@@ -15,7 +15,7 @@ from ..cast_timing import CAST_AT_INSTANT_SPEED
 from ..hand_size import maximum_hand_size
 from ..models import Permanent
 from ..auras import clear_ignored_restrictions
-from ..cast_restrictions import clear_ignored_play_bans
+from ..cast_bans import clear_ignored_play_bans
 from ..keywords import (clear_granted_ability_lines,
                         clear_granted_keywords,
                         clear_removed_ability_keywords,
@@ -172,7 +172,7 @@ class CleanupStepMixin:
             self.attack_restrictions_until_eot, self
         )
         # The same countdown for the targeting ban Peace Talks' other clause
-        # arms, read by `legality._enumerate_targets`.
+        # arms, read by `legality_enumeration._enumerate_targets`.
         self.targeting_bans = _turn_expired(self.targeting_bans)
         # "Until the end of your next turn, they can't phase in." (Teferi,
         # Timeless Voyager.) The block counts the *caster's* turn ends; this

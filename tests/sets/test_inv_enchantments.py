@@ -968,7 +968,7 @@ def test_w1g5_mana_maze_does_not_stop_a_land_and_the_ai_stops_proposing(set_pool
     AI's proposal filter asks the same predicate — otherwise a seat re-proposes
     its second green spell all turn and does nothing."""
     from engine.ai_policy import _can_cast_with_targets
-    from engine.cast_restrictions import last_cast_color_ban
+    from engine.cast_bans import last_cast_color_ban
 
     second = _w1g5_spell("Green Two", ("G",))
     game, _board, _ = _w1g5_table(

@@ -7,7 +7,7 @@ illegal. … If all its targets, for every instance of the word 'target', are
 now illegal, the spell or ability doesn't resolve."
 
 A spell has had this since the stamp (``GraveyardTarget``) existed:
-``legality.illegal_targets_refusal`` reads a stamp with no surviving copy as a
+``legality_resolution.illegal_targets_refusal`` reads a stamp with no surviving copy as a
 target that is gone. An ability never reached that gate, and its resolution
 re-located the vanished stamp to *no index* — exactly what a bare, headless
 activation carries — so every graveyard handler took its own pick: exile the
@@ -16,7 +16,7 @@ the creature card beside it. W1G3 fixed which cards that fallback may take
 (``test_narrowed_graveyard_return_keeps_its_narrowing.py``) and left the
 fallback itself.
 
-``legality.vanished_graveyard_target_refusal`` is the gate, asked above the
+``legality_resolution.vanished_graveyard_target_refusal`` is the gate, asked above the
 instructions. The sweep drives every activated ability in the pool whose
 picker is a graveyard card: announce the first card the picker offers, take
 that card out of the graveyard in response, resolve, and require that no zone

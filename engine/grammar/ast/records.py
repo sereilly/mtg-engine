@@ -835,7 +835,7 @@ class SourceAbilityActivations:
     than a spelling of :class:`CountedNumber`, because what it counts is not on
     any board: it is a per-turn ledger the activation path keeps on the
     permanent, which is the same ledger CR 602.5's "Activate no more than twice
-    each turn" is refused against (``engine/activation_restrictions.py``).
+    each turn" is refused against (``engine/activation_tallies.py``).
 
     ``count`` and ``comparison`` are the printed words and nothing else, so the
     card that prints "twice or more" or "exactly three times" extends this

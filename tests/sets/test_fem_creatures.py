@@ -71,7 +71,7 @@ def test_farrelite_priest_adds_white_and_clocks_itself_on_the_fourth_use(set_poo
     turn, sacrifice this creature at the beginning of the next end step."
 
     The tally is the ability's own activation count, kept by
-    ``engine/activation_restrictions.py`` -- the same ledger CR 602.5's printed
+    ``engine/activation_tallies.py`` -- the same ledger CR 602.5's printed
     caps are refused against. The fourth use crosses the threshold and creates
     the delayed sacrifice (CR 603.7); the end step carries it out.
     """

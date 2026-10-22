@@ -30,27 +30,28 @@ from __future__ import annotations
 from ..auras import aura_continuous_claim
 from ..combat_assignment import (DEFENDER_ASSIGNS_CLAIM,
                                  defender_assigns_line)
-from ..cast_restrictions import (CAST_RESTRICTIONS, COMBAT_PLAY_BAN_CLAIM,
+from ..cast_restrictions import (CAST_RESTRICTIONS,
                                  cast_absence_line,
-                                 combat_play_ban_line,
                                  cast_condition_line,
                                  cast_damage_source_line,
                                  cast_opponent_cast_line,
-                                 cast_own_cast_line,
-                                 chosen_name_ban_line,
-                                 SAME_NAME_AS_PERMANENT_BAN_CLAIM,
-                                 same_name_as_permanent_ban_line,
-                                 MOST_PERMANENTS_PLAY_BAN_CLAIM,
-                                 most_permanents_play_ban_line,
-                                 OWN_CAST_BAN_CLAIM,
-                                 own_cast_ban_line,
-                                 SPELL_CAP_CLAIM,
-                                 spell_cap_line,
-                                 LAST_CAST_COLOR_BAN_CLAIM,
-                                 last_cast_color_ban_line,
-                                 global_cast_ban_line,
-                                 global_play_timing_line,
-                                 GLOBAL_PLAY_TIMING_CLAIM)
+                                 cast_own_cast_line)
+from ..cast_bans import (COMBAT_PLAY_BAN_CLAIM,
+                         combat_play_ban_line,
+                         chosen_name_ban_line,
+                         SAME_NAME_AS_PERMANENT_BAN_CLAIM,
+                         same_name_as_permanent_ban_line,
+                         MOST_PERMANENTS_PLAY_BAN_CLAIM,
+                         most_permanents_play_ban_line,
+                         OWN_CAST_BAN_CLAIM,
+                         own_cast_ban_line,
+                         SPELL_CAP_CLAIM,
+                         spell_cap_line,
+                         LAST_CAST_COLOR_BAN_CLAIM,
+                         last_cast_color_ban_line,
+                         global_cast_ban_line,
+                         global_play_timing_line,
+                         GLOBAL_PLAY_TIMING_CLAIM)
 from ..cast_permissions import (BOARD_FREE_CAST_CLAIM,
                                 BOARD_GRAVEYARD_PLAY_CLAIM,
                                 board_free_cast_line,
@@ -171,7 +172,7 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     if uncounterable_class_line(normalized) is not None:
         return CLASS_UNCOUNTERABLE_CLAIM
 
-    # engine/cast_restrictions.py — the *board* half of CR 601.3a: "Creature
+    # engine/cast_bans.py — the *board* half of CR 601.3a: "Creature
     # spells can't be cast." (Aether Storm.) Not a gate the casting card prints
     # about itself but a prohibition a permanent imposes on every player, so it
     # carries no instruction for the same reason the rows above carry none —
@@ -180,7 +181,7 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     if global_cast_ban_line(normalized) is not None:
         return "cast_restrictions"
 
-    # engine/cast_restrictions.py — the same rule scoped to the permanent's own
+    # engine/cast_bans.py — the same rule scoped to the permanent's own
     # controller: "You can't cast creature spells." (Steel Golem.) Claimed
     # through the reader that enforces it, so the claim cannot outlive the ban.
     if own_cast_ban_line(normalized) is not None:
@@ -194,28 +195,28 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     if defender_assigns_line(normalized):
         return DEFENDER_ASSIGNS_CLAIM
 
-    # engine/cast_restrictions.py — the same rule counting casts instead of
+    # engine/cast_bans.py — the same rule counting casts instead of
     # naming a type: "Each player can't cast more than one spell each turn."
     # (Arcane Laboratory.) Claimed through the reader that enforces it, so the
     # claim cannot outlive the cap.
     if spell_cap_line(normalized) is not None:
         return SPELL_CAP_CLAIM
 
-    # engine/cast_restrictions.py — the same rule comparing two spells:
+    # engine/cast_bans.py — the same rule comparing two spells:
     # "Players can't cast spells that share a color with the spell most
     # recently cast this turn." (Mana Maze.) Claimed through the reader that
     # enforces it, so the claim cannot outlive the ban.
     if last_cast_color_ban_line(normalized):
         return LAST_CAST_COLOR_BAN_CLAIM
 
-    # engine/cast_restrictions.py — the *name*-keyed half of the same rule:
+    # engine/cast_bans.py — the *name*-keyed half of the same rule:
     # "Spells with the chosen names can't be cast and lands with the chosen
     # names can't be played." (Null Chamber.) Claimed through the reader that
     # enforces it, so the claim cannot outlive the ban.
     if chosen_name_ban_line(normalized):
         return "cast_restrictions"
 
-    # engine/cast_restrictions.py — the same name-keyed rule with the names read
+    # engine/cast_bans.py — the same name-keyed rule with the names read
     # off the **board** instead of chosen: "Players can't cast spells with the
     # same name as a nontoken permanent." / "Players can't play nonbasic lands
     # with the same name as a nontoken permanent." (Cornered Market.) Two
@@ -224,7 +225,7 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     if same_name_as_permanent_ban_line(normalized) is not None:
         return SAME_NAME_AS_PERMANENT_BAN_CLAIM
 
-    # engine/cast_restrictions.py — the same rule over a seat the *board* names
+    # engine/cast_bans.py — the same rule over a seat the *board* names
     # rather than the sentence: "A player who controls more permanents than
     # each other player can't play lands or cast artifact, creature, or
     # enchantment spells. That player may sacrifice a permanent…" (Damping
@@ -234,7 +235,7 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     if most_permanents_play_ban_line(normalized) is not None:
         return MOST_PERMANENTS_PLAY_BAN_CLAIM
 
-    # engine/cast_restrictions.py — the *timing* half of CR 601.3a and CR
+    # engine/cast_bans.py — the *timing* half of CR 601.3a and CR
     # 602.5 at once: "Players can cast spells and activate abilities only
     # during their own turns." (City of Solitude.) One printed sentence, two
     # gates, one reader — claimed through the reader both of them enforce with,
@@ -242,7 +243,7 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     if global_play_timing_line(normalized):
         return GLOBAL_PLAY_TIMING_CLAIM
 
-    # engine/cast_restrictions.py — the same two gates over a *phase* instead of
+    # engine/cast_bans.py — the same two gates over a *phase* instead of
     # a turn: "During combat, players can't cast instant spells or activate
     # abilities that aren't mana abilities." (Hand to Hand.) One printed
     # sentence, two gates, one reader — claimed through the reader both of them

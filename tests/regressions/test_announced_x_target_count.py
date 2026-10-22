@@ -13,7 +13,7 @@ named:
 
 Nothing crashed, every card reported supported, and no compiled program was
 wrong — only running a card could see it. The gate is
-``legality.activation_target_refusal``'s ``x_value``: the announced X becomes the
+``legality_abilities.activation_target_refusal``'s ``x_value``: the announced X becomes the
 same ``max_targets`` a defined X (the verse cycle) already became.
 
 The sweep asks the whole pool rather than the cards above, and carries a floor

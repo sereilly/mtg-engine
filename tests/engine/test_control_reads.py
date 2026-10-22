@@ -326,7 +326,11 @@ POSITIONAL_BASELINE: dict[str, int] = {
     # left is the emblem path, which has no resolution context to carry an id.
     "engine/handlers/prevention.py": 1,
     "engine/handlers/zones.py": 2,
-    "engine/legality.py": 2,
+    # One read each when `legality.py` split: the declare-blockers pair
+    # (`legal_blocker_assignments`) stayed, and the activation picker's source
+    # slot (`activation_target_spec`) went with the ability half.
+    "engine/legality.py": 1,
+    "engine/legality_abilities.py": 1,
     "engine/mixins/effects.py": 2,
     # `engine/mixins/permanent_state.py` gone at PCY W3G3: Clone's copy choice
     # subscripted the battlefield by the cast-time slot, so a creature leaving

@@ -2216,7 +2216,7 @@ from tests.helpers import resolve_stack as _w2g3_resolve_stack
 _W2G3_HOMES = {"Swamp": "LEA", "Hill Giant": "LEA", "Grizzly Bears": "LEA"}
 
 #: The line CR 608.2b's gate writes when an activated ability's every target
-#: has become illegal (``legality.ability_targets_refusal``).
+#: has become illegal (``legality_resolution.ability_targets_refusal``).
 _W2G3_FIZZLE = (
     "Savage Gorilla ability was removed from the stack: "
     "every target is illegal (608.2b)"

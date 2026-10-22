@@ -653,7 +653,7 @@ def test_silent_dart_with_no_creature_pays_nothing(set_pool):
 
     CARD_VERIFICATION.md records Silent Dart *failing*: "I get an error saying
     no valid creature targets but the card sacrifices itself." The gate that
-    fixed it is `legality.activation_target_refusal`, asked before any cost is
+    fixed it is `legality_abilities.activation_target_refusal`, asked before any cost is
     paid (CR 602.2b/601.2c), and CLAUDE.md names this card as its worked
     example — but nothing asserted the *cost* half, only that the AI declines
     to propose the activation. A gate asked after the sacrifice would satisfy

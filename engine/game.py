@@ -23,6 +23,15 @@ from .mixins import (
 from .ante import AnteMixin
 from .commander import CommanderMixin
 from .legality import LegalityMixin
+# LegalityMixin's parts, one subject each (see engine/legality.py's docstring),
+# composed directly after it so every lookup resolves as it did in one class.
+from .legality_cast_spec import CastTargetSpecMixin
+from .legality_roles import RoleTargetsMixin
+from .legality_abilities import AbilityTargetsMixin
+from .legality_cast_gates import CastTargetGatesMixin
+from .legality_stack import StackTargetsMixin
+from .legality_resolution import ResolutionTargetsMixin
+from .legality_enumeration import TargetEnumerationMixin
 # Per-phase and per-step turn-structure logic (CR 500–514) lives in engine.phases,
 # one mixin class per phase/step. See engine/phases/__init__.py for the taxonomy.
 from .phases import (
@@ -78,6 +87,13 @@ class Game(
     EffectsMixin,
     GameHelpersMixin,
     LegalityMixin,
+    CastTargetSpecMixin,
+    RoleTargetsMixin,
+    AbilityTargetsMixin,
+    CastTargetGatesMixin,
+    StackTargetsMixin,
+    ResolutionTargetsMixin,
+    TargetEnumerationMixin,
     AnteMixin,
     CommanderMixin,
 ):
@@ -510,7 +526,7 @@ class Game(
     # battlefield right now (CR 611.3) and ends with it.
     #
     # Each entry: {"source_name", "remaining_turns"}. Read by
-    # `legality._enumerate_targets`, the one list both the target picker and
+    # `legality_enumeration._enumerate_targets`, the one list both the target picker and
     # the announcement gates go through, and swept by the same cleanup
     # countdown the two restriction lists above use.
     targeting_bans: list = field(default_factory=list)

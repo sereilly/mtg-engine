@@ -1160,7 +1160,7 @@ def forbid_casting_types_this_turn(game: Game, instruction: OracleInstruction, c
 
     The land-play prohibition below with a card-type narrowing, on the same
     per-turn seat record model — a resolved effect naming a seat and a window,
-    where ``engine/cast_restrictions.py``'s three bans are re-derived from a
+    where ``engine/cast_bans.py``'s three bans are re-derived from a
     permanent's own text at every cast.
 
     A card type is data: a card printing "creature spells" is this sentence and

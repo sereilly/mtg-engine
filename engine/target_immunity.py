@@ -587,7 +587,7 @@ def graveyard_cards_untargetable(game) -> str | None:
     **Targets only.** The ruling's other half: "Abilities that don't target
     cards in graveyards (like the one Tormod's Crypt has) can still affect
     those cards." So this is asked by the one enumeration of graveyard
-    *targets* (``legality._enumerate_graveyard_creatures``) and by the
+    *targets* (``legality_enumeration._enumerate_graveyard_creatures``) and by the
     resolution re-check (``Game.graveyard_target_is_legal``), and by nothing
     that merely moves a card — a cost paid out of a graveyard, a mass exile,
     and a flashback cast (CR 702.34a casts the card; nothing targets it) are

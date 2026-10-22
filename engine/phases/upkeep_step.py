@@ -891,7 +891,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             # Held to the list the trigger would choose from for itself
             # (``_trigger_target_candidates``, asked of the trigger as it will
             # exist — the prospective-object reading
-            # ``legality.entry_trigger_cast_targets`` takes of an entry
+            # ``legality_cast_spec.entry_trigger_cast_targets`` takes of an entry
             # trigger). Only ever narrower: where that picker declines the
             # phrase there is no list to hold this one to, and it stands.
             legal = self._upkeep_trigger_legal_targets(source, seat, trig)

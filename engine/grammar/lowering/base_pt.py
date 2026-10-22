@@ -335,7 +335,7 @@ def _reads_a_target_characteristic(node) -> tuple[OracleInstruction, ...] | None
 
     The **in-combat relation** rides the instruction as its own key rather than
     the filter, because no read of the chosen creature alone can answer it:
-    ``engine/legality.py`` tests it at activation and the handler again at
+    ``engine/legality_enumeration.py`` tests it at activation and the handler again at
     resolution (CR 608.2b). Both stats must name the same ``TargetSpec`` — the
     parse binds the second clause's pronoun to the first clause's choice, and
     two different specs here would mean the sentence somehow named two.

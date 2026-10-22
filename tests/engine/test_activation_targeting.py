@@ -707,7 +707,7 @@ def test_no_mandatory_target_ability_can_be_activated_with_nothing_to_target(sup
 # Round 31 — the printed narrowing the picker used to drop
 # ---------------------------------------------------------------------------
 #
-# `legality._ability_target_legal` was a per-kind if-chain over a bare
+# `legality_enumeration._ability_target_legal` was a per-kind if-chain over a bare
 # `return True`, so an instruction kind nobody had listed had its payload
 # filter **dropped at the picker entirely**. That is not a missing feature: the
 # ability then worked more often than the card reads, silently and in the

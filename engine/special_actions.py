@@ -109,7 +109,7 @@ def special_action_refusal(
     """Why *seat* may not take *kind* with *card* right now, or None.
 
     One gate, asked by the engine before it acts and by the web layer before it
-    offers — the same arrangement `legality.activation_target_refusal` makes,
+    offers — the same arrangement `legality_abilities.activation_target_refusal` makes,
     and for the same reason: an action the client offers and the engine refuses
     is a button that does nothing.
 
@@ -327,7 +327,7 @@ class PermanentSpecialAction:
 #: owning that effect's record can answer. `engine/auras.py` holds the two
 #: attached ones: it owns the record a became-an-Aura permanent carries, so it
 #: is the only place that can say whether the effect is still running or take
-#: it back. `engine/cast_restrictions.py` holds the board-wide one (Damping
+#: it back. `engine/cast_bans.py` holds the board-wide one (Damping
 #: Engine), for the same reason one zone out: it owns the prohibition and the
 #: record of who has bought a turn off it.
 PERMANENT_SPECIAL_ACTIONS: dict[str, PermanentSpecialAction] = {}
@@ -351,7 +351,7 @@ def _load_registrations() -> None:
     depending on import order.
     """
     from . import auras  # noqa: F401
-    from . import cast_restrictions  # noqa: F401
+    from . import cast_bans  # noqa: F401
 
 
 def _split_sentences(line: str) -> list[str]:

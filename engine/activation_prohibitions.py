@@ -128,7 +128,7 @@ def _own_turn_only(game, seat, source, ability):
     # turns." (City of Solitude.) The activation half of the one sentence
     # ``cast_prohibitions`` reads for its casting half, through the same
     # reader. No mana-ability exception: the sentence names none.
-    from .cast_restrictions import global_play_timing
+    from .cast_bans import global_play_timing
 
     wrong_turn = global_play_timing(game, seat)
     if wrong_turn is None:
@@ -142,7 +142,7 @@ def _own_turn_only(game, seat, source, ability):
 def _combat_ban(game, seat, source, ability):
     # "During combat, players can't cast instant spells or **activate
     # abilities that aren't mana abilities**." (Hand to Hand.)
-    from .cast_restrictions import combat_play_ban
+    from .cast_bans import combat_play_ban
 
     ban = combat_play_ban(game)
     if ban is None or _is_mana(ability):

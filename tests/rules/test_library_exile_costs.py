@@ -250,7 +250,7 @@ def test_an_unpayable_library_cost_spends_no_mana_and_taps_nothing():
 # ---------------------------------------------------------------------------
 #
 # Found by giving Storm Elemental's "Tap target creature with flying" a game.
-# ``legality._ability_target_legal``'s tap arm asked the **pure** matcher, which
+# ``legality_enumeration._ability_target_legal``'s tap arm asked the **pure** matcher, which
 # by design cannot answer three of the keys these payloads carry — a keyword is
 # layer 6, a controller is a seat, "attacking you" is a combat record — and
 # ignores them rather than refusing. Four cards in the pool print one, three of

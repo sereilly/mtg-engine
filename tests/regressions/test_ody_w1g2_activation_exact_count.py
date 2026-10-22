@@ -3,7 +3,7 @@ fewer (CR 601.2c through CR 602.2b) — W1G2, found driving Nomad Decoy.
 
 "Threshold — {W}{W}, {T}: Tap **two** target creatures." named at one creature
 was accepted, paid for, and tapped one. The cast side has counted since
-Planeshift (``legality.cast_target_count_refusal``); ROADMAP carried the
+Planeshift (``legality_cast_gates.cast_target_count_refusal``); ROADMAP carried the
 activation side as a leftover. Measured on the tree before the gate: five
 abilities in both manifest roles print an exact count of two or more, and
 four of the four that could be driven accepted a list of one (Argothian

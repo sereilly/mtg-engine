@@ -76,7 +76,7 @@ class PlayerComparison:
     answer, so the picker cannot enforce one and the two kinds in that table
     are enforced elsewhere; a board, a life total, a hand size and a graveyard
     can all be counted while CR 601.2c is choosing, which is what lets this
-    clause be enforced where it must be — in ``legality``'s seat loop, the one
+    clause be enforced where it must be — in ``legality_enumeration``'s seat loop, the one
     list the picker and the announcement gate both read.
 
     ``quantity`` is what is counted, and it is a whole printed noun phrase

@@ -733,7 +733,7 @@ def lower_record_condition(
         return {"kind": "had_named_counter", "counter": condition.counter}
     if isinstance(condition, ast.SourceAbilityActivations):
         # The number and the comparison travel; what they are measured against
-        # is the per-turn activation ledger `engine/activation_restrictions.py`
+        # is the per-turn activation ledger `engine/activation_tallies.py`
         # keeps, which the evaluator reads through that module's own accessor
         # rather than off the metadata key — one reader, so the refusal a
         # printed cap makes and the question this clause asks cannot come to

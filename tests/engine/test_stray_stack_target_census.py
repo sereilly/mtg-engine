@@ -3,7 +3,7 @@
 CR 601.2c chooses "an appropriate object or player **for each target the spell
 requires**". A ``target_stack_index`` on a Lightning Bolt, a Terror or a Wrath
 of God names an object for a target the spell does not have, and the engine
-accepted it — the stack gate (``legality.cast_stack_target_refusal``) asks
+accepted it — the stack gate (``legality_stack.cast_stack_target_refusal``) asks
 whether the named spell is one the printed phrase admits and has nothing to ask
 a spell with no stack target at all. Measured on the tree before the gate:
 
@@ -19,7 +19,7 @@ though: CR 608.2b counts a recorded stack object among a spell's targets, so a
 spell whose real target had left stayed "partly legal" while the stray one sat
 on the stack.
 
-``legality.stray_stack_target_refusal`` and its activation twin are the gate.
+``legality_stack.stray_stack_target_refusal`` and its activation twin are the gate.
 **Validated backwards**, as a census has to be: with each gate switched off the
 sweep must find the known cases by name, and it carries a floor on how many
 announcements it examined — a sweep that examined none passes on any tree.

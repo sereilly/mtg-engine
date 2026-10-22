@@ -315,7 +315,7 @@ def _lower_search_library(
     payload: dict[str, object] = {"count": len(destinations), "card_type": card_type}
     if filt.named_as_target is not None:
         # The spell's own target (CR 601.2c), so ``engine/targeting.py`` raises
-        # the picker and ``legality`` gates the announcement — the search's find
+        # the picker and ``legality_cast_gates`` gates the announcement — the search's find
         # is chosen at resolution and this is not that choice.
         payload.update(payload_targets)
     if node.count_amount is not None:

@@ -770,7 +770,7 @@ class CantCastSpellTypes:
     CR 601.3's prohibition on a *named seat* for a stated window, which is what
     separates it from every "can't cast" this engine already reads: those three
     are printed on a permanent and are re-derived from its text at each cast
-    (``cast_restrictions.py``, ``auras.py``), and this one is a resolved effect
+    (``cast_bans.py``, ``auras.py``), and this one is a resolved effect
     with nothing left on the battlefield to read.
 
     The types are payload for the reason every printed word in this grammar is:

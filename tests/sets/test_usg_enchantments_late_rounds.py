@@ -353,7 +353,7 @@ def test_w2g4_the_cap_is_claimed_by_the_reader_that_enforces_it(set_pool):
     """A restriction claimed and not enforced is an enchantment that reports
     supported while everybody keeps casting, so the claim and the gate ask one
     function — and the number is payload, not part of the rule."""
-    from engine.cast_restrictions import spell_cap_line
+    from engine.cast_bans import spell_cap_line
 
     card = set_pool("USG")["Arcane Laboratory"]
     assert compile_card_oracle(card).supported

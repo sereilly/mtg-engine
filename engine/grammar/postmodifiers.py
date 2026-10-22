@@ -399,7 +399,7 @@ def _parse_postmodifiers(
             # cheerfully offer the very creature the card excludes — then fizzle
             # at resolution, once the record had filled in. A picker and an
             # enforcement disagreeing about one list is the failure
-            # ``legality.activation_target_refusal`` exists to prevent.
+            # ``legality_abilities.activation_target_refusal`` exists to prevent.
             #
             # Resolving the pronoun to the host is only true while the cost is
             # the one that taps it, which no filter can check. The compiler

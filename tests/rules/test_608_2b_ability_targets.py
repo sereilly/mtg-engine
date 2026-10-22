@@ -9,7 +9,7 @@
     or ability will resolve normally. Illegal targets, if any, won't be
     affected by parts of a resolving spell's effect for which they're illegal."
 
-``legality.illegal_targets_refusal`` asked this of instants and sorceries and
+``legality_resolution.illegal_targets_refusal`` asked this of instants and sorceries and
 declined every ability. An **activated** ability's targets are an announcement
 like a spell's — chosen by a player (CR 602.2b), held to the picker's list
 before a cost is paid, recorded on the stack object — and so are a **triggered**

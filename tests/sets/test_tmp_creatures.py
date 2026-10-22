@@ -1256,7 +1256,7 @@ def test_w3g1_only_before_combat_is_narrower_than_before_attackers(
 ):
     """"Activate only during an opponent's turn and only before combat."
 
-    Two conjuncts, split by ``activation_restrictions._conjuncts`` before the
+    Two conjuncts, split by ``activation_clauses._conjuncts`` before the
     table sees them, which is why this is two rows and not one. The
     beginning-of-combat step is still *before attackers are declared* and is not
     before *combat* (CR 506.1), so a row reusing Nettling Imp's window would

@@ -141,7 +141,7 @@ _CHOOSER_SEATS = {
     # controller chooses that, and this takes the first live one. What was
     # narrowed as well — and is now fixed — is that a printed "target" carries
     # CR 601.2c's legality with it, so the ability cannot be activated when the
-    # chooser has nothing to choose (``legality._announced_choice_refusal``).
+    # chooser has nothing to choose (``legality_abilities._announced_choice_refusal``).
     # What is still narrowed is the *timing*: the pick happens as the ability
     # resolves rather than in its announcement, so nothing can be held in
     # response to it. ROADMAP.md carries that with what closing it needs.

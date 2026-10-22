@@ -510,7 +510,7 @@ def test_118_6_spell_with_no_mana_cost_cannot_be_cast():
 # ---------------------------------------------------------------------------
 # Rule 602.2b / 601.2c — an activated ability with no legal target cannot be
 # activated, and its cost is not paid. One gate for every object-targeted
-# ability (engine/legality.activation_target_refusal), replacing a per-kind
+# ability (engine/legality_abilities.activation_target_refusal), replacing a per-kind
 # if-chain that named only four instruction kinds.
 # ---------------------------------------------------------------------------
 
@@ -837,7 +837,7 @@ def test_601_2d_an_unannounced_division_falls_back_to_the_even_split():
 # --- FixB: a departed target is a fizzle, not the next permanent along ---
 #
 # CR 608.2b at the *resolver*. The rule is enforced above the instructions for
-# a spell (``legality.illegal_targets_refusal``, instants and sorceries only),
+# a spell (``legality_resolution.illegal_targets_refusal``, instants and sorceries only),
 # and an activated ability has no such gate — so the only place its target can
 # be found to be gone is where the handler asks for it.
 
@@ -955,7 +955,7 @@ def _leadb_board(oracle_text):
     """A game, an invented artifact's activated ability, and two targets.
 
     The ability is invented because the rule under test is about *abilities*,
-    and ``legality.illegal_targets_refusal`` — the engine's CR 608.2b gate —
+    and ``legality_resolution.illegal_targets_refusal`` — the engine's CR 608.2b gate —
     covers instants and sorceries only. A spell probe would be checked by the
     gate and would say nothing about the resolver underneath it.
     """
@@ -1007,7 +1007,7 @@ def test_608_2b_an_abilitys_target_that_left_is_not_replaced_by_its_slots_new_te
     list, so an engine holding the index rather than the identity lands there
     every time.
 
-    The engine's 608.2b gate (``legality.illegal_targets_refusal``) is instants
+    The engine's 608.2b gate (``legality_resolution.illegal_targets_refusal``) is instants
     and sorceries only and returns None for every ability, so this has to be
     answered by the resolver.
     """
@@ -2026,7 +2026,7 @@ def test_115_3_two_instances_of_target_may_each_name_the_same_creature(catalog_b
 # control ... up to one **target** creature you don't control" prints it twice
 # and one creature could legally fill both, were the two filters not disjoint.
 # ``targeting.py`` answers that question off the payload's per-slot filter list
-# and ``legality._repeated_target_refusal`` enforces the answer.
+# and ``legality_abilities._repeated_target_refusal`` enforces the answer.
 # ---------------------------------------------------------------------------
 
 

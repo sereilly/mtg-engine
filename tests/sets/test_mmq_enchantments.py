@@ -616,7 +616,7 @@ def _g5_board(*battlefields, hands=None):
 # --- Ivory Mask ------------------------------------------------------------
 # "You have shroud." CR 702.18a is explicit that a **player** can have it, which
 # `engine/game.py` used to assert the opposite of in a comment beside
-# `targeting_bans`. Enforced in `legality._enumerate_targets` — the one list the
+# `targeting_bans`. Enforced in `legality_enumeration._enumerate_targets` — the one list the
 # picker and both announcement gates read — so the seat is simply not offered.
 
 
@@ -1352,7 +1352,7 @@ def test_cornered_market_claims_both_of_its_printed_lines(set_pool):
     """Each line is claimed on its own: admitting the card on the casting half
     alone would ship an enchantment that stops a spell and lets the land it
     shares a name with through."""
-    from engine.cast_restrictions import same_name_as_permanent_ban_line
+    from engine.cast_bans import same_name_as_permanent_ban_line
 
     market = set_pool("MMQ")["Cornered Market"]
     halves = [

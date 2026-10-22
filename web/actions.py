@@ -536,7 +536,7 @@ def _action_activate(session, req, seat_type):
         # role refs (the cast side's Suffocating Blast shape, should an ability
         # print it). Translated here into the one stack channel an activation
         # has and a slot marker the engine fills from it
-        # (``legality.named_role_objects``), so the wire's top-first index
+        # (``legality_roles.named_role_objects``), so the wire's top-first index
         # never reaches the engine.
         role_refs = None
         if req.target_role_refs:

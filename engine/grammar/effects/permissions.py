@@ -612,7 +612,7 @@ def parse_cant_play_lands(
 
 
 #: The card types a printed "can't cast <types> spells" may name. The same list
-#: ``cast_restrictions._BANNABLE_SPELL_TYPES`` holds one module over, and for
+#: ``cast_bans._BANNABLE_SPELL_TYPES`` holds one module over, and for
 #: that list's reason: what a card may forbid is a card type, and a word outside
 #: the type line describes nothing the gate can test.
 _BANNABLE_CAST_TYPES = (
@@ -628,7 +628,7 @@ def parse_cant_cast_spell_types(
     the subject has already been read by the caller.
 
     CR 601.3's permission withdrawn from one named seat, the resolved-effect
-    twin of the three board-scanned bans in ``engine/cast_restrictions.py``.
+    twin of the three board-scanned bans in ``engine/cast_bans.py``.
 
     Every type must be one the gate can test, and the list must be **exhausted
     by the word "spells"**: a phrase this reader could only half-consume would
@@ -644,7 +644,7 @@ def parse_cant_cast_spell_types(
     sentence, and ``sentence_clauses._distribute_duration`` attaches a leading
     prefix to the node afterwards; the lowering is what refuses a node that
     still has none, for ``CantPlayLands``' reason — a durationless "can't cast"
-    is a permanent's static ability that ``cast_restrictions.py`` already reads.
+    is a permanent's static ability that ``cast_bans.py`` already reads.
     """
     if not isinstance(subject, ast.PlayerRef):
         return None

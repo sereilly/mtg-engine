@@ -12,7 +12,7 @@ announced several objects, in what order the caster is asked for them, and what
 each slot's legality owes to the ones already chosen (CR 601.2c). The readers
 differ accordingly: everything in ``_targets`` is read by the handler that acts
 on the one chosen object, and everything here is read by a *walk* —
-``legality.role_target_options`` enumerates slot *n* with slots 0…n-1 settled,
+``legality_roles.role_target_options`` enumerates slot *n* with slots 0…n-1 settled,
 the announcement gate re-asks that same call over what the caster named, and
 ``handlers/_common.roles_still_legal`` asks it a third time at resolution.
 
@@ -57,7 +57,7 @@ DEPENDENT_TARGET_RELATIONS: dict[str, tuple[str, str]] = {
 
 #: The role name of the object a roles description's effect actually acts on.
 #: One name, read by the lowering that builds the description, by
-#: ``engine/targeting.py``'s spec, by ``engine/legality.py``'s enumerator and by
+#: ``engine/targeting.py``'s spec, by ``engine/legality_roles.py``'s enumerator and by
 #: the handler at resolution — so "which of the two did the player pick for the
 #: counters?" has one answer rather than four positional conventions.
 PRIMARY_TARGET_ROLE = "subject"
@@ -78,7 +78,7 @@ def describe_target_roles(
     are legal at all is decided by the Wall's block record, so the Wall is role
     0 and the creature role 1. That order is the whole wire convention: the
     picker walks the roles in it, the caster's answers travel in it, and
-    ``engine/legality.py`` enumerates role *n* only with roles 0…n-1 already
+    ``engine/legality_roles.py`` enumerates role *n* only with roles 0…n-1 already
     settled. Describing them in printed order would ask the caster for a
     creature before anything could say which creatures the card allows.
     """
@@ -191,7 +191,7 @@ def describe_independent_target_roles(
 #: Dead) names the seat the sentence in front of it chose. The matcher has the
 #: branch — it refuses rather than widening to "any opponent", which is the
 #: whole reason these four are spelled out there — but nothing hands
-#: ``legality._enumerate_targets`` a seat, so a role narrowed by one offers
+#: ``legality_enumeration._enumerate_targets`` a seat, so a role narrowed by one offers
 #: nothing and the announcement is refused with a message about targets rather
 #: than about the missing seat. Declining the conversion leaves such a card's
 #: program exactly where it was, which is honest about what is not built: the
@@ -314,7 +314,7 @@ def _names_different_nouns(first: dict, second: dict) -> bool:
     it is its own predicate: an artifact creature answers both of Orim's
     Thunder's phrases, and CR 115.3 lets one object be chosen once for each
     instance of the word "target". The roles walk refuses the repeat
-    (``legality.role_target_options``), as it does for every roles spell.
+    (``legality_roles.role_target_options``), as it does for every roles spell.
     """
     nouns = [
         (described.get("filter") or {}).get("type_filter")
@@ -763,7 +763,7 @@ def plan_another_target_roles(steps) -> "AnotherTargetRoles | None":
         role.update({"role": name, "count": 1, "filter": narrowing})
         if position == 1:
             # The printed word, written down. The roles walk already refuses
-            # an object an earlier role took (``legality.role_target_options``)
+            # an object an earlier role took (``legality_roles.role_target_options``)
             # — that is what *enforces* it — and the key is what says this
             # slot's sentence asked for it rather than the walk's default.
             role["distinct"] = True

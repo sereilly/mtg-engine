@@ -816,7 +816,7 @@ def test_a_counted_cap_is_a_cap_even_though_no_number_is_printed(set_pool):
     pool printed its number — a counted cap can only answer "no cap", which is
     the value that stops the tally and leaves the ability uncapped on every
     board."""
-    from engine.activation_restrictions import (
+    from engine.activation_tallies import (
         activations_allowed_each_turn,
         printed_activation_caps,
     )

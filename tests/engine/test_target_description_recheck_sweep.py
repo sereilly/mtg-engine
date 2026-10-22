@@ -1,7 +1,7 @@
 """Pool sweep: a spell whose every target stopped answering its printed
 description does nothing at all (CR 608.2b), however its handlers are written.
 
-``legality.illegal_targets_refusal`` re-asks the announcement's own question —
+``legality_resolution.illegal_targets_refusal`` re-asks the announcement's own question —
 ``Game._described_cast_target_slots`` — of each surviving target. Before it
 did, a spell whose target stopped matching resolved anyway: what its handler
 re-checked was skipped, what it did not re-check ran, and a resolver that

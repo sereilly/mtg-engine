@@ -1759,7 +1759,7 @@ def test_whalebone_glider_only_lifts_a_creature_the_phrase_admits(set_pool):
     its phrase the same way, one narrowing over.
 
     Enforced where CR 602.2b puts it -- at activation, with nothing paid --
-    which is what ``legality.activation_target_refusal`` asks over the same
+    which is what ``legality_abilities.activation_target_refusal`` asks over the same
     list the picker is handed.
     """
     pool = set_pool("ICE")

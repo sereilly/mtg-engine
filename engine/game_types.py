@@ -375,7 +375,7 @@ class StackItem:
     # A positive mark rather than "an ability that is not a trigger": the
     # effect label says ``triggered_`` for most triggers and not for all of
     # them, both kinds carry their printed line, and the reader that needs
-    # this (``legality.vanished_graveyard_target_refusal``) must not answer for
+    # this (``legality_resolution.vanished_graveyard_target_refusal``) must not answer for
     # a trigger — a trigger's target is stamped at its fire site, which is the
     # bug ROADMAP's CR 608.2b entry declines the rule over.
     activated: bool = False

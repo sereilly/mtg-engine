@@ -753,7 +753,7 @@ def test_w2g2_damping_engines_two_sentences_are_read_together(set_pool):
     reader, so the claim and the offer cannot come to describe different words
     — and a trailing sentence neither table reads takes the whole line with it,
     which is what stops a longer printing being admitted on its first half."""
-    from engine.cast_restrictions import most_permanents_play_ban_line
+    from engine.cast_bans import most_permanents_play_ban_line
     from engine.special_actions import permanent_special_action_sentence
 
     printed = set_pool("ULG")["Damping Engine"].oracle_text
@@ -774,7 +774,7 @@ def test_w2g2_the_escape_hatch_is_not_inferred_from_the_prohibition(set_pool):
     is enforced as one — but it makes no CR 116.2d offer, because the offer is
     a printed sentence and not a consequence of the restriction. Inferred, this
     module would hand back what such a card took."""
-    from engine.cast_restrictions import most_permanents_play_ban_line
+    from engine.cast_bans import most_permanents_play_ban_line
 
     pool, catalog = set_pool("ULG"), _w2g2_pool()
     printed = pool["Damping Engine"].oracle_text

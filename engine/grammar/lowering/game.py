@@ -574,7 +574,7 @@ def _lower_cant_cast_spell_types(
 
     The window is **required** for :class:`ast.CantPlayLands`' reason: a
     durationless "can't cast <type> spells" is a permanent's static ability that
-    ``engine/cast_restrictions.py`` already reads as a table, and admitting it
+    ``engine/cast_bans.py`` already reads, and admitting it
     here would take that table's line and hand it to an effect that expires at
     the turn boundary.
     """

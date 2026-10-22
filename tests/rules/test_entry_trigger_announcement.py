@@ -5,7 +5,7 @@ This engine names an entry trigger's target as the permanent is cast. The rule
 chooses it as the trigger is put on the stack, so the cast's announcement is a
 pre-answer to that choice — and it was never held to what the choice would
 accept. Both ends read the trigger's own list now: the cast picker
-(``legality.entry_trigger_cast_targets``) and the push
+(``legality_cast_spec.entry_trigger_cast_targets``) and the push
 (``Game.cast_announcement_fault``).
 
 The pool-wide statement is ``tests/engine/

@@ -36,7 +36,8 @@ from functools import lru_cache
 
 import pytest
 
-import engine.legality as legality
+import engine.legality_cast_spec as legality_cast_spec
+import engine.legality_enumeration as legality_enumeration
 from engine import Game, PlayerState, faces
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.cast_permissions import grant_permission
@@ -202,7 +203,10 @@ def test_w1g3_the_census_sees_a_slot_counted_after_the_spell_has_left(monkeypatc
 def test_w1g3_the_census_sees_a_spell_offered_as_its_own_target(monkeypatch):
     """Validated backwards: with the spec left unmarked, every spell whose
     phrase the card itself answers is offered its own slot."""
-    monkeypatch.setattr(legality, "_cast_from_graveyard_slot", lambda *args: None)
+    # Both callers' bindings: the enumeration's (a spell's own pile) and the
+    # cast spec's (a permanent spell's entry-trigger list).
+    for module in (legality_enumeration, legality_cast_spec):
+        monkeypatch.setattr(module, "_cast_from_graveyard_slot", lambda *args: None)
     census = _Census().run()
     for name in ("Regrowth", "Coffin Purge", "Recoup", "Elven Cache"):
         assert name in census.offered_itself, (name, census.offered_itself)

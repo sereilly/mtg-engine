@@ -689,7 +689,8 @@ def _lower_granted_keywords(
             # checks a target's legality once, when the ability begins
             # resolving — not between its instructions. So the narrowing is
             # enforced where the rules put it, at announcement
-            # (CR 601.2c / 602.2b, `legality.py`'s gates over the same
+            # (CR 601.2c / 602.2b, `legality_cast_gates.py`'s and
+            # `legality_abilities.py`'s gates over the same
             # `_enumerate_targets` list the picker gets).
             if scope == "target":
                 _describe_targets(shortcut, node.subject)

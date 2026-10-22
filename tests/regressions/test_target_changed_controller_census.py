@@ -484,7 +484,7 @@ def test_the_sweep_finds_the_defect_on_the_tree_as_it_was(
 ):
     """Backwards: with the seat left where the announcement put it, the same
     sweeps name the cards the census named on ``e67196d6``."""
-    from engine.legality import LegalityMixin
+    from engine.legality_resolution import ResolutionTargetsMixin
 
     clean = sweep(_catalog, _by_name, only=_KNOWN)
     clean_triggers = sweep_triggers(_catalog, _by_name, only=_KNOWN_TRIGGERS)
@@ -494,7 +494,7 @@ def test_the_sweep_finds_the_defect_on_the_tree_as_it_was(
     _assert_clean(clean_triggers)
 
     monkeypatch.setattr(
-        LegalityMixin, "resettle_announced_target_seats", lambda self, item: 0,
+        ResolutionTargetsMixin, "resettle_announced_target_seats", lambda self, item: 0,
     )
     found = sweep(_catalog, _by_name, only=_KNOWN)
     found_triggers = sweep_triggers(_catalog, _by_name, only=_KNOWN_TRIGGERS)
