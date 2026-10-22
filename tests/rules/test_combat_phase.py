@@ -917,7 +917,7 @@ def test_ai_choose_attackers_includes_forced_creatures():
     # choose_attackers heuristic would otherwise hold a 2/2 back from a wall it
     # can't profitably attack into, producing a declaration that declare_attackers
     # rejects — and the [] fallback fails identically, hanging declare_attackers.
-    from engine.ai_policy import choose_attackers
+    from engine.ai_declarations import choose_attackers
 
     forced = Permanent(card=_mk_creature("Grizzly Bears", 2, 2))
     forced.metadata["must_attack_until_eot"] = True

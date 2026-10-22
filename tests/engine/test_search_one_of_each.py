@@ -19,7 +19,7 @@ from __future__ import annotations
 import pytest
 
 from engine import Game, PlayerState
-from engine.ai_policy import choose_search_cards
+from engine.ai_prompts import choose_search_cards
 from engine.search_filters import (
     ONE_OF_EACH,
     search_matches,
@@ -193,7 +193,7 @@ def test_a_seat_choosing_for_another_hand_gives_up_its_least(lea):
     assert len(for_itself) == len(for_its_opponent) == 3
     assert for_itself != for_its_opponent
     assert "Forest" in for_itself and "Forest" in for_its_opponent, "the only land"
-    from engine.ai_policy import _score_tutor_choice
+    from engine.ai_scoring import _score_tutor_choice
 
     def worth(seat, names):
         game = Game(players=[PlayerState(name="P0"), PlayerState(name="P1")])

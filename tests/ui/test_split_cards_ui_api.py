@@ -234,10 +234,11 @@ def test_the_routes_timing_gate_reads_the_halfs_type(half, expected_status):
 
 
 def test_the_ai_seat_casts_a_half_by_name():
-    """The web AI's executor reads ``ai_policy.spell_being_cast``: the policy
+    """The web AI's executor reads ``ai_actions.spell_being_cast``: the policy
     proposes ``card_name="Assault"`` out of the hand slot holding the split
     card, and the executor must cast that name, not the slot's."""
-    from engine.ai_policy import choose_cast_action, spell_being_cast
+    from engine.ai_policy import choose_cast_action
+    from engine.ai_actions import spell_being_cast
 
     sid, _session_obj, game = _session()
     me = game.players[0]

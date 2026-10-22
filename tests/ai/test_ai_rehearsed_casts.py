@@ -4,7 +4,7 @@ at all.
 The behaviour behind the two censuses beside this file
 (``test_ai_mode_chooser_census.py``, ``test_ai_idle_cast_census.py``), one
 defect at a time and on boards small enough to read. The policy carries a
-candidate cast out on a scratch copy of the game (``ai_valuation.rehearse``)
+candidate cast out on a scratch copy of the game (``ai_rehearsal.rehearse``)
 and proposes it only if the engine takes it, it changes something, and it
 leaves its caster no worse off — and where a cast may name one of several
 things, each is a different cast and the one that does most is the one named.
@@ -16,9 +16,9 @@ from __future__ import annotations
 import pytest
 
 from engine import Game, PlayerState
-from engine import ai_valuation
-from engine.ai_policy import (cast_announcement, choose_cast_action,
-                              choose_combat_instant_cast_action)
+from engine import ai_rehearsal
+from engine.ai_actions import cast_announcement
+from engine.ai_policy import choose_cast_action, choose_combat_instant_cast_action
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units
 from engine.models import Permanent
@@ -208,7 +208,7 @@ def test_a_player_nothing_distinguishes_is_the_opponent_unless_the_effect_is_a_g
     seat — a tapped land is no worse a land — and the tie was the caster's.
     Where the seats measure alike the effect's family says whose it is: the
     opponent's, unless it is a gift (a shield, an untap)."""
-    from engine.ai_valuation import _SEAT_GIFT_KINDS, spell_seat_side
+    from engine.ai_target_sides import _SEAT_GIFT_KINDS, spell_seat_side
     from engine.handlers import EFFECT_HANDLERS
 
     assert _SEAT_GIFT_KINDS <= set(EFFECT_HANDLERS)
@@ -218,7 +218,7 @@ def test_a_player_nothing_distinguishes_is_the_opponent_unless_the_effect_is_a_g
     island = pool["Island"]
     # In the caster's own main phase the opponent's lands untap in its own
     # untap step (CR 502.3) before they could have been used, and a cast that
-    # leaves nothing behind is held (`ai_valuation.untap_for_the_next_turn`);
+    # leaves nothing behind is held (`ai_rehearsal.untap_for_the_next_turn`);
     # in the opponent's turn they stay tapped through the caster's.
     own_turn = _table(pool, [pool["Mana Short"]], mine=[island, island], theirs=[island, island])
     assert choose_cast_action(own_turn, ME) is None
@@ -336,15 +336,15 @@ def test_a_rehearsal_leaves_the_game_and_its_dice_exactly_as_they_were(pool):
 
     bolt = pool["Lightning Bolt"]
     game = _table(pool, [bolt], theirs=[_mk_creature_card("Their Ogre", 3, 3)])
-    before = ai_valuation.position_digest(game)
+    before = ai_rehearsal.position_digest(game)
     log = list(game.log)
     random.seed(99)
     expected = random.Random(99).random()
     assert choose_cast_action(game, ME) is not None
     assert random.random() == expected
-    assert ai_valuation.same_position(before, ai_valuation.position_digest(game))
+    assert ai_rehearsal.same_position(before, ai_rehearsal.position_digest(game))
     assert game.log == log
-    assert not ai_valuation.rehearsing()
+    assert not ai_rehearsal.rehearsing()
 
 
 def test_no_rehearsal_is_run_part_way_through_a_resolution(pool):
@@ -356,7 +356,7 @@ def test_no_rehearsal_is_run_part_way_through_a_resolution(pool):
     game = _table(pool, [bolt])
     game.resolving_seats.append(ME)
     try:
-        assert ai_valuation.mid_resolution(game)
-        assert ai_valuation.rehearse(game, ME, lambda table: None) is None
+        assert ai_rehearsal.mid_resolution(game)
+        assert ai_rehearsal.rehearse(game, ME, lambda table: None) is None
     finally:
         game.resolving_seats.pop()

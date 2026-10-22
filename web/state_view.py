@@ -432,7 +432,7 @@ def _card_castable_now(
     # Mana affordability for non-land cards
     if card.primary_type != "land" and game.enforce_mana_costs:
         # CR 601.2f, through the three functions the cast path and the AI's own
-        # affordability read (``ai_policy._cost_for``) already call. What stood
+        # affordability read (``ai_payment._cost_for``) already call. What stood
         # here was ``3 if a permanent is named "Gloom" and the card is white``:
         # one card name, one hardcoded amount, one colour, and the printed
         # colours at that. The pool prints **28** cards this misses — twelve

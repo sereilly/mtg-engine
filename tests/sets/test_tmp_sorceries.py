@@ -429,7 +429,7 @@ def test_mana_severance_is_not_a_search_a_headless_seat_takes_the_maximum_of(set
     player would do. Nothing but driving the card finds this — the census, the
     hollow-line report and `parse_coverage` all read it as done.
     """
-    from engine.ai_valuation import exiled_search_pile_comes_back
+    from engine.ai_prompt_readers import exiled_search_pile_comes_back
 
     card = set_pool("TMP")["Mana Severance"]
     assert not exiled_search_pile_comes_back(card)
@@ -453,7 +453,7 @@ def test_a_search_whose_pile_comes_back_still_takes_the_maximum(catalog_by_name)
     "search and exile" with a return behind it is answered right the day it
     lands, and one without is answered right without anybody listing it.
     """
-    from engine.ai_valuation import exiled_search_pile_comes_back
+    from engine.ai_prompt_readers import exiled_search_pile_comes_back
 
     for name in ("Foresight", "Mangara's Tome", "Chandra, Heart of Fire"):
         assert exiled_search_pile_comes_back(catalog_by_name[name]), name

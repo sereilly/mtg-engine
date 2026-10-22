@@ -45,7 +45,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from engine import Game, PlayerState, load_cards
-from engine.ai_policy import choose_combat_blockers
+from engine.ai_declarations import choose_combat_blockers
 from engine.models import CardDefinition, Permanent
 from tests.helpers import _game, _nosick
 from tests.helpers import CARDS_BY_NAME as _C

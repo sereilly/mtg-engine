@@ -6,7 +6,7 @@ Two callers have to aim a cast at a seat with nothing else to go on:
   (``web/action_helpers._default_target``): the caster's own where the spell
   gives something to the player it names, the opposing one otherwise;
 * the **AI's tie-break** between seats a rehearsal measures alike
-  (``ai_valuation.spell_seat_side``, under ``ai_policy._choose_target_for_spell``).
+  (``ai_target_sides.spell_seat_side``, under ``ai_scoring._choose_target_for_spell``).
 
 Each had its own derivation — a private ``_SEAT_GIFT_KINDS`` in
 ``engine/targeting.py`` and another, with different contents, in
@@ -16,7 +16,7 @@ target player controls" (Early Harvest) was the AI's own and a person's
 opponent's; "target player draws three cards" (Ancestral Recall) was a gift
 by list for a person and nobody's for the AI.
 
-It is one derivation now (``ai_valuation.cast_helps_the_player_it_names``)
+It is one derivation now (``ai_target_sides.cast_helps_the_player_it_names``)
 and this sweep holds the two readers to it: every supported instant and
 sorcery — each mode of a caster-chosen modal one — whose first described slot
 admits a player, both readers asked.
@@ -38,7 +38,8 @@ from types import SimpleNamespace
 import pytest
 
 from engine import Game, PlayerState
-from engine.ai_valuation import considering_mode, spell_seat_side
+from engine.ai_weighed_cast import considering_mode
+from engine.ai_target_sides import spell_seat_side
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units
 from engine.oracle import compile_card_oracle
@@ -195,7 +196,8 @@ def test_an_ai_seat_takes_its_own_extra_turn():
     AI seat's hand. An extra turn shows in no standing, so the two seats
     measured alike and the tie went to the opponent: the seat paid five mana
     to give a turn away."""
-    from engine.ai_policy import cast_announcement, choose_cast_action
+    from engine.ai_actions import cast_announcement
+    from engine.ai_policy import choose_cast_action
     from tests.helpers import resolve_stack
 
     forest = POOL["Forest"]

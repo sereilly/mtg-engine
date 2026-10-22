@@ -34,7 +34,7 @@ from collections import Counter
 import pytest
 
 from engine.ai_simulator import run_ai_simulation
-from engine.ai_valuation import rehearsing
+from engine.ai_rehearsal import rehearsing
 from engine.card_loader import manifest_set_path
 from engine.game import Game
 

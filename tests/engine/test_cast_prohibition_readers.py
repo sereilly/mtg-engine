@@ -38,7 +38,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from engine import Game, PlayerState, ai_policy
+from engine import Game, PlayerState, ai_cast_gates, ai_casts
 from engine import cast_prohibitions
 from engine.auras import attach_aura
 from engine.card_loader import load_cards, manifest_set_paths
@@ -145,7 +145,7 @@ def _w2g3_ai_proposes(game, hand_name: str) -> bool:
     """The AI's whole proposal for the card, not only its first gate."""
     hand = game.players[0].hand
     index = next(i for i, card in enumerate(hand) if card.name == hand_name)
-    return ai_policy._cast_candidate(game, 0, hand[index], index) is not None
+    return ai_casts._cast_candidate(game, 0, hand[index], index) is not None
 
 
 def _w2g3_glows(session, hand_name: str) -> bool:
@@ -262,7 +262,7 @@ def test_w2g3_a_prohibited_cast_is_refused_unproposed_and_dark(
     # below is this row's and nothing else's.
     game, _ = _w2g3_board(session, situation, hand_name)
     assert cast_prohibition(game, 0, _POOL[hand_name]) is None
-    assert ai_policy._can_cast_with_targets(game, 0, _POOL[hand_name])
+    assert ai_cast_gates._can_cast_with_targets(game, 0, _POOL[hand_name])
     assert _w2g3_ai_proposes(game, hand_name)
     if situation in (OWN_MAIN, AFTER_A_SPELL) or _POOL[hand_name].primary_type == "instant":
         assert _w2g3_glows_on_the_wire(session, hand_name)
@@ -276,7 +276,7 @@ def test_w2g3_a_prohibited_cast_is_refused_unproposed_and_dark(
     assert found is not None and found.kind == kind, found
 
     # The two other readers, before the cast path is asked to refuse.
-    assert not ai_policy._can_cast_with_targets(game, 0, card)
+    assert not ai_cast_gates._can_cast_with_targets(game, 0, card)
     assert not _w2g3_ai_proposes(game, hand_name)
     assert not _w2g3_glows_on_the_wire(session, hand_name)
 
@@ -467,7 +467,7 @@ def test_w2g3_no_reader_says_yes_to_a_cast_a_permanent_forbids(session):
 #: The three readers of the one predicate.
 _READERS = {
     "engine/mixins/stack/casting.py": "_cast_onto_stack",
-    "engine/ai_policy.py": "_can_cast_with_targets",
+    "engine/ai_cast_gates.py": "_can_cast_with_targets",
     "web/state_view.py": "_card_castable_now",
 }
 

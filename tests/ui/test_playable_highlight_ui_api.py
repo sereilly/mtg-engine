@@ -187,7 +187,7 @@ def test_an_aura_is_not_highlighted_with_nothing_to_enchant():
 # that would refuse the click, and "not castable" over one that would take it.
 #
 # The same three functions the cast path (``mixins/stack/casting``) and the AI's
-# affordability read (``ai_policy._cost_for``) call, so all three price a spell
+# affordability read (``ai_payment._cost_for``) call, so all three price a spell
 # identically by construction.
 
 from engine.card_loader import load_catalog as _load_catalog

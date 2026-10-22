@@ -14,7 +14,7 @@ cast does *to the combat that follows it* was not in the price:
 A cast whose good is this turn's only — everything it changed gone by the end
 of the turn (``Rehearsal.fleeting``), or more of its good than is left — is
 now read a second time with the turn's combat fought on both copies
-(``ai_policy._weighed_through_the_fight``), and one that has left nothing
+(``ai_scoring._weighed_through_the_fight``), and one that has left nothing
 even then is not proposed (``_worth_proposing``).
 
 Every test makes the cast and **plays the turn's combat for real**
@@ -31,9 +31,9 @@ import pytest
 
 from engine import Game, PlayerState
 from engine.ai_combat import run_ai_combat_phase
-from engine.ai_policy import (SPELL_BASE_SCORE, cast_announcement,
-                              choose_cast_action,
-                              choose_combat_instant_cast_action)
+from engine.ai_scoring import SPELL_BASE_SCORE
+from engine.ai_actions import cast_announcement
+from engine.ai_policy import choose_cast_action, choose_combat_instant_cast_action
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units
 from engine.models import Permanent
@@ -272,7 +272,7 @@ def test_hatred_pays_the_life_the_fight_needs(pool):
     """A 2/2 into a 0/4 Wall: two life is a dead Wall. The X was the largest
     the life reserve allowed — ten life for a Wall worth less than that —
     and measured as the loss it was, so Hatred was held; each size is now
-    weighed (``ai_policy._cast_candidate_sized``)."""
+    weighed (``ai_casts._cast_candidate_sized``)."""
     wall = _mk_creature_card("Their Wall", 0, 4, "Defender")
     game = _table(pool, ["Hatred"], mine=[BEAR], theirs=[wall])
     action = choose_cast_action(game, ME)

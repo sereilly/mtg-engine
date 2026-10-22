@@ -197,7 +197,8 @@ def test_w1g9_the_highlight_and_the_ai_both_reach_a_painlands_color(set_pool):
     for no third, and for one pip at a time; the AI's planner taps it by the
     ability that makes the colour, pays for a Lightning Bolt with it, and takes
     the point of damage — where a generic cost is paid with the painless {C}."""
-    from engine.ai_policy import choose_cast_action, tap_planned_lands
+    from engine.ai_policy import choose_cast_action
+    from engine.ai_payment import tap_planned_lands
     from engine.board_payment import board_can_pay
 
     lea = set_pool("LEA")

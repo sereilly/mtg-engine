@@ -3,10 +3,10 @@ word of **take gifts, pay tolls, make no trades**.
 
 A *toll* is an offer with a printed decline consequence, so both answers cost
 something, and the default used to pay whenever it could however the two costs
-compared. The magnitudes are `ai_valuation.toll_branch_loss`, derived from the
+compared. The magnitudes are `ai_prompt_readers.toll_branch_loss`, derived from the
 compiled program with the permanents resolved to the engine's own default
 sacrifice picks; the prices and the comparison are
-`ai_policy.toll_decline_is_smaller_loss`. A side the program cannot price
+`ai_prompts.toll_decline_is_smaller_loss`. A side the program cannot price
 answers False and the standing policy — pay tolls — is what happens, which is
 why every card here is a real pool card and no card is named in the code.
 """
@@ -14,8 +14,8 @@ why every card here is a real pool card and no card is named in the code.
 from __future__ import annotations
 
 from engine import Game, PlayerState
-from engine.ai_policy import toll_decline_is_smaller_loss
-from engine.ai_valuation import TollLoss, toll_branch_loss
+from engine.ai_prompts import toll_decline_is_smaller_loss
+from engine.ai_prompt_readers import TollLoss, toll_branch_loss
 from engine.auras import attach_aura
 from engine.models import Permanent
 from engine.oracle import OracleInstruction
@@ -140,7 +140,7 @@ def test_an_unpriceable_side_keeps_the_pay_tolls_policy(set_pool):
 def test_a_mana_priced_toll_is_left_to_the_floating_mana_policy(set_pool):
     """A toll paid in mana is not this comparison's to improve: the default
     pays it out of the pool and the untapped lands whenever it can
-    (``ai_policy.optional_pay_may_tap_lands``), and nothing here prices a
+    (``ai_prompts.optional_pay_may_tap_lands``), and nothing here prices a
     tapped land against the penalty."""
     game = Game(players=[PlayerState(name="A"), PlayerState(name="B")])
     entry = {

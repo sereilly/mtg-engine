@@ -35,13 +35,13 @@ total a cast pays is settled deep in ``cast_from_hand`` — taxes scoped to what
 the spell targets, a commander's, a kicker's symbols, a buyback's reduction,
 the split of an X — and a second assembly of it here would be the planner the
 browser just lost. Instead the announcement is rehearsed on a scratch copy
-(``ai_valuation.scratch_copy``, the copy the policy's own rehearsals take)
+(``ai_rehearsal.scratch_copy``, the copy the policy's own rehearsals take)
 whose ``_pay_mana_cost`` is wrapped to note each payment it could not make:
 the engine's own ``required`` and ``PaymentPurpose``, at CR 601.2f's moment.
 Every mana payment a cast or an activation makes goes through that one
 method, and the census test fails the day one does not.
 
-**The plan is the AI's** (``ai_policy._PaymentPlanner``): the exact matching
+**The plan is the AI's** (``ai_payment._PaymentPlanner``): the exact matching
 (``mana_payment.plan_payment``) over what each land's tap makes through the
 tap seam (``board_payment.land_tap_yields``) and every non-land source whose
 whole cost is {T}, with the colour to ask each for. One planner and two
@@ -50,7 +50,7 @@ does. **Never a source that is sacrificed**: the AI weighs giving up a Black
 Lotus and a button labelled "Auto-Tap" does not make that choice for a
 person, which is also where the highlight draws its line.
 
-**And the taps are the engine's own** (``ai_policy.tap_planned_lands``): a
+**And the taps are the engine's own** (``ai_payment.tap_planned_lands``): a
 land through the tap seam with the ability that makes the planned colour, a
 Llanowar Elves through ``activate_permanent_ability`` — a mana ability, which
 resolves inline (CR 605.3b). Nothing here writes to a mana pool.
@@ -70,8 +70,8 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from types import SimpleNamespace
 
-from engine.ai_policy import _PaymentPlanner, _paying_for, tap_planned_lands
-from engine.ai_valuation import mid_resolution, scratch_copy
+from engine.ai_payment import _PaymentPlanner, _paying_for, tap_planned_lands
+from engine.ai_rehearsal import mid_resolution, scratch_copy
 from engine.models import Permanent
 from engine.restricted_mana import CAST
 

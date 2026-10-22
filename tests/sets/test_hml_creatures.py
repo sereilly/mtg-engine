@@ -361,7 +361,7 @@ def test_the_ai_points_daughter_of_autumn_at_its_own_creature(set_pool):
     family and backwards about the side. Aimed by the category alone the AI
     picked the opponent's White Knight.
     """
-    from engine.ai_policy import choose_activation_action
+    from engine.ai_abilities import choose_activation_action
 
     game, (daughter, theirs) = _g3_board(
         set_pool, "Daughter of Autumn", ("LEA", "White Knight"),

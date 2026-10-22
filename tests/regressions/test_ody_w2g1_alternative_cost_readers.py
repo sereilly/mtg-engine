@@ -10,7 +10,7 @@ cost right now?" before the cast is made:
   prompt greys the option by;
 * ``web/state_view`` — the castable highlight, which falls back to that flag
   when the mana cost cannot be paid;
-* ``ai_policy._cast_candidate`` — the AI's proposal, which takes the
+* ``ai_casts._cast_candidate`` — the AI's proposal, which takes the
   alternative cost when the mana cost cannot be planned.
 
 All three read an alternative cost as owing no mana, which was true of the cast
@@ -43,7 +43,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from engine import Game, PlayerState
-from engine.ai_policy import _cast_candidate, cast_announcement, tap_planned_lands
+from engine.ai_casts import _cast_candidate
+from engine.ai_actions import cast_announcement
+from engine.ai_payment import tap_planned_lands
 from engine.alternative_costs import alternative_costs
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units, whole_card

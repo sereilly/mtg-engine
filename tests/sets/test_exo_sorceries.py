@@ -160,7 +160,7 @@ def test_w1g2_fade_away_charges_each_creatures_own_controller(set_pool):
     _g2s_put(game, 0, _G2S_LEA["Grizzly Bears"])
     _g2s_put(game, 1, _G2S_LEA["Hill Giant"])
     # Tapped, so the toll cannot be paid: a seat nobody asks pays a toll out
-    # of its untapped lands (W2G4, `ai_policy.optional_pay_may_tap_lands`),
+    # of its untapped lands (W2G4, `ai_prompts.optional_pay_may_tap_lands`),
     # and this test is about whose permanent goes when it is not paid.
     _g2s_put(game, 1, _G2S_LEA["Mountain"]).tapped = True
     alice.hand.append(set_pool("EXO")["Fade Away"])

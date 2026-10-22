@@ -11,7 +11,7 @@ the pick itself. The if-you-do branch ran anyway:
 * **Forsaken City** — "you may exile a card from your hand. If you do, untap
   this land" untapped for a seat that accepted and then exiled nothing, and for
   a seat that accepted over an empty hand. The AI's pricing of that trade
-  (``ai_policy.offer_trade_is_worth_taking``) refused it outright for this
+  (``ai_prompts.offer_trade_is_worth_taking``) refused it outright for this
   reason: taken by a seat nobody asks it was a free untap, because the pick
   defaulted to "no card".
 * **Metathran Aerostat** — "you may put a creature card with mana value X from

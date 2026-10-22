@@ -26,10 +26,15 @@ from __future__ import annotations
 import pytest
 
 from engine import Game, PlayerState
-from engine.ai_policy import (SLOW_RETURN_PILE_SIZE, X_LIFE_RESERVE,
-                              _cast_candidate, _pick_x_value, tap_planned_lands)
-from engine.ai_valuation import (_walk_program, exiled_search_pile_comes_back,
-                                 exiled_search_pile_comes_back_one_at_a_time)
+from engine.ai_prompts import SLOW_RETURN_PILE_SIZE
+from engine.ai_scoring import X_LIFE_RESERVE, _pick_x_value
+from engine.ai_casts import _cast_candidate
+from engine.ai_payment import tap_planned_lands
+from engine.ai_weighed_cast import _walk_program
+from engine.ai_prompt_readers import (
+    exiled_search_pile_comes_back,
+    exiled_search_pile_comes_back_one_at_a_time,
+)
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.cast_costs import additional_costs
 from engine.faces import compilation_units
@@ -108,7 +113,7 @@ def test_w2g5_an_x_paid_in_life_keeps_a_reserve(pool):
         assert _cast_candidate(low, 0, card, 0) is None, card.name
     # One, where it was two. Hatred is the other, and on this board it is no
     # longer proposed at any X: ten life for a +10/+0 that is gone by the end
-    # of the turn measures as a loss (`ai_policy._worth_proposing`), which the
+    # of the turn measures as a loss (`ai_scoring._worth_proposing`), which the
     # reserve never asked. Its X is held to the reserve in the test below.
     assert proposed >= 1
 
@@ -265,7 +270,7 @@ def test_w2g5_guard_dogs_picks_a_permanent_that_shares_the_targets_color(pool):
     and the ability prevented nothing. It takes the first that shares a colour
     with the target, here its own red Hill Giant, and the damage is prevented.
     """
-    from engine.ai_valuation import pick_is_tested_for_a_shared_color
+    from engine.ai_prompt_readers import pick_is_tested_for_a_shared_color
 
     printing = sorted(
         card.name for card in pool.values()

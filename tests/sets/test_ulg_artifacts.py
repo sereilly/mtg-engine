@@ -819,7 +819,7 @@ def test_w2g2_the_escape_hatch_is_not_inferred_from_the_prohibition(set_pool):
 #
 # The pool-wide census lives in `tests/ai/test_ai_declaration_legality.py`; this
 # is the ULG card that occasioned it.
-from engine.ai_policy import choose_attackers as _w2g4_choose_attackers
+from engine.ai_declarations import choose_attackers as _w2g4_choose_attackers
 
 
 def _w2g4_duel_under_crawlspace(set_pool):

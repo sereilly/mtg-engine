@@ -3,7 +3,7 @@ aimed at the side its effect wants.
 
 "Return up to X target creatures to their owners' hands, where X is one plus
 the number of cards named Aether Burst in all graveyards as you cast this
-spell." (Aether Burst.) `ai_policy._choose_several_targets` had three roads
+spell." (Aether Burst.) `ai_targets._choose_several_targets` had three roads
 for a counted list — a printed maximum, an X the caster pays for, and an X the
 game counts — and the third fell through to the several-slot default at the
 bottom of the function: *the caster's own board*, on the argument that every
@@ -19,10 +19,10 @@ from __future__ import annotations
 
 import pytest
 
-from engine.ai_policy import (cast_announcement, choose_cast_action,
-                              spell_being_cast, tap_planned_lands,
-                              zone_being_cast_from)
-from engine.ai_valuation import spell_target_side
+from engine.ai_actions import cast_announcement, spell_being_cast, zone_being_cast_from
+from engine.ai_policy import choose_cast_action
+from engine.ai_payment import tap_planned_lands
+from engine.ai_target_sides import spell_target_side
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units
 from engine.game import Game

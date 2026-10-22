@@ -23,8 +23,7 @@ from __future__ import annotations
 import pytest
 
 from engine import Game
-from engine.ai_policy import (choose_activation_action,
-                              choose_hand_activation_action)
+from engine.ai_abilities import choose_activation_action, choose_hand_activation_action
 from engine.ai_simulator import run_ai_simulation
 from engine.card_loader import manifest_set_path
 from engine.models import CardDefinition, Permanent, PlayerState

@@ -784,7 +784,7 @@ def test_extravagant_spirits_toll_scales_with_the_hand(set_pool):
 
     The card is asserted at the compiled program, which is what this test is
     about; a headless seat now pays a toll out of its untapped lands too
-    (``ai_policy.optional_pay_may_tap_lands``), and Megatherium below pays the
+    (``ai_prompts.optional_pay_may_tap_lands``), and Megatherium below pays the
     same toll out of a pool it already holds.
     """
     from engine.oracle import compile_card_oracle

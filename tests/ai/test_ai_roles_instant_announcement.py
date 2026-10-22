@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import pytest
 
-from engine import Game, PlayerState, ai_policy
+from engine import Game, PlayerState, ai_actions, ai_policy
 from engine.card_loader import load_catalog
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
@@ -71,7 +71,7 @@ def test_the_instant_chooser_proposes_a_roles_instant_the_engine_takes(_by_name,
     action = ai_policy.choose_combat_instant_cast_action(game, 0)
 
     assert action is not None and action.card_name == name
-    announced = ai_policy.cast_announcement(action)
+    announced = ai_actions.cast_announcement(action)
     assert len(announced["target_permanent_ids"]) == 2
     result = game.queue_from_hand(0, name, **announced)
     assert result.supported, result.details

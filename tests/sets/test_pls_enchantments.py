@@ -2237,7 +2237,7 @@ def test_w1g7_keldon_twilight_offers_only_the_creatures_it_names(set_pool):
 # Phyrexian Tyranny and the seat nobody asks. "Pay tolls, always" answered this
 # card by tapping two lands in every draw step for the rest of the game, so a
 # toll whose whole penalty is a little life is priced against the lands on the
-# seat's own turn (`ai_policy.optional_pay_may_tap_lands`).
+# seat's own turn (`ai_prompts.optional_pay_may_tap_lands`).
 
 
 def _w1g7_tyranny_draw_step(set_pool, *, life, hand):
@@ -2283,7 +2283,7 @@ def test_w1g7_a_seat_with_nothing_to_cast_pays_the_toll(set_pool):
 
 def test_w1g7_a_seat_low_on_life_pays_even_holding_a_spell(set_pool):
     """Declining would leave it under `LIFE_TOLL_FLOOR`."""
-    from engine.ai_policy import LIFE_TOLL_FLOOR
+    from engine.ai_prompts import LIFE_TOLL_FLOOR
 
     table, lands = _w1g7_tyranny_draw_step(
         set_pool, life=LIFE_TOLL_FLOOR + 1, hand=("Grizzly Bears",)

@@ -10,7 +10,7 @@ normalizer and **raised** when the land had been asked for ``{C}``:
     ValueError: Invalid mana color: C
 
 A colourless land wearing the Aura is an ordinary board, and the AI's shared
-tap executor (``ai_policy.tap_planned_lands``, the simulator's *and* the web
+tap executor (``ai_payment.tap_planned_lands``, the simulator's *and* the web
 app's AI seat) asks a land for exactly the symbol its plan counted — so the
 first AI seat to plan a ``{C}`` out of such a land took the whole game down.
 Found by INV W3G1 on a seeded simulation (Archaeological Dig under a Fertile

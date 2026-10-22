@@ -279,7 +279,7 @@ def offer_permission(game, seat: int, card, cost: str):
     exile, for its madness cost and nothing else (CR 118.9b), for as long as
     the offer stands. Granted as a stored :class:`CastPermission` rather than
     derived, because the AI weighs the cast on a scratch copy that owes no
-    prompt (``ai_valuation.rehearse``'s ``detach="abstract"``) and the
+    prompt (``ai_rehearsal.rehearse``'s ``detach="abstract"``) and the
     permission has to travel with the copy."""
     from .cast_permissions import grant_permission
 
@@ -384,7 +384,9 @@ def default_madness_offer(game, choice) -> None:
     (``ai_policy.choose_madness_cast``). A cast it would propose is made — its
     lands tapped by the plan, its announcement the chooser's — and anything
     else, or a cast the engine then refuses, declines."""
-    from .ai_policy import cast_announcement, choose_madness_cast, tap_planned_lands
+    from .ai_actions import cast_announcement
+    from .ai_policy import choose_madness_cast
+    from .ai_payment import tap_planned_lands
 
     card = choice.data.get("_card")
     seat = choice.player_index

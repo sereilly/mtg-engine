@@ -2440,7 +2440,7 @@ def test_w2g4_mournful_zombie_gives_its_life_to_the_seat_that_paid_for_it(
     policy's list of gift kinds said ``gain_life``, a name nothing compiles to,
     so the ability fell through to "aim it at them". It proposes its own seat
     now, and the activation it proposes gains that seat the life."""
-    from engine.ai_policy import choose_activation_action
+    from engine.ai_abilities import choose_activation_action
 
     game, (zombie,) = _w2g4_creature_table(
         set_pool, catalog_by_name, ["Mournful Zombie"], interactive=(),

@@ -3,7 +3,7 @@
 Moving the choice from activation to resolution (W2G5) is what lets a default
 read the board the opponent's response left. The stated policy stays printed
 order among the free alternatives; it now skips an alternative that would
-change nothing there (``ai_valuation.offered_alternative_changes_nothing``), so
+change nothing there (``ai_prompt_readers.offered_alternative_changes_nothing``), so
 an AI's Urborg aimed at a swampwalker takes swampwalk rather than the first
 strike the creature does not have.
 """

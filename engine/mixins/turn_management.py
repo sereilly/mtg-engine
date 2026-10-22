@@ -627,7 +627,7 @@ class TurnManagementMixin:
         as it did.
 
         On the game rather than in the AI's policy, where it was written
-        (``ai_policy.planned_tap_ability`` asks here now): the engine's own
+        (``ai_payment.planned_tap_ability`` asks here now): the engine's own
         payer — a cost an effect collects, ``_pay_planned_cost`` — taps lands
         for a colour a plan counted on exactly as an AI seat does, and two
         readers choosing an ability two ways is a land that pays for one
@@ -674,7 +674,7 @@ class TurnManagementMixin:
         mana. Pure: nothing is tapped, logged or produced.
 
         **The seam's own gate, made askable.** The AI's tap planner
-        (`ai_policy._plan_land_taps`) counted every untapped land as a mana,
+        (`ai_payment._plan_land_taps`) counted every untapped land as a mana,
         while this seam refuses a storage or depletion land with no counter
         to pay (Sand Silos), a land with no mana ability at all (Bazaar of
         Baghdad), a summoning-sick land creature and a land under Interdict —

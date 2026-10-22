@@ -24,8 +24,10 @@ from __future__ import annotations
 import pytest
 
 from engine.ai_policy import choose_cast_action
-from engine.ai_valuation import (chosen_name_is_read_off_the_targets_library,
-                                 chosen_name_own_zone)
+from engine.ai_prompt_readers import (
+    chosen_name_is_read_off_the_targets_library,
+    chosen_name_own_zone,
+)
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units
 from engine.game import Game

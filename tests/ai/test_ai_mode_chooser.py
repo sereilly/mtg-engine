@@ -22,21 +22,15 @@ from pathlib import Path
 import pytest
 
 from engine import ai_simulator
-from engine.ai_policy import (
-    CastAction,
-    cast_announcement,
-    choose_cast_action,
-    choose_combat_instant_cast_action,
-    spell_being_cast,
-)
-from engine.ai_valuation import (
+from engine.ai_actions import CastAction, cast_announcement, spell_being_cast
+from engine.ai_policy import choose_cast_action, choose_combat_instant_cast_action
+from engine.ai_weighed_cast import (
     caster_chooses_a_mode,
     considering_mode,
-    instruction_target_side,
     mode_considered,
-    spell_target_side,
     spell_text,
 )
+from engine.ai_target_sides import instruction_target_side, spell_target_side
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units
 from engine.game import Game
@@ -593,33 +587,64 @@ _MODE_QUESTIONS = {
 }
 
 
+#: The AI's valuation readers -- what a card does, asked by the policy. They
+#: are the *other* seam (``ai_weighed_cast._spell_instructions`` reads a modal
+#: spell's steps for the mode being weighed, so it walks
+#: ``program.instructions`` by design) and they announce nothing, so the
+#: guards about the policy's announcements leave them out.
+_VALUATION_MODULES = frozenset({
+    "ai_valuation.py", "ai_weighed_cast.py", "ai_target_sides.py",
+    "ai_rehearsal.py", "ai_prompt_readers.py",
+})
+
+
+def policy_modules() -> list[Path]:
+    """Every ``engine/ai_*.py`` but the valuation readers: the policy, in
+    however many modules it is split into, and the drivers that carry its
+    proposals out.
+
+    Globbed rather than listed. These guards read ``engine/ai_policy.py``
+    alone until the policy was split into a dozen modules (the 2,000-line
+    round), and a guard reading one file passes over every question a split
+    moves out of it -- it reads green with nothing left to read. A new module
+    is examined the day it exists; a new *valuation* module fails here loudly
+    until it is named above."""
+    root = Path(__file__).resolve().parents[2]
+    found = sorted(
+        path for path in (root / "engine").glob("ai_*.py")
+        if path.name not in _VALUATION_MODULES
+    )
+    assert {"ai_policy.py", "ai_casts.py", "ai_targets.py"} <= {p.name for p in found}
+    return found
+
+
 def test_every_cast_question_the_policy_asks_names_the_mode():
     """The mode being weighed is one context variable read at two seams
-    (`ai_valuation._spell_instructions`, `ai_policy._announced_mode`). This
+    (`ai_weighed_cast._spell_instructions`, `ai_actions._announced_mode`). This
     holds the second: every call in the policy to an engine question that
     takes a mode passes it. An ability's or an entry trigger's enumeration
     (``ability_instruction=``, ``for_cast=False``) has no mode to pass."""
-    root = Path(__file__).resolve().parents[2]
-    tree = ast.parse((root / "engine" / "ai_policy.py").read_text(encoding="utf-8"))
     asked = 0
     missing = []
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call):
-            continue
-        name = getattr(node.func, "attr", None) or getattr(node.func, "id", None)
-        if name not in _MODE_QUESTIONS:
-            continue
-        keywords = {keyword.arg: keyword.value for keyword in node.keywords}
-        if "ability_instruction" in keywords:
-            continue
-        for_cast = keywords.get("for_cast")
-        if name == "_enumerate_targets" and not (
-            isinstance(for_cast, ast.Constant) and for_cast.value is True
-        ):
-            continue
-        asked += 1
-        if "mode_index" not in keywords:
-            missing.append(f"engine/ai_policy.py:{node.lineno}: {name}(…) names no mode")
+    for path in policy_modules():
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            name = getattr(node.func, "attr", None) or getattr(node.func, "id", None)
+            if name not in _MODE_QUESTIONS:
+                continue
+            keywords = {keyword.arg: keyword.value for keyword in node.keywords}
+            if "ability_instruction" in keywords:
+                continue
+            for_cast = keywords.get("for_cast")
+            if name == "_enumerate_targets" and not (
+                isinstance(for_cast, ast.Constant) and for_cast.value is True
+            ):
+                continue
+            asked += 1
+            if "mode_index" not in keywords:
+                missing.append(f"engine/{path.name}:{node.lineno}: {name}(…) names no mode")
     assert not missing, "\n".join(missing)
     assert asked >= 12, f"the scan found only {asked} calls — it is reading nothing"
 
@@ -627,15 +652,14 @@ def test_every_cast_question_the_policy_asks_names_the_mode():
 def test_the_policy_reads_a_spells_steps_through_the_mode_seam():
     """…and the first: nothing in the policy walks ``program.instructions``
     for itself, which for a modal card is mode 0's."""
-    root = Path(__file__).resolve().parents[2]
-    source = (root / "engine" / "ai_policy.py").read_text(encoding="utf-8")
-    tree = ast.parse(source)
     reads = [
-        node.lineno for node in ast.walk(tree)
+        f"engine/{path.name}:{node.lineno}"
+        for path in policy_modules()
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
         if isinstance(node, ast.Attribute) and node.attr == "instructions"
         and isinstance(node.value, ast.Name) and node.value.id == "program"
     ]
-    assert reads == [], f"program.instructions read at lines {reads}"
+    assert reads == [], f"program.instructions read at {reads}"
 
 
 def _modal_population():

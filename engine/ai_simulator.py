@@ -6,18 +6,27 @@ from pathlib import Path
 from typing import Sequence
 import random
 
-from . import ai_valuation
+from . import ai_rehearsal
 from .ai_combat import run_ai_combat_phase
-from .ai_policy import (activate_chosen_ability, cast_announcement,
-                        cast_chosen_instant, choose_activation_action,
-                        choose_cast_action, choose_combat_instant_cast_action,
-                        choose_foreign_activation_action,
-                        choose_hand_activation_action,
-                        choose_instant_speed_activation, choose_land_drop,
-                        holds_an_ability_it_could_activate,
-                        holds_an_instant_it_could_pay_for, spell_being_cast,
-                        tap_planned_lands, zone_being_cast_from)
-from .ai_valuation import mid_resolution, permitted_casts, rehearsing
+from .ai_policy import (
+    activate_chosen_ability,
+    cast_chosen_instant,
+    choose_cast_action,
+    choose_combat_instant_cast_action,
+    choose_instant_speed_activation,
+    choose_land_drop,
+    holds_an_ability_it_could_activate,
+    holds_an_instant_it_could_pay_for,
+)
+from .ai_actions import cast_announcement, spell_being_cast, zone_being_cast_from
+from .ai_abilities import (
+    choose_activation_action,
+    choose_foreign_activation_action,
+    choose_hand_activation_action,
+)
+from .ai_payment import tap_planned_lands
+from .ai_rehearsal import mid_resolution, rehearsing
+from .ai_weighed_cast import permitted_casts
 from .card_loader import load_cards
 from .faces import whole_card
 from .game import Game
@@ -97,7 +106,7 @@ class SimulationReport:
     cleanup_discards: int = 0
     #: Abilities activated on a permanent another seat controls (CR 602.1b,
     #: "Any player may activate this ability"). Zero in every run before
-    #: `ai_policy.choose_foreign_activation_action` existed, because every
+    #: `ai_abilities.choose_foreign_activation_action` existed, because every
     #: chooser walked the seat's own battlefield.
     foreign_activations: int = 0
     #: Lands played (CR 305.1), by the land-drop pass rather than as the
@@ -159,7 +168,7 @@ class SimulationReport:
     #: nothing reports nothing owed.
     step_changes: int = 0
     #: Rehearsals that **raised** during this run, by what was being rehearsed
-    #: and what the engine raised (``ai_valuation.REHEARSALS_RAISED``).
+    #: and what the engine raised (``ai_rehearsal.REHEARSALS_RAISED``).
     #:
     #: The policy carries a candidate cast out on a copy of the game before it
     #: proposes it, and a copy that raises answers "this could not be weighed"
@@ -775,7 +784,7 @@ def _execute_foreign_activation(
     game: Game, active: int, action, report: SimulationReport,
     game_index: int, turn: int,
 ) -> None:
-    """Carry out `ai_policy.choose_foreign_activation_action`'s choice.
+    """Carry out `ai_abilities.choose_foreign_activation_action`'s choice.
 
     The activator pays (CR 602.1a) from its own lands, so the taps are on
     *active*'s board; the permanent is on ``action.source_controller_index``'s,
@@ -893,7 +902,7 @@ def _play_one_cast(
     card_to_cast = spell_being_cast(cast_zone, cast_action)
 
     # The payment: the planned lands tapped into the pool, each for the colour
-    # the plan counted on (`ai_policy.tap_planned_lands`, the web AI seat's
+    # the plan counted on (`ai_payment.tap_planned_lands`, the web AI seat's
     # executor too); the cast below spends it. What comes back is the action
     # **as it reads now**: a source that pays by being sacrificed renumbers
     # the battlefield under every slot the announcement names.
@@ -907,7 +916,7 @@ def _play_one_cast(
     # Presence requires a target", CR 601.2c/115.1b), and the AI had already
     # picked a legal land for it.
     #
-    # Through `ai_policy.cast_announcement`, the one function that turns a
+    # Through `ai_actions.cast_announcement`, the one function that turns a
     # `CastAction` into a cast: the seat, the object, the X, the alternative
     # cost (CR 118.9), the division (CR 601.2d), the optional costs and the
     # mode (CR 601.2b). Each of those was once a keyword spelled here and
@@ -1032,7 +1041,7 @@ def _play_casts(
 
 def _casts_on_loan(game: Game, seat: int) -> frozenset:
     """Which casts from outside its hand *seat* is offered right now
-    (`ai_valuation.permitted_casts`), as ``(zone, pile's seat, spell name)`` —
+    (`ai_weighed_cast.permitted_casts`), as ``(zone, pile's seat, spell name)`` —
     so the main loop can tell when an activation has opened a new one."""
     return frozenset(
         (permitted.zone, permitted.owner_seat, permitted.spell.name)
@@ -1058,7 +1067,7 @@ def _play_activations(
             target_permanent_index=activation_action.target_permanent_index,
             target_role_refs=activation_action.target_role_refs,
             # Which card a "Discard a card" cost takes, when the policy named
-            # one (a card with madness, `ai_policy._madness_discard_index`).
+            # one (a card with madness, `ai_abilities._madness_discard_index`).
             cost_hand_index=activation_action.cost_hand_index,
         )
         _resolve_pending_choices(game)
@@ -1314,7 +1323,7 @@ def _priority_answerer(table: Game, report: SimulationReport, game_index: int, c
     does with the game: it deep-copies it, and a copy carries this attribute
     with it. A function is copied as itself, so the copy's driver is this one —
     which answers only for *table*, the game it was made for, and only outside
-    a rehearsal (`ai_valuation.rehearsing`): a copy's priority is passed, as
+    a rehearsal (`ai_rehearsal.rehearsing`): a copy's priority is passed, as
     every copy's was before there was a driver. A method or a partial would
     have copied the report into every rehearsal.
 
@@ -1341,7 +1350,7 @@ def _answer_priority(
 
     Asked only in `_instant_speed_window`'s moments, only where no
     resolution is part-way through (a rehearsal cannot be run there, and a
-    response nobody weighed is a guess — `ai_valuation.mid_resolution`), and
+    response nobody weighed is a guess — `ai_rehearsal.mid_resolution`), and
     only once the cheap question has said there is something the seat could
     pay for (`ai_policy.holds_an_instant_it_could_pay_for`,
     `holds_an_ability_it_could_activate`); both choosers rehearse what they
@@ -1447,7 +1456,7 @@ def run_ai_simulation(
     # What this run adds to the process's record of rehearsals that raised
     # (`SimulationReport.rehearsals_raised`): read as a difference, since the
     # record is the process's and a test before this one may have written it.
-    raised_seen = Counter(ai_valuation.REHEARSALS_RAISED)
+    raised_seen = Counter(ai_rehearsal.REHEARSALS_RAISED)
 
     for game_index in range(1, games + 1):
         p1 = PlayerState(
@@ -1623,7 +1632,7 @@ def run_ai_simulation(
             # A rehearsal that raised this turn: an engine exception the real
             # cast would have crashed on, caught in the copy. Each distinct
             # one is an issue, in the turn it first happened.
-            raised = ai_valuation.REHEARSALS_RAISED - raised_seen
+            raised = ai_rehearsal.REHEARSALS_RAISED - raised_seen
             if raised:
                 for what in sorted(raised):
                     if what not in report.rehearsals_raised:
@@ -1633,7 +1642,7 @@ def run_ai_simulation(
                             f"and a cast nobody weighed): {what}",
                         ))
                 report.rehearsals_raised.update(raised)
-                raised_seen = Counter(ai_valuation.REHEARSALS_RAISED)
+                raised_seen = Counter(ai_rehearsal.REHEARSALS_RAISED)
 
             current = _zone_counter(game)
             if current != initial_cards:

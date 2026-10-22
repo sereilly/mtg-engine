@@ -7,7 +7,7 @@ import pytest
 
 from engine import Game, PlayerState
 from engine.ai_simulator import build_limited_deck, run_ai_simulation
-from engine.ai_valuation import rehearsing
+from engine.ai_rehearsal import rehearsing
 from engine.models import Permanent
 from tests.helpers import LEA_PATH
 
@@ -426,7 +426,7 @@ def test_the_simulator_plays_an_ending_phase_and_until_end_of_turn_ends(
 
     def cleanup(self, *args, **kwargs):
         # A step taken on a scratch copy of the game — the cast policy
-        # rehearsing a spell (`ai_valuation.rehearse`) — is not a step of the
+        # rehearsing a spell (`ai_rehearsal.rehearse`) — is not a step of the
         # simulated game. The spy is on the class, so it sees both.
         if rehearsing():
             return original_cleanup(self, *args, **kwargs)
@@ -529,10 +529,10 @@ def test_combat_damage_in_the_simulator_actually_moves_a_life_total():
 @pytest.fixture(scope="module")
 def _w3g4_paid_run():
     """Three LEA games with every `cast_from_hand` recorded: what the cast
-    owed (`ai_policy._cost_for`, the three functions the cast path prices with)
+    owed (`ai_payment._cost_for`, the three functions the cast path prices with)
     against the mana floating in the caster's pool as the cast began — which,
     now that the executor taps the planned lands first, is exactly what pays."""
-    from engine.ai_policy import _cost_for
+    from engine.ai_payment import _cost_for
     from engine.search_filters import card_has_type
 
     seen = {"casts": [], "lands": [], "refused_lands": []}
@@ -540,7 +540,7 @@ def _w3g4_paid_run():
 
     def cast(self, seat, name, *args, **kwargs):
         # Not a cast of the simulated game: the policy rehearsing one on a
-        # scratch copy (`ai_valuation.rehearse`), where mana is not asked for.
+        # scratch copy (`ai_rehearsal.rehearse`), where mana is not asked for.
         if rehearsing():
             return original(self, seat, name, *args, **kwargs)
         player = self.players[seat]

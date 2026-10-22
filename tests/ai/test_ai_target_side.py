@@ -7,7 +7,7 @@ the opponent equally and the tie went to the caster. "Target creature can't
 attack or block this turn" kept the AI's own creature home, Crumble destroyed
 its own artifact, Shrink shrank its own attacker and Topple exiled its own
 biggest creature. The side is now derived from the compiled program
-(``ai_valuation.spell_target_side`` / ``instruction_target_side``), so most of
+(``ai_target_sides.spell_target_side`` / ``instruction_target_side``), so most of
 these tests use an *invented* card printing the template: a name-free
 derivation answers it the same as the printed one.
 
@@ -19,13 +19,11 @@ cast.
 from __future__ import annotations
 
 from engine.faces import compilation_units
-from engine.ai_policy import (
-    _choose_target_for_spell,
-    choose_activation_action,
-    choose_cast_action,
-    legal_attackers,
-)
-from engine.ai_valuation import instruction_target_side, spell_target_side
+from engine.ai_scoring import _choose_target_for_spell
+from engine.ai_abilities import choose_activation_action
+from engine.ai_policy import choose_cast_action
+from engine.ai_declarations import legal_attackers
+from engine.ai_target_sides import instruction_target_side, spell_target_side
 from engine.game import Game
 from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
@@ -197,7 +195,7 @@ def test_every_kind_the_side_tables_name_is_one_something_dispatches():
     """The tables are keyed by instruction kind, so a rename empties them in
     silence and every card printing that template goes back to the tie — the
     way ``MANA_ABILITY_KINDS`` once named two kinds that no longer existed."""
-    import engine.ai_valuation as valuation
+    import engine.ai_target_sides as valuation
     from engine.handlers import EFFECT_HANDLERS
 
     named = (
@@ -341,7 +339,7 @@ def test_the_simulator_counts_a_refused_activation(monkeypatch):
     Before it existed the 80 refusals NEM's wave 2 found were visible only by
     reading the log."""
     import engine.ai_simulator as simulator
-    from engine.ai_policy import ActivationAction
+    from engine.ai_actions import ActivationAction
     from engine.card_loader import manifest_set_path
     from engine.game_types import SimulationResult
 

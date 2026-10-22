@@ -1,6 +1,6 @@
 """The AI's payment plan is the engine's exact one, and it pays what it plans.
 
-`ai_policy._plan_land_taps` was a greedy pass over its own reading of what a
+`ai_payment._plan_land_taps` was a greedy pass over its own reading of what a
 land makes. Two things followed, both measured on the tree before this file:
 
 * **It disagreed with the castable highlight** (`board_payment.board_can_pay`)
@@ -35,10 +35,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from engine import Game, PlayerState, ai_policy
-from engine.ai_policy import (_nonland_mana_source, _plan_land_taps,
-                              choose_activation_action, choose_cast_action,
-                              tap_planned_lands)
+from engine import Game, PlayerState, ai_payment
+from engine.ai_mana_sources import _nonland_mana_source
+from engine.ai_payment import _plan_land_taps, tap_planned_lands
+from engine.ai_abilities import choose_activation_action
+from engine.ai_policy import choose_cast_action
 from engine.ai_simulator import SimulationReport, _play_one_cast
 from engine.board_payment import board_can_pay
 from engine.card_loader import load_cards, manifest_set_paths
@@ -61,7 +62,7 @@ for _card in load_cards(manifest_set_paths(include_measured=True)):
 def _paying(card):
     """The plan's "this is for a spell" context — absent on a tree that has no
     such thing, where the census is run to be validated backwards."""
-    context = getattr(ai_policy, "_paying_for", None)
+    context = getattr(ai_payment, "_paying_for", None)
     return context(card) if context is not None else nullcontext()
 
 

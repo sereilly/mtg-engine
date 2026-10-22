@@ -24,7 +24,9 @@ from __future__ import annotations
 import pytest
 
 from engine import Game, PlayerState, load_cards
-from engine.ai_policy import _land_mixed_run, _plan_land_taps, choose_land_drop
+from engine.ai_mana_sources import _land_mixed_run
+from engine.ai_payment import _plan_land_taps
+from engine.ai_policy import choose_land_drop
 from engine.ai_valuation import entry_sacrifice_is_unavoidable
 from engine.card_loader import manifest_set_paths
 from engine.mixins.turn_management import is_tap_alone_mana_ability

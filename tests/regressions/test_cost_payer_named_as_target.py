@@ -23,7 +23,7 @@ from __future__ import annotations
 import pytest
 
 from engine import Game, PlayerState
-from engine.ai_policy import _choose_single_object_target
+from engine.ai_targets import _choose_single_object_target
 from engine.card_loader import load_catalog
 from engine.faces import compilation_units
 from engine.models import Permanent

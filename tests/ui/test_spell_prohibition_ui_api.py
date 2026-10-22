@@ -8,7 +8,7 @@ readers beside the cast path did not ask it:
 
 * the board's castable highlight (``web/state_view._card_castable_now``), so a
   banned player's hand glowed and every click was refused;
-* the AI's proposal filter (``ai_policy._can_cast_with_targets``), so a banned
+* the AI's proposal filter (``ai_cast_gates._can_cast_with_targets``), so a banned
   seat proposed its hand and was refused once per card.
 
 Driven here through the record's own writer, on shipped cards, because the

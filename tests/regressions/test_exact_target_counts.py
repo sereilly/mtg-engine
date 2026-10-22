@@ -31,7 +31,8 @@ from __future__ import annotations
 import pytest
 
 from engine import Game, PlayerState
-from engine.ai_policy import choose_cast_action, tap_planned_lands
+from engine.ai_policy import choose_cast_action
+from engine.ai_payment import tap_planned_lands
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units
 from engine.legality import exact_target_count

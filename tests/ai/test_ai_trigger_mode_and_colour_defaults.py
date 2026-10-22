@@ -6,7 +6,7 @@
   the first offered mode that is not a price, so Trufflesnout took its counter
   at three life and Relic Bind pinged an opponent at twenty while its
   controller sat at one. The default now asks the policy
-  (``ai_policy.choose_trigger_mode``), which answers the prompt in each
+  (``ai_prompts.choose_trigger_mode``), which answers the prompt in each
   offered mode on a scratch copy of the game and takes the one measured to do
   most — the valuation the cast chooser weighs a spell's bullets with.
 * **"The color of your choice", for a sweep** — Root Greevil ("Destroy all
@@ -15,14 +15,14 @@
   permanent, so against an army of green creatures and one white enchantment
   Root Greevil named green and destroyed nothing. It is now the colour the
   sweep behind the choice is worth most in
-  (``ai_valuation.color_most_worth_sweeping``).
+  (``ai_prompt_readers.color_most_worth_sweeping``).
 """
 from __future__ import annotations
 
 import pytest
 
 from engine import Game, PlayerState
-from engine.ai_valuation import chosen_color_sweeps, color_most_worth_sweeping
+from engine.ai_prompt_readers import chosen_color_sweeps, color_most_worth_sweeping
 from engine.auras import attach_aura
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units
@@ -203,7 +203,7 @@ def test_an_interactive_seat_is_still_asked(pool):
 def test_every_sweep_kind_named_is_a_registered_handler():
     """A kind renamed out from under the reader would silently restore the
     board-wide count."""
-    from engine.ai_valuation import _COLOR_SWEEP_KINDS
+    from engine.ai_prompt_readers import _COLOR_SWEEP_KINDS
 
     assert set(_COLOR_SWEEP_KINDS) <= set(EFFECT_HANDLERS)
 

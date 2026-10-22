@@ -746,7 +746,7 @@ def test_wood_sage_naming_nothing_bins_the_whole_pile(set_pool):
 
 import pytest
 
-from engine import Game, PlayerState, ai_policy
+from engine import Game, PlayerState, ai_declarations
 from engine.combat_permissions import MUST_BLOCK_ATTACKERS_UNTIL_EOT
 from engine.models import Permanent
 from engine.named_counters import add_counters
@@ -864,7 +864,7 @@ def test_w2g2_the_ai_obeys_watchdogs_requirement(set_pool):
     dog = set_pool("TMP")["Watchdog"]
     game, p0, p1 = _w2g2_duel([_mk_creature_card("Bear", 2, 2)], [dog])
     _w2g2_to_blockers(game, [0])
-    assert ai_policy.choose_combat_blockers(game, 1) == {0: 0}
+    assert ai_declarations.choose_combat_blockers(game, 1) == {0: 0}
 
 
 def test_w2g2_trumpeting_armodon_compels_one_named_pair(set_pool):

@@ -598,7 +598,7 @@ def test_w1g5_breakthrough_with_x_above_the_hand_discards_nothing(set_pool):
 # ==== W1G6 ==========================================================
 # W1G6's tests go between this line and the "end W1G6" line.
 from engine import Game as _W1G6Game, PlayerState as _W1G6PlayerState  # noqa: E402
-from engine import ai_policy as _w1g6_ai_policy  # noqa: E402
+from engine import ai_casts as _w1g6_ai_casts  # noqa: E402
 from tests.helpers import resolve_stack as _w1g6_resolve_stack  # noqa: E402
 
 
@@ -644,14 +644,14 @@ def test_w1g6_overmaster_s_next_instant_cannot_be_countered_and_only_that_one(
     assert game.queue_from_hand(0, "Lightning Bolt", target_player_index=1).supported
     # The AI does not spend a counterspell on a spell it cannot counter.
     counterspell = game.players[1].hand[0]
-    assert _w1g6_ai_policy._cast_candidate(game, 1, counterspell, 0) is None
+    assert _w1g6_ai_casts._cast_candidate(game, 1, counterspell, 0) is None
     assert game.cast_from_hand(1, "Counterspell", target_stack_index=0).supported
     _w1g6_resolve_stack(game)
     assert game.players[1].life == 17
     assert any("can't be countered (Overmaster)" in line for line in game.log)
 
     assert game.queue_from_hand(0, "Lightning Bolt", target_player_index=1).supported
-    assert _w1g6_ai_policy._cast_candidate(game, 1, game.players[1].hand[0], 0) is not None
+    assert _w1g6_ai_casts._cast_candidate(game, 1, game.players[1].hand[0], 0) is not None
     assert game.cast_from_hand(1, "Counterspell", target_stack_index=0).supported
     _w1g6_resolve_stack(game)
     assert game.players[1].life == 17, "the second Bolt was countered"

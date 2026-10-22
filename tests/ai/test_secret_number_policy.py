@@ -3,7 +3,7 @@
 "Each player hides at least one item … Each player loses life equal to the
 number of items they revealed. The player who revealed the fewest items then
 loses half their life, rounded up." Every point named is a point of life, and
-the least pays half of what it has left — so ``ai_policy.choose_secret_number``
+the least pays half of what it has left — so ``ai_prompts.choose_secret_number``
 has two lines to pick between, and picks from the life totals alone.
 
 It is a default like any other: deterministic, a function of public state, and
@@ -15,7 +15,7 @@ from __future__ import annotations
 import pytest
 
 from engine import Game, PlayerState
-from engine.ai_policy import choose_secret_number
+from engine.ai_prompts import choose_secret_number
 
 
 def _table(lives, lost=()):

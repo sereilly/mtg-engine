@@ -8,7 +8,7 @@ the simulator counts the refusal (``SimulationReport.refused_activations``):
 the seat proposed the one thing it cannot do, and will propose it again next
 turn, because nothing about the board has changed.
 
-``ai_policy.choose_activation_action`` asked about the costs it knew one at a
+``ai_abilities.choose_activation_action`` asked about the costs it knew one at a
 time — a sacrifice, a discard, life, a counter on the source — and nothing
 else, while the path's checks were inline, one refusal per cost block, with
 no gate to ask. Torment's Grim Lavamancer ("{R}, {T}, Exile two cards from
@@ -46,7 +46,7 @@ import random
 import pytest
 
 from engine import Game, PlayerState, ai_simulator
-from engine.ai_policy import choose_activation_action
+from engine.ai_abilities import choose_activation_action
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle

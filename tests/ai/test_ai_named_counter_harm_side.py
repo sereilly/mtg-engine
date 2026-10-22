@@ -8,7 +8,7 @@ card lit its own creature, watched it destroyed, took the 4 damage, and then
 started on Bomb Squad itself. ODY W2G7 found it by dealing the card into six
 simulated games.
 
-``ai_valuation.named_counter_marks_for_harm`` derives the answer from the
+``ai_target_sides.named_counter_marks_for_harm`` derives the answer from the
 compiled program: the same card carries a state trigger over that counter kind
 whose effect the engine already files as hostile.
 """
@@ -16,8 +16,8 @@ whose effect the engine already files as hostile.
 from __future__ import annotations
 
 from engine import Game, PlayerState
-from engine.ai_policy import choose_activation_action
-from engine.ai_valuation import named_counter_marks_for_harm
+from engine.ai_abilities import choose_activation_action
+from engine.ai_target_sides import named_counter_marks_for_harm
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
 

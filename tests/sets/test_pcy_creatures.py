@@ -735,7 +735,7 @@ def test_w1g2_the_ai_prices_the_avatar_at_the_reduced_cost(
     the cast does — priced at {6}{X}{X} on a board where the card costs {X}{X},
     the AI would never propose the cast; priced cheap where it is not, it would
     propose a cast the rules refuse every turn."""
-    from engine.ai_policy import _cost_for
+    from engine.ai_payment import _cost_for
 
     for board, generic in ((met, 0), (unmet, 6)):
         game = _w1g2_avatar_game(set_pool, avatar, **board)

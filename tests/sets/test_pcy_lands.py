@@ -31,7 +31,7 @@ a prompt.
 # through either seam and said to rewrite it when the card landed. Its two
 # floors survive below, in `test_w3g1_rhystic_cave_is_never_payment_mana`.
 from engine import Game as _W3G1Game, PlayerState as _W3G1PlayerState
-from engine.ai_policy import _plan_land_taps as _w3g1_ai_tap_plan
+from engine.ai_payment import _plan_land_taps as _w3g1_ai_tap_plan
 from engine.mana_payment import plan_payment as _w3g1_plan_payment
 from engine.mana_payment import untapped_mana_lands as _w3g1_payment_lands
 from engine.mana_payment import is_mana_ability as _w3g1_is_mana_ability

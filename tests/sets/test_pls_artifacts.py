@@ -134,7 +134,7 @@ def test_w1g8_skyship_weatherlight_links_what_its_entry_exiled(set_pool):
     exiled = sorted(card.name for card in game.players[0].exile)
     eligible = ["Grizzly Bears", "Hill Giant", "Juggernaut", "Sol Ring"]
     # A seat nobody asks keeps the three it most wants, not all four (PLS
-    # W2G5, `ai_policy.SLOW_RETURN_PILE_SIZE`): the pile comes back one card
+    # W2G5, `ai_prompts.SLOW_RETURN_PILE_SIZE`): the pile comes back one card
     # per {4}, {T}. Which three is the policy's; that they are artifacts and
     # creatures, linked to the ship, is the card's.
     assert len(exiled) == 3 and set(exiled) <= set(eligible)

@@ -1,6 +1,6 @@
 """What a seat nobody asks names for Brass Herald's creature type.
 
-``ai_valuation.chosen_creature_type_side`` reads, off what a card does with
+``ai_prompt_readers.chosen_creature_type_side`` reads, off what a card does with
 "the chosen type", whose creatures the type should name. Brass Herald prints
 two readers that agree — an anthem (+1/+1, a gift) and a reveal that puts
 cards of the type from its controller's **own library** into their hand. The
@@ -14,7 +14,7 @@ The sibling cases (Belbe's Portal, Urza's Incubator, An-Zerrin Ruins) are in
 
 from __future__ import annotations
 
-from engine.ai_valuation import chosen_creature_type_side
+from engine.ai_prompt_readers import chosen_creature_type_side
 from engine.game import Game
 from engine.models import Permanent, PlayerState
 from tests.helpers import _mk_card, resolve_stack

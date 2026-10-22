@@ -980,7 +980,7 @@ def test_509_1h_removal_alone_leaves_the_attacker_blocked():
 # `attack_declaration_refusal`, hoisted out of `declare_blockers` so the AI's
 # chooser can ask the same question the gate asks. Before it existed the three
 # declaration-wide restrictions lived inline in the gate and nowhere else, so
-# `ai_policy.choose_combat_blockers` pruned against nothing: it proposed a map
+# `ai_declarations.choose_combat_blockers` pruned against nothing: it proposed a map
 # the engine refused *whole*, and the defender blocked with nobody — this
 # combat and every later one, with nothing spent, no rule broken and nothing
 # logged. `tests/ai/test_ai_declaration_legality.py` holds the AI half; these

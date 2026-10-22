@@ -14,8 +14,8 @@ opposite directions:
   (PLS W1G5: "97 declines, 0 untaps"; 122 and 0 re-measured).
 
 Both are one question — what the offer costs and what it buys — so the two
-halves are named off the compiled program (``ai_valuation.offer_trade``) and
-weighed against the board (``ai_policy.offer_trade_is_worth_taking``): a land
+halves are named off the compiled program (``ai_prompt_readers.offer_trade``) and
+weighed against the board (``ai_prompts.offer_trade_is_worth_taking``): a land
 is worth a draw to a seat short of lands and to nobody else. The City's trade
 stays declined, for the reason the policy states.
 """
@@ -25,8 +25,9 @@ from __future__ import annotations
 import pytest
 
 from engine import Game, PlayerState
-from engine.ai_policy import LAND_FOR_DRAW_FLOOR
-from engine.ai_valuation import OfferTrade, _walk_program, offer_trade
+from engine.ai_prompts import LAND_FOR_DRAW_FLOOR
+from engine.ai_prompt_readers import OfferTrade, offer_trade
+from engine.ai_weighed_cast import _walk_program
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units
 from engine.models import Permanent

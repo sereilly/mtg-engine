@@ -23,8 +23,8 @@ Embrace) and one real grant (Planeswalker's Mischief) are driven whole.
 from __future__ import annotations
 
 from engine import Game, PlayerState
-from engine.ai_policy import (choose_activation_action, choose_cast_action,
-                              choose_land_drop)
+from engine.ai_abilities import choose_activation_action
+from engine.ai_policy import choose_cast_action, choose_land_drop
 from engine.ai_simulator import (SimulationReport, _play_activations,
                                  _play_land_drops, _play_one_cast)
 from engine.card_loader import load_cards, manifest_set_paths
@@ -248,7 +248,7 @@ def test_demonic_embrace_is_cast_from_the_graveyard_but_never_with_the_last_life
     """"You may cast this card from your graveyard by paying 3 life and
     discarding a card in addition to paying its other costs." Proposed with
     life to spare; never at a life total the price would take to zero
-    (`ai_policy._cast_life_price`: a cost paid in life is not paid with the
+    (`ai_cast_gates._cast_life_price`: a cost paid in life is not paid with the
     seat's last point)."""
     embrace = _POOL["Demonic Embrace"]
 

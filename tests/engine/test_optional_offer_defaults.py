@@ -11,7 +11,7 @@ time it was not asked.
 The policy now is one line — **take gifts, pay tolls, make no trades** — and
 both halves of it are read off the compiled program:
 
-* the *price* is ``ai_valuation.offered_action_is_a_payment``, over the
+* the *price* is ``ai_prompt_readers.offered_action_is_a_payment``, over the
   instruction kinds the rules define as done to oneself (CR 701.21a, 701.9a,
   118.3b, 407.4, 701.13a). A kind, never a card name, so the eight cards in the
   pool that print "you may sacrifice …" and every card still to come are
@@ -31,7 +31,7 @@ import pytest
 
 from engine.faces import compilation_units
 from engine import Game, PlayerState
-from engine.ai_valuation import SELF_PAYMENT_KINDS, offered_action_is_a_payment
+from engine.ai_prompt_readers import SELF_PAYMENT_KINDS, offered_action_is_a_payment
 from engine.handlers.registry import EFFECT_HANDLERS
 from engine.oracle import compile_card_oracle
 from engine.pending_choices import PendingChoice
@@ -235,7 +235,7 @@ def test_a_toll_is_still_paid_because_refusing_it_is_not_free(catalog):
     is an unpriced trade, however expensive taking it is. Elder Spawn's Island
     is a price and so is the 6 damage and the 7/7 behind refusing it; picking
     the cheaper of two losses is a different question with its own answer —
-    ``ai_policy.toll_decline_is_smaller_loss``, tested in
+    ``ai_prompts.toll_decline_is_smaller_loss``, tested in
     ``tests/ai/test_ai_toll_valuation.py`` — and where its derivation cannot
     price a side, this default (pay tolls) is still what stands."""
     refused_tolls = [

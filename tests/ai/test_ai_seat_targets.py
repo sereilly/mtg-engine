@@ -1,7 +1,7 @@
 """Census: the seat an AI names for an ability that targets a player — or
 "any target" — is its own when the effect is a gift.
 
-``ai_policy._choose_target_for_instruction`` decides the seat, and it decided
+``ai_abilities._choose_target_for_instruction`` decides the seat, and it decided
 with a list of instruction kinds: ``draw_target_cards``, ``gain_life`` and
 ``prevent_damage`` went to the activator and everything else to an opponent.
 Two of the three are names no handler has — the grammar lowers those effects
@@ -11,7 +11,7 @@ was a claim about the pool had expired: "{W}, {T}: Target player gains 1 life"
 next 1 damage that would be dealt to any target" in the pool, Samite Healer
 first among nineteen.
 
-Which effects are gifts is ``ai_valuation.ability_seat_side`` now, read off the
+Which effects are gifts is ``ai_target_sides.ability_seat_side`` now, read off the
 compiled program step by step. This census asks it of every activated ability
 in both manifest roles whose target can be a player's face, in three ways:
 
@@ -34,8 +34,8 @@ from __future__ import annotations
 import pytest
 
 from engine import Game, PlayerState
-from engine.ai_policy import _choose_target_for_instruction, choose_activation_action
-from engine.ai_valuation import ability_seat_side
+from engine.ai_abilities import _choose_target_for_instruction, choose_activation_action
+from engine.ai_target_sides import ability_seat_side
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units
 from engine.models import Permanent
@@ -45,7 +45,7 @@ from engine.targeting import derive_activation_spec, usable_activated_abilities
 from tests.helpers import _mk_card, _nosick, resolve_stack
 
 #: The spec kinds whose candidates include a player's face — the picker's own
-#: set (``ai_valuation._SEAT_SPEC_KINDS``), spelled here so the census does not
+#: set (``ai_target_sides._SEAT_SPEC_KINDS``), spelled here so the census does not
 #: borrow its population from the code it is checking.
 _SEAT_KINDS = ("player", "player_or_planeswalker", "any")
 

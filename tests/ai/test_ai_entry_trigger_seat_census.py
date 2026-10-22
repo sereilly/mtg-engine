@@ -8,7 +8,7 @@ could not choose is set aside there and chosen again. So a wrong announcement
 is not a wrong game — it is a log line saying the cast named something the
 trigger refused, and a decision the policy did not make.
 
-``ai_policy._choose_target_for_spell`` read the seat off what the trigger
+``ai_scoring._choose_target_for_spell`` read the seat off what the trigger
 *does* (``entry_trigger_seat_side``: a denial is aimed across the table) and
 otherwise gave a permanent's seat to its caster. "When this creature enters,
 **target opponent** gains control of it" (Sleeper Agent) does nothing that

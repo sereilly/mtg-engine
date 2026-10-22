@@ -1,7 +1,7 @@
 """Census: does an AI seat cast a spell that does nothing — or does it to itself?
 
 Three ways a cast is legal and worse than holding the card, and until the
-policy measured a cast before proposing it (``ai_valuation.rehearse``) it made
+policy measured a cast before proposing it (``ai_rehearsal.rehearse``) it made
 all three:
 
 ``idle``
@@ -58,7 +58,7 @@ import pytest
 from engine import Game, PlayerState
 from engine import ai_simulator
 from engine.ai_policy import choose_cast_action
-from engine.ai_valuation import CARD_WORTH, scratch_copy, standings
+from engine.ai_rehearsal import CARD_WORTH, scratch_copy, standings
 from engine.oracle import compile_card_oracle
 from tests.ai import test_ai_mode_chooser_census as modes
 
@@ -85,7 +85,7 @@ ALWAYS = frozenset({
 
 #: A cast is a loss when it leaves its caster this much worse off: half a
 #: life, and a hair, so that a cast the policy measured at exactly its own
-#: floor (``ai_policy.HARM_FLOOR``) is not one.
+#: floor (``ai_scoring.HARM_FLOOR``) is not one.
 LOSS = -0.51
 EPSILON = 0.01
 
@@ -248,18 +248,26 @@ def run(card, mode, layout: str) -> dict:
 
 
 #: How many rehearsals the sweep's proposals asked for, and how many of them
-#: could not be run (``ai_valuation.rehearse`` answering None). A policy whose
+#: could not be run (``ai_rehearsal.rehearse`` answering None). A policy whose
 #: every rehearsal failed would propose as the old one did and this sweep
 #: would say so in 590 lines; one that failed for a few cards would hide them.
 REHEARSALS = Counter()
 
 
 def census(sample: bool) -> list:
-    from engine import ai_policy
+    from engine import ai_policy, ai_prompts, ai_scoring
 
+    # Every policy module that rehearses reads ``rehearse`` out of its own
+    # namespace -- a cast's rehearsal (``ai_scoring``), a modal trigger's
+    # (``ai_prompts``) and an instant-speed activation's (``ai_policy``) -- so
+    # each is counted where it is read.
+    readers = [
+        module for module in (ai_scoring, ai_prompts, ai_policy)
+        if hasattr(module, "rehearse")
+    ]
     # None on a tree whose policy does not rehearse: the sweep still runs
     # there (that is how it is validated backwards) and counts none.
-    real = getattr(ai_policy, "rehearse", None)
+    real = getattr(ai_scoring, "rehearse", None)
 
     def counted(*args, **kwargs):
         got = real(*args, **kwargs)
@@ -268,10 +276,10 @@ def census(sample: bool) -> list:
         return got
 
     rows = []
-    with (
-        mock.patch.object(ai_policy, "rehearse", counted) if real is not None
-        else contextlib.nullcontext()
-    ):
+    with contextlib.ExitStack() as patches:
+        if real is not None:
+            for module in readers:
+                patches.enter_context(mock.patch.object(module, "rehearse", counted))
         for position, (card, mode) in enumerate(population()):
             if sample and position % SAMPLE_EVERY and card.name not in SWEPT:
                 continue
@@ -310,7 +318,7 @@ IDLE: dict = {}
 #:
 #: Game of Chaos flips a coin for a point of life each way and doubles the
 #: stakes. A rehearsal's randomness is its own on purpose
-#: (``ai_valuation._rehearsal_seed``): it says what such a cast is *like* and
+#: (``ai_rehearsal._rehearsal_seed``): it says what such a cast is *like* and
 #: must not say how the real flip will fall. Its sample won; this sweep's
 #: cast, on the seed `run` fixes, lost.
 #:

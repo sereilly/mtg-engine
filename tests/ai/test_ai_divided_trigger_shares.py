@@ -19,7 +19,7 @@ below fail with every creature alive, and the third with the Lions dead.
 from __future__ import annotations
 
 from engine import Game, PlayerState
-from engine.ai_policy import divided_shrink_shares, least_harmed_permanent
+from engine.ai_divisions import divided_shrink_shares, least_harmed_permanent
 from engine.models import Permanent
 from tests.helpers import resolve_stack
 

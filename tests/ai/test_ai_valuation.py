@@ -24,7 +24,8 @@ import pytest
 
 from engine.faces import compilation_units
 from engine import Game, PlayerState
-from engine.ai_policy import choose_activation_action, choose_cast_action
+from engine.ai_abilities import choose_activation_action
+from engine.ai_policy import choose_cast_action
 from engine.ai_valuation import (
     MANA_ABILITY_KINDS,
     cards_drawn_by_target,
@@ -106,7 +107,7 @@ def test_a_permanent_is_castable_with_nothing_for_its_ability_to_target(ability)
     Invented names, per this module's rule: the real cards (Flying Carpet,
     Pyramids) would pass against a fix that special-cased them.
     """
-    from engine.ai_policy import _can_cast_with_targets
+    from engine.ai_cast_gates import _can_cast_with_targets
 
     card = _mk_card(name="Gadget", mana_cost="{3}", type_line="Artifact", oracle_text=ability)
     # The premise: the branch kind really is in the mirrored card-level list, so
@@ -179,7 +180,7 @@ def test_a_destroy_is_valued_by_what_the_opponent_actually_has(all_cards):
     barren = _board(hand=[CLEANSING_RITE], theirs=[pool["Grizzly Bears"]])
     stocked = _board(hand=[CLEANSING_RITE], theirs=[pool["Howling Mine"], pool["Black Vise"]])
 
-    from engine.ai_policy import _score_spell_target
+    from engine.ai_scoring import _score_spell_target
 
     assert _score_spell_target(CLEANSING_RITE, 0, 1, barren) < _score_spell_target(
         CLEANSING_RITE, 0, 1, stocked
@@ -304,7 +305,7 @@ def test_a_divided_spells_side_is_read_off_the_counter_it_places(
     what ``divided_shape`` reads, and an invented card pins it: the derivation
     has to reach a name the engine has never seen.
     """
-    from engine.ai_valuation import divided_shape
+    from engine.ai_target_sides import divided_shape
 
     invented = _mk_card(
         "Grudge of the Fen", "{2}{B}", "Sorcery",
@@ -346,7 +347,7 @@ def test_every_divided_card_in_the_pool_is_described(catalog):
     something *and* has a side, or it divides nothing. The list is a reviewed
     inventory of which cards those are, and a promotion is when it is reviewed.
     """
-    from engine.ai_valuation import divided_shape
+    from engine.ai_target_sides import divided_shape
     from engine.divided_damage import divided_description
 
     described = []
@@ -518,7 +519,7 @@ def test_every_divided_card_in_the_pool_is_described(catalog):
         # first three creatures offered killed nothing over a Hill Giant, a
         # Craw Wurm, a Grizzly Bears and a Llanowar Elves; with nothing on
         # the opponent's side the whole three landed on its controller's
-        # first creature. `ai_policy.divided_shrink_shares` (lethal shares
+        # first creature. `ai_divisions.divided_shrink_shares` (lethal shares
         # first) and `least_harmed_permanent` answer it now;
         # `tests/ai/test_ai_divided_trigger_shares.py` holds both.
         "Shambling Swarm",
@@ -534,7 +535,7 @@ def test_only_a_division_with_two_different_ends_has_a_side_per_slot():
     Over both manifest roles, because the one card it is not empty for is in a
     measured set until Apocalypse ships.
     """
-    from engine.ai_valuation import divided_shape
+    from engine.ai_target_sides import divided_shape
     from engine.card_loader import load_cards, manifest_set_paths
 
     per_slot, shared = {}, 0
@@ -606,7 +607,7 @@ def test_every_several_target_removal_card_in_the_pool_aims_at_an_opponent(catal
     """The pool-wide half, because the entry above is a claim about which cards
     a table reaches. A removal spell whose printed noun names no side must not
     come back with the caster's own seat."""
-    from engine.ai_valuation import several_target_slot_sides
+    from engine.ai_target_sides import several_target_slot_sides
 
     removal = {"destroy_target_permanent", "exile_target_permanent"}
     checked = []

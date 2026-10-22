@@ -17,7 +17,7 @@ shipped that way since Urza's Destiny — its reminder text names the case and
 nothing read it.
 
 CR 303.4f makes the host the choice of "that player" — the one the Aura
-enters under. A seat nobody asks takes ``ai_policy.choose_returning_aura_host``;
+enters under. A seat nobody asks takes ``ai_targets.choose_returning_aura_host``;
 an interactive seat with more than one legal host is asked, once per Aura,
 through the general ``permanent_choice`` prompt, and **nothing moves until the
 last answer**: the cards enter together (Torment wave 2, W2G2).
