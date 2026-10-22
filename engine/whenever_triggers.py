@@ -338,20 +338,20 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      # phrase with an article, and "this creature" is a self-reference. A
      # **marker** rather than a `_subject` group for the damager's reason one
      # screen up — the noun parser refuses the words, and a filter is not what
-     # "this" means anyway: it is an identity, tested as one in `events.py`.
+     # "this" means anyway: it is an identity, tested as one in `event_filters.py`.
      r"(?P<damaged_self>this (?:creature|artifact|enchantment|land|aura|permanent))"
      r"|(?P<damage_recipient>a player or planeswalker|a player"
      # "…to **defending player**" (Electryte). CR 506.2's seat, printed with no
      # article — the one recipient word naming a relation to the *combat*
      # rather than to the ability's controller. Beside the others here because
-     # it is a fixed word like them, and tested in `events.py` against the
+     # it is a fixed word like them, and tested in `event_filters.py` against the
      # attack declaration.
      r"|an opponent|a planeswalker|defending player|you)"
      # "…deals damage **to a creature**" (Bellowing Fiend). A recipient that is
      # an *object*: none of the fixed words above can say it, because every one
      # of them names a player or a planeswalker. Delimited as a `damaged_subject`
      # group, read by the same noun parser every other narrowed condition here
-     # goes through, and tested by `engine/events.py`'s filter against the
+     # goes through, and tested by `engine/event_filters.py`'s filter against the
      # permanent that took the damage — which the one damage seam already
      # freezes (`target_permanent_id`).
      #
@@ -376,7 +376,7 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      # phrase simply grows.
      #
      # A second group name rather than a second use of the one above, because
-     # Python forbids repeating one — `events.py` folds the two spellings back
+     # Python forbids repeating one — `event_filters.py` folds the two spellings back
      # into a single seat before testing, so the word order is not a second
      # answer to "whose damage was this".
      r"(?P<damaged_subject>an? [^,]+?)"
@@ -389,7 +389,7 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # over **both** verbs — the Basilisk destroys no Wall whichever side of the
     # block it was on. So the phrase is delimited once and lands under both
     # halves' filter keys (`_PAIR_SUBJECT_GROUP_SUFFIX`), and the two general
-    # dispatchers in phases/declare_blockers_step.py read it exactly as they
+    # dispatchers in phases/block_triggers.py read it exactly as they
     # read a card that prints the halves separately (Infernal Medusa does).
     #
     # The kind used to spell the narrowing — `..._blocked_by_nonwall` — and had
@@ -457,7 +457,7 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # War.) The same declaration read from every seat rather than from the
     # ability's own controller — which is a question about the event, not a
     # different event, so it shares the kind the two "you attack" rows below
-    # use and says so in the payload. `engine/events.py`'s filter is what reads
+    # use and says so in the payload. `engine/event_filters.py`'s filter is what reads
     # the marker; the empty group is the `_includes_source` spelling, present
     # in the groupdict exactly when this row matched and carrying no text of
     # its own to re-read.
@@ -639,7 +639,7 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # ability that triggers on blocking *at least* N creatures fires **once**,
     # however many answered, where the singular row fires once per creature
     # (CR 509.3b) — and the threshold is read by `_threshold_firings` in
-    # phases/declare_blockers_step.py off the same `block_pair_count` key
+    # phases/block_triggers.py off the same `block_pair_count` key
     # Dwarven Soldier's joined sentence writes. One key, because it is one rule
     # about one number; a second spelling of it would be a second reader free
     # to disagree about how often the ability fires.
@@ -686,7 +686,7 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # rows and the two above — a condition with no partner phrase fires once for
     # the creature the event is about, however many creatures are on the other
     # side, where a narrowed one fires once per creature its phrase admits. Two
-    # announcements, and ``events._board_wide_block_filter`` is what keeps a
+    # announcements, and ``event_filters._board_wide_block_filter`` is what keeps a
     # trigger on exactly the one its own narrowing asks for.
     #
     # Below the narrowed rows, in this table's standing specific-before-generic
@@ -737,7 +737,7 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # of Souls). The same event as the row below, narrowed to the half of it a
     # combat damage step deals — payload rather than a kind, under the very key
     # `damage_dealt` records the same printed word on
-    # (``events._damage_dealt_filter``), because one printed word read by two
+    # (``event_filters._damage_dealt_filter``), because one printed word read by two
     # spellings is how the two dispatch scopes come to disagree about what it
     # means. Above the bare row it is not a prefix of, in this table's usual
     # order.
@@ -796,7 +796,7 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # event and `tapped_attached` for the tap. The fire site is the same one
     # (`mixins/target_announcements._announce_targeting`); what tells the two
     # dispatch scopes apart is this group, read by
-    # `events._self_becomes_target_filter`.
+    # `event_filters._self_becomes_target_filter`.
     #
     # Above the self spelling, in the order this table's own note asks for.
     ("self_becomes_target",
@@ -819,7 +819,7 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # watches neither — Rayne is a third party, and what it is about is a seat's
     # whole side of the board. So it is a narrowing on the same kind rather than
     # a kind of its own, which is this table's standing rule, and
-    # `events._self_becomes_target_filter` is where the three scopes are told
+    # `event_filters._self_becomes_target_filter` is where the three scopes are told
     # apart.
     #
     # Its subject is the one thing none of the rows above can express: it spans
@@ -840,7 +840,7 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # targeted object, nor attached to it, nor its controller — Cowardice
     # watches every creature on every battlefield. So the subject is a printed
     # *noun phrase* delimited as a `_subject` group, exactly as the death rows
-    # above delimit theirs, and `events._self_becomes_target_filter` asks
+    # above delimit theirs, and `event_filters._self_becomes_target_filter` asks
     # `subject_matches` with it.
     #
     # **Last** of the four, and the position is a guard rather than
@@ -854,7 +854,7 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # owner's hand." (Cloud Cover.) "Another" sits where the article does and
     # is inside the delimited phrase, so the noun parser folds it into
     # ``exclude_self`` exactly as it does for the entry rows' "another Rogue" —
-    # and ``events._self_becomes_target_filter`` hands ``subject_matches`` the
+    # and ``event_filters._self_becomes_target_filter`` hands ``subject_matches`` the
     # watching permanent as its source, which is what the key is tested
     # against. An alternative of the article rather than a row of its own:
     # every axis after the noun is this row's.
@@ -883,7 +883,7 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # "Whenever a Forest an opponent controls becomes tapped" (Lifetap). The
     # type and the controller scope are named groups, so the restriction
     # arrives as condition-payload data and one dispatcher
-    # (engine/events.py::_becomes_tapped_filter) covers every card written this
+    # (engine/event_filters.py::_becomes_tapped_filter) covers every card written this
     # way.
     #
     # **One kind for every "becomes tapped" trigger, and the two that used to
@@ -1060,7 +1060,7 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # same narrowing over a *union* of colours (CR 105.2b: an object is each of
     # its colours, so any listed one answers), carried in the `cast_colors` key
     # Quirion Dryad's row below already uses rather than a second spelling of
-    # the question — `events._cast_narrowing_admits` reads both. Before the
+    # the question — `cast_event_filters._cast_narrowing_admits` reads both. Before the
     # single-colour row, which is its strict prefix: matched there, "green"
     # would be read and "or white spell" left unconsumed.
     ("spell_cast",
@@ -1082,12 +1082,12 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # more (CR 105.2b) — so it is a marker group of its own rather than a sixth
     # word in the colour alternation above, which would be looked up in the
     # colour table and found to name none. One narrowing on all three cast
-    # scopes, read by the one helper (`events._cast_narrowing_admits`).
+    # scopes, read by the one helper (`cast_event_filters._cast_narrowing_admits`).
     ("spell_cast",
      r"whenever a player casts a (?P<cast_multicolored>)multicolored spell"),
     # The same narrowing on the spell's *type* rather than its colour (Urza's
     # Chalice). Written with the group name `you_cast_spell`'s rows already use,
-    # so all three cast kinds ask one helper (`events._cast_narrowing_admits`)
+    # so all three cast kinds ask one helper (`cast_event_filters._cast_narrowing_admits`)
     # rather than each growing its own type test. Must precede the bare row.
     ("spell_cast",
      r"whenever a player casts an? (?P<cast_type>noncreature|nonartifact|creature|artifact|enchantment|instant|sorcery|land) spell"),
@@ -1106,7 +1106,7 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # a spell is kicked when "its controller declared the intention to pay" its
     # kicker cost, which is part of casting it (CR 601.2b) -- so this is the
     # cast event narrowed by a fact about the cast, not a second event. The
-    # marker group is what the dispatcher reads (`events._spell_cast_filter`,
+    # marker group is what the dispatcher reads (`cast_event_filters._spell_cast_filter`,
     # against the ``kicked`` flag every cast announces); a row without it would
     # be the bare trigger above under another spelling, firing on every spell.
     ("spell_cast",                  r"whenever a player kicks a spell(?P<cast_kicked>)"),
@@ -1139,7 +1139,7 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r" other than the (?P<after_spell_ordinal>[a-z]+) (?P=cast_type) spell that player casts each turn"),
     # "…a creature spell **with flying**" (Hidden Spider). A narrowing on an
     # *ability* of the spell rather than on its type line, so it is its own
-    # payload key and `events._cast_narrowing_admits` reads it off the card
+    # payload key and `cast_event_filters._cast_narrowing_admits` reads it off the card
     # being cast. Above the bare type row below, which is its strict prefix:
     # matched there the clause would be left unread and the Spider would wake
     # for every creature an opponent cast, which is the silent widening this
@@ -1154,7 +1154,7 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # The colour narrowing on the opponent-scoped kind (Freyalise's Charm,
     # Leshrac's Sigil), captured into the same `color_word` payload the
     # player-scoped row above uses — one narrowing read by one helper
-    # (`events._cast_narrowing_admits`), not a second spelling of the question.
+    # (`cast_event_filters._cast_narrowing_admits`), not a second spelling of the question.
     # Before the bare row, which is its strict prefix.
     # "Whenever an opponent casts a **blue or black** spell" (Snake Pit). The
     # colour *union* on the opponent-scoped kind, in the `cast_colors` key its
@@ -1190,7 +1190,7 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     #
     # No narrowing group: the printed seat word is the whole of the condition
     # and it is answered by the announcement's ``seat``
-    # (``events._SEAT_SCOPED_EVENTS``), not by a payload key — CR 109.5's "you"
+    # (``event_filters._SEAT_SCOPED_EVENTS``), not by a payload key — CR 109.5's "you"
     # is the watching permanent's controller, and the caster is what the event
     # already carries.
     ("your_spell_countered",        r"whenever a spell you've cast is countered"),
@@ -1252,7 +1252,7 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # condition with two fire sites, and a version that only watched casts
     # would leave the artifact sitting through a land drop. Both halves are
     # announced in ``engine/mixins`` (the cast announcement and the land
-    # branch of ``_resolve_card``); ``engine/events.py`` scopes it to the
+    # branch of ``_resolve_card``); ``engine/cast_event_filters.py`` scopes it to the
     # permanent's own controller, which is what the printed "you" says.
     ("you_play_card",               r"whenever you play a card"),
     ("enchantment_cast",            r"whenever you cast an enchantment spell"),
@@ -1438,12 +1438,12 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # kind, which is the same reading `land_played` above records: one event,
     # and the printed words decide whose draw it watches and which card. Both
     # are answered against the *source permanent's* entry record, which is why
-    # they are words here and a metadata read in `engine/events.py` — nothing
+    # they are words here and a metadata read in `engine/event_filters.py` — nothing
     # about the payload could carry a choice made when the artifact entered.
     # "Whenever **a player** draws a card, that player loses 2 life unless they
     # pay {2}." (Phyrexian Tyranny.) The third value of the seat axis and not a
     # third condition — `land_played` above reads the same three words for the
-    # same reason, and the captured word is what `events._draws_card_filter`
+    # same reason, and the captured word is what `event_filters._draws_card_filter`
     # compares: unnarrowed, so every seat's draw fires it for every watcher,
     # the enchantment's own controller included. Captured rather than left as
     # the absence of the group, because an absent group already means "you".

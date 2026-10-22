@@ -20,7 +20,8 @@ from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.models import Permanent
 from tests.helpers import _mk_card
-from web.prompts import PromptContext, _enter_choice
+from web.prompt_values import _enter_choice
+from web.prompts import PromptContext
 
 
 @pytest.fixture(scope="module")

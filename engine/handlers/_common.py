@@ -166,7 +166,7 @@ def damage_dealer(context: "OracleExecutionContext"):
       ``has_keyword``;
     * a "deals damage" trigger narrowed by ``damager_self`` or by a noun phrase
       compares the source *by identity* against a permanent
-      (``events.py``), and a card matches nothing;
+      (``event_filters.py``), and a card matches nothing;
     * ``_announce`` publishes ``event_subject_permanent_id`` only for a source
       with an id, so "…deals that much damage to **that creature**" cannot name
       the dealer;

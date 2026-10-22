@@ -20,6 +20,12 @@ LAYERS = (
     "deck_legality",
     "deck_builder",
     "deck_store",
+    # The prompt-renderer table, then the renderers by what a prompt is
+    # answered with, then the three loops that read them.
+    "prompt_registry",
+    "prompt_cards",
+    "prompt_board",
+    "prompt_values",
     "prompts",
     "session_store",
     # The card pool, the stores' instances, and session lookup.

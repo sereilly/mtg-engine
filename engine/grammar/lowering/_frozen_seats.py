@@ -69,7 +69,7 @@ _DEFENDING_PLAYER_EVENTS: frozenset[str] = frozenset({
     # "Whenever this creature becomes blocked, **defending player** discards a
     # card." (Alley Grifters, Corrupt Official, Port Inspector, Robber Fly.)
     # The declare-*blockers* fire site
-    # (`declare_blockers_step._fire_becomes_blocked_triggers`) stamps the same
+    # (`block_triggers._fire_becomes_blocked_triggers`) stamps the same
     # key off `combat_attackers`, which is what puts the kind in this set — the
     # entry is the list of events that stamped it, never the list of events on
     # which the phrase reads plausibly.

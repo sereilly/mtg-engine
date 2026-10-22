@@ -54,9 +54,6 @@ OVERSIZED: dict[str, int] = {
     # --- S9 ---
     # --- S10 ---
     # --- S11 ---
-    "web/prompts.py": 2892,
-    "engine/phases/declare_blockers_step.py": 2830,
-    "engine/phases/declare_attackers_step.py": 2042,
     # --- integrator ---
 }
 

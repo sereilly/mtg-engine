@@ -140,7 +140,7 @@ def _parse_cast_event(
     # ``chosen_color`` key and not a colour word. The whole line has to be
     # consumed here or the four words fall through to the effect parser, which
     # is where they were refusing the card: the trigger's own dispatcher is
-    # ``events._cast_narrowing_admits``, reading the key ``trigger_conditions.py``'s table
+    # ``cast_event_filters._cast_narrowing_admits``, reading the key ``trigger_conditions.py``'s table
     # captures from the same words.
     #
     # Read **first**, ahead of the colour union below: that branch opens on the

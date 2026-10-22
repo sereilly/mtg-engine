@@ -57,7 +57,7 @@ _BECOMES_TARGET_OBJECTS: tuple[tuple[str, ...], ...] = (
     # class than "a spell", and an *axis entry* rather than a fourth condition
     # for the reason this table is generated at all: the three axes multiply,
     # so a card printing this phrase about an artifact, or about a spell an
-    # opponent controls, is already read. The filter in `engine/events.py` is
+    # opponent controls, is already read. The filter in `engine/event_filters.py` is
     # what enforces it — dropped, the Druid would draw a card for any spell at
     # all.
     ("an", "aura", "spell"),
@@ -76,7 +76,7 @@ _BECOMES_TARGET_CONTROLLERS: tuple[tuple[str, ...], ...] = (
 #: "**You or a permanent you control**" (Rayne, Academy Chancellor) is the one
 #: that is not a self-reference: it spans a *player* and a set of permanents at
 #: once, which is a third dispatch scope for this event rather than a third
-#: spelling of the first — `engine/events.py` is where the three are told apart,
+#: spelling of the first — `engine/event_filters.py` is where the three are told apart,
 #: and `engine/trigger_conditions.py`'s marker group is what tells them.
 #:
 #: It joins the axes rather than getting a production of its own because that is
@@ -265,7 +265,7 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # stack. CR 603.10e is why the tense is safe to read at all — an ability
     # that triggers when a spell is countered looks back in time.
     #
-    # The seat rides the announcement (``events._SEAT_SCOPED_EVENTS``) rather
+    # The seat rides the announcement (``event_filters._SEAT_SCOPED_EVENTS``) rather
     # than the phrase, so "you've" is part of the condition's identity here and
     # is not re-tested by the reader: the spell's caster is what the event
     # carries, and the watching permanent's controller is CR 109.5's "you".
@@ -300,7 +300,7 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # Traitors.) The same event with the printed exclusion as the trigger's own
     # narrowing, which the *other* front end carries as payload
     # (``engine/trigger_conditions.py``'s ``other_land`` group, compared against the played
-    # permanent's id by ``engine/events._land_played_filter``) — this table has
+    # permanent's id by ``engine/event_filters._land_played_filter``) — this table has
     # only to agree about which event the words name, the arrangement the seat
     # rows above already use. Above the bare phrase it is not a prefix of, so
     # the order is documentation here rather than precedence.
@@ -325,7 +325,7 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # Trap.) The third spelling of the same event, and here for the reason the
     # second is: a line only one front end reads is a card the other refuses.
     # Both narrowings are the condition's — the seat and the card name were
-    # chosen as the artifact entered (CR 614.1c), and `engine/events.py` tests
+    # chosen as the artifact entered (CR 614.1c), and `engine/event_filters.py` tests
     # them against the permanent's own record. This table carries no payload, so
     # what it buys is the *effect* half: without the phrase the grammar refuses
     # the line and the trigger compiles with no instruction behind it.
@@ -438,7 +438,7 @@ _BOARD_WIDE_BLOCK_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
 #: 509.3d fire a bare condition once for the creature the event is about however
 #: many creatures are on the other side, where a narrowed one fires once per
 #: creature its phrase admits. The fire site makes both announcements and
-#: ``events._board_wide_block_filter`` keeps a trigger on exactly one.
+#: ``event_filters._board_wide_block_filter`` keeps a trigger on exactly one.
 #:
 #: Read **after** the table above, because each phrase here is a strict prefix
 #: of the matching row there — the same specific-before-generic order
@@ -615,7 +615,7 @@ _DAMAGE_RECIPIENTS: tuple[tuple[tuple[str, ...], str], ...] = (
     # "…deals combat damage to **defending player**" (Electryte). The seat the
     # attack was declared against (CR 506.2), which is a relation to the
     # *combat* rather than to the ability's controller — so it is a row here
-    # beside "an opponent" and a test of its own in `events.py`, not a spelling
+    # beside "an opponent" and a test of its own in `event_filters.py`, not a spelling
     # of one of the four above. Printed with no article, which is why the tuple
     # is two words.
     (("defending", "player"), "defending player"),

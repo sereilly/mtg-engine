@@ -78,7 +78,10 @@ from .phases import (
     CombatPhaseMixin,
     BeginningOfCombatStepMixin,
     DeclareAttackersStepMixin,
+    AttackLegalityMixin,
     DeclareBlockersStepMixin,
+    BlockLegalityMixin,
+    BlockTriggersMixin,
     CombatDamageStepMixin,
     EndOfCombatStepMixin,
     PostcombatMainPhaseMixin,
@@ -101,7 +104,11 @@ class Game(
     CombatPhaseMixin,
     BeginningOfCombatStepMixin,
     DeclareAttackersStepMixin,
+    # Split out of the declare-step mixins and composed directly after them.
+    AttackLegalityMixin,
     DeclareBlockersStepMixin,
+    BlockLegalityMixin,
+    BlockTriggersMixin,
     CombatDamageStepMixin,
     EndOfCombatStepMixin,
     PostcombatMainPhaseMixin,
@@ -586,7 +593,7 @@ class Game(
     blocking_restrictions_until_eot: list = field(default_factory=list)
     # "Creatures can't attack this turn." (Festival) — the attack twin of the
     # list above, CR 506.3/508.1c. Each entry: {"filter": <subject payload>,
-    # "source_name"}. Read by `declare_attackers_step.can_attack` (which is
+    # "source_name"}. Read by `attack_legality.can_attack` (which is
     # also what the legality enumerator asks), swept at cleanup. State plus a
     # reader rather than a flag stamped per creature, for that list's reason: a
     # creature entering after this resolves is restricted too.

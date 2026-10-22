@@ -31,7 +31,7 @@ from engine.card_loader import load_cards, manifest_set_path
 from engine.models import Permanent
 from tests.helpers import app_js_function_body
 from web.app import app, store
-from web.prompts import offer_wording
+from web.prompt_values import offer_wording
 
 client = TestClient(app)
 

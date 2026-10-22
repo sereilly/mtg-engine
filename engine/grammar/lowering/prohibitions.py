@@ -83,7 +83,7 @@ def _lower_cant_be(
         # take the sentence away from the table without giving it to anybody.
         #
         # Which is what it did. The kind has had two enforcement sites all
-        # along — `declare_blockers_step._can_block_attacker` refuses every
+        # along — `block_legality._can_block_attacker` refuses every
         # blocker on it and `legality.is_unblockable` reads it for the UI's fade
         # — and no producer at all, so the one card printing the sentence was
         # reported unsupported over behaviour that was already complete.

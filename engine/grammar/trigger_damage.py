@@ -76,7 +76,7 @@ def _parse_damage_dealt_event(
     # would take "you" for a damager and then fail on the missing "deals",
     # refusing the line rather than falling through to here. The recipient is
     # consumed and not carried, exactly as the active form's is —
-    # `engine/trigger_conditions.py`'s row marks the seat and `events._damage_dealt_filter`
+    # `engine/trigger_conditions.py`'s row marks the seat and `event_filters._damage_dealt_filter`
     # tests it, which is where every other recipient narrowing is answered.
     passive = stream.mark()
     if stream.accept_word("you're") or (
@@ -144,7 +144,7 @@ def _parse_damage_dealt_event(
         #
         # Consumed and not carried, exactly as Justice's "or spell" is:
         # `engine/trigger_conditions.py`'s table marks the self-reference and
-        # `events._damage_dealt_filter` tests it by identity, which is not
+        # `event_filters._damage_dealt_filter` tests it by identity, which is not
         # something an `ObjectFilter` narrowing could say.
         self_recipient = stream.mark()
         if stream.at_kind(SELF) or stream.at_word("this"):

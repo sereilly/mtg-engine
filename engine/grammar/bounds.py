@@ -188,7 +188,7 @@ def accept_comparative_characteristic(
     spelled-out comparison uses, and that is exact rather than convenient: the
     matcher reads that key against the ``source`` its caller supplies, and at
     both block fire sites the source supplied to a subject filter **is** the
-    other creature of the pair (``phases/declare_blockers_step.py`` passes the
+    other creature of the pair (``phases/block_triggers.py`` passes the
     attacker when testing a blocker and the blocker when testing an attacker).
     So the two spellings are one question with one answer, and a second key
     would be a second reading of "than what?".

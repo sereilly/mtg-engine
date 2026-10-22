@@ -6,7 +6,7 @@ each creature blocking it beyond the first." So this module is a rewrite in
 the shape ``engine/equipment.py`` established for equip — the printed keyword
 line becomes the ability the rules say it already is, and from there the
 existing "becomes blocked" dispatcher in
-``engine/phases/declare_blockers_step.py`` fires it, the stack carries it, and
+``engine/phases/block_triggers.py`` fires it, the stack carries it, and
 one handler resolves it. Nothing downstream of the compiler knows the word.
 
 Writing it as a real trigger rather than as a pump applied at declaration is

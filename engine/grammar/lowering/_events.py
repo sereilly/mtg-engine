@@ -115,7 +115,7 @@ _EVENT_SUBJECT_OBJECTS: frozenset[str] = frozenset({
     # to **it**." (Powerstone Minefield.) The declared attacker *or* the
     # declared blocker, stamped by whichever of the union's two fire sites
     # announced it (`_fire_matching_creature_attacks_triggers`,
-    # `declare_blockers_step._announce_bare_board_wide_blocks`). The event has
+    # `block_triggers._announce_bare_board_wide_blocks`). The event has
     # one object — no partner is named — so the pronoun has one referent.
     "matching_creature_attacks_or_blocks",
     # "Whenever a creature of the chosen color deals damage to you …, this
@@ -141,7 +141,7 @@ _EVENT_SUBJECT_OBJECTS: frozenset[str] = frozenset({
     # that one instead.
     #
     # Both of the kind's fire sites stamp the id
-    # (`declare_blockers_step._fire_board_wide_block_triggers` for CR 509.3d's
+    # (`block_triggers._fire_board_wide_block_triggers` for CR 509.3d's
     # narrowed reading, `_announce_bare_board_wide_blocks` for CR 509.3c's bare
     # one), which is what this table is a claim about — and the *source*-scoped
     # scan one screen up announces `creature_becomes_blocked`, a different kind

@@ -201,7 +201,7 @@ _PAYERLESS_PLANNERS = {
     "engine/ai_payment.py",
     # "Pay any amount of mana": a generic cost, which every unit pays whatever
     # the seat may spend it as.
-    "web/prompts.py",
+    "web/prompt_values.py",
 }
 
 

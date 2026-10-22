@@ -23,7 +23,8 @@ twenty-four were in `engine/handlers/combat.py` — that module and
 `combat_declarations.py` beside it since the 2,000-line cap's split round —
 where what the handler writes is a mark a combat step reads back. The other ten
 have no `EFFECT_HANDLERS` entry at all — the declarations and the damage
-assignment (`phases/declare_attackers_step.py`, `phases/declare_blockers_step.py`,
+assignment (`phases/declare_attackers_step.py`, `phases/declare_blockers_step.py`
+and the `attack_legality.py` / `block_legality.py` beside them,
 `combat_assignment.py`) read them straight off the compiled program. The
 converse is not claimed: `evasion`'s four kinds and three of `prevention`'s
 resolve in those handler modules too and keep their own categories, because a

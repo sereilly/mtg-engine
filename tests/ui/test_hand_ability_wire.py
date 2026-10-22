@@ -162,7 +162,8 @@ def test_the_button_body_carries_every_field_the_handler_reads():
 
 
 def test_the_look_top_prompt_renders_after_a_hand_activation():
-    """A `NameError` in `web/prompts.py` that no path could reach until now.
+    """A `NameError` in a prompt renderer (`web/prompt_cards.py` now) that no
+    path could reach until now.
 
     `_look_top_pick` read `owner.library` and nothing bound `owner`, so
     `GET /state` answered 500 the moment a `look_top_pick` prompt was owed to a

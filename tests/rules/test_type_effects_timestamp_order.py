@@ -1575,7 +1575,7 @@ def test_j6_replenish_orders_one_players_enchantments_as_the_graveyard_has_them(
 
     Pinned so the day the choice is asked this fails and is rewritten. What
     asking takes: a prompt kind on ``pending_choices`` that orders a set of
-    entering permanents (a renderer in ``web/prompts.py`` and its client
+    entering permanents (a renderer in ``web/prompt_board.py`` and its client
     half), armed by ``return_all_cards_from_graveyard`` and
     ``put_cards_from_hand_onto_battlefield`` when two or more of one seat's
     cards enter and — to keep it from asking about every pair of Bears — at
