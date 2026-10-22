@@ -291,7 +291,7 @@ def _spell_object_target_steps(card: CardDefinition) -> tuple[OracleInstruction,
     **seat** role ("…and 2 damage to target player or planeswalker", Lunge) is
     left out: it says nothing about a permanent.
     """
-    from .targeting import SEAT_ROLE_KINDS, payload_own_role
+    from .target_roles import SEAT_ROLE_KINDS, payload_own_role
 
     def spends_an_object_role(payload: dict, targets: dict) -> bool:
         own = payload_own_role(payload)
@@ -597,7 +597,8 @@ def entry_trigger_seat_side(
     — this reading said every non-denial "already lands where its card prints
     it", and seven did not (Torment's W2G3).
     """
-    from .targeting import _first_described_slot, entry_trigger_instructions
+    from .targeting import _first_described_slot
+    from .cast_targets import entry_trigger_instructions
 
     if card.primary_type in SPELL_TYPES:
         return None
@@ -1017,8 +1018,8 @@ def role_target_sides(
     kicked Rushing River announces two roles and an unkicked one none.
     """
     from .targeting import (derive_cast_spec, instructions_as_announced,
-                            payload_own_role, role_dependency, role_is_seat,
                             spec_roles)
+    from .target_roles import payload_own_role, role_dependency, role_is_seat
 
     program = compile_card_oracle(card)
     # ...and CR 601.2b's other answer, the mode being weighed
@@ -1067,7 +1068,7 @@ def _sides_of_roles(roles, run, slot_sides) -> tuple[str | None, ...]:
     """The side each of *roles* is picked from, read off the steps of *run*
     that spend it — the body :func:`role_target_sides` and
     :func:`ability_role_target_sides` share."""
-    from .targeting import payload_own_role, role_dependency, role_is_seat
+    from .target_roles import payload_own_role, role_dependency, role_is_seat
 
     spenders: list[OracleInstruction] = []
 

@@ -58,9 +58,9 @@ from .targeting import (
     GRAVEYARD_TARGET_KIND,
     cast_target_slot,
     instructions_as_announced,
-    spec_is_a_cost,
     spec_roles,
 )
+from .cost_pickers import spec_is_a_cost
 from .ai_actions import (
     _OFFERS_ANNOUNCED,
     _announced_mode,

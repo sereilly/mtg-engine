@@ -211,7 +211,7 @@ def _source_shield_matches(
         if not hasattr(source, "has_type") or not source.has_type(str(subtype)):
             return False
     if wanted.get("enchanted"):
-        from ..auras import auras_attached_to
+        from ..aura_attachment import auras_attached_to
 
         if not hasattr(source, "metadata") or not auras_attached_to(source):
             return False
@@ -346,7 +346,7 @@ def _source_type_shielded_by(game, event: dict) -> dict | None:
     twin) and the text of whatever is attached to it ("dealt to **enchanted**
     creature", which is a shield the recipient's own text says nothing about).
     """
-    from ..auras import auras_attached_to
+    from ..aura_attachment import auras_attached_to
 
     recipient = event["recipient"]
     if isinstance(recipient, PlayerState) or recipient is None:
@@ -1191,7 +1191,7 @@ def prevent_small_event_threshold(line: str, card_name: str | None = None) -> in
     """
     normalized = " ".join((line or "").strip().lower().rstrip(".").split())
     if card_name:
-        from ..oracle import _collapse_self_references
+        from ..self_reference import _collapse_self_references
 
         normalized = _collapse_self_references(
             normalized, card_name, "this creature"

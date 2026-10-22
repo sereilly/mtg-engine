@@ -30,7 +30,8 @@ from ..events import emit
 from ..models import PlayerState
 from ..pending_choices import spec_for
 from ..replacement_choices import DRAW_OF
-from ..replacements import TOP_OF_LIBRARY_DISCARD_TEXT, apply_replacements
+from ..replacements import apply_replacements
+from ..replacements.zone_changes import TOP_OF_LIBRARY_DISCARD_TEXT
 from ..oracle import compile_card_oracle
 from ..trigger_utils import make_trigger_event, matching_triggers
 

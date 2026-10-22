@@ -36,10 +36,6 @@ What a card *does* is not the policy's to say: the valuation modules read it
 off the compiled program (``ai_valuation`` and its family), and the weights
 here and beside it are tuning over those readings. The policy draws nothing
 from the seeded RNG; a rehearsal restores what its copy drew.
-
-The prompt answers and four helpers beside them are bound here as well (the
-last import block): the engine's resolution paths import them from
-``ai_policy`` inside the function that asks.
 """
 
 from __future__ import annotations
@@ -103,31 +99,6 @@ from .ai_casts import (
     _cast_candidate,
     _every_mode_worth_casting,
     _modes_weighed,
-)
-
-# Not read here: bound for the engine modules that import these from
-# `ai_policy` inside the function that asks (a prompt's default answer --
-# `mixins/stack/choices`, `handlers/zones`, `handlers/stack`). The split
-# that gave each its own module left their import lines where they were.
-from .ai_mana_sources import _land_mana_is_unplannable
-from .ai_cast_gates import given_back_first
-from .ai_targets import choose_returning_aura_host
-from .ai_divisions import divided_shrink_shares, least_harmed_permanent
-from .ai_prompts import (
-    choose_trigger_mode,
-    choose_search_card,
-    choose_search_cards,
-    slow_pile_picks,
-    choose_reorder_library_order,
-    choose_secret_number,
-    choose_scry_arrangement,
-    toll_decline_is_smaller_loss,
-    choose_target_change,
-    offer_trade_is_worth_taking,
-    offer_buys_own_drawback,
-    chained_toll_declined,
-    optional_pay_may_tap_lands,
-    order_hand_pick,
 )
 
 

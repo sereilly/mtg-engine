@@ -55,7 +55,7 @@ def _w2g6_sanctuary_run():
     # for this run alone.
     with pytest.MonkeyPatch.context() as patched:
         patched.setattr(
-            "engine.ai_policy.offer_trade_is_worth_taking",
+            "engine.ai_prompts.offer_trade_is_worth_taking",
             lambda game, player_index, entry: True,
         )
         return run_ai_simulation(

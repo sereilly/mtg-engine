@@ -39,7 +39,8 @@ from pathlib import Path
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units
 from engine.oracle import compile_card_oracle
-from engine.targeting import derive_activation_spec, spec_is_a_cost
+from engine.targeting import derive_activation_spec
+from engine.cost_pickers import spec_is_a_cost
 from tests.helpers import app_js_function_body
 
 APP_JS = (Path(__file__).resolve().parents[2] / "web" / "static" / "app.js").read_text(

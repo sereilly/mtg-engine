@@ -644,7 +644,7 @@ class ActivationPaymentMixin:
                 # legal target (CR 608.2b).
                 default_order = slots
                 if price and pile is controller:
-                    from ...ai_valuation import graveyard_price_order
+                    from ...ai_prompt_readers import graveyard_price_order
 
                     default_order = graveyard_price_order(
                         self, controller_index, slots,

@@ -171,7 +171,7 @@ def _static_shield_match(line: str, card_name: str | None = None):
     """
     normalized = " ".join((line or "").strip().lower().rstrip(".").split())
     if card_name:
-        from ..oracle import _collapse_self_references
+        from ..self_reference import _collapse_self_references
 
         normalized = _collapse_self_references(
             normalized, card_name, "this creature"
@@ -241,7 +241,7 @@ def _attached_damage_shields(perm) -> list[dict]:
     """
     if not hasattr(perm, "metadata"):
         return []
-    from ..auras import auras_attached_to
+    from ..aura_attachment import auras_attached_to
 
     found: list[dict] = []
     own = getattr(perm, "effective_card", None) or getattr(perm, "card", None)

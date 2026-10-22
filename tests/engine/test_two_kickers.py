@@ -38,8 +38,8 @@ from engine.cast_costs import (additional_costs, is_kicker_line, kicked,
 from engine.enter_effects import kicked_entry
 from engine.faces import compilation_units
 from engine.models import Permanent
-from engine.oracle import (compile_card_oracle, expand_ability_lines,
-                           expand_card_lines)
+from engine.oracle import compile_card_oracle, expand_ability_lines
+from engine.line_rewrites import expand_card_lines
 
 #: Planeshift prints five; a later set raises it and an empty census fails.
 _TWO_KICKER_FLOOR = 5

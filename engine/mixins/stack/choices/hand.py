@@ -60,7 +60,7 @@ class HandChoicesMixin:
         ]
 
     def _resolve_discard(self, choice: PendingChoice, hand_indices: list[int], to_library: bool) -> bool:
-        from ....handlers.zones import _resolve_one_discard
+        from ....handlers.discards import _resolve_one_discard
 
         count = int(choice.data["count"])
         chosen = [i for i in dict.fromkeys(hand_indices)][:count]
@@ -324,7 +324,7 @@ class HandChoicesMixin:
         """What happens to the chosen card. One place, because the family varies
         only here — Duress discards it, and the exile ending arrives with the
         card that needs it."""
-        from ....handlers.zones import _resolve_one_discard
+        from ....handlers.discards import _resolve_one_discard
         from ....linked_exile import LEAVES, link_exiled_card, until_leaves_source
 
         fate = str(choice.data.get("fate", "discard"))
@@ -569,7 +569,7 @@ class HandChoicesMixin:
         list the interactive seat is offered. Re-read each time round, because
         each discard renumbers the hand behind it.
         """
-        from ....handlers.zones import _resolve_one_discard
+        from ....handlers.discards import _resolve_one_discard
 
         discarded = 0
         took: list = []
@@ -612,7 +612,7 @@ class HandChoicesMixin:
         the list the seat is offered and the list its answer is checked against
         have to be one list.
         """
-        from ....handlers.zones import exile_from_hand_candidates
+        from ....handlers.hand import exile_from_hand_candidates
 
         return exile_from_hand_candidates(
             self, choice.data.get("_payload") or {}, self.players[choice.player_index]
@@ -625,7 +625,7 @@ class HandChoicesMixin:
         reason one prompt over: the list the seat is offered and the list its
         answer is checked against have to be one list.
         """
-        from ....handlers.zones import exile_from_hand_candidates
+        from ....handlers.hand import exile_from_hand_candidates
 
         return exile_from_hand_candidates(
             self, choice.data.get("_payload") or {},
@@ -807,7 +807,7 @@ class HandChoicesMixin:
 
     def live_put_from_hand_choices(self, choice: PendingChoice) -> list[int]:
         """The hand slots still eligible, from the engine's own rule."""
-        from ....handlers.zones import put_from_hand_candidates
+        from ....handlers.hand import put_from_hand_candidates
 
         return put_from_hand_candidates(
             self, choice.data.get("_payload") or {}, self.players[choice.player_index]
@@ -930,7 +930,7 @@ class HandChoicesMixin:
 
     def live_choose_cards_in_hand(self, choice: PendingChoice) -> list[int]:
         """The hand slots still eligible, from the engine's own rule."""
-        from ....handlers.zones import chosen_hand_card_candidates
+        from ....handlers.hand import chosen_hand_card_candidates
 
         return chosen_hand_card_candidates(
             self, choice.data.get("_payload") or {}, self.players[choice.player_index]
@@ -972,8 +972,8 @@ class HandChoicesMixin:
         card in a hand are one object, and a red pick naming one Lightning Bolt
         must not be read as naming both.
         """
-        from ....handlers._common import _card_matches_filter
-        from ....handlers.zones import hand_slot_filters
+        from ....handlers._filters import _card_matches_filter
+        from ....handlers.hand import hand_slot_filters
 
         slot_filters = hand_slot_filters(choice.data.get("_payload") or {})
         if slot_filters is None:
@@ -1090,7 +1090,7 @@ class HandChoicesMixin:
         onto the battlefield for its owner (Stronghold Gambit) takes the card
         that sentence admits, at its superlative's extreme.
         """
-        from ....ai_policy import order_hand_pick
+        from ....ai_prompts import order_hand_pick
 
         context = choice.data.get("_context")
         live = order_hand_pick(

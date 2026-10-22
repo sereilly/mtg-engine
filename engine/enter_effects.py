@@ -60,16 +60,11 @@ from .entry_choices import (
 )
 
 # Re-exported: names that moved to ``engine/entry_choices.py`` at the
-# 2,000-line split and are in this module's ``__all__``, or are still pulled
-# from here by ``mixins/permanent_state`` and ``handlers/control_flow``, which
-# other groups were splitting in the same round. New code imports a name from
-# the module that defines it.
-from .entry_choices import (CHOSEN_COLOR_KEY, CHOSEN_LAND_TYPE_KEY,
-                            ENTRY_CHOICES, LIFE_PAID_AS_ENTERED,
-                            PAY_ANY_LIFE_ON_ENTER, EntryChoice,
-                            choosable_bodies, chooses_card_name_on_enter,
-                            chosen_as_entered, entry_choices_of,
-                            own_chosen_protection_color)
+# 2,000-line split and are in this module's ``__all__``, which stays their
+# import path.
+from .entry_choices import (ENTRY_CHOICES, PAY_ANY_LIFE_ON_ENTER, EntryChoice,
+                            chooses_card_name_on_enter, chosen_as_entered,
+                            entry_choices_of)
 
 # --- CR 614.1c entry state, engine/mixins/permanent_state.py ---------------
 
@@ -297,7 +292,7 @@ KICKED_ENTRY_SIZED_BY_X = re.compile(
 
 #: The permanent-metadata key the announced X of the cast that became this
 #: permanent is stamped under (``resolution._resolve_card``). Spelled here for
-#: the reason :data:`LIFE_PAID_AS_ENTERED` is: the entry state reads it for
+#: the reason ``entry_choices.LIFE_PAID_AS_ENTERED`` is: the entry state reads it for
 #: three sentences now, and a channel spelled at each end is one that can be
 #: renamed at one.
 CAST_X_VALUE = "cast_x_value"

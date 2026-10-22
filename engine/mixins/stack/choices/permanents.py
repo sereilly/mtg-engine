@@ -12,7 +12,8 @@ pickers: tap any number of creatures, untap up to N permanents.
 
 from __future__ import annotations
 
-from ....handlers._common import apply_temp_pt_boost, permanent_matches_filter
+from ....handlers._common import apply_temp_pt_boost
+from ....handlers._filters import permanent_matches_filter
 from ....pending_choices import PendingChoice
 from ....mana_payment import plan_payment
 from ....subject_filters import subject_matches
@@ -397,7 +398,7 @@ class PermanentChoicesMixin:
             # it only when the life is all there is: a seat nobody asks keeps
             # its creatures unless the damage would be lethal to it. A
             # planeswalker target is not that question, and is declined.
-            from ....handlers._common import resolve_amount
+            from ....handlers._amounts import resolve_amount
 
             context = choice.data.get("_context")
             amount = resolve_amount(
@@ -429,7 +430,7 @@ class PermanentChoicesMixin:
             # prompt's own default is that pick too, and an interactive seat
             # answered for (a test's drain, a timed-out seat) lands where an AI
             # seat would.
-            from ....ai_policy import choose_returning_aura_host
+            from ....ai_targets import choose_returning_aura_host
 
             aura_card = (choice.data.get("_payload") or {}).get("legal_host_for_card")
             if aura_card is not None:
@@ -448,12 +449,12 @@ class PermanentChoicesMixin:
         # the compiled program; stable, so board order still breaks every tie.
         context = choice.data.get("_context")
         if live and getattr(context, "card", None) is not None:
-            from ....ai_valuation import pick_is_tested_for_a_shared_color
+            from ....ai_prompt_readers import pick_is_tested_for_a_shared_color
 
             if pick_is_tested_for_a_shared_color(
                 context.card, str(choice.data.get("result_key") or "")
             ):
-                from ....handlers._common import resolve_target_permanent
+                from ....handlers._targets import resolve_target_permanent
                 from ....object_colors import share_a_color
 
                 target = resolve_target_permanent(
@@ -627,7 +628,7 @@ class PermanentChoicesMixin:
         # and keeps the order it has always had.
         asking = getattr(choice.data.get("_context"), "source_permanent", None)
         if floor and asking is not None and any(perm is asking for perm in own):
-            from ....ai_policy import given_back_first
+            from ....ai_cast_gates import given_back_first
 
             own = given_back_first(own, asking)
         picks = own[:limit]

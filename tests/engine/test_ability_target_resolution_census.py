@@ -76,7 +76,8 @@ from engine.mana_payment import is_mana_ability
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
 from engine.stack_targets import _target_instances, chosen_targets
-from engine.targeting import spec_is_a_cost, usable_activated_abilities
+from engine.targeting import usable_activated_abilities
+from engine.cost_pickers import spec_is_a_cost
 from tests.helpers import _mk_card, _nosick, resolve_stack
 
 #: What the gate logs for an ability (``legality_resolution.ability_targets_refusal``),

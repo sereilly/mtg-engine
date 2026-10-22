@@ -36,7 +36,8 @@ from engine.cast_costs import (KICKED, KICKED_WITH, additional_costs,
 from engine.enter_effects import enter_effect_line, kicked_entry
 from engine.faces import compilation_units
 from engine.models import Permanent
-from engine.oracle import compile_card_oracle, expand_card_lines
+from engine.oracle import compile_card_oracle
+from engine.line_rewrites import expand_card_lines
 from tests.helpers import _mk_card
 
 #: Apocalypse prints five Volvers, two keyed lines each.

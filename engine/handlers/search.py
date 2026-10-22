@@ -613,8 +613,10 @@ def search_and_exile_matching(game: Game, instruction: OracleInstruction, contex
     steps behind this one wait for the answer — the Opt lesson, applied here
     by registration rather than by hoping.
     """
-    from ..ai_valuation import (exiled_search_pile_comes_back,
-                                exiled_search_pile_comes_back_one_at_a_time)
+    from ..ai_prompt_readers import (
+        exiled_search_pile_comes_back,
+        exiled_search_pile_comes_back_one_at_a_time,
+    )
 
     caster = context.caster
     caster_index = game.players.index(caster)

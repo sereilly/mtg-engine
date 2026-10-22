@@ -732,8 +732,8 @@ class TriggerChoicesMixin:
                 # ability allows, the cards their owner could still cast from
                 # there first, else in pile order). So announcing them changes
                 # what a *player* is asked and nothing an unasked seat does.
-                from ....ai_valuation import (denied_graveyard_pile,
-                                             graveyard_denial_order)
+                from ....ai_prompt_readers import (denied_graveyard_pile,
+                                                   graveyard_denial_order)
 
                 piles = list(dict.fromkeys(target["seat"] for target in cards))
                 pile = denied_graveyard_pile(choice.player_index, piles)
@@ -836,7 +836,8 @@ class TriggerChoicesMixin:
         on its controller's own board it killed the Savannah Lions it was
         offered first beside a Hill Giant that would have lived.
         """
-        from ....ai_policy import divided_shrink_shares, least_harmed_permanent
+        from ....ai_divisions import (divided_shrink_shares,
+                                      least_harmed_permanent)
         from ....divided_damage import CHOSEN, EVENLY, divided_instruction, spread_shares
 
         permanents = [
@@ -895,7 +896,8 @@ class TriggerChoicesMixin:
         foreign-activation chooser (the first) already take, so a trigger is
         aimed the way a mode and an activated ability of the same effect are.
         """
-        from ....ai_valuation import ability_target_side, activation_target_side
+        from ....ai_target_sides import (ability_target_side,
+                                         activation_target_side)
 
         instruction = getattr(item, "ability_instruction", None)
         if instruction is None:
@@ -966,8 +968,8 @@ class TriggerChoicesMixin:
         a swampwalker takes swampwalk, not the first strike it does not have.
         Printed order is still the answer whenever no alternative is a no-op.
         """
-        from ....ai_valuation import (offered_action_is_a_payment,
-                                     offered_alternative_changes_nothing)
+        from ....ai_prompt_readers import (offered_action_is_a_payment,
+                                           offered_alternative_changes_nothing)
 
         seat = self.players[choice.player_index]
         context = choice.data.get("_context")
@@ -1018,7 +1020,7 @@ class TriggerChoicesMixin:
         here is the registry's decision, as it is for every default that asks
         the policy something.
         """
-        from ....ai_policy import choose_trigger_mode
+        from ....ai_prompts import choose_trigger_mode
 
         stated = self._first_unpriced_mode(choice)
         return self._resolve_mode_choice(

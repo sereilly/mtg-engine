@@ -493,7 +493,7 @@ def change_event_object_targets(game: Game, instruction: OracleInstruction, cont
         )
 
     if chooser not in game.interactive_seats:
-        from ..ai_policy import choose_target_change
+        from ..ai_prompts import choose_target_change
 
         chosen = choose_target_change(game, chooser, item, slots) if optional else None
         if chosen is None and not optional:

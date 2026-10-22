@@ -626,8 +626,9 @@ class TargetAnnouncementsMixin:
         card.
         """
         from ..events import emit
-        from ..targeting import (ROLES_TARGET_KIND, _PLAYER_TARGET_SPEC_KINDS,
+        from ..targeting import (_PLAYER_TARGET_SPEC_KINDS,
                                  stack_object_target_spec)
+        from ..target_roles import ROLES_TARGET_KIND
 
         spec = stack_object_target_spec(item)
         if spec is not None and spec.get("kind") == ROLES_TARGET_KIND:
@@ -832,7 +833,7 @@ class TargetAnnouncementsMixin:
         * ``stack_targets.chosen_targets`` must answer the empty tuple — None
           is "this engine cannot say", and is not nobody.
         """
-        from ..mixins.stack.resolution import _target_is_up_to
+        from .stack.trigger_targets import _target_is_up_to
         from ..stack_targets import chosen_targets
 
         if item is None or not getattr(item, "activated", False) or item.is_copy:

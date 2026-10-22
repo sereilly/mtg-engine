@@ -343,7 +343,7 @@ class PaymentChoicesMixin:
         counter_card = data.get("counter_card")
         if not destination or counter_card is None:
             return False
-        from ....handlers._common import _card_matches_filter
+        from ....handlers._filters import _card_matches_filter
         from ....handlers.stack import _redirect_countered_card
 
         described = data.get("countered_filter")
@@ -381,7 +381,7 @@ class PaymentChoicesMixin:
         person: it is mana beyond the plan (:meth:`mana_beyond_the_plan`),
         theirs to tap before they answer.
         """
-        from ....ai_policy import _land_mana_is_unplannable
+        from ....ai_mana_sources import _land_mana_is_unplannable
 
         return [
             land

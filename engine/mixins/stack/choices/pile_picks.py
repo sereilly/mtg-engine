@@ -19,8 +19,8 @@ from ....oracle_types import (CLAIMABLE_EXILED_CARDS, EXILED_THIS_WAY,
 from .... import piles
 from ....pending_choices import PendingChoice
 from ....mana_payment import mana_cost_label
-from ....handlers.zones import (FORGOTTEN_PICKS,
-                                GRAVEYARD_PICK_TO_LIBRARY_BOTTOM)
+from ....handlers.zones import GRAVEYARD_PICK_TO_LIBRARY_BOTTOM
+from ....handlers.returns import FORGOTTEN_PICKS
 
 
 class PileChoicesMixin:
@@ -655,7 +655,7 @@ class PileChoicesMixin:
         ``excluded_graveyard_slot``, the reader Junk Diver's "another" already
         goes through.
         """
-        from ....handlers._common import graveyard_slots_matching
+        from ....handlers._filters import graveyard_slots_matching
 
         owner = self.players[int(choice.data["owner_index"])]
         spec = dict(choice.data.get("_payload") or {})
@@ -809,11 +809,11 @@ class PileChoicesMixin:
         live = self.live_graveyard_exile_candidates(choice)
         owner_index = int(choice.data["owner_index"])
         if owner_index != choice.player_index:
-            from ....ai_valuation import graveyard_denial_order
+            from ....ai_prompt_readers import graveyard_denial_order
 
             live = graveyard_denial_order(self, owner_index, live)
         else:
-            from ....ai_valuation import graveyard_price_order
+            from ....ai_prompt_readers import graveyard_price_order
 
             live = graveyard_price_order(self, owner_index, live)
         wanted = self._how_many_graveyard_cards(choice)
@@ -830,7 +830,7 @@ class PileChoicesMixin:
         against, and two readings of "which cards does this phrase name" is
         exactly the drift ``graveyard_card_matches`` exists to stop.
         """
-        from ....handlers._common import graveyard_card_matches
+        from ....handlers._filters import graveyard_card_matches
 
         return [
             seat for seat, player in enumerate(self.players)
@@ -924,7 +924,7 @@ class PileChoicesMixin:
         ``ai_valuation.denied_graveyard_pile``; still seat order within it,
         so it is as seed-deterministic as it was.
         """
-        from ....ai_valuation import denied_graveyard_pile
+        from ....ai_prompt_readers import denied_graveyard_pile
 
         live = self.live_graveyard_pile_choices(choice)
         seat = denied_graveyard_pile(choice.player_index, live)

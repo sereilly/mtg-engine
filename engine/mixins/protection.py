@@ -17,10 +17,10 @@ from __future__ import annotations
 
 import re
 
-from ..enter_effects import own_chosen_protection_color
-from ..auras import (AMONG_CONTROLLED_PROTECTION_COLORS,
-                     CHOSEN_PROTECTION_COLOR, aura_protection_colors,
-                     auras_attached_to)
+from ..entry_choices import own_chosen_protection_color
+from ..aura_grants import (AMONG_CONTROLLED_PROTECTION_COLORS,
+                           CHOSEN_PROTECTION_COLOR, aura_protection_colors)
+from ..aura_attachment import auras_attached_to
 from ..keywords import abilities_lost_at, protection_flag_granted_after
 from ..lord_buffs import LORD_BUFF_KIND, lord_buff_from_payload
 from ..handlers._targets import attached_host

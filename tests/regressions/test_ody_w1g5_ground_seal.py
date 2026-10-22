@@ -43,8 +43,9 @@ from engine.card_loader import load_cards, manifest_set_paths
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.stack_targets import _target_instances
-from engine.targeting import (GRAVEYARD_TARGET_KIND, spec_is_a_cost,
+from engine.targeting import (GRAVEYARD_TARGET_KIND,
                               usable_activated_abilities)
+from engine.cost_pickers import spec_is_a_cost
 from tests.helpers import _nosick, resolve_stack
 
 #: One card of each printed type in each graveyard, so most graveyard noun

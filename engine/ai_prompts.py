@@ -846,7 +846,7 @@ def order_hand_pick(
     keeps its hand order behind them.
     """
     from .ai_valuation import hand_pick_entry_consumer
-    from .handlers._common import _card_matches_filter
+    from .handlers._filters import _card_matches_filter
 
     order = list(candidates)
     key = str((payload or {}).get("result_key") or "chosen_hand_cards")

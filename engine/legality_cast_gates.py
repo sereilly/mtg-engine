@@ -31,10 +31,10 @@ from .targeting import (
     as_cast_from,
     cast_target_slot,
     derive_cast_spec,
-    spec_is_a_cost,
     spec_offers_a_player,
     spec_roles,
 )
+from .cost_pickers import spec_is_a_cost
 from .legality import (
     _unnamed_single_pile_refusal,
     _UNCHECKED_CAST_TARGET_KINDS,

@@ -538,7 +538,7 @@ def toll_branch_loss(
     somebody else's permanent. Without a context those steps stay unpriceable,
     which is what they were.
     """
-    from .handlers._common import attached_host
+    from .handlers._targets import attached_host
 
     player = game.players[player_index]
     recipients = frozenset(self_recipients)

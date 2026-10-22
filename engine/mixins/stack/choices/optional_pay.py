@@ -643,7 +643,7 @@ class OptionalPayChoicesMixin:
         resolution knows them: "that player" is whoever the offer was rebound
         to, and CR 601.2b's chooser is the seat holding the prompt.
         """
-        from ....ai_valuation import offered_action_is_a_payment
+        from ....ai_prompt_readers import offered_action_is_a_payment
 
         entry = choice.data
         if (
@@ -662,7 +662,7 @@ class OptionalPayChoicesMixin:
         """`ai_policy.offer_trade_is_worth_taking` for a **free, untolled**
         offer — the only kind whose accept branch is the whole of its price —
         or None for every other, which the standing policy answers."""
-        from ....ai_policy import offer_trade_is_worth_taking
+        from ....ai_prompts import offer_trade_is_worth_taking
 
         entry = choice.data
         if (
@@ -737,7 +737,7 @@ class OptionalPayChoicesMixin:
         # gifts only with mana nothing else this turn will spend — and it lives
         # with the other weights (`ai_policy.optional_pay_may_tap_lands`).
         # Paying is then the plan `_pay_optional` already spends, lands and all.
-        from ....ai_policy import optional_pay_may_tap_lands
+        from ....ai_prompts import optional_pay_may_tap_lands
 
         may_tap: list[bool] = []  # asked once, and only when the pool falls short
 
@@ -812,7 +812,8 @@ class OptionalPayChoicesMixin:
         # One link of an "unless any player pays" chain asks the effect's own
         # controller too, and paying is only right for the seat the unpaid
         # branch hurts (`ai_policy.chained_toll_declined`).
-        from ....ai_policy import chained_toll_declined, offer_buys_own_drawback
+        from ....ai_prompts import (chained_toll_declined,
+                                    offer_buys_own_drawback)
 
         if floating is not None and chained_toll_declined(
             self, choice.player_index, entry
@@ -864,7 +865,7 @@ class OptionalPayChoicesMixin:
         # magnitudes derived in `ai_valuation.toll_branch_loss`; a side the
         # program cannot price answers False and the pay-tolls policy stands.
         elif floating is not None:
-            from ....ai_policy import toll_decline_is_smaller_loss
+            from ....ai_prompts import toll_decline_is_smaller_loss
 
             if toll_decline_is_smaller_loss(
                 self, choice.player_index, entry, self._offer_self_recipients(choice)

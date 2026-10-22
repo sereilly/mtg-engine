@@ -61,7 +61,8 @@ from engine import Game, PlayerState
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
 from engine.stack_targets import chosen_targets
-from engine.targeting import cast_announced_entry_trigger, derive_cast_spec
+from engine.targeting import derive_cast_spec
+from engine.cast_targets import cast_announced_entry_trigger
 
 from .test_entry_trigger_stack_census import _pool
 

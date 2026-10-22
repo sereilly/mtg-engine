@@ -23,14 +23,14 @@ from .oracle import compile_card_oracle
 from .resolution_overrides import resolves_with_illegal_targets
 from .modal_triggers import modal_trigger_modes
 from .targeting import (
-    ROLES_TARGET_KIND,
     derive_cast_spec,
     derive_instruction_spec,
     role_is_stack,
-    spec_is_a_cost,
     spec_offers_a_player,
     spec_roles,
 )
+from .target_roles import ROLES_TARGET_KIND
+from .cost_pickers import spec_is_a_cost
 from .legality import (
     _UNFIZZLABLE_TARGET_KINDS,
     _STACK_TARGET_KINDS,

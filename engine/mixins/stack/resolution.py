@@ -33,10 +33,6 @@ from ...oracle import OracleInstruction, compile_card_oracle
 from ...modal_triggers import modal_trigger_modes
 from ...resumption import run_resumable
 from ...state_triggers import release_latch
-# Re-exported, temporarily: ``engine/mixins/helpers.py`` pulls it from here
-# inside a function, and that module is being split by another group of the
-# same round. New code imports it from ``trigger_targets``.
-from .trigger_targets import _target_is_up_to
 
 
 class StackResolutionMixin:

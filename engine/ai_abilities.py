@@ -46,13 +46,13 @@ from .models import Permanent, PlayerState
 from .oracle import OracleInstruction, compile_card_oracle
 from .activation_zones import HAND
 from .targeting import (
-    SINGLE_GRAVEYARD,
     derive_activation_spec,
-    role_is_seat,
-    spec_is_a_cost,
     spec_roles,
     usable_activated_abilities,
 )
+from .target_descriptions import SINGLE_GRAVEYARD
+from .target_roles import role_is_seat
+from .cost_pickers import spec_is_a_cost
 from .ai_payment import _plan_land_taps
 from .ai_actions import ActivationAction, HandActivationAction
 from .ai_scoring import (
@@ -1117,7 +1117,7 @@ def choose_hand_activation_action(
         # ``Game.activate_from_hand`` charges: a Fluctuator on the board makes
         # a Cycling {2} free, and a policy pricing the printed cost would pass
         # over an ability the engine would let it take for nothing.
-        from .mixins.stack.activation import hand_activation_cost
+        from .mixins.stack.card_activation import hand_activation_cost
 
         tap_colors: tuple[str, ...] = ()
         required = hand_activation_cost(game, player_index, card, ability)[0]
@@ -1157,8 +1157,8 @@ def _hand_entry_has_a_card(
     it (``_resolve_chosen_subtype``), so the policy and the resolution cannot
     disagree about which cards the step admits.
     """
-    from .handlers._common import _resolve_chosen_subtype
-    from .handlers.zones import put_from_hand_candidates
+    from .handlers._chosen import _resolve_chosen_subtype
+    from .handlers.hand import put_from_hand_candidates
 
     player = game.players[player_index]
     for payload in hand_entry_steps(instruction):

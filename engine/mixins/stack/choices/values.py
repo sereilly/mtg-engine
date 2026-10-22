@@ -234,7 +234,7 @@ class ValueChoicesMixin:
         escape the Aura exclusion the card prints. Checked against the same list
         the prompt offered (idiom 9), and refused rather than repaired.
         """
-        from ....handlers._common import CHOSEN_CARD_TYPE
+        from ....handlers._chosen import CHOSEN_CARD_TYPE
 
         word = str(card_type or "").strip().lower()
         offered = [
@@ -590,7 +590,7 @@ class ValueChoicesMixin:
         # and could not answer it. The renderer was fixed for the same missing
         # keys a set earlier; the answer path was not.
         if choice.data.get("needs_card_name") and not choice.data.get("opponents"):
-            from ....cast_restrictions import CHOSEN_CARD_NAMES
+            from ....cast_bans import CHOSEN_CARD_NAMES
 
             permanent = choice.data["permanent"]
             # "…**you and an opponent each** choose a card name other than a

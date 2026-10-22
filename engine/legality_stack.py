@@ -394,7 +394,7 @@ class StackTargetsMixin:
             # countered.
             stack_mana_value = spec.get("stack_mana_value")
             if stack_mana_value:
-                from .handlers._common import _comparison_holds
+                from .handlers._filters import _comparison_holds
                 from .targeting import stack_object_mana_value
 
                 if not _comparison_holds(stack_mana_value, stack_object_mana_value(item)):

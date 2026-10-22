@@ -16,7 +16,7 @@ for it, and composed onto ``Game`` directly after it; each side calls the
 other through ``self``.
 """
 
-from ..auras import aura_restriction_active
+from ..aura_restrictions import aura_restriction_active
 from ..combat_permissions import (ATTACK_AS_THOUGH_NO_DEFENDER,
                                   ATTACKS_AS_THOUGH_NO_DEFENDER,
                                   CANT_ATTACK_UNTIL_EOT)

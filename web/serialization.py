@@ -32,8 +32,10 @@ from engine.activation_prohibitions import activation_prohibition
 from engine.keywords import abilities_lost_at, derived_ability_lines
 from engine.hand_locks import locked_hand_indices
 from engine.revealed_hands import hand_revealed_to
-from engine.targeting import (derive_cast_spec, recorded_role_seats, spec_is_a_cost,
+from engine.targeting import (derive_cast_spec,
                               usable_activated_abilities)
+from engine.target_roles import recorded_role_seats
+from engine.cost_pickers import spec_is_a_cost
 from engine.text_changes import changed_words
 
 from .runtime import CARD_BY_NAME

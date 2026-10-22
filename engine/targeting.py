@@ -43,8 +43,8 @@ points — :func:`derive_cast_spec`, :func:`derive_activation_spec`,
 :func:`derive_instruction_spec` and the slot readers beside them — the
 subject filters a handler reads off a payload, and what an object already on
 the stack announced (CR 115.9). The evidence was split out of it at the
-2,000-line cap, and every name a caller pulls from ``engine.targeting`` is
-still exported here:
+2,000-line cap, and a caller imports each name from the module that defines
+it:
 
 * ``engine/enchant_targets.py`` — an Aura's "Enchant <subject>" line;
 * ``engine/cast_targets.py`` — what a cast announces: its mode, its kicker,
@@ -71,23 +71,6 @@ from .instruction_targets import (_first_described_slot, _from_instructions,
                                   _nested_steps)
 from .cast_targets import (_as_kicked, _cast_cost_picker, _cast_target_spec,
                            _kickers_announced, announced_mode_instructions)
-
-# Re-exported: names other modules pull from ``engine.targeting`` that moved
-# out of it at the 2,000-line split (the docstring's last paragraph says where
-# each went). This module stays their import path — several of their
-# importers were being split by other groups in the same round — and new code
-# may import a name from the module that defines it.
-from .enchant_targets import enchant_clause_nouns, enchant_line_subject
-from .target_roles import (ROLES_TARGET_KIND, ROLE_SEATS, SEAT_ROLE_KINDS,
-                           payload_own_role, payload_role_slot,
-                           recorded_role_seats, role_dependency, role_is_seat,
-                           role_relation_holds, role_seat_positions)
-from .target_descriptions import (SINGLE_GRAVEYARD, _from_targets_payload,
-                                  slot_list_is_exact)
-from .cost_pickers import spec_is_a_cost
-from .cast_targets import (cast_announced_entry_trigger,
-                           entry_trigger_instructions)
-from .picker_probes import line_names_a_cast_target
 
 
 #: Set on a graveyard-target spec derived for a cast **out of a graveyard**:

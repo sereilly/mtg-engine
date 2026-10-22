@@ -105,7 +105,7 @@ def test_the_client_reads_both_spellings_of_a_seat_role():
     neighbour's reason: the client is DOM-coupled and cannot be imported here,
     and which list the branch consults is the real answer.
     """
-    from engine.targeting import SEAT_ROLE_KINDS
+    from engine.target_roles import SEAT_ROLE_KINDS
     from tests.helpers import app_js_function_body
 
     body = app_js_function_body("roleChoosesAPlayer")

@@ -206,7 +206,8 @@ from engine.cast_costs import (BUYBACK_RULES_TEXT, additional_costs,
                                buyback_cost, buyback_paid, expand_buyback_line,
                                is_buyback_line, unread_cost_sentence)
 from engine.models import Permanent
-from engine.oracle import compile_card_oracle, expand_card_lines
+from engine.oracle import compile_card_oracle
+from engine.line_rewrites import expand_card_lines
 
 
 def _g2_rig(set_pool, card_name, **pool):

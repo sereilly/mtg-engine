@@ -1290,7 +1290,7 @@ def test_the_printed_target_opponent_survives_the_lowering(set_pool):
     for one.
     """
     from engine.grammar import compile_line
-    from engine.targeting import _from_targets_payload
+    from engine.target_descriptions import _from_targets_payload
 
     lowered = compile_line(
         "Flip a coin. If you win the flip, you gain 1 life and target opponent "

@@ -19,8 +19,9 @@ from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
-from engine.targeting import (derive_activation_spec, role_is_seat, spec_roles,
+from engine.targeting import (derive_activation_spec, spec_roles,
                               usable_activated_abilities)
+from engine.target_roles import role_is_seat
 from tests.helpers import resolve_stack
 
 _POOL: dict = {}

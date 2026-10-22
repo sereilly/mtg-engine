@@ -453,7 +453,7 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     # whole static half is this sentence reported "text too complex" for the one
     # line the engine could enforce end to end. Asked of the reader that
     # enforces it, so the claim cannot outlive the ban.
-    from .cast_restrictions import chosen_name_ban_line, own_cast_ban_line
+    from .cast_bans import chosen_name_ban_line, own_cast_ban_line
 
     if own_cast_ban_line(normalized) is not None:
         return True

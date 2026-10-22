@@ -35,28 +35,6 @@ if TYPE_CHECKING:
     from ..game_types import OracleExecutionContext
 from ..models import Permanent
 
-# Re-exported, and not an API: an importer pulls a name from the floor it lives
-# in. Each name below is pulled from here by a module another group of the same
-# split round was cutting in parallel (``engine/legality.py``,
-# ``engine/mixins/stack/choices.py``, ``engine/ai_policy.py``,
-# ``engine/ai_valuation.py``, ``engine/activation_restrictions.py``,
-# ``engine/cast_restrictions.py``), mostly from inside functions that round was
-# moving, so the import lines could not move with this split without a merge
-# conflict on every one. Three modules ``tests/engine/test_module_size.py``
-# still holds at their size pull some of them from here too
-# (``engine/handlers/control_flow.py``, ``engine/handlers/stack.py``,
-# ``engine/mixins/permanent_state.py``):
-# one import statement there would have become several, and a held module may
-# not grow. Each name goes when its last importer is repointed — the import
-# hygiene guard fails a re-export nobody pulls.
-from ._amounts import count_from_payload, evaluate_count, resolve_amount
-from ._chosen import CHOSEN_CARD_TYPE, _resolve_chosen_subtype
-from ._filters import (_card_matches_filter, _comparison_holds,
-                       excluded_graveyard_slot, graveyard_card_matches,
-                       graveyard_slots_matching, permanent_matches_filter,
-                       state_holds)
-from ._targets import attached_host, resolve_target_permanent
-
 
 def return_permanent_to_owners_hand(game, permanent, fallback_owner=None):
     """Take one permanent off the battlefield into its owner's hand (CR 400.3).

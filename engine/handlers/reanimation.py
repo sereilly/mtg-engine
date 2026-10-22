@@ -994,7 +994,7 @@ def return_all_cards_from_graveyard(game: Game, instruction: OracleInstruction, 
                 if len(legal) > 1 and seat in game.interactive_seats:
                     asks.append((seat, index, card, legal))
                     continue
-                from ..ai_policy import choose_returning_aura_host
+                from ..ai_targets import choose_returning_aura_host
 
                 # One legal host is no question; a seat nobody asks takes the
                 # policy's pick (``ai_policy.choose_returning_aura_host``).

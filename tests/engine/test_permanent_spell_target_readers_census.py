@@ -44,10 +44,11 @@ from engine.faces import compilation_units
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.targeting import (
-    cast_announced_entry_trigger, derive_activation_spec, derive_cast_spec,
+    derive_activation_spec, derive_cast_spec,
     single_player_target, single_spell_target, spell_targets,
     stack_object_target_spec,
 )
+from engine.cast_targets import cast_announced_entry_trigger
 from tests.helpers import resolve_stack
 
 #: Floors, because a sweep that reaches nothing passes. 52 permanents, 14

@@ -522,7 +522,7 @@ def _entry_gate_gives_back_more_than_it_brings(
     A card its own noun does not admit is left alone: with nothing to return
     the trigger does nothing, and the permanent stays.
     """
-    from .handlers._common import _card_matches_filter
+    from .handlers._filters import _card_matches_filter
 
     gate = entry_self_return_gate(card)
     if gate is None:
@@ -613,7 +613,7 @@ def _caster_holds_a_hand_pick_entrant(
     the pick writes.
     """
     from .game_types import OracleExecutionContext
-    from .handlers._common import _card_matches_filter
+    from .handlers._filters import _card_matches_filter
     from .handlers.control_flow import evaluate_condition
 
     entries = spell_hand_pick_entries(card)

@@ -315,7 +315,7 @@ def _source_in_combat(game: "Game", controller_index: int, source, match) -> boo
     """
     if source is None:
         return False
-    from .handlers._common import state_holds
+    from .handlers._filters import state_holds
 
     words = [word for word in match.group("roles").split(" or ")]
     return any(state_holds(source, word) for word in words)

@@ -354,7 +354,7 @@ class NumberChoicesMixin:
         gives it — a policy over the life totals every player can see, which
         is the whole of what this seat is entitled to know. It does not read
         the map this answer goes into."""
-        from ....ai_policy import choose_secret_number
+        from ....ai_prompts import choose_secret_number
 
         return self._resolve_secret_number(
             choice,

@@ -65,9 +65,10 @@ from .oracle import compile_card_oracle
 from .stack_targets import names_a_target
 from .target_requirements import narrow_offer
 from .targeting import (
-    ROLES_TARGET_KIND, activation_target_slot, cast_target_slot,
+    activation_target_slot, cast_target_slot,
     graveyard_target_spec, spec_offers_a_player, spec_roles,
 )
+from .target_roles import ROLES_TARGET_KIND
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .game import Game

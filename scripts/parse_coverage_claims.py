@@ -68,8 +68,7 @@ from engine.draw_step_modifiers import (  # noqa: E402
 from engine.global_statics import global_static_for  # noqa: E402
 from engine.stack_statics import stack_static_claims_line  # noqa: E402
 from engine.mana_spending import mana_spending_for  # noqa: E402
-from engine.targeting import enchant_line_subject  # noqa: E402
-from engine.enchant_targets import enchant_graveyard_line  # noqa: E402
+from engine.enchant_targets import enchant_graveyard_line, enchant_line_subject  # noqa: E402
 from engine.lord_buffs import sacrifice_state_trigger  # noqa: E402
 from engine.auras import aura_effect_claim  # noqa: E402
 from engine.aura_grants import aura_static_pt_grant  # noqa: E402

@@ -25,7 +25,8 @@ judges it.
 from __future__ import annotations
 
 from .models import CardDefinition, Permanent, PlayerState
-from .targeting import role_is_stack, role_relation_holds, spec_roles
+from .targeting import role_is_stack, spec_roles
+from .target_roles import role_relation_holds
 
 
 def _role_object_key(obj) -> tuple:
@@ -453,7 +454,7 @@ class RoleTargetsMixin:
         printed "another"): two players named as different players cannot
         come to be one.
         """
-        from .targeting import recorded_role_seats, role_seat_positions
+        from .target_roles import recorded_role_seats, role_seat_positions
 
         recorded = recorded_role_seats(holder)
         if recorded is None:

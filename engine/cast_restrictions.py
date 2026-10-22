@@ -28,28 +28,6 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import TYPE_CHECKING, Callable
 
-# Re-exported for the modules that imported them from here before the board
-# half of CR 601.3 moved to ``cast_bans`` (``oracle.py``'s support gates,
-# ``mixins/stack/choices.py``); new code imports them from there.
-from .cast_bans import (  # noqa: F401
-    CHOSEN_CARD_NAMES,
-    COMBAT_PLAY_BAN_CLAIM,
-    GLOBAL_PLAY_TIMING_CLAIM,
-    LAST_CAST_COLOR_BAN_CLAIM,
-    MOST_PERMANENTS_PLAY_BAN_CLAIM,
-    OWN_CAST_BAN_CLAIM,
-    SAME_NAME_AS_PERMANENT_BAN_CLAIM,
-    SPELL_CAP_CLAIM,
-    chosen_name_ban_line,
-    combat_play_ban_line,
-    global_play_timing_line,
-    last_cast_color_ban_line,
-    most_permanents_play_ban_line,
-    own_cast_ban_line,
-    same_name_as_permanent_ban_line,
-    spell_cap_line,
-)
-
 if TYPE_CHECKING:
     from .game import Game
 
@@ -706,7 +684,7 @@ def spells_cast_matching(game: "Game", seat: int, payload: dict) -> bool:
     record holds ``CardDefinition``s, the printed faces, which is exactly what
     there is to ask about a spell that is no longer anywhere.
     """
-    from .handlers._common import _card_matches_filter
+    from .handlers._filters import _card_matches_filter
 
     if not 0 <= seat < len(game.players):
         return False
@@ -728,7 +706,7 @@ def _an_opponent_cast(game: "Game", caster_index: int, payload: dict) -> bool:
     printed faces, which is exactly what there is to ask about a spell that is
     no longer anywhere.
     """
-    from .handlers._common import _card_matches_filter
+    from .handlers._filters import _card_matches_filter
 
     return any(
         _card_matches_filter(spell, payload)

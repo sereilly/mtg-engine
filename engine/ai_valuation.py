@@ -76,31 +76,6 @@ from .ai_weighed_cast import (
     _effect_steps,
 )
 
-# Not read here: bound for the engine modules that import these from
-# `ai_valuation` inside the function that asks (a resolution's default
-# answer -- `mixins/stack/choices`, `handlers/zones`, `handlers/control_flow`
-# and the cast and activation paths). The split that gave each its own
-# module left their import lines where they were.
-from .ai_target_sides import activation_target_side, ability_target_side
-from .ai_prompt_readers import (
-    chosen_creature_type_side,
-    offered_action_is_a_payment,
-    offered_alternative_changes_nothing,
-    threatening_color,
-    color_most_worth_sweeping,
-    exiled_search_pile_comes_back,
-    pick_is_tested_for_a_shared_color,
-    exiled_search_pile_comes_back_one_at_a_time,
-    FLIP_RUN_LENGTH,
-    chosen_number_bounds_flip_run,
-    chosen_name_own_zone,
-    chosen_name_is_read_off_the_targets_library,
-    denied_graveyard_pile,
-    graveyard_denial_order,
-    graveyard_price_order,
-    reads_what_its_cost_exiled,
-)
-
 
 # Instruction kinds that add mana to their controller's pool (CR 605.1a).
 #
@@ -260,7 +235,7 @@ def entry_triggers_bought(
     Empty for an instant or sorcery, whose bought half is a step of its own
     resolution and is read off the cast spec.
     """
-    from .targeting import entry_trigger_instructions
+    from .cast_targets import entry_trigger_instructions
 
     if card.primary_type in SPELL_TYPES or not optional_cost_payments:
         return ()

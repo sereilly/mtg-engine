@@ -776,7 +776,7 @@ def test_a_card_naming_itself_is_read_as_the_object_not_as_the_word(catalog_by_n
     Position decides which, so the collapse is not a blanket substitution: a
     name in a type slot ("each other attacking …") is left alone.
     """
-    from engine.oracle import _collapse_self_references
+    from engine.self_reference import _collapse_self_references
 
     printed = ("whenever aurochs attacks, it gets +1/+0 until end of turn "
                "for each other attacking aurochs")

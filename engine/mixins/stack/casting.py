@@ -44,12 +44,14 @@ from ...faces import choose_a_face_refusal, spell_named
 from ...classifier import classify_card
 from ...cost_modifiers import (CostReduction, buyback_cost_reduction,
                                cost_reduction_for_cast, reduce_cost,
-                               self_per_target_tax, spell_cost_tax,
+                               spell_cost_tax,
                                spell_life_tax, spell_symbol_tax)
+from ...self_cost_modifiers import self_per_target_tax
 from ...flashback import is_flashback
 from ...game_types import SimulationResult, StackItem, chosen_damage_source
 from ...models import CardDefinition
-from ...oracle import _COLOR_WORD_TO_SYMBOL, compile_card_oracle
+from ...oracle import compile_card_oracle
+from ...oracle_types import _COLOR_WORD_TO_SYMBOL
 from ...targeting import graveyard_target_spec, derive_cast_spec
 from ...target_roles import ROLE_SEATS
 from .cast_additional_costs import (_optional_cost_announcement,

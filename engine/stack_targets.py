@@ -218,7 +218,7 @@ _UNTARGETED_SPEC_FLAGS = ("source_of_choice", "optional")
 
 def _spec_targets(spec: dict | None) -> bool:
     """Whether *spec* describes a picker that is a CR 115.1 target."""
-    from .targeting import spec_is_a_cost
+    from .cost_pickers import spec_is_a_cost
 
     if not spec or spec.get("kind") in (None, "none", "modal", "hand_card", "faces"):
         return False
@@ -371,7 +371,7 @@ def _spell_names_a_target(card) -> bool:
     reading here and in ``tests/engine/test_targeting.py``.
     """
     from .legality import _cast_lines
-    from .targeting import line_names_a_cast_target
+    from .picker_probes import line_names_a_cast_target
 
     return any(
         line_names_a_cast_target(_REMINDER_TEXT.sub("", line))
@@ -422,9 +422,11 @@ def _read(game: "Game", item: "StackItem", announcement: _Announcement) -> list[
     beside a player-kind spec with no permanent it is a face.
     """
     from .targeting import (
-        GRAVEYARD_TARGET_KIND, ROLES_TARGET_KIND, _PLAYER_TARGET_SPEC_KINDS,
-        recorded_role_seats, role_is_seat, role_is_stack, spec_roles,
+        GRAVEYARD_TARGET_KIND, _PLAYER_TARGET_SPEC_KINDS,
+        role_is_stack, spec_roles,
     )
+    from .target_roles import (ROLES_TARGET_KIND, recorded_role_seats,
+                               role_is_seat)
 
     spec, holder, mode = announcement.spec, announcement.holder, announcement.mode
     kind = spec.get("kind")
@@ -642,7 +644,7 @@ def _printed_target_instances(item: "StackItem") -> int | None:
     """
     from .legality import _cast_lines
     from .oracle import compile_card_oracle
-    from .targeting import line_names_a_cast_target
+    from .picker_probes import line_names_a_cast_target
 
     def count(text: str | None) -> int:
         return _target_instances(text) if text else 0
@@ -874,7 +876,7 @@ def names_several_targets(item: "StackItem") -> bool:
     # …or several **players**, each on a slot of its own ("target player …
     # another target player", Cultural Exchange): the list is only ever
     # recorded for two or more of them.
-    from .targeting import recorded_role_seats
+    from .target_roles import recorded_role_seats
 
     if recorded_role_seats(item) is not None:
         return True
@@ -940,7 +942,7 @@ def blank_illegal_targets(item: "StackItem", targets) -> int:
     scalar seat beside it. The list is replaced, never mutated: a copy of the
     spell (CR 707.10) shares the original's list object.
     """
-    from .targeting import ROLE_SEATS, recorded_role_seats
+    from .target_roles import ROLE_SEATS, recorded_role_seats
 
     blanked = 0
     dropped: list[int] = []

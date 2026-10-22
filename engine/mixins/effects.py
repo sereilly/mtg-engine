@@ -23,7 +23,8 @@ import re
 
 from ..color_changes import change_color
 from ..card_hooks import UNTAPPED_ARTIFACT_PROTECTORS
-from ..auras import aura_restriction_active, attached_subject_triggers
+from ..aura_restrictions import aura_restriction_active
+from ..aura_attachment import attached_subject_triggers
 from ..damage_events import (EVENT_LOCK, EVENT_PREVENTION_LOCK,
                              damage_source_seat, deal_damage,
                              lifelink_life_gained)
@@ -277,7 +278,7 @@ class EffectsMixin:
         """Whether an Aura can't be attached to *permanent* — either a per-permanent
         flag set by an effect, or Guardian Beast's continuous grant to the
         noncreature artifacts its controller controls while it's untapped."""
-        from ..auras import cant_be_enchanted_by_own_text
+        from ..aura_restrictions import cant_be_enchanted_by_own_text
 
         return (
             bool(permanent.metadata.get("cant_be_enchanted_by_auras"))

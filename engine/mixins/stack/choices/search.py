@@ -203,7 +203,7 @@ class LibrarySearchChoicesMixin:
             # permanent untaps has one place to be.
             rider = choice.data.get("untap_found_if")
             if rider and found.tapped:
-                from ....handlers._common import evaluate_count
+                from ....handlers._amounts import evaluate_count
 
                 held = evaluate_count(self, caster, rider["filter"])
                 if held >= int(rider["threshold"]):
@@ -821,7 +821,7 @@ class LibrarySearchChoicesMixin:
         """The AI's search policy, and a fail-to-find when it declines or when
         its choice turns out not to be legal — the library is searched either
         way (CR 701.23b), which is what the decline path performs."""
-        from ....ai_policy import choose_search_card, choose_search_cards
+        from ....ai_prompts import choose_search_card, choose_search_cards
 
         slots = self._search_destination_slots(choice.data)
         if len(slots) > 1:
@@ -1013,7 +1013,7 @@ class LibrarySearchChoicesMixin:
             # the library in exile. How many, and which, is a weight
             # (`ai_policy.slow_pile_picks`); that it is asked at all is this
             # registry's decision, made where the candidates are known.
-            from ....ai_policy import slow_pile_picks
+            from ....ai_prompts import slow_pile_picks
 
             picks = slow_pile_picks(self, choice.player_index, picks)
         if not self._resolve_search_exile(choice, picks):

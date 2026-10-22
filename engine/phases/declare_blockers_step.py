@@ -15,7 +15,8 @@ onto ``Game`` directly after this.
 
 import random
 
-from ..auras import attached_combat_restrictions, aura_restriction_active
+from ..aura_restrictions import (attached_combat_restrictions,
+                                 aura_restriction_active)
 from ..combat_permissions import (MUST_BLOCK_ALL_UNTIL_EOT,
                                   MUST_BLOCK_ATTACKERS_UNTIL_EOT,
                                   MUST_BLOCK_UNTIL_EOT)

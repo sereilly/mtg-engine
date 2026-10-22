@@ -24,7 +24,7 @@ from __future__ import annotations
 import re
 
 from ..card_hooks import ON_LEAVE_BATTLEFIELD
-from ..auras import auras_attached_to
+from ..aura_attachment import auras_attached_to
 from ..destruction_events import (RESOLVING, announce_destroyed,
                                   destruction_finished)
 from ..delayed_triggers import fire_delayed_triggers

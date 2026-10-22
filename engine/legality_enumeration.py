@@ -16,12 +16,9 @@ this reaches for a ``stack`` spec.
 
 from __future__ import annotations
 
-from .handlers._common import (
-    excluded_graveyard_slot,
-    graveyard_card_matches,
-    permanent_matches_filter,
-    state_holds,
-)
+from .handlers._filters import (excluded_graveyard_slot,
+                                graveyard_card_matches,
+                                permanent_matches_filter, state_holds)
 from .models import CardDefinition, Permanent
 from .cast_restrictions import timing_fixed_seat
 from .faces import whole_card
@@ -29,9 +26,9 @@ from .player_statics import seat_has_player_keyword
 from .subject_filters import card_matches_any, subject_matches
 from .targeting import (
     CAST_FROM_GRAVEYARD,
-    spec_is_a_cost,
     spec_offers_a_player,
 )
+from .cost_pickers import spec_is_a_cost
 from .legality import _STACK_TARGET_KINDS, spec_chooses_a_source
 
 
@@ -407,7 +404,7 @@ class TargetEnumerationMixin:
                 # Mantle): the creature excluded is the one the source is
                 # attached to, which is the one that will deal the damage.
                 if spec.get("exclude_attached"):
-                    from .handlers._common import attached_host
+                    from .handlers._targets import attached_host
 
                     if perm is attached_host(self, source_permanent):
                         continue
@@ -1009,7 +1006,7 @@ class TargetEnumerationMixin:
 
         def eligible(card) -> bool:
             if cost_filter:
-                from .handlers._common import _card_matches_filter
+                from .handlers._filters import _card_matches_filter
 
                 if not _card_matches_filter(card, cost_filter):
                     return False

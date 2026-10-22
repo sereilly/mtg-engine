@@ -73,7 +73,7 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
     # Function-level, like every other `..targeting` reader in `handlers/`:
     # that module reads the cast-cost tables, which read the filters, which
     # read this package.
-    from ..targeting import payload_own_role
+    from ..target_roles import payload_own_role
 
     target = context.target
     card = context.card

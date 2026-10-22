@@ -57,10 +57,11 @@ from engine.handlers import _targets
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.stack_targets import announcement_targets, chosen_targets
-from engine.targeting import (ROLE_SEATS, derive_activation_spec,
-                              derive_cast_spec, recorded_role_seats,
-                              role_is_seat, spec_roles,
+from engine.targeting import (derive_activation_spec,
+                              derive_cast_spec,
+                              spec_roles,
                               usable_activated_abilities)
+from engine.target_roles import ROLE_SEATS, recorded_role_seats, role_is_seat
 from engine.target_descriptions import roles_spec
 from tests.engine.test_player_target_census import SCENARIOS, kickers, table
 

@@ -28,7 +28,7 @@ from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
-from engine.targeting import slot_list_is_exact
+from engine.target_descriptions import slot_list_is_exact
 from tests.helpers import resolve_stack
 
 #: Both manifest roles, first printing wins. Consume Strength is Apocalypse's,

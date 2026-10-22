@@ -58,7 +58,9 @@ def arm_damage_to_counter_removal(game: Game, instruction: OracleInstruction, co
     every record naming the seat whose upkeep it is, which is exactly "until
     your next upkeep".
     """
-    from ..replacements import DAMAGE_TO_COUNTER_REMOVAL_RECORD
+    from ..replacements.damage_substitutions import (
+        DAMAGE_TO_COUNTER_REMOVAL_RECORD,
+    )
 
     source = context.source_permanent
     if source is None:

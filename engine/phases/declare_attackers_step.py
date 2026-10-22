@@ -12,7 +12,7 @@ are ``attack_legality.py``'s, composed onto ``Game`` directly after this.
 """
 
 from ..attack_tapping import attacking_causes_tap
-from ..auras import attached_combat_restrictions
+from ..aura_restrictions import attached_combat_restrictions
 from ..combat_restrictions import (declaration_tap_costs, defender_attack_cap,
                                    participation_cap)
 from ..mana_payment import mana_cost_label, plan_payment
@@ -883,7 +883,7 @@ class DeclareAttackersStepMixin:
         the stack (e.g. Mijae Djinn's coin flip) — one per attacking creature
         that has the trigger, unlike _fire_attack_triggers' once-per-declaration
         team-wide version."""
-        from ..auras import attached_subject_triggers
+        from ..aura_attachment import attached_subject_triggers
         from ..game_types import StackItem
 
         controller = self.players[controller_index]

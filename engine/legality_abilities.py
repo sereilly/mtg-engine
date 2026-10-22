@@ -23,7 +23,7 @@ permanent may carry several that target differently
 
 from __future__ import annotations
 
-from .handlers._common import evaluate_count
+from .handlers._amounts import evaluate_count
 from .models import CardDefinition
 from .divided_damage import divided_entry
 from .oracle import compile_card_oracle
@@ -35,13 +35,13 @@ from .target_requirements import (
 )
 from .targeting import (
     GRAVEYARD_TARGET_KIND,
-    ROLES_TARGET_KIND,
     activation_target_slot,
     role_is_stack,
-    spec_is_a_cost,
     spec_roles,
     usable_activated_abilities,
 )
+from .target_roles import ROLES_TARGET_KIND
+from .cost_pickers import spec_is_a_cost
 from .legality import (
     _unnamed_single_pile_refusal,
     _iter_instruction_tree,

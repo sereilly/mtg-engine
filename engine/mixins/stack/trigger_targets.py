@@ -777,7 +777,7 @@ class TriggerTargetsMixin:
                 # a pile and its slots (``_resolve_trigger_graveyard_targets``).
                 from collections import Counter
 
-                from ...targeting import SINGLE_GRAVEYARD
+                from ...target_descriptions import SINGLE_GRAVEYARD
 
                 piles = Counter(
                     entry["seat"] for entry in offered if entry["kind"] == "graveyard"
@@ -976,7 +976,7 @@ class TriggerTargetsMixin:
         which is what every prompt in this engine does when nothing
         distinguishes the options.
         """
-        from ...ai_valuation import activation_target_side
+        from ...ai_target_sides import activation_target_side
 
         candidates = option.get("valid_targets") or []
         if not candidates:

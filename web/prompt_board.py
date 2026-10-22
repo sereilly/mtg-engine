@@ -239,8 +239,6 @@ def _untap_up_to(ctx: PromptContext, choices: list) -> dict:
     """"Untap up to four lands." (Rewind): every matching permanent on every
     battlefield, by stable id, multi-select up to the amount. The engine
     re-validates each id, so the candidate list is a hint."""
-    from engine.handlers._filters import permanent_matches_filter
-
     from engine.subject_filters import subject_matches
 
     choice = choices[0]

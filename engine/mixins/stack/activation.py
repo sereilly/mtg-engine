@@ -24,12 +24,12 @@ from __future__ import annotations
 
 
 from ...restricted_mana import ACTIVATE, PaymentPurpose
-from ...auras import attached_ability_cost_reduction
+from ...aura_grants import attached_ability_cost_reduction
 from ...bare_announcements import (announced_fields, default_activation_target,
                                    names_an_object, seat_of_unseated_slot)
 from ...cost_modifiers import (ability_cost_reduction, ability_cost_tax,
-                               ability_self_reduction_amount,
                                 sacrifice_taxes)
+from ...self_cost_modifiers import ability_self_reduction_amount
 from ...divided_damage import DIVIDED_TARGETS
 from ...cost_x_definitions import cost_x_is_defined, cost_x_value
 from ...oracle_types import x_spend_colors_from_text
@@ -44,10 +44,6 @@ from ...handlers._chosen import CHOSEN_ABILITY
 from ...handlers._targets import attached_host
 from ...oracle import OracleInstruction
 from .activation_payment import activation_mana_per_counter
-# Re-exported, temporarily: ``engine/ai_policy.py`` pulls it from here
-# inside a function, and that module is being split by another group of the
-# same round. New code imports it from ``card_activation``.
-from .card_activation import hand_activation_cost
 
 
 class AbilityActivationMixin:

@@ -83,26 +83,6 @@ from .aura_vocabulary import (
     _line_text,
 )
 
-# Re-exported: names that moved out at the 2,000-line split and are still
-# pulled from ``engine.auras`` by modules other groups were splitting in the
-# same round (``mixins/helpers``, ``mixins/permanent_state``,
-# ``mixins/effects``, ``mixins/stack/activation``, ``prevention``,
-# ``handlers/board_misc``, ``ai_policy`` and the two declare steps), whose
-# import lines were left alone. New code imports a name from the module that
-# defines it.
-from .aura_attachment import (BECAME_AURA_ENCHANT, BECAME_AURA_RECORD,
-                              attach_aura, attached_subject_triggers,
-                              auras_attached_to, detach_aura)
-from .aura_grants import (AMONG_CONTROLLED_PROTECTION_COLORS,
-                          CHOSEN_PROTECTION_COLOR,
-                          attached_ability_cost_reduction,
-                          aura_board_counted_penalty, aura_protection_colors,
-                          conditional_ability_lines_for)
-from .aura_restrictions import (attached_block_ceiling,
-                                attached_combat_restrictions,
-                                aura_restriction_active,
-                                cant_be_enchanted_by_own_text)
-
 #: "Enchanted land is a Swamp." (Evil Presence.) "Enchanted land is **an**
 #: Island." (Lingering Mirage.) CR 305.7's replacement, layer 4 — and one
 #: pattern for the claim and for the change, so a line this table admits is a
@@ -1207,8 +1187,10 @@ def aura_continuous_claim(line: str) -> str | None:
     """
     # Imported here rather than at module scope: `prevention` reads this
     # module's attachment record, so the two are mutually recursive at import.
-    from .prevention import (
+    from .prevention.shields import (
         attached_damage_shield as _attached_damage_shield_line,
+    )
+    from .prevention.static import (
         attached_prevent_all_from_source_type as _attached_prevent_all_from_source_type,
     )
     from .target_immunity import immunity_claims_line

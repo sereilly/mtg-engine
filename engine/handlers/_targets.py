@@ -316,7 +316,7 @@ def roles_still_legal(
     blocked.
     """
     from ..subject_filters import subject_matches
-    from ..targeting import role_is_seat
+    from ..target_roles import role_is_seat
 
     targets = (payload or {}).get("targets") or {}
     roles = list(targets.get("roles") or ())
@@ -366,7 +366,7 @@ def roles_still_legal(
         # printed phrase admits — the stack picker's own list, asked again for
         # this slot, by identity.
         if role.get("kind") == "spell":
-            from ..targeting import _from_targets_payload
+            from ..target_descriptions import _from_targets_payload
 
             named = context.stack_target
             admitted = game._offered_stack_targets(
@@ -399,7 +399,7 @@ def _role_relation_still_holds(game: Game, role: dict, roles: list, resolved: li
     copies of this lookup is exactly how a re-check comes to disagree with the
     picker it was written from.
     """
-    from ..targeting import role_dependency, role_relation_holds
+    from ..target_roles import role_dependency, role_relation_holds
 
     _relation, depends_on = role_dependency(role)
     earlier = next(
@@ -593,7 +593,7 @@ def resolve_role_permanent(
     caller that has one seat in hand (a test, the AI); the wire always sends
     ids, because the roles of one spell may sit on two battlefields.
     """
-    from ..targeting import payload_role_slot
+    from ..target_roles import payload_role_slot
 
     slot = payload_role_slot(payload, role)
     if slot is None:
@@ -640,8 +640,9 @@ def resolve_role_player(
     above stands for a two-player payload announced *without* the list, which
     is an announcement the cast gate does not accept.
     """
-    from ..targeting import (payload_role_slot, recorded_role_seats,
-                             role_is_seat, spec_roles)
+    from ..targeting import spec_roles
+    from ..target_roles import (payload_role_slot, recorded_role_seats,
+                                role_is_seat)
 
     slot = payload_role_slot(payload, role)
     if slot is None:
@@ -740,7 +741,7 @@ def resolve_role_graveyard_card(
     role that no longer resolves is CR 608.2b's illegal target, not an
     invitation to reanimate whichever artifact card is nearest.
     """
-    from ..targeting import payload_role_slot
+    from ..target_roles import payload_role_slot
 
     slot = payload_role_slot(payload, role)
     if slot is None:

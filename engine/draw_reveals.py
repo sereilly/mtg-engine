@@ -84,7 +84,7 @@ def reveals_every_draw(game, player_index: int) -> bool:
     A permanent whose entry choice recorded nobody names nobody, which is the
     honest reading of a card that entered with no opponent to choose.
     """
-    from .oracle import expand_card_lines
+    from .line_rewrites import expand_card_lines
 
     for permanent in game.all_permanents():
         if permanent.metadata.get("chosen_player_index") != player_index:
@@ -112,7 +112,7 @@ def reveals_first_draw(game, player_index: int) -> bool:
     from ``expand_ability_lines`` is reading a different card" rule, collected
     the first time this module asked the question.
     """
-    from .oracle import expand_card_lines
+    from .line_rewrites import expand_card_lines
 
     for permanent in game.controlled_by(player_index):
         card = permanent.effective_card

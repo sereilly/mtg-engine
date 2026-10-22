@@ -82,7 +82,7 @@ def counter_cap(permanent, kind: str) -> int | None:
     asked what it says now (CR 613 layers 1 and 3) — the same reading
     ``target_immunity`` gives its own restriction.
     """
-    from .oracle import expand_card_lines
+    from .line_rewrites import expand_card_lines
 
     card = getattr(permanent, "effective_card", None) or permanent.card
     for line in expand_card_lines(card):

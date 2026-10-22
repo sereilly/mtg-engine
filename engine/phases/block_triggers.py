@@ -98,7 +98,7 @@ class BlockTriggersMixin:
         Path is the other case and leaves the flag alone: its creatures are
         removed from combat first, so they really do start blocking again.
         """
-        from ..auras import attached_subject_triggers
+        from ..aura_attachment import attached_subject_triggers
         from ..events import trigger_subject_matches
         from ..game_types import StackItem
 
@@ -296,7 +296,7 @@ class BlockTriggersMixin:
         one that targets chooses its target as it is put on the stack
         (``_choose_trigger_targets``), from the list the picker offers.
         """
-        from ..auras import attached_subject_triggers
+        from ..aura_attachment import attached_subject_triggers
         from ..game_types import StackItem
 
         if self.combat_unblocked_triggers_fired:
@@ -503,7 +503,7 @@ class BlockTriggersMixin:
         to admit — CR 509.3c and CR 509.3d drawing their line through one body
         rather than two.
         """
-        from ..auras import attached_subject_triggers
+        from ..aura_attachment import attached_subject_triggers
         from ..events import trigger_subject_matches
         from ..game_types import StackItem
         from ..targeting import announces_a_target

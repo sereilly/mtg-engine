@@ -36,7 +36,7 @@ from __future__ import annotations
 
 import re
 
-from ..enter_effects import (ENTERED_BATTLEFIELD_TURN, LIFE_PAID_AS_ENTERED,
+from ..enter_effects import (ENTERED_BATTLEFIELD_TURN,
                              entry_exile_requirement,
                              entry_sacrifice_requirement,
                              sacrifice_any_number_on_enter,
@@ -47,8 +47,7 @@ from ..enter_effects import (ENTERED_BATTLEFIELD_TURN, LIFE_PAID_AS_ENTERED,
                              chooses_two_land_types_on_enter,
                              chooses_creature_type_on_enter,
                              chooses_land_type_on_enter,
-                             choose_one_of_two_on_enter, CHOSEN_COLOR_KEY,
-                             CHOSEN_LAND_TYPE_KEY,
+                             choose_one_of_two_on_enter,
                              chooses_two_card_names_on_enter,
                              chooses_card_name_on_enter,
                              chooses_opponent_on_enter,
@@ -60,8 +59,9 @@ from ..enter_effects import (ENTERED_BATTLEFIELD_TURN, LIFE_PAID_AS_ENTERED,
                              choose_number_on_enter, pay_any_life_on_enter,
                              enters_with_pt_counters, kicked_entry,
                              enters_with_named_counter,
-                             LOSE_LIFE_EQUAL_TO_TOTAL_ON_ENTER,
-                             choosable_bodies)
+                             LOSE_LIFE_EQUAL_TO_TOTAL_ON_ENTER)
+from ..entry_choices import (LIFE_PAID_AS_ENTERED, CHOSEN_COLOR_KEY,
+                             CHOSEN_LAND_TYPE_KEY, choosable_bodies)
 from .. import copies
 from ..named_counters import add_counters as add_named_counters
 from ..cast_costs import KICKED, KICKED_WITH

@@ -28,9 +28,8 @@ from engine.faces import compilation_units
 from engine.card_loader import load_catalog
 from engine.faces import castable_faces
 from engine.oracle import compile_card_oracle
-from engine.targeting import (derive_cast_spec, derive_cast_target,
-                              line_names_a_cast_target)
-from engine.picker_probes import card_names_a_chooser
+from engine.targeting import derive_cast_spec, derive_cast_target
+from engine.picker_probes import card_names_a_chooser, line_names_a_cast_target
 
 
 def _supported_units(pool):
@@ -574,8 +573,8 @@ def test_a_reanimation_printed_your_graveyard_still_offers_only_yours(supported_
 # self-contained.
 import pytest as _w3g5_pytest
 
-from engine.picker_probes import cast_picker_expected as _w3g5_cast_picker_expected
-from engine.targeting import (
+from engine.picker_probes import (
+    cast_picker_expected as _w3g5_cast_picker_expected,
     line_names_a_cast_target as _w3g5_names_a_cast_target,
 )
 

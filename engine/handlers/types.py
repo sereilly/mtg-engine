@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING
 
 from ..continuous import next_timestamp
 from ..land_types import MIRE_COUNTER, change_land_type
-from ..auras import BECAME_AURA_ENCHANT, BECAME_AURA_RECORD
+from ..aura_attachment import BECAME_AURA_ENCHANT, BECAME_AURA_RECORD
 from ..layer_bridge import SET_CARD_TYPES
 from ..type_changes import gain_types, lose_types
 from ..models import Permanent

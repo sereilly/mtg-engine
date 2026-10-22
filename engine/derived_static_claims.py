@@ -97,8 +97,8 @@ def _derived_static_claims(
     from .cost_modifiers import cost_modifier_claims_line
     from .cost_x_definitions import (cast_x_ceiling_line,
                                      cast_x_definition_line, cast_x_floor_line)
-    from .cast_restrictions import (MOST_PERMANENTS_PLAY_BAN_CLAIM,
-                                    most_permanents_play_ban_line)
+    from .cast_bans import (MOST_PERMANENTS_PLAY_BAN_CLAIM,
+                            most_permanents_play_ban_line)
     from .damage_source_colors import CLAIM as DAMAGE_SOURCE_COLORS_CLAIM
     from .damage_source_colors import colorless_source_line
     from .draw_step_modifiers import (draw_step_bonus_for, draw_step_skip_for,
@@ -210,14 +210,12 @@ def _derived_static_claims(
     # instruction means the card reports unsupported however well the
     # restriction works. Its own claim name for the two bans' reason: it is
     # what the permanent *does*, and it is about everybody else's turns.
-    from .cast_restrictions import (COMBAT_PLAY_BAN_CLAIM,
-                                    OWN_CAST_BAN_CLAIM,
-                                    GLOBAL_PLAY_TIMING_CLAIM,
-                                    SAME_NAME_AS_PERMANENT_BAN_CLAIM,
-                                    combat_play_ban_line,
-                                    own_cast_ban_line,
-                                    same_name_as_permanent_ban_line,
-                                    global_play_timing_line)
+    from .cast_bans import (COMBAT_PLAY_BAN_CLAIM, OWN_CAST_BAN_CLAIM,
+                            GLOBAL_PLAY_TIMING_CLAIM,
+                            SAME_NAME_AS_PERMANENT_BAN_CLAIM,
+                            combat_play_ban_line, own_cast_ban_line,
+                            same_name_as_permanent_ban_line,
+                            global_play_timing_line)
 
     if any(
         global_play_timing_line(line)
@@ -298,9 +296,8 @@ def _derived_static_claims(
     # naming a type, read off the board at every cast — so there is no
     # instruction, and the enchantment's whole text is this sentence, which
     # means no claim is an unsupported card however well the cap works.
-    from .cast_restrictions import (LAST_CAST_COLOR_BAN_CLAIM,
-                                    SPELL_CAP_CLAIM, last_cast_color_ban_line,
-                                    spell_cap_line)
+    from .cast_bans import (LAST_CAST_COLOR_BAN_CLAIM, SPELL_CAP_CLAIM,
+                            last_cast_color_ban_line, spell_cap_line)
 
     # "Players can't cast spells that share a color with the spell most
     # recently cast this turn." (Mana Maze.) Read off the board at every

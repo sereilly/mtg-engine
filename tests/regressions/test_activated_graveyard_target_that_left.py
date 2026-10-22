@@ -40,9 +40,10 @@ from engine.card_loader import load_catalog
 from engine.models import Permanent
 from engine.oracle import compiled_units
 from engine.targeting import (
-    GRAVEYARD_TARGET_KIND, derive_activation_spec, spec_is_a_cost,
+    GRAVEYARD_TARGET_KIND, derive_activation_spec,
     usable_activated_abilities,
 )
+from engine.cost_pickers import spec_is_a_cost
 from tests.helpers import _nosick, resolve_stack
 
 #: Two different cards of each printed type in every pile, so that with the

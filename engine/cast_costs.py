@@ -49,11 +49,8 @@ from .cast_cost_clauses import (
 from .oracle_types import compilation_cache
 
 # Re-exported: ``__all__`` names that moved to ``engine/cast_cost_clauses.py``
-# at the 2,000-line split, and ``graveyard_card_noun``, which
-# ``mixins/stack/casting`` (split by another group in the same round) still
-# pulls from here. New code imports a name from the module that defines it.
-from .cast_cost_clauses import (graveyard_card_noun, read_return_clause,
-                                read_sacrifice_all_clause,
+# at the 2,000-line split, and this module stays their import path.
+from .cast_cost_clauses import (read_return_clause, read_sacrifice_all_clause,
                                 read_sacrifice_clause)
 
 if TYPE_CHECKING:

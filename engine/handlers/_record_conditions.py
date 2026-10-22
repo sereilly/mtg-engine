@@ -619,7 +619,7 @@ def evaluate_record_condition(
         # The activation that is resolving has already been counted — the stamp
         # goes on once every cost and guard has passed — so the fourth use is
         # the one that sees four, which is what the card says.
-        from ..activation_restrictions import activations_this_turn
+        from ..activation_tallies import activations_this_turn
 
         source = context.source_permanent
         if source is None:

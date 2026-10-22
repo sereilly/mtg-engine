@@ -30,7 +30,8 @@ from engine.control import BASE_CONTROLLER, control_changes
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.stack_targets import chosen_targets
-from engine.targeting import ROLE_SEATS, derive_cast_spec
+from engine.targeting import derive_cast_spec
+from engine.target_roles import ROLE_SEATS
 from tests.helpers import _mk_card, _mk_creature_card
 
 NAME = "Cultural Exchange"

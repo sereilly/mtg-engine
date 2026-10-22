@@ -78,13 +78,6 @@ from .registry import (PREVENTION_EFFECTS, PreventionOutcome,
 from . import shields  # noqa: F401  (registers its shields)
 from .static import prevention_claims_line
 
-# Temporary re-exports, not an API: pulled from the package by
-# ``engine/auras.py``, which another group of the 2,000-line cap's split round
-# is cutting in parallel. Each goes when that importer is repointed at
-# ``.shields`` / ``.static``.
-from .shields import attached_damage_shield
-from .static import attached_prevent_all_from_source_type
-
 __all__ = [
     "PREVENTION_EFFECTS",
     "PreventionOutcome",

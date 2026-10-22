@@ -115,7 +115,8 @@ def _spent_role(step: OracleInstruction) -> dict | None:
     one-instruction roles sentence whose handler asks for its role by name —
     "Put X glyph counters on target creature that target Wall blocked").
     """
-    from ..targeting import payload_own_role, spec_roles
+    from ..targeting import spec_roles
+    from ..target_roles import payload_own_role
 
     payload = step.payload if isinstance(step.payload, dict) else {}
     described = payload.get("targets")
@@ -206,8 +207,9 @@ def _role_scoped(
     the toll's context — and resolved against the scoped channels that arm
     would have read the payer's own creature.
     """
-    from ..targeting import (payload_own_role, payload_role_slot, role_is_seat,
-                             spec_roles)
+    from ..targeting import spec_roles
+    from ..target_roles import (payload_own_role, payload_role_slot,
+                                role_is_seat)
     from ._targets import resolve_role_permanent, resolve_role_player
 
     payload = step.payload
@@ -336,7 +338,7 @@ def _role_its_branches_spend(step: OracleInstruction):
     ones a roles lowering built) or when they name more than one — a wrapper
     over two roles has no single object to be about.
     """
-    from ..targeting import payload_own_role
+    from ..target_roles import payload_own_role
 
     found: dict[str, dict] = {}
 

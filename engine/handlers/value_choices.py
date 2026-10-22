@@ -143,8 +143,8 @@ def choose_number(game: Game, instruction: OracleInstruction, context: OracleExe
         # value is for is the sentence behind the choice, read off the compiled
         # program where every such question is, and the length a seat nobody
         # asks takes is a weight beside it.
-        from ..ai_valuation import (FLIP_RUN_LENGTH,
-                                    chosen_number_bounds_flip_run)
+        from ..ai_prompt_readers import (FLIP_RUN_LENGTH,
+                                         chosen_number_bounds_flip_run)
 
         if context.card is not None and chosen_number_bounds_flip_run(
             context.card, instruction
@@ -410,7 +410,8 @@ def choose_color(game: Game, instruction: OracleInstruction, context: OracleExec
                 f"{card_name}: {game.players[seat].name} chose {offered[0]}"
             )
             return True, "resolved"
-    from ..ai_valuation import color_most_worth_sweeping, threatening_color
+    from ..ai_prompt_readers import (color_most_worth_sweeping,
+                                     threatening_color)
 
     default_color = None
     if offered is None:
@@ -474,7 +475,7 @@ def recall_chosen_color(game: Game, instruction: OracleInstruction, context: Ora
     context chose, and protection from a colour nobody named is a protection
     the card never gave.
     """
-    from ..enter_effects import CHOSEN_COLOR_KEY
+    from ..entry_choices import CHOSEN_COLOR_KEY
 
     source = context.source_permanent
     chosen = (getattr(source, "metadata", None) or {}).get(CHOSEN_COLOR_KEY)

@@ -516,7 +516,7 @@ class OracleInstructionsMixin:
         #
         # So a union dispatches on **what was chosen**. A single-noun clause is
         # untouched, which is every other Aura in the pool.
-        from ..targeting import enchant_clause_nouns
+        from ..enchant_targets import enchant_clause_nouns
 
         _clause = aura_enchant_clause(printed)
         _nouns = enchant_clause_nouns(_clause) if _clause else ()

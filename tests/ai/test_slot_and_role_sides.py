@@ -45,7 +45,8 @@ from engine.faces import compilation_units
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.targeting import (derive_cast_spec, instructions_as_announced,
-                              payload_own_role, role_is_seat, spec_roles)
+                              spec_roles)
+from engine.target_roles import payload_own_role, role_is_seat
 from tests.helpers import resolve_stack
 
 #: Spells whose cast names several object targets, both manifest roles.

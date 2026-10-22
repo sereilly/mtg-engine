@@ -745,7 +745,7 @@ def _read_cost_clauses(costs: str) -> dict | None:
     by whatever was read.
     """
     from .cast_cost_clauses import read_sacrifice_clause
-    from .oracle import _chargeable_discard_filters
+    from .chargeable_costs import _chargeable_discard_filters
 
     fields: dict = {
         "pay_life": 0,
@@ -1012,7 +1012,7 @@ def alternative_costs(card: CardDefinition) -> tuple[AlternativeCost, ...]:
     the two halves of one question are not read two ways, which is how the
     sibling would have been the one place short.
     """
-    from .oracle import expand_card_lines
+    from .line_rewrites import expand_card_lines
 
     found = [
         cost
