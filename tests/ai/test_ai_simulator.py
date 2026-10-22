@@ -87,7 +87,7 @@ def test_the_simulator_drains_every_prompt_that_suspends_a_resolution():
     registered ``default_at_arm`` is never *queued* for a non-interactive seat —
     ``arm_pending_choice`` takes its default before the flag is set — so a
     headless run cannot owe one. ``effect_order`` is the same rule written a
-    layer up: ``engine/replacements.py`` answers a non-interactive seat with the
+    layer up: ``engine/replacements/`` answers a non-interactive seat with the
     default before queueing.
     """
     from engine.ai_simulator import _SIMULATED_CHOICES

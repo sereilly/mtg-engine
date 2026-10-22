@@ -193,7 +193,7 @@ def block_partners_this_turn(game, permanent) -> list:
     creature block (Sorrow's Path) is counted here exactly as a declaration is.
 
     **Only survivors are returned**, by the same ``permanent_by_id`` resolution
-    every other reader of those lists uses (``handlers/destruction.py``,
+    every other reader of those lists uses (``handlers/destroy_sweeps.py``,
     ``targeting.py``): the record is a list of ids, and a creature that has left
     the battlefield has no object to ask a characteristic of. That is a real
     narrowing on a clause like "blocked or was blocked by a blue creature this

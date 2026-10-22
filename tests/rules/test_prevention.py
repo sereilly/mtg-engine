@@ -15,7 +15,7 @@ Covers:
   616.1  — When several shields apply to one event they are applied in sequence,
            each consumed at most once
 
-These exercise engine/prevention.py, the registry that replaced the hardcoded
+These exercise engine/prevention/, the registry that replaced the hardcoded
 prevention cascade, and engine/shields.py, the one collection its interceptors
 read instead of a field named after a card. The per-card end-to-end behavior
 (casting Reverse Damage, activating a Circle of Protection, Forcefield in
@@ -28,13 +28,10 @@ import pytest
 
 from engine import Game, PlayerState
 from engine.models import CardDefinition, Permanent
-from engine.prevention import (
-    COMBAT_SHIELD_BOTH,
-    PREVENTION_EFFECTS,
-    PreventionOutcome,
-    add_directional_shield,
-    prevention_effect,
-)
+from engine.prevention import (PREVENTION_EFFECTS, PreventionOutcome,
+                               prevention_effect)
+from engine.prevention.shields import (COMBAT_SHIELD_BOTH,
+                                       add_directional_shield)
 from engine.shields import (
     END_OF_COMBAT,
     END_OF_TURN,
@@ -736,8 +733,10 @@ def test_615_3_a_directional_shield_lasts_the_window_its_card_printed():
     phase the card never mentions. So the window is data on the record and the
     end-of-combat sweep asks for it.
     """
-    from engine.prevention import (COMBAT_SHIELD_BOTH, add_directional_shield,
-                                   clear_directional_shields, shields_damage)
+    from engine.prevention.shields import (COMBAT_SHIELD_BOTH,
+                                           add_directional_shield,
+                                           clear_directional_shields,
+                                           shields_damage)
     from engine.shields import END_OF_COMBAT, END_OF_TURN
 
     game, _, _ = _game()

@@ -253,7 +253,7 @@ def _resolve_one_discard(
         # the library top above applied the Library's replacement first
         # (CR 616.1), after which there is no graveyard move left to replace.
         from ..madness import exile_madness_card
-        from ..replacements import discarded_onto_battlefield
+        from ..replacements.zone_changes import discarded_onto_battlefield
 
         # …and madness's (CR 702.35a: "…exiles it instead of putting it into
         # their graveyard"), for the same reason and through the same body the

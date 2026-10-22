@@ -778,7 +778,7 @@ class LibraryChoicesMixin:
         on every pass rather than once, so a player who lost while the poll was
         open is not asked.
         """
-        from ....replacements import REVEAL_DRAW_LIFE_COST
+        from ....replacements.revealed_draws import REVEAL_DRAW_LIFE_COST
 
         if remaining_seats is None:
             count = len(self.players)

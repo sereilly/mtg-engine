@@ -7,8 +7,8 @@ still dealt, in full, by the same source — so lifelink still gains from it
 records still see it. A redirect written as a shield plus a second damage event
 would get every one of those numbers wrong in the same direction.
 
-This module is what a redirect **is**; ``engine/replacements.py`` registers what
-one **does** — the same split ``engine/shields.py`` and ``engine/prevention.py``
+This module is what a redirect **is**; ``engine/replacements/redirects.py`` registers what
+one **does** — the same split ``engine/shields.py`` and ``engine/prevention/``
 have, and for the same reason. Two card-specific redirects predate it (Jade
 Monolith's ``redirect_damage_to_player`` metadata pair and Personal
 Incarnation's charge counter), each a field named after the card that writes it;
@@ -538,7 +538,7 @@ def chosen_color_spell_redirects(game, recipient) -> list[DamageRedirect]:
     )
     if seat is None:
         return []
-    from .replacements import chosen_color_spell_redirect
+    from .replacements.redirects import chosen_color_spell_redirect
 
     found: list[DamageRedirect] = []
     for permanent in game.controlled_by(seat):
@@ -576,7 +576,7 @@ def spell_source_matches(game, redirect: DamageRedirect, source) -> bool:
     from .damage_events import damage_source_seat
     from .damage_source_colors import damage_source_colors
     from .prevention import source_has_type
-    from .replacements import _source_is_a_spell
+    from .replacements.damage import _source_is_a_spell
 
     types, color = redirect.spell_sources
     if not _source_is_a_spell(game, source):
@@ -624,7 +624,7 @@ def applicable_redirect(
     watching one recipient CR 616.1 would let the affected player choose, and
     the *default* choice this makes is the earlier one. A second contending
     redirect on one recipient does not occur in this pool; when one does, it
-    wants an order of its own in ``engine/replacements.py`` rather than a
+    wants an order of its own in ``engine/replacements/registry.py`` rather than a
     second reading here.
 
     *combat* is the event's own CR 510.2 flag, and the one fact about a damage

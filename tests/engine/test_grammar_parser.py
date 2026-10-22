@@ -471,7 +471,7 @@ REGISTRY_LINES = [
         "cost_modifiers",
     ),
     ("This spell costs 3 life more to cast for each target.", "cost_modifiers"),
-    # engine/replacements.py CR 614 interceptors.
+    # engine/replacements/ CR 614 interceptors.
     ("If you would gain life, draw that many cards instead.", "replacements"),
     (
         "Damage that would reduce your life total to less than 1 reduces it to 1 instead.",
@@ -543,7 +543,8 @@ def test_registry_claim_matches_the_registry_phrase_exactly():
     could drift from the interceptor that reads it, and a drifted copy would
     claim a line nothing implements."""
     from engine.grammar.registries import registry_for_line
-    from engine.replacements import DAMAGE_LIFE_FLOOR_TEXT, LIFE_GAIN_TO_DRAW_TEXT
+    from engine.replacements.damage import DAMAGE_LIFE_FLOOR_TEXT
+    from engine.replacements.draws import LIFE_GAIN_TO_DRAW_TEXT
 
     assert registry_for_line(LIFE_GAIN_TO_DRAW_TEXT + ".") == "replacements"
     assert registry_for_line(DAMAGE_LIFE_FLOOR_TEXT + ".") == "replacements"

@@ -29,7 +29,7 @@ from engine.damage_events import (
 )
 from engine.game import Game
 from engine.models import CardDefinition, Permanent
-from engine.prevention import POOL
+from engine.prevention.registry import POOL
 from engine.replacements import REPLACEMENTS, replacement_effect
 from tests.helpers import _mk_creature_card
 

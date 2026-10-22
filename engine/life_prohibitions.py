@@ -3,7 +3,7 @@
 "Players can't gain life." (Forsaken Wastes.) A continuous effect from a static
 ability that takes an event away rather than replacing it — which is exactly the
 distinction CR 119.7 draws, and the reason this is not an entry in
-``engine/replacements.py``:
+``engine/replacements/``:
 
     If an effect says that a player can't gain life, … a **replacement effect
     that would replace a life gain event affecting that player won't do

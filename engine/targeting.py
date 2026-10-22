@@ -811,8 +811,8 @@ def stack_object_target_spec(item) -> dict | None:
     engine cannot say.
 
     One reader for the two kinds of thing that sit on a stack, because
-    :func:`single_spell_target` and ``handlers/stack._legal_new_targets`` both
-    have to ask it and neither may get a different answer. A **spell** answers
+    :func:`single_spell_target` and ``handlers/retargeting._legal_new_targets``
+    both have to ask it and neither may get a different answer. A **spell** answers
     from the card's compiled program (CR 601.2c); an **ability** cannot —
     ``derive_cast_spec`` would hand back the spec of whatever the *card* does
     when cast, which for Silver Wyvern's Drake is nothing at all and for a

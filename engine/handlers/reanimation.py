@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 from ..auras import PUT_ONTO_BATTLEFIELD_BY
 from ..keywords import grant_keyword
 from ..models import Permanent
-from ..replacements import EXILE_ON_LEAVING_BATTLEFIELD
+from ..replacements.zone_changes import EXILE_ON_LEAVING_BATTLEFIELD
 from ..resumption import run_resumable
 from ..search_filters import card_has_type
 from ._filters import _card_matches_filter, graveyard_card_matches
@@ -303,7 +303,7 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
     # it anywhere else." (Dreams of the Dead.) Armed on the permanent this step
     # created, which is the only object the sentence can be about — the
     # ability's target is a card in a graveyard. The marker is what
-    # `engine/replacements.py`'s `would_leave_battlefield` interceptor reads,
+    # `engine/replacements/zone_changes.py`'s `would_leave_battlefield` interceptor reads,
     # and it lives on the permanent rather than on the card because a
     # `CardDefinition` is shared between every copy of a card in a deck.
     if reanimated is not None and instruction.payload.get("exile_on_leave"):

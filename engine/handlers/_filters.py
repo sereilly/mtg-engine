@@ -543,7 +543,7 @@ def unblocked_attacker(perm) -> bool:
     """CR 509.1h — *perm* is an attacking creature nothing was declared to block.
 
     The one reading of the printed word, shared by the filter key below and by
-    ``engine/replacements.py``'s source classes. An attacker with a blocker
+    ``engine/replacements/damage.py``'s source classes. An attacker with a blocker
     declared for it **is** a blocked creature and stays one even if every
     blocker leaves combat, so a trampler's excess damage to the player is not
     dealt "by an unblocked creature" — which is why this reads the permanent's

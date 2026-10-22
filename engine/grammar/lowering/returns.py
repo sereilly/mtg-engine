@@ -145,7 +145,7 @@ def _lower_return_self_instead_of_untapping(
 
     What the handler does is *arm* the replacement rather than perform the
     return — the return happens a step later, inside the untap step, through
-    ``engine/replacements.py``'s ``would_untap`` seam. That split is the card:
+    ``engine/replacements/permanents.py``'s ``would_untap`` seam. That split is the card:
     performed now it would be an ordinary self-bounce, and the land would never
     have produced its mana at all.
     """

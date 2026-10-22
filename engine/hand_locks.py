@@ -3,7 +3,7 @@
 Firestorm Phoenix: "If this creature would die, return it to its owner's hand
 instead. **Until that player's next turn, that player plays with that card
 revealed in their hand and can't play it.**" The first sentence is the
-replacement (``engine/replacements.py``); this module is the second, which is
+replacement (``engine/replacements/zone_changes.py``); this module is the second, which is
 not a replacement at all but a lasting restriction on one card in one hand.
 
 **Why it is not stamped on the card.** Every other "this object is under an

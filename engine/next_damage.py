@@ -1,6 +1,6 @@
 """What the **next** damage a named source deals does differently, as state.
 
-``engine/shields.py`` is what a prevention shield *is* and ``engine/prevention.py``
+``engine/shields.py`` is what a prevention shield *is* and ``engine/prevention/``
 what one *does*; ``engine/damage_redirects.py`` is the same split for a redirect.
 This module is that pair a third time, for the one printed shape neither of them
 can hold: an effect that waits for **one source's** next damage event and changes

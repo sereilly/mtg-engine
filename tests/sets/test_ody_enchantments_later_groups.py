@@ -1241,7 +1241,7 @@ def _w1g6_learning_triggers(game):
 
 
 def test_w1g6_pedantic_learning_draws_for_a_land_milled_from_your_library(set_pool):
-    from engine.replacements import _mill_cards as _w1g6_mill
+    from engine.replacements.draws import _mill_cards as _w1g6_mill
 
     game = _w1g6_learning(set_pool, ["Forest", "Island", "Island"])
     _w1g6_mill(game, game.players[0], 1)
@@ -1260,7 +1260,7 @@ def test_w1g6_pedantic_learning_draws_for_a_land_milled_from_your_library(set_po
 def test_w1g6_pedantic_learning_triggers_once_per_land_and_pays_each_separately(
     set_pool,
 ):
-    from engine.replacements import _mill_cards as _w1g6_mill
+    from engine.replacements.draws import _mill_cards as _w1g6_mill
 
     game = _w1g6_learning(set_pool, ["Forest", "Forest", "Island", "Island"])
     _w1g6_mill(game, game.players[0], 2)
@@ -1278,7 +1278,7 @@ def test_w1g6_pedantic_learning_triggers_once_per_land_and_pays_each_separately(
 
 
 def test_w1g6_pedantic_learning_ignores_every_other_arrival(set_pool):
-    from engine.replacements import _mill_cards as _w1g6_mill
+    from engine.replacements.draws import _mill_cards as _w1g6_mill
 
     lea = set_pool("LEA")
     # A nonland card milled.

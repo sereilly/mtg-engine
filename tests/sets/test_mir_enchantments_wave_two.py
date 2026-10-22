@@ -941,7 +941,7 @@ def test_soul_echo_offers_a_fresh_replacement_every_upkeep(set_pool):
     Without the sweep the record would stand for ever and the opponent's
     decision would be made once, on the first upkeep, for the rest of the game.
     """
-    from engine.replacements import DAMAGE_TO_COUNTER_REMOVAL_RECORD
+    from engine.replacements.damage_substitutions import DAMAGE_TO_COUNTER_REMOVAL_RECORD
 
     game, echo = _w2g2_soul_echo(set_pool, 4)
     game.start_turn(0)
@@ -970,7 +970,7 @@ def test_the_counter_replacement_covers_only_the_abilitys_controller(set_pool):
     dealt to the opponent — the whole card inverted — so the lowering pins the
     seat and the arming handler records it.
     """
-    from engine.replacements import DAMAGE_TO_COUNTER_REMOVAL_RECORD
+    from engine.replacements.damage_substitutions import DAMAGE_TO_COUNTER_REMOVAL_RECORD
 
     game, echo = _w2g2_soul_echo(set_pool, 3)
     game.start_turn(0)

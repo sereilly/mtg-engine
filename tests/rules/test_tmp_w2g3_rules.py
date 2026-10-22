@@ -26,7 +26,7 @@ from engine.mana_could_produce import (
 )
 from engine.models import Permanent
 from engine.damage_events import deal_damage
-from engine.replacements import damage_multiplier_line
+from engine.replacements.damage import damage_multiplier_line
 from tests.helpers import _mk_card
 from engine.untap_restrictions import (
     ANY_PERMANENT_SCOPE,

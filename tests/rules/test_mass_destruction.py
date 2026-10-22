@@ -98,7 +98,7 @@ def test_701_7a_every_sweep_kind_is_registered(catalog):
     one function under several kinds, and a kind added to the table without the
     registration loop seeing it would be a silent no-op."""
     from engine.handlers import EFFECT_HANDLERS
-    from engine.handlers.destruction import _SWEEP_TYPES
+    from engine.handlers.destroy_sweeps import _SWEEP_TYPES
 
     for kind in _SWEEP_TYPES:
         assert kind in EFFECT_HANDLERS, kind

@@ -1987,8 +1987,8 @@ def test_609_4_a_shroud_exception_applies_only_to_the_seat_it_names():
 # this engine, and the same for every one of the pool's untargeted burn spells,
 # sweepers and damage-dealing artifacts.
 #
-# The fix is a `@prevention_effect` in `engine/prevention.py`, because CR 702.16e
-# says the damage "is prevented" rather than "is not dealt". These tests are the
+# The fix is a `@prevention_effect` in `engine/prevention/shields.py`, because
+# CR 702.16e says the damage "is prevented" rather than "is not dealt". These tests are the
 # rule's four consequences: it works off the combat path, it works for a spell
 # source as well as a permanent one, unpreventable damage beats it, and the
 # player half (CR 702.16b/e says "permanent **or player**") still holds.

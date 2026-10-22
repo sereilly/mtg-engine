@@ -1710,7 +1710,7 @@ def test_fog_lowers_to_the_turn_wide_combat_flag():
     """Byte-identical to the legacy rule this replaces.
 
     ``prevent_all_combat_damage`` takes an empty payload and sets one turn-wide
-    flag that ``engine/prevention.py`` reads on every event carrying
+    flag that ``engine/prevention/shields.py`` reads on every event carrying
     ``combat=True``. A payload key the handler does not read would leave the
     card reporting as supported while the flag never got set.
     """

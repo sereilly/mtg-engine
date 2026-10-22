@@ -221,7 +221,7 @@ class SimulationReport:
 # holds ``game.effect_suspended``, so leaving one owed would stop the *next*
 # resumable loop anywhere in the game after one step. ``effect_order`` is the
 # one exception and does not need draining — a non-interactive seat is answered
-# with the default before it is ever queued (engine/replacements.py). Held by
+# with the default before it is ever queued (engine/replacements/). Held by
 # tests/ai/test_ai_simulator.py.
 _SIMULATED_CHOICES = (
     "search_library", "search_exile_cards", "scry", "reorder_library", "discard",

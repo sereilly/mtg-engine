@@ -498,7 +498,7 @@ def test_w2g1_the_damage_delta_reads_both_printed_directions():
     printed word, and the two halves of the sentence must name the **same**
     recipients — a card reducing damage to a permanent and dealing the reduced
     amount to a creature is not this effect and stays unclaimed."""
-    from engine.replacements import source_damage_delta
+    from engine.replacements.damage import source_damage_delta
 
     assert source_damage_delta(
         "If a spell would deal damage to a permanent or player, it deals that "

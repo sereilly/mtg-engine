@@ -244,7 +244,7 @@ def arm_turn_draw_replacement(game: Game, instruction: OracleInstruction, contex
     A CR 614 replacement a resolving spell creates for the turn, recorded on
     the caster's seat (CR 109.5's "you") with the chosen player as the seat
     whose draws it takes (``engine/turn_replacements.py``); the draw seam's
-    interceptor in ``engine/replacements.py`` reads it and the cleanup step's
+    interceptor in ``engine/replacements/draws.py`` reads it and the cleanup step's
     one sweep ends it. On the game rather than on any permanent for
     ``arm_draw_replacement``'s reason above: the effect is the resolved
     spell's (CR 611.2), and there is no permanent.

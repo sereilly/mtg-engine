@@ -978,7 +978,7 @@ import pytest as _w1g8_pytest
 from engine import Game as _w1g8_Game, PlayerState as _w1g8_PlayerState
 from engine.models import Permanent as _w1g8_Permanent
 from engine.oracle import compile_card_oracle as _w1g8_compile
-from engine.replacements import discard_to_battlefield as _w1g8_discard_to_battlefield
+from engine.replacements.zone_changes import discard_to_battlefield as _w1g8_discard_to_battlefield
 from engine.replacements import replacement_claims_line as _w1g8_claims_line
 from tests.helpers import _mk_card as _w1g8_mk_card
 from tests.helpers import resolve_stack as _w1g8_resolve_stack

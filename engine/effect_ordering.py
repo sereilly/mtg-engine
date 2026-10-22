@@ -8,8 +8,8 @@ one is applied; and then the process repeats over whatever is *still* applicable
 running a hardcoded cascade is usually right and occasionally not.
 
 This module is that process, and it is the only place either registry decides
-what runs next. Both feed it: ``engine/prevention.py`` (CR 615 shields) and
-``engine/replacements.py`` (CR 614), with ``engine/damage_events.py`` putting a
+what runs next. Both feed it: ``engine/prevention/`` (CR 615 shields) and
+``engine/replacements/`` (CR 614), with ``engine/damage_events.py`` putting a
 damage event's members of both into the one candidate list the rule describes.
 Three things follow from putting the process here:
 

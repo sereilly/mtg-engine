@@ -126,7 +126,7 @@ def test_the_target_the_old_prompt_offered_did_nothing_when_chosen(by_name):
     # made the first a real bug rather than a cosmetic one.
     assert result.supported is False
     assert theirs.tapped is True  # the creature was never touched
-    from engine.prevention import shields_damage
+    from engine.prevention.shields import shields_damage
 
     assert not shields_damage(theirs, dealt_to=True, combat=True)
 

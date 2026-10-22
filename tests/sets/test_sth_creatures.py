@@ -1187,7 +1187,7 @@ def test_w2g3_silver_wyverns_new_target_must_be_a_creature(set_pool):
     """"The new target must be a creature." Rod of Ruin's ability could have
     been aimed at a face, and the bound is the only thing that stops the Wyvern
     sending it there -- a rider read and dropped is a strictly larger card."""
-    from engine.handlers.stack import _legal_new_targets
+    from engine.handlers.retargeting import _legal_new_targets
 
     game, mine, _ = _w2g3_board(set_pool)
     assert game.queue_permanent_ability(

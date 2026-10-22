@@ -217,7 +217,7 @@ def test_the_shield_is_claimed_by_the_reader_that_applies_it(set_pool):
     """The gate and the interceptor are one function, so a card cannot be
     admitted with its only line doing nothing — and the two singular
     self-references the source-narrowed readers own must keep refusing here."""
-    from engine.prevention import prevent_all_to_matching
+    from engine.prevention.static import prevent_all_to_matching
 
     assert compile_card_oracle(set_pool("WTH")["Bubble Matrix"]).supported
     assert compile_card_oracle(set_pool("WTH")["Inner Sanctum"]).supported

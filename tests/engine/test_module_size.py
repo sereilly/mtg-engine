@@ -60,10 +60,6 @@ OVERSIZED: dict[str, int] = {
     "engine/handlers/damage.py": 3397,
     "engine/handlers/pump.py": 2894,
     # --- S8 ---
-    "engine/replacements.py": 5549,
-    "engine/prevention.py": 2974,
-    "engine/handlers/stack.py": 2223,
-    "engine/handlers/combat.py": 2145,
     # --- S9 ---
     "engine/mixins/permanent_state.py": 4737,
     "engine/mixins/helpers.py": 4386,

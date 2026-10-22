@@ -31,7 +31,8 @@ from engine import Game, PlayerState
 from engine.game_types import OracleExecutionContext
 from engine.models import CardDefinition, Permanent
 from engine.oracle_types import OracleInstruction
-from engine.prevention import COMBAT_SHIELD_BOTH, _COMBAT_SHIELD_DIRECTION_KEY
+from engine.prevention.shields import (COMBAT_SHIELD_BOTH,
+                                       _COMBAT_SHIELD_DIRECTION_KEY)
 from tests.helpers import _damage_dealt
 
 

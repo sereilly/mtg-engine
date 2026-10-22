@@ -1758,7 +1758,7 @@ def test_nettling_imp_cannot_name_a_creature_that_arrived_this_turn(set_pool):
     """"…the active player has **controlled continuously since the beginning of
     the turn**." The clause was consumed into nothing, which made this Siren's
     Call with a target: any creature at all, including one cast a moment ago."""
-    from engine.handlers.combat import forced_attacker_is_legal
+    from engine.handlers.combat_declarations import forced_attacker_is_legal
 
     game, _imp, bears, giant = _nettling_board(set_pool)
     giant.metadata["summoning_sickness_turn"] = game.turn
@@ -1770,7 +1770,7 @@ def test_nettling_imp_cannot_name_a_creature_that_arrived_this_turn(set_pool):
 def test_nettling_imp_cannot_name_a_creature_of_the_inactive_player(set_pool):
     """"…**the active player** has controlled …" — the card exists to make
     somebody attack on their own turn."""
-    from engine.handlers.combat import forced_attacker_is_legal
+    from engine.handlers.combat_declarations import forced_attacker_is_legal
 
     game, imp, bears, _giant = _nettling_board(set_pool)
 

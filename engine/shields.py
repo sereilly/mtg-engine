@@ -1,6 +1,6 @@
 """Prevention shields as *state* (CR 615).
 
-``engine/prevention.py`` registers what a shield **does**; this module is what a
+``engine/prevention/`` registers what a shield **does**; this module is what a
 shield **is**. The split matters because the two used to be welded together by
 name: every card that granted a shield got its own ``PlayerState`` field —
 ``forcefield_capped_sources``, ``reverse_damage_charges``,

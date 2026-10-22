@@ -48,8 +48,8 @@ and dropped whatever followed) is deleted. See "Grammar front end" below.
 | `engine/oracle.py` | The compiler: caches one `OracleProgram` per card and runs the gates every card passes on its way to one. The readers it calls each have a module of their own (split out at the 2,000-line cap): `line_rewrites` (every rewrite applied before a line is classified — equip, cycling, buyback, kicker, echo, fading, flashback, modal heads), `line_classification` (the line loops, one per card type, the planeswalker program included), `ability_lines` (one line read as a triggered, activated or modal ability, and the delayed trigger a line creates), `front_ends` (an effect clause through `engine.grammar` and then the card hooks), `trigger_conditions` + `whenever_triggers` (the trigger-condition tables), `activation_costs` + `chargeable_costs` (an ability's cost, and the charger's reading of a prose cost), `keyword_lines`, `static_line_support` + `derived_static_claims` (support derived from the text-keyed rule tables) and `line_normalization`. |
 | `engine/handlers/` | Effect executors. Each `@effect_handler(kind)` function mutates game state for one instruction kind. Registered into `EFFECT_HANDLERS` and dispatched with a single dict lookup. The shared helpers are four floors and one module above them: `_chosen.py` (a chosen word turned into filter keys), `_filters.py` (`permanent_matches_filter`, `_card_matches_filter`), `_targets.py` (`resolve_target_permanent`/`pick_target_permanent`, roles, back-references), `_amounts.py` (`evaluate_count`, `count_from_payload`), and `_common.py` (shared actions: the bounce, coin flips, damage application). |
 | `engine/pt.py` | The single write API for power/toughness channels (`set_base_pt`, `add_pt_modifier`, `switch_pt`, `clear_base_pt`) — see "P/T channels" below. All P/T mutation should go through here, never direct metadata pokes. |
-| `engine/replacements.py` | CR 614 replacement-effect registry (`life_gain`, `damage_to_creature`, `would_die`, …). An interceptor may consume an event or adjust its amount before the default action runs; see "Replacement effects" below. |
-| `engine/prevention.py` | CR 615 damage-shield registry. Each `@prevention_effect(order, applies=…)` function reports how many points it removes from one damage event, over players and permanents alike. See "Prevention effects" below. |
+| `engine/replacements/` | CR 614 replacement-effect registry (`life_gain`, `damage_to_creature`, `would_die`, …). An interceptor may consume an event or adjust its amount before the default action runs; see "Replacement effects" below. |
+| `engine/prevention/` | CR 615 damage-shield registry. Each `@prevention_effect(order, applies=…)` function reports how many points it removes from one damage event, over players and permanents alike. See "Prevention effects" below. |
 | `engine/effect_ordering.py` | CR 616.1: gather every applicable replacement and prevention effect, choose one, apply it, re-ask the rest. Both registries run through it, which is why each registration carries a pure `applies` predicate. See "Effect ordering" below. |
 | `engine/damage_events.py` | A damage event start to finish: CR 120.4's two halves (damage dealt, then its result), with CR 616.1's contention set — shields *and* replacements together — inside each. `deal_damage(game, event)` is what every damage path calls, and there is no half-event alternative. |
 | `engine/tokens.py` | `make_token_card(...)` — the one place that builds a token's `CardDefinition`. A token-creating card is a production lowering to a generic `create_token` instruction, never a bespoke handler. |
@@ -116,7 +116,7 @@ Work top-down; stop at the first step that covers the card.
    type_line/colors/keywords/count) — never write a bespoke token handler.
    Setting/modifying power or toughness: go through `engine/pt.py`, never
    metadata directly. "If X would happen, Y instead": register an interceptor
-   in `engine/replacements.py` instead of an inline metadata check.
+   in `engine/replacements/` instead of an inline metadata check.
 4. **Card-specific behavior.** If the behavior can't be expressed generically,
    register a hook in `engine/card_hooks.py` keyed by card name (or, for a
    genuinely textual timing restriction, an entry in
@@ -314,7 +314,7 @@ function) — a new CDA card is one table entry, not a new branch.
 
 "If X would happen, Y instead" effects (Lich, Disintegrate's exile-instead,
 Jade Monolith's redirect, …) are interceptors registered in
-`engine/replacements.py` by event kind (`life_gain`, `damage_to_creature`,
+`engine/replacements/` by event kind (`life_gain`, `damage_to_creature`,
 `life_loss`, `would_die`, …). Each registration is a pure `applies` predicate
 plus the effect itself; `apply_replacements(game, kind, payload)` runs them
 through CR 616.1 (see "Effect ordering" below). An interceptor may consume the
@@ -390,7 +390,7 @@ armed and never shown — which is exactly what Primal Clay shipped with.
 ## Prevention effects
 
 Damage shields (CR 615) are a separate registry with the same shape,
-`engine/prevention.py`. A `@prevention_effect(order, applies=…)` function
+`engine/prevention/`. A `@prevention_effect(order, applies=…)` function
 inspects one event — `{recipient, amount, source, combat}`, where `recipient` is
 a `PlayerState` *or* a `Permanent` — and returns how many points it removes, or
 `None` to pass. `combat` marks the event as combat damage and is what scopes the

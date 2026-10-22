@@ -554,7 +554,7 @@ class TargetEnumerationMixin:
             # turn" narrows it further, and the picker offering a creature the
             # handler will refuse is the two-readers failure this gate exists
             # to prevent. One reader answers both.
-            from .handlers.combat import forced_attacker_is_legal
+            from .handlers.combat_declarations import forced_attacker_is_legal
 
             return forced_attacker_is_legal(self, perm)
         if instruction.kind == "grant_flying_and_delayed_destruction":

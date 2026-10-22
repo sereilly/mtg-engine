@@ -617,7 +617,7 @@ def _lower_source_class_redirect(
 
     Veteran Bodyguard's sentence with a duration on it, which is the whole
     reason it is a *record* rather than the static
-    ``engine/replacements.py`` derives off the printed line: that one is asked
+    ``engine/replacements/redirects.py`` derives off the printed line: that one is asked
     of the board on every damage event and is true exactly while the creature is
     untapped, and this one is armed once and lasts the turn whatever happens to
     the Guard afterwards.
