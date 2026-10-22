@@ -25,8 +25,6 @@ from engine.cast_timing import casts_at_instant_speed
 from engine.faces import choose_a_face_refusal, holds_spell_named, spell_named
 from engine.mana_payment import is_mana_ability, taps_for_payment
 from engine.mixins.turn_management import is_tap_alone_mana_ability
-from engine.oracle import compile_card_oracle
-from engine.targeting import usable_activated_abilities
 
 from .action_registry import ACTION_HANDLERS, HUMAN_ONLY, action_handler
 from .prompts import blocking_prompt

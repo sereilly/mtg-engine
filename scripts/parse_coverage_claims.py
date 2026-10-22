@@ -328,20 +328,20 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # prohibition a permanent imposes on every player, enforced by
     # `cast_bans.global_cast_ban` from `mixins/stack/casting.py`. Its
     # own channel, asking the reader that answers it.
-    ("cast_restrictions.py (board-wide ban)",
+    ("cast_bans.py (board-wide ban)",
      lambda s: global_cast_ban_line(s) is not None),
     # "Each player can't cast more than one spell each turn." (Arcane
     # Laboratory.) CR 601.3a counting casts rather than naming a type, enforced
     # by `cast_bans.spell_cap_ban` from `mixins/stack/casting.py`. Its
     # own channel beside the ban above, asking the reader that answers it.
-    ("cast_restrictions.py (per-turn spell cap)",
+    ("cast_bans.py (per-turn spell cap)",
      lambda s: spell_cap_line(s) is not None),
     # "Players can't cast spells that share a color with the spell most
     # recently cast this turn." (Mana Maze.) CR 601.3a comparing two spells,
     # enforced by `cast_bans.last_cast_color_ban` from
     # `mixins/stack/casting.py`. Its own channel, asking the reader that
     # answers it.
-    ("cast_restrictions.py (last-cast colour ban)",
+    ("cast_bans.py (last-cast colour ban)",
      lambda s: last_cast_color_ban_line(s)),
     # "**Rather than the attacking player, you assign the combat damage of each
     # creature attacking you.** You can divide that creature's combat damage as
@@ -361,7 +361,7 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # Chamber.) Its own channel beside the type-keyed one for that channel's
     # reason: the reader that enforces the line is the one asked, so a claim
     # cannot outlive the ban.
-    ("cast_restrictions.py (chosen-name ban)",
+    ("cast_bans.py (chosen-name ban)",
      lambda s: chosen_name_ban_line(s)),
     # The same name-keyed rule with the names read off the **board** instead of
     # chosen — "Players can't cast spells with the same name as a nontoken
@@ -369,7 +369,7 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # Market). Its own channel beside the row above for that row's reason, and
     # a *separate* claim per printed line, because the card spends a line on
     # each half and each is enforced on its own.
-    ("cast_restrictions.py (same-name-as-permanent ban)",
+    ("cast_bans.py (same-name-as-permanent ban)",
      lambda s: same_name_as_permanent_ban_line(s) is not None),
     # "A player who controls more permanents than each other player can't play
     # lands or cast artifact, creature, or enchantment spells." (Damping
@@ -383,7 +383,7 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # CR 116.2d offer behind this one is claimed on its own by the
     # `special_actions.py (permanent offer)` channel below. Two claims for two
     # sentences, each asking the code that carries that sentence out.
-    ("cast_restrictions.py (most-permanents play ban)",
+    ("cast_bans.py (most-permanents play ban)",
      lambda s: most_permanents_play_ban_sentence(s) is not None),
     # The same shape one rule over — "Activated abilities of creatures can't be
     # activated." (Cursed Totem), CR 602.5's board half, enforced by
@@ -398,14 +398,14 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # `mixins/stack/casting.py` and `mixins/stack/activation_checks.py`, so it gets one
     # channel asking that one reader: a claim split over two would be free to
     # survive the removal of either gate.
-    ("cast_restrictions.py (board-wide own-turn window)",
+    ("cast_bans.py (board-wide own-turn window)",
      lambda s: global_play_timing_line(s)),
     # The same two gates over a **phase** instead of a turn — "During combat,
     # players can't cast instant spells or activate abilities that aren't mana
     # abilities." (Hand to Hand.) One channel for the same reason the row above
     # has one: it is one printed sentence, and a claim split over the cast half
     # and the activation half would survive the removal of either gate.
-    ("cast_restrictions.py (board-wide combat window)",
+    ("cast_bans.py (board-wide combat window)",
      lambda s: combat_play_ban_line(s) is not None),
     # CR 601.3a read the other way round: "Any player may cast creature spells
     # with mana value 3 or less without paying their mana costs and as though
@@ -585,7 +585,7 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # effect, which is why no parse rule matches it — `_parse_delayed_attack_
     # trigger` is what reads it and `create_delayed_trigger` is what the card
     # carries.
-    ("oracle.py (delayed trigger)",
+    ("ability_lines.py (delayed trigger)",
      lambda s: _parse_delayed_attack_trigger(s, None) is not None),
     # "Equip {1}" used to be claimed here by prefix, as "a cost rather than an
     # effect". It is neither: CR 702.6a defines it as an activated ability, the
@@ -606,9 +606,9 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # turn any time you could cast an instant." (Teferi, Master of Time.) CR
     # 306.5d relaxed by the card itself, read by the planeswalker compiler off
     # this exact sentence and enforced by the activation timing check.
-    ("oracle.py (loyalty timing static)",
+    ("line_classification.py (loyalty timing static)",
      lambda s: bool(_LOYALTY_TIMING.match(s))),
-    ("oracle.py (modal trigger head)",
+    ("ability_lines.py (modal trigger head)",
      lambda s: s.rstrip(" —-").endswith("choose one")),
     # A board-wide static contributes through the CR 613 layer bridge and,
     # for a granted ability, through the affected permanent's effective
@@ -643,7 +643,7 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # the card is supported at all.
     ("draw_step_modifiers.py", lambda s: draw_step_skip_line(s)),
     ("cost_modifiers.py", lambda s: bool(cost_modifiers_for(s))),
-    ("activation gate (stack/activation)", lambda s: any(g in s for g in _ACTIVATION_GATES)),
+    ("activation gate (stack/activation_checks)", lambda s: any(g in s for g in _ACTIVATION_GATES)),
     ("mixin text scan", lambda s: _matches_any(s, _MIXIN_TEXT_SCANS)),
     # Through the compiler's own reader rather than a substring. The head is
     # printed bare ("Choose one —") and with its chooser in front of it ("An
@@ -925,11 +925,11 @@ CARD_CHANNELS: tuple[tuple[str, object], ...] = (
         # Gaze of Pain: "you may … . **If you do**, it assigns no combat damage
         # this turn." One clause, two sentences, and the second is the half the
         # card is played for.
-        "oracle.py (delayed trigger rider)",
+        "ability_lines.py (delayed trigger rider)",
         lambda card, s: s in _delayed_trigger_rider_sentences(card.oracle_text or ""),
     ),
     (
-        "auras.py (attached ability cost reduction)",
+        "aura_grants.py (attached ability cost reduction)",
         lambda card, s: s in aura_cost_reduction_sentences(card.oracle_text or ""),
     ),
     (
@@ -946,7 +946,7 @@ CARD_CHANNELS: tuple[tuple[str, object], ...] = (
         # Snowblind, the second reader shaped that way: the penalty, the two
         # boards it can be counted on and the clamp are four sentences that mean
         # nothing apart, so the derivation matches them joined.
-        "auras.py (board-counted clamped penalty)",
+        "aura_grants.py (board-counted clamped penalty)",
         lambda card, s: s in aura_board_counted_penalty_sentences(
             card.oracle_text or ""
         ),

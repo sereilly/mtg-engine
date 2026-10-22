@@ -21,7 +21,7 @@ from engine.cost_modifiers import spell_cost_tax
 from engine.divided_damage import DIVIDED_TARGETS, divided_entry
 from engine.entry_choices import chosen_as_entered
 from engine.faces import combined_oracle_text, face_cards, is_face, whole_card
-from engine.legality import activation_target_obligation, cast_target_kind
+from engine.legality import activation_target_obligation
 from engine.models import Permanent, PlayerState
 from engine.layer_bridge import displayed_type_line
 from engine.library_top import top_is_public
@@ -32,8 +32,7 @@ from engine.activation_prohibitions import activation_prohibition
 from engine.keywords import abilities_lost_at, derived_ability_lines
 from engine.hand_locks import locked_hand_indices
 from engine.revealed_hands import hand_revealed_to
-from engine.targeting import (derive_cast_spec,
-                              usable_activated_abilities)
+from engine.targeting import derive_cast_spec
 from engine.target_roles import recorded_role_seats
 from engine.cost_pickers import spec_is_a_cost
 from engine.text_changes import changed_words

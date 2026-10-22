@@ -705,7 +705,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | auras.py (attached effect) | 47 |
 | cost_modifiers.py | 45 |
 | flashback.py | 37 |
-| oracle.py (modal trigger head) | 37 |
+| ability_lines.py (modal trigger head) | 37 |
 | activation_permissions.py | 34 |
 | loyalty cost | 33 |
 | mixin text scan | 17 |
@@ -713,43 +713,43 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | special_actions.py (permanent offer) | 14 |
 | cast_timing.py (cleanup sacrifice rider) | 10 |
 | aura static (oracle_instructions/permanent_state) | 10 |
-| oracle.py (delayed trigger) | 8 |
+| ability_lines.py (delayed trigger) | 8 |
 | draw_step_modifiers.py | 7 |
 | x spend color (stack/activation) | 6 |
-| activation gate (stack/activation) | 4 |
+| activation gate (stack/activation_checks) | 4 |
 | cost_x_definitions.py | 4 |
 | modal machinery | 4 |
-| auras.py (board-counted clamped penalty) | 4 |
+| aura_grants.py (board-counted clamped penalty) | 4 |
 | card_hooks bespoke (name-keyed, whole card) | 3 |
-| cast_restrictions.py (per-turn spell cap) | 2 |
+| cast_bans.py (per-turn spell cap) | 2 |
 | lord_buffs.py (state trigger) | 2 |
 | mana_spending.py | 2 |
-| cast_restrictions.py (same-name-as-permanent ban) | 2 |
+| cast_bans.py (same-name-as-permanent ban) | 2 |
 | activation_restrictions.py (board-wide ban) | 2 |
 | combat_assignment.py (defender assigns) | 2 |
 | handler ← choose_permanent | 2 |
 | x spend one of each color (cast_costs.py) | 2 |
-| cast_restrictions.py (board-wide ban) | 1 |
+| cast_bans.py (board-wide ban) | 1 |
 | cast_permissions.py (board-wide free cast) | 1 |
 | special_actions.py | 1 |
 | mixins/effects.py (_set_lockout_banning_card) | 1 |
-| cast_restrictions.py (board-wide own-turn window) | 1 |
-| cast_restrictions.py (most-permanents play ban) | 1 |
+| cast_bans.py (board-wide own-turn window) | 1 |
+| cast_bans.py (most-permanents play ban) | 1 |
 | alternative_costs.py (granted) | 1 |
 | target_restrictions.py | 1 |
 | land_play_allowance.py | 1 |
 | life_prohibitions.py | 1 |
-| oracle.py (delayed trigger rider) | 1 |
+| ability_lines.py (delayed trigger rider) | 1 |
 | activation_restrictions.py (self-named) | 1 |
 | resolution_overrides.py | 1 |
-| cast_restrictions.py (board-wide combat window) | 1 |
-| cast_restrictions.py (last-cast colour ban) | 1 |
+| cast_bans.py (board-wide combat window) | 1 |
+| cast_bans.py (last-cast colour ban) | 1 |
 | handler ← counter_top_stack_spell | 1 |
 | named_protection.py | 1 |
 | extra_triggers.py | 1 |
 | cost_modifiers.py (ability reduction) | 1 |
 | cost_x_definitions.py (cast) | 1 |
-| oracle.py (loyalty timing static) | 1 |
+| line_classification.py (loyalty timing static) | 1 |
 | stack_statics.py | 1 |
 | cost_x_definitions.py (ceiling) | 1 |
 | cast_permissions.py (controller's graveyard opened) | 1 |

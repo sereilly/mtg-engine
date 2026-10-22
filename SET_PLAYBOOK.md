@@ -871,13 +871,6 @@ phase that clears it and the parts. A Phase 6 that drains an entry deletes it
 (the story goes in the commit and the retrospective); a set that meets a new
 one adds it. Re-check an entry against the code before briefing it.
 
-- **The module cap's split round is open.** `tests/engine/test_module_size.py`'s
-  `OVERSIZED` holds every module that was past 2,000 lines when the cap was
-  widened, each frozen at its size. A frozen module cannot grow by a line, so a
-  group whose work lands in one fails the guard. *Clears:* the split round,
-  before the next set's Phase 0 (step 3 checks it). Each module leaves the dict
-  when split to ~1,500 lines or less, as code motion (both differentials 0).
-
 - **Two kinds of target slot cannot be roles yet.** *Why:* each leaves a printed
   narrowing or a choice to the handler at resolution. *Clears:* a round of its
   own, with `oracle_diff`.

@@ -17,7 +17,8 @@ from .registry import effect_handler
 
 if TYPE_CHECKING:
     from ..game import Game
-    from ..oracle_types import OracleExecutionContext, OracleInstruction
+    from ..game_types import OracleExecutionContext
+    from ..oracle_types import OracleInstruction
 
 
 @effect_handler("separate_into_piles")
