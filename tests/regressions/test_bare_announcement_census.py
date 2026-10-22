@@ -72,9 +72,11 @@ from engine.oracle import compile_card_oracle, compiled_units
 from engine.shields import shields_on
 from engine.stack_targets import chosen_targets
 from engine.targeting import (
-    ROLES_TARGET_KIND, derive_activation_spec, derive_cast_spec, spec_is_a_cost,
+    derive_activation_spec, derive_cast_spec,
     usable_activated_abilities,
 )
+from engine.target_roles import ROLES_TARGET_KIND
+from engine.cost_pickers import spec_is_a_cost
 from tests.helpers import _nosick, resolve_stack
 
 #: The share of the pool each run examines (one announcement in this many).

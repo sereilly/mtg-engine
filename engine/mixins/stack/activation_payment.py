@@ -545,8 +545,8 @@ class ActivationPaymentMixin:
         eligible object is taken, which is what every other cost payment in this
         file does for a non-interactive seat. *price* says the cards out of the
         payer's own graveyard are a plain payment — the effect does not read
-        which they were (``ai_valuation.reads_what_its_cost_exiled``) — and then
-        "first" is the least valuable (``ai_valuation.graveyard_price_order``):
+        which they were (``ai_prompt_readers.reads_what_its_cost_exiled``) — and then
+        "first" is the least valuable (``ai_prompt_readers.graveyard_price_order``):
         Grim Lavamancer gave up the bottom two cards of its pile, a flashback
         spell as soon as a land.
         """
@@ -644,7 +644,7 @@ class ActivationPaymentMixin:
                 # legal target (CR 608.2b).
                 default_order = slots
                 if price and pile is controller:
-                    from ...ai_valuation import graveyard_price_order
+                    from ...ai_prompt_readers import graveyard_price_order
 
                     default_order = graveyard_price_order(
                         self, controller_index, slots,

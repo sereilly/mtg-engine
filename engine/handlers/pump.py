@@ -30,14 +30,6 @@ from ._targets import (block_pair_permanents, attached_host,
                        resolve_target_permanents, resolve_target_slots)
 from .registry import effect_handler
 
-# Re-exported, and not an API: the grants' two shared readers live in
-# ``keywords.py``. ``engine/handlers/combat.py`` pulls them from here, from
-# inside a function, and another group of the 2,000-line cap's split round is
-# cutting that module in parallel — so its import line could not move with this
-# split without a merge conflict. The line goes when that importer is repointed;
-# the import hygiene guard fails a re-export nobody pulls.
-from .keywords import DURATION_WORDS, grant_lifetime
-
 if TYPE_CHECKING:
     from ..game import Game
     from ..game_types import OracleExecutionContext
@@ -277,7 +269,7 @@ def pump_target_creature_until_eot(game: Game, instruction: OracleInstruction, c
 
 #: What a "for as long as this permanent remains tapped" pump records on its
 #: **source**: the pumped permanent's id and the boost. Read by
-#: ``mixins/permanent_state._refresh_linked_tapped_pumps`` on every recompute.
+#: ``mixins/dynamic_creatures._refresh_linked_tapped_pumps`` on every recompute.
 #: One name, because the handler that writes it and the refresh that reads it
 #: are in different files and a second spelling is how they come apart.
 PUMP_WHILE_TAPPED_KEY = "pump_while_tapped"

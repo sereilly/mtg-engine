@@ -28,7 +28,8 @@ from engine.card_loader import load_catalog
 from engine.faces import compilation_units
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
-from engine.targeting import derive_cast_spec, spec_is_a_cost
+from engine.targeting import derive_cast_spec
+from engine.cost_pickers import spec_is_a_cost
 from tests.helpers import resolve_stack
 
 # Each card whose text compiles (`faces.compilation_units`): a split card's

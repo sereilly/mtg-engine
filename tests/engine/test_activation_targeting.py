@@ -459,7 +459,7 @@ def test_slots_that_differ_become_roles_and_keep_both_narrowings():
     filter, and CR 601.2c's distinctness comes free: a permanent taken by an
     earlier role is not offered to a later one.
     """
-    from engine.targeting import _from_targets_payload
+    from engine.target_descriptions import _from_targets_payload
 
     one_filter = _from_targets_payload({
         "quantifier": "target", "kind": "object", "count": 2,
@@ -502,7 +502,7 @@ def test_an_optional_slot_keeps_the_shared_list_it_can_still_be_cast_with():
     smaller one, so these keep the shared list and the narrowing loss that comes
     with it. ``optional_slots`` is what the description records to say so.
     """
-    from engine.targeting import _from_targets_payload
+    from engine.target_descriptions import _from_targets_payload
 
     spec = _from_targets_payload({
         "quantifier": "target", "kind": "object", "count": 2,

@@ -474,7 +474,7 @@ def bounce_target_creature(game: Game, instruction: OracleInstruction, context: 
     # collected: each slot resolves strictly (a departed target is dropped,
     # CR 608.2b) and each creature goes to its own owner's hand (CR 400.3).
     targets_desc = instruction.payload.get("targets") or {}
-    from ..targeting import payload_own_role
+    from ..target_roles import payload_own_role
 
     if (
         isinstance(targets_desc, dict)

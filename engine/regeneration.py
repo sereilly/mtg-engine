@@ -126,7 +126,8 @@ def denies_regeneration(permanent: "Permanent") -> bool:
 def self_regeneration_line(line: str) -> bool:
     """Whether one printed line is, in full, the CR 701.19b static above.
 
-    Read by ``engine/oracle.py``'s support gate and by the grammar's parse
+    Read by the support gates (``engine/static_line_support.py``,
+    ``engine/derived_static_claims.py``) and by the grammar's parse
     claim, so what this file implements and what a card is admitted for are the
     same sentence. Without it, a creature whose only non-keyword line is this
     one produces no instruction and would report unsupported however well the

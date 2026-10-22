@@ -8,7 +8,7 @@ Cauldron, Mind Swords, Elkin Lair's card at random) or onto the library
 (Metalworker, Stronghold Gambit's reveal of the picks). The candidate readers
 (:func:`put_from_hand_candidates`, :func:`exile_from_hand_candidates`,
 :func:`chosen_hand_card_candidates`) are public because the prompt renderer and
-the resolver in ``engine/mixins/stack/choices.py`` both ask them, so what a seat
+the resolver in ``engine/mixins/stack/choices/`` both ask them, so what a seat
 is offered and what it may answer cannot disagree.
 
 Split out of ``zones.py`` at the 2,000-line cap's split round. Discarding is

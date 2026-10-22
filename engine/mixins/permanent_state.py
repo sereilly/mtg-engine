@@ -36,7 +36,7 @@ from __future__ import annotations
 
 import re
 
-from ..enter_effects import (ENTERED_BATTLEFIELD_TURN, LIFE_PAID_AS_ENTERED,
+from ..enter_effects import (ENTERED_BATTLEFIELD_TURN,
                              entry_exile_requirement,
                              entry_sacrifice_requirement,
                              sacrifice_any_number_on_enter,
@@ -47,8 +47,7 @@ from ..enter_effects import (ENTERED_BATTLEFIELD_TURN, LIFE_PAID_AS_ENTERED,
                              chooses_two_land_types_on_enter,
                              chooses_creature_type_on_enter,
                              chooses_land_type_on_enter,
-                             choose_one_of_two_on_enter, CHOSEN_COLOR_KEY,
-                             CHOSEN_LAND_TYPE_KEY,
+                             choose_one_of_two_on_enter,
                              chooses_two_card_names_on_enter,
                              chooses_card_name_on_enter,
                              chooses_opponent_on_enter,
@@ -60,8 +59,9 @@ from ..enter_effects import (ENTERED_BATTLEFIELD_TURN, LIFE_PAID_AS_ENTERED,
                              choose_number_on_enter, pay_any_life_on_enter,
                              enters_with_pt_counters, kicked_entry,
                              enters_with_named_counter,
-                             LOSE_LIFE_EQUAL_TO_TOTAL_ON_ENTER,
-                             choosable_bodies)
+                             LOSE_LIFE_EQUAL_TO_TOTAL_ON_ENTER)
+from ..entry_choices import (LIFE_PAID_AS_ENTERED, CHOSEN_COLOR_KEY,
+                             CHOSEN_LAND_TYPE_KEY, choosable_bodies)
 from .. import copies
 from ..named_counters import add_counters as add_named_counters
 from ..cast_costs import KICKED, KICKED_WITH
@@ -747,7 +747,7 @@ class PermanentStateMixin:
         #
         # The other half of the same printed paragraph - "if you can't, put this
         # creature into its owner's graveyard instead of onto the battlefield" -
-        # is the CR 614 interceptor in engine/replacements.py, asked before this
+        # is the CR 614 interceptor in engine/replacements/, asked before this
         # runs. So by the time this arms, the graveyard is known to hold enough:
         # the exile here is a cost that *can* be paid, and the only open
         # question is which cards pay it and which counter each one buys.
@@ -773,7 +773,7 @@ class PermanentStateMixin:
         # and its four siblings.) CR 614.1a's entry toll, charged here for
         # Frankenstein's Monster's reason one branch up: the other half of the
         # same paragraph - "if you don't, put it into its owner's graveyard" -
-        # is the interceptor in engine/replacements.py, and it declined to apply,
+        # is the interceptor in engine/replacements/, and it declined to apply,
         # which is exactly the statement that the battlefield holds something
         # the toll accepts. So this is a cost that *can* be paid and the only
         # open question is which permanent pays it.

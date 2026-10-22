@@ -347,7 +347,7 @@ def cost_target_count(count: object, paid: dict | None) -> int | None:
     *paid* is the ``{offer: times}`` map the casting path records under
     ``additional_costs_paid``, keyed by ``mana_payment.mana_cost_label``'s
     canonical spelling — the same key the lowering wrote, because both sides go
-    through that one function (see ``lowering/_records.optional_cost_key``).
+    through that one function (see ``lowering/_cost_records.optional_cost_key``).
     An offer the caster declined is simply absent, which is zero repetitions and
     the base count alone.
     """
@@ -1028,7 +1028,7 @@ _MANA_TOKEN_RE = re.compile(r"\{([^}]+)\}")
 #: Permanent ids, and one record shape with the reanimation's
 #: (``handlers/reanimation.REANIMATED_PERMANENTS``) on purpose: a sentence reading
 #: "that creature" should not have to care which step put the permanent
-#: there, so both are members of ``lowering/_events._RECORDED_PERMANENTS``
+#: there, so both are members of ``lowering/_record_keys._RECORDED_PERMANENTS``
 #: and every reader asks that set rather than a key.
 #:
 #: Here rather than beside a reader, for ``EXILED_THIS_WAY``'s reason

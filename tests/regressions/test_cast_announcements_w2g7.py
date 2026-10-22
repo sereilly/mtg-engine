@@ -36,7 +36,8 @@ from engine.faces import face_cards
 from engine.handlers._targets import attached_host
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
-from engine.targeting import derive_cast_spec, spec_is_a_cost, spec_roles
+from engine.targeting import derive_cast_spec, spec_roles
+from engine.cost_pickers import spec_is_a_cost
 from tests.helpers import _mk_card, _nosick, resolve_stack
 
 

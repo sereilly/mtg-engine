@@ -1,6 +1,6 @@
 """Tests for the keyword abilities surfaced by the web UI's ``_DISPLAY_KEYWORDS``.
 
-Every keyword listed in :data:`web.app._DISPLAY_KEYWORDS` is exercised here against
+Every keyword listed in :data:`web.serialization._DISPLAY_KEYWORDS` is exercised here against
 the rule that defines it in the Comprehensive Rules section 702 ("Keyword
 Abilities"). Each test cites the specific subrule it covers.
 

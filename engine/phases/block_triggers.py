@@ -21,7 +21,7 @@ from ..models import Permanent
 from ..trigger_utils import matching_triggers
 
 
-#: CR 509.3e's threshold, as ``engine/oracle.py``'s condition table records it:
+#: CR 509.3e's threshold, as ``engine/whenever_triggers.py``'s condition table records it:
 #: "blocks or becomes blocked by **one or more** Orcs" (Dwarven Soldier). Absent
 #: means the sentence printed no number, which is the per-creature firing
 #: CR 509.3b/509.3d give — so the two shapes are told apart by the payload and
@@ -98,7 +98,7 @@ class BlockTriggersMixin:
         Path is the other case and leaves the flag alone: its creatures are
         removed from combat first, so they really do start blocking again.
         """
-        from ..auras import attached_subject_triggers
+        from ..aura_attachment import attached_subject_triggers
         from ..events import trigger_subject_matches
         from ..game_types import StackItem
 
@@ -296,7 +296,7 @@ class BlockTriggersMixin:
         one that targets chooses its target as it is put on the stack
         (``_choose_trigger_targets``), from the list the picker offers.
         """
-        from ..auras import attached_subject_triggers
+        from ..aura_attachment import attached_subject_triggers
         from ..game_types import StackItem
 
         if self.combat_unblocked_triggers_fired:
@@ -503,7 +503,7 @@ class BlockTriggersMixin:
         to admit — CR 509.3c and CR 509.3d drawing their line through one body
         rather than two.
         """
-        from ..auras import attached_subject_triggers
+        from ..aura_attachment import attached_subject_triggers
         from ..events import trigger_subject_matches
         from ..game_types import StackItem
         from ..targeting import announces_a_target
@@ -631,7 +631,7 @@ class BlockTriggersMixin:
                             "event_subject_controller": blocker_seat,
                             # CR 506.2's seat, so a sentence after this
                             # event may say "defending player" and name one
-                            # (`lowering/_events._DEFENDING_PLAYER_EVENTS`).
+                            # (`lowering/_frozen_seats._DEFENDING_PLAYER_EVENTS`).
                             "trigger_defending_player_index": defending_index,
                             # The pair this firing is about, by stable id
                             # and under the key the *blocks* half already

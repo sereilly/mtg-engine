@@ -22,7 +22,7 @@ creature-type counts the entry default does.
 
 from __future__ import annotations
 
-from ..enter_effects import CHOSEN_COLOR_KEY
+from ..entry_choices import CHOSEN_COLOR_KEY
 from ..keywords import grant_keyword
 from ..models import Permanent, PlayerState
 from ..pt import add_pt_counters, pt_counter_deltas, set_base_pt
@@ -261,7 +261,7 @@ class EntryChoicesMixin:
         which is legal and pointless.
 
         **Unless the card feeds the type rather than hosing it**, which
-        ``ai_valuation.chosen_creature_type_side`` reads off what *card* does
+        ``ai_prompt_readers.chosen_creature_type_side`` reads off what *card* does
         with the word: Belbe's Portal puts a creature of the chosen type out of
         its controller's hand, Urza's Incubator makes its controller's spells
         of the type cheaper, and the opponents' type is the one answer certain
@@ -280,7 +280,7 @@ class EntryChoicesMixin:
         likely to matter if a board arrives later.
         """
         if card is not None:
-            from ..ai_valuation import chosen_creature_type_side
+            from ..ai_prompt_readers import chosen_creature_type_side
 
             if chosen_creature_type_side(card) == "you":
                 own = self._own_creature_type_counts(caster_index)

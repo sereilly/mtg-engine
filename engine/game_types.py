@@ -178,7 +178,7 @@ CHOICE_KEYS = (
     # and on this channel for ``divided_targets``' reason: it is the other
     # announcement that names several players, and ``target_player_index`` is
     # one seat. Written only where there are two or more seat roles —
-    # ``targeting.ROLE_SEATS`` names the key and says who reads it.
+    # ``target_roles.ROLE_SEATS`` names the key and says who reads it.
     "role_seats",
 )
 

@@ -27,7 +27,8 @@ from engine.cast_costs import (additional_costs, buyback_cost, buyback_paid,
                                unread_cost_sentence)
 from engine.card_loader import load_catalog
 from engine.models import CardDefinition, PlayerState
-from engine.oracle import compile_card_oracle, expand_card_lines
+from engine.oracle import compile_card_oracle
+from engine.line_rewrites import expand_card_lines
 
 _CATALOG_FOR_BUYBACK = {card.name: card for card in load_catalog()}
 

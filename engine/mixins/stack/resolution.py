@@ -33,10 +33,6 @@ from ...oracle import OracleInstruction, compile_card_oracle
 from ...modal_triggers import modal_trigger_modes
 from ...resumption import run_resumable
 from ...state_triggers import release_latch
-# Re-exported, temporarily: ``engine/mixins/helpers.py`` pulls it from here
-# inside a function, and that module is being split by another group of the
-# same round. New code imports it from ``trigger_targets``.
-from .trigger_targets import _target_is_up_to
 
 
 class StackResolutionMixin:
@@ -326,7 +322,7 @@ class StackResolutionMixin:
         ``1 - caster``: the opposing seat of a two-player game, which is the
         arithmetic :meth:`_resolve_card` has always done and the default the
         web route sends for a cast with no ``target_seat``. A method so that
-        the announcement gate (``legality._cast_player_target_refusal``,
+        the announcement gate (``legality_cast_gates._cast_player_target_refusal``,
         CR 601.2c) and the resolution gate (``illegal_targets_refusal``,
         CR 608.2b) ask about the very seat the resolution will read — the
         default is a target like any other, and a gate that guessed it
@@ -742,7 +738,7 @@ class StackResolutionMixin:
         # resolution re-checks its targets, and until now nothing did: each
         # handler checked its *own* target and skipped its own effect, so the
         # sentences printed after the targeted one carried on regardless.
-        # The gate is `legality.illegal_targets_refusal` — the sibling of the
+        # The gate is `legality_resolution.illegal_targets_refusal` — the sibling of the
         # announcement gate, so the same identities decide both ends.
         illegal = self.illegal_targets_refusal(item)
         if illegal is None:
@@ -752,7 +748,7 @@ class StackResolutionMixin:
             # A second call rather than a branch inside the gate above, because
             # that gate is CR 608.2b for spells and this is CR 608.2b for one
             # printed clause — folding them would advertise a cover over
-            # abilities that does not exist. `legality.stale_comparison_refusal`
+            # abilities that does not exist. `legality_resolution.stale_comparison_refusal`
             # states its own bounds.
             illegal = self.stale_comparison_refusal(item)
         if illegal is None:
@@ -1073,7 +1069,7 @@ class StackResolutionMixin:
             # *enter*: the log line, the global buff, the enters-the-battlefield
             # trigger, the Aura's attach. Running any of them for an entry that
             # did not happen is the "when it enters, do X instead" reading that
-            # engine/replacements.py exists to avoid, one layer up from the
+            # engine/replacements/ exists to avoid, one layer up from the
             # interceptor - and the log line saying the permanent was put onto
             # the battlefield is the same claim in the one place a player reads.
             if not self.is_on_battlefield(permanent):
@@ -1088,7 +1084,7 @@ class StackResolutionMixin:
                 # that offers a copy choice as it enters (Clone, Vesuvan
                 # Doppelganger, Copy Artifact — CR 707.5's "as a copy", a
                 # CR 614.1c replacement) announces *that* at cast:
-                # ``targeting._cast_target_spec`` raises the copy picker in
+                # ``cast_targets._cast_target_spec`` raises the copy picker in
                 # place of an entry trigger's. So whatever entry trigger the
                 # copied object brings (CR 707.5) was announced by nobody, and
                 # handing it the cast's target would aim it at the creature
@@ -1394,7 +1390,7 @@ class StackResolutionMixin:
         which is only ever right by accident. A card that prints its clauses on
         one line already compiles to a single ``sequence``; a card that prints
         them on two gets one instruction per line
-        (``oracle._noncreature_line_instructions``), and every line after the
+        (``line_classification._noncreature_line_instructions``), and every line after the
         first was silently dropped. Opt scried and never drew, Revitalize gained
         life and never drew — supported cards playing as a strictly smaller card,
         which is the first standing invariant. It survived because no shipped

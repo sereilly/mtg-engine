@@ -16,12 +16,9 @@ this reaches for a ``stack`` spec.
 
 from __future__ import annotations
 
-from .handlers._common import (
-    excluded_graveyard_slot,
-    graveyard_card_matches,
-    permanent_matches_filter,
-    state_holds,
-)
+from .handlers._filters import (excluded_graveyard_slot,
+                                graveyard_card_matches,
+                                permanent_matches_filter, state_holds)
 from .models import CardDefinition, Permanent
 from .cast_restrictions import timing_fixed_seat
 from .faces import whole_card
@@ -29,9 +26,9 @@ from .player_statics import seat_has_player_keyword
 from .subject_filters import card_matches_any, subject_matches
 from .targeting import (
     CAST_FROM_GRAVEYARD,
-    spec_is_a_cost,
     spec_offers_a_player,
 )
+from .cost_pickers import spec_is_a_cost
 from .legality import _STACK_TARGET_KINDS, spec_chooses_a_source
 
 
@@ -39,7 +36,7 @@ def _cast_from_graveyard_slot(spec: dict, graveyard, spell) -> int | None:
     """The slot of *graveyard* the spell being cast out of it occupies, or
     None when this spec is not such a cast's.
 
-    ``handlers/_common.excluded_graveyard_slot``'s shape, for the other reason
+    ``handlers/_filters.excluded_graveyard_slot``'s shape, for the other reason
     one slot of a pile is not a candidate: there the printed word "another"
     rules out an ability's own source, here CR 601.2a has already moved the
     card to the stack. A **slot** for that function's reason too — two copies
@@ -407,7 +404,7 @@ class TargetEnumerationMixin:
                 # Mantle): the creature excluded is the one the source is
                 # attached to, which is the one that will deal the damage.
                 if spec.get("exclude_attached"):
-                    from .handlers._common import attached_host
+                    from .handlers._targets import attached_host
 
                     if perm is attached_host(self, source_permanent):
                         continue
@@ -997,7 +994,7 @@ class TargetEnumerationMixin:
         # Reconstruction returns an *artifact* card, Raise Dead a creature card,
         # Chandra a red instant or sorcery. One template with the type as data,
         # and one predicate shared with the cast-time re-check and the handler
-        # (`engine/handlers/_common.py`) — a picker that offers what
+        # (`engine/handlers/_filters.py`) — a picker that offers what
         # resolution then refuses is the bug this module exists to prevent, and
         # it was live: the re-check asked only "is it a creature card?".
 
@@ -1009,7 +1006,7 @@ class TargetEnumerationMixin:
 
         def eligible(card) -> bool:
             if cost_filter:
-                from .handlers._common import _card_matches_filter
+                from .handlers._filters import _card_matches_filter
 
                 if not _card_matches_filter(card, cost_filter):
                     return False
@@ -1049,7 +1046,7 @@ class TargetEnumerationMixin:
 
 
 #: The payload keys a composed instruction nests its steps under, in the order
-#: :func:`engine.targeting._from_instructions` reads them. Held to that order on
+#: :func:`engine.instruction_targets._from_instructions` reads them. Held to that order on
 #: purpose: the picker's *kind* comes from there and its *restriction* comes from
 #: here, and two walks that disagreed would offer a target the resolution then
 #: declines — the two-readers failure this file exists to prevent.

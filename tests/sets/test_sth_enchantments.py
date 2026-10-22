@@ -986,7 +986,7 @@ def test_contempt_does_not_fire_when_the_enchanted_creature_stays_home(set_pool)
 def test_an_attached_attack_trigger_reads_the_same_event_on_both_front_ends():
     """Two trigger front ends and only one of them dispatches.
 
-    A condition in `engine/oracle.py`'s table alone parses and fires nowhere; a
+    A condition in `engine/trigger_conditions.py`'s table alone parses and fires nowhere; a
     production in the grammar alone compiles an instruction the fire sites never
     reach. Both are asked here, of the same printed sentence.
     """

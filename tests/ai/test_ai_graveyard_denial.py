@@ -263,13 +263,13 @@ def test_the_sweep_names_the_defect_with_the_old_defaults_restored(monkeypatch):
     the sweep must name the cards — every one wrong from chair 0 and right
     from chair 1, which is why nobody playing the AI from the guest's seat
     saw it. A sweep that read clean here would be a sweep that reads nothing."""
-    from engine import ai_abilities, ai_targets, ai_valuation
+    from engine import ai_abilities, ai_prompt_readers, ai_targets
     from engine.mixins.stack import activation as activation_path
     from engine.mixins.stack import card_activation as card_activation_path
     from engine.mixins.stack import casting as casting_path
 
     monkeypatch.setattr(
-        ai_valuation, "denied_graveyard_pile",
+        ai_prompt_readers, "denied_graveyard_pile",
         lambda player_index, piles: (list(piles) or [None])[0],
     )
     monkeypatch.setattr(ai_targets, "_graveyard_denial_target", lambda *args: None)

@@ -135,7 +135,7 @@ def _spell_instructions(card: CardDefinition) -> tuple[OracleInstruction, ...]:
 
     Empty for a permanent card; see ``SPELL_TYPES``. For a modal spell being
     weighed in one of its modes (:func:`considering_mode`), that mode's own --
-    through ``targeting.announced_mode_instructions``, the reader the cast
+    through ``cast_targets.announced_mode_instructions``, the reader the cast
     gates and the resolution share, so what the policy values is the steps
     the announcement will run.
     """

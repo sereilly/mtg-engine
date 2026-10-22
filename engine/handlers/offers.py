@@ -503,7 +503,8 @@ def _action_is_takeable(
     # onto the battlefield under your control. **If you do**, this creature
     # assigns no combat damage this turn." (Bone Dancer.) A pile with no
     # creature card in it is a real and checkable "nothing to give", and this
-    # is the card SET_PLAYBOOK.md's Known gaps names: accepting over an empty
+    # is the card a SET_PLAYBOOK.md Known-gaps entry named until this closed it:
+    # accepting over an empty
     # graveyard reanimated nothing and still marked the attacker as assigning
     # no combat damage, which is the rider firing on an action that did not
     # happen. Reproduced before it was fixed.

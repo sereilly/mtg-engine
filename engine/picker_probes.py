@@ -11,9 +11,8 @@ One probe per question, each with two readers —
 ``tests/engine/test_targeting.py`` over the shipped pool and
 ``scripts/picker_sweep.py`` over a measured set during Phase 3 — so the
 script's census and the ratchet cannot drift apart. Split out of
-``engine/targeting.py`` at the 2,000-line cap; ``engine.targeting`` still
-exports :func:`line_names_a_cast_target`, which ``engine/stack_targets.py``
-pulls.
+``engine/targeting.py`` at the 2,000-line cap; a caller
+(``engine/stack_targets.py`` among them) imports a name from here.
 """
 
 from __future__ import annotations

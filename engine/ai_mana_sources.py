@@ -32,7 +32,7 @@ from .ai_valuation import mana_ability_symbols, planned_mana_yield
 from .activation_permissions import activation_permission_denial
 from .activation_restrictions import activation_denial, global_activation_ban
 from .game import Game
-from .auras import aura_restriction_active
+from .aura_restrictions import aura_restriction_active
 from .models import Permanent
 from .oracle import compile_card_oracle
 from .targeting import usable_activated_abilities

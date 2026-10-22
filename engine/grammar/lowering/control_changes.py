@@ -39,7 +39,7 @@ from ._delays import (_BOUND_OBJECT_DELAYED_EVENTS)
 
 
 # The scratchpad key the tap records and this sentence reads. One name, in one
-# place, because ``engine/grammar/lower.py``'s ``_PRODUCES`` writes it and the
+# place, because ``engine/grammar/lowering/_records.py``'s ``_PRODUCES`` writes it and the
 # refusal below is what proves a producer ran — two spellings would make the
 # refusal vacuous while the handler read an empty record and marked nothing.
 
@@ -177,8 +177,9 @@ def _lower_offered_steal(
 
 
 #: The seats a control change may be handed to by name. Each is one
-#: ``engine/handlers/_common.resolve_target_player`` already answers, which is
-#: the whole of what makes this list a claim rather than a filter: a seat word
+#: ``engine/handlers/control_changes.give_control_of_source_to_player``
+#: already answers, which is the whole of what makes this list a claim
+#: rather than a filter: a seat word
 #: nobody resolves would hand the permanent to whichever player an empty lookup
 #: defaults to, which is the ability doing something the card never said.
 #: "At the beginning of each player's upkeep, that player may pay {R}{R} or
@@ -186,7 +187,7 @@ def _lower_offered_steal(
 #: (Emberwilde Djinn.) A seat the *firing event* named rather than one the
 #: resolution chose, so it is neither a named gainer below (nothing targeted
 #: it) nor a chosen one above (nobody picks).
-#: ``_events._EVENT_SUBJECT_PLAYERS`` is what says an event really froze one,
+#: ``_frozen_seats._EVENT_SUBJECT_PLAYERS`` is what says an event really froze one,
 #: so under any other trigger the word names a player nobody recorded and the
 #: sentence refuses.
 _EVENT_GAINERS = frozenset({"that_player", "they"})

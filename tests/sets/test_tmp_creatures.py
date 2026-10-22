@@ -2187,7 +2187,7 @@ def test_mindwhip_sliver_is_cast_without_a_prompt(set_pool):
     the reason it already erases a "can't be the target of" prohibition.
     """
     from engine.legality import _cast_lines
-    from engine.targeting import line_names_a_cast_target
+    from engine.picker_probes import line_names_a_cast_target
 
     sliver = set_pool("TMP")["Mindwhip Sliver"]
 

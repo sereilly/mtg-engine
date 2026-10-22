@@ -795,7 +795,7 @@ def target_cant_attack_until_eot(game: Game, instruction: OracleInstruction, con
 
     The attacking twin of ``target_cant_block_until_eot`` above, and the same
     shape: a mark on the one permanent the spell chose, swept with the turn by
-    ``_EOT_METADATA_KEYS``, read by ``declare_attackers_step.can_attack``.
+    ``_EOT_METADATA_KEYS``, read by ``attack_legality.can_attack``.
 
     Not the blanket ``cant_attack_until_eot`` beside it -- that arms a
     board-wide filter, and a targeted restriction routed through it would
@@ -1006,7 +1006,7 @@ def cant_attack_until_eot(game: Game, instruction: OracleInstruction, context: O
     """"Creatures can't attack this turn." (Festival.)
 
     The attack twin of ``cant_block_until_eot`` below: a blanket restriction the
-    attack gate (``declare_attackers_step.can_attack``) tests for the rest of
+    attack gate (``attack_legality.can_attack``) tests for the rest of
     the turn, swept at cleanup. State plus a reader, never a flag stamped per
     creature — a creature entering after this resolves cannot attack either,
     which per-permanent flags would miss.

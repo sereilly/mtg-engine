@@ -32,8 +32,10 @@ from engine.activation_prohibitions import activation_prohibition
 from engine.keywords import abilities_lost_at, derived_ability_lines
 from engine.hand_locks import locked_hand_indices
 from engine.revealed_hands import hand_revealed_to
-from engine.targeting import (derive_cast_spec, recorded_role_seats, spec_is_a_cost,
+from engine.targeting import (derive_cast_spec,
                               usable_activated_abilities)
+from engine.target_roles import recorded_role_seats
+from engine.cost_pickers import spec_is_a_cost
 from engine.text_changes import changed_words
 
 from .runtime import CARD_BY_NAME
@@ -1076,7 +1078,7 @@ def _stack_item_targets(item, game: Game) -> list[dict]:
 
     # Several **players**, each its own target ("…target player controls …
     # another target player controls", Cultural Exchange). The announcement
-    # recorded a seat per role (``targeting.ROLE_SEATS``) and the scalar read
+    # recorded a seat per role (``target_roles.ROLE_SEATS``) and the scalar read
     # below is only the first of them, so without this the table was shown a
     # spell aimed at one player while it was aimed at two. A slot CR 608.2b
     # blanked is ``None`` and draws no arrow.

@@ -493,7 +493,7 @@ def chooses_card_name_on_enter(text: str) -> dict | None:
 
     ``{}`` is the unbounded choice (Runed Halo) and ``{"excluded_card_type":
     "land"}`` is "a **nonland** card name" (Meddling Mage) — the key
-    ``mixins/stack/choices._named_card_breaks_printed_bound`` enforces and the
+    ``mixins/stack/choices/card_names._named_card_breaks_printed_bound`` enforces and the
     default obeys, so the prompt, the headless seat and the answer path read
     one bound.
 
@@ -531,7 +531,7 @@ def chooses_card_name_on_enter(text: str) -> dict | None:
 #: permanent that paid it.
 #:
 #: A named constant because four readers now spell it: the choice that records
-#: it (``mixins/stack/choices.py``), the CR 604.3 recompute that reads it back
+#: it (``mixins/stack/choices/``), the CR 604.3 recompute that reads it back
 #: (Nameless Race, ``characteristic_defining.py`` → ``permanent_state.py``), the
 #: reset that clears it, and the where-clause that sizes a token from it
 #: (Phyrexian Processor). One key has one name, exactly as
@@ -623,7 +623,7 @@ def _self_normalized(line: str, card_name: str | None = None) -> str:
 
     Pre-modern and legendary templating writes the subject as the card's name
     ("**Rasputin** enters with seven dream counters on it") where the patterns
-    here are anchored on "this <noun>". Through ``oracle._restriction_line``
+    here are anchored on "this <noun>". Through ``self_reference._restriction_line``
     rather than a collapser of its own, for the reason ``target_immunity``
     gives at the same seam: the *gate* already reads a line that way, and a
     runtime reader normalizing differently is exactly how a card compiles
@@ -814,7 +814,7 @@ def entry_choices_of(card) -> "tuple[EntryChoice, ...]":
     """The rows of :data:`ENTRY_CHOICES` *card*'s text makes as it enters.
 
     Read the way the entry state reads it — the compiled program's normalized
-    text for the substring probes and ``oracle.expand_card_lines`` for the
+    text for the substring probes and ``line_rewrites.expand_card_lines`` for the
     whole-line ones — so "does this card choose a colour as it enters" has the
     answer the mixin acted on. Imported late for :func:`_entry_choice_catalogs`'
     reason: ``engine/oracle.py`` imports ``engine/enter_effects.py``, which

@@ -110,12 +110,13 @@ def _spent_role(step: OracleInstruction) -> dict | None:
     it acts on, or None for a step that spends no role.
 
     Two spellings of "which role is mine" exist and both are read: the key
-    inside the description (``targeting.payload_own_role``, a step of a
+    inside the description (``target_roles.payload_own_role``, a step of a
     sentence spent a role at a time) and ``subject_role`` beside it (a
     one-instruction roles sentence whose handler asks for its role by name —
     "Put X glyph counters on target creature that target Wall blocked").
     """
-    from ..targeting import payload_own_role, spec_roles
+    from ..targeting import spec_roles
+    from ..target_roles import payload_own_role
 
     payload = step.payload if isinstance(step.payload, dict) else {}
     described = payload.get("targets")
@@ -206,8 +207,9 @@ def _role_scoped(
     the toll's context — and resolved against the scoped channels that arm
     would have read the payer's own creature.
     """
-    from ..targeting import (payload_own_role, payload_role_slot, role_is_seat,
-                             spec_roles)
+    from ..targeting import spec_roles
+    from ..target_roles import (payload_own_role, payload_role_slot,
+                                role_is_seat)
     from ._targets import resolve_role_permanent, resolve_role_player
 
     payload = step.payload
@@ -336,7 +338,7 @@ def _role_its_branches_spend(step: OracleInstruction):
     ones a roles lowering built) or when they name more than one — a wrapper
     over two roles has no single object to be about.
     """
-    from ..targeting import payload_own_role
+    from ..target_roles import payload_own_role
 
     found: dict[str, dict] = {}
 
@@ -920,7 +922,7 @@ def _offer_to_seat(
         "_context": context,
         # Who the card offers this to, as printed: one seat's answer is read
         # differently when every seat is being asked the same question
-        # (``ai_policy.offer_buys_own_drawback``).
+        # (``ai_prompts.offer_buys_own_drawback``).
         "_offered_actor": instruction.payload.get("actor", "you"),
     }
     # "…**If you do**, untap this land." (Forsaken City.) Where the offered
@@ -1032,7 +1034,7 @@ def choose_one(game: Game, instruction: OracleInstruction, context: OracleExecut
 
     Not a modal **ability**. A modal triggered ability chooses its mode as it is
     put on the stack (CR 700.2b), which
-    ``mixins/stack/resolution._choose_trigger_mode`` does, and by the time such
+    ``mixins/stack/trigger_targets._choose_trigger_mode`` does, and by the time such
     an ability resolves ``_chosen_trigger_instruction`` has already substituted
     the chosen mode — so a modal head never arrives here with a mode still to
     pick. What does arrive is every choice CR 608.2d makes "while applying the

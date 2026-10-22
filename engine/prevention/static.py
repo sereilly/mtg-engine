@@ -211,7 +211,7 @@ def _source_shield_matches(
         if not hasattr(source, "has_type") or not source.has_type(str(subtype)):
             return False
     if wanted.get("enchanted"):
-        from ..auras import auras_attached_to
+        from ..aura_attachment import auras_attached_to
 
         if not hasattr(source, "metadata") or not auras_attached_to(source):
             return False
@@ -346,7 +346,7 @@ def _source_type_shielded_by(game, event: dict) -> dict | None:
     twin) and the text of whatever is attached to it ("dealt to **enchanted**
     creature", which is a shield the recipient's own text says nothing about).
     """
-    from ..auras import auras_attached_to
+    from ..aura_attachment import auras_attached_to
 
     recipient = event["recipient"]
     if isinstance(recipient, PlayerState) or recipient is None:
@@ -514,7 +514,7 @@ def _static_points_prevented(game, event: dict) -> int:
     """How many points every such line on the recipient's board shaves off this
     event. Pure — nothing is spent, because nothing here is a charge.
 
-    **Summed** across the battlefield, for ``replacements._spell_damage_delta``'s
+    **Summed** across the battlefield, for ``replacements.damage._spell_damage_delta``'s
     reason exactly: CR 616.1 would apply two Armors as two effects in an order
     the affected player picks, subtraction commutes, and one candidate per
     registration is the model ``apply_in_order`` has. Clamped to the event, so
@@ -1191,7 +1191,7 @@ def prevent_small_event_threshold(line: str, card_name: str | None = None) -> in
     """
     normalized = " ".join((line or "").strip().lower().rstrip(".").split())
     if card_name:
-        from ..oracle import _collapse_self_references
+        from ..self_reference import _collapse_self_references
 
         normalized = _collapse_self_references(
             normalized, card_name, "this creature"
@@ -1355,7 +1355,7 @@ def prevention_claims_line(line: str, card_name: str | None = None) -> bool:
     """Whether one printed line is, in full, a static prevention effect
     implemented in this package.
 
-    The twin of ``replacements.replacement_claims_line`` and read by the same
+    The twin of ``replacements.lines.replacement_claims_line`` and read by the same
     two callers — the grammar's parse claim (engine/grammar/registries.py) and
     the support gate (engine/oracle.py) — because a permanent whose ability is a
     prevention produces no instruction either. Nine Lives happened to print

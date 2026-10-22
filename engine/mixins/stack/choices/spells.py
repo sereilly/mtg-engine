@@ -48,7 +48,7 @@ class SpellChoicesMixin:
         # **that player** controls", "…deals 4 damage to **that player**"
         # (Misfortune), "**That player** draws up to three cards" (Fatal Lore).
         # Frozen here, under the key every fire site freezes a seat under, so
-        # `handlers/_common.frozen_that_player_seat` and the damage/draw
+        # `handlers/_targets.frozen_that_player_seat` and the damage/draw
         # recipients read one answer rather than three. In a duel it happens to
         # equal the resolution's default opposing seat; with three players it
         # does not, which is why it is recorded rather than re-derived.

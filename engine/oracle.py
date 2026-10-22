@@ -55,8 +55,7 @@ from .faces import CAST_FACE_LAYOUTS, face_cards, is_multi_face
 from .oracle_types import (ActivatedAbilityCost, ModalOption,
                            OracleInstruction, OracleProgram, OracleToken,
                            ParsedActivatedAbility, ParsedTriggeredAbility,
-                           TriggerCondition, _COLOR_WORD_TO_SYMBOL,
-                           compilation_cache)
+                           TriggerCondition, compilation_cache)
 from .auras import unclaimed_aura_lines
 from .cycling import unread_cycling_line
 from .flashback import (FLASHBACK_CLAIM, flashback_x_unannounced,
@@ -87,22 +86,11 @@ from .line_classification import (_noncreature_line_instructions,
                                   _parse_planeswalker_program,
                                   _unread_land_text)
 
-# Re-exported: names that moved out at the 2,000-line split and are still
-# pulled from ``engine.oracle``. Three are ``__all__``'s; the rest are pulled
-# by modules other groups were splitting in the same round (``auras``,
-# ``cast_costs``, ``enter_effects``, ``prevention``,
-# ``activation_restrictions``, ``events``, ``mixins/permanent_state``), whose
-# import lines were left alone. New code
-# imports a name from the module that defines it.
+# Re-exported: three of ``__all__``'s names moved out at the 2,000-line
+# split, and this module stays their import path.
 from .trigger_conditions import trigger_condition_of_line
-from .chargeable_costs import (_chargeable_discard_filters,
-                               chargeable_exile_payload,
-                               chargeable_sacrifice_payload,
-                               cost_object_is_chargeable)
+from .chargeable_costs import chargeable_sacrifice_payload
 from .activation_costs import parse_activated_ability_cost
-from .self_reference import _collapse_self_references
-from .line_rewrites import expand_card_lines
-from .line_classification import compile_emblem_text
 
 
 __all__ = [

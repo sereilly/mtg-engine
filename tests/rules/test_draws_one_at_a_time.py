@@ -9,7 +9,7 @@ per event, the modified events that replace it included.
 
 The engine keeps the first by parking a draw behind one that is still waiting
 on its player (``Game._draw_prompt_open``) and the second by carrying what an
-event has been through on the draws made of it (``replacements.draws_behind``).
+event has been through on the draws made of it (``replacements.draws.draws_behind``).
 The pool-wide census is ``tests/engine/test_draw_replacement_pair_census.py``;
 these are the rules, one scenario each.
 """

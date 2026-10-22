@@ -46,9 +46,11 @@ from engine.models import Permanent
 from engine.oracle import compile_card_oracle, compiled_units
 from engine.shields import shields_on
 from engine.targeting import (
-    ROLES_TARGET_KIND, activation_target_slot, derive_activation_spec,
-    spec_is_a_cost, usable_activated_abilities,
+    activation_target_slot, derive_activation_spec,
+    usable_activated_abilities,
 )
+from engine.target_roles import ROLES_TARGET_KIND
+from engine.cost_pickers import spec_is_a_cost
 from tests.helpers import _nosick, resolve_stack
 
 #: One of most things a printed target phrase can ask for, the same on both

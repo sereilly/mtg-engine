@@ -24,8 +24,8 @@ cast and activation paths) or the policy's answer to it (``ai_prompts``):
   :func:`graveyard_price_order`), and whether an effect reads which cards its
   cost exiled.
 
-The engine's resolution paths import most of these from ``ai_valuation``,
-which binds them for that reason.
+The engine's resolution paths import these from here, inside the function
+that asks.
 """
 
 from __future__ import annotations
@@ -538,7 +538,7 @@ def toll_branch_loss(
     somebody else's permanent. Without a context those steps stay unpriceable,
     which is what they were.
     """
-    from .handlers._common import attached_host
+    from .handlers._targets import attached_host
 
     player = game.players[player_index]
     recipients = frozenset(self_recipients)

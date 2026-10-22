@@ -46,7 +46,7 @@ from engine.faces import compilation_units
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.stack_targets import chosen_targets
-from engine.targeting import cast_announced_entry_trigger
+from engine.cast_targets import cast_announced_entry_trigger
 from tests.helpers import resolve_stack
 
 #: A floor, because a sweep that reaches nothing passes. 32 on the day.

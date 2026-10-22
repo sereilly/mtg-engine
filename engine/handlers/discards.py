@@ -7,7 +7,7 @@ printed phrase names, the ability's own controller, and the two fused shapes —
 Bazaar of Baghdad's draw-then-discard and Kinetic Augur's
 discard-then-draw-that-many. A chosen discard is a ``discard`` prompt on the
 pending-choice queue, and :func:`_resolve_one_discard` is the one move its
-answer makes, shared with the resolvers in ``engine/mixins/stack/choices.py``.
+answer makes, shared with the resolvers in ``engine/mixins/stack/choices/``.
 
 Split out of ``zones.py`` at the 2,000-line cap's split round. A discard of a
 card a *reveal* chose ("…discards it unless they pay 1 life") is

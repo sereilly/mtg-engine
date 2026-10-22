@@ -495,7 +495,7 @@ def _divided_in_both_arms(conditional):
     resolves, so as it is cast both arms are still in front of the caster — and
     they name one list of targets (CR 601.2c: chosen once, for whichever arm
     resolves). The replacing arm is the one returned, because it is the arm
-    ``targeting.py``'s own walk reads first; what each target is *dealt* is
+    ``instruction_targets.py``'s own walk reads first; what each target is *dealt* is
     the resolving arm's own amount (:func:`divide`), never this one's.
 
     Two refusals, each a way the answer would be about half the card:

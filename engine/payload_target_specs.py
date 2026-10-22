@@ -396,7 +396,7 @@ def _graveyard_return_spec(payload: dict) -> dict:
     # "Return **another** target artifact card…" (Junk Diver). Carried onto the
     # spec for the subtype's reason directly above: the enumerator reads it
     # through the one predicate the handler also reads
-    # (``handlers/_common.excluded_graveyard_slot``), so the picker cannot offer
+    # (``handlers/_filters.excluded_graveyard_slot``), so the picker cannot offer
     # the card the printed word excludes and then have resolution decline it.
     if payload.get("exclude_source_card"):
         spec["exclude_source_card"] = True
@@ -618,7 +618,7 @@ def _prevention_shield_spec(payload: dict) -> dict | None:
 
 
 #: The printed source types a "…source of your choice" picker can be narrowed
-#: to by its spec ``kind`` — the kinds ``legality._permanent_matches_target_kind``
+#: to by its spec ``kind`` — the kinds ``legality_enumeration._permanent_matches_target_kind``
 #: has an arm for. Any other printed type is offered as a permanent, which is
 #: wider than the card and never narrower: a shield is matched by its own
 #: predicate at damage time (CR 615.9), so an over-wide offer is a choice that

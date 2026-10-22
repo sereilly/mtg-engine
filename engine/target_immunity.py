@@ -270,7 +270,7 @@ class BoardTargetImmunity:
 #: The plural of :data:`_TARGET_IMMUNITY`'s sentence, and the plural is not
 #: cosmetic: a **set** of objects takes "the target**s**", where a single
 #: permanent takes "the target". The subject is read with ``plural=True`` for
-#: the reason ``prevention.prevent_all_to_matching`` reads its own that way —
+#: the reason ``prevention.static.prevent_all_to_matching`` reads its own that way —
 #: the parser refuses a singular self-reference under that flag, so "this
 #: creature" and "enchanted creature", which reduce to a bare
 #: ``{"type_filter": "creature"}`` and would shroud every creature in the game,
@@ -822,7 +822,7 @@ def source_is_in_class(game, source, source_class: str) -> bool:
     the same question, asked of a different kind of object. A spell is a card
     on the stack; an ability's source is a permanent, and an animated artifact
     land is an artifact source however its printed type line reads — which is
-    why the card-type half goes through ``prevention.source_has_type`` rather
+    why the card-type half goes through ``prevention.registry.source_has_type`` rather
     than through the printed line.
     """
     if source_class.startswith(COLOR_CLASS_PREFIX):

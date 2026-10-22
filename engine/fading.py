@@ -6,7 +6,7 @@ upkeep, remove a fade counter from this permanent. If you can't, sacrifice the
 permanent." So this is the rewrite ``engine/echo.py`` made for echo and
 ``engine/equipment.py`` for equip — the printed keyword line becomes the
 sentences the rules say it already is, applied by
-``oracle.expand_ability_lines`` before any line is classified, and from there
+``line_rewrites.expand_ability_lines`` before any line is classified, and from there
 nothing downstream knows the word.
 
 **Both sentences already had a reader**, which is the whole argument for a

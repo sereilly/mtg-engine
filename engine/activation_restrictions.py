@@ -87,12 +87,6 @@ from .activation_tallies import (
     _ONCE_ONLY_CLAUSE,
     _not_yet_activated_at_all,
 )
-# Re-exported for the module that imported it from here before the
-# activation caps moved to ``activation_tallies`` (``handlers/control_flow.py``);
-# new code imports it from there.
-from .activation_tallies import (  # noqa: F401
-    activations_this_turn,
-)
 
 if TYPE_CHECKING:
     from .game import Game
@@ -986,7 +980,7 @@ def activation_restriction_line(sentence: str, card_name: str | None = None) -> 
     through the joining word instead of through a missing row.
     """
     if card_name:
-        from .oracle import _collapse_self_references
+        from .self_reference import _collapse_self_references
 
         # Lowercased first, for ``_clauses``' reason one function up.
         sentence = _collapse_self_references(

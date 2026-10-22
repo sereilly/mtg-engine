@@ -29,7 +29,7 @@ Beside the seam, the three things it is the reason for:
 
 from __future__ import annotations
 
-from ..auras import auras_attached_to, detach_aura
+from ..aura_attachment import auras_attached_to, detach_aura
 from ..control import (base_controller, change_control, control_changes,
                        end_control_change, last_controller,
                        set_last_controller, has_control_change,
@@ -76,7 +76,7 @@ class ControlSeamMixin:
         """End the continuous effects an Aura applied (CR 611.3).
 
         The Aura's P/T contribution is *derived* while it is attached
-        (auras.aura_static_pt_grant via layer_bridge), so detaching it is the
+        (aura_grants.aura_static_pt_grant via layer_bridge), so detaching it is the
         whole removal — there is no delta to subtract. What is still undone
         here are the metadata flags _apply_aura_effect stamps directly, plus
         the linked one-shots (control theft, animation, Animate Dead's

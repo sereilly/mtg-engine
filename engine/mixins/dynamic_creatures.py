@@ -24,8 +24,8 @@ from __future__ import annotations
 
 import re
 
-from ..enter_effects import LIFE_PAID_AS_ENTERED
-from ..auras import auras_attached_to
+from ..entry_choices import LIFE_PAID_AS_ENTERED
+from ..aura_attachment import auras_attached_to
 from .. import copies
 from ..landwalk import BOARD_NAMED_LANDWALKS, board_named_landwalks
 from ..zone_copies import ZONE_TOP_COPY_KIND, zone_top_copy_from_payload
@@ -387,7 +387,8 @@ class DynamicCreaturesMixin:
         1" is what makes Snowblind unable to kill, and reading a toughness this
         effect had already reduced would make the clamp chase itself.
         """
-        from ..auras import aura_board_counted_penalty, auras_attached_to
+        from ..aura_grants import aura_board_counted_penalty
+        from ..aura_attachment import auras_attached_to
         from ..subject_filters import subject_matches
 
         for seat, host in self.permanents_with_controller():

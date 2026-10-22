@@ -21,8 +21,9 @@ from engine.card_loader import load_cards, manifest_set_paths
 from engine.grammar import ast, parse_line
 from engine.grammar.lowering._common import chargeable_tap_filter
 from engine.mixins.stack.activation_payment import COST_PERFORMING_KINDS
-from engine.oracle import (chargeable_exile_payload, chargeable_sacrifice_payload,
+from engine.oracle import (chargeable_sacrifice_payload,
                            compile_card_oracle, parse_activated_ability_cost)
+from engine.chargeable_costs import chargeable_exile_payload
 
 
 @pytest.fixture(scope="module")

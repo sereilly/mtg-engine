@@ -25,71 +25,71 @@ _LAND_TYPES = ("plains", "island", "swamp", "mountain", "forest")
 
 
 # (pattern, kind) — enforced by:
-#   cant_attack_unless_defender_controls  phases/declare_attackers_step.can_attack
-#   cant_attack_without_controlled_count  phases/declare_attackers_step.can_attack
-#   cant_attack                     phases/declare_attackers_step.can_attack
-#   controlled_creatures_cant_attack  phases/declare_attackers_step.can_attack
-#   creatures_cant_attack           phases/declare_attackers_step.can_attack
-#   cant_attack_if_attacked_last_turn  phases/declare_attackers_step.can_attack
-#   cant_attack_unless_defender_acted  phases/declare_attackers_step.can_attack
-#   cant_attack_unless_you_cast     phases/declare_attackers_step.can_attack
-#   cant_attack_unless_pay          phases/declare_attackers_step.can_attack
+#   cant_attack_unless_defender_controls  phases/attack_legality.can_attack
+#   cant_attack_without_controlled_count  phases/attack_legality.can_attack
+#   cant_attack                     phases/attack_legality.can_attack
+#   controlled_creatures_cant_attack  phases/attack_legality.can_attack
+#   creatures_cant_attack           phases/attack_legality.can_attack
+#   cant_attack_if_attacked_last_turn  phases/attack_legality.can_attack
+#   cant_attack_unless_defender_acted  phases/attack_legality.can_attack
+#   cant_attack_unless_you_cast     phases/attack_legality.can_attack
+#   cant_attack_unless_pay          phases/attack_legality.can_attack
 #                                   + declare_attackers (the charge)
 #   creatures_cant_attack_you_unless_pay
-#                                   phases/declare_attackers_step.can_attack
+#                                   phases/attack_legality.can_attack
 #                                   + declare_attackers (the charge)
-#   creatures_cant_attack_you       phases/declare_attackers_step.can_attack
+#   creatures_cant_attack_you       phases/attack_legality.can_attack
 #   subject_cant_block_subject_unless_pay_life
-#                                   phases/declare_blockers_step._can_block_attacker
+#                                   phases/block_legality._can_block_attacker
 #                                   + declare_blockers (the charge)
-#   cant_block                      phases/declare_blockers_step
-#   creatures_cant_block            phases/declare_blockers_step
-#   must_attack_each_combat         phases/declare_attackers_step._must_attack_if_able
-#   creatures_must_attack           phases/declare_attackers_step._must_attack_if_able
+#   cant_block                      phases/block_legality
+#   creatures_cant_block            phases/block_legality
+#   must_attack_each_combat         phases/attack_legality._must_attack_if_able
+#   creatures_must_attack           phases/attack_legality._must_attack_if_able
 #                                   (a board scan)
 #   creatures_must_attack_if_partner_attacks
-#                                   phases/declare_attackers_step._must_attack_beside
+#                                   phases/attack_legality._must_attack_beside
 #                                   (a board scan over the declaration)
 #   creatures_must_attack_if_source_attacks
-#                                   phases/declare_attackers_step._must_attack_beside
+#                                   phases/attack_legality._must_attack_beside
 #                                   (the same scan, asking identity)
 #   must_block_each_combat          phases/declare_blockers_step.declare_blockers
-#   creatures_must_block            phases/declare_blockers_step.declare_blockers
+#   creatures_must_block            phases/block_legality._board_compels_block
 #                                   (a board scan)
 #   attacker_chooses_blocks         phases/combat_phase.block_chooser_index
 #                                   (the declaration, CR 509.1c)
 #   must_attack_if_partner_attacks  phases/declare_attackers_step.declare_attackers
 #                                   (the declaration, not the creature)
 #   attacks_as_though_hasty_unless_it_entered
-#                                   phases/declare_attackers_step.can_attack
-#   subject_ignores_defender        phases/declare_attackers_step._ignores_defender
+#                                   phases/attack_legality.can_attack
+#   subject_ignores_defender        phases/attack_legality._ignores_defender
 #   cant_be_blocked_while_attacking_alone
-#                                   phases/declare_blockers_step
-#   cant_be_blocked_by              phases/declare_blockers_step
-#   cant_be_blocked_except_by       phases/declare_blockers_step
-#   cant_block_subject              phases/declare_blockers_step
+#                                   phases/block_legality
+#   cant_be_blocked_by              phases/block_legality
+#   cant_be_blocked_except_by       phases/block_legality
+#   cant_block_subject              phases/block_legality
 #                                   (also the first half of "can't block or be
 #                                   blocked by", whose second half is
 #                                   cant_be_blocked_by above)
 #   cant_block_power_n_or_greater_unless_pay  phases/declare_blockers_step
 #                                   + declare_blockers (the charge)
 #   creatures_that_attacked_last_turn_cant_attack
-#                                   phases/declare_attackers_step.can_attack
-#   can_block_only_with_keyword     phases/declare_blockers_step
-#   subject_can_block_only          phases/declare_blockers_step (a board scan)
+#                                   phases/attack_legality.can_attack
+#   can_block_only_with_keyword     phases/block_legality
+#   subject_can_block_only          phases/block_legality (a board scan)
 #   must_be_blocked                 phases/declare_blockers_step
 #   must_be_blocked_by_all_able     phases/declare_blockers_step
 #   max_attackers_each_combat       phases/declare_attackers_step.declare_attackers
 #   max_attackers_on_you_each_combat  phases/declare_attackers_step.declare_attackers
-#   max_blockers_each_combat        phases/declare_blockers_step.declare_blockers
-#   cant_attack_unless_others_attack  phases/declare_attackers_step.declare_attackers
-#   cant_block_unless_others_block  phases/declare_blockers_step.declare_blockers
+#   max_blockers_each_combat        phases/block_legality.block_declaration_refusal
+#   cant_attack_unless_others_attack  phases/attack_legality.attack_declaration_refusal
+#   cant_block_unless_others_block  phases/block_legality.block_declaration_refusal
 #   cant_attack_unless_greater_power_attacks
-#                                   phases/declare_attackers_step.declaration_refusal
+#                                   phases/attack_legality.attack_declaration_refusal
 #   cant_block_unless_greater_power_blocks
-#                                   phases/declare_blockers_step.declare_blockers
+#                                   phases/block_legality.block_declaration_refusal
 #   cant_attack_unless_subject_attacks
-#                                   phases/declare_attackers_step.attack_declaration_refusal
+#                                   phases/attack_legality.attack_declaration_refusal
 _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
     (
         # "No more than two creatures can attack **you** each combat."
@@ -623,7 +623,7 @@ _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
         # the exclusion deleted, one step to the right — and its own kind for
         # the reason that pair is always two: the two prohibitions are answered
         # at two different steps, and one kind read at both is a kind one of
-        # them forgets. `declare_blockers_step._can_block_attacker` has scanned
+        # them forgets. `block_legality._can_block_attacker` has scanned
         # the board for this kind since Katabatic Winds, whose sentence names
         # both halves at once; nothing had ever printed the blocking half on
         # its own, so the row that produces it was missing while the
@@ -731,7 +731,7 @@ _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
         # count and no price, so nothing may block it at all (CR 509.1b).
         #
         # **The kind already had two enforcement sites and no producer.**
-        # `phases/declare_blockers_step._can_block_attacker` refuses every
+        # `phases/block_legality._can_block_attacker` refuses every
         # blocker on it and `legality.is_unblockable` reads it for the UI's
         # fade, both keyed on ``cant_be_blocked``, and nothing in the engine
         # ever emitted one — the grammar's `_lower_cant_be` refuses a

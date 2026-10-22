@@ -98,7 +98,7 @@ def _accept_bands_with_other(stream: TokenStream) -> str | None:
     * ``"bands with other <quality>"`` — one ability, granted or held.
     * ``all "bands with other" abilities`` — the **family**, which is what a
       removal names (Shelkin Brownie, Tolaria). It is not an ability anything
-      has; :func:`engine.banding.expand_ability_removal` is what turns it into
+      has; :func:`engine.keywords.expand_ability_removal` is what turns it into
       the ones a permanent actually has, and lowering is what refuses it as a
       *grant*.
 
@@ -288,7 +288,7 @@ def parse_keyword_list(stream: TokenStream) -> tuple[tuple[str, ...], bool]:
             # keyword word is simply left unprinted on the second — the "or
             # from" spelling below with the other connective, and granting
             # both rather than one. The keyword *line* and the Aura grant
-            # already read it (`oracle._protection_qualities`, `auras.py`);
+            # already read it (`mixins/protection._protection_qualities`, `auras.py`);
             # this is the list every one-shot grant reads, which did not, so
             # the tail was unconsumed text and the whole ability refused.
             while True:

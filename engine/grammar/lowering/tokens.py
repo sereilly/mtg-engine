@@ -597,7 +597,7 @@ def _stamp_token_count(
         # "…**equal to the amount of mana they paid this way**." (Liege of the
         # Hollows.) A back-reference that *names* its record, and one number
         # per seat — so it rides the per-recipient channel the branch above
-        # already uses, read by `_common.per_recipient_amount` inside the loop
+        # already uses, read by `_amounts.per_recipient_amount` inside the loop
         # over recipients rather than once in front of it.
         #
         # Read before the bare spelling below, which this used to fall into:

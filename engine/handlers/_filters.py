@@ -389,7 +389,7 @@ def excluded_graveyard_slot(spec: dict, graveyard, source_card) -> int | None:
     already gives "exile **it**" for a dies-trigger whose source is in the pile.
 
     One reader for both callers, for the reason ``graveyard_card_matches`` is
-    one: ``legality._enumerate_graveyard_creatures`` offers the choice and the
+    one: ``legality_enumeration._enumerate_graveyard_creatures`` offers the choice and the
     handler performs it, and a second copy of "which slot is the source's" is
     how a picker comes to offer what resolution then refuses. The announcement
     gates (CR 601.2c for a spell, CR 602.2b for an ability) need no third call

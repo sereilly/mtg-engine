@@ -115,7 +115,7 @@ PREVENT_AND_EXILE = "prevent_and_exile"
 #: whole-instance shield with another flag: `_live` finds a shield by asking the
 #: recipient for its own collection, and a shield covering permanents nobody has
 #: hung it on has to be found some other way (`recipients` below, and
-#: `prevention._class_shields` — the exact twin of
+#: `prevention.shields._class_shields` — the exact twin of
 #: `damage_redirects.class_redirects`, which the redirect side has had since
 #: Blood of the Martyr).
 PREVENT_TEAM = "prevent_team"
@@ -237,7 +237,7 @@ class Shield:
     #: *whole* of what it covers: Shadowbane's "you **and/or** creatures you
     #: control" covers the seat it hangs off as well, and this one hangs off a
     #: seat only because a class has nothing else to hang off (the cleanup sweep
-    #: walks seats). Read by ``prevention._live`` before it counts a seat's own
+    #: walks seats). Read by ``prevention.shields._live`` before it counts a seat's own
     #: shields as protecting that seat -- without it the caster's own face would
     #: be shielded by a sentence that never names them.
     spares_holder: bool = False
@@ -253,7 +253,7 @@ class Shield:
     #: covers a creature.
     #:
     #: The shield still lives on the seat that armed it — a lifetime has to hang
-    #: off something the cleanup sweep walks — and ``prevention._table_shields``
+    #: off something the cleanup sweep walks — and ``prevention.shields._table_shields``
     #: is what makes every recipient find it, exactly as ``_class_shields``
     #: makes a described permanent find Shadowbane's.
     any_recipient: bool = False
@@ -596,7 +596,7 @@ def make_numeric_pool(
 
     The narrowing is a field on the same shield rather than a kind of its own,
     because ``kind`` names the *interceptor* that consumes the shield and this
-    one is still spent a point at a time by ``prevention._prevention_pool``.
+    one is still spent a point at a time by ``prevention.shields._prevention_pool``.
     What differs is a recorded property, which CR 615.9 rechecks when the damage
     would be dealt — the same axis ``colors`` and ``source_type`` already sit on.
     """
@@ -628,7 +628,7 @@ def make_named_source_pool(
     is a different source and spends nothing here.
 
     ``any_recipient`` is Penance's flag, and it buys the same reach:
-    ``prevention._table_shields`` finds this shield from whichever player or
+    ``prevention.shields._table_shields`` finds this shield from whichever player or
     permanent the damage was headed for, while the shield still lives on the
     seat that armed it so the cleanup sweep can expire it.
     """
@@ -743,7 +743,7 @@ def make_chosen_source_blanket(
     recipient, so the shield stops that source's damage to whoever it was
     headed for — a player or a permanent, the caster's or anybody's. It still
     lives on the seat that armed it, which is where the cleanup sweep finds it,
-    and ``prevention._table_shields`` is what makes every recipient reach it.
+    and ``prevention.shields._table_shields`` is what makes every recipient reach it.
     """
     if source is None:
         raise ValueError("a chosen-source blanket is armed against a source")
@@ -872,7 +872,7 @@ def make_color_shield(
     # (CR 609.7a), where the activation named one. CR 615.8: the shield
     # prevents "the next instance of damage from **that source**" — and CR
     # 615.9 still rechecks the colour when it would deal it, which is why the
-    # two are separate fields ``prevention._source_matches`` asks in turn. It
+    # two are separate fields ``prevention.shields._source_matches`` asks in turn. It
     # was not recorded at all ("matching is by color"), so a Circle that named
     # the Hill Giant spent itself on the Goblin beside it. None is the
     # announcement that named nothing (an AI seat, a headless caller): the
@@ -925,7 +925,7 @@ def make_recipient_class_shield(
     event its phrase narrows.
 
     It hangs off *seat*'s player, because a class has nothing else to hang off
-    and the cleanup sweep walks seats; ``prevention._class_shields`` is what
+    and the cleanup sweep walks seats; ``prevention.shields._class_shields`` is what
     makes a described permanent find it, and ``spares_holder`` is what keeps
     the seat itself out of a sentence that never named it. The set is never
     captured: CR 615.1's shields watch the event, so a creature that enters

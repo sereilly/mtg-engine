@@ -89,7 +89,7 @@ def _parse_attached_step_event(
 ) -> "ast.TriggerEvent | None":
     """"At the beginning of the <step> of enchanted <noun>'s controller, …".
 
-    A production rather than four more rows of ``triggers._AT_EVENTS``, and the
+    A production rather than four more rows of ``trigger_tables._AT_EVENTS``, and the
     **subject** is why — the same reason ``_parse_attached_event`` is
     one. A table row builds an event with no subject, and the effect behind
     this one says "destroy that creature **if it** didn't attack this turn":

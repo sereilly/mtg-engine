@@ -291,7 +291,7 @@ def _spell_object_target_steps(card: CardDefinition) -> tuple[OracleInstruction,
     **seat** role ("…and 2 damage to target player or planeswalker", Lunge) is
     left out: it says nothing about a permanent.
     """
-    from .targeting import SEAT_ROLE_KINDS, payload_own_role
+    from .target_roles import SEAT_ROLE_KINDS, payload_own_role
 
     def spends_an_object_role(payload: dict, targets: dict) -> bool:
         own = payload_own_role(payload)
@@ -426,7 +426,7 @@ def cast_helps_the_player_it_names(
     disagree about the same card.
 
     Read off the slot the cast's own picker is derived from
-    (``targeting._first_described_slot``, through the mode the cast names),
+    (``instruction_targets._first_described_slot``, through the mode the cast names),
     so the answer is about the target the announcement actually makes — one
     step, not every step the spell goes on to carry out, some of which are
     about somebody else ("…that player loses 5 life **and you gain 5
@@ -475,7 +475,7 @@ def entry_trigger_target_side(card: CardDefinition) -> str | None:
     should be aimed at — "you", "opponent" or None.
 
     This engine names an entry trigger's target as the permanent is cast
-    (``targeting._cast_target_spec``: "a standing approximation"), so the cast
+    (``cast_targets._cast_target_spec``: "a standing approximation"), so the cast
     is where an AI seat chooses it — and :func:`spell_target_side` reads only
     what resolves *as a spell*, which for a creature is nothing. With no side
     the chooser took the caster's own board first: Nekrataal destroyed its
@@ -521,7 +521,7 @@ def entry_trigger_target_side(card: CardDefinition) -> str | None:
 _SEAT_DENIAL_KINDS = frozenset({"discard_target_cards", "target_loses_life"})
 
 #: The spec kinds whose candidates include a player's face
-#: (``resolution._CHOOSABLE_TRIGGER_PLAYER_KINDS``, the picker's own set).
+#: (``trigger_targets._CHOOSABLE_TRIGGER_PLAYER_KINDS``, the picker's own set).
 _SEAT_SPEC_KINDS = frozenset({"player", "player_or_planeswalker", "any"})
 
 
@@ -588,7 +588,7 @@ def entry_trigger_seat_side(
 
     Asked of the one trigger the cast's picker is derived from -- the first
     that describes a target, among those a cast announced with
-    *optional_cost_payments* will fire (``targeting.entry_trigger_instructions``,
+    *optional_cost_payments* will fire (``cast_targets.entry_trigger_instructions``,
     CR 702.33g) -- so the answer is about the target the cast actually names.
     Only the denial is answered: a gift aimed by this rule could contradict the
     printed phrase ("target **opponent** draws two cards", Lord of
@@ -597,7 +597,8 @@ def entry_trigger_seat_side(
     — this reading said every non-denial "already lands where its card prints
     it", and seven did not (Torment's W2G3).
     """
-    from .targeting import _first_described_slot, entry_trigger_instructions
+    from .targeting import _first_described_slot
+    from .cast_targets import entry_trigger_instructions
 
     if card.primary_type in SPELL_TYPES:
         return None
@@ -1017,8 +1018,8 @@ def role_target_sides(
     kicked Rushing River announces two roles and an unkicked one none.
     """
     from .targeting import (derive_cast_spec, instructions_as_announced,
-                            payload_own_role, role_dependency, role_is_seat,
                             spec_roles)
+    from .target_roles import payload_own_role, role_dependency, role_is_seat
 
     program = compile_card_oracle(card)
     # ...and CR 601.2b's other answer, the mode being weighed
@@ -1067,7 +1068,7 @@ def _sides_of_roles(roles, run, slot_sides) -> tuple[str | None, ...]:
     """The side each of *roles* is picked from, read off the steps of *run*
     that spend it — the body :func:`role_target_sides` and
     :func:`ability_role_target_sides` share."""
-    from .targeting import payload_own_role, role_dependency, role_is_seat
+    from .target_roles import payload_own_role, role_dependency, role_is_seat
 
     spenders: list[OracleInstruction] = []
 

@@ -149,7 +149,7 @@ def _grant_animation_protection(
     CR 702.16g: "protection from each of" a set of qualities is one protection
     ability per quality, so a colourless spell grants none and a two-coloured
     one grants two. Written on the ``protection_from_<word>`` channel every
-    other granted protection uses (`mixins/permanent_state._protection_qualities`),
+    other granted protection uses (`mixins/protection._protection_qualities`),
     so the Titan's shield is read by the same code a printed one is.
 
     The colours are the spell's as the trigger froze it (CR 603.10): by the

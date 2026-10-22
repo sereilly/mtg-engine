@@ -386,7 +386,7 @@ class CastAnnouncementMixin:
             # …and the same rule for a target **on the stack**, which the gate
             # above does not read (its slots are battlefield slots). One call
             # where Invasion's first wave left two: see
-            # `legality.cast_stack_target_refusal`. Without it "counter target
+            # `legality_stack.cast_stack_target_refusal`. Without it "counter target
             # creature spell" was announceable at any spell, paid for, and then
             # declined by its own handler — and a bare cast was accepted with
             # nothing on the stack its phrase admits.
@@ -473,7 +473,7 @@ class CastAnnouncementMixin:
         player has had priority between CR 601.2i and this — the whole
         announcement is still one uninterruptible moment.
 
-        The picker is the one `legality._enumerate_targets` builds for every
+        The picker is the one `legality_enumeration._enumerate_targets` builds for every
         other spell, with the chooser's seat supplied beside the
         ``that_player_only`` flag the mode's own noun phrase produced ("up to
         two target creatures **that player** controls"). Nothing else can supply

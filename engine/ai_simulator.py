@@ -992,7 +992,7 @@ def _modes_named(card: CardDefinition, cast_action) -> list[tuple[int, str]]:
     resolves, or ``[]`` for a spell whose caster chooses no mode.
 
     A modal spell cast naming none is mode 0 — that is what the engine resolves
-    it as (`targeting.announced_mode_instructions`), and it is what every
+    it as (`cast_targets.announced_mode_instructions`), and it is what every
     simulated cast was before the policy had a mode to name.
     """
     program = compile_card_oracle(card)

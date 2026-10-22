@@ -28,9 +28,8 @@ from engine.faces import compilation_units
 from engine.card_loader import load_catalog
 from engine.faces import castable_faces
 from engine.oracle import compile_card_oracle
-from engine.targeting import (derive_cast_spec, derive_cast_target,
-                              line_names_a_cast_target)
-from engine.picker_probes import card_names_a_chooser
+from engine.targeting import derive_cast_spec, derive_cast_target
+from engine.picker_probes import card_names_a_chooser, line_names_a_cast_target
 
 
 def _supported_units(pool):
@@ -233,7 +232,7 @@ _NO_PICKER = {
     # written out: a spec for the kind, an "all slots from one pile"
     # constraint, a handler that consumes announced slots, and the AI's side
     # of naming graveyard slots. Odyssey's second wave was that round
-    # (``targeting.SINGLE_GRAVEYARD``), and it moved Ebony Charm's second mode,
+    # (``target_descriptions.SINGLE_GRAVEYARD``), and it moved Ebony Charm's second mode,
     # Decompose and the two activations with it. Under a *trigger* the same
     # sentence is still chosen at resolution; no card prints one.
 }
@@ -574,8 +573,8 @@ def test_a_reanimation_printed_your_graveyard_still_offers_only_yours(supported_
 # self-contained.
 import pytest as _w3g5_pytest
 
-from engine.picker_probes import cast_picker_expected as _w3g5_cast_picker_expected
-from engine.targeting import (
+from engine.picker_probes import (
+    cast_picker_expected as _w3g5_cast_picker_expected,
     line_names_a_cast_target as _w3g5_names_a_cast_target,
 )
 

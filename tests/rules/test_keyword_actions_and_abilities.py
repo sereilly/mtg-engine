@@ -118,7 +118,7 @@ def test_702_5a_enchant_restricts_what_an_aura_may_be_attached_to():
     The subject is read off the printed line, so the restriction and the words
     that produced it cannot drift apart.
     """
-    from engine.targeting import enchant_line_subject
+    from engine.enchant_targets import enchant_line_subject
 
     assert enchant_line_subject("Enchant creature") == "creature"
     assert enchant_line_subject("Enchant land") == "land"
@@ -130,7 +130,7 @@ def test_702_5a_a_line_that_is_not_an_enchant_restriction_is_not_read_as_one():
     """The restriction is the whole line and nothing else — "Enchanted creature
     gets +1/+1" is an effect, not an attachment restriction, and reading it as
     one would let an Aura attach to anything."""
-    from engine.targeting import enchant_line_subject
+    from engine.enchant_targets import enchant_line_subject
 
     assert enchant_line_subject("Enchanted creature gets +1/+1.") is None
     assert enchant_line_subject("Destroy target creature.") is None
@@ -140,7 +140,7 @@ def test_702_5a_a_line_that_is_not_an_enchant_restriction_is_not_read_as_one():
 def test_702_5_a_printed_aura_declares_its_restriction(set_pool):
     """A real Aura's enchant line is what the engine derives its legal targets
     from — Holy Strength enchants a creature, and says so in one line."""
-    from engine.targeting import enchant_line_subject
+    from engine.enchant_targets import enchant_line_subject
 
     strength = set_pool("LEA")["Holy Strength"]
     subjects = [

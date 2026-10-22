@@ -29,7 +29,7 @@ So flashback is three things this engine already had and had never joined:
   :func:`leaves_stack_to_exile`.
 
 **The keyword line is a rewrite**, composed into
-``oracle.expand_ability_lines`` beside cycling, buyback and kicker and for
+``line_rewrites.expand_ability_lines`` beside cycling, buyback and kicker and for
 their reason: every reader of a card's lines has to see the same sentence.
 The rewritten sentence is the rule's own first one. The second has no
 sentence to rewrite into, for the reason buyback's second half has none: it is

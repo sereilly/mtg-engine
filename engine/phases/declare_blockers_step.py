@@ -15,7 +15,8 @@ onto ``Game`` directly after this.
 
 import random
 
-from ..auras import attached_combat_restrictions, aura_restriction_active
+from ..aura_restrictions import (attached_combat_restrictions,
+                                 aura_restriction_active)
 from ..combat_permissions import (MUST_BLOCK_ALL_UNTIL_EOT,
                                   MUST_BLOCK_ATTACKERS_UNTIL_EOT,
                                   MUST_BLOCK_UNTIL_EOT)
@@ -439,7 +440,7 @@ class DeclareBlockersStepMixin:
         # ask them, so it proposed a set the declaration refused *whole* and the
         # defender blocked with nobody. They live in
         # :meth:`block_declaration_refusal` now, which is what both this gate
-        # and `ai_policy._legal_block_declaration` read.
+        # and `ai_declarations._legal_block_declaration` read.
         #
         # A Camouflage resolution is exempt for the reason menace and Lure are —
         # the piles were matched at random, so there is no declaration to

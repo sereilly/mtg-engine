@@ -45,7 +45,7 @@ from .tolls import (_accept_graded_toll_outcomes, _accept_trailing_toll,
 #: "for each **card** less than two a player **draws** this way" (Truce) — the
 #: printed noun and verb that name a per-seat record an earlier step of the same
 #: effect wrote, and the scratchpad key it wrote it under. A table for
-#: ``amounts._THIS_WAY_COUNTS``'s reason, and checked as a *pair* for its
+#: ``records._THIS_WAY_COUNTS``'s reason, and checked as a *pair* for its
 #: reason too: "for each card less than two a player discards this way" is a
 #: sentence about the other record, and reading one for the other computes a
 #: number the card never printed.

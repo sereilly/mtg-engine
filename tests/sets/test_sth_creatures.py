@@ -776,7 +776,7 @@ def test_g4_a_prose_mana_payment_with_no_rate_refuses_the_line():
     """The gate on the production above, written as its refusal.
 
     A bare "Pay {1}:" is the mana symbol spelled twice, and admitting it would
-    make the grammar's reading and ``oracle.parse_activated_ability_cost``'s
+    make the grammar's reading and ``activation_costs.parse_activated_ability_cost``'s
     disagree: that reader charges a flat {1} for it, and this one would charge
     a rate over a counter nothing named. The positive case always passes; this
     is the one that finds the bug.

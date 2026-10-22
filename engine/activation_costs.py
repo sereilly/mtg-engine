@@ -126,7 +126,7 @@ def _sacrifices_the_attached_permanent(cost_lower: str) -> bool:
     ``sacrifice_self`` eats the Aura and ``sacrifice_filter`` eats any matching
     creature on the board, while the enchanted one lives.
 
-    The grammar's half of the same clause is ``costs._is_chargeable_sacrifice``,
+    The grammar's half of the same clause is ``grammar/chargeable._is_chargeable_sacrifice``,
     which admits the line on ``ObjectFilter.is_enchanted``; the payload that
     filter produces drops the word entirely, so a reader that went through it
     would charge "sacrifice a creature" and never know.

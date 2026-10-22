@@ -69,13 +69,6 @@ from .self_cost_modifiers import (
     self_cost_reduction_for_cast,
 )
 
-# Re-exported: names that moved to ``engine/self_cost_modifiers.py`` at the
-# 2,000-line split and are still pulled from here by ``mixins/stack/casting``
-# and ``mixins/stack/activation``, which another group was splitting in the
-# same round. New code imports a name from the module that defines it.
-from .self_cost_modifiers import (ability_self_reduction_amount,
-                                  self_per_target_tax)
-
 
 def cost_modifier_claims_line(line: str) -> bool:
     """Whether *line* is, in its entirety, one of the templates

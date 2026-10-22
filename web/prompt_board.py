@@ -115,7 +115,7 @@ def _trigger_target(ctx: PromptContext, choices: list) -> dict:
     # client keeps a selection inside the pile its first card came from and
     # sends ``target_seat`` with ``graveyard_indices`` — the flag the cast
     # picker's spec already carries for the same sentence on a spell
-    # (``targeting.SINGLE_GRAVEYARD``). Absent everywhere else.
+    # (``target_descriptions.SINGLE_GRAVEYARD``). Absent everywhere else.
     if choice.data.get("single_graveyard") and payload.get("max_targets"):
         payload["single_graveyard"] = True
     return payload
@@ -239,8 +239,6 @@ def _untap_up_to(ctx: PromptContext, choices: list) -> dict:
     """"Untap up to four lands." (Rewind): every matching permanent on every
     battlefield, by stable id, multi-select up to the amount. The engine
     re-validates each id, so the candidate list is a hint."""
-    from engine.handlers._filters import permanent_matches_filter
-
     from engine.subject_filters import subject_matches
 
     choice = choices[0]

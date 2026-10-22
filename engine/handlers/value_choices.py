@@ -143,8 +143,8 @@ def choose_number(game: Game, instruction: OracleInstruction, context: OracleExe
         # value is for is the sentence behind the choice, read off the compiled
         # program where every such question is, and the length a seat nobody
         # asks takes is a weight beside it.
-        from ..ai_valuation import (FLIP_RUN_LENGTH,
-                                    chosen_number_bounds_flip_run)
+        from ..ai_prompt_readers import (FLIP_RUN_LENGTH,
+                                         chosen_number_bounds_flip_run)
 
         if context.card is not None and chosen_number_bounds_flip_run(
             context.card, instruction
@@ -196,7 +196,7 @@ def secretly_choose_numbers(game: Game, instruction: OracleInstruction, context:
     the discipline ``choose_number`` states and for a reason: a provisional
     number is a number, and the sentences behind this one would lose life by
     it if anything let them run early. A seat nobody asks is answered where
-    the prompt is armed (``default_at_arm``) by ``ai_policy.choose_secret_number``,
+    the prompt is armed (``default_at_arm``) by ``ai_prompts.choose_secret_number``,
     which reads life totals and never this map — so a seat the engine plays
     commits before any other answer exists and cannot be told one.
 
@@ -260,7 +260,7 @@ def choose_color(game: Game, instruction: OracleInstruction, context: OracleExec
     one of them would leave the other reader with nothing and no error.
 
     A deterministic default is stamped first — the colour of the opposing object
-    on the stack this choice is answering (``ai_valuation.threatening_color``),
+    on the stack this choice is answering (``ai_prompt_readers.threatening_color``),
     and failing one the colour the chooser's opponents hold most of among
     nontoken permanents, the policy the entry state applies — so a headless or
     AI seat is never blocked and never left with a colour nobody controls,
@@ -410,7 +410,8 @@ def choose_color(game: Game, instruction: OracleInstruction, context: OracleExec
                 f"{card_name}: {game.players[seat].name} chose {offered[0]}"
             )
             return True, "resolved"
-    from ..ai_valuation import color_most_worth_sweeping, threatening_color
+    from ..ai_prompt_readers import (color_most_worth_sweeping,
+                                     threatening_color)
 
     default_color = None
     if offered is None:
@@ -474,7 +475,7 @@ def recall_chosen_color(game: Game, instruction: OracleInstruction, context: Ora
     context chose, and protection from a colour nobody named is a protection
     the card never gave.
     """
-    from ..enter_effects import CHOSEN_COLOR_KEY
+    from ..entry_choices import CHOSEN_COLOR_KEY
 
     source = context.source_permanent
     chosen = (getattr(source, "metadata", None) or {}).get(CHOSEN_COLOR_KEY)

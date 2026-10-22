@@ -412,7 +412,7 @@ def casts_at_instant_speed(card, game: "Game | None" = None, seat: int | None = 
     a game has them: a permission granted by an effect (Winding Canyons) is
     state rather than text, so no reading of the card alone can see it. They
     are optional because the question is legitimately asked *of a card* too —
-    a test of Mirage's five Auras, and `engine/oracle.py`'s support gate, ask
+    a test of Mirage's five Auras, and `engine/derived_static_claims.py`'s support gate, ask
     whether the printed text grants flash and have no board to ask about. A
     caller that has one and does not pass it gets the printed half, which is
     the pre-grant answer and never a wider one.

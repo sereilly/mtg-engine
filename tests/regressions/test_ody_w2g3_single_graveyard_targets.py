@@ -54,8 +54,9 @@ from engine.faces import compilation_units
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle, expand_ability_lines
 from engine.stack_targets import chosen_targets
-from engine.targeting import (GRAVEYARD_TARGET_KIND, SINGLE_GRAVEYARD,
+from engine.targeting import (GRAVEYARD_TARGET_KIND,
                               derive_activation_spec, derive_cast_spec)
+from engine.target_descriptions import SINGLE_GRAVEYARD
 from tests.helpers import _mk_card, _mk_creature_card, resolve_stack
 
 #: "…target [adjectives] cards from/in … graveyard", and the singular only

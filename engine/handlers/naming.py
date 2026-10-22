@@ -88,8 +88,10 @@ def choose_card_name(game: Game, instruction: OracleInstruction, context: Oracle
     # nothing: one card drawn, every time, for a spell whose whole text is
     # the second one. Aimed at another seat it keeps the public evidence —
     # *that* seat's graveyard — and never reads the library it is milling.
-    from ..ai_valuation import (chosen_name_is_read_off_the_targets_library,
-                                chosen_name_own_zone)
+    from ..ai_prompt_readers import (
+        chosen_name_is_read_off_the_targets_library,
+        chosen_name_own_zone,
+    )
 
     own_zone = (
         chosen_name_own_zone(context.card, instruction)

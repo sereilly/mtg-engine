@@ -15,8 +15,9 @@ for them, and composed onto ``Game`` directly after it; each side calls the
 other through ``self``.
 """
 
-from ..auras import (attached_block_ceiling, attached_combat_restrictions,
-                     aura_restriction_active)
+from ..aura_restrictions import (attached_block_ceiling,
+                                 attached_combat_restrictions,
+                                 aura_restriction_active)
 from ..combat_permissions import (ADDITIONAL_BLOCKS_UNTIL_EOT,
                                   CAN_BLOCK_ANY_NUMBER_UNTIL_EOT,
                                   CANT_BLOCK_ATTACKERS_UNTIL_EOT,

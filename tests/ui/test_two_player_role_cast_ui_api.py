@@ -22,7 +22,7 @@ from fastapi.testclient import TestClient
 from engine import load_cards
 from engine.card_loader import manifest_set_path
 from engine.models import Permanent
-from engine.targeting import ROLE_SEATS
+from engine.target_roles import ROLE_SEATS
 from tests.helpers import _mk_creature_card
 from web.app import app, store
 

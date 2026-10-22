@@ -356,7 +356,7 @@ class TriggeredAbilitiesMixin:
 
         **The cast's announcement rides the object.** This engine names an
         entry trigger's target as the permanent is cast (the standing
-        approximation ``targeting._cast_target_spec`` documents; CR 603.3d
+        approximation ``cast_targets._cast_target_spec`` documents; CR 603.3d
         would choose it here), so the seat, slot and id the cast handed in are
         stamped on the stack object, flagged ``announced_at_cast`` so the push
         neither asks again nor announces the same choice twice — **provided
@@ -391,7 +391,7 @@ class TriggeredAbilitiesMixin:
 
         *targets_announced* says whether the targets handed in were chosen
         *for these triggers*. True for a cast whose picker was derived from the
-        entry trigger (``targeting._cast_target_spec``'s last branch). False
+        entry trigger (``cast_targets._cast_target_spec``'s last branch). False
         for an entry nothing cast (a token, a reanimation), for a cast that
         announced nothing, and for a copy, whose cast announced the object to
         copy instead: nothing chose a target for the trigger at all, so one
@@ -400,7 +400,7 @@ class TriggeredAbilitiesMixin:
 
         **An announcement is spent by the one trigger it was made for.** The
         cast's picker is derived from the *first* entry trigger that describes
-        a target (``targeting._first_described_slot``, over the triggers a cast
+        a target (``instruction_targets._first_described_slot``, over the triggers a cast
         kicked this way will fire -- CR 702.33g), so that trigger is the only
         one anybody chose for. A second trigger with a target of its own was
         announced by nobody, exactly as on an entry nothing cast, and handing

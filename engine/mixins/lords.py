@@ -18,7 +18,8 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from ..auras import auras_attached_to, conditional_ability_lines_for
+from ..aura_attachment import auras_attached_to
+from ..aura_grants import conditional_ability_lines_for
 from ..named_counters import counters_on
 from ..granted_abilities import bind_granter
 from ..keywords import (add_derived_ability_line, add_derived_grant,

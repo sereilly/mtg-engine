@@ -80,7 +80,7 @@ class OptionalManaCost:
         choice of *which* colours, one unit each -- the payer's (CR 601.2h),
         and this engine has no channel to ask it, so every choice is returned
         and the reader takes the first the pool can pay
-        (``casting._x_color_allocations`` is the same arrangement for "Spend
+        (``pool_payment._x_color_allocations`` is the same arrangement for "Spend
         only black and/or red mana on X"). In WUBRG order, which is the only
         order the card's text is neutral about.
 
@@ -105,7 +105,7 @@ class OptionalManaCost:
 
         What a *planner* asks (the picker's ceiling, the AI's sizing): "is any
         of these payable from this pool and these lands?" The payment itself
-        does not go through the pips -- see ``casting._pay_cast_cost`` for why
+        does not go through the pips -- see ``pool_payment._pay_cast_cost`` for why
         a pip is not quite "a unit of that colour" -- but it walks the same
         choices in the same order.
         """
@@ -134,7 +134,7 @@ class OptionalManaCost:
 
         The one place an offer's X becomes mana, read by the charge
         (``casting.queue_from_hand``) and the picker's ceiling
-        (``legality.cast_cost_offers``) alike. An unannounced X is 0, which is
+        (``legality_cast_spec.cast_cost_offers``) alike. An unannounced X is 0, which is
         CR 107.3's reading of a number nobody named and the only one that
         cannot charge a player for mana they did not agree to.
         """
@@ -225,7 +225,7 @@ class AdditionalCost:
     #: alternative cost, additional cost, and/or activation cost"), and Fire
     #: Covenant ({1}{B}{R}, "pay X life") lost the same way in the **shipped**
     #: pool. :func:`cast_announces_x` is now the one reader of that question and
-    #: ``legality.cast_target_spec`` puts its answer on the picker's spec.
+    #: ``legality_cast_spec.cast_target_spec`` puts its answer on the picker's spec.
     return_count_x: bool = False
     #: "As an additional cost to cast this spell, **exile a creature you
     #: control**." (Soul Exchange.) The same noun-phrase vocabulary one field
@@ -275,7 +275,7 @@ class AdditionalCost:
     #: hand may pay the discard above, as the alternatives the payer chooses
     #: between — the same tuple-of-payloads shape
     #: ``ActivatedAbilityCost.discard_filters`` carries, read by the same
-    #: function (``oracle._chargeable_discard_filters``) and tested by the same
+    #: function (``chargeable_costs._chargeable_discard_filters``) and tested by the same
     #: matcher (``subject_filters.card_matches_any``). CR 601.2b and CR 602.2b
     #: are one announcement step, so what may pay a printed discard is one
     #: answer wherever the discard is printed.
@@ -664,7 +664,7 @@ _COST_CLAUSES: tuple[tuple[re.Pattern[str], str], ...] = (
     # was printed, claimed by nobody, and never charged.
     #
     # The noun phrase goes through the same reader an activation cost's discard
-    # does (``oracle._chargeable_discard_filters``), so what may pay a printed
+    # does (``chargeable_costs._chargeable_discard_filters``), so what may pay a printed
     # discard is one answer wherever the discard is printed. Only the singular
     # is admitted, for the reason ``grammar/costs.py`` states on the activation
     # side: a counted "discard two cards" is a shape nothing charges, and
@@ -706,7 +706,7 @@ _COST_CLAUSES: tuple[tuple[re.Pattern[str], str], ...] = (
     # leaves the line unclaimed, which for a card whose *other* line compiles
     # means it reports ``supported`` and is cast without its real cost. The
     # phrase goes through the same reader an activation cost's does
-    # (``oracle.chargeable_sacrifice_payload``), so what may pay a printed
+    # (``chargeable_costs.chargeable_sacrifice_payload``), so what may pay a printed
     # cost is one answer wherever the cost is printed.
     # "..., **return X Swamps you control to their owner's hand**." (Infernal
     # Harvest.) The destination is part of the clause and not an afterthought:
@@ -765,7 +765,7 @@ def read_discard_clause(
     the noun parser refuses "a card at random" and the whole cost sentence goes
     unread, which for a card whose other line compiles is a spell cast for free.
 
-    The alternatives go through ``oracle._chargeable_discard_filters``, the one
+    The alternatives go through ``chargeable_costs._chargeable_discard_filters``, the one
     reader an activation cost's discard already uses, so what may pay a printed
     discard is one answer wherever the discard is printed. An empty tuple from
     it is the unrestricted "discard a card" and a real answer; None is the
@@ -958,7 +958,7 @@ def read_graveyard_exile_clause(phrase: str) -> tuple[dict, int, bool] | None:
     # protecting anything. What that rule guards is a narrowing the reduction
     # **lost**, and ``chargeable_card_filter`` returns None for a key the card
     # matcher cannot test rather than dropping it — the argument
-    # ``oracle.cost_object_is_chargeable`` makes for "Sacrifice a permanent".
+    # ``chargeable_costs.cost_object_is_chargeable`` makes for "Sacrifice a permanent".
     return carried, (0 if is_x else number), is_x
 
 

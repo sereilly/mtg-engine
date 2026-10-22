@@ -43,7 +43,8 @@ def _is_chargeable_sacrifice(filt: ast.ObjectFilter) -> bool:
     direction they drift in is a cost nobody pays. The word "another" is left in
     the filter: the charger has the ability's source and compares by identity.
     """
-    from ..oracle import chargeable_sacrifice_payload, cost_object_is_chargeable
+    from ..oracle import chargeable_sacrifice_payload
+    from ..chargeable_costs import cost_object_is_chargeable
 
     if filt.is_source:
         return True
@@ -99,7 +100,8 @@ def _is_chargeable_exile(filt: ast.ObjectFilter) -> bool:
     is what Necropolis prints, and a phrase naming somebody else's pile is a
     cost this charger has no enumeration for.
     """
-    from ..oracle import chargeable_exile_payload, cost_object_is_chargeable
+    from ..chargeable_costs import (chargeable_exile_payload,
+                                    cost_object_is_chargeable)
 
     if filt.zone == "graveyard":
         # Whose pile. "your graveyard" (Necropolis) is the payer's own; **no

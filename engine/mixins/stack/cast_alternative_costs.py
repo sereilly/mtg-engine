@@ -649,7 +649,7 @@ class AlternativeCastCostsMixin:
 
         Three readers price a cast and all three used to read an alternative
         cost as costing no mana, because the cast path charged none: the offer's
-        ``payable`` (``legality.cast_cost_offers``), the castable highlight's
+        ``payable`` (``legality_cast_spec.cast_cost_offers``), the castable highlight's
         fallback behind it, and the AI's ``_alternative_cost_is_payable``. One
         reader so the day the cast path began charging the taxes was not the day
         the other three began offering casts it refuses.

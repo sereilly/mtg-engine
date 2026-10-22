@@ -16,7 +16,7 @@ for it, and composed onto ``Game`` directly after it; each side calls the
 other through ``self``.
 """
 
-from ..auras import aura_restriction_active
+from ..aura_restrictions import aura_restriction_active
 from ..combat_permissions import (ATTACK_AS_THOUGH_NO_DEFENDER,
                                   ATTACKS_AS_THOUGH_NO_DEFENDER,
                                   CANT_ATTACK_UNTIL_EOT)
@@ -466,7 +466,7 @@ class AttackLegalityMixin:
         # entered on its 1/6 Wall body has it through a layer-6 grant, and
         # neither prints the word. Both could attack while this read the card.
         # Animate Wall grants the exemption while attached
-        # (auras.aura_restrictions).
+        # (aura_restrictions.aura_restrictions).
         if self._has_keyword(attacker, "defender") and not self._ignores_defender(
             attacker
         ):
@@ -719,7 +719,7 @@ class AttackLegalityMixin:
         (Caverns of Despair, Crawlspace).
 
         **Public, and returning the offending permanent, because the AI asks it
-        too.** `ai_policy.choose_attackers` builds its set out of
+        too.** `ai_declarations.choose_attackers` builds its set out of
         `legal_attackers`, which is that per-creature predicate — so it happily
         proposed a set the declaration then refused *whole*, and a Conscripts
         beside one Bear grounded the Bear as well. A second reading of the rule

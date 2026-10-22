@@ -13,8 +13,7 @@ cast (:func:`cast_announced_entry_trigger`, CR 603.3d).
 
 ``targeting.derive_cast_spec`` puts the cost half and the target half
 together and stays the entry point. Split out of ``engine/targeting.py`` at
-the 2,000-line cap; ``engine.targeting`` still exports the names its callers
-pull.
+the 2,000-line cap; a caller imports a name from here.
 """
 
 from __future__ import annotations
@@ -262,7 +261,7 @@ def announced_mode_instructions(program, mode_index: "int | None") -> tuple:
     ``program.modes[mode_index].instruction`` when the caster named a real mode
     and falls back to ``program.instructions`` — which for a modal card *is*
     mode 0's instruction — when it named none (a headless caller; an AI seat
-    names its mode since ``ai_policy.CastAction.mode_index``). So a
+    names its mode since ``ai_actions.CastAction.mode_index``). So a
     spec, an obligation or a legality question derived through this function
     is about the very steps that will resolve, whichever mode was named.
 

@@ -34,7 +34,8 @@ from ..events import emit
 from ..faces import whole_card
 from ..models import Permanent, PlayerState, next_permanent_id
 from ..oracle_types import EVENT_SUBJECT_LAST_KNOWN, EXILED_BY_SEAT
-from ..replacements import apply_entry_riders, apply_replacements
+from ..replacements import apply_replacements
+from ..replacements.permanents import apply_entry_riders
 from ..tokens import is_token_card
 
 
@@ -630,7 +631,7 @@ class ZoneFunnelsMixin:
             # travel in one record and in printed order. Nothing to attach to
             # means the Aura simply arrives, and CR 704.5n's sweep bins it.
             if entry.get("attach_to_returned") and returned is not None:
-                from ..auras import attach_aura
+                from ..aura_attachment import attach_aura
 
                 attach_aura(arrival, returned)
             else:

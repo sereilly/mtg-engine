@@ -49,10 +49,10 @@ from .target_requirements import (
     requirements_binding,
 )
 from .targeting import (
-    ROLES_TARGET_KIND,
-    cast_announced_entry_trigger,
     derive_cast_spec,
 )
+from .target_roles import ROLES_TARGET_KIND
+from .cast_targets import cast_announced_entry_trigger
 from .legality import _cast_picker_is_a_target
 from .legality_enumeration import _cast_from_graveyard_slot
 
@@ -99,7 +99,7 @@ class CastTargetSpecMixin:
         give.
         """
         from .game_types import OracleExecutionContext
-        from .handlers._common import count_from_payload
+        from .handlers._amounts import count_from_payload
         from .targeting import cast_time_count_spec
 
         spec = cast_time_count_spec(

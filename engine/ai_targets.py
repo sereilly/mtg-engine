@@ -58,9 +58,9 @@ from .targeting import (
     GRAVEYARD_TARGET_KIND,
     cast_target_slot,
     instructions_as_announced,
-    spec_is_a_cost,
     spec_roles,
 )
+from .cost_pickers import spec_is_a_cost
 from .ai_actions import (
     _OFFERS_ANNOUNCED,
     _announced_mode,
@@ -103,7 +103,7 @@ def _graveyard_denial_target(
     Headstone, Crypt Creeper, Steamclaw, Grave Robbers and Scavenging Ooze,
     and the seat in chair 1 exiled its opponent's, off one board. A graveyard
     card is announced as a seat and a slot in that seat's pile, the spelling
-    the cast and activation gates check (`targeting.GRAVEYARD_TARGET_KIND`).
+    the cast and activation gates check (`target_descriptions.GRAVEYARD_TARGET_KIND`).
     """
     by_seat: dict[int, list[int]] = {}
     for entry in legal or ():
@@ -502,7 +502,7 @@ def _choose_several_targets(
     # "Exile **two** target artifacts" (Dust to Dust): a printed count is the
     # number, not a ceiling (CR 601.2c) — the spec's ``exact_targets``, which
     # the browser's confirm has always waited for and the cast gate now counts
-    # (`legality.cast_target_count_refusal`). Read here for every branch below;
+    # (`legality_cast_gates.cast_target_count_refusal`). Read here for every branch below;
     # it was read only for the cost-sized one, so this chooser named one
     # creature for "two target creatures" whenever one was all the side held.
     exact = bool((spec or {}).get("exact_targets"))
@@ -533,7 +533,7 @@ def _choose_several_targets(
         # sizes it by. With nothing taken it is the base alone, and it can be
         # one. One is still a number this chooser has to answer: CR 601.2c
         # refuses an announcement that names no target
-        # (`legality.cast_target_refusal`), and a several-target handler has no
+        # (`legality_cast_gates.cast_target_refusal`), and a several-target handler has no
         # resolution-time board scan to fall into the way a single-target one
         # does. Without this the seat re-proposes the spell every turn and is
         # refused every turn, which is exactly what `refused_casts` counts.

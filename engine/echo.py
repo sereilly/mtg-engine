@@ -5,7 +5,7 @@ the beginning of your upkeep, if this permanent came under your control since
 the beginning of your last upkeep, sacrifice it unless you pay [cost]." So this
 module is the rewrite ``engine/equipment.py`` established for equip — the
 printed keyword line becomes the sentence the rules say it already is, applied
-by ``oracle.expand_ability_lines`` before any line is classified, and from
+by ``line_rewrites.expand_ability_lines`` before any line is classified, and from
 there nothing downstream knows the word: the grammar reads the trigger, the
 intervening-if and the pay-or-sacrifice offer, ``lowering/upkeep.py`` produces
 the ``upkeep_pay_or_sacrifice_self`` kind the pool has printed since Alpha, and

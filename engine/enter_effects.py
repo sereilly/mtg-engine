@@ -60,16 +60,11 @@ from .entry_choices import (
 )
 
 # Re-exported: names that moved to ``engine/entry_choices.py`` at the
-# 2,000-line split and are in this module's ``__all__``, or are still pulled
-# from here by ``mixins/permanent_state`` and ``handlers/control_flow``, which
-# other groups were splitting in the same round. New code imports a name from
-# the module that defines it.
-from .entry_choices import (CHOSEN_COLOR_KEY, CHOSEN_LAND_TYPE_KEY,
-                            ENTRY_CHOICES, LIFE_PAID_AS_ENTERED,
-                            PAY_ANY_LIFE_ON_ENTER, EntryChoice,
-                            choosable_bodies, chooses_card_name_on_enter,
-                            chosen_as_entered, entry_choices_of,
-                            own_chosen_protection_color)
+# 2,000-line split and are in this module's ``__all__``, which stays their
+# import path.
+from .entry_choices import (ENTRY_CHOICES, PAY_ANY_LIFE_ON_ENTER, EntryChoice,
+                            chooses_card_name_on_enter, chosen_as_entered,
+                            entry_choices_of)
 
 # --- CR 614.1c entry state, engine/mixins/permanent_state.py ---------------
 
@@ -175,7 +170,7 @@ def _counted_entry_spec(phrase: str) -> "dict | None":
     — so the two printed sentences count the same set. A second reader of the
     phrase would be free to disagree with the pump about what a creature card
     in a graveyard is, which is exactly the drift
-    ``activation_restrictions._controlled_board_phrase`` is written this way to
+    ``activation_conditions._controlled_board_phrase`` is written this way to
     avoid.
 
     The article is supplied here: ``parse_subject_filter`` reads a *subject*,
@@ -297,7 +292,7 @@ KICKED_ENTRY_SIZED_BY_X = re.compile(
 
 #: The permanent-metadata key the announced X of the cast that became this
 #: permanent is stamped under (``resolution._resolve_card``). Spelled here for
-#: the reason :data:`LIFE_PAID_AS_ENTERED` is: the entry state reads it for
+#: the reason ``entry_choices.LIFE_PAID_AS_ENTERED`` is: the entry state reads it for
 #: three sentences now, and a channel spelled at each end is one that can be
 #: renamed at one.
 CAST_X_VALUE = "cast_x_value"
@@ -740,7 +735,7 @@ def exile_cards_on_enter(line: str, card_name: str | None = None) -> dict | None
 
     Three readers, one string: the support gate (through
     :func:`enter_effect_line`), the entry state that arms the choice, and the
-    CR 614 interceptor in ``engine/replacements.py`` that performs the "if you
+    CR 614 interceptor in ``engine/replacements/`` that performs the "if you
     can't" sentence. ``"x"`` is returned as itself rather than resolved here
     because the value is announced on the *spell* (CR 601.2b) and this function
     is handed a line, not a permanent.
@@ -838,7 +833,7 @@ ENTRY_SACRIFICE_TOLL = re.compile(
 #: can give up, so the land always enters. That is why the two patterns are two
 #: and not one with an optional tail — "if you don't, put it into its owner's
 #: graveyard" is the whole of the difference and it decides whether the
-#: interceptor in ``engine/replacements.py`` is this card's business at all.
+#: interceptor in ``engine/replacements/`` is this card's business at all.
 #:
 #: "each" is consumed **here** rather than by the noun parser, which reads a
 #: description of a set of objects and leaves the quantifier to the sentence
@@ -883,7 +878,7 @@ def entry_sacrifice_toll(line: str, card_name: str | None = None) -> dict | None
 
     Three readers, one string: the support gate (through
     :func:`enter_effect_line`), the entry state that arms the sacrifice, and the
-    CR 614 interceptor in ``engine/replacements.py`` that performs the "if you
+    CR 614 interceptor in ``engine/replacements/`` that performs the "if you
     don't" sentence. The same arrangement :func:`exile_cards_on_enter` is half
     of, and for its reason - the sentence that refuses the entry and the
     sentence that charges for it must not describe different permanents.
@@ -1009,7 +1004,7 @@ def entry_discard_toll(line: str, card_name: str | None = None) -> dict | None:
 
     Three readers, one string, exactly as :func:`entry_sacrifice_toll` above has:
     the support gate (through :func:`enter_effect_line`), the CR 614
-    interceptor in ``engine/replacements.py`` that offers the choice, and the
+    interceptor in ``engine/replacements/`` that offers the choice, and the
     resolver that carries out whichever half was chosen. One phrase, so what is
     offered and what is charged cannot describe different cards.
 
@@ -1063,7 +1058,7 @@ def entry_discard_requirement(card) -> dict | None:
     performs it need one answer about one permanent, and two readings of the
     printed phrase would be two chances to disagree about which cards may pay.
 
-    Through :func:`engine.oracle.expand_card_lines` rather than a split of
+    Through :func:`engine.line_rewrites.expand_card_lines` rather than a split of
     ``oracle_text``, for the reason that function documents.
     """
     from .line_rewrites import expand_card_lines
@@ -1085,7 +1080,7 @@ def entry_sacrifice_requirement(card) -> dict | None:
     chances to disagree about which permanents may pay, which is a land that
     entered for free.
 
-    Through :func:`engine.oracle.expand_card_lines` rather than a split of
+    Through :func:`engine.line_rewrites.expand_card_lines` rather than a split of
     ``oracle_text``, for the reason that function documents.
     """
     from .line_rewrites import expand_card_lines
@@ -1104,14 +1099,14 @@ def entry_exile_requirement(card, x_value: int | None = None) -> dict | None:
     prints no such line.
 
     Two readers need the same answer about the same permanent - the CR 614
-    interceptor in ``engine/replacements.py`` that performs "if you can't", and
+    interceptor in ``engine/replacements/`` that performs "if you can't", and
     the entry state that performs the exile - and the count is the one part of
     the answer that is not on the printed line: ``X`` is the value announced
     when the spell was cast (CR 601.2b), read off the permanent. One function so
     the two cannot disagree about how many cards are owed, which would be a
     creature that entered when the card says it could not.
 
-    Through :func:`engine.oracle.expand_card_lines` rather than a split of
+    Through :func:`engine.line_rewrites.expand_card_lines` rather than a split of
     ``oracle_text``, for the reason that function documents: a reader that
     splits the raw text is reading a different card from the gate above it.
     """
@@ -1277,7 +1272,7 @@ def enter_effect_line(line: str, card_name: str | None = None) -> str | None:
     # "This creature has protection from the chosen color." (Voice of All.)
     # The same arrangement one layer up: the static that spends the entry
     # choice as a protection ability, performed by
-    # ``permanent_state._protection_qualities`` off this same reader.
+    # ``protection._protection_qualities`` off this same reader.
     if has_protection_from_the_chosen_color_line(normalized):
         return "has protection from the chosen color"
     # "…choose **black or red**" / "…choose **Island or Swamp**". The same
@@ -1315,7 +1310,7 @@ def enter_effect_line(line: str, card_name: str | None = None) -> str | None:
     # The three-sentence entry cost (Frankenstein's Monster). Claimed here
     # because all three sentences are one CR 614.1c replacement: the exile and
     # the counters are performed by the entry state, and the "if you can't"
-    # half by the interceptor in engine/replacements.py, which self-selects off
+    # half by the interceptor in engine/replacements/, which self-selects off
     # this same reader. One string, three readers, so what is claimed and what
     # is carried out cannot describe different cards.
     if exile_cards_on_enter(normalized) is not None:
@@ -1323,7 +1318,7 @@ def enter_effect_line(line: str, card_name: str | None = None) -> str | None:
     # The three-sentence entry toll (the Alliances sac lands). Claimed here for
     # the reason the entry above is: all three sentences are one CR 614.1a
     # replacement, the sacrifice performed by the entry state and the "if you
-    # don't" half by the interceptor in engine/replacements.py, both reading
+    # don't" half by the interceptor in engine/replacements/, both reading
     # this same function.
     # The **raw** line and the name, not `normalized`: this reader wants the
     # printed card name inside "each other permanent named Sheltered Valley",
@@ -1334,7 +1329,7 @@ def enter_effect_line(line: str, card_name: str | None = None) -> str | None:
     # The same three-sentence paragraph with an **optional** toll out of a hand
     # (Mox Diamond). Claimed here for the entry above's reason: all three
     # sentences are one CR 614.1a replacement, offered and carried out by
-    # `engine/replacements.py` off this same reader.
+    # `engine/replacements/` off this same reader.
     if entry_discard_toll(line, card_name) is not None:
         return "may discard a card as it enters"
     return None

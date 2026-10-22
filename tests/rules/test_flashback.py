@@ -39,7 +39,8 @@ from engine.flashback import (FLASHBACK_RULES_TEXT, expand_flashback_line,
                               unread_flashback_line)
 from engine.mana_payment import mana_cost_from_symbols
 from engine.models import CardDefinition, Permanent
-from engine.oracle import compile_card_oracle, expand_card_lines
+from engine.oracle import compile_card_oracle
+from engine.line_rewrites import expand_card_lines
 from engine.targeting import CAST_FROM_GRAVEYARD, derive_cast_spec
 from tests.helpers import _damage_dealt, _nosick, declare_attack, resolve_stack
 

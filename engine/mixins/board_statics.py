@@ -496,7 +496,7 @@ class BoardStaticsMixin:
         ]
         for found in type_statics:
             # An attached animating Aura: whether it reached its host is the
-            # answer every later layer reads (``auras.animating_auras``), so a
+            # answer every later layer reads (``aura_grants.animating_auras``), so a
             # *no* is written down as carefully as a yes.
             # (Its payload is the host; no other static's is a permanent.)
             if isinstance(found.payload, Permanent):

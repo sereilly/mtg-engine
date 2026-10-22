@@ -40,8 +40,8 @@ from engine.cast_costs import (KICKED, additional_costs, expand_kicker_line,
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.enter_effects import kicked_entry
 from engine.models import Permanent
-from engine.oracle import (compile_card_oracle, expand_ability_lines,
-                           expand_card_lines)
+from engine.oracle import compile_card_oracle, expand_ability_lines
+from engine.line_rewrites import expand_card_lines
 
 #: Invasion alone prints thirty-five; the floors below are deliberately under
 #: that, so a later set raises the count without touching this file and an

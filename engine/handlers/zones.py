@@ -26,17 +26,6 @@ from ..models import Permanent
 from ._filters import graveyard_card_matches
 from ._targets import (_resolve_graveyard_slots, frozen_that_player_seat,
                        resolve_target_permanent, resolve_target_permanents)
-# Re-exported, and not an API: each name below lives in the module it is imported
-# from, and is pulled from here by ``engine/mixins/stack/choices.py`` or
-# ``engine/ai_policy.py`` — modules other groups of the same split round were
-# cutting in parallel, mostly from inside functions those groups were moving, so
-# the import lines could not move with this split without a merge conflict on
-# every one. Each goes when its last importer is repointed; the import hygiene
-# guard fails a re-export nobody pulls.
-from .discards import _resolve_one_discard
-from .hand import (chosen_hand_card_candidates, exile_from_hand_candidates,
-                   hand_slot_filters, put_from_hand_candidates)
-from .returns import FORGOTTEN_PICKS
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -421,7 +410,7 @@ def put_self_into_zone(game: Game, instruction: OracleInstruction, context: Orac
     answers for both.
 
     The destination is payload, and today the only one the grammar admits is a
-    graveyard — see ``lowering/zones._lower_put_source_into_zone``, which
+    graveyard — see ``lowering/returns._lower_put_source_into_zone``, which
     refuses the rest by name rather than letting a card report itself supported
     and land somewhere else.
 

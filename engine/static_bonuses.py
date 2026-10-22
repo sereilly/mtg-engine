@@ -69,7 +69,7 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
 def static_bonus_for(normalized_line: str) -> StaticBonus | None:
     """The conditional static ability *normalized_line* grants, or None.
 
-    Takes an already-normalized line (``oracle.normalize_creature_line``).
+    Takes an already-normalized line (``line_normalization.normalize_creature_line``).
     The two legacy kinds are tried first so their payloads stay byte-identical;
     everything newer rides the general ``conditional_static`` shape below.
     """
@@ -660,7 +660,7 @@ def conditional_static_holds(
             )
         return len(game.players[seat].graveyard) >= wanted
     if kind == "controls":
-        # The same payload shape ``engine/grammar/lower._lower_condition``
+        # The same payload shape ``engine/grammar/lowering/conditions._lower_condition``
         # produces, answered by the same matcher — ``subject_matches`` is the one
         # place a printed noun phrase is tested against a permanent, so "a
         # creature with power 4 or greater" cannot mean one thing on a trigger's

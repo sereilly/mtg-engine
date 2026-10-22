@@ -2,7 +2,7 @@
 
 CR 601.2c: "The player announces their choice of an appropriate object or
 player for each target the spell requires." A *roles* announcement names
-several targets of different kinds in one go (``targeting.ROLES_TARGET_KIND``),
+several targets of different kinds in one go (``target_roles.ROLES_TARGET_KIND``),
 and a stack object had one field meaning "the player this targets"
 (``target_player_index``). So every reader of a role's seat filled every
 player slot from that one field — which nobody could see, because no card
@@ -31,7 +31,7 @@ one, one where each seat in turn has shroud, a three-seat one with a player
 gone): every assignment of seats to an object's player roles is accepted
 exactly when the object's own picker offers it, an accepted one is read back
 role for role by ``stack_targets.chosen_targets``, each named player becomes
-the target exactly once, and the per-role seat list (``targeting.ROLE_SEATS``)
+the target exactly once, and the per-role seat list (``target_roles.ROLE_SEATS``)
 is recorded exactly where there are two or more seats to record.
 
 ``tests/engine/test_player_target_census.py`` makes the first of those
@@ -57,10 +57,11 @@ from engine.handlers import _targets
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.stack_targets import announcement_targets, chosen_targets
-from engine.targeting import (ROLE_SEATS, derive_activation_spec,
-                              derive_cast_spec, recorded_role_seats,
-                              role_is_seat, spec_roles,
+from engine.targeting import (derive_activation_spec,
+                              derive_cast_spec,
+                              spec_roles,
                               usable_activated_abilities)
+from engine.target_roles import ROLE_SEATS, recorded_role_seats, role_is_seat
 from engine.target_descriptions import roles_spec
 from tests.engine.test_player_target_census import SCENARIOS, kickers, table
 

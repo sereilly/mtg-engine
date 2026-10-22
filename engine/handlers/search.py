@@ -613,8 +613,10 @@ def search_and_exile_matching(game: Game, instruction: OracleInstruction, contex
     steps behind this one wait for the answer — the Opt lesson, applied here
     by registration rather than by hoping.
     """
-    from ..ai_valuation import (exiled_search_pile_comes_back,
-                                exiled_search_pile_comes_back_one_at_a_time)
+    from ..ai_prompt_readers import (
+        exiled_search_pile_comes_back,
+        exiled_search_pile_comes_back_one_at_a_time,
+    )
 
     caster = context.caster
     caster_index = game.players.index(caster)
@@ -636,7 +638,7 @@ def search_and_exile_matching(game: Game, instruction: OracleInstruction, contex
         shuffle_pile=bool(instruction.payload.get("shuffle_pile")),
         # Whether anything on this card reads the pile back, which is what a
         # headless seat needs before it answers "any number". Derived from the
-        # compiled program (``ai_valuation.exiled_search_pile_comes_back``) and
+        # compiled program (``ai_prompt_readers.exiled_search_pile_comes_back``) and
         # carried on the prompt, so the resolver's stated policy is read off the
         # card rather than off the three cards that policy was written for.
         comes_back=(

@@ -129,7 +129,7 @@ TABLES: tuple[DerivationTable, ...] = (
 def _normalized(line: str) -> str:
     """The line as the derivation tables see it.
 
-    Every matcher below takes what ``oracle.normalize_creature_line`` produces,
+    Every matcher below takes what ``line_normalization.normalize_creature_line`` produces,
     so this reduction has to be the same one: reminder text removed, lowercased,
     whitespace collapsed, trailing stop dropped.
 

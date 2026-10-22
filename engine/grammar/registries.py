@@ -80,7 +80,7 @@ from ..replacements import replacement_claims_line
 from ..revealed_hands import revealed_hands_line
 from ..target_requirements import CLAIM as TARGET_REQUIREMENTS_CLAIM
 from ..target_requirements import must_choose_claims_line
-from ..targeting import enchant_line_subject
+from ..enchant_targets import enchant_line_subject
 from ..untap_restrictions import self_untap_line, untap_restriction_for
 
 

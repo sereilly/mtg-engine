@@ -673,7 +673,7 @@ def grant_banding_to_target(game: Game, instruction: OracleInstruction, context:
     if target_creature is None:
         game.log.append("No valid creature target for banding effect")
         return False, "no valid creature target for banding effect"
-    from .pump import DURATION_WORDS, grant_lifetime
+    from .keywords import DURATION_WORDS, grant_lifetime
 
     lifetime = grant_lifetime(game, instruction, context)
     grant_keyword(target_creature, "banding", **lifetime)

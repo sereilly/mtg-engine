@@ -173,7 +173,7 @@ _UNTARGETED_SPEC_FLAGS = ("source_of_choice", "optional")
 def _offers_targets(spec: dict | None) -> bool:
     """Whether *spec*'s picker chooses **targets** (CR 601.2c) rather than a
     cost (CR 601.2b), a source or a copy."""
-    from .targeting import spec_is_a_cost
+    from .cost_pickers import spec_is_a_cost
 
     if not spec or spec.get("kind") in _NO_OBJECT_OFFER_KINDS:
         return False
@@ -208,7 +208,7 @@ def _offered_permanents(game: "Game", entries, found: dict | None = None) -> dic
 def one_slot(spec: dict) -> bool:
     """Whether *spec* announces exactly one target slot — the shape in which
     "at least one of the targets" and "the target" are the same statement."""
-    from .targeting import ROLES_TARGET_KIND
+    from .target_roles import ROLES_TARGET_KIND
 
     if spec.get("kind") in (ROLES_TARGET_KIND, "divided"):
         return False

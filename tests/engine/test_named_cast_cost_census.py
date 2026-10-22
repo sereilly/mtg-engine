@@ -33,7 +33,7 @@ from engine.cast_costs import additional_costs
 from engine.faces import compilation_units
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
-from engine.targeting import spec_is_a_cost
+from engine.cost_pickers import spec_is_a_cost
 from tests.helpers import _nosick
 
 #: What the caster holds. Wide on purpose and no wider: every printed cost

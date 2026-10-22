@@ -61,7 +61,7 @@ def _chargeable_counter_target(phrase: str) -> dict | None:
     """The filter payload a "put a counter on <noun phrase>" cost charges, or
     None when the payment path cannot find the permanent.
 
-    The charging half of ``grammar/costs._is_chargeable_counter_target``, and
+    The charging half of ``grammar/chargeable._is_chargeable_counter_target``, and
     the two agree by asking the same two functions the sacrifice pair asks —
     the noun parser for what the phrase names, and the charger's own reduction
     for whether it can be tested. A phrase one admitted and the other refused
@@ -174,7 +174,7 @@ def cost_object_is_chargeable(carried: dict | None) -> bool:
     payload.
 
     The one reader of a question three cost tables were each answering with
-    their own spelling: ``grammar/costs._is_chargeable_sacrifice`` asked
+    their own spelling: ``grammar/chargeable._is_chargeable_sacrifice`` asked
     ``card_types or subtypes or named``, ``_is_chargeable_exile`` asked
     ``card_types or subtypes``, and ``cast_cost_clauses._chargeable_object``
     asked ``type_filter or subtype_filter``. Three answers to one question is

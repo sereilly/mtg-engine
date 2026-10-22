@@ -24,12 +24,12 @@ from __future__ import annotations
 
 
 from ...restricted_mana import ACTIVATE, PaymentPurpose
-from ...auras import attached_ability_cost_reduction
+from ...aura_grants import attached_ability_cost_reduction
 from ...bare_announcements import (announced_fields, default_activation_target,
                                    names_an_object, seat_of_unseated_slot)
 from ...cost_modifiers import (ability_cost_reduction, ability_cost_tax,
-                               ability_self_reduction_amount,
                                 sacrifice_taxes)
+from ...self_cost_modifiers import ability_self_reduction_amount
 from ...divided_damage import DIVIDED_TARGETS
 from ...cost_x_definitions import cost_x_is_defined, cost_x_value
 from ...oracle_types import x_spend_colors_from_text
@@ -44,10 +44,6 @@ from ...handlers._chosen import CHOSEN_ABILITY
 from ...handlers._targets import attached_host
 from ...oracle import OracleInstruction
 from .activation_payment import activation_mana_per_counter
-# Re-exported, temporarily: ``engine/ai_policy.py`` pulls it from here
-# inside a function, and that module is being split by another group of the
-# same round. New code imports it from ``card_activation``.
-from .card_activation import hand_activation_cost
 
 
 class AbilityActivationMixin:
@@ -1043,7 +1039,7 @@ class AbilityActivationMixin:
         # into.
         graveyard_stamps = graveyard_target_stamp_after_cost
         # Every seat the announcement named, where it named more than one
-        # (``targeting.ROLE_SEATS``); None for every roles ability the pool
+        # (``target_roles.ROLE_SEATS``); None for every roles ability the pool
         # holds today, each of which names at most one.
         role_seats = None
         if target_role_refs:
@@ -1178,7 +1174,7 @@ class AbilityActivationMixin:
                     "old_color": self._normalize_mana_color(old_color),
                     # A seat per player role, where the announcement named two
                     # or more — beside the scalar above, which then holds the
-                    # first. See ``targeting.ROLE_SEATS``.
+                    # first. See ``target_roles.ROLE_SEATS``.
                     ROLE_SEATS: role_seats,
                 },
             )
@@ -1262,7 +1258,7 @@ class AbilityActivationMixin:
 
         **Two player slots answer with a fifth value as well**: every seat
         named, positional in role order with ``None`` in the other slots
-        (``targeting.ROLE_SEATS``) — the list the item's ``choices`` carries so
+        (``target_roles.ROLE_SEATS``) — the list the item's ``choices`` carries so
         that slot 1's player is not read off slot 0's scalar. None where the
         announcement names at most one seat, which is every roles ability and
         spell the pool held before "target player … another target player"
@@ -1303,7 +1299,7 @@ class AbilityActivationMixin:
                 # A **stack** slot answers with none of the three either: the
                 # spell it names rides ``target_stack_item``, the scalar an
                 # activation has carried since Deathgrip, and every reader
-                # fills the slot from there (``legality.named_role_objects``).
+                # fills the slot from there (``legality_roles.named_role_objects``).
                 ids.append(None)
                 indices.append(None)
                 stamps.append(None)

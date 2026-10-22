@@ -3,7 +3,7 @@ from a described class of source.
 
 Every card here is a Creature by printed type, so by `tests/sets/README.md` it
 would live in `test_legends_creatures.py`; it is split out because these five
-share one mechanism (`prevention._SOURCE_CLASSES`) and the round that bought
+share one mechanism (`prevention.static._SOURCE_CLASSES`) and the round that bought
 them is easier to find whole. See tests/sets/README.md.
 """
 

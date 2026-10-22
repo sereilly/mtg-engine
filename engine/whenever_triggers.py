@@ -579,7 +579,7 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # own condition, ordered before the bare "attacks" it is a prefix of: the
     # event is the same declaration, but "isn't blocked" can only be known once
     # blockers are (CR 509.1h), so it is announced at the combat damage step
-    # (engine/phases/combat_damage_step._fire_unblocked_attack_triggers) rather
+    # (engine/phases/block_triggers._fire_unblocked_attack_triggers) rather
     # than at declare-attackers with the generic attack triggers.
     # "Whenever **enchanted creature** attacks and isn't blocked" (Cloak of
     # Confusion), above the source's own spelling for the same reason every

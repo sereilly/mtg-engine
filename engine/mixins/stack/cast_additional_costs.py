@@ -26,7 +26,8 @@ from __future__ import annotations
 
 import random
 
-from ...cast_costs import AdditionalCost, OptionalManaCost, graveyard_card_noun
+from ...cast_costs import AdditionalCost, OptionalManaCost
+from ...cast_cost_clauses import graveyard_card_noun
 from ...models import CardDefinition, Permanent
 from ...oracle import compile_card_oracle
 from ...subject_filters import card_matches_any, filter_head_noun, subject_matches
@@ -923,7 +924,7 @@ class AdditionalCastCostsMixin:
             # A cast that named no set takes the top of the pile down, the
             # deterministic pick every unnamed cost here has — least valuable
             # first where the cards are a plain price
-            # (``ai_valuation.graveyard_price_order``): Haunting Misery and
+            # (``ai_prompt_readers.graveyard_price_order``): Haunting Misery and
             # Skeletal Scrying read how many went, not which.
             if cost.exile_graveyard_filter is not None:
                 owed = cost.exiled_from_graveyard(x_value)
@@ -956,8 +957,10 @@ class AdditionalCastCostsMixin:
                     )
                     if not candidates:
                         break  # gated above; a pile that changed since is a no-op
-                    from ...ai_valuation import (graveyard_price_order,
-                                                 reads_what_its_cost_exiled)
+                    from ...ai_prompt_readers import (
+                        graveyard_price_order,
+                        reads_what_its_cost_exiled,
+                    )
 
                     index = candidates[-1]
                     if not reads_what_its_cost_exiled(

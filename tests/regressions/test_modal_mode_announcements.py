@@ -27,7 +27,7 @@ was checked by neither spelling. Planeshift prints five Charms and Hull Breach:
   (``web/serialization._mode_target_kind``) whose fall-through answered
   "player", so "deals 1 damage to target creature" asked for a player.
 
-The fix is one derivation — ``targeting.announced_mode_instructions`` /
+The fix is one derivation — ``cast_targets.announced_mode_instructions`` /
 ``derive_cast_spec(mode_index=)`` — read by all of them. The census at the
 bottom is the ratchet: every mode of every modal instant and sorcery in both
 manifest roles, against an oracle that never read the cast gate (what the same

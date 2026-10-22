@@ -13,8 +13,7 @@ that ends one.
 
 Split out of ``engine/auras.py`` at the 2,000-line cap, beneath the readers
 that ask what an attached Aura does. ``engine/auras.py`` registers the offer
-with ``engine/special_actions.py`` and re-exports the names other modules
-still pull from it.
+with ``engine/special_actions.py``.
 """
 
 from __future__ import annotations

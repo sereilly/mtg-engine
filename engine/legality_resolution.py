@@ -23,14 +23,14 @@ from .oracle import compile_card_oracle
 from .resolution_overrides import resolves_with_illegal_targets
 from .modal_triggers import modal_trigger_modes
 from .targeting import (
-    ROLES_TARGET_KIND,
     derive_cast_spec,
     derive_instruction_spec,
     role_is_stack,
-    spec_is_a_cost,
     spec_offers_a_player,
     spec_roles,
 )
+from .target_roles import ROLES_TARGET_KIND
+from .cost_pickers import spec_is_a_cost
 from .legality import (
     _UNFIZZLABLE_TARGET_KINDS,
     _STACK_TARGET_KINDS,
@@ -353,7 +353,7 @@ class ResolutionTargetsMixin:
             # role instead of through a kind.
             #
             # **Answered where the announcement recorded its seats per role**
-            # (``targeting.ROLE_SEATS``): "…creatures **target player** controls
+            # (``target_roles.ROLE_SEATS``): "…creatures **target player** controls
             # … creatures **another target player** controls" (Cultural
             # Exchange). There the reading this branch lacked exists — each
             # player is on a slot of its own, so each has a verdict of its own
@@ -923,7 +923,7 @@ class ResolutionTargetsMixin:
           Welder's graveyard card), for the reason the spell side gives of a
           player role. A roles announcement of permanents is judged the way a
           roles *spell* is — still there and still targetable; each role's
-          description and relation is ``handlers/_common.roles_still_legal``'s.
+          description and relation is ``handlers/_targets.roles_still_legal``'s.
 
         A **graveyard** target is legal while any copy of the chosen card is
         left in that pile, the deliberately ambiguous case
@@ -1155,7 +1155,7 @@ class ResolutionTargetsMixin:
         is *where the choice stood*, settled from the id as the object went on
         the stack (:meth:`announced_target_seat`, through
         ``_settle_announced_target_seat``). Every resolver looks the id up **on
-        that seat** — ``handlers/_common.pick_target_permanent``'s first step,
+        that seat** — ``handlers/_targets.pick_target_permanent``'s first step,
         ``bare_announcements.announced_slots``, every "its controller" read off
         ``context.target`` — and that scoping is deliberate: a resolver has no
         description to test a permanent against, and many of them say "you

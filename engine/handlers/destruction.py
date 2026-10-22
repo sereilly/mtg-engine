@@ -73,7 +73,7 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
     # Function-level, like every other `..targeting` reader in `handlers/`:
     # that module reads the cast-cost tables, which read the filters, which
     # read this package.
-    from ..targeting import payload_own_role
+    from ..target_roles import payload_own_role
 
     target = context.target
     card = context.card
@@ -637,7 +637,7 @@ def sacrifice_attached_permanent(game: Game, instruction: OracleInstruction, con
     existed.
 
     CR 701.21a: only the permanent's controller may sacrifice it, and that is
-    who the offer was made to — ``handlers/control_flow._action_is_takeable``
+    who the offer was made to — ``handlers/offers._action_is_takeable``
     withdraws the offer when the Aura has come unattached, so reaching here
     with nothing attached means the offer was never narrowed and the right
     answer is to do nothing rather than to charge a cost that cannot be paid.
@@ -647,7 +647,7 @@ def sacrifice_attached_permanent(game: Game, instruction: OracleInstruction, con
     # reason: a Slow Motion destroyed with its upkeep trigger on the stack still
     # names the creature it was on, and the trigger still offers "sacrifice
     # that creature unless you pay {2}". The offer side
-    # (``control_flow._action_is_takeable``) reads the same helper.
+    # (``offers._action_is_takeable``) reads the same helper.
     attached = attached_host(game, source)
     if attached is None:
         game.log.append(f"{context.card.name}: nothing attached to sacrifice")

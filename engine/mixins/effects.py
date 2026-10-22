@@ -23,7 +23,8 @@ import re
 
 from ..color_changes import change_color
 from ..card_hooks import UNTAPPED_ARTIFACT_PROTECTORS
-from ..auras import aura_restriction_active, attached_subject_triggers
+from ..aura_restrictions import aura_restriction_active
+from ..aura_attachment import attached_subject_triggers
 from ..damage_events import (EVENT_LOCK, EVENT_PREVENTION_LOCK,
                              damage_source_seat, deal_damage,
                              lifelink_life_gained)
@@ -53,7 +54,7 @@ def _damage_word_matches(trig, combat: bool) -> bool:
 
     "Whenever this creature is dealt **combat** damage" (Wall of Essence, Wall
     of Souls) reads the printed word off the condition's ``damage_combat``
-    payload — the same key ``events._damage_dealt_filter`` reads for the same
+    payload — the same key ``event_filters._damage_dealt_filter`` reads for the same
     printed word on the *dealing* side of the event, deliberately, because one
     word answered by two spellings is how two dispatch scopes come to disagree
     about what it means.
@@ -277,7 +278,7 @@ class EffectsMixin:
         """Whether an Aura can't be attached to *permanent* — either a per-permanent
         flag set by an effect, or Guardian Beast's continuous grant to the
         noncreature artifacts its controller controls while it's untapped."""
-        from ..auras import cant_be_enchanted_by_own_text
+        from ..aura_restrictions import cant_be_enchanted_by_own_text
 
         return (
             bool(permanent.metadata.get("cant_be_enchanted_by_auras"))
@@ -956,7 +957,7 @@ class EffectsMixin:
         # a comment claiming "protection is not prevention". CR 702.16e says the
         # opposite in as many words — "Any damage that would be dealt … is
         # prevented" — so it is a CR 615 shield like every other, registered in
-        # ``engine/prevention.py`` and asked at the one seam every damage event
+        # ``engine/prevention/`` and asked at the one seam every damage event
         # passes through. Two consequences of moving it, both the rule's:
         # unpreventable damage (Whippoorwill, Lava Burst) gets through, and
         # protection contends under CR 616.1 with whatever else applies.

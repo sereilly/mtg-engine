@@ -55,7 +55,7 @@ def _lower_lose_ability_text(
     CR 613.1f's removal of a whole printed ability: the sentence is recorded
     on ``keywords.REMOVED_ABILITY_LINES`` and ``Permanent.effective_card`` drops
     it, so every reader of "what does it say?" — here the static shield
-    ``prevention._attached_damage_shields`` derives from the text on each damage
+    ``prevention.shields._attached_damage_shields`` derives from the text on each damage
     event — stops seeing it until the sweep the duration names gives it back.
 
     Two refusals, each a way the sentence could otherwise mean more than it

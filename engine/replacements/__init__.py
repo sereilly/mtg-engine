@@ -101,15 +101,6 @@ from . import (  # noqa: F401  (each registers its interceptors)
 )
 from .lines import REPLACEMENT_LINES, replacement_claims_line
 
-# Temporary re-exports, not an API: each is pulled from the package by a module
-# another group of the 2,000-line cap's split round is cutting in parallel
-# (``engine/handlers/damage.py``, ``engine/mixins/effects.py``,
-# ``engine/mixins/helpers.py``). Each goes when its importer is repointed at
-# the module named here.
-from .damage_substitutions import DAMAGE_TO_COUNTER_REMOVAL_RECORD
-from .permanents import apply_entry_riders
-from .zone_changes import TOP_OF_LIBRARY_DISCARD_TEXT
-
 __all__ = [
     "REPLACEMENTS",
     "REPLACEMENT_LINES",

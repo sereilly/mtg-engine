@@ -501,7 +501,7 @@ class LibraryChoicesMixin:
         return True
 
     def _default_reorder_library(self, choice: PendingChoice) -> None:
-        from ....ai_policy import choose_reorder_library_order
+        from ....ai_prompts import choose_reorder_library_order
 
         # The bottom of a library: as they lay. The order is the owner's
         # freedom and nothing scores it — ``choose_reorder_library_order``
@@ -581,7 +581,7 @@ class LibraryChoicesMixin:
         return True
 
     def _default_scry(self, choice: PendingChoice) -> None:
-        from ....ai_policy import choose_scry_arrangement
+        from ....ai_prompts import choose_scry_arrangement
 
         card_order, bottom_count = choose_scry_arrangement(
             self, choice.player_index, choice.data["top_count"],

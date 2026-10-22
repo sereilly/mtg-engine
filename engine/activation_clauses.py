@@ -93,7 +93,7 @@ def _clauses(text: str, card_name: str | None = None) -> list[str]:
     sentence rather than about a card.
     """
     if card_name:
-        from .oracle import _collapse_self_references
+        from .self_reference import _collapse_self_references
 
         # Lowercased **before** the collapse, not after: the name forms
         # ``_self_name_forms`` produces are lowercase and the match is

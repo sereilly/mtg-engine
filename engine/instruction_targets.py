@@ -16,8 +16,8 @@ kinds :data:`_TYPE_FILTER_NAMES_THE_TARGET` lists, and last the kind itself
 What an instruction targets does not depend on whether a spell, an ability or
 a trigger produced it, so ``targeting.derive_cast_spec``,
 ``derive_activation_spec`` and ``derive_instruction_spec`` all end here. Split
-out of ``engine/targeting.py`` at the 2,000-line cap; ``engine.targeting``
-still exports the names its callers pull.
+out of ``engine/targeting.py`` at the 2,000-line cap; a caller imports a name
+from here.
 """
 
 from __future__ import annotations
@@ -125,7 +125,7 @@ _KIND_TO_SPEC: dict[str, dict] = {
     # row and enforced nowhere else, so the spell granted the permission to the
     # *caster's* own creature — a printed restriction that reached the picker,
     # the cast gate and the handler as nothing at all. It is a spec key rather
-    # than a branch because `legality._enumerate_targets` already answers the
+    # than a branch because `legality_enumeration._enumerate_targets` already answers the
     # flag, and answers it for a spell now: the seat is the live combat's.
     "grant_unlimited_blocking": {"kind": "creature", "defending_player_only": True},
     "target_gains_life": {"kind": "any"},
@@ -609,7 +609,7 @@ def _first_described_slot(instructions) -> "tuple[dict, object] | None":
 #:
 #: CR 601.2d's "as you choose" needs it so the picker can ask for a division
 #: that totals it. The two the *card* divides need it for a different reader and
-#: the same reason: ``ai_policy._divided_announcement_total`` asks "how much is
+#: the same reason: ``ai_divisions._divided_announcement_total`` asks "how much is
 #: there", and a spell whose answer is 0 has no lawful announcement at all — so
 #: Cone of Flame, whose 6 is printed and needs no asking, was skipped by the
 #: policy every turn it was in hand.
@@ -669,7 +669,7 @@ def _from_instruction(instruction) -> dict | None:
         # here before the sizing below ran: the spec said "divided, as you
         # choose" and not how much. Both of its readers then had nothing to
         # divide — the browser fell back to asking for an X the card does not
-        # print, and `ai_policy._divided_announcement_total` read 0, which is
+        # print, and `ai_divisions._divided_announcement_total` read 0, which is
         # "no lawful announcement", so no AI seat ever cast Remedy or Pollen
         # Remedy.
         return _sized_division(from_payload(instruction.payload), instruction)

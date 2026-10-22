@@ -797,7 +797,7 @@ def _creature_subtype(word: str) -> str | None:
 def lord_buff_for(normalized_line: str) -> LordBuff | None:
     """The continuous buff *normalized_line* grants to other creatures, or None.
 
-    Takes an already-normalized line (``oracle.normalize_creature_line``).
+    Takes an already-normalized line (``line_normalization.normalize_creature_line``).
     """
     line = normalized_line.strip().strip(".").strip()
     if not line:

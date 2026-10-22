@@ -343,7 +343,7 @@ class PaymentChoicesMixin:
         counter_card = data.get("counter_card")
         if not destination or counter_card is None:
             return False
-        from ....handlers._common import _card_matches_filter
+        from ....handlers._filters import _card_matches_filter
         from ....handlers.stack import _redirect_countered_card
 
         described = data.get("countered_filter")
@@ -367,7 +367,7 @@ class PaymentChoicesMixin:
         pool that this payment can spend is the game's to answer, and two
         readers already answer it for the AI's cast plan: the tap seam's own
         gate (``land_mana_tap_refusal`` — a summoning-sick land creature, a
-        land under Interdict) and ``ai_policy._land_mana_is_unplannable``
+        land under Interdict) and ``ai_mana_sources._land_mana_is_unplannable``
         (mana that may be spent only on something else, CR 106.6; an amount or
         a colour the board decides and decides at nothing). A plan that
         counted such a land said "can pay", tapped it, and failed part-way —
@@ -381,7 +381,7 @@ class PaymentChoicesMixin:
         person: it is mana beyond the plan (:meth:`mana_beyond_the_plan`),
         theirs to tap before they answer.
         """
-        from ....ai_policy import _land_mana_is_unplannable
+        from ....ai_mana_sources import _land_mana_is_unplannable
 
         return [
             land

@@ -20,7 +20,7 @@ damage estimates beside it.
 from __future__ import annotations
 
 from .game import Game
-from .auras import aura_restriction_active
+from .aura_restrictions import aura_restriction_active
 from .combat_permissions import MUST_BLOCK_ATTACKERS_UNTIL_EOT
 from .models import Permanent
 from .oracle import compile_card_oracle

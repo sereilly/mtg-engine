@@ -82,7 +82,7 @@ LeaveBattlefieldHook = Callable[["Game", "PlayerState", "Permanent"], None]
 # fails on one, because an entry that stops being load-bearing is an entry
 # nobody would notice was lying.
 #
-# Keys are the line as `oracle.normalize_creature_line` renders it: lowercased,
+# Keys are the line as `line_normalization.normalize_creature_line` renders it: lowercased,
 # reminder text in parentheses removed, whitespace collapsed, trailing stop
 # dropped. The guard test builds them from the pool's own cards, so a key that
 # no longer matches a printed line fails rather than silently never matching.

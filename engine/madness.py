@@ -237,7 +237,7 @@ def exile_madness_card(game, player, card) -> bool:
     Returns whether it applied; False leaves the caller's default move.
 
     One body for both discard seams (the ``discard`` event and the chosen
-    discard), for ``replacements.discarded_onto_battlefield``'s reason.
+    discard), for ``replacements.zone_changes.discarded_onto_battlefield``'s reason.
 
     The trigger's controller is the card's **owner** ("its owner may cast
     it"), which is the discarding player: a hand holds only its owner's cards

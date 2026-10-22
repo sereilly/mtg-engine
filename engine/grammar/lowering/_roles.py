@@ -239,7 +239,7 @@ def _sequence_role_name(
     reason to hand the line back, and a default here would have it claim
     announcements it declines today.
     """
-    from ...targeting import SEAT_ROLE_KINDS
+    from ...target_roles import SEAT_ROLE_KINDS
 
     filt = described.get("filter") or {}
     if described.get("kind") in SEAT_ROLE_KINDS:
@@ -524,7 +524,7 @@ def describe_sequence_target_roles(
     tells every reader the announcement is several.
     """
     from ...subject_filters import untestable_filter_keys
-    from ...targeting import SEAT_ROLE_KINDS
+    from ...target_roles import SEAT_ROLE_KINDS
 
     carried = _announced_slots(instructions)
     slots = list(enumerate(described for described, _carrier in carried))

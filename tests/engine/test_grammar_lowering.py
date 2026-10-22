@@ -3771,7 +3771,7 @@ def test_an_as_long_as_condition_the_grammar_cannot_model_is_not_claimed():
     `_parse_condition` failed on unconsumed words. Psychic Allergy's "nontoken
     permanents of the chosen color they control" put that phrase in, and the
     production would then have claimed this line and refused it a layer later
-    at `statics._lower_anthem_condition` — which is the one failure
+    at `static_conditions._lower_anthem_condition` — which is the one failure
     ``parse_line``'s derivation-table fallback cannot recover from, since it
     only fires on a *parse* refusal. So the production gates on the phrase
     directly: a colour recorded on one permanent as it entered (CR 614.1c) is

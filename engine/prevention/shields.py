@@ -164,14 +164,14 @@ def _static_shield_match(line: str, card_name: str | None = None):
     legendary templating write "Prevent all damage that would be dealt to
     **Cho-Manno**" where modern templating writes "this creature", and the
     pattern is anchored on the modern wording. The same rewrite
-    ``oracle._restriction_line`` makes for the combat-restriction table, at the
+    ``self_reference._restriction_line`` makes for the combat-restriction table, at the
     one consult that needs it — a caller naming no card gets today's answer
     unchanged, which is what every reader asking about a *line* rather than a
     card wants.
     """
     normalized = " ".join((line or "").strip().lower().rstrip(".").split())
     if card_name:
-        from ..oracle import _collapse_self_references
+        from ..self_reference import _collapse_self_references
 
         normalized = _collapse_self_references(
             normalized, card_name, "this creature"
@@ -241,7 +241,7 @@ def _attached_damage_shields(perm) -> list[dict]:
     """
     if not hasattr(perm, "metadata"):
         return []
-    from ..auras import auras_attached_to
+    from ..aura_attachment import auras_attached_to
 
     found: list[dict] = []
     own = getattr(perm, "effective_card", None) or getattr(perm, "card", None)

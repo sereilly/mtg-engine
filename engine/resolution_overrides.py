@@ -17,7 +17,7 @@ is put on the stack, and there is no instruction for a production to lower —
 it changes what the *rules* do with the object, which is exactly the shape
 `engine/special_actions.py` and `engine/cost_modifiers.py` already have and the
 reason all three are read as **whole printed sentences** rather than compiled.
-`grammar/parser._parse_registry_claimed_sentence` consumes it and asks this
+`grammar/sequences._parse_registry_claimed_sentence` consumes it and asks this
 module whether the words can be read, so a wording nothing here implements
 leaves the line refused rather than being silently dropped — the rule
 `engine/activation_restrictions.py` states for its own clause.

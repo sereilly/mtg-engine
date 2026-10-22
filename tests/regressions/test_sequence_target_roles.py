@@ -241,7 +241,7 @@ def test_no_announcement_mixes_a_seat_and_an_object_without_roles():
     ``activate_permanent_ability`` a question that settles the stack itself and
     so examined zero announcements while passing.
     """
-    from engine.targeting import SEAT_ROLE_KINDS
+    from engine.target_roles import SEAT_ROLE_KINDS
 
     cards = compilation_units(load_cards(manifest_set_paths(include_measured=True)))
     examined = 0

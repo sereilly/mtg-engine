@@ -482,7 +482,7 @@ def _x_definition_spec(
     a CR 613 layer 7c contribution the P/T refresh rebuilds on every recompute,
     and a scratchpad key is not there to be read the second time. A continuous
     effect sized by a frozen record is the failure
-    ``characteristics._lower_pump_per_milled`` refuses in its own words.
+    :func:`_lower_pump_per_milled` refuses in its own words.
 
     One parameter rather than a flag beside a set, because the two questions
     are one: may a record define this X, and which records exist. A caller that

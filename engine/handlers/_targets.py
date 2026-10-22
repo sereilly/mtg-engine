@@ -202,7 +202,7 @@ def pick_target_permanent(
     above this function now: CR 608.2b's gate judges the target against its
     description, and where it is still legal on another battlefield the seat
     is settled from the id again before any handler runs
-    (``LegalityMixin.resettle_announced_target_seats``), so the *player* this
+    (``ResolutionTargetsMixin.resettle_announced_target_seats``), so the *player* this
     is handed is the one the target is on.
 
     An id that resolves to **nothing** is a different question, and it has an
@@ -234,7 +234,7 @@ def pick_target_permanent(
             # Sappers, Whippoorwill and Merieke Ri Berit all read the same
             # resolver. A spell, an activated ability and a trigger whose
             # target was chosen are refused above the instructions when
-            # *every* target is gone (``legality.illegal_targets_refusal``);
+            # *every* target is gone (``legality_resolution.illegal_targets_refusal``);
             # this is what is left for the object that still resolves because
             # another of its targets is legal, and for a trigger whose target
             # a fire site stamped — and it is the reading a slot blanked by
@@ -316,7 +316,7 @@ def roles_still_legal(
     blocked.
     """
     from ..subject_filters import subject_matches
-    from ..targeting import role_is_seat
+    from ..target_roles import role_is_seat
 
     targets = (payload or {}).get("targets") or {}
     roles = list(targets.get("roles") or ())
@@ -366,7 +366,7 @@ def roles_still_legal(
         # printed phrase admits — the stack picker's own list, asked again for
         # this slot, by identity.
         if role.get("kind") == "spell":
-            from ..targeting import _from_targets_payload
+            from ..target_descriptions import _from_targets_payload
 
             named = context.stack_target
             admitted = game._offered_stack_targets(
@@ -399,7 +399,7 @@ def _role_relation_still_holds(game: Game, role: dict, roles: list, resolved: li
     copies of this lookup is exactly how a re-check comes to disagree with the
     picker it was written from.
     """
-    from ..targeting import role_dependency, role_relation_holds
+    from ..target_roles import role_dependency, role_relation_holds
 
     _relation, depends_on = role_dependency(role)
     earlier = next(
@@ -593,7 +593,7 @@ def resolve_role_permanent(
     caller that has one seat in hand (a test, the AI); the wire always sends
     ids, because the roles of one spell may sit on two battlefields.
     """
-    from ..targeting import payload_role_slot
+    from ..target_roles import payload_role_slot
 
     slot = payload_role_slot(payload, role)
     if slot is None:
@@ -631,7 +631,7 @@ def resolve_role_player(
     no longer resolves.
 
     **Unless the announcement recorded its seats per role**
-    (``targeting.ROLE_SEATS``), which is what one naming two players does:
+    (``target_roles.ROLE_SEATS``), which is what one naming two players does:
     "…creatures **target player** controls … creatures **another target
     player** controls" (Cultural Exchange). Then the slot is read the way its
     siblings read theirs — positionally — and the scalar is not consulted at
@@ -640,8 +640,9 @@ def resolve_role_player(
     above stands for a two-player payload announced *without* the list, which
     is an announcement the cast gate does not accept.
     """
-    from ..targeting import (payload_role_slot, recorded_role_seats,
-                             role_is_seat, spec_roles)
+    from ..targeting import spec_roles
+    from ..target_roles import (payload_role_slot, recorded_role_seats,
+                                role_is_seat)
 
     slot = payload_role_slot(payload, role)
     if slot is None:
@@ -693,7 +694,7 @@ def _role_seat_is_still_a_target(
 
     The question is the announcement's own, through the list the picker and
     the cast gate read (``Game._enumerate_targets`` over the role, exactly as
-    ``legality.role_target_options`` asks it), so "may be targeted" has one
+    ``legality_roles.role_target_options`` asks it), so "may be targeted" has one
     answer at both ends. Asked as a *triggered* ability's would be: that
     skips the one test which depends on what kind of object is resolving —
     "can't be the targets of spells or activated abilities" (Peace Talks),
@@ -740,7 +741,7 @@ def resolve_role_graveyard_card(
     role that no longer resolves is CR 608.2b's illegal target, not an
     invitation to reanimate whichever artifact card is nearest.
     """
-    from ..targeting import payload_role_slot
+    from ..target_roles import payload_role_slot
 
     slot = payload_role_slot(payload, role)
     if slot is None:

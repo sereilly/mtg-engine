@@ -249,7 +249,7 @@ def aura_board_counted_penalty(oracle_text: str) -> dict | None:
     ``{"filter": <noun-phrase payload>}`` — what to count. Whose board it is
     counted on is not payload: the sentence says, and the answer changes with
     the combat, so it is asked at every recompute by
-    ``permanent_state._refresh_board_counted_penalties``.
+    ``dynamic_creatures._refresh_board_counted_penalties``.
 
     The noun phrase is refused unless ``subject_matches`` can test it, the same
     gate every other text-keyed table applies: a narrowing the matcher cannot
@@ -694,7 +694,7 @@ def aura_granted_line_derived_lines(oracle_text: str) -> tuple[str, ...]:
 
     So the grant of such a keyword is a grant of the *line*, exactly as
     ``keywords.LINE_DERIVED_KEYWORDS`` already says for the one-shot path
-    (`handlers/pump._grant_one_keyword`) — this is that same rule on the
+    (`handlers/keywords._grant_one_keyword`) — this is that same rule on the
     continuous path, derived per read like every other half of this file so
     detaching the Aura takes the ability away with nothing to undo. The word
     comes back for free: ``layer_bridge._TEXT_KEYWORDS`` scans the compiled
@@ -1134,7 +1134,7 @@ def attached_ability_cost_reduction(permanent) -> tuple[int, int]:
 #: ability: it lasts exactly as long as the Aura is attached, which is why it
 #: is derived here on every damage event rather than armed as a record —
 #: removal is the Aura ceasing to be attached, and there is no remembered
-#: delta to undo. The same shape ``prevention._attached_damage_shields`` has one
+#: delta to undo. The same shape ``prevention.shields._attached_damage_shields`` has one
 #: module over, and for the same reason.
 #:
 #: "You" is CR 109.5's controller of the **Aura**, not of the creature: an

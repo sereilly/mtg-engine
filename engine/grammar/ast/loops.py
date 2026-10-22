@@ -153,7 +153,7 @@ class EachShortOfThisWay:
 
     ``record`` is the resolution-scratchpad key the count is read from, resolved
     by the parse from the printed noun and verb *together* — exactly as
-    ``amounts._THIS_WAY_COUNTS`` resolves the pair it reads, and for its reason:
+    ``records._THIS_WAY_COUNTS`` resolves the pair it reads, and for its reason:
     "for each card less than two a player *discards* this way" is a sentence
     about a different record, and reading one for the other is a number nobody
     printed. Carried resolved rather than as the two words, because that is what

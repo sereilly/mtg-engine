@@ -99,7 +99,7 @@ def emblem_trigger_events(game: Game, kind: str, players=None) -> list[dict]:
     as the source, so the stack item and the resolution context read it like
     any other trigger's.
     """
-    from .oracle import compile_emblem_text
+    from .line_classification import compile_emblem_text
 
     events: list[dict] = []
     for seat, player in enumerate(game.players):

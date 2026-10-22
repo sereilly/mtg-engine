@@ -679,7 +679,7 @@ class ActivationChargesMixin:
                 permanent.card.name, False, "unsupported", named_cost_refusal
             )
         if ability.cost.exile_filter is not None:
-            from ...ai_valuation import reads_what_its_cost_exiled
+            from ...ai_prompt_readers import reads_what_its_cost_exiled
 
             exile_cost_choice = self._choose_exile_cost(
                 ability.cost, controller, controller_index, permanent,

@@ -109,7 +109,7 @@ _TARGET_PRONOUN_SPEC = ast.TargetSpec("it")
 
 
 #: Whom a damage *history* clause names, longest phrase first — the same set
-#: `triggers._DAMAGE_RECIPIENTS` reads on the event side, because one printed
+#: `trigger_tables._DAMAGE_RECIPIENTS` reads on the event side, because one printed
 #: phrase should mean one thing whether a card asks about the damage as it
 #: happens or about the damage it dealt earlier this turn.
 _DAMAGE_HISTORY_RECIPIENTS: tuple[tuple[tuple[str, ...], str], ...] = (

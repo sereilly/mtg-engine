@@ -8,7 +8,7 @@ the ability *resolved* — after every response, which is a different card —
 and pinned it in ``tests/engine/test_stack_targets._UNANNOUNCED_TRIGGER_
 TARGETS``: the trigger-target prompt could name one graveyard card and no
 more. Wave 2 (W2G2) gave it the several-card shape the spell form of the same
-sentence already had (Decompose: ``targeting.SINGLE_GRAVEYARD``):
+sentence already had (Decompose: ``target_descriptions.SINGLE_GRAVEYARD``):
 
 * the lowering writes the ``targets`` description under a trigger too, so the
   picker is derived;
