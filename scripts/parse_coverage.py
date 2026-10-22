@@ -73,12 +73,14 @@ from engine.cost_modifier_lines import cost_modifiers_for  # noqa: E402
 from engine.aura_grants import aura_quoted_grants, quoted_grant_readable  # noqa: E402
 from engine.oracle import (  # noqa: E402
     _is_supported_keyword_line,
-    _parse_activated_ability,
     trigger_condition_of_line,
-    _parse_triggered_ability,
     compile_card_oracle,
     expand_ability_lines,
     normalize_creature_line,
+)
+from engine.ability_lines import (  # noqa: E402
+    _parse_activated_ability,
+    _parse_triggered_ability,
 )
 from engine.line_classification import _parse_loyalty_ability  # noqa: E402
 from engine.static_line_support import _is_supported_static_creature_line  # noqa: E402
