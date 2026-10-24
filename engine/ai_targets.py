@@ -43,6 +43,7 @@ from .ai_rehearsal import has_a_creature_to_fight_with, permanent_worth
 from .ai_prompt_readers import (
     exiles_a_graveyard_target,
     graveyard_denial_order,
+    graveyard_price_order,
 )
 from .game import Game
 from .mixins.stack import (
@@ -149,7 +150,56 @@ def _cast_graveyard_denial(
         player_index, card, optional_cost_payments=_OFFERS_ANNOUNCED.get(),
         mode_index=_announced_mode(card), from_zone=_cast_zone(card),
     ).get("valid_targets") or []
-    return _graveyard_denial_target(game, player_index, legal)
+    denial = _graveyard_denial_target(game, player_index, legal)
+    own = _own_graveyard_pick(game, player_index, legal)
+    if denial is None or own is None:
+        return denial
+    return _better_graveyard_pick(game, player_index, card, denial, own)
+
+
+def _own_graveyard_pick(
+    game: Game, player_index: int, legal
+) -> "tuple[int, int] | None":
+    """``(the caster's seat, slot)`` — the card of its **own** an exile out of
+    a graveyard would cost it least (``graveyard_price_order``: one it could
+    still cast from there last, then the cheapest) — or None when the
+    picker offers none of its own."""
+    slots = [
+        int(entry["index"]) for entry in legal or ()
+        if entry.get("kind") == "graveyard" and int(entry["seat"]) == player_index
+    ]
+    if not slots:
+        return None
+    return player_index, graveyard_price_order(game, player_index, slots)[0]
+
+
+def _better_graveyard_pick(
+    game: Game, player_index: int, card: CardDefinition,
+    denial: "tuple[int, int]", own: "tuple[int, int]",
+) -> "tuple[int, int]":
+    """Of an opponent's card (*denial*) and one of the caster's own (*own*),
+    the one whose exile does more, by rehearsal (``ai_rehearsal.rehearse``) —
+    *denial* on a tie or where neither can be weighed.
+
+    The steps behind the exile may give the card's **owner** something:
+    "Exile target card from a graveyard. Its owner creates a 1/1 white Spirit
+    creature token with flying." (Funeral Pyre.) The denial reading aimed it
+    at the opponent's pile every time, so the cast handed the opponent a
+    flier — and the rehearsal, reading that, held a spell that cast at the
+    caster's own land card makes the caster one. A plain exile reads the same
+    either way (no standing counts a graveyard), so it keeps the denial.
+    """
+    best, best_swing = denial, None
+    for seat, slot in (denial, own):
+        rehearsal = _rehearse_announcement(
+            game, player_index, card,
+            _announcement(card, target=seat, caster=player_index, permanent_index=slot),
+        )
+        if rehearsal is None or not rehearsal.accepted or not rehearsal.changed:
+            continue
+        if best_swing is None or rehearsal.swing > best_swing + 1e-9:
+            best, best_swing = (seat, slot), rehearsal.swing
+    return best
 
 
 def _one_graveyard_card_is_denied(spec, instructions) -> bool:

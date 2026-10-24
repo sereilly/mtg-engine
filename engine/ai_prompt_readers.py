@@ -800,6 +800,52 @@ def pick_is_tested_for_a_shared_color(card: CardDefinition, result_key: str) -> 
     )
 
 
+#: The steps that take a recorded permanent away from whoever controls it —
+#: out of play, not merely tapped or phased for a turn.
+_TAKEN_FROM_ITS_CONTROLLER = frozenset({
+    "exile_recorded_permanent",
+    "sacrifice_recorded_permanent",
+    "return_recorded_permanents_to_hand",
+})
+
+
+def pick_is_taken_from_its_controller(card: CardDefinition, result_key: str) -> bool:
+    """Whether a later step of *card* takes the permanent a
+    ``choose_permanent`` recorded under *result_key* away from its controller
+    — exiles it, sacrifices it, returns it to its owner's hand.
+
+    "When this creature enters, **an opponent chooses** a permanent you
+    control other than this creature **and exiles it**." (Wormfang Crab.) The
+    pick is the chooser's to make count against the permanents' controller,
+    and a seat nobody asks took the first candidate in board order — the
+    Crab's controller's first land, every time.
+
+    Read off the compiled steps (the record each names, ``permanents_from``),
+    so any card printing the shape is answered and no card is named.
+    """
+
+    def walk(instructions) -> bool:
+        for instruction in instructions:
+            payload = getattr(instruction, "payload", None) or {}
+            if (
+                getattr(instruction, "kind", None) in _TAKEN_FROM_ITS_CONTROLLER
+                and payload.get("permanents_from") == result_key
+            ):
+                return True
+            for key in ("steps", "then", "else", "action", "otherwise", "effect"):
+                nested = payload.get(key)
+                if isinstance(nested, (list, tuple)) and walk(nested):
+                    return True
+        return False
+
+    program = compile_card_oracle(card)
+    return (
+        walk(program.instructions)
+        or walk(a.instruction for a in program.activated_abilities if a.instruction is not None)
+        or walk(t.instruction for t in program.triggered_abilities if t.instruction is not None)
+    )
+
+
 #: The pile readers that hand back **one card** per use.
 _ONE_CARD_PILE_READERS = frozenset({
     "put_exiled_pile_top_into_hand",
@@ -1218,6 +1264,7 @@ __all__ = [
     "reads_what_its_cost_exiled",
     "offer_trade",
     "offered_action_is_a_payment",
+    "pick_is_taken_from_its_controller",
     "pick_is_tested_for_a_shared_color",
     "toll_branch_loss",
 ]

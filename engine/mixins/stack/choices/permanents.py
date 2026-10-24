@@ -471,6 +471,26 @@ class PermanentChoicesMixin:
                             wanted, self._effective_colors(perm)
                         ),
                     )
+        # **And a pick that takes the permanent from somebody else.** "…an
+        # opponent chooses a permanent you control other than this creature and
+        # exiles it" (Wormfang Crab): the chooser controls none of the
+        # candidates and the step behind the pick takes the one chosen away
+        # (`ai_prompt_readers.pick_is_taken_from_its_controller`, off the
+        # compiled program), so its pick is the one that costs their
+        # controller most — the dearest by ``ai_rehearsal.permanent_worth``,
+        # board order between equals. Board order's first answer was the
+        # Crab's controller's first land.
+        if live and getattr(context, "card", None) is not None:
+            from ....ai_prompt_readers import pick_is_taken_from_its_controller
+
+            if pick_is_taken_from_its_controller(
+                context.card, str(choice.data.get("result_key") or "")
+            ) and all(
+                self.controller_index_of(perm) != choice.player_index for perm in live
+            ):
+                from ....ai_rehearsal import permanent_worth
+
+                live = sorted(live, key=lambda perm: -permanent_worth(perm))
         if not live or not self._resolve_permanent_choice(
             choice, live[0].permanent_id
         ):
