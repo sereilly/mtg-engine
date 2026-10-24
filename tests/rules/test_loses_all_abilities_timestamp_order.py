@@ -67,9 +67,23 @@ REMOVERS = {
 #: (triggered, and activated — the door's case), a board-wide static's quoted
 #: ability, a noncreature lord's keyword, a line-derived keyword granted by a
 #: spell and by an ability, an Aura's protection, an ability's protection.
+#:
+#: And the door's case on each of its three channels, so the door's floor is
+#: met by the pins alone (Hermetic Study's two rows, Resuscitate's two,
+#: Citanul Hierophants' one): an Aura's quoted activated ability (Hermetic
+#: Study), a spell's ("Until end of turn, creatures you control gain '{1}:
+#: Regenerate this creature.'", Resuscitate) and a permanent's static's
+#: ("Creatures you control have '{T}: Add {G}.'", Citanul Hierophants - one
+#: row, Humble's: Humility strips the Hierophants' own static, a creature's).
+#: Pinned at Judgment's promotion rehearsal, where the set's 38 new granters
+#: moved the stride off every door granter but Hermetic Study and Multani's
+#: Harmony and the door read 4. Measured over the whole pool then (every
+#: granter, both trees): 31 door rows from sixteen granters, and nothing
+#: kept, taken, refused or printed.
 PINNED = (
     "Jump", "Fishliver Oil", "Pendrell Flux", "Hermetic Study", "Energy Flux",
     "Fervor", "Rapid Fire", "Jabari's Banner", "Black Ward", "Mother of Runes",
+    "Resuscitate", "Citanul Hierophants",
 )
 
 #: Every STRIDE-th granter beside the pinned ones.
@@ -321,7 +335,9 @@ def test_every_grant_is_ordered_against_every_loss_of_all_abilities(_by_name):
 
     # Floors: a sweep that reaches nothing passes. Measured 129 / 121 / 79 / 9
     # on the pool this was written against, and 107 / 99 / 65 / 6 once
-    # Apocalypse and Odyssey moved which granters the stride samples.
+    # Apocalypse and Odyssey moved which granters the stride samples. The
+    # door's is met by PINNED alone since Judgment's promotion (5 rows), so
+    # the stride can no longer move it below the floor.
     assert counts["pairs"] >= 95, counts
     assert counts["grant_first"] >= 88, counts
     assert counts["loss_first"] >= 58, counts
