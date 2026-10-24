@@ -17,9 +17,9 @@ out of ``engine/targeting.py`` at the 2,000-line cap.
 
 from __future__ import annotations
 
-from .target_descriptions import (GRAVEYARD_TARGET_KIND, PILE_OWNER_TARGET,
-                                  SINGLE_GRAVEYARD, _from_targets_payload,
-                                  _narrowing_flags)
+from .target_descriptions import (COUNTED_SEAT_TARGET, GRAVEYARD_TARGET_KIND,
+                                  PILE_OWNER_TARGET, SINGLE_GRAVEYARD,
+                                  _from_targets_payload, _narrowing_flags)
 
 
 #: The payload key a computed amount's count spec is stamped under. Spelled here
@@ -416,6 +416,14 @@ def _graveyard_return_spec(payload: dict) -> dict:
     # the card the printed word excludes and then have resolution decline it.
     if payload.get("exclude_source_card"):
         spec["exclude_source_card"] = True
+    # "…up to X target cards from your graveyard …, where X is the number of
+    # black permanents **target opponent** controls as you cast this spell."
+    # (Reap.) The count's seat is a target too
+    # (``target_descriptions.COUNTED_SEAT_TARGET``) — carried only beside the
+    # caster's own pile, where the announcement's seat field names no pile.
+    counted = player_pronoun_spec((payload.get(_X_FROM_COUNT) or {}).get("owner"))
+    if counted is not None and spec.get("own_graveyard_only"):
+        spec[COUNTED_SEAT_TARGET] = counted
     return spec
 
 

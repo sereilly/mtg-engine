@@ -65,7 +65,7 @@ class CastTargetSpecMixin:
 
     def announced_cast_x(
         self, caster_index: int, card: CardDefinition, *,
-        mode_index: int | None = None,
+        mode_index: int | None = None, seat: int | None = None,
     ) -> int | None:
         """CR 601.2b: the X this spell's own where-clause fixes **at the
         announcement**, or None when it defines none.
@@ -87,17 +87,21 @@ class CastTargetSpecMixin:
         clause means is for both moments to ask one function. What differs is
         the moment, which is what the caller supplies.
 
-        **No seat is taken from the caller**, and that is a rule rather than an
-        omission. The cast wire carries one ``target_player_index``, and for a
-        spell whose targets sit in a graveyard that field already means *which
-        pile* — so reading it here would count a board the caster never named,
-        and differently in the picker (which has no such field) than in the gate.
-        ``count_from_payload`` resolves the seat itself (CR 102.3: a player is
-        never their own opponent, so the fallback is the first living one),
-        which in a two-player game is the only announcement CR 601.2c permits;
-        the lowering refuses any scope that would need an answer this cannot
-        give.
+        **The seat is the announcement's** (*seat*, the cast's
+        ``target_player_index``). "Target opponent" in the count is a target
+        (the card's 2008-04-01 ruling: errata "so that it now targets a
+        specific opponent"; 2008-04-01: "The count … is done during
+        announcement"), and the spell is scoped to its caster's own pile, so
+        that field names no pile and carries the opponent
+        (``target_descriptions.COUNTED_SEAT_TARGET``). Read through
+        ``bare_announcements.announced_counted_seat``, which answers a seat
+        named nowhere — the picker asks with none, the browser sends the
+        caster's own pile — with the first one the description admits, the
+        seat the cast itself will then stamp. This said "no seat is taken from
+        the caller" while the field meant only the pile, and at three seats
+        the count fell to the first opponent whatever the caster meant.
         """
+        from .bare_announcements import announced_counted_seat
         from .game_types import OracleExecutionContext
         from .handlers._amounts import count_from_payload
         from .targeting import cast_time_count_spec
@@ -108,7 +112,13 @@ class CastTargetSpecMixin:
         if spec is None:
             return None
         caster = self.players[caster_index]
-        context = OracleExecutionContext(caster=caster, target=caster, card=card)
+        target = caster
+        counted = announced_counted_seat(
+            self, caster_index, card, seat, mode_index=mode_index,
+        )
+        if isinstance(counted, int) and 0 <= counted < len(self.players):
+            target = self.players[counted]
+        context = OracleExecutionContext(caster=caster, target=target, card=card)
         return max(0, int(count_from_payload(self, context, spec)))
 
     def _size_conditional_division(
@@ -269,6 +279,19 @@ class CastTargetSpecMixin:
             spec["defined_x"] = announced
             spec.pop("x_targets", None)
             spec["max_targets"] = announced
+            # …and where X is counted on a seat the caster chooses (Reap's
+            # "target opponent", ``target_descriptions.COUNTED_SEAT_TARGET``),
+            # the X each legal seat would fix, so a picker asking for the seat
+            # first can cap the cards by it. ``defined_x`` above is the default
+            # seat's — the one a cast naming none is announced at.
+            counted = self._counted_seats(caster_index, card, spec)
+            if counted is not None:
+                spec["defined_x_by_seat"] = {
+                    seat: self.announced_cast_x(
+                        caster_index, card, mode_index=mode_index, seat=seat,
+                    )
+                    for seat in sorted(counted)
+                }
         # CR 107.3a's *other three* places an X can live. The browser asked only
         # the mana-cost string, so Fire Covenant ({1}{B}{R}, "pay X life") and
         # Infernal Harvest ({1}{B}, "return X Swamps") were offered no X box at

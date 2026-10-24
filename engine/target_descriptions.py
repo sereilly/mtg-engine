@@ -909,3 +909,18 @@ SINGLE_GRAVEYARD = "single_graveyard"
 #: CR 608.2b re-asks it at resolution. The seat travels on the field a
 #: graveyard spec's pile always has, ``target_player_index``.
 PILE_OWNER_TARGET = "pile_owner_target"
+
+#: "Return up to X target cards from **your** graveyard to your hand, where X
+#: is the number of black permanents **target opponent** controls as you cast
+#: this spell." (Reap.) The count's seat is a target of the same announcement
+#: (CR 601.2c; the card's 2008-04-01 ruling: "This card has received errata so
+#: that it now targets a specific opponent") — chosen **before** the cards,
+#: since it fixes how many may be named. The spec carries the player
+#: description it is chosen by, for a graveyard spec scoped to the caster's
+#: own pile (``own_graveyard_only``), whose ``target_player_index`` therefore
+#: names no pile and is free to name this seat (``Game.graveyard_target_seat``
+#: has always read the caster's pile for such a spec, whatever the field said).
+#: Read by ``bare_announcements.announced_counted_seat`` (the seat an
+#: announcement names, or the first legal one), ``Game.announced_cast_x`` (the
+#: X counted on it) and the cast gate (CR 601.2c).
+COUNTED_SEAT_TARGET = "counted_seat_target"

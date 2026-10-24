@@ -42,6 +42,7 @@ from ...enchant_targets import (_ENCHANT_LAND_SUBTYPES,
                                 enchant_subject_seat)
 from ...targeting import (derive_cast_spec, role_is_stack, spec_roles,
                           targets_mana_value_x)
+from ...target_descriptions import COUNTED_SEAT_TARGET
 from ...target_roles import role_is_seat
 from ...cost_x_definitions import defines_cast_x
 from ...divided_damage import (
@@ -1080,8 +1081,18 @@ class CastTargetValidationMixin:
             # reads any graveyard, the caster's own otherwise. Resolved once and
             # asked by both branches, because "whose graveyard" is one question
             # and two copies of the answer is how they come to disagree.
+            # …except where that field names the seat the spell's count is
+            # taken on rather than a pile ("…where X is the number of black
+            # permanents **target opponent** controls", Reap —
+            # ``target_descriptions.COUNTED_SEAT_TARGET``): the cards are the
+            # caster's own whichever opponent was named.
+            counted_seat = bool(
+                (graveyard_target_spec(card, program, mode_index=mode_index) or {})
+                .get(COUNTED_SEAT_TARGET)
+            )
             wrong_seat = (
                 not any_graveyard
+                and not counted_seat
                 and target_player_index is not None
                 and target_player_index != caster_index
             )

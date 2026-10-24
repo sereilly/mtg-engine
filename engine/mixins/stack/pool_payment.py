@@ -726,7 +726,9 @@ class PoolPaymentMixin:
         # picker and the target gate already asked, so the number the caster was
         # offered, the number the announcement was checked against and the
         # number the resolution spends are one number.
-        announced_x = self.announced_cast_x(caster_index, card, mode_index=mode_index)
+        announced_x = self.announced_cast_x(
+            caster_index, card, mode_index=mode_index, seat=target_player_index,
+        )
         if announced_x is not None:
             resolved_x_value = announced_x
         if resolved_x_value is None and "{X}" in card.mana_cost.upper():

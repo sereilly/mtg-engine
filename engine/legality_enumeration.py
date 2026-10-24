@@ -988,13 +988,35 @@ class TargetEnumerationMixin:
         """
         from .target_descriptions import PILE_OWNER_TARGET
 
-        pile = (spec or {}).get(PILE_OWNER_TARGET)
-        if not isinstance(pile, dict):
+        return self._described_seat_options(
+            caster_index, card, (spec or {}).get(PILE_OWNER_TARGET),
+        )
+
+    def _counted_seats(
+        self, caster_index: int, card, spec: dict | None,
+    ) -> "set[int] | None":
+        """The seats a graveyard spec's **counted target seat** may be
+        (``target_descriptions.COUNTED_SEAT_TARGET``: "…where X is the number
+        of black permanents target opponent controls", Reap), or None for a
+        spec whose count names no target seat. Enumerated as
+        :meth:`_pile_owner_seats` enumerates its seat, for its reason."""
+        from .target_descriptions import COUNTED_SEAT_TARGET
+
+        return self._described_seat_options(
+            caster_index, card, (spec or {}).get(COUNTED_SEAT_TARGET),
+        )
+
+    def _described_seat_options(
+        self, caster_index: int, card, described,
+    ) -> "set[int] | None":
+        """Every seat *described* — a ``{"kind": "player", …}`` description —
+        admits, through the seat loop; None for no description."""
+        if not isinstance(described, dict):
             return None
         return {
             entry["seat"]
             for entry in self._enumerate_targets(
-                caster_index, card, dict(pile), for_cast=False,
+                caster_index, card, dict(described), for_cast=False,
             )
             if entry.get("kind") == "player"
         }

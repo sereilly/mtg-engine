@@ -29,7 +29,8 @@ from __future__ import annotations
 import re
 
 from ...cast_permissions import consume as consume_permission
-from ...bare_announcements import (announced_fields, default_cast_target,
+from ...bare_announcements import (announced_counted_seat, announced_fields,
+                                   default_cast_target,
                                    names_an_object, seat_of_unseated_slot)
 from ...cast_costs import (additional_costs, buyback_cost, cast_announces_x,
                            kicked, optional_x_offers)
@@ -492,6 +493,17 @@ class SpellCastingMixin:
                 target_permanent_ids = named["target_permanent_ids"]
             if "target_stack_index" in named:
                 target_stack_index = named["target_stack_index"]
+        # …and the seat a spell's **count** targets ("…where X is the number of
+        # black permanents target opponent controls", Reap): named, or — for a
+        # cast naming the caster's own pile or nothing — the first one its
+        # description admits, written onto the announcement so the X counted,
+        # the gate and the stack object all read one seat
+        # (``bare_announcements.announced_counted_seat``).
+        counted_seat = announced_counted_seat(
+            self, caster_index, card, target_player_index, mode_index=mode_index,
+        )
+        if counted_seat is not None:
+            target_player_index = counted_seat
 
         # What the spell points at, computed once: both taxes whose scope is
         # "that target this creature" need it, and the mana one is charged at
