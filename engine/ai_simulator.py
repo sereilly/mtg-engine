@@ -26,6 +26,7 @@ from .ai_abilities import (
 )
 from .ai_payment import tap_planned_lands
 from .ai_rehearsal import mid_resolution, rehearsing
+from .ai_special_actions import special_action_before_combat
 from .ai_weighed_cast import permitted_casts
 from .card_loader import load_cards
 from .faces import whole_card
@@ -214,6 +215,15 @@ class SimulationReport:
     #: spell it answers.
     activations_at_instant_speed: Counter[str] = field(default_factory=Counter)
     refused_instant_activations: Counter[str] = field(default_factory=Counter)
+    #: CR 116.2c-e special actions a seat took (`ai_special_actions`), by the
+    #: offer's kind — "ignore_attached_static_until_eot" for a creature bought
+    #: a turn off Volrath's Curse or Lost in Thought. **Empty in every run
+    #: before JUD's wave 2**, and not because nothing was offered: the offer
+    #: stood every main phase and no AI path answered it, so a cursed creature
+    #: never attacked again however cheap the price — and the run read exactly
+    #: as clean as it does now. The refusals among them are beside it.
+    special_actions_taken: Counter[str] = field(default_factory=Counter)
+    refused_special_actions: Counter[str] = field(default_factory=Counter)
 
     @property
     def ok(self) -> bool:
@@ -1146,6 +1156,27 @@ def _play_activations(
         )
 
 
+def _play_special_actions(
+    game: Game, active: int, report: SimulationReport, game_index: int, turn: int
+) -> None:
+    """The CR 116 special action the seat takes before its combat, if any
+    (`ai_special_actions.special_action_before_combat`, which holds the
+    priority the action needs), counted."""
+    taken = special_action_before_combat(game, active)
+    if taken is None:
+        return
+    choice, refusal = taken
+    _resolve_pending_choices(game)
+    report.log_lines.append(
+        f"G{game_index} T{turn} {game.players[active].name} special action "
+        f"{choice.kind} ({choice.name}) -> {refusal or 'taken'}"
+    )
+    if refusal is None:
+        report.special_actions_taken[choice.kind] += 1
+    else:
+        report.refused_special_actions[f"{choice.name}: {refusal}"] += 1
+
+
 def _play_combat_phase(
     game: Game, active: int, report: SimulationReport, game_index: int, turn: int
 ) -> None:
@@ -1625,6 +1656,10 @@ def run_ai_simulation(
             # attack declaration also goes through — a refused declaration is
             # silent, and a second copy of that fallback chain would be a
             # second place for the silence to live.
+            if not game.is_game_over():
+                # CR 116.2d: an offer that buys a creature its attack this
+                # turn is taken, if at all, before the attack is declared.
+                _play_special_actions(game, active, report, game_index, turn)
             if not game.is_game_over():
                 _play_combat_phase(game, active, report, game_index, turn)
 
