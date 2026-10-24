@@ -305,9 +305,11 @@ def test_no_acknowledgement_has_gone_stale(entry):
 # Every count below is a read of one of those maps or of an index that arrived
 # from a client. They convert together or not at all.
 POSITIONAL_BASELINE: dict[str, int] = {
-    # The AI's attack and block choosers, all eleven reads (they were
-    # `engine/ai_policy.py`'s until the 2,000-line split moved them).
-    "engine/ai_declarations.py": 11,
+    # The AI's attack and block choosers (they were `engine/ai_policy.py`'s
+    # until the 2,000-line split moved them). 11 -> 9 at round kg: Blaze of
+    # Glory's block in the chooser read its attackers by slot, and went when
+    # the chooser started asking `Game.obeying_block_declaration` instead.
+    "engine/ai_declarations.py": 9,
     # Both moved from `_common.py` with the functions holding them when that
     # module was split at the 2,000-line cap: `pick_target_permanent` (the
     # acknowledged slot read above) and `resolve_own_combatant`.
