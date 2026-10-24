@@ -50,7 +50,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ODY | 335 | 507 | 89.7% | 89.7% | 69.6% | 295 |
 | TOR | 143 | 261 | 86.2% | 86.2% | 68.2% | 138 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| JUD *(measured)* | 143 | 241 | 70.1% | 66.0% | 44.8% | 95 |
+| JUD *(measured)* | 143 | 241 | 73.4% | 69.7% | 46.1% | 98 |
 | **All (shipped)** | **7884** | **11645** | **90.6%** | **90.0%** | **62.3%** | **6139** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -63,7 +63,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 669 | 343 | expected a subject |  |
+| 662 | 341 | expected a subject |  |
 | 168 | 87 | unrecognized effect verb |  |
 | 136 | 75 | unconsumed text |  |
 | 65 | 46 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -3631,6 +3631,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Draw a card at the beginning of the next turn's upkeep.`
   - `Flare deals 1 damage to any target.`
   - `Draw a card at the beginning of the next turn's upkeep.`
+- **Flaring Pain**
+  - `Damage can't be prevented this turn.`
 - **Flash**
   - `You may put a creature card from your hand onto the battlefield. If you do, sacrifice it unless you pay its mana cost reduced by {2}.`
   - `You may put a creature card from your hand onto the battlefield. If you do, sacrifice it unless you pay its mana cost reduced by {2}.`
@@ -7725,6 +7727,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}: The next time a source of your choice of the chosen color would deal damage to you this turn, prevent that damage.`
 - **Prismatic Lace**
   - `Target permanent becomes the color or colors of your choice. (This effect lasts indefinitely.)`
+- **Prismatic Strands**
+  - `Prevent all damage that sources of the color of your choice would deal this turn.`
 - **Prismite**
   - `{2}: Add one mana of any color.`
 - **Private Research**
@@ -9059,6 +9063,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Destroy all Auras.`
 - **Serene Offering**
   - `Destroy target enchantment. You gain life equal to its mana value.`
+- **Serene Sunset**
+  - `Prevent all combat damage X target creatures would deal this turn.`
 - **Serenity**
   - `At the beginning of your upkeep, destroy all artifacts and enchantments. They can't be regenerated.`
   - `At the beginning of your upkeep, destroy all artifacts and enchantments. They can't be regenerated.`
