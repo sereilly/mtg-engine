@@ -900,6 +900,26 @@ def _matching_sweep_spec(payload: dict) -> dict | None:
     return _from_targets_payload(payload.get("targets"))
 
 
+def _subject_controller_spec(payload: dict) -> dict | None:
+    """"Creatures **target player** controls attack this turn if able."
+    (Instigator.)
+
+    :func:`_sweep_controller_spec` for a requirement, whose described set
+    rides ``subject`` rather than ``filter``: the noun phrase says which
+    creatures, the ``controller`` key inside it says whose, and only the second
+    is a choice (CR 601.2c). Without the row the activation derived no target
+    at all — its picker offered only the discard cost — and the handler, handed
+    no seat, matched no creature: the ability resolved doing nothing at any
+    table. Every other printing of the kind ("Non-Wall creatures **the active
+    player** controls", Maddening Imp; a set an earlier step chose) names no
+    targeted seat, and the reader answers None for it.
+    """
+    described = payload.get("subject")
+    if not isinstance(described, dict):
+        return None
+    return player_pronoun_spec(described.get("controller"))
+
+
 def _counted_scope_spec(payload: dict) -> dict | None:
     """"Draw a card for each tapped creature **target opponent** controls."
     (Theft of Dreams.)
@@ -1256,6 +1276,7 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     # opponent at three seats. Every other printing of this kind counts
     # nobody's board or the caster's, and the reader answers None for them.
     "add_mana_from_text": _counted_scope_spec,
+    "force_subject_to_attack_until_eot": _subject_controller_spec,
     "grant_target_ability_text": _ability_text_grant_spec,
     "give_control_of_source_to_player": _control_gift_spec,
     "choose_permanents": _chosen_from_target_player_spec,
