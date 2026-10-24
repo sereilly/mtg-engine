@@ -219,16 +219,23 @@ def _parse_counter(stream: TokenStream) -> ast.Statement:
     #
     # Peeked rather than consumed, and only for the two payers that clause
     # admits: a third party "having" damage dealt keeps the refusal below.
+    #
+    # "…unless its controller **exiles all cards from their graveyard**."
+    # (Grip of Amnesia.) The same hand-off for the toll's other deed this
+    # clause can print: a price the spell's controller *does* rather than
+    # pays, read by the toll reader's graveyard currency
+    # (``tolls.accept_whole_graveyard_exile_price``) and refused there by name
+    # if it is anything else.
     punisher_mark = stream.mark()
     if stream.accept_word("unless"):
         payer = parse_player_ref(stream)
-        chooses_damage = (
+        pays_a_deed = (
             payer is not None
             and payer.kind in ("controller", "that_player")
-            and stream.at_word("has", "have")
+            and stream.at_word("has", "have", "exiles", "exile")
         )
         stream.reset(punisher_mark)
-        if chooses_damage:
+        if pays_a_deed:
             return ast.CounterSpell(subject)
 
     payment, payment_life = _parse_unless_pays(stream)

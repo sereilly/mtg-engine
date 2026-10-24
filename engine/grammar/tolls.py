@@ -37,8 +37,9 @@ from .phrases import (_accept_life_alternative, _parse_mana_payment,
 from .readers import accept_source_reference_spec
 from .sacrifices import _parse_counted_sacrifice
 from .effects import (_parse_counted_graveyard_cards, _parse_damage,
-                      _parse_discard, _parse_mill, _parse_put_counter,
-                      _parse_put_hand_cards_on_library, _parse_remove_counter)
+                      _parse_discard, _parse_mill, _parse_player_exiles_pile,
+                      _parse_put_counter, _parse_put_hand_cards_on_library,
+                      _parse_remove_counter)
 
 
 def _parse_unless_player_pays(stream: TokenStream, parse_body) -> "ast.UnlessPlayerPays | None":
@@ -353,9 +354,14 @@ def _accept_price_action(
             stream.reset(mark)
             return None
     # "…unless you **exile a card from your graveyard**" (Rotting Giant). The
-    # sixth currency, see :func:`accept_graveyard_exile_price`.
+    # sixth currency, see :func:`accept_graveyard_exile_price`. "…unless its
+    # controller **exiles all cards from their graveyard**" (Grip of Amnesia)
+    # is the same currency spent whole, see
+    # :func:`accept_whole_graveyard_exile_price`.
     if stream.at_word("exiles", "exile"):
         exiled = accept_graveyard_exile_price(stream, payer)
+        if exiled is None:
+            exiled = accept_whole_graveyard_exile_price(stream, payer)
         if exiled is None:
             stream.reset(mark)
         return exiled
@@ -447,6 +453,59 @@ def accept_graveyard_exile_price(
         stream.reset(mark)
         return None
     return ast.Exile(chosen)
+
+
+def accept_whole_graveyard_exile_price(
+    stream: TokenStream, payer: ast.PlayerRef
+) -> "ast.ExileGraveyard | None":
+    """``exile[s] all cards from <the payer's own> graveyard`` as a **price**
+    — or None with the cursor unmoved.
+
+    "Counter target spell **unless its controller exiles all cards from their
+    graveyard**." (Grip of Amnesia.) The graveyard currency above spent whole:
+    the payer gives up the pile, not a card chosen out of it. Read by the
+    reader every printed-subject graveyard sweep already goes through
+    (``effects._parse_player_exiles_pile`` — Living Death's "each player
+    exiles all creature cards from their graveyard"), so the phrase means one
+    thing whether it is an effect or a price.
+
+    It becomes :class:`ast.ExileGraveyard` over ``that_player`` — the zone
+    sweep Tormod's Crypt already lowers to — because "all cards from their
+    graveyard" with no narrowing *is* the zone, and the seat whose zone it is
+    is the one the offer is made to. ``that_player`` rather than the printed
+    payer, because the offer lowering aims the action at the seat it asks and
+    a back-reference is what reads that; the printed "its controller" read
+    again inside the action would be a second lookup of the same seat.
+
+    **The whole pile, out of the payer's own graveyard, and nothing else.** A
+    narrowed noun ("all creature cards") is a different price a card could
+    print and is refused rather than read as this; so is a pile that is not
+    the payer's.
+
+    No takeability arm, and that is the card's ruling rather than an omission:
+    "You can choose to exile all cards from your graveyard even if it has no
+    cards in it." (Grip of Amnesia, 2004-10-04.) An empty graveyard pays the
+    whole price, so a "can you?" check would withdraw an offer the card makes.
+    """
+    mark = stream.mark()
+    swept = _parse_player_exiles_pile(stream, payer)
+    if not isinstance(swept, ast.Exile) or swept.actor is None:
+        stream.reset(mark)
+        return None
+    spec = swept.subject
+    filt = spec.filter
+    owner = filt.zone_owner
+    whole_pile = dataclasses.replace(
+        filt, is_card=True, zone="graveyard", zone_owner=owner,
+    ) == ast.ObjectFilter(is_card=True, zone="graveyard", zone_owner=owner)
+    own_pile = owner is not None and owner.kind in ("owner", payer.kind)
+    if (
+        not whole_pile or not own_pile or swept.face_down
+        or spec.quantifier != "all" or swept.actor != payer
+    ):
+        stream.reset(mark)
+        return None
+    return ast.ExileGraveyard(ast.PlayerRef("that_player"))
 
 
 def _payers_own_graveyard_cards(
