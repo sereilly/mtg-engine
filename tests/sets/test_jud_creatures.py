@@ -146,6 +146,104 @@ def test_w1g3_nantuko_tracer_under_an_ai_seat_names_and_bottoms_a_card(set_pool)
     assert any(p.card.name == "Nantuko Tracer" for p in empty.controlled_by(0))
     assert empty.pending_choices == [] and empty.stack == []
 
+
+# Selfless Exorcist: the exiled card is the source of the damage (CR 120.2),
+# and its power is the one it has in exile — printed, or what its
+# characteristic-defining ability says (CR 604.3, 113.6a; ruling 2013-04-15).
+
+from engine.models import Permanent as _w1g3_Permanent
+
+
+def _w1g3_exorcist_game(set_pool, theirs, *, mine=("Grizzly Bears",)):
+    jud, lea = set_pool("JUD"), set_pool("LEA")
+    pool = {**lea, **set_pool("ICE"), **jud}
+    game = _w1g3_Game(players=[
+        _w1g3_PlayerState(
+            name="P0", graveyard=[pool[name] for name in mine],
+            library=[lea["Plains"]] * 5,
+        ),
+        _w1g3_PlayerState(
+            name="P1", graveyard=[pool[name] for name in theirs],
+            library=[lea["Island"]] * 5,
+        ),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.active_player_index = 0
+    game._set_phase_and_step("precombat_main", "precombat_main")
+    exorcist = _w1g3_Permanent(card=jud["Selfless Exorcist"])
+    game._put_permanent_onto_battlefield(0, exorcist, None)
+    exorcist.tapped = False
+    exorcist.metadata["summoning_sickness_turn"] = -99
+    _w1g3_resolve(game)
+    return game, exorcist
+
+
+def _w1g3_exorcise(game, slot, seat=1):
+    result = game.activate_permanent_ability(
+        0, "Selfless Exorcist", target_player_index=seat, target_permanent_index=slot,
+    )
+    assert result.supported, result.details
+    _w1g3_resolve(game)
+
+
+def test_w1g3_selfless_exorcist_offers_creature_cards_in_every_graveyard(set_pool):
+    game, _exorcist = _w1g3_exorcist_game(set_pool, ("Swamp", "Hill Giant", "Craw Wurm"))
+    spec = game.activation_target_spec(0, 0)
+    assert {(t["seat"], t["name"]) for t in spec["valid_targets"]} == {
+        (0, "Grizzly Bears"), (1, "Hill Giant"), (1, "Craw Wurm"),
+    }
+    # A land card is not a creature card, and the announcement says so.
+    assert not game.activate_permanent_ability(
+        0, "Selfless Exorcist", target_player_index=1, target_permanent_index=0,
+    ).supported
+
+
+def test_w1g3_selfless_exorcist_takes_the_exiled_cards_power_in_damage(set_pool):
+    game, exorcist = _w1g3_exorcist_game(set_pool, ("Swamp", "Hill Giant", "Craw Wurm"))
+    _w1g3_exorcise(game, 1)                                   # Hill Giant, 3/3
+
+    assert [c.name for c in game.players[1].exile] == ["Hill Giant"]
+    assert game.is_on_battlefield(exorcist) and exorcist.damage_marked == 3
+    assert "Hill Giant deals 3 damage to Selfless Exorcist" in game.log
+
+
+def test_w1g3_selfless_exorcist_dies_to_a_bigger_card(set_pool):
+    game, exorcist = _w1g3_exorcist_game(set_pool, ("Swamp", "Hill Giant", "Craw Wurm"))
+    _w1g3_exorcise(game, 2)                                   # Craw Wurm, 6/4
+
+    assert [c.name for c in game.players[1].exile] == ["Craw Wurm"]
+    assert not game.is_on_battlefield(exorcist)
+    assert "Selfless Exorcist" in [c.name for c in game.players[0].graveyard]
+
+
+def test_w1g3_selfless_exorcist_reads_a_characteristic_defined_power_in_exile(set_pool):
+    """Lhurgoyf's power is the number of creature cards in all graveyards, in
+    exile as anywhere (CR 604.3): with Lhurgoyf exiled that is the Bears, the
+    Giant and the Wurm — 3, not the 0 a printed "*" reads as."""
+    game, exorcist = _w1g3_exorcist_game(set_pool, ("Lhurgoyf", "Hill Giant", "Craw Wurm"))
+    _w1g3_exorcise(game, 0)
+
+    assert [c.name for c in game.players[1].exile] == ["Lhurgoyf"]
+    assert exorcist.damage_marked == 3
+    assert game.card_power_outside_battlefield(game.players[1].exile[0], 1) == 3
+
+
+def test_w1g3_selfless_exorcist_whose_card_left_in_response_does_nothing(set_pool):
+    """CR 608.2b: its one target gone, the ability does not resolve — nothing
+    is exiled and no damage is dealt."""
+    game, exorcist = _w1g3_exorcist_game(set_pool, ("Swamp", "Hill Giant", "Craw Wurm"))
+    result = game.queue_permanent_ability(
+        0, "Selfless Exorcist", target_player_index=1, target_permanent_index=2,
+    )
+    assert result.supported, result.details
+    victim = game.players[1]
+    victim.library.append(victim.graveyard.pop(2))           # the Wurm, in response
+    _w1g3_resolve(game)
+
+    assert victim.exile == [] and exorcist.damage_marked == 0
+    assert game.is_on_battlefield(exorcist)
+
 # ==== end W1G3 ======================================================
 
 

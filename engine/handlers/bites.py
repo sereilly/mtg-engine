@@ -180,6 +180,9 @@ def bound_bites_source(game, instruction, context):
     if target is None or not game.is_on_battlefield(target):
         game.log.append(f"{context.card.name}: nothing left to bite back")
         return True, "resolved"
+    if instruction.payload.get("cards_from") is not None:
+        _exiled_card_bites_source(game, instruction, context, target)
+        return True, "resolved"
     for permanent_id in recorded:
         biter = game.permanent_by_id(permanent_id)
         if biter is None or not biter.is_creature:
@@ -195,6 +198,44 @@ def bound_bites_source(game, instruction, context):
             asks=True,
         )
     return True, "resolved"
+
+
+def _exiled_card_bites_source(game, instruction, context, target) -> None:
+    """"…**That card** deals damage equal to its power to this creature."
+    (Selfless Exorcist, ``cards_from``.)
+
+    The biter is a **card in exile** — the one the step in front of this
+    sentence took, read out of that step's record — and it is the source of the
+    damage (CR 120.2: any object can deal damage). Its power is the card's own
+    in the zone it is in: the printed number, or what its characteristic-
+    defining ability says, because a CDA functions in every zone (CR 604.3,
+    113.6a; the card's 2013-04-15 ruling says exactly this of Lhurgoyf and its
+    kin) — ``Game.card_power_outside_battlefield``.
+
+    A card no longer in exile is a new object (CR 400.7) and deals nothing.
+    This engine keeps each card exiled in its owner's ``exile`` list, so the
+    list it is found in names its owner — the seat a CDA's "you" names for an
+    object with no controller (CR 109.5).
+    """
+    for card in context.results.get(str(instruction.payload["cards_from"])) or ():
+        owner_seat = next(
+            (
+                seat for seat, player in enumerate(game.players)
+                if any(held is card for held in player.exile)
+            ),
+            None,
+        )
+        if owner_seat is None:
+            game.log.append(f"{context.card.name}: {card.name} is no longer in exile")
+            continue
+        power = max(0, game.card_power_outside_battlefield(card, owner_seat))
+        apply_damage_to_creature(
+            game, target, power, card,
+            log_message=lambda dealt, card=card: (
+                f"{card.name} deals {dealt} damage to {target.card.name}"
+            ),
+            asks=True,
+        )
 
 
 @effect_handler("bound_bites_player")

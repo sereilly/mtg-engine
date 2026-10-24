@@ -43,6 +43,11 @@ from ._events import (_DAMAGED_PERMANENTS, _EVENT_SUBJECT_CONTROLLERS,
                       _EVENT_SUBJECT_OBJECTS, _RECORDED_PERMANENTS,
                       _TAPPED_PERMANENTS)
 
+#: The record a graveyard exile writes of the cards it took
+#: (``_records._PRODUCES["exile_target_graveyard_card"]``), read here as the
+#: biter of "**That card** deals damage equal to its power …".
+_EXILED_CARDS = "exiled_cards"
+
 
 def lower_bite(
     node: ast.DealDamage, produced: frozenset[str] = frozenset(),
@@ -402,6 +407,37 @@ def lower_bite(
         if node.amount.bonus:
             payload["power_bonus"] = node.amount.bonus
         return (OracleInstruction("source_bites_target", "", payload),)
+
+    # "Exile target creature card from a graveyard. **That card** deals damage
+    # equal to its power to this creature." (Selfless Exorcist.) Tracker's
+    # bite-back below with a **card** for the biter: the object the exile in
+    # front of this sentence moved, which is in exile now and is the source of
+    # the damage (CR 120.2: any object can deal damage). Its own payload key
+    # rather than ``permanents_from``, because the record is a different shape
+    # — the cards the exile took (``exiled_cards``), not permanent ids — and a
+    # reader of one handed the other finds nothing to bite with.
+    if (
+        isinstance(node.amount, ast.ThatMuch)
+        and node.amount.source == "its_power"
+        and not node.amount.bonus
+        and isinstance(node.source, ast.TargetSpec)
+        and node.source.quantifier == "that"
+        and node.source.filter == ast.ObjectFilter(is_card=True)
+        and len(node.recipients) == 1
+        and _is_source(node.recipients[0])
+        and node.riders == ast.DamageRiders()
+    ):
+        if _EXILED_CARDS not in produced:
+            raise LoweringError(
+                f"back-reference to {_EXILED_CARDS!r} with no producer in this "
+                "effect",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "bound_bites_source", "", {"cards_from": _EXILED_CARDS},
+            ),
+        )
 
     # "**That creature** deals damage equal to its power to this creature."
     # (Tracker.) The second half of a printed exchange: the biter is the
