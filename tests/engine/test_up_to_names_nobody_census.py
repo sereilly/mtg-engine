@@ -194,6 +194,10 @@ def _stage(game, card, where, ability):
 #: How deep a pile the census will build to meet a printed restriction.
 _DEEPEST_PILE = 20
 
+#: The quantity a pushed trigger's firing event froze, for a ceiling counted
+#: off the event ("up to that many", ``x_from_trigger``).
+_EVENT_QUANTITY = 3
+
 
 def _meet_a_counted_pile(game, source, ability) -> None:
     """Grow the activator's graveyard until the ability's own printed
@@ -251,15 +255,28 @@ def _announce(game, card, where, position, step, ability, source) -> bool:
             ).supported
         game._put_permanent_onto_battlefield(0, Permanent(card=card), None)
         return True
+    # The seats a real fire site freezes (CR 603.10): the defending player
+    # for an attack trigger, "that player" for a damage trigger.
+    context = {
+        "defending_player_index": 1, "event_subject_player": 1,
+        "trigger_defending_player_index": 1,
+    }
+    # And the number one freezes, where the ceiling is the event's: "return
+    # **up to that many** target permanents that player controls" (Cephalid
+    # Constable) is as many as the damage dealt, read off the context key the
+    # instruction names (``x_from_trigger``). Pushed without it, the ceiling
+    # is zero, the ability names nobody without asking (as a real event of no
+    # quantity would), and this census's question - may an *asked* seat answer
+    # nobody - is never put to it. Three, so the prompt is a several-target
+    # one, as a pumped Constable's is.
+    targets = (step.payload or {}).get("targets")
+    quantity_key = targets.get("x_from_trigger") if isinstance(targets, dict) else None
+    if quantity_key:
+        context[quantity_key] = _EVENT_QUANTITY
     game._enqueue_triggered_ability(
         controller_index=0, source_permanent=source, instruction=step,
         effect_kind="triggered_" + step.kind, ability_text=ability.source_line,
-        # The seats a real fire site freezes (CR 603.10): the defending player
-        # for an attack trigger, "that player" for a damage trigger.
-        trigger_context={
-            "defending_player_index": 1, "event_subject_player": 1,
-            "trigger_defending_player_index": 1,
-        },
+        trigger_context=context,
     )
     return True
 

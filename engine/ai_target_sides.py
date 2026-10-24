@@ -252,7 +252,28 @@ def _effect_side(instruction: OracleInstruction) -> str | None:
     sign = _pt_delta_sign(instruction)
     if sign:
         return "you" if sign > 0 else "opponent"
+    if _silences_its_object(instruction):
+        return "opponent"
     return activation_target_side(instruction)
+
+
+def _silences_its_object(instruction: OracleInstruction) -> bool:
+    """Whether *instruction* is a combat shield on **both** ends of the event:
+    "Prevent all combat damage that would be dealt to **and dealt by** that
+    creature this turn" (Foxfire, Maze of Ith; "those creatures", Energy Arc).
+
+    Its kind is the recipient shield (``prevention``, read as a gift), and the
+    ``to_and_by`` payload key adds the other end: a creature that deals no
+    combat damage, which is ``prevent_damage_by_target_until_eot``'s denial in
+    ``_OPPONENT_KINDS``. Where a shield and a denial meet on one object the
+    denial wins, :func:`spell_target_side`'s rule; a printed seat still
+    outranks it ("…by target creature **you control**", Cephalid Illusionist),
+    because :func:`instruction_target_side` asks the noun phrase first.
+    """
+    return (
+        instruction.kind == "prevent_damage_to_target_until_eot"
+        and bool((instruction.payload or {}).get("to_and_by"))
+    )
 
 
 def denies_its_target(instruction: OracleInstruction) -> bool:
@@ -277,6 +298,19 @@ def denies_its_target(instruction: OracleInstruction) -> bool:
     return INSTRUCTION_CATEGORIES.get(kind) in ("destruction", "tapping")
 
 
+#: Kinds that, printed with no target of their own after a step that named
+#: one, are spent on **that** object — so what they do to it is part of whose
+#: it should be. "Untap target attacking creature. Prevent all combat damage
+#: that would be dealt to and dealt by that creature this turn." (Foxfire;
+#: "those creatures", Energy Arc, through the record the untap wrote.) The
+#: handler resolves the pronoun to the target the sentence in front named
+#: (``handlers/prevention.prevent_damage_to_target_until_eot``). Read alone,
+#: the untap made both spells "you" (``_OWN_KINDS``): an AI seat aimed Energy
+#: Arc at its own creature with the opposing twin measuring four times as
+#: much, and could cast Foxfire only at its own attacker.
+_SPENT_ON_THE_EARLIER_TARGET = frozenset({"prevent_damage_to_target_until_eot"})
+
+
 def _spell_object_target_steps(card: CardDefinition) -> tuple[OracleInstruction, ...]:
     """Every step of *card*'s spell program that names an **object** target,
     wrappers opened (``sequence``, ``if_then``, ``may``).
@@ -290,6 +324,11 @@ def _spell_object_target_steps(card: CardDefinition) -> tuple[OracleInstruction,
     target the score tie handed to the caster's own board. A step spending a
     **seat** role ("…and 2 damage to target player or planeswalker", Lunge) is
     left out: it says nothing about a permanent.
+
+    **And a step spent on the object an earlier step named** (one of
+    ``_SPENT_ON_THE_EARLIER_TARGET``, with no target of its own): the shield
+    in "Untap target attacking creature. Prevent all combat damage … dealt to
+    and dealt by that creature" is about the same creature the untap is.
     """
     from .target_roles import SEAT_ROLE_KINDS, payload_own_role
 
@@ -314,6 +353,12 @@ def _spell_object_target_steps(card: CardDefinition) -> tuple[OracleInstruction,
                     targets.get("kind") == "roles"
                     and spends_an_object_role(payload, targets)
                 )
+            ):
+                found.append(instruction)
+            elif (
+                found and targets is None
+                and instruction.kind in _SPENT_ON_THE_EARLIER_TARGET
+                and not payload.get("on_source")
             ):
                 found.append(instruction)
             for key in ("steps", "then", "else", "action", "otherwise"):

@@ -63,6 +63,27 @@ GIFTS = frozenset({
     "buff_creatures_global",
 })
 
+#: The kinds whose answer is not the kind's but its payload's, each with the
+#: reading, restated here so a change to what the derivation reads is a line
+#: in a diff too. A row of one of these kinds is a gift exactly when its
+#: reading says so (and the card does not print "target **opponent**").
+GIFTS_BY_PAYLOAD = {
+    # "Search target player's library for up to three cards with flashback
+    # and put them into that player's graveyard." (Quiet Speculation, JUD.) A
+    # card with flashback in its owner's graveyard is a spell they may cast
+    # from there (CR 702.34a), so the finds are cards gained. Every other
+    # search a spell aims at a player takes what it finds: "...and exile it"
+    # (Extract), "...up to seven cards and exile them" (Denying Wind), "...onto
+    # the battlefield under your control" (Bribery, which also prints "target
+    # opponent"). So the kind alone answers nothing: Judgment's promotion
+    # made `search_library` a gift row, and a kind-level entry in GIFTS would
+    # have called Extract and Denying Wind gifts.
+    "search_library": lambda payload: (
+        payload.get("destination") == "graveyard"
+        and (payload.get("restrictions") or {}).get("with_keyword") == "flashback"
+    ),
+}
+
 
 def _pool() -> dict:
     cards: dict = {}
@@ -116,6 +137,7 @@ def census() -> list:
     return [
         {
             "card": card.name, "mode": mode, "kind": instruction.kind,
+            "payload": instruction.payload or {},
             "opponents_only": bool(spec.get("opponents_only")),
             "web": web_says_gift(card, mode), "ai": ai_says_gift(card, mode),
         }
@@ -151,14 +173,26 @@ def test_the_two_readers_agree(rows):
 
 def test_what_is_a_gift_is_the_named_list(rows):
     """By kind, so the list is readable: every row both readers call a gift
-    is one of ``GIFTS``, and every row of one of those kinds is a gift unless
-    the card prints "target **opponent**"."""
-    assert {row["kind"] for row in rows if row["web"]} == GIFTS
+    is one of ``GIFTS`` or of ``GIFTS_BY_PAYLOAD``; every row of a ``GIFTS``
+    kind is a gift unless the card prints "target **opponent**"; and a row of
+    a ``GIFTS_BY_PAYLOAD`` kind is a gift exactly when its reading says so."""
+    assert {row["kind"] for row in rows if row["web"]} - set(GIFTS_BY_PAYLOAD) == GIFTS
     withheld = {
         tag(row) for row in rows
         if row["kind"] in GIFTS and not row["web"] and not row["opponents_only"]
     }
     assert withheld == set()
+    misread = {
+        tag(row): (row["kind"], f"web={row['web']}")
+        for row in rows if row["kind"] in GIFTS_BY_PAYLOAD
+        and row["web"] != (
+            not row["opponents_only"] and GIFTS_BY_PAYLOAD[row["kind"]](row["payload"])
+        )
+    }
+    assert misread == {}
+    # A floor for the payload reading: Extract and Denying Wind, the two
+    # searches that take what they find and name either seat, are rows.
+    assert sum(row["kind"] in GIFTS_BY_PAYLOAD for row in rows) >= 3
 
 
 @pytest.mark.parametrize("name, mode", [
@@ -185,6 +219,9 @@ def test_a_gift_is_a_gift_on_both_roads(name, mode):
     # "…that player loses 5 life **and you gain 5 life**": the gain is the
     # caster's, in a later step, and is not about the player named.
     ("Rhystic Syphon", None),
+    # A search that takes what it finds: `search_library` is a gift only
+    # where its payload bins cards with flashback (``GIFTS_BY_PAYLOAD``).
+    ("Extract", None), ("Denying Wind", None),
 ])
 def test_anything_else_is_the_opponents_on_both_roads(name, mode):
     card = POOL[name]
