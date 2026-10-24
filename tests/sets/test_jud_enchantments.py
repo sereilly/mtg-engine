@@ -409,4 +409,117 @@ def test_w1g10_mirari_s_wake_counts_in_what_the_board_can_pay(set_pool):
     assert (mine.effective_power, mine.effective_toughness) == (3, 3)
     assert (theirs.effective_power, theirs.effective_toughness) == (2, 2)
 
+
+def _w1g10_mist_game(set_pool, seat0, seat1, *, graveyards=((), ())):
+    """Two seats with permanents (card names) and graveyards (card names),
+    Mist of Stagnation on seat 0's side, every other permanent tapped."""
+    from tests.helpers import resolve_stack
+
+    pool = {**set_pool("LEA"), **set_pool("JUD")}
+    island = pool["Island"]
+    game = _W1G10Game(players=[
+        _W1G10PlayerState(
+            name=f"P{seat}", life=20, library=[island] * 8,
+            graveyard=[pool[name] for name in graveyards[seat]],
+        )
+        for seat in range(2)
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    mist = _w1g10_put(game, pool["Mist of Stagnation"], 0)
+    sides = []
+    for seat, names in ((0, seat0), (1, seat1)):
+        placed = [_w1g10_put(game, pool[name], seat) for name in names]
+        for permanent in placed:
+            permanent.tapped = True
+        sides.append(placed)
+    game._settle()
+
+    def take_turn(seat):
+        game.start_turn(seat)
+        for _ in range(4):
+            game.auto_resolve_pending_choices()
+            if not resolve_stack(game):
+                break
+
+    return game, mist, sides, take_turn
+
+
+def test_w1g10_mist_of_stagnation_untaps_one_per_graveyard_card(set_pool):
+    """"Permanents don't untap during their controllers' untap steps. At the
+    beginning of each player's upkeep, that player chooses a permanent for each
+    card in their graveyard, then untaps those permanents."
+
+    The untap step untaps nothing of anyone's (CR 502.3); the upkeep player
+    with two cards in their graveyard untaps two permanents, and a seat
+    nobody asks picks its own tapped ones. The other seat, with an empty
+    graveyard, gets nothing back on its own upkeep."""
+    game, _, (mine, theirs), take_turn = _w1g10_mist_game(
+        set_pool,
+        ["Forest", "Forest", "Forest", "Grizzly Bears"],
+        ["Mountain", "Mountain"],
+        graveyards=(("Lightning Bolt", "Giant Growth"), ()),
+    )
+
+    take_turn(1)
+    assert all(permanent.tapped for permanent in theirs), (
+        "an empty graveyard untaps nothing, and the untap step untapped nothing"
+    )
+    assert all(permanent.tapped for permanent in mine)
+
+    take_turn(0)
+    assert [permanent.tapped for permanent in mine] == [False, False, True, True]
+    assert all(permanent.tapped for permanent in theirs)
+
+
+def test_w1g10_mist_of_stagnation_counts_the_upkeep_players_graveyard(set_pool):
+    """"…for each card in **their** graveyard" is the upkeep player's pile, not
+    the Mist controller's: on seat 1's upkeep seat 1's three cards count, and
+    seat 0's own graveyard of one does not."""
+    game, _, (mine, theirs), take_turn = _w1g10_mist_game(
+        set_pool,
+        ["Forest", "Forest"],
+        ["Mountain", "Mountain", "Mountain", "Mountain"],
+        graveyards=(("Lightning Bolt",), ("Hill Giant", "Hill Giant", "Dark Ritual")),
+    )
+    take_turn(1)
+    assert [permanent.tapped for permanent in theirs] == [False, False, False, True]
+    assert all(permanent.tapped for permanent in mine)
+
+
+def test_w1g10_mist_of_stagnation_asks_the_upkeep_player_and_any_permanent_counts(set_pool):
+    """An interactive upkeep player is asked for exactly as many as their
+    graveyard holds, out of **every** permanent — "a permanent", not one they
+    control — and the ones named are untapped, an opponent's included."""
+    game, _, (mine, theirs), _ = _w1g10_mist_game(
+        set_pool,
+        ["Forest", "Forest"],
+        ["Mountain", "Mountain"],
+        graveyards=((), ("Lightning Bolt", "Dark Ritual")),
+    )
+    game.interactive_seats = {0, 1}
+    game.start_turn(1)
+    for _ in range(4):
+        if not game.stack or not game.resolve_top_of_stack():
+            break
+
+    prompts = [c for c in game.pending_choices if c.kind == "permanent_set_choice"]
+    assert len(prompts) == 1, [c.kind for c in game.pending_choices]
+    prompt = prompts[0]
+    assert prompt.player_index == 1
+    assert (prompt.data["up_to"], prompt.data["at_least"]) == (2, 2)
+    offered = {perm.permanent_id for perm in game.live_permanent_set_choices(prompt)}
+    assert {perm.permanent_id for perm in mine + theirs} <= offered
+    assert not game.confirm_permanent_set_choice(1, [theirs[0].permanent_id]), (
+        "one permanent is not one for each card"
+    )
+    assert game.confirm_permanent_set_choice(
+        1, [theirs[1].permanent_id, mine[0].permanent_id]
+    )
+    from tests.helpers import resolve_stack
+
+    resolve_stack(game)
+    assert [permanent.tapped for permanent in theirs] == [True, False]
+    assert [permanent.tapped for permanent in mine] == [False, True]
+
 # ==== end W1G10 ======================================================

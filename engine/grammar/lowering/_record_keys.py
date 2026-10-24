@@ -46,7 +46,7 @@ and the module that names them cannot form a cycle.
 
 from __future__ import annotations
 
-from ...oracle_types import (BASE_PT_SET_PERMANENTS,
+from ...oracle_types import (BASE_PT_SET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
                              CONTROL_EXCHANGED_PERMANENTS,
                              COUNTERS_PLACED_THIS_WAY,
                              COUNTERS_REMOVED, HAND_CARDS_TO_LIBRARY,
@@ -407,6 +407,12 @@ _RECORDED_PERMANENTS: frozenset[str] = frozenset({
     # Takklemaggot's does, and reads the key by name through the attach
     # channel rather than through this set.
     CHOSEN_PERMANENT,
+    # …and its plural, the set a ``choose_permanents`` prompt was answered
+    # with: "that player chooses a permanent for each card in their graveyard,
+    # then untaps **those permanents**" (Mist of Stagnation). The entry above's
+    # reason one count over — the first sentence behind such a pick to name its
+    # set as objects.
+    CHOSEN_THIS_WAY_OBJECTS,
 })
 
 #: The subset of :data:`_RECORDED_PERMANENTS` whose producer *made* the

@@ -191,7 +191,17 @@ def _blocked_subject(phrase: str) -> dict | None:
     if not stream.exhausted:
         return None
     payload = described.to_payload()
-    if not payload or untestable_filter_keys(payload):
+    if not payload:
+        # "**Permanents** don't untap during their controllers' untap steps."
+        # (Mist of Stagnation.) CR 110.1's word with nothing narrowing it —
+        # every permanent, which is the one phrase whose payload is rightly
+        # empty. Told apart from a phrase whose narrowing had no payload form
+        # (and would come back just as empty) by the filter itself: only the
+        # bare noun parses to a filter with no field set at all.
+        from .grammar import ast
+
+        return {} if described == ast.ObjectFilter() else None
+    if untestable_filter_keys(payload):
         return None
     return payload
 
