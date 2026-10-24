@@ -412,9 +412,10 @@ _ROW_PREDICATES = frozenset({
 _READERS = {
     "engine/mixins/stack/activation.py": ("_activate_onto_stack",),
     # The hand and graveyard roads, split out of ``activation.py`` at the
-    # 2,000-line cap.
+    # 2,000-line cap. The bodies, since the public names became the CR 602.2b
+    # announcement wrappers (deferred triggers, CR 704.3's check) around them.
     "engine/mixins/stack/card_activation.py": (
-        "activate_from_hand", "activate_from_graveyard",
+        "_activate_from_hand", "_activate_from_graveyard",
     ),
     "engine/board_payment.py": ("source_tap_yields",),
     "web/serialization.py": None,
