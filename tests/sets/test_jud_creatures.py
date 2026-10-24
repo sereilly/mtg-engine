@@ -313,6 +313,32 @@ def test_w1g4_wormfang_crab_s_opponent_picks_from_the_crab_controller_s_board(se
     assert [c.name for c in game.players[0].exile] == ["Wormfang Crab"]
 
 
+def test_w1g4_wormfang_crab_s_exiled_token_ceases_to_exist(set_pool):
+    # CR 111.7: a token that leaves the battlefield ceases to exist, so there
+    # is no card in exile for "return the exiled card" to name. The handler
+    # behind the Crab (``exile_recorded_permanent``, Cannibalize's) used to
+    # append the token's card to its owner's exile like any other card.
+    from engine.tokens import make_token_card
+
+    game = _w1g4_game(set_pool, hand=["Wormfang Crab"], interactive=(1,))
+    token = _W1G4Permanent(card=make_token_card("Saproling", 1, 1, "Creature — Saproling"))
+    token.metadata["is_token"] = True
+    game._put_permanent_onto_battlefield(0, token, None)
+    game.queue_from_hand(0, "Wormfang Crab")
+    game.resolve_top_of_stack()
+    game.resolve_top_of_stack()
+    assert game.confirm_permanent_choice(1, token.permanent_id)
+    _w1g4_drain(game)
+
+    crab = _w1g4_named(game, 0, "Wormfang Crab")
+    assert not game.is_on_battlefield(token)
+    assert game.players[0].exile == []
+    assert _w1g4_linked_entries(crab) == ()
+
+    _w1g4_swords(game, set_pool, crab)
+    assert _w1g4_names(game, 0) == []
+
+
 def test_w1g4_wormfang_crab_alone_exiles_nothing(set_pool):
     game = _w1g4_game(set_pool, hand=["Wormfang Crab"])
     _w1g4_put(game, set_pool, 1, "Forest")
