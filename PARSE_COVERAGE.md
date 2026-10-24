@@ -12,26 +12,6 @@ unclaimed text. Do not edit by hand.
 - With UNCLAIMED text (must fix or acknowledge): **0**
 - With deletion-probe findings (ignored words): **643**
 
-## Measured sets — reported, not gated
-
-Cards in a `measured` set (see `cards/manifest.json`) that the
-compiler calls **supported** while carrying a printed line nothing
-implements. They are the debt behind that set's progress number, and
-`--hollow-lines` sees only the ones that produced an *ability part* —
-a line yielding nothing at all leaves that probe nothing to find.
-
-Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
-`HOOK_RELIANCE.md`'s ceilings exclude the same sets: a ratchet over a
-set nobody has implemented fires on its composition rather than on
-anything anyone did, and every ingest would arrive red.
-
-**2 unclaimed sentence(s) across 2 supported card(s).**
-
-- **Krosan Verge**
-  - `{2}, {t}, sacrifice this land: search your library for a forest card and a plains card, put them onto the battlefield tapped, then shuffle`
-- **Mirari's Wake**
-  - `whenever you tap a land for mana, add one mana of any type that land produced`
-
 ## Acknowledged simplifications
 
 | Card | Sentence | Why it is acceptable |

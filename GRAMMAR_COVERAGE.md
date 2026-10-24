@@ -50,7 +50,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ODY | 335 | 507 | 89.7% | 89.7% | 69.6% | 295 |
 | TOR | 143 | 261 | 86.2% | 86.2% | 68.2% | 138 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| JUD *(measured)* | 143 | 241 | 86.3% | 85.9% | 61.0% | 122 |
+| JUD *(measured)* | 143 | 241 | 89.2% | 88.8% | 63.5% | 126 |
 | **All (shipped)** | **7884** | **11645** | **90.6%** | **90.0%** | **62.3%** | **6139** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -64,7 +64,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
 | 653 | 332 | expected a subject |  |
-| 165 | 84 | unrecognized effect verb |  |
+| 164 | 83 | unrecognized effect verb |  |
 | 129 | 68 | unconsumed text |  |
 | 65 | 46 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
@@ -5589,6 +5589,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Threshold — {T}: Untap up to three target lands. Activate only if there are seven or more cards in your graveyard.`
 - **Krosan Verge**
   - `{T}: Add {C}.`
+  - `{2}, {T}, Sacrifice this land: Search your library for a Forest card and a Plains card, put them onto the battlefield tapped, then shuffle.`
 - **Krosan Wayfarer**
   - `Sacrifice this creature: You may put a land card from your hand onto the battlefield.`
 - **Krovikan Elementalist**
@@ -6513,6 +6514,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever you cast an instant or sorcery spell, you may pay {3}. If you do, copy that spell. You may choose new targets for the copy.`
 - **Mirari's Wake**
   - `Creatures you control get +1/+1.`
+  - `Whenever you tap a land for mana, add one mana of any type that land produced.`
 - **Mire Shade**
   - `{B}, Sacrifice a Swamp: Put a +1/+1 counter on this creature. Activate only as a sorcery.`
 - **Mirozel**
@@ -6566,6 +6568,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{0}: This creature gains flying. (This effect lasts indefinitely.)`
   - `{0}: This creature loses flying. (This effect lasts indefinitely.)`
   - `{3}{U}{U}: This creature phases out. (While it's phased out, it's treated as though it doesn't exist. It phases in before you untap during your next untap step.)`
+- **Mist of Stagnation**
+  - `At the beginning of each player's upkeep, that player chooses a permanent for each card in their graveyard, then untaps those permanents.`
 - **Mistfolk**
   - `{U}: Counter target spell that targets this creature.`
 - **Mistmoon Griffin**
@@ -6644,6 +6648,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Morale**
   - `Attacking creatures get +1/+1 until end of turn.`
   - `Attacking creatures get +1/+1 until end of turn.`
+- **Morality Shift**
+  - `Exchange your graveyard and library. Then shuffle your library.`
 - **Morbid Hunger**
   - `Morbid Hunger deals 3 damage to any target. You gain 3 life.`
 - **Morgue Theft**
@@ -7936,6 +7942,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{4}, {T}: You may put a creature card from your hand onto the battlefield.`
 - **Quicksilver Wall**
   - `{4}: Return this creature to its owner's hand. Any player may activate this ability.`
+- **Quiet Speculation**
+  - `Search target player's library for up to three cards with flashback and put them into that player's graveyard. Then the player shuffles.`
 - **Quirion Druid**
   - `{G}, {T}: Target land becomes a 2/2 green creature that's still a land. (This effect lasts indefinitely.)`
 - **Quirion Dryad**
@@ -8866,6 +8874,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature attacks, you may have it deal 1 damage to each creature without flying defending player controls.`
 - **Scalding Tongs**
   - `At the beginning of your upkeep, if you have three or fewer cards in hand, this artifact deals 1 damage to target opponent or planeswalker.`
+- **Scalpelexis**
+  - `Whenever this creature deals combat damage to a player, that player exiles the top four cards of their library. If two or more of those cards have the same name, repeat this process.`
 - **Scandalmonger**
   - `{2}: Target player discards a card. Any player may activate this ability but only as a sorcery.`
 - **Scapegoat**
