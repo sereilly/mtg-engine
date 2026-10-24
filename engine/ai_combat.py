@@ -149,10 +149,14 @@ def _would_be_prevented(game, source, recipient, amount: int) -> bool:
     shield answers yes. The chooser reads that as damage that may not arrive,
     which is the cautious reading of it.
     """
-    from .damage_events import damage_candidates, damage_source_seat
+    from .damage_events import (damage_candidates, damage_source_seat,
+                                mark_turn_unpreventable)
 
     event = {"recipient": recipient, "amount": amount, "source": source, "combat": True}
     event["source_seat"] = damage_source_seat(game, source)
+    # The event as `deal_damage` would see it: under Flaring Pain's "Damage
+    # can't be prevented this turn" no shield stops it.
+    mark_turn_unpreventable(game, event)
     return any(
         candidate.prevents_or_redirects and candidate.applies(game, dict(event))
         for candidate in damage_candidates(recipient, event)

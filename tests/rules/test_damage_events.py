@@ -922,10 +922,29 @@ def test_every_prevention_contender_is_dropped_by_both_locks():
     assert preventers and movers, "the board has both kinds to tell apart"
     assert all(c.prevents_or_redirects for c in preventers)
 
+    # CR 615.12: "any applicable prevention effects are still applied … any
+    # additional effects they have will take place." A preventer that declares
+    # its additional effect (Nine Lives' counter, a Phantom's, Rock Hydra's)
+    # stays in a locked set as that effect alone — and says it no longer
+    # prevents, so no reader counts it as a shield. Every other preventer goes.
+    riders = {c.key: c for c in preventers if c.unpreventable_apply is not None}
+    assert riders, "the registry has CR 615.12 riders to keep"
+
+    def kept_as_riders(locked):
+        for candidate in locked:
+            if candidate.key in riders:
+                assert not candidate.prevents and not candidate.prevents_or_redirects
+                assert candidate.apply is riders[candidate.key].unpreventable_apply
+        return [c.key for c in locked if c.key not in riders]
+
     short = damage_candidates(victim, {**event, EVENT_PREVENTION_LOCK: True})
-    assert [c.key for c in short] == [c.key for c in everything if not c.prevents]
+    assert kept_as_riders(short) == [c.key for c in everything if not c.prevents]
+    assert {c.key for c in short} >= set(riders)
     assert {c.key for c in movers} <= {c.key for c in short}
 
     long = damage_candidates(victim, {**event, EVENT_LOCK: True})
     assert not any(c.prevents_or_redirects for c in long)
+    assert kept_as_riders(long) == [
+        c.key for c in everything if not c.prevents_or_redirects
+    ]
     assert game.is_on_battlefield(victim)

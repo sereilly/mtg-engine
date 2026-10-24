@@ -333,9 +333,13 @@ def damage_candidates(recipient, event: dict | None = None) -> list[Candidate]:
                 # contender declaring that half (a Phantom's counter, Nine
                 # Lives') stays in the set with the half as its whole effect;
                 # every other one has nothing left to do and leaves.
+                # It is no longer a contender that prevents anything, so it
+                # says so: a reader asking "would this damage be stopped?"
+                # (the AI's combat probe) must not count a rider as a shield.
                 if candidate.unpreventable_apply is not None:
                     kept.append(dataclasses.replace(
                         candidate, apply=candidate.unpreventable_apply,
+                        prevents=False, prevents_or_redirects=False,
                     ))
                 continue
             if candidate.prevents_or_redirects and redirect_lock:
@@ -343,6 +347,23 @@ def damage_candidates(recipient, event: dict | None = None) -> list[Candidate]:
             kept.append(candidate)
         candidates = kept
     return sorted(candidates, key=lambda candidate: candidate.order)
+
+
+def mark_turn_unpreventable(game, event: dict) -> None:
+    """"Damage can't be prevented this turn." (Flaring Pain.) The turn-long
+    sentence becomes the per-event mark Urza's Rage's "and the damage can't be
+    prevented" already puts on its own damage — so a turn-wide sentence and a
+    one-spell sentence are one question for every reader of the mark
+    (``damage_candidates``, CR 615.12's riders).
+
+    Called by :func:`deal_damage`, the one seam every event passes through, and
+    by anything that builds a damage event to *ask about* rather than to deal
+    (``ai_combat._would_be_prevented``): a probe that skipped it would read a
+    Circle of Protection as stopping damage Flaring Pain has made
+    unpreventable.
+    """
+    if not event.get(EVENT_PREVENTION_LOCK) and damage_prevention_forbidden(game, event):
+        event[EVENT_PREVENTION_LOCK] = True
 
 
 def _settled(game, event: dict) -> bool:
@@ -389,13 +410,7 @@ def deal_damage(game, event: dict, *, restart: Callable[[], Any] | None = None) 
     # to fill the key in. `setdefault`, so a caller that genuinely knows better
     # can say so.
     event.setdefault("source_seat", damage_source_seat(game, event.get("source")))
-    # "Damage can't be prevented this turn." (Flaring Pain.) The turn-long
-    # sentence becomes the per-event mark Urza's Rage's "and the damage can't
-    # be prevented" already puts on its own damage, here at the one seam every
-    # event passes through — so every path, combat included, and every reader
-    # of the mark (``damage_candidates``, CR 615.12's riders) sees one lock.
-    if not event.get(EVENT_PREVENTION_LOCK) and damage_prevention_forbidden(game, event):
-        event[EVENT_PREVENTION_LOCK] = True
+    mark_turn_unpreventable(game, event)
     kind = damage_kind(event["recipient"])
     trace = apply_in_order(
         game,
