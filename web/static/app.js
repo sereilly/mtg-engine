@@ -2758,6 +2758,16 @@ function isManaRefusal(message) {
   return text.startsWith("insufficient mana") || /cannot pay for .*'s ability/.test(text);
 }
 
+// The pool as the payment prompts show it: "none" when it is empty. The
+// formatter beside it says "No mana cost" for an empty set of symbols, which is
+// right for a *cost* and read as nonsense under "Current mana:" (Krosan Verge's
+// {2} activation showed "Current mana: No mana cost").
+function currentManaHtml(pool) {
+  return MANA_ORDER.some((symbol) => Number(pool?.[symbol] || 0) > 0)
+    ? formatManaSymbolsHtml(pool)
+    : "none";
+}
+
 function formatManaSymbols(counts) {
   const parts = [];
   for (const symbol of ["W", "U", "B", "R", "G", "C"]) {
@@ -13311,7 +13321,7 @@ function renderActivationPrompt() {
         : [
           `<div>Cost: ${renderSymbolsInline(pendingCastX.card.mana_cost || "none")}</div>`,
           `<div>Needed: ${formatManaSymbolsHtml(pendingCastX.manaRequirement || {})}</div>`,
-          `<div>Current mana: ${me ? formatManaSymbolsHtml(me.mana_pool) : "Unknown"}</div>`,
+          `<div>Current mana: ${me ? currentManaHtml(me.mana_pool) : "Unknown"}</div>`,
           `<div class="prompt-choice-row">${choiceButtons.join("")}</div>`,
         ]
     ).join("");
@@ -13464,7 +13474,7 @@ function renderActivationPrompt() {
   steps.innerHTML = [
     `<div>Cost: ${renderSymbolsInline(pendingActivation.activationCost || "none")}</div>`,
     `<div>Needed: ${formatManaSymbolsHtml(manaRequirement)}</div>`,
-    `<div>Current mana: ${me ? formatManaSymbolsHtml(me.mana_pool) : "Unknown"}</div>`,
+    `<div>Current mana: ${me ? currentManaHtml(me.mana_pool) : "Unknown"}</div>`,
     `<div>Action: ${pendingActivation.awaitingApproval ? "press OK to start paying, then click lands or other mana sources." : "click lands or other mana sources, then wait for the activation to resolve."}</div>`,
   ].join("");
   customRow.classList.add("hidden");

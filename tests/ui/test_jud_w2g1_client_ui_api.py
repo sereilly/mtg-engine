@@ -1029,3 +1029,21 @@ def test_glory_is_activated_from_the_graveyard_and_asks_its_colour(set_pool):
     bears = next(c for c in _state(sid)["players"][0]["battlefield"] if c["name"] == "Grizzly Bears")
     assert "Protection from red" in bears["keywords"]
     assert [card.name for card in game.players[0].graveyard][0] == "Glory", "it stays where it works from"
+
+
+@needs_node
+def test_an_empty_pool_reads_none_under_current_mana():
+    """Krosan Verge's {2} activation prompt read "Current mana: No mana cost":
+    the cost formatter's empty answer, shown for an empty pool."""
+    prelude = (
+        'const MANA_ORDER = ["W", "U", "B", "R", "G", "C"];\n'
+        "function symbolSrc() { return null; }\n"
+        "function escapeHtml(s) { return String(s); }\n"
+    )
+    out = run_app_js(
+        ["currentManaHtml", "formatManaSymbolsHtml"],
+        "return [currentManaHtml({W: 0, U: 0, B: 0, R: 0, G: 0, C: 0}), currentManaHtml({G: 2})];",
+        None, prelude=prelude,
+    )
+    assert out[0] == "none"
+    assert out[1] == "G x2"
