@@ -731,13 +731,15 @@ def _compute_graveyard_abilities(session: Session, player_index: int) -> list[di
     the questions the hand list asks: ``payable`` (the pool plus the untapped
     lands), ``prohibited`` (CR 602.5, the activation path's own predicate).
 
-    ``targets`` says the ability names a target. The browser has no picker for
-    a target chosen from a graveyard ability yet, so it shows that entry
-    disabled rather than sending a bare activation the engine would answer
-    with the first legal target (``engine/bare_announcements.py``) — a choice
-    the player did not make. ``sacrifice_choices`` is the "Sacrifice a
-    creature" a cost may name (Necrosavant), by id, the list the engine's own
-    candidate filter gives.
+    ``targets`` says the ability names a target, and ``target_spec`` is what
+    it may name — ``Game.graveyard_activation_target_spec``, the list the
+    activation's own gate judges a named target by (Carrionette's "target
+    creature"), so the browser runs its ordinary target picker over it and
+    sends the choice with ``activate_graveyard``. Without it the button was
+    disabled: a bare activation is answered with the first legal target
+    (``engine/bare_announcements.py``), a choice the player did not make.
+    ``sacrifice_choices`` is the "Sacrifice a creature" a cost may name
+    (Necrosavant), by id, the list the engine's own candidate filter gives.
     """
     game = session.game
     window = _casting_window(session, player_index)
@@ -774,6 +776,10 @@ def _compute_graveyard_abilities(session: Session, player_index: int) -> list[di
                 # cost's own picker (Necrosavant's "Sacrifice a creature").
                 "targets": spec.get("kind") not in (None, "none") and not spec_is_a_cost(spec),
             }
+            if entry["targets"]:
+                entry["target_spec"] = game.graveyard_activation_target_spec(
+                    player_index, card, ability
+                )
             if ability.cost.sacrifice_filter is not None:
                 entry["sacrifice_choices"] = [
                     {"permanent_id": perm.permanent_id, "name": perm.card.name}

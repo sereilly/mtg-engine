@@ -15302,7 +15302,14 @@ function confirmPermanentCost() {
   pendingPermanentCost = null;
   renderActivationPrompt();
   if (pending.graveyardAbility) {
-    sendGraveyardAbility(pending.graveyardAbility, { cost_permanent_id: picked[0] });
+    // An ability that also names a target asks for it next, the cost riding
+    // along: both are announced together (CR 602.2b), in one body.
+    const costFields = { cost_permanent_id: picked[0] };
+    if (pending.graveyardAbility.targets) {
+      startGraveyardAbilityTargetPrompt(pending.graveyardAbility, costFields);
+      return;
+    }
+    sendGraveyardAbility(pending.graveyardAbility, costFields);
     return;
   }
   if (pending.zoneCast) {
@@ -17719,6 +17726,17 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
   }
   clearFfaTargetingHighlights();
   renderActivationPrompt();
+
+  // A graveyard ability's target (Carrionette): the activation is sent now,
+  // with whatever the button announced before the picker opened.
+  if (pending.castAction === "activate_graveyard" && pending.graveyardAbility) {
+    updateActionHint(`Activating ${pending.cardName}...`);
+    sendGraveyardAbility(pending.graveyardAbility, {
+      ...(pending.graveyardFields || {}),
+      ...graveyardAbilityTargetFields(selectedTarget, selectedPermanentIndex),
+    });
+    return;
+  }
 
   // CR 601.2b's payment for a spell that also targets (Goblin Grenade's Goblin,
   // Soul Exchange's exiled creature): what was clicked is a cost, not a target.
@@ -24068,14 +24086,85 @@ function renderHandAbilities(state, hasPriority) {
 // engine has taken these since Ashen Ghoul and no gesture reached them: a
 // graveyard card's click is a cast or nothing. One button per entry of
 // `state.graveyard_abilities`, the hand abilities' shape, offered while the
-// viewer has priority. An ability that names a target is shown disabled — no
-// picker here chooses it yet, and a bare activation would be answered with
-// the engine's first legal target, which is not the player's choice.
+// viewer has priority. An ability that names a target (Carrionette's "target
+// creature") carries the engine's own `target_spec` — the list the activation
+// gate judges the choice by — and its click opens the ordinary target picker
+// over it, the choice riding `activate_graveyard`. A target shape this button
+// cannot pick (several targets, roles, a division, a spell, a card in a
+// graveyard) stays disabled with the reason: a bare activation would be
+// answered with the engine's first legal target, which is not the player's
+// choice. No card in the pool prints one.
 function graveyardAbilityRefusal(entry) {
   if (!entry) return "Not available.";
   if (typeof entry.prohibited === "string" && entry.prohibited) return entry.prohibited;
-  if (entry.targets) return "This ability names a target, which can't be chosen from a graveyard button yet.";
+  if (entry.targets && !graveyardAbilityTargetKind(entry)) {
+    return "This ability's targets can't be chosen from a graveyard button yet.";
+  }
   return null;
+}
+
+// The `pendingCastTarget` kind the target picker runs for a graveyard
+// ability's spec, or null for a shape it cannot pick in one click. One target,
+// on the battlefield or a player — the picker's single-target kinds — because
+// the engine's graveyard door takes one (`web/actions.py`'s
+// `activate_graveyard` refuses roles, a division and a spell).
+function graveyardAbilityTargetKind(entry) {
+  const spec = entry?.target_spec;
+  if (!spec || !entry.targets) return null;
+  const several = Number.isInteger(spec.max_targets) && spec.max_targets > 1;
+  if (several || spec.x_targets || spec.requires_source || spec.also_stack
+      || spec.cost_spec || (spec.keyword_options || []).length) {
+    return null;
+  }
+  const kinds = {
+    creature: "creature", artifact: "artifact", land: "land",
+    permanent: "permanent", player: "player", any: "any",
+  };
+  return kinds[spec.kind] || null;
+}
+
+// Open the target picker for a graveyard ability; `fields` is what was
+// already announced (a sacrifice the cost names). The canvas click lands in
+// `resolvePendingCastTarget`, whose `activate_graveyard` branch sends it.
+function startGraveyardAbilityTargetPrompt(entry, fields = {}) {
+  const targetKind = graveyardAbilityTargetKind(entry);
+  if (!targetKind) {
+    updateActionHint(graveyardAbilityRefusal(entry) || `${entry.name} can't be activated.`, true);
+    return;
+  }
+  // The picker reads its spec off a card; the entry's spec is that card's.
+  const card = { name: entry.name, oracle_text: entry.text || "", target_spec: entry.target_spec };
+  const targets = pendingTargetFields(card);
+  if (targets.validKeys.size === 0 && targets.validPlayerSeats.size === 0) {
+    SFX.onError();
+    updateActionHint(`No valid target for ${entry.name}.`, true);
+    return;
+  }
+  pendingCastTarget = {
+    card,
+    cardName: entry.name,
+    targetKind,
+    castAction: "activate_graveyard",
+    graveyardAbility: entry,
+    graveyardFields: fields,
+    ...targets,
+  };
+  renderActivationPrompt();
+  renderBoard(currentState);
+  updateActionHint(`Choose a target for ${entry.name}'s ability.`);
+}
+
+// The target fields of a graveyard ability's body: the seat always (a
+// player target is the seat alone), the permanent by slot *and* stable id so a
+// board that moved between the click and the request is a refusal, not
+// whichever permanent slid into the slot (CR 400.7).
+function graveyardAbilityTargetFields(targetSeat, permanentIndex) {
+  const fields = { target_seat: targetSeat };
+  if (Number.isInteger(permanentIndex)) {
+    fields.target_permanent_index = permanentIndex;
+    withPermanentId(fields, "target_permanent_id", targetSeat, permanentIndex);
+  }
+  return fields;
 }
 
 function graveyardAbilityBody(entry, fields = {}) {
@@ -24139,6 +24228,10 @@ function renderGraveyardAbilities(state, hasPriority) {
         };
         renderActivationPrompt();
         updateActionHint(`Choose what ${entry.name} will sacrifice to pay its cost.`);
+        return;
+      }
+      if (entry.targets) {
+        startGraveyardAbilityTargetPrompt(entry);
         return;
       }
       sendGraveyardAbility(entry);
