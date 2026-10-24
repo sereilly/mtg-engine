@@ -52,6 +52,8 @@ log), not instruction kinds alone.
 # price ("You can take the 'exile three cards' action any time you have
 # priority without using the stack", ruling 2004-10-04).
 
+import pytest as _w1g5_pytest  # noqa: E402
+
 from engine.special_actions import (  # noqa: E402
     available_permanent_special_actions as _w1g5_offers,
     permanent_special_action_refusal as _w1g5_refusal,
@@ -260,6 +262,24 @@ def test_w1g5_web_of_inertia_forbids_attacking_you_and_nobody_else(set_pool):
     assert not game.can_attack(giant, 0)
     assert game.can_attack(giant, 2)
     assert game.can_attack(giant, 0, attacking_planeswalker=True)
+
+
+@_w1g5_pytest.mark.parametrize("could_attack", [True, False])
+def test_w1g5_a_seat_nobody_asks_keeps_its_graveyard_when_nothing_could_attack(
+    set_pool, could_attack
+):
+    """The standing policy paid this toll every combat — a card out of the
+    graveyard (threshold's pile, in this block) to lift a restriction on an
+    attack the seat could not have made. With nothing able to attack, the
+    restriction takes nothing and the offer is refused; with an attacker,
+    the price is still paid."""
+    game, giant = _w1g5_web(set_pool, interactive=())
+    if not could_attack:
+        giant.tapped = True
+    _w1g5.settle(game)
+
+    assert len(game.players[1].graveyard) == (1 if could_attack else 2)
+    assert bool(game.attack_restrictions_until_eot) is (not could_attack)
 
 
 def test_w1g5_web_of_inertia_restricts_that_players_creatures_only(set_pool):

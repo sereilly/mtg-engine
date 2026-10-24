@@ -381,6 +381,11 @@ _TOLL_MILL_PRICE = 0.25
 _TOLL_PERMANENT_FLOOR = 2.5
 #: Tapping the source: a turn's use of it, not the card.
 _TOLL_TAP_PRICE = 1.0
+#: A card exiled out of the seat's own graveyard: the mill's weight, since it
+#: is the same card one zone further on — and not nothing, because threshold
+#: (CR 207.2c), flashback and every "for each card in your graveyard" read
+#: the pile.
+_TOLL_GRAVEYARD_CARD_PRICE = _TOLL_MILL_PRICE
 
 
 def _toll_loss_price(game: Game, player_index: int, loss) -> float:
@@ -391,6 +396,7 @@ def _toll_loss_price(game: Game, player_index: int, loss) -> float:
     price = float(loss.life)
     price += loss.cards * _TOLL_CARD_PRICE
     price += loss.milled * _TOLL_MILL_PRICE
+    price += loss.exiled_from_graveyard * _TOLL_GRAVEYARD_CARD_PRICE
     for permanent in loss.permanents:
         price += _TOLL_PERMANENT_FLOOR + _permanent_value(permanent)
     if loss.taps_source:
