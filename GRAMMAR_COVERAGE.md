@@ -50,7 +50,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ODY | 335 | 507 | 89.7% | 89.7% | 69.6% | 295 |
 | TOR | 143 | 261 | 86.2% | 86.2% | 68.2% | 138 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| JUD *(measured)* | 143 | 241 | 69.7% | 63.1% | 41.9% | 89 |
+| JUD *(measured)* | 143 | 241 | 70.1% | 66.0% | 44.8% | 95 |
 | **All (shipped)** | **7884** | **11645** | **90.6%** | **90.0%** | **62.3%** | **6139** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -63,7 +63,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 670 | 344 | expected a subject |  |
+| 669 | 343 | expected a subject |  |
 | 168 | 87 | unrecognized effect verb |  |
 | 136 | 75 | unconsumed text |  |
 | 65 | 46 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -77,7 +77,6 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 6 | 1 | unsupported life-loss target 'owner' |  |
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
 | 5 | 5 | expected a zone name |  |
-| 5 | 5 | conditional_static_holds evaluates no such condition on a continuous buff |  |
 | 4 | 1 | the sacrifice prompt cannot test this restriction |  |
 | 4 | 1 | expected 'that' |  |
 | 4 | 1 | expected a destination zone after 'return' |  |
@@ -88,6 +87,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 3 | 1 | expected 'top' |  |
 | 3 | 3 | expected a keyword ability |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
+| 2 | 1 | expected 'the number of' in a where-clause |  |
 
 ## Cards executing through the grammar
 
@@ -413,6 +413,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Sacrifice this enchantment: Return target creature to its owner's hand.`
 - **Angelic Voices**
   - `Creatures you control get +1/+1 as long as you control no nonartifact, nonwhite creatures.`
+- **Anger**
+  - `As long as this card is in your graveyard and you control a Mountain, creatures you control have haste.`
 - **Angus Mackenzie**
   - `{G}{W}{U}, {T}: Prevent all combat damage that would be dealt this turn. Activate only before the combat damage step.`
 - **Animal Sanctuary**
@@ -1224,6 +1226,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Enchanted creature gets +1/+1 for each other creature you control.`
 - **Brawl**
   - `Until end of turn, all creatures gain "{T}: This creature deals damage equal to its power to target creature."`
+- **Brawn**
+  - `As long as this card is in your graveyard and you control a Forest, creatures you control have trample.`
 - **Breach**
   - `Target creature gets +2/+0 and gains fear until end of turn. (It can't be blocked except by artifact creatures and/or black creatures.)`
 - **Breaking Wave**
@@ -3517,6 +3521,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of combat on each opponent's turn, separate all creatures that player controls into two piles. Only creatures in the pile of their choice can attack this turn.`
 - **Fighting Chance**
   - `For each blocking creature, flip a coin. If you win the flip, prevent all combat damage that would be dealt by that creature this turn.`
+- **Filth**
+  - `As long as this card is in your graveyard and you control a Swamp, creatures you control have swampwalk.`
 - **Filthy Cur**
   - `Whenever this creature is dealt damage, you lose that much life.`
 - **Final Fortune**
@@ -4013,6 +4019,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Choose two target blocked attacking creatures. If each of those creatures could be blocked by all creatures that the other is blocked by, each creature that's blocking exactly one of those attacking creatures stops blocking it and is blocking the other attacking creature. Activate only during the declare blockers step.`
 - **General's Regalia**
   - `{3}: The next time a source of your choice would deal damage to you this turn, that damage is dealt to target creature you control instead.`
+- **Genesis**
+  - `At the beginning of your upkeep, if this creature is in your graveyard, you may pay {2}{G}. If you do, return target creature card from your graveyard to your hand.`
 - **Geothermal Crevice**
   - `{T}: Add {R}.`
   - `{T}, Sacrifice this land: Add {B}{G}.`
@@ -8400,6 +8408,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{R}: This creature gets +1/+0 until end of turn.`
 - **Riftstone Portal**
   - `{T}: Add {C}.`
+  - `As long as this card is in your graveyard, lands you control have "{T}: Add {G} or {W}."`
 - **Righteous Aura**
   - `{W}, Pay 2 life: The next time a source of your choice would deal damage to you this turn, prevent that damage.`
   - `{W}, Pay 2 life: The next time a source of your choice would deal damage to you this turn, prevent that damage.`
@@ -11172,6 +11181,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{B}: Vaevictis Asmadi gets +1/+0 until end of turn.`
   - `{R}: Vaevictis Asmadi gets +1/+0 until end of turn.`
   - `{G}: Vaevictis Asmadi gets +1/+0 until end of turn.`
+- **Valor**
+  - `As long as this card is in your graveyard and you control a Plains, creatures you control have first strike.`
 - **Valorous Steed**
   - `When this creature enters, create a 2/2 white Knight creature token with vigilance.`
 - **Vampire Bats**
@@ -11805,6 +11816,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {C}.`
   - `{1}, {T}: Add {U}.`
   - `{2}, {T}: Add {W} or {B}.`
+- **Wonder**
+  - `As long as this card is in your graveyard and you control an Island, creatures you control have flying.`
 - **Wood Elves**
   - `When this creature enters, search your library for a Forest card, put that card onto the battlefield, then shuffle.`
   - `When this creature enters, search your library for a Forest card, put that card onto the battlefield, then shuffle.`
