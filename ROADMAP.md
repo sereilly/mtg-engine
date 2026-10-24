@@ -1231,15 +1231,13 @@ one card prints this") reads as a work item long after it stopped being true.
     and the player is not asked *which* card Experimental Overload returns.
     And the single-graveyard production reads its cards as targets whether or
     not the word "target" is printed (two deletion-probe rows; no pool card).
-  * *A characteristic-defining ability off the battlefield* (CR 604.3).
-    `handlers/_amounts._printed_power` reads "*" as 0, so Carrion Grub with a
-    -vore in the graveyard is 2 where it should be 10: 43 variable-P/T cards.
-    No function evaluates `dynamic_pt_count` without a `Permanent`; 15 of the
-    43 carry a `count_spec` that `evaluate_count` could answer given an
-    owner, and 28 use the older count/scope payload. Its neighbour in the
-    layers: Humility over a conditional static that spans layers (Wayward
-    Angel, Repentant Vampire) strips the whole static, where CR 613.6 lets
-    the layer-5 colour change continue.
+  * *Humility over a conditional static that spans layers* (Wayward Angel,
+    Repentant Vampire) strips the whole static, where CR 613.6 lets the
+    layer-5 colour change continue. (Its neighbour, a characteristic-defining
+    ability read off the battlefield, closed at Judgment:
+    `Game.card_pt_outside_battlefield` reads both halves through the
+    battlefield refresh's own mapping, `_cda_halves`; Carrion Grub was fixed
+    with it.)
   * *"Tapped for mana", what is still not the event.* The seven tap triggers
     that are not mana abilities (Manabarbs, Scald, Storm Cauldron, Mana Web,
     Sanctimony, Price of Glory, Savage Firecat) resolve at the tap, not on
@@ -1296,8 +1294,9 @@ one card prints this") reads as a work item long after it stopped being true.
   * *Costs.* A flashback cost with {X} in its mana is read since Torment
     (Flaming Gambit's "Flashback {X}{R}{R}"; `flashback_x_unannounced` still
     refuses one whose mana cost has no X), and a zone cast prices its X from
-    its own way. Judgment's Flash of Insight, whose flashback cost exiles X
-    cards, is the X that still has no channel. A waiver is priced at the
+    its own way, and since Judgment an X a flashback cost defines by what it
+    sacrifices or exiles (`AlternativeCost.announces_x`: Flash of Insight,
+    Firecat Blitz) is announced and paid. A waiver is priced at the
     full cost by the castable highlight and the AI
     (`web/state_view._card_castable_now` and
     `ai_casts._cast_candidate_announcing` should ask
@@ -1904,7 +1903,17 @@ expire:
 > what is already there); `test_the_shipped_sets_are_in_printing_order` is the
 > assertion that can.
 
-Run against `set_progress.json` on 2026-10-21, with Torment shipped, it
+Run on 2026-10-24, with Judgment shipped, it answers **Onslaught** (ONS,
+2002-10-07, 320 new by the release line's count — re-measure against this
+pool) and then Legions and Scourge. **Judgment arrived at 55.9%**, the lowest
+work-set arrival since Mirage, and not for keywords (it brought none):
+for **zones**. Statics that function from a graveyard (CR 113.6b, the
+Incarnations), cards from outside the game (CR 400.11, the Wishes — the
+sideboard was already modelled), cards in a graveyard as targets (the
+Advocates' roles walk over one opponent's pile), linked entry exiles (the
+Nightmares). Ten groups landed all 143 with no decline and no hook.
+Before that, run against `set_progress.json` on 2026-10-21, with Torment
+shipped, it
 answers **Judgment** (JUD, 2002-05-27, 141 new by the release line's count -
 re-measure against this pool) and then Onslaught (ONS, 2002-10-07, 320 new).
 (FBB, SUM and 4BB are earlier and unshipped; they are alternate printings of
@@ -2068,6 +2077,7 @@ a wave is five parallel worktree groups integrated serially.
 | APC | 143 | 65.7% | 2 waves (nine groups, then four: one on the last card and three on the pile) |
 | ODY | 335 | 65.4% | 2 waves (nine groups, then eight: four on the last five cards and four on the pile) + 2 closers |
 | TOR | 143 | 70.6% | 2 waves (eight groups landed every card; then four: the client, two on the pile, one answering the promotion rehearsal) |
+| JUD | 143 | 55.9% | 2 waves (ten groups landed every card, three at a time for memory; then four: the client, the engine pile, the AI pile, the rehearsal's answers) + 3 follow-ups on regressions the full gates found |
 
 Three data points shape an estimate. **Legends** is the warning: the lowest
 starting coverage and the flattest ranking — after eight rounds, 113 of its 135
@@ -2083,20 +2093,20 @@ mis-playing along the way, which every set since Ice Age has repeated and which
 is the argument for the Rock Hydra step.
 
 **Where the pool stands** (regenerate rather than trust these; read
-2026-10-21, at Torment's close): 5,388 unique cards over 34 sets,
-7,884 printings, 100% supported. Grammar parses 90.6% of lines, lowers 90.0%
-and executes 62.3% (`GRAMMAR_COVERAGE.md`; the 0.1% fall in the first two is
-Torment's membership in a printing-weighted row, and no shipped set's row
-fell). **0.9%** of supported cards carry a name-keyed hook — 49 cards, 54
-entries in 6 registries (`HOOK_RELIANCE.md`) — and the projection that
-implies for the release line has fallen from 1,195 hand-written entries to
-**262**, across twenty-one consecutive sets that added no hook (Torment's 142
-new cards added none). That is the measure moving the way the architecture
-needs it to. Parse coverage: 5,386 of 5,388 supported cards fully claimed, 2
+2026-10-24, at Judgment's close): 5,529 unique cards over 35 sets,
+8,027 printings, 100% supported. Grammar parses 90.6% of lines, lowers 90.1%
+and executes 62.4% (`GRAMMAR_COVERAGE.md`). **0.9%** of supported cards
+carry a name-keyed hook — 48 cards, 53 entries in 6 registries
+(`HOOK_RELIANCE.md`) — and the projection that implies for the release line
+has fallen from 1,195 hand-written entries to **250**, across twenty-two
+consecutive sets that added no hook (Judgment's 141 new cards added none,
+and its Wishes' production made Ring of Ma'rûf's hook dead, so it was
+deleted). That is the measure moving the way the architecture needs it to.
+Parse coverage: 5,527 of 5,529 supported cards fully claimed, 2
 acknowledged, **0 unclaimed** (`PARSE_COVERAGE.md`). `RULES_PROGRESS.md` is
-the CR coverage tracker (419 of 625 tracked rules, 3,134 tests).
-`CARD_VERIFICATION.md` is a log, not a target: 812 passed (554 in-game,
-258 auto), 60 equivalent, 0 failed, 4,516 untested.
+the CR coverage tracker (419 of 625 tracked rules, 3,144 tests).
+`CARD_VERIFICATION.md` is a log, not a target: 816 passed (554 in-game,
+262 auto), 61 equivalent, 0 failed, 4,652 untested.
 
 **A whole wave can fix a hundred cards and move no compiled program**, and 6ED's
 is the run to cite. Five groups, five Known-gaps entries, zero cards implemented,

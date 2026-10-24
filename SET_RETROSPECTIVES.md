@@ -1264,3 +1264,31 @@ tables whole, cutting a method by step). *Known gaps:* the restructure deleted
 Phyrexian Splicer's runtime narrowing as drained when it is not, found by
 reading the code comments that cite the list; it is restored. Nothing else
 drained.
+
+### JUD — 2026-10-24
+
+*Two waves and fourteen agents on the Odyssey block's third set: 55.9% on
+arrival, no new keyword, 141 of 143 new.* What Judgment brought was zones —
+statics that function from a graveyard (CR 113.6b), cards from outside the
+game (CR 400.11), cards in a graveyard as targets, linked entry exiles — and
+ten wave-1 groups landed all 143 with no decline and no hook (Ring of Ma'rûf's
+hook was deleted, its line now the grammar's). Wave 2 took no card: the client
+(every unanswerable prompt built and clicked), the engine pile (an offer now
+pauses its resolution; sweeps ask CR 616.1e; cost roads check state), the AI
+pile (special actions, sideboards, land abilities, attacks by layer), and the
+rehearsal's answers. Three follow-ups fixed regressions the full gates found:
+a new `PlayerState` field read by every `vars()` walker (twice), a land's own
+mana under a swap, and two wave-2 reds at the promotion's gate.
+
+*Edits in place:* Agents and the machine sizes the fan-out from measured
+memory (three agents here; the owner's other work held most of 64 GB); later
+groups start from the latest gated link; a full gate after the first merge
+that changes a shared seam, because the meeting run did not predict this
+wave's close; a sampled census's red is computed on both links before blaming
+a merge; a new field is read by every `vars()` walker. *Known gaps:* the
+non-resolution audit narrowed to turn-based actions; the AI's untriaged
+`primary_type` reads eight to four; added position-sampled censuses, the
+damage calls left without `asks`, and Carrionette's graveyard target. Four
+session ends stopped agents mid-work; each resumed by message from its
+measured state. "A confirmed answer may not leave the prompt queue" was not
+re-probed.

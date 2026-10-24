@@ -43,10 +43,16 @@ scripts named below are in `scripts/integration/`, run from Git Bash with
   checkout's venv by absolute path. Where worktrees are unavailable, fan out
   *design* instead: each agent returns an exact spec (file, function, current
   code, replacement, tests) and one applier lands them in sequence.
-- **At most five agents at once.** Hold the rest of a wave and start each as a
-  slot frees; a wave-2 group may take a slot while wave 1 finishes. *Why:* the
-  machine has 16 GB and a suite worker peaks near 2 GB, and the account's rate
-  limit stops agents mid-edit.
+- **Size the fan-out from the memory you measure, never from a number here.**
+  Read free *commit* (not just free RAM) with nothing of yours running, and
+  count about 4 GB for every process that compiles the pool — a suite worker,
+  an instrument, an agent's serial pytest. Five agents was right on an idle
+  machine; at Judgment the owner's other work left ~18 GB, so three agents
+  testing serially plus the integrator's `-n 2` meeting runs, and the full
+  gate alone at `-n 4`. Hold the rest of a wave and start each as a slot
+  frees. Past the limit nothing fails loudly: a suite dies as a `MemoryError`
+  formatting a collection error, a `sim_fingerprint` "moves" a run whose log
+  is truncated, and agents stop mid-edit.
 - **An agent never runs the full suite.** It runs the files it wrote, every
   test file it edited, and the files that cover the modules it touched (grep
   `tests/` for the module names — a guard sits far from its code), serially or
@@ -142,6 +148,9 @@ And when writing one:
   what it did not drive. A comment saying what the code "then" does is a claim
   to drive. Prefer one client group holding every prompt the reports say a
   person could not answer over every group making one client change.
+- **A group launched after the first merges starts from the latest gated
+  link**, not the wave's base: it reuses its siblings' work instead of
+  rebuilding it, and its merge meets less. Tell it what the link already holds.
 - **Brief wave 2 from wave 1's reports as they arrive**, on the link holding the
   files it will touch, and extend a running group by message — census path,
   parts, and the names a sibling already took, so the two union rather than
@@ -176,9 +185,19 @@ And when writing one:
 - **The full gate** (`gate.sh <tree> <tag>`, read with `gate_report.sh`:
   `oracle_diff`, the duplicate and missing-name scans, the whole suite,
   `check_all`, the support report) **runs at each wave's close and on the
-  promotion commit.** Whatever it finds that the meeting run did not goes into
-  `surprises.txt` that day. A branch arriving after the wave's gate has started
-  needs no gate of its own when the promotion's is next.
+  promotion commit — and after the first merge that changes a shared seam**
+  (a new `PlayerState`/`Game` field, the static recompute, the rehearsal).
+  The meeting run reads the files the branches touched; a regression in a file
+  nobody touched waits for a full gate, and at Judgment six such reds from the
+  first merge surfaced only at the wave's close. Whatever it finds that the
+  meeting run did not goes into `surprises.txt` that day. A branch arriving
+  after the wave's gate has started needs no gate of its own when the
+  promotion's is next.
+- **A census that samples by position re-samples at every merge.** Several
+  sweep every Nth card of a pool that includes the measured set, so a merge
+  that supports cards shifts which cards are examined: a red appears, or
+  vanishes, at a merge that did not cause it. Compute the sample on both
+  links before blaming the merge (Known gaps).
 - **A merge commit claims only what was verified when it was made** — the
   conflict resolutions, `oracle_diff` over that merge, the scans, the meeting
   run — and says where the full gate's result will be recorded.
@@ -275,6 +294,11 @@ on at least one resolution.
 - **A seeded simulation test asserts its subject was exercised, never how
   often.** A count over a seeded game is a statement about every other card in
   a set still being implemented; the floor is one.
+- **A new `PlayerState` or `Game` field is read by every `vars()` walker** —
+  `ai_rehearsal.seat_standing` and the AI censuses' board signatures. One that
+  moves on every resolution (a graveyard arrival stamp) reads as a lasting
+  change: the AI cast spells that did nothing, and two censuses drifted.
+  Decide at the merge whether a new field is bookkeeping.
 - **Read a new mechanism for what it lets the code know.** Ask at the merge what
   it can see that it should not (a rehearsal copy holding the opponent's real
   hand) and what can now fail without anybody being told (an exception
@@ -949,12 +973,34 @@ one adds it. Re-check an entry against the code before briefing it.
   until then, Phase 5 of any set whose cards reach a route no browser test
   drives.
 
-- **The state-based check after a non-resolution is audited for special actions
-  only.** It runs after a resolution and after a special action; turn-based
-  actions and cost payments have not been audited. *Why:* CR 704.3 checks
-  before any player receives priority, and a missed check left a stolen
-  creature stolen through a combat. *Clears:* Phase 3 of the next set adding a
-  non-resolution state change. (Not re-probed since Exodus.)
+- **The state-based check after a non-resolution is not audited for turn-based
+  actions.** It runs after a resolution, after a special action, and — since
+  Judgment — after a cost paid on every activation road (battlefield, hand and
+  graveyard; `tests/regressions/test_jud_w2g2_cost_state_census.py`). *Why:*
+  CR 704.3 checks before any player receives priority. *Clears:* Phase 3 of
+  the next set adding a turn-based state change.
+- **Censuses that sample by position re-sample at every merge.** The zone-cast
+  twin census (`test_ody_w2g2_zone_cast_census.py`, every 10th spell) and the
+  loses-all-abilities door census (every 6th granter) count over a pool that
+  includes the measured set, so each merge that supports cards moves the
+  sample; at Judgment Shaman's Trance's finding flickered in and out across
+  four merges. *Clears:* a round that samples by a stable digest of the name
+  (`zlib.crc32`, not the salted `hash()`), re-measures each floor once, and
+  keeps a full-stride run at promotion. Parts: the two censuses' samplers; any
+  other `[::STRIDE]` over `manifest_set_paths(include_measured=True)`.
+- **Fifteen damage calls in `engine/handlers` still ask no CR 616.1e
+  question** (no `asks`): the six sweep kinds were converted at Judgment, and
+  five multi-recipient loops are left (`deal_damage` at two sites,
+  `each_matching_bites_itself`, `deal_damage_to_recorded_permanents`,
+  `deal_damage_to_those_damaged_this_game`), each needing `asks=True` and a
+  resumable loop. List: `scratch/jud/w2g2/residue_damage_asks.txt`. *Clears:*
+  a round of its own, census first.
+- **A graveyard ability that targets cannot be activated by a person**
+  (Carrionette). The client's graveyard-ability gesture exists since Judgment
+  (`state.graveyard_abilities`, `activate_graveyard`), but there is no
+  activation target spec for a card in a graveyard and no routing of the
+  target prompt to `activate_graveyard`; the button is disabled with its
+  reason. *Clears:* the next client group.
 
 - **A confirmed answer may not leave the prompt queue.** Urza's Destiny found
   `_resolve_pay_any_amount` leaving its own choice queued — the game then
@@ -986,10 +1032,12 @@ one adds it. Re-check an entry against the code before briefing it.
   part missing is a second injected callable on `PromptContext` that takes a
   permanent. *Clears:* a small round of its own.
 
-- **Eight `card.primary_type` reads in `engine/ai_policy.py` and the modules
-  split out of it are untriaged**
+- **Four `card.primary_type` reads in the AI are untriaged** — one in
+  `engine/ai_policy.py`, three in `ai_scoring.py`
   (`PRIMARY_TYPE_BASELINE` in `tests/engine/test_layer_reads.py`): each wants
-  the card-or-permanent judgement the other sites got. Krovikan Vampire's death
+  the card-or-permanent judgement the other sites got. (The attack and block
+  choosers' three and `ai_abilities`' one were read by layer at Judgment:
+  an animated land had never attacked or blocked for the AI.) Krovikan Vampire's death
   record beside them wants a "was a creature" stamp at the removal seam
   (CR 603.10a). *Clears:* the round that next opens those modules.
 
