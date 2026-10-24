@@ -614,7 +614,7 @@ def test_orc_general_buffs_other_orcs_and_eats_one_to_do_it(set_pool):
         perm.card.name for perm in p1.battlefield
     } or {"Goblin Wizard"}
     assert eaten, "the cost ate nothing"
-    # "**Other** Orc creatures" - CR 109.5 excludes the ability's own source,
+    # "**Other** Orc creatures" - CR 113.7 excludes the ability's own source,
     # so the General that paid does not buff itself.
     assert source.effective_power == printed, game.log
     if any(perm is other_orc for perm in p1.battlefield):

@@ -456,7 +456,7 @@ def _other_subtype_count(match: re.Match) -> dict[str, object]:
     battlefield."
 
     Every battlefield (the sentence names no controller), the source itself
-    excluded — which is what "other" means (CR 109.5) and is why it is a
+    excluded — which is what "other" means (CR 113.7) and is why it is a
     separate key rather than a subtype filter that would count the Rat asking.
     The printed toughness stands (Pestilence Rats is */3), exactly as it does
     for Kinetic Augur.

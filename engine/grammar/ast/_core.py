@@ -722,7 +722,7 @@ class DamageDealtThisTurn:
     printed. *source_name* is ``"self"`` — the SELF token, the card naming
     itself — and never a spelled-out name, which is what keeps a card name out
     of the engine (``tests/engine/test_card_name_reads.py``). *others_only* is
-    CR 109.5's "**other** sources": an identity comparison against the ability's
+    CR 113.7's "**other** sources": an identity comparison against the ability's
     own source, the same narrowing "another creature" already carries.
     """
     #: ``"source"`` is Blazing Effigy's "dealt **to this creature**"; ``"you"``

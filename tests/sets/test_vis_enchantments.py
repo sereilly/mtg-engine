@@ -983,7 +983,7 @@ def test_vampirism_counts_the_board_and_shrinks_everything_else(set_pool, catalo
     ``subject: "attached"``, which the P/T refresh lands on the host.
 
     The host's own arithmetic is what the two sentences agree on. "Other" is
-    relative to the object the ability is on (CR 109.5), and Vampirism is not a
+    relative to the object the ability is on (CR 113.7), and Vampirism is not a
     creature -- so the count includes the host and the penalty reaches it too,
     which nets to exactly the reading where both words exclude it. Three
     creatures, one enchanted: 2 + 3 - 1 = 4.

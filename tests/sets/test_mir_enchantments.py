@@ -528,7 +528,7 @@ def test_favorable_destiny_grants_shroud_off_the_hosts_controller(set_pool):
     Two things were missing and they are one referent. ``who: "controller"`` is
     a *pronoun* seat — CR 109.5 makes the ability the Aura's, so "you control"
     would be the Aura's controller, and this clause follows the **host's**
-    instead. And "another creature" is CR 109.5's exclusion measured against the
+    instead. And "another creature" is CR 113.7's exclusion measured against the
     same permanent, which the gate refused outright because ``exclude_self`` is
     out of ``OBJECT_ONLY_FILTER_KEYS`` — a set written for callers that have no
     source, where this one is handed the permanent the static is about.

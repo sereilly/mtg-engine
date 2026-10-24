@@ -540,7 +540,7 @@ def add_counter_to_target(game: Game, instruction: OracleInstruction, context: O
         def eligible(perm) -> bool:
             if not permanent_matches_filter(perm, filters):
                 return False
-            # "other" (CR 109.5's exclusion of the source) and "you control" are
+            # "other" (CR 113.7's exclusion of the source) and "you control" are
             # both outside permanent_matches_filter's vocabulary — it answers
             # about a permanent alone, and these two need the source and the
             # board — so they are asked here rather than widened into it.

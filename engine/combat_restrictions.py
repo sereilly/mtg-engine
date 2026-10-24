@@ -127,7 +127,7 @@ _IF_ON_BATTLEFIELD = re.compile(
 #: place the noun on opposite sides of the copula, and a single regex reading
 #: both would have to make the head optional, which is how a pattern stops
 #: saying which sentence it matches. "Another" is captured here too, for that
-#: pattern's reason: it is CR 109.5's exclusion of the ability's own source, and
+#: pattern's reason: it is CR 113.7's exclusion of the ability's own source, and
 #: a card printing "if another enchantment is on the battlefield" means
 #: something the article does not.
 _IF_NOUN_ON_BATTLEFIELD = re.compile(
@@ -320,7 +320,7 @@ def combat_restriction_for(
                 return None
             if shared.group("other"):
                 # "Another" is a comparison against the ability's own source
-                # (CR 109.5), which is exactly what `exclude_self` means to
+                # (CR 113.7), which is exactly what `exclude_self` means to
                 # `subject_matches` — so the word becomes the key every other
                 # reader of a noun phrase already tests, rather than a second
                 # spelling only this file would know.

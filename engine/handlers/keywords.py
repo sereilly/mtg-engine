@@ -276,7 +276,7 @@ def granted_target_legal(game, instruction, context, *, characteristics=True):
 
     The three questions are the split ``add_counter_to_target`` already makes:
     ``permanent_matches_filter`` answers about a permanent alone, so "another"
-    (CR 109.5's source exclusion) and "you control" (a seat) are asked here.
+    (CR 113.7's source exclusion) and "you control" (a seat) are asked here.
 
     *characteristics* is CR 608.2b's "once", and :func:`granted_target` is the
     only caller that turns it off — see there.
@@ -759,7 +759,7 @@ def _target_grant_predicate(game, instruction, context):
 
     Split out of ``grant_target_keyword_until_eot`` so the quoted-ability grant
     asks the *same* three questions rather than a second spelling of them: the
-    printed filter, CR 109.5's source exclusion, and the seat "you control"
+    printed filter, CR 113.7's source exclusion, and the seat "you control"
     compares against.
 
     ``subject_types`` is the printed noun of a grant whose target was chosen by

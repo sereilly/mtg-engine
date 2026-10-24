@@ -511,7 +511,7 @@ def _lower_tap(
                 # would not be by that key.
                 "attacked_this_turn",
                 # "When this creature enters, tap all **other** creatures."
-                # (Thundermare.) CR 109.5's identity rather than a
+                # (Thundermare.) CR 113.7's identity rather than a
                 # characteristic: it reaches the payload as ``exclude_self``
                 # and ``subject_matches`` tests it against the ability's own
                 # source, which this handler already passes. The word is the

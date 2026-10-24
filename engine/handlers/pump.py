@@ -472,7 +472,7 @@ def buff_creatures_global(game: Game, instruction: OracleInstruction, context: O
     subtypes = tuple(instruction.payload.get("subtypes") or ())
     exclude_types = tuple(instruction.payload.get("exclude_types") or ())
     with_keywords = tuple(instruction.payload.get("with_keywords") or ())
-    # "**Other** creatures you control" (Bolt Hound) — CR 109.5's exclusion of
+    # "**Other** creatures you control" (Bolt Hound) — CR 113.7's exclusion of
     # the ability's own source, which no per-permanent filter can test.
     exclude_self = (
         context.source_permanent

@@ -4575,7 +4575,7 @@ def test_a_sentences_only_target_reads_another_as_the_source_exclusion():
     CR 601.2c lets two instances of the word "target" name the same object
     unless something forbids it, and "another" is that forbidding — it points at
     whatever the sentence already chose. When the sentence chooses nothing else,
-    the only object left to point at is the ability's source (CR 109.5), which
+    the only object left to point at is the ability's source (CR 113.7), which
     is the restriction ``exclude_self`` already names. So the word survives into
     the payload as the *same* key the postmodifier spelling ("target creature
     other than this creature") produces, and one picker and one handler read

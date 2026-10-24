@@ -393,7 +393,7 @@ def _rebind_blocking_pronoun(statement: ast.Statement) -> ast.Statement:
     earlier (``blocking_bound_target``). Under an activated ability whose
     *whole* effect is this one statement there is nothing earlier — the pronoun
     cannot mean the creature being chosen, since no creature blocks itself — so
-    the only object it can name is the ability's own source (CR 109.5). That is
+    the only object it can name is the ability's own source (CR 113.7). That is
     the relation ``blocking_source`` already carries, and the same rewrite
     ``lowering/_counted_pumps._resolve_per_each_pronoun`` makes one file over
     for Johtull Wurm's "for each creature blocking it".

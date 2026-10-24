@@ -362,7 +362,7 @@ def test_lhurgoyf_counts_every_graveyard_and_its_toughness_is_that_plus_one(set_
     assert (lhurgoyf.effective_power, lhurgoyf.effective_toughness) == (3, 4)
 def test_pestilence_rats_counts_the_other_rats(set_pool):
     """"…the number of **other** Rats on the battlefield" — the source excluded
-    by identity (CR 109.5), and the printed toughness (3) left standing."""
+    by identity (CR 113.7), and the printed toughness (3) left standing."""
     pool = set_pool("ICE")
     first = Permanent(card=pool["Pestilence Rats"])
     second = Permanent(card=pool["Pestilence Rats"])

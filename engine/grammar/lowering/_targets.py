@@ -593,7 +593,7 @@ def _targets_payload(
         # and the two lowerings that can honour a per-clause distinctness
         # (`_fused_two_target_pump`, `target_bites_target`) build their own
         # description and never call this. So the only object left in the
-        # sentence for "another" to exclude is the ability's source (CR 109.5),
+        # sentence for "another" to exclude is the ability's source (CR 113.7),
         # which is exactly what `other_than_source` says — the same restriction
         # printed a second way, and the spelling `parse_target_spec` already
         # produces for "up to two **other** target creatures".
@@ -734,7 +734,7 @@ def _refuse_unfused_distinctness(steps: tuple[ast.Statement, ...]) -> None:
 
     Reaching ``_lower_steps`` with the word still on a step therefore means two
     things at once: the clauses would land on one permanent, and
-    ``_targets_payload`` would read the word as CR 109.5's source exclusion,
+    ``_targets_payload`` would read the word as CR 113.7's source exclusion,
     which is a different restriction. Both are the wider-than-printed outcome, so
     the sentence refuses.
 
@@ -749,7 +749,7 @@ def _refuse_unfused_distinctness(steps: tuple[ast.Statement, ...]) -> None:
     target: the second names its subject with a back-reference to what the
     first one chose, so there is no prior choice for "another" to differ from
     and the only object left in the sentence for it to exclude is the ability's
-    source, which is CR 109.5 and exactly what ``_targets_payload`` turns it
+    source, which is CR 113.7 and exactly what ``_targets_payload`` turns it
     into one function above. Refusing on the clause count instead read the
     hazard off the wrong number — the hazard is two pickers reading one answer,
     which needs two printed targets to exist at all.

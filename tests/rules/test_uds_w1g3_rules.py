@@ -194,9 +194,9 @@ def test_613_4c_a_modifier_still_applies_over_the_base_pt_opalescence_sets():
     assert (crusade.effective_power, crusade.effective_toughness) == (3, 3)
 
 
-@pytest.mark.cr("109.5", "613.1d")
-def test_109_5_opalescence_excludes_itself_and_reaches_every_battlefield():
-    """"Each **other** …" is CR 109.5's exclusion of the ability's own source,
+@pytest.mark.cr("113.7", "613.1d")
+def test_113_7_opalescence_excludes_itself_and_reaches_every_battlefield():
+    """"Each **other** …" is CR 113.7's exclusion of the ability's own source,
     and the sentence names no seat — so it is every other non-Aura enchantment
     on the table, an opponent's included."""
     catalog = _uds_g3_catalog()

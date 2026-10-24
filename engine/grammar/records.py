@@ -89,7 +89,7 @@ def accept_damage_dealt_this_turn(
 
     Every narrowing is read rather than assumed, and the production refuses the
     moment one of them is missing. "This turn" is the ledger's window and a
-    clause without it is asking about a different one; "other" is CR 109.5's
+    clause without it is asking about a different one; "other" is CR 113.7's
     identity exclusion and dropping it would count the creature's own damage to
     itself; and the name must be the SELF token — the card naming itself — so a
     clause comparing against some *other* printed name refuses here instead of

@@ -35,7 +35,7 @@ a prompt.
 #                     discard aimed at a seat the announcement chose
 # * Defense of the Heart  a plural back-reference in a search's placement clause
 # * Aura Flux         a board-wide static granting a quoted *triggered* ability,
-#                     with CR 109.5's "other" excluding its own source
+#                     with CR 113.7's "other" excluding its own source
 #
 # Every test drives a real upkeep step and reads the board afterwards, never the
 # compiled instruction kinds: three of these four cards compiled to plausible
@@ -288,7 +288,7 @@ def test_defense_of_the_heart_finds_fewer_when_the_library_holds_fewer(set_pool)
 def test_aura_flux_taxes_every_other_enchantment_and_not_itself(set_pool):
     """"**Other** enchantments have "At the beginning of your upkeep, sacrifice
     this enchantment unless you pay {2}."" — Energy Flux's sentence over a
-    different noun, plus CR 109.5's exclusion of the source.
+    different noun, plus CR 113.7's exclusion of the source.
 
     "Other" is the first word of its kind in that table, and the board-wide
     static pass applies every other template to its own source deliberately

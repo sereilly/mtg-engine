@@ -880,7 +880,7 @@ def test_gargantuan_gorillas_bite_line_lowers_with_the_word_another(set_pool):
     the multi-clause distinctness guard counted *clauses* where the hazard it
     guards (two pickers reading one answer) needs two printed **targets**. The
     second clause names its subject with a back-reference, so there is one
-    target here and "another" can only mean CR 109.5's source exclusion.
+    target here and "another" can only mean CR 113.7's source exclusion.
 
     Asserted on the **line**, not on the card: the creature gate is "is every
     trigger implemented", so the Gorilla's unread upkeep paragraph keeps the
@@ -897,7 +897,7 @@ def test_gargantuan_gorillas_bite_line_lowers_with_the_word_another(set_pool):
 
     assert [i.kind for i in lowered] == ["source_bites_target", "bound_bites_source"]
     assert lowered[0].payload["targets"]["filter"]["exclude_self"] is True, (
-        "\"another\" is CR 109.5's source exclusion here, not a second target"
+        "\"another\" is CR 113.7's source exclusion here, not a second target"
     )
     assert lowered[1].payload["permanents_from"] == "damaged_permanents", (
         "the second clause reads what the first one bit"

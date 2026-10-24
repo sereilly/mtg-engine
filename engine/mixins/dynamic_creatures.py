@@ -162,7 +162,7 @@ def _count_dynamic_pt(
     # lands") is then this template rather than a new one.
     excluded_supertype = payload.get("exclude_supertype")
     # "the number of **other** Rats on the battlefield" (Pestilence Rats): the
-    # source itself is excluded by identity (CR 109.5), never by name — a
+    # source itself is excluded by identity (CR 113.7), never by name — a
     # second Rat with the same name is a different permanent.
     subtype = payload.get("subtype")
     exclude_self = bool(payload.get("exclude_self"))

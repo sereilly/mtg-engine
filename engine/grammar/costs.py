@@ -60,8 +60,9 @@ def _parse_cost_object(
     # returns quantifier "all" for "creature" and None for "another creature".
     # Teaching the noun parser an "another" quantifier would change every
     # targeted line in the pool, so the exclusion is read here and carried on
-    # the filter's existing `other_than_source` field: CR 602.5c's "another" is
-    # a restriction on what may pay, not a different kind of cost.
+    # the filter's existing `other_than_source` field: "another" is measured
+    # against the ability's own source (CR 113.7), a restriction on what may
+    # pay rather than a different kind of cost.
     # "{1}{W}, Sacrifice **Lieutenant Kirtar**: …" A legendary permanent
     # naming itself in a cost (CR 201.5) - the lexer has collapsed the name to
     # one SELF token, the same reference "this creature" is, and the counter

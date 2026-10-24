@@ -791,7 +791,7 @@ def _condition_about_the_host(condition: dict) -> dict:
         return {**condition, "subject": "attached"}
     # Two parts of a ``controls`` clause are pronouns like ``is_state``'s, and
     # only these two: "**its** controller" (``who: "controller"``) and
-    # "**another** creature" (``exclude_self``, CR 109.5's "other than this
+    # "**another** creature" (``exclude_self``, CR 113.7's "other than this
     # object"). Both are about the permanent the sentence is about — the
     # enchanted creature — so the clause is stamped for them and for nothing
     # else. Stamping every ``controls`` clause would quietly move "you control a
