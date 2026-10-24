@@ -766,6 +766,19 @@ class TriggerTargetsMixin:
         # keeps the prompt those raise byte-identical.
         several = {}
         printed = spec.get("max_targets")
+        quantity_key = spec.get("x_from_trigger")
+        if quantity_key:
+            # "Whenever this creature deals combat damage to a player, return
+            # **up to that many** target permanents…" (Cephalid Constable.) The
+            # ceiling is the number the firing event froze (the damage dealt),
+            # read off this object's own context as it goes on the stack —
+            # CR 603.3d chooses here, so here is where the number is known.
+            # A context with no number names none, which "up to" allows.
+            frozen = (item.trigger_context or {}).get(quantity_key)
+            printed = frozen if isinstance(frozen, int) and frozen > 0 else 0
+            if printed == 0:
+                self.record_no_target_named(item)
+                return
         if isinstance(printed, int) and printed > 1:
             on_offer = sum(1 for entry in offered if entry["kind"] == "permanent")
             if stamps:
