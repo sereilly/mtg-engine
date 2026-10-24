@@ -824,10 +824,30 @@ class TurnManagementMixin:
         which is no text at all. Empty for every other land, a land whose type
         an effect *set* included — that one has only the intrinsic ability,
         which the summary path below already is.
+
+        **…and the land's own types, once a granted mana ability is in the
+        compiled walk.** 'As long as this card is in your graveyard, lands you
+        control have "{T}: Add {G} or {W}."' (Riftstone Portal.) A Swamp so
+        granted has two mana abilities, and the second is again in a different
+        place: the grant compiles, the Swamp's own "{T}: Add {B}" (CR 305.6) is
+        no text. While the walk finds nothing the summary path is the type's
+        ability, as for every basic; the moment the grant is found it is the
+        walk's answer and the summary is never read, so the Swamp tapped for
+        {G} when asked for {B} and the planner counted it as no {B} at all.
+        The same two places as Blanket of Night's, read through the same
+        symbols. Not after a "loses all abilities" (CR 613.1f): what survives
+        one is a grant newer than it (``_land_mana_abilities`` walks the
+        effective card), and the type's ability is not that. No land in the
+        pool prints a mana ability of its own beside a basic land type, so
+        this reaches exactly the lands a mana ability was granted to.
         """
         from ..land_types import added_land_types
 
         added = set(added_land_types(land))
+        if land.basic_land_types and abilities_lost_at(land) is None:
+            free, priced = TurnManagementMixin._land_mana_abilities(land)
+            if free is not None or priced:
+                added |= set(land.basic_land_types)
         if not added:
             return ()
         return tuple(
