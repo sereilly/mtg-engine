@@ -37,7 +37,11 @@ readers copy is read off their compiled trigger, not listed.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 import pytest
+
+import engine.handlers.control_flow as _control_flow
 
 from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_paths
@@ -144,6 +148,29 @@ def readers(pool) -> list[tuple]:
     return found
 
 
+@contextmanager
+def _flips(won: bool):
+    """Every coin flipped inside comes up *won*.
+
+    "Whenever a player casts a spell, that player flips a coin. If they lose
+    the flip, counter that spell." (Planar Chaos, Judgment.) The first reader
+    whose counter is gated on a coin, and the coin is not this census's
+    subject — *which* spell the counter acts on is. So the cast trigger's flip
+    is lost (the counter happens and can be seen), and the card's own upkeep
+    flip ("If you lose the flip, sacrifice this enchantment") is won while the
+    board is set up, or the reader leaves before anything is cast. Read off the
+    seeded RNG instead, the row passed or failed with the seed. Through the
+    name every coin-rigging test patches (``handlers.control_flow.flip_coin``,
+    which ``flip_coin_for`` is handed).
+    """
+    real = _control_flow.flip_coin
+    _control_flow.flip_coin = lambda: won
+    try:
+        yield
+    finally:
+        _control_flow.flip_coin = real
+
+
 def _aimed(spell, at: int) -> dict:
     """A Bolt names a player; the two casts name different ones, so a copy of
     one is told from a copy of the other."""
@@ -187,8 +214,9 @@ def _stacked(by_name, reader, kind):
             ])
             game.enforce_mana_costs = False
             game.interactive_seats = {0, 1}
-            game.start_turn(0)
-            game._settle()
+            with _flips(won=True):
+                game.start_turn(0)
+                game._settle()
             if not game.queue_from_hand(first_seat, spell.name, **_aimed(spell, 1)).supported:
                 continue
             earlier = game.stack[0]
@@ -239,8 +267,9 @@ def _resolve_and_see(game, earlier, later, trigger) -> str:
     left the stack; a spell copied has a copy above it carrying its targets.
     """
     held = list(game.stack)
-    game.resolve_top_of_stack(pause_for_choices=True)
-    _answer(game)
+    with _flips(won=False):
+        game.resolve_top_of_stack(pause_for_choices=True)
+        _answer(game)
     assert not _on_stack(game, trigger), "the trigger resolved"
     copies = [item for item in game.stack if not any(item is old for old in held)]
     if copies:
