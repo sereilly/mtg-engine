@@ -557,6 +557,17 @@ def _action_is_takeable(
         from .hand import exile_from_hand_candidates
 
         return bool(exile_from_hand_candidates(game, instruction.payload, player))
+    # "You may reveal a sorcery card you own from outside the game and put it
+    # into your hand." (Burning Wish.) A sideboard holding no card the phrase
+    # admits — or none at all, which is every seat the AI simulator deals — is a
+    # real and checkable "nothing to give": the offer is not made rather than
+    # asked with one honest answer. Through the candidate list the pick itself
+    # offers, so the offer and the prompt behind it agree; the offered seat is
+    # the one whose sideboard it is, because the pick reads the performer's own.
+    if instruction.kind == "put_outside_game_card_into_hand":
+        from .cards import outside_game_candidates
+
+        return bool(outside_game_candidates(game, instruction.payload, player))
     return True
 
 

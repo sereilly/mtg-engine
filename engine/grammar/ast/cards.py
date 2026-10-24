@@ -270,6 +270,29 @@ class RevealCardsFromHand:
 
 
 @dataclass(frozen=True)
+class PutOutsideGameCardIntoHand:
+    """``[Reveal] a <filter> card you own from outside the game and put it
+    into your hand`` / ``put a card you own from outside the game into your
+    hand``. (The five Judgment Wishes; Ring of Ma'rûf's "instead"; CR 701.48a's
+    learn prints the same sentence about a Lesson.)
+
+    CR 400.11b's "bring a card into the game from outside the game" — one card,
+    picked by the player whose sideboard it is (CR 400.11a), out of the cards
+    the printed phrase admits. *card* carries the phrase, ``outside_the_game``
+    and "you own" included, for the lowering to check rather than for the
+    parser to assume.
+
+    ``revealed`` is the printed verb (CR 701.20a): Burning Wish shows the card
+    to every player, Death Wish does not, and that is the whole of what the two
+    sentences differ by apart from the filter — so it is a field of one node
+    rather than a second node, and a reader that ignored it would name Death
+    Wish's find in a log every seat reads.
+    """
+    card: ObjectFilter
+    revealed: bool = False
+
+
+@dataclass(frozen=True)
 class RevealRandomFromHand:
     """``<player> reveals a card at random from their hand.`` (Wand of Ith.)
 

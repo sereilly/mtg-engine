@@ -1692,3 +1692,42 @@ register_choice(
     # the keep, and a seat nobody asks never queues one.
     suspends=True,
 )
+
+register_choice(
+    # "You may reveal a sorcery card you own from outside the game and put it
+    # into your hand." (The Judgment Wishes.) CR 400.11b's card brought into
+    # the game: a position in the seat's own sideboard, checked against the
+    # printed phrase the pick was armed with.
+    #
+    # Not Ring of Ma'rûf's ``outside_game_draw`` with a type narrowing. That
+    # one is a CR 614 replacement choice, answered inside the draw it replaced
+    # and resolving the draws queued behind it (CR 121.2); this is a step of a
+    # resolving spell, held on ``pending_choices`` with the stack object until
+    # it is answered (CR 608.2). The two share the reader of what may come in
+    # (``Game._outside_game_choices``) and the mover (``Game.
+    # bring_card_from_outside_game``), not a queue.
+    "outside_game_pick",
+    resolve=lambda game, choice, r: game._resolve_outside_game_pick(
+        choice, r.get("sideboard_index")
+    ),
+    default=lambda game, choice: game._default_outside_game_pick(choice),
+    action="outside_game_pick_confirm",
+    prompt_key="outside_game_pick",
+    blocked_detail=(
+        "choose a card you own from outside the game before other actions"
+    ),
+    # **Not** ``suspends``: the move *is* the answer, and nothing printed
+    # behind it reads the card it brings in — the Wishes' "Exile <this>" and
+    # Death Wish's life loss stand behind the "you may" offer, which does not
+    # suspend either, and Ring of Ma'rûf's pick is a replacement's whole
+    # effect. ``blocked_detail`` is what makes the game wait (CR 608.2). A card
+    # printing a step that reads the brought-in card is the one that makes
+    # this a suspending kind (and a row in ``tests/engine/
+    # test_pending_choices.py``'s ratchet).
+    # A non-interactive seat never queues it: the resolution has to finish, and
+    # the stated default is taken where the effect stands.
+    default_at_arm=True,
+    # Deliberately *not* spectator_visible: the candidates are the seat's
+    # sideboard, which ``web/serialization`` keeps private like a hand — so
+    # only the seat that owes the decision is shown them.
+)

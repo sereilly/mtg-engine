@@ -380,6 +380,239 @@ def test_w1g5_the_offer_holds_the_spell_on_the_stack_until_it_is_answered(set_po
 
 # ==== W1G6 ==========================================================
 # W1G6's tests go between this line and the "end W1G6" line.
+#
+# The Wishes: "You may reveal a <type> card you own from outside the game and
+# put it into your hand. Exile <this>." Outside the game is a player's
+# sideboard (CR 400.11a, 100.4 — the sanctioned reading of the 2009-10-01
+# ruling; this engine has no collection), and the card brought in stays in the
+# game (CR 400.11b). The "you may" is an offer (optional_pay) made only when a
+# card qualifies; the pick is an ``outside_game_pick`` prompt over the
+# caster's own sideboard, checked against the printed type.
+
+import pytest as _w1g6_pytest  # noqa: E402
+
+from engine import Game as _W1G6Game, PlayerState as _W1G6PlayerState  # noqa: E402
+from tests.helpers import resolve_stack as _w1g6_resolve_stack  # noqa: E402
+
+_W1G6_SIDEBOARD = (
+    "Lightning Bolt", "Stone Rain", "Shivan Dragon", "Forest", "Sol Ring",
+    "Wild Growth",
+)
+
+
+def _w1g6_table(set_pool, wish, sideboard=_W1G6_SIDEBOARD, *, interactive=False, life=20):
+    """Seat 0 holds *wish* with *sideboard* outside the game, its turn begun."""
+    lea = set_pool("LEA")
+    game = _W1G6Game(players=[
+        _W1G6PlayerState(
+            name="Alice", hand=[set_pool("JUD")[wish]], life=life,
+            library=[lea["Island"]] * 5, sideboard=[lea[name] for name in sideboard],
+        ),
+        _W1G6PlayerState(name="Bob", library=[lea["Island"]] * 5),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0} if interactive else set()
+    game.start_turn(0)
+    return game
+
+
+def _w1g6_cast_headless(game, wish):
+    """Cast and resolve with nobody asked: the offer and the pick are answered
+    by the registry's defaults, as an AI seat's are."""
+    result = game.cast_from_hand(0, wish)
+    assert result.supported, result.details
+    _w1g6_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+
+
+def _w1g6_names(zone):
+    return [card.name for card in zone]
+
+
+@_w1g6_pytest.mark.parametrize(
+    "wish, sideboard, fetched",
+    [
+        ("Burning Wish", ("Lightning Bolt", "Stone Rain", "Shivan Dragon"), "Stone Rain"),
+        ("Golden Wish", ("Lightning Bolt", "Sol Ring", "Shivan Dragon"), "Sol Ring"),
+        ("Golden Wish", ("Stone Rain", "Wild Growth", "Forest"), "Wild Growth"),
+        ("Living Wish", ("Lightning Bolt", "Stone Rain", "Forest"), "Forest"),
+        ("Living Wish", ("Lightning Bolt", "Sol Ring", "Shivan Dragon"), "Shivan Dragon"),
+    ],
+)
+def test_w1g6_a_wish_brings_in_only_a_card_of_its_printed_type_and_exiles_itself(
+    set_pool, wish, sideboard, fetched,
+):
+    """Each sideboard holds exactly one card the printed type admits, so a
+    pick of anything else would be a wish fetching what it does not name. The
+    find is revealed (CR 701.20a): the log names it and the reveal feed carries
+    it. The Wish is exiled, not binned (CR 608.2n's move is replaced by its
+    own last instruction)."""
+    game = _w1g6_table(set_pool, wish, sideboard)
+    _w1g6_cast_headless(game, wish)
+    alice = game.players[0]
+
+    assert _w1g6_names(alice.hand) == [fetched]
+    assert sorted(_w1g6_names(alice.sideboard)) == sorted(
+        name for name in sideboard if name != fetched
+    )
+    assert _w1g6_names(alice.exile) == [wish] and alice.graveyard == []
+    assert (
+        f"Alice revealed {fetched} from outside the game and put it into "
+        f"their hand ({wish})"
+    ) in game.log
+    assert game.reveal_events[-1]["cards"] == [fetched]
+
+
+def test_w1g6_living_wish_offers_a_creature_or_a_land_and_nothing_else(set_pool):
+    """The person is offered exactly the union the card prints — the two
+    candidates, by sideboard position — and the pick list is the engine's own,
+    so an answer naming the Bolt is refused with the prompt kept."""
+    game = _w1g6_table(set_pool, "Living Wish", interactive=True)
+    assert game.cast_from_hand(0, "Living Wish").supported
+    game.resolve_top_of_stack(pause_for_choices=True)
+    assert game.resolve_pending_choice("optional_pay", 0, accept=True, option=None)
+
+    (pick,) = game.pending_choices_of("outside_game_pick")
+    sideboard = game.players[0].sideboard
+    assert [sideboard[i].name for i in game.live_outside_game_picks(pick)] == [
+        "Shivan Dragon", "Forest",
+    ]
+    assert not game.confirm_outside_game_pick(0, 0)          # Lightning Bolt
+    assert game.pending_choices_of("outside_game_pick")
+    assert game.confirm_outside_game_pick(0, 3)              # Forest
+    _w1g6_resolve_stack(game)
+    assert _w1g6_names(game.players[0].hand) == ["Forest"]
+    assert _w1g6_names(game.players[0].exile) == ["Living Wish"]
+
+
+def test_w1g6_burning_wish_waits_on_the_stack_for_the_offer_and_the_pick(set_pool):
+    """CR 608.2: the spell is still resolving while its caster is asked, so it
+    is on the stack, unexiled, through both questions — the "you may" and the
+    pick — and is exiled once the last is answered. The pick is mandatory once
+    the offer was taken: a decline is refused with the prompt kept."""
+    game = _w1g6_table(set_pool, "Burning Wish", interactive=True)
+    assert game.cast_from_hand(0, "Burning Wish").supported
+    game.resolve_top_of_stack(pause_for_choices=True)
+
+    assert [c.kind for c in game.pending_choices] == ["optional_pay"]
+    assert _w1g6_names(item.card for item in game.stack) == ["Burning Wish"]
+    assert game.players[0].exile == []
+
+    assert game.resolve_pending_choice("optional_pay", 0, accept=True, option=None)
+    assert [c.kind for c in game.pending_choices] == ["outside_game_pick"]
+    assert _w1g6_names(item.card for item in game.stack) == ["Burning Wish"]
+    assert not game.confirm_outside_game_pick(0, None)
+
+    assert game.confirm_outside_game_pick(0, 1)              # Stone Rain
+    _w1g6_resolve_stack(game)
+    assert game.stack == [] and game.pending_choices == []
+    assert _w1g6_names(game.players[0].hand) == ["Stone Rain"]
+    assert _w1g6_names(game.players[0].exile) == ["Burning Wish"]
+
+
+def test_w1g6_declining_the_offer_brings_nothing_in_and_still_exiles_the_wish(set_pool):
+    game = _w1g6_table(set_pool, "Burning Wish", interactive=True)
+    assert game.cast_from_hand(0, "Burning Wish").supported
+    game.resolve_top_of_stack(pause_for_choices=True)
+    assert game.resolve_pending_choice("optional_pay", 0, accept=False, option=None)
+    _w1g6_resolve_stack(game)
+
+    assert game.players[0].hand == []
+    assert len(game.players[0].sideboard) == len(_W1G6_SIDEBOARD)
+    assert _w1g6_names(game.players[0].exile) == ["Burning Wish"]
+    assert game.pending_choices == []
+
+
+def test_w1g6_nothing_to_wish_for_is_an_offer_never_made(set_pool):
+    """A sideboard with no sorcery (and a sorcery in *exile*, which is in the
+    game and cannot be acquired — 2009-10-01) makes no offer at all, so an
+    interactive seat is not asked a question whose only honest answer is no;
+    the Wish exiles itself and the log says why nothing came."""
+    game = _w1g6_table(
+        set_pool, "Burning Wish", ("Lightning Bolt", "Shivan Dragon"), interactive=True,
+    )
+    game.players[0].exile.append(set_pool("LEA")["Stone Rain"])
+    assert game.cast_from_hand(0, "Burning Wish").supported
+    game.resolve_top_of_stack(pause_for_choices=True)
+    _w1g6_resolve_stack(game)
+
+    assert game.pending_choices == []
+    assert game.players[0].hand == []
+    assert _w1g6_names(game.players[0].exile) == ["Stone Rain", "Burning Wish"]
+    assert _w1g6_names(game.players[0].sideboard) == ["Lightning Bolt", "Shivan Dragon"]
+
+
+@_w1g6_pytest.mark.parametrize("for_ante", [False, True])
+def test_w1g6_an_ante_card_outside_the_game_comes_in_only_in_a_game_for_ante(
+    set_pool, for_ante,
+):
+    """CR 407.3: when not playing for ante, the ante cards "can't be brought
+    into the game from outside the game". Contract from Below is a sorcery, so
+    Burning Wish's phrase admits it — the reader Ring of Ma'rûf already asks is
+    what keeps it out."""
+    game = _w1g6_table(
+        set_pool, "Burning Wish", ("Contract from Below", "Stone Rain"), interactive=True,
+    )
+    game.playing_for_ante = for_ante
+    assert game.cast_from_hand(0, "Burning Wish").supported
+    game.resolve_top_of_stack(pause_for_choices=True)
+    assert game.resolve_pending_choice("optional_pay", 0, accept=True, option=None)
+
+    (pick,) = game.pending_choices_of("outside_game_pick")
+    offered = [game.players[0].sideboard[i].name for i in game.live_outside_game_picks(pick)]
+    assert offered == (["Contract from Below", "Stone Rain"] if for_ante else ["Stone Rain"])
+    assert game.confirm_outside_game_pick(0, 0) is for_ante
+
+
+@_w1g6_pytest.mark.parametrize("life, after", [(20, 10), (15, 7), (1, 0)])
+def test_w1g6_death_wish_loses_half_its_casters_life_rounded_up_even_finding_nothing(
+    set_pool, life, after,
+):
+    """"You lose half your life, rounded up" — 15 loses 8 — and the 2007-05-01
+    ruling: "If you fail to find something, you still lose half your life,
+    rounded up." An empty sideboard finds nothing and the life is lost all the
+    same; the card is exiled."""
+    game = _w1g6_table(set_pool, "Death Wish", (), life=life)
+    _w1g6_cast_headless(game, "Death Wish")
+
+    assert game.players[0].life == after
+    assert game.players[0].hand == []
+    assert _w1g6_names(game.players[0].exile) == ["Death Wish"]
+
+
+def test_w1g6_death_wish_takes_any_card_and_does_not_reveal_it(set_pool):
+    """No type, so every card outside the game is offered; no "reveal", so the
+    find is never named in the log every seat reads, nor sent to the reveal
+    feed — the hand it goes to is hidden (CR 400.2)."""
+    game = _w1g6_table(set_pool, "Death Wish", interactive=True)
+    assert game.cast_from_hand(0, "Death Wish").supported
+    game.resolve_top_of_stack(pause_for_choices=True)
+    assert game.resolve_pending_choice("optional_pay", 0, accept=True, option=None)
+    (pick,) = game.pending_choices_of("outside_game_pick")
+    assert game.live_outside_game_picks(pick) == list(range(len(_W1G6_SIDEBOARD)))
+
+    assert game.confirm_outside_game_pick(0, 2)              # Shivan Dragon
+    _w1g6_resolve_stack(game)
+    assert _w1g6_names(game.players[0].hand) == ["Shivan Dragon"]
+    assert game.players[0].life == 10
+    assert game.reveal_events == []
+    assert not any("Shivan Dragon" in line for line in game.log)
+    assert (
+        "Alice put a card they own from outside the game into their hand "
+        "(Death Wish)"
+    ) in game.log
+
+
+def test_w1g6_the_card_brought_in_is_in_the_game_and_can_be_cast(set_pool):
+    """CR 400.11b: the card stays in the game. Golden Wish fetches Sol Ring and
+    the Ring is cast from the hand like any other card."""
+    game = _w1g6_table(set_pool, "Golden Wish", ("Sol Ring", "Lightning Bolt"))
+    _w1g6_cast_headless(game, "Golden Wish")
+    assert _w1g6_names(game.players[0].hand) == ["Sol Ring"]
+
+    assert game.cast_from_hand(0, "Sol Ring").supported
+    _w1g6_resolve_stack(game)
+    assert [p.card.name for p in game.controlled_by(0)] == ["Sol Ring"]
 
 # ==== end W1G6 ======================================================
 

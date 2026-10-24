@@ -561,6 +561,51 @@ def test_w1g5_grip_announces_a_spell_and_nothing_else(set_pool):
 
 # ==== W1G6 ==========================================================
 # W1G6's tests go between this line and the "end W1G6" line.
+#
+# Cunning Wish: "You may reveal an instant card you own from outside the game
+# and put it into your hand. Exile Cunning Wish." The sorcery Wishes' tests
+# (offer, pick, reveal, ante, exile) are in test_jud_sorceries.py's W1G6
+# section; what is the instant's own is the timing.
+
+from engine import Game as _W1G6IGame, PlayerState as _W1G6IPlayerState  # noqa: E402
+from tests.helpers import resolve_stack as _w1g6i_resolve_stack  # noqa: E402
+
+
+def test_w1g6_cunning_wish_on_the_opponents_turn_fetches_an_instant_that_is_then_cast(set_pool):
+    """Cast in Bob's turn, with a creature spell of his on the stack — an
+    instant's timing (CR 304.1) — Cunning Wish resolves first, brings in the
+    one instant its sideboard holds (not the sorcery beside it), and that
+    Lightning Bolt is cast from the hand in the same window, at Bob."""
+    lea = set_pool("LEA")
+    game = _W1G6IGame(players=[
+        _W1G6IPlayerState(
+            name="Alice", hand=[set_pool("JUD")["Cunning Wish"]],
+            library=[lea["Island"]] * 5,
+            sideboard=[lea["Stone Rain"], lea["Lightning Bolt"]],
+        ),
+        _W1G6IPlayerState(
+            name="Bob", hand=[lea["Grizzly Bears"]], library=[lea["Island"]] * 5,
+        ),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(1)
+    assert game.queue_from_hand(1, "Grizzly Bears").supported
+
+    assert game.queue_from_hand(0, "Cunning Wish").supported
+    assert [item.card.name for item in game.stack] == ["Grizzly Bears", "Cunning Wish"]
+    assert game.resolve_top_of_stack()
+    game.auto_resolve_pending_choices()
+    alice = game.players[0]
+    assert [card.name for card in alice.hand] == ["Lightning Bolt"]
+    assert [card.name for card in alice.sideboard] == ["Stone Rain"]
+    assert [card.name for card in alice.exile] == ["Cunning Wish"]
+    assert [item.card.name for item in game.stack] == ["Grizzly Bears"]
+
+    assert game.queue_from_hand(0, "Lightning Bolt", target_player_index=1).supported
+    _w1g6i_resolve_stack(game)
+    assert game.players[1].life == 17
+    assert [p.card.name for p in game.controlled_by(1)] == ["Grizzly Bears"]
 
 # ==== end W1G6 ======================================================
 

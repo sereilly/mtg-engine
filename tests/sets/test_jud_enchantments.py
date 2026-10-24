@@ -299,6 +299,122 @@ def test_w1g5_web_of_inertia_restricts_that_players_creatures_only(set_pool):
 
 # ==== W1G6 ==========================================================
 # W1G6's tests go between this line and the "end W1G6" line.
+#
+# Two drive-list cards, supported on arrival, given a game: Telekinetic Bonds
+# and Spirit Cairn, both "Whenever a player discards a card, you may pay …".
+# Driving Bonds found its "tap or untap target permanent" writing the tapped
+# state directly — past the CR 701.26 seams every "becomes tapped" and
+# "becomes untapped" trigger hangs off — on all thirteen cards that print the
+# verb (``handlers/tapping.tap_or_untap_target``).
+
+from engine import Game as _W1G6EGame, PlayerState as _W1G6EPlayerState  # noqa: E402
+from engine.models import Permanent as _W1G6EPermanent  # noqa: E402
+from tests.helpers import _nosick as _w1g6e_nosick  # noqa: E402
+from tests.helpers import resolve_stack as _w1g6e_resolve_stack  # noqa: E402
+
+
+def _w1g6e_table(set_pool, enchantment, *, interactive):
+    """Alice: *enchantment*, two Islands and a Plains, Mind Twist in hand;
+    Bob: one card to discard. Alice's turn."""
+    lea = set_pool("LEA")
+    game = _W1G6EGame(players=[
+        _W1G6EPlayerState(name="Alice", hand=[lea["Mind Twist"]], library=[lea["Island"]] * 5),
+        _W1G6EPlayerState(name="Bob", hand=[lea["Lightning Bolt"]], library=[lea["Island"]] * 5),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0} if interactive else set()
+    game.start_turn(0)
+    for card in (set_pool("JUD")[enchantment], lea["Island"], lea["Island"], lea["Plains"]):
+        _w1g6e_put(game, 0, card)
+    return game
+
+
+def _w1g6e_put(game, seat, card):
+    permanent = _w1g6e_nosick(_W1G6EPermanent(card=card))
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    _w1g6e_resolve_stack(game)
+    return permanent
+
+
+def _w1g6e_bob_discards(game):
+    """Mind Twist for one: Bob discards his only card, which is the event both
+    enchantments watch ("a player" — the opponent here)."""
+    result = game.cast_from_hand(0, "Mind Twist", target_player_index=1, x_value=1)
+    assert result.supported, result.details
+    assert [card.name for card in game.players[1].graveyard] == ["Lightning Bolt"]
+
+
+def _w1g6e_answer_bonds(game, target):
+    """Alice aims Telekinetic Bonds' trigger at *target* (CR 603.3d), pays its
+    {1}{U} and takes the tap-or-untap — each as the prompt that asks it."""
+    answered = []
+    for _ in range(12):
+        if game.pending_choices:
+            choice = game.pending_choices[0]
+            if choice.kind == "trigger_target":
+                assert game.resolve_pending_choice(
+                    "trigger_target", 0, permanent_id=target.permanent_id,
+                    seat=game.controller_index_of(target),
+                )
+            else:
+                assert choice.kind == "optional_pay", choice.kind
+                assert game.resolve_pending_choice("optional_pay", 0, accept=True, option=None)
+            answered.append(choice.kind)
+        elif game.stack:
+            game.resolve_top_of_stack(pause_for_choices=True)
+        else:
+            return answered
+    raise AssertionError(f"the prompts did not settle: {answered}")
+
+
+def test_w1g6_telekinetic_bonds_tapping_a_forest_is_a_forest_becoming_tapped(set_pool):
+    """Bob discards; Alice pays {1}{U} and taps his Forest. Lifetap ("Whenever
+    a Forest an opponent controls becomes tapped, you gain 1 life") sees it —
+    it did not while the toggle wrote ``tapped`` past ``become_tapped``."""
+    game = _w1g6e_table(set_pool, "Telekinetic Bonds", interactive=True)
+    _w1g6e_put(game, 0, set_pool("LEA")["Lifetap"])
+    forest = _w1g6e_put(game, 1, set_pool("LEA")["Forest"])
+    _w1g6e_bob_discards(game)
+
+    assert _w1g6e_answer_bonds(game, forest) == [
+        "trigger_target", "optional_pay", "optional_pay",
+    ]
+    _w1g6e_resolve_stack(game)
+    assert forest.tapped
+    assert game.players[0].life == 21
+    assert sum(1 for p in game.controlled_by(0) if p.has_type("land") and p.tapped) == 2
+
+
+def test_w1g6_telekinetic_bonds_untapping_a_creature_is_it_becoming_untapped(set_pool):
+    """The untap half: a tapped Ghostly Pilferer untapped by Bonds is a
+    creature that became untapped (CR 701.26b), and its own trigger fires."""
+    game = _w1g6e_table(set_pool, "Telekinetic Bonds", interactive=True)
+    pilferer = _w1g6e_put(game, 1, set_pool("M21")["Ghostly Pilferer"])
+    pilferer.tapped = True
+    _w1g6e_bob_discards(game)
+    _w1g6e_answer_bonds(game, pilferer)
+
+    _w1g6e_resolve_stack(game)
+    assert not pilferer.tapped
+    untapped = game.log.index("Untapped Ghostly Pilferer")
+    assert "Ghostly Pilferer ability resolved" in game.log[untapped:], game.log[-8:]
+
+
+def test_w1g6_spirit_cairn_buys_a_flying_spirit_when_an_opponent_discards(set_pool):
+    """Headless: the offer's {W} is paid off the Plains and a 1/1 white Spirit
+    with flying is created — the discard is Bob's, and "a player" counts it."""
+    game = _w1g6e_table(set_pool, "Spirit Cairn", interactive=False)
+    _w1g6e_bob_discards(game)
+    _w1g6e_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    _w1g6e_resolve_stack(game)
+
+    (spirit,) = [p for p in game.controlled_by(0) if p.card.name == "Spirit Token"]
+    assert (spirit.effective_power, spirit.effective_toughness) == (1, 1)
+    assert game._has_keyword(spirit, "flying")
+    assert spirit.card.colors == ("W",)
+    plains = next(p for p in game.controlled_by(0) if p.card.name == "Plains")
+    assert plains.tapped
 
 # ==== end W1G6 ======================================================
 

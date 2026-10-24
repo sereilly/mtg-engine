@@ -35,7 +35,17 @@ def _client_reads(js: str, key: str) -> bool:
 #: client change rather than left behind as a blanket.
 #: Empty since Torment's wave 2: ``madness_cast`` (W1G1) was the one entry,
 #: and its client is ``applyMadnessCastPrompt`` in ``app.js``.
-_AWAITING_CLIENT: dict[str, str] = {}
+_AWAITING_CLIENT: dict[str, str] = {
+    # Judgment W1G6 — the Wishes (CR 400.11b). The payload
+    # (``web/prompt_cards._outside_game_pick``) is ``{player_seat, card_name,
+    # optional, reveal, choices: [{sideboard_index, name, card}]}``; the client
+    # shows the cards (the Ring of Ma'rûf modal's picker fits, titled by
+    # ``card_name`` rather than "Ring of Ma'rûf"), sends
+    # ``{action: "outside_game_pick_confirm", sideboard_index}`` for a pick
+    # and ``accept: false`` for a decline, drawing the Decline button only when
+    # ``optional`` is true.
+    "outside_game_pick": "outside_game_pick_confirm",
+}
 
 
 def test_every_prompt_has_a_client_renderer():

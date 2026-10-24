@@ -80,6 +80,7 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_keep_chosen_discar
                        _lower_exile_graveyard_arrivals_this_turn,
                        _lower_reveal_hand, _lower_reveal_random_from_hand,
                        _lower_reveal_cards_from_hand,
+                       _lower_put_outside_game_card_into_hand,
                        _lower_graveyard_top_to_library,
                        _lower_reveal_top_sorting_by_filter,
                        _lower_look_at_hand, _lower_look_at_library_top,
@@ -329,6 +330,9 @@ _BY_NODE_TYPE: dict[type, object] = {
     # chosen-subset reveal beside the whole-hand one, and a different node
     # for a different effect - see `ast.RevealCardsFromHand`.
     ast.RevealCardsFromHand: _lower_reveal_cards_from_hand,
+    # "Reveal a sorcery card you own from outside the game and put it into
+    # your hand." (Burning Wish.) See `ast.PutOutsideGameCardIntoHand`.
+    ast.PutOutsideGameCardIntoHand: _lower_put_outside_game_card_into_hand,
     ast.RevealRandomFromHand: _lower_reveal_random_from_hand,
     ast.ExileCostSacrifices: _lower_exile_cost_sacrifices,
     ast.ExileGraveyard: _lower_exile_graveyard,

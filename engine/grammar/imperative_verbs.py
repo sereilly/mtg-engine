@@ -56,6 +56,7 @@ from .readers import _parse_entering_counters
 from .effects import (
     parse_bin_revealed_card,
     parse_choose_host_at_random,
+    parse_put_outside_game_card_into_hand,
     _parse_force_chosen_creature_to_attack,
     _parse_add_mana,
     _parse_ante,
@@ -282,6 +283,13 @@ def parse_imperative_verb(
         off_the_top = parse_put_library_top_into_hand(stream)
         if off_the_top is not None:
             return off_the_top
+        # "Put a card you own from outside the game into your hand." (Death
+        # Wish; Ring of Ma'rûf behind "instead".) Same treatment and same
+        # reason as every one above: the counter production reads "a" as a
+        # count and refuses with a site naming counters.
+        brought_in = parse_put_outside_game_card_into_hand(stream)
+        if brought_in is not None:
+            return brought_in
         return _parse_put_counter(stream)
     if stream.at_word("double"):
         return _parse_double(stream)
@@ -595,6 +603,14 @@ def parse_imperative_verb(
         chosen = parse_reveal_any_number_from_hand(stream)
         if chosen is not None:
             return chosen
+        # "Reveal a sorcery card you own **from outside the game** and put it
+        # into your hand." (Burning Wish and its four siblings.) The same
+        # opening words as the hand reveal just above it, with the scope
+        # outside every zone; non-consuming on refusal until those words have
+        # been read, so every other reveal keeps its reading and its refusal.
+        brought_in = parse_put_outside_game_card_into_hand(stream)
+        if brought_in is not None:
+            return brought_in
         hand = _parse_reveal_hand(stream, ast.PlayerRef("you"))
         if hand is not None:
             return hand

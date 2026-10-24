@@ -7,6 +7,12 @@ a hand, put onto the battlefield out of one, or chosen in one for a later step
 to act on; "discard it unless you pay N life"; and the revealed-hand
 notification a viewer dismisses. Every candidate list is read from the hand as
 it stands, because each card that leaves renumbers the ones behind it.
+
+One pick goes the other way and lives here for its shape: a card brought *into*
+a hand from outside the game (the Judgment Wishes, CR 400.11b), which is the
+put-from-hand pick with its two ends swapped and is answered the same way —
+a position in a pile the seat looks through in full, checked against the rule
+the pile was offered by.
 """
 
 from __future__ import annotations
@@ -909,6 +915,88 @@ class HandChoicesMixin:
         live = self.live_put_from_hand_choices(choice)
         if not live or not self._resolve_put_from_hand_choice(choice, live[0]):
             self._resolve_put_from_hand_choice(choice, None)
+
+    # -- A card brought into a hand from outside the game --------------------
+
+    def arm_outside_game_pick(self, player_index: int, payload: dict, context) -> None:
+        """Queue "pick a card you own from outside the game" for *player_index*
+        (the Wishes; CR 400.11b).
+
+        The put-from-hand pick above with the other end moved: the candidates
+        are sideboard positions and the destination is the hand. The whole
+        payload travels for ``arm_put_from_hand_choice``'s reason — it is the
+        *rule* the candidates came from, so the list offered and the list an
+        answer is checked against are one list.
+        """
+        self.arm_pending_choice(
+            "outside_game_pick", player_index,
+            card_name=context.card.name if context.card is not None else "Effect",
+            optional=bool(payload.get("optional")),
+            reveal=bool(payload.get("reveal")),
+            _payload=dict(payload),
+            _context=context,
+        )
+
+    def live_outside_game_picks(self, choice: PendingChoice) -> list[int]:
+        """The sideboard positions still eligible, from the engine's own rule."""
+        from ....handlers.cards import outside_game_candidates
+
+        return outside_game_candidates(
+            self, choice.data.get("_payload") or {}, self.players[choice.player_index]
+        )
+
+    def confirm_outside_game_pick(self, player_index: int, sideboard_index) -> bool:
+        """Answer the pending pick with a position in the seat's sideboard.
+        ``None`` declines, which is an answer only when the step was offered
+        (the "you may" in front of it) or once nothing qualifies."""
+        return self.resolve_pending_choice(
+            "outside_game_pick", player_index, sideboard_index=sideboard_index
+        )
+
+    def _resolve_outside_game_pick(self, choice: PendingChoice, sideboard_index) -> bool:
+        player = self.players[choice.player_index]
+        live = self.live_outside_game_picks(choice)
+        name = choice.data.get("card_name", "Effect")
+        if sideboard_index is None:
+            # Refused on a mandatory pick with something left to take, so a
+            # client cannot answer a sentence that offered no way out — Ring of
+            # Ma'rûf's "instead put a card" — but allowed once nothing qualifies,
+            # because then the decision is over either way (CR 608.2b).
+            if live and not choice.data.get("optional"):
+                return False
+            self.log.append(
+                f"{player.name} put no card from outside the game into their "
+                f"hand ({name})"
+            )
+            self.discard_pending_choice(choice)
+            return True
+        if sideboard_index not in live:
+            return False
+        self.bring_card_from_outside_game(
+            choice.player_index, sideboard_index,
+            source_name=name, revealed=bool(choice.data.get("reveal")),
+        )
+        self.discard_pending_choice(choice)
+        return True
+
+    def _default_outside_game_pick(self, choice: PendingChoice) -> None:
+        """The stated policy: the eligible card the seat would most want to
+        tutor for (``ai_prompts.choose_outside_game_card``), the same weight a
+        library search's AI answer reads — a sideboard is a pile the seat may
+        look through in full (CR 400.11a), which is the search's situation
+        exactly. A pick refused for any reason falls back to the decline, and a
+        decline refused (a mandatory pick) to the first eligible card, so the
+        prompt always comes off the queue."""
+        from ....ai_prompts import choose_outside_game_card
+
+        live = self.live_outside_game_picks(choice)
+        pick = choose_outside_game_card(self, choice.player_index, live)
+        if pick is not None and self._resolve_outside_game_pick(choice, pick):
+            return
+        if self._resolve_outside_game_pick(choice, None):
+            return
+        if not (live and self._resolve_outside_game_pick(choice, live[0])):
+            self.discard_pending_choice(choice)
 
     # -- Cards picked out of a hand for a later step to act on ---------------
 

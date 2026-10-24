@@ -179,6 +179,7 @@ from .cards import (
     _parse_reveal_hand,
     _parse_reveal_hand_and_choose,
     parse_put_milled_card_onto_battlefield,
+    parse_put_outside_game_card_into_hand,
     parse_turn_draw_replacement,
 )
 # CR 601.3's permission sentences, split off `cards` at the size guard under
@@ -433,6 +434,7 @@ __all__ = [
     "_parse_put_exiled_this_way",
     "parse_put_exiled_pile_on_library",
     "parse_put_milled_card_onto_battlefield",
+    "parse_put_outside_game_card_into_hand",
     "_parse_put_hand_cards_on_library",
     "_parse_player_puts_whole_hand_on_library",
     "_parse_player_puts_hand_cards_on_library",

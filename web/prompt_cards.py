@@ -960,6 +960,38 @@ def _put_from_hand_choice(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("outside_game_pick")
+def _outside_game_pick(ctx: PromptContext, choices: list) -> dict:
+    """The Wishes: which card of this seat's sideboard comes in from outside
+    the game (CR 400.11b).
+
+    The candidates come from the engine's own rule — the printed phrase over
+    what may come in at all (CR 407.3's ante cards and CR 903.11a's Commander
+    bars are already off the list) — so the list offered and the list an answer
+    is checked against are one rule. Each is a sideboard *position*, the field
+    the answer sends back (``sideboard_index``), with the card serialized for a
+    visual picker. ``optional`` decides the Decline button, for the from-hand
+    pick's reason; ``reveal`` says the find will be shown to every player.
+    """
+    choice = choices[0]
+    owner = ctx.game.players[choice.player_index]
+    live = ctx.game.live_outside_game_picks(choice)
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "optional": bool(choice.data.get("optional")),
+        "reveal": bool(choice.data.get("reveal")),
+        "choices": [
+            {
+                "sideboard_index": index,
+                "name": owner.sideboard[index].name,
+                "card": ctx.serialize_card(owner.sideboard[index]),
+            }
+            for index in live
+        ],
+    }
+
+
 @prompt_renderer("choose_cards_in_hand")
 def _choose_cards_in_hand(ctx: PromptContext, choices: list) -> dict:
     """Sylvan Library: which cards in this seat's hand the next step acts on.

@@ -540,6 +540,14 @@ def _zone_counter(game: Game) -> Counter[str]:
     of which fails a per-seat comparison while nothing is wrong. What is left
     is the invariant actually worth asserting — a card may move anywhere, and
     may not stop existing or start existing twice.
+
+    **And a seat's sideboard counts**, though it is not in the game at all (CR
+    400.11a). A Wish or Ring of Ma'rûf brings one of its cards *into* the game
+    (CR 400.11b), and counted from the game's zones alone that card read as
+    one starting to exist — measured at Judgment with sideboards given to the
+    seats by hand: fourteen false alarms in four games. The deal gives no seat
+    a sideboard today, so nothing this reads has changed for any seeded run;
+    it is the reservoir the invariant has to include the day one does.
     """
     counter: Counter[str] = Counter()
     already: set[int] = set()
@@ -547,6 +555,7 @@ def _zone_counter(game: Game) -> Counter[str]:
         for zone in (
             player.library, player.hand, player.graveyard,
             player.exile, player.ante, player.command_zone,
+            player.sideboard,
         ):
             for card in zone:
                 counter[card.name] += 1
