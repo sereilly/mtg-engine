@@ -185,6 +185,50 @@ def resolve_stack(game, *, limit: int = 200) -> int:
     )
 
 
+#: Set to anything but ``""`` or ``"0"`` and every census that samples through
+#: :func:`stable_sample` examines its whole population instead — the
+#: full-stride run the promotion gate makes (SET_PLAYBOOK Phase 4). An
+#: environment variable rather than a ``slow`` mark because CI runs the
+#: ``tests/regressions`` and ``tests/rules`` shard *with* its slow tests, and
+#: a full-pool census there is minutes on every build; the sample is what the
+#: suite is for, and the whole pool is what a promotion is for.
+FULL_CENSUS_ENV = "MTG_FULL_CENSUS"
+
+
+def full_census() -> bool:
+    """Whether this run was asked for every row (:data:`FULL_CENSUS_ENV`)."""
+    import os
+
+    return os.environ.get(FULL_CENSUS_ENV, "") not in ("", "0")
+
+
+def stable_digest(label: str) -> int:
+    """A digest of *label* that is the same in every process and on every
+    pool: ``zlib.crc32`` of its UTF-8, never the salted built-in ``hash()``."""
+    import zlib
+
+    return zlib.crc32(label.encode("utf-8"))
+
+
+def stable_sample(label: str, every: int) -> bool:
+    """Whether *label* — a card's name, or a name with an ability's ordinal —
+    is in a census's one-in-*every* sample.
+
+    **By what the row is, never by where it sits.** A census that took every
+    Nth card of a sorted, filtered pool re-sampled whenever the pool moved: a
+    card supported, a set promoted or ingested, and every row behind it shifted
+    one place, so a finding flickered in and out across merges that never
+    touched it (Shaman's Trance, at Judgment) and a floor measured on one pool
+    failed on the next. A digest of the label keeps each row's membership a
+    fact about the row: growing the pool only *adds* rows, at the same rate.
+
+    Every row is in the sample when *every* is 1 or :func:`full_census` is set.
+    """
+    if every <= 1 or full_census():
+        return True
+    return stable_digest(label) % every == 0
+
+
 def _get(all_cards, name: str):
     return next(card for card in all_cards if card.name == name)
 
