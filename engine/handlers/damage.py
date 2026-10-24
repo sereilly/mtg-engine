@@ -352,8 +352,14 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         if not chosen:
             game.log.append(f"{card.name}: nothing to deal damage to")
             return True, "resolved"
-        for perm in chosen:
-            apply_damage_to_creature(game, perm, damage, source_permanent or card)
+        # One resumable loop: a target whose event stops to ask which effect
+        # applies first (CR 616.1e) takes the targets behind it with it.
+        run_resumable(
+            game, chosen,
+            lambda perm: apply_damage_to_creature(
+                game, perm, damage, source_permanent or card, asks=True,
+            ),
+        )
         return True, "resolved"
     # "…to target creature or planeswalker **that player** controls."
     # (Chandra's Incinerator.) "That player" is a referent the *event* picked —
@@ -384,7 +390,9 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         if perm is None:
             game.log.append(f"{card.name}: nothing of theirs to damage")
             return True, "resolved"
-        apply_damage_to_creature(game, perm, damage, source_permanent or card)
+        apply_damage_to_creature(
+            game, perm, damage, source_permanent or card, asks=True,
+        )
         return True, "resolved"
     # "…and N damage to you": a second damage instruction in the same sequence
     # aimed at the source's controller rather than the spell's target. Reads the
@@ -431,7 +439,9 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         if victim is None or not game.is_on_battlefield(victim):
             game.log.append(f"{card.name}: the creature it named is gone")
             return True, "resolved"
-        apply_damage_to_creature(game, victim, damage, source_permanent or card)
+        apply_damage_to_creature(
+            game, victim, damage, source_permanent or card, asks=True,
+        )
         return True, "resolved"
     if instruction.payload.get("recipient") == "event_subject":
         # "Whenever a creature without flying attacks you, this enchantment
@@ -463,7 +473,9 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
                 f"{card.name}: {victim.card.name} no longer answers the clause"
             )
             return True, "resolved"
-        apply_damage_to_creature(game, victim, damage, source_permanent or card)
+        apply_damage_to_creature(
+            game, victim, damage, source_permanent or card, asks=True,
+        )
         return True, "resolved"
     if instruction.payload.get("recipient") == "caster":
         def _report(dealt: int) -> None:
@@ -894,13 +906,21 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         # Highest slot first, so a death here cannot shift a target this loop
         # has not reached yet. Kept even though each target is now resolved up
         # front: `_mark_damage_on_permanent` reads the battlefield itself.
-        for target_perm in sorted(
-            chosen, key=lambda perm: game.battlefield_index_of(perm) or 0, reverse=True
-        ):
-            game._mark_damage_on_permanent(
+        #
+        # One resumable loop, as the divided branch above is: a target whose
+        # event stops to ask which effect applies first (CR 616.1e) takes the
+        # targets behind it with it.
+        run_resumable(
+            game,
+            sorted(
+                chosen, key=lambda perm: game.battlefield_index_of(perm) or 0,
+                reverse=True,
+            ),
+            lambda target_perm: game._mark_damage_on_permanent(
                 target_perm, per_target, source=source_permanent or card,
-                then=_damage_reporter(game, card, target_perm),
-            )
+                then=_damage_reporter(game, card, target_perm), asks=True,
+            ),
+        )
         return True, "resolved"
     if isinstance(target_perm_idx, int) or single_chosen_id(
         context.target_permanent_id
@@ -1040,6 +1060,7 @@ def deal_damage_to_player(game: Game, instruction: OracleInstruction, context: O
         then=lambda dealt: game.log.append(
             f"{context.card.name} dealt {dealt} damage to {victim.name}"
         ),
+        asks=True,
     )
     return True, "resolved"
 
@@ -1065,6 +1086,7 @@ def simulacrum_redirect(game: Game, instruction: OracleInstruction, context: Ora
         log_message=lambda dealt: (
             f"{card.name} dealt {dealt} damage to {target_perm.card.name} and {caster.name} gained {amount} life"
         ),
+        asks=True,
     )
     return True, "resolved"
 
@@ -1080,26 +1102,37 @@ def deal_damage_and_self_damage(game: Game, instruction: OracleInstruction, cont
     target_perm = game.chosen_permanent(
         target, target_perm_idx, context.target_permanent_id
     )
-    if target_perm is not None:
-        game._mark_damage_on_permanent(
-            target_perm, amount, source=damage_dealer(context),
-            then=lambda dealt: game.log.append(
-                f"{card.name} dealt {dealt} damage to {target_perm.card.name}"
-            ),
-        )
-    else:
+
+    def to_target() -> None:
+        if target_perm is not None:
+            game._mark_damage_on_permanent(
+                target_perm, amount, source=damage_dealer(context),
+                then=lambda dealt: game.log.append(
+                    f"{card.name} dealt {dealt} damage to {target_perm.card.name}"
+                ),
+                asks=True,
+            )
+            return
         game._deal_damage_to_player(
             target, amount, source=damage_dealer(context),
             then=lambda damage: game.log.append(
                 f"{card.name} dealt {damage} damage to {target.name}"
             ),
+            asks=True,
         )
-    game._deal_damage_to_player(
-        caster, self_damage, source=damage_dealer(context),
-        then=lambda dealt: game.log.append(
-            f"{card.name} dealt {dealt} damage to {caster.name} (self-damage)"
-        ),
-    )
+
+    def to_caster() -> None:
+        game._deal_damage_to_player(
+            caster, self_damage, source=damage_dealer(context),
+            then=lambda dealt: game.log.append(
+                f"{card.name} dealt {dealt} damage to {caster.name} (self-damage)"
+            ),
+            asks=True,
+        )
+
+    # Two damage events, one resumable loop: the self-damage waits for any
+    # question the first event asks (CR 616.1e) rather than landing past it.
+    run_resumable(game, [to_target, to_caster], lambda event: event())
     return True, "resolved"
 
 
@@ -1115,12 +1148,20 @@ def coin_flip_damage_loop(
     is two coins — one flip read twice would make the exit condition a 1-in-2
     rather than a 1-in-4 and would never let one player take damage alone.
 
-    **This damage deliberately does not ask CR 616.1's ordering question.** The
-    mechanism behind an ask is a *restart*: the event is re-run once the seat has
-    answered (see `engine/resumption.py`). Re-running anything inside this loop
-    would re-flip its coins, so the answer would be applied to a different
-    random outcome than the one it was asked about — a worse failure than not
-    asking. Every other damage path in the engine is re-runnable and does ask.
+    **Each player's damage may stop to ask** which of two applicable effects
+    applies first (CR 616.1e), and it can without re-flipping anything. The
+    re-run an answer makes is of *that damage event* alone (``asks=True``
+    builds a restart of exactly the one ``_deal_damage_to_player`` call), never
+    of the round or its flips. What an answer has to bring back is everything
+    after the event — the other player's damage this round, and the rounds
+    still to flip — so each round's damage is a resumable loop
+    (``engine/resumption.py``) whose last step goes on to the next round. This
+    used to deal without asking, on the stated ground that a restart would
+    re-flip the coins; the restart never reached the flips.
+
+    Rounds are played in a ``while`` rather than by recursion, so a long run of
+    tails costs no stack: the next-round step only *re-enters* :func:`play`
+    when it runs from an answer, after the loop that recorded it had returned.
 
     The round cap is not a rule. CR 705 makes this terminate with probability 1
     (a quarter of rounds end it), and a seeded RNG that failed to is a bug in
@@ -1133,23 +1174,60 @@ def coin_flip_damage_loop(
         game.log.append(f"{card.name}: no opponent to flip against")
         return True, "resolved"
     damage = resolve_amount(instruction.payload.get("amount", 1), context.x_value)
-    rounds = 0
-    while rounds < 1000:
-        rounds += 1
-        caster_heads = flip_coin()
-        opponent_heads = flip_coin()
+    rounds = {"flipped": 0}
+
+    def finish() -> None:
         game.log.append(
-            f"{card.name}: {caster.name} flipped "
-            f"{'heads' if caster_heads else 'tails'}, {opponent.name} flipped "
-            f"{'heads' if opponent_heads else 'tails'}"
+            f"{card.name}: both coins came up heads after {rounds['flipped']} flip(s)"
         )
-        if not caster_heads:
-            game._deal_damage_to_player(caster, damage, source=damage_dealer(context))
-        if not opponent_heads:
-            game._deal_damage_to_player(opponent, damage, source=damage_dealer(context))
-        if caster_heads and opponent_heads:
-            break
-    game.log.append(f"{card.name}: both coins came up heads after {rounds} flip(s)")
+
+    def play() -> None:
+        """Flip rounds until both coins come up heads, or until a round's
+        damage stops to ask — whose answer comes back through the round's
+        last step and calls this again."""
+        while True:
+            if rounds["flipped"] >= 1000:
+                finish()
+                return
+            rounds["flipped"] += 1
+            caster_heads = flip_coin()
+            opponent_heads = flip_coin()
+            game.log.append(
+                f"{card.name}: {caster.name} flipped "
+                f"{'heads' if caster_heads else 'tails'}, {opponent.name} flipped "
+                f"{'heads' if opponent_heads else 'tails'}"
+            )
+            if caster_heads and opponent_heads:
+                finish()
+                return
+            # "…1 damage to each player whose coin comes up tails" — the
+            # caster's, then the opponent's, as before.
+            tails = [
+                player for player, heads in
+                ((caster, caster_heads), (opponent, opponent_heads)) if not heads
+            ]
+            here = {"inline": True, "next_round": False}
+
+            def next_round(here=here) -> None:
+                if here["inline"]:
+                    here["next_round"] = True
+                else:
+                    play()
+
+            run_resumable(
+                game, tails,
+                lambda player: game._deal_damage_to_player(
+                    player, damage, source=damage_dealer(context), asks=True,
+                ),
+                then=next_round,
+            )
+            here["inline"] = False
+            if not here["next_round"]:
+                # A damage event stopped to ask: the round's last step is
+                # recorded, and the answer runs it.
+                return
+
+    play()
     return True, "resolved"
 
 
@@ -1183,24 +1261,40 @@ def deal_damage_to_those_damaged_this_game(
     classes = set(instruction.payload.get("classes") or ())
     record = source.metadata.get(DAMAGED_THIS_GAME) or {}
     controller = game.controller_index_of(source)
-    struck = []
+    # The recipients are fixed first -- the opponents, then the planeswalkers
+    # -- and dealt to in one resumable loop with the summary as its last step:
+    # a recipient whose event stops to ask which effect applies first (CR
+    # 616.1e) takes the rest with it, and the line is written once, after them.
+    # The players asked from a plain ``for`` and the planeswalkers not at all.
+    recipients: list = []
     if "opponent" in classes:
         for seat in list(record.get("seats") or ()):
             if seat == controller or not (0 <= seat < len(game.players)):
                 continue
-            victim = game.players[seat]
-            game._deal_damage_to_player(victim, damage, source=source, asks=True)
-            struck.append(victim.name)
+            recipients.append(game.players[seat])
     if "planeswalker" in classes:
         for permanent_id in list(record.get("permanents") or ()):
             walker = game.permanent_by_id(permanent_id)
             if walker is None or not walker.has_type("planeswalker"):
                 continue
-            apply_damage_to_creature(game, walker, damage, source)
-            struck.append(walker.card.name)
-    game.log.append(
-        f"{card.name} dealt {damage} damage to {', '.join(struck)}"
-        if struck else f"{card.name} has dealt damage to nobody yet"
+            recipients.append(walker)
+    struck = [
+        victim.card.name if isinstance(victim, Permanent) else victim.name
+        for victim in recipients
+    ]
+
+    def hit(victim) -> None:
+        if isinstance(victim, Permanent):
+            apply_damage_to_creature(game, victim, damage, source, asks=True)
+            return
+        game._deal_damage_to_player(victim, damage, source=source, asks=True)
+
+    run_resumable(
+        game, recipients, hit,
+        then=lambda: game.log.append(
+            f"{card.name} dealt {damage} damage to {', '.join(struck)}"
+            if struck else f"{card.name} has dealt damage to nobody yet"
+        ),
     )
     return True, "resolved"
 
@@ -1229,7 +1323,11 @@ def deal_damage_to_recorded_permanents(
     recorded = recorded_permanent_ids(
         context, instruction.payload.get("permanents_from")
     )
-    struck = []
+    # Which of those the printed adjective names is settled for all of them
+    # before any is dealt to (CR 608.2h), and the damage is one resumable loop
+    # with the summary as its last step: a creature whose event stops to ask
+    # which effect applies first (CR 616.1e) takes the rest with it.
+    recipients = []
     for permanent_id in recorded:
         permanent = game.permanent_by_id(permanent_id)
         if permanent is None:
@@ -1239,11 +1337,17 @@ def deal_damage_to_recorded_permanents(
             observer=observer, source=context.source_permanent,
         ):
             continue
-        apply_damage_to_creature(game, permanent, damage, damage_dealer(context))
-        struck.append(permanent.card.name)
-    game.log.append(
-        f"{card.name} dealt {damage} damage to {', '.join(struck)}"
-        if struck else f"{card.name} found none of those permanents to damage"
+        recipients.append(permanent)
+    struck = [permanent.card.name for permanent in recipients]
+    run_resumable(
+        game, recipients,
+        lambda permanent: apply_damage_to_creature(
+            game, permanent, damage, damage_dealer(context), asks=True,
+        ),
+        then=lambda: game.log.append(
+            f"{card.name} dealt {damage} damage to {', '.join(struck)}"
+            if struck else f"{card.name} found none of those permanents to damage"
+        ),
     )
     return True, "resolved"
 
