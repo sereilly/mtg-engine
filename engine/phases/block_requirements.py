@@ -68,8 +68,10 @@ from ..subject_filters import subject_matches
 
 #: How many nodes one search may visit before it answers with the best it has
 #: found. Never reached by a board the pool can build — the bound closes every
-#: measured board in a few dozen nodes — and present so that a pathological one
-#: costs a slow declaration rather than a hung game. An inexact answer is
+#: census board in under ten nodes, and a twelve-creature Invasion Plans board
+#: against six menace attackers under Dueling Grounds in under five hundred —
+#: and present so that a pathological one costs a slow declaration rather than
+#: a hung game. An inexact answer is
 #: still *sound* in one direction: a declaration it refuses is refused for a
 #: witness that really does obey more.
 _NODE_BUDGET = 200_000
@@ -110,11 +112,13 @@ class BlockRequirement:
 class BlockRequirementSearch:
     """The most requirements a legal, cost-free declaration obeys, and one that
     does (``witness``, blocker slot → attacker slots). ``exact`` is False only
-    when the node budget ran out first."""
+    when the node budget ran out first; ``visited`` is how many nodes the
+    search took, which is what the budget is measured against."""
 
     best: int
     witness: dict[int, tuple[int, ...]] = field(default_factory=dict)
     exact: bool = True
+    visited: int = 0
 
 
 class BlockRequirementsMixin:
@@ -643,6 +647,7 @@ class BlockRequirementsMixin:
             return False
 
         search(0, 0, 0)
+        result.visited = nodes
         return result
 
 
