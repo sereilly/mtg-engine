@@ -2092,8 +2092,8 @@ def test_w1g9_masked_gorgon_gives_green_and_white_creatures_protection_from_gorg
     """"Green creatures and white creatures have protection from Gorgons." One
     set, "green or white" (CR 105.2), whoever controls it: the Gorgon may not
     block a green Bears or a white Lions but may block a red Hill Giant
-    (CR 702.16e), and its combat damage to the white blocker is prevented
-    (CR 702.16d) while the Lions' damage to it is not."""
+    (CR 702.16f), and its combat damage to the white blocker is prevented
+    (CR 702.16e) while the Lions' damage to it is not."""
     jud, lea = set_pool("JUD"), set_pool("LEA")
     game = _w1g9_table(set_pool)
     gorgon = _w1g9_put(game, jud["Masked Gorgon"], 0)
@@ -2225,6 +2225,25 @@ def test_w1g9_nomad_mythmaker_leaves_an_aura_it_cannot_attach_in_the_graveyard(s
     _w1g9_mythmaker(game, seat=0)
     assert [card.name for card in game.players[0].graveyard] == ["Wild Growth"]
     assert not [p for p in game.all_permanents() if p.card.name == "Wild Growth"]
+
+
+def test_w1g9_nomad_mythmaker_never_offers_a_host_protected_from_the_aura(set_pool):
+    """The ruling's own example (2004-10-04): "you can't choose a creature with
+    protection from black if the targeted Aura card is black." Unholy Strength
+    is black and the White Knight is protected from it (CR 702.16c), so even an
+    interactive seat is not asked — the one legal host takes it."""
+    jud, lea = set_pool("JUD"), set_pool("LEA")
+    game = _w1g9_table(set_pool, interactive=(0,))
+    myth = _w1g9_put(game, jud["Nomad Mythmaker"], 0)
+    knight = _w1g9_put(game, lea["White Knight"], 0)
+    game.players[1].graveyard.append(lea["Unholy Strength"])
+
+    _w1g9_mythmaker(game)
+    assert not game.pending_choices
+    (strength,) = [p for p in game.all_permanents() if p.card.name == "Unholy Strength"]
+    assert strength.metadata.get("attached_to") is myth
+    assert (myth.effective_power, myth.effective_toughness) == (4, 3)
+    assert (knight.effective_power, knight.effective_toughness) == (2, 2)
 
 # ==== end W1G9 ======================================================
 
