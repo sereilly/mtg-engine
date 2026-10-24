@@ -466,11 +466,25 @@ def _acts_on_the_replaced_target(replaced, replacement) -> bool:
     Whether the word can name that target ("that creature" after "target
     nonblack creature", not after "target artifact") is
     ``_instead_inherits_subject``'s question, asked next as for every pair.
+
+    **A permanent on the battlefield, and done to by a verb about one.** The
+    target-restating test reads a back-reference's head noun and deliberately
+    not its zone, so "that spell" would restate any target at all; a pair whose
+    arms are about different *kinds of object* — a creature, then a spell on the
+    stack or a card in a graveyard — is two different announcements whichever
+    words point back, and only the same-kind pairs above may cross zones.
     """
     if type(replacement) is type(replaced) or not isinstance(replacement, _REPLACEABLE):
         return False
+    if isinstance(replacement, (ast.CounterSpell, ast.ReturnToZone)):
+        return False
     field = _INSTEAD_SUBJECT_FIELDS.get(type(replacement))
     if field is None or not _one_announced_object(replaced):
+        return False
+    original = getattr(replaced, _INSTEAD_SUBJECT_FIELDS[type(replaced)])
+    if isinstance(original, tuple):
+        (original,) = original
+    if original.filter.zone != "battlefield" or original.filter.is_card:
         return False
     named = getattr(replacement, field)
     return not isinstance(named, tuple) and _points_back(named)

@@ -1440,8 +1440,9 @@ def _w1g7_scrounger_table(set_pool, catalog_by_name, cards_in_graveyard):
 def test_w1g7_scrounger_needs_threshold_before_its_cost_is_paid(
     set_pool, catalog_by_name,
 ):
-    """Six cards: refused by the restriction with nothing moved (CR 602.5b —
-    asked as the ability is activated, before the cost)."""
+    """Six cards: refused by the restriction with nothing moved (CR 602.5 — a
+    player can't begin to activate an ability that's prohibited, so it is
+    asked before the cost)."""
     game, scrounger = _w1g7_scrounger_table(set_pool, catalog_by_name, 6)
     result = game.activate_permanent_ability(0, "Battlefield Scrounger")
 

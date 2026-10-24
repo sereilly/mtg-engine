@@ -902,15 +902,11 @@ def _each_seat_picks_from_own_graveyard(
     last, so a later "for each card exiled this way" reads every pile.
     """
     caster_index = game.players.index(context.caster)
-    if instruction.payload.get("graveyard_owner") == "each_opponent":
-        seats = [s for s in game.opponents_of(caster_index) if not game.players[s].lost]
-    else:
-        total = len(game.players)
-        active = game.active_player_index or 0
-        seats = sorted(
-            (i for i, p in enumerate(game.players) if not p.lost),
-            key=lambda i: ((i - active) % total, i),
-        )
+    seats = game.apnap_seats(
+        game.opponents_of(caster_index)
+        if instruction.payload.get("graveyard_owner") == "each_opponent"
+        else None
+    )
     context.results[EXILED_THIS_WAY_OBJECTS] = []
     context.results[EXILED_THIS_WAY] = 0
     for seat in seats:
