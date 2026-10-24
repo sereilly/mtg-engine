@@ -701,6 +701,45 @@ def test_w1g4_wormfang_behemoth_holds_its_controller_s_hand_until_it_leaves(set_
     assert sorted(c.name for c in p0.hand) == ["Grizzly Bears", "Lightning Bolt"]
     assert [c.name for c in p0.exile] == ["Wormfang Behemoth"]
 
+
+def test_w1g4_anurid_brushhopper_comes_back_out_of_exile_at_the_end_step(set_pool):
+    # Supported on arrival and never seen to work: the delayed return looked
+    # for the card on the battlefield and in the graveyards, logged "no longer
+    # in a graveyard", and left the Brushhopper in exile for good.
+    game = _w1g4_game(
+        set_pool, hand=["Grizzly Bears", "Lightning Bolt", "Hill Giant"],
+    )
+    game.start_turn(0)
+    hopper = _w1g4_put(game, set_pool, 0, "Anurid Brushhopper")
+    hopper.tapped = True
+    hopper.damage_marked = 2
+    result = game.activate_permanent_ability(0, "Anurid Brushhopper")
+    assert result.supported, result.details
+    _w1g4_drain(game)
+
+    p0 = game.players[0]
+    assert len(p0.hand) == 1 and len(p0.graveyard) == 2
+    assert [c.name for c in p0.exile] == ["Anurid Brushhopper"]
+
+    game.resolve_end_step(0)
+    _w1g4_drain(game)
+
+    back = _w1g4_named(game, 0, "Anurid Brushhopper")
+    # A new object (CR 400.7): untapped, no damage, a fresh id.
+    assert back is not hopper and not back.tapped and back.damage_marked == 0
+    assert p0.exile == []
+
+
+def test_w1g4_anurid_brushhopper_needs_two_cards_to_discard(set_pool):
+    game = _w1g4_game(set_pool, hand=["Grizzly Bears"])
+    game.start_turn(0)
+    _w1g4_put(game, set_pool, 0, "Anurid Brushhopper")
+    result = game.activate_permanent_ability(0, "Anurid Brushhopper")
+
+    assert not result.supported
+    assert _w1g4_names(game, 0) == ["Anurid Brushhopper"]
+    assert [c.name for c in game.players[0].hand] == ["Grizzly Bears"]
+
 # ==== end W1G4 ======================================================
 
 

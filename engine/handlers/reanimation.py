@@ -570,7 +570,25 @@ def return_source_card_to_battlefield(game: Game, instruction: OracleInstruction
         owner = base_controller(source)
         if isinstance(owner, int):
             seat = owner
-    if source is not None and game.is_on_battlefield(source):
+    if instruction.payload.get("from") == "exile":
+        # "Exile this creature. Return it to the battlefield under its owner's
+        # control at the beginning of the next end step." (Anurid
+        # Brushhopper.) The lowering names the zone because the step in front
+        # of this one put the card there: CR 400.3 put it in its **owner's**
+        # exile, which is the only pile asked, and by identity through the
+        # departure seam (``take_card_from_exile``). A card that has left
+        # exile since is a new object (CR 400.7) and nothing is returned.
+        from ..control import base_controller
+
+        owner_seat = base_controller(source) if source is not None else None
+        if not isinstance(owner_seat, int):
+            owner_seat = seat
+        if not game.take_card_from_exile(owner_seat, card):
+            game.log.append(f"{card.name} was no longer in exile")
+            return True, "resolved"
+        if owners_control:
+            seat = owner_seat
+    elif source is not None and game.is_on_battlefield(source):
         game.remove_from_battlefield(source)
     else:
         for player in game.players:
