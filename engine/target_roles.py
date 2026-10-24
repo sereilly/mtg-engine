@@ -123,6 +123,18 @@ def recorded_role_seats(holder) -> "list | None":
 SAME_CONTROLLER_ROLE = "same_controller_role"
 
 
+#: The key a **count** carries naming the role whose seat it is taken on.
+#: "…the number of creatures **target opponent** controls" (Superior Numbers)
+#: is a target announced beside the spell's object (CR 601.2c) and read by
+#: nothing but the count, so the count says which role answers its ``owner``
+#: (``lowering/_roles.describe_counted_seat_roles``) and the resolution reads
+#: that role's seat off the announcement
+#: (``handlers/_amounts.count_from_payload``) — never the seat a scope left
+#: in ``context.target``, which for the object's step is the object's
+#: controller.
+COUNTED_SEAT_ROLE = "owner_role"
+
+
 def role_seat_of(earlier, game) -> int | None:
     """The seat an earlier role's chosen object **names**, for a relation that
     asks "whose?" of it: a player role's own seat, a permanent's controller

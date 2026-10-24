@@ -33,6 +33,7 @@ the middle of, and the split is invisible to every caller either way.
 
 import dataclasses
 
+from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 
@@ -571,6 +572,15 @@ def describe_sequence_target_roles(
     graveyard_roles = describe_graveyard_card_roles(instructions)
     if graveyard_roles is not None:
         return graveyard_roles
+    # A line whose one object slot sits beside a **target seat printed inside
+    # its count** ("…to target creature equal to … the number of creatures
+    # target opponent controls", Superior Numbers) is two targets by the same
+    # argument as a seat beside an object: there is no antecedent either could
+    # be a copy of. Asked here, before the slot count below, because the seat
+    # carries no ``targets`` description for that count to see.
+    counted_roles = describe_counted_seat_roles(instructions)
+    if counted_roles is not None:
+        return counted_roles
 
     carried = _announced_slots(instructions)
     slots = list(enumerate(described for described, _carrier in carried))
@@ -701,6 +711,127 @@ def describe_sequence_target_roles(
         for (position, _described), role in zip(announced, roles)
     }
     return _stamp_slot_roles(tuple(instructions), roles, by_position, [])
+
+
+#: The count ``owner`` words that name a seat the sentence **targets**, and the
+#: seat role each one is announced as. "Target opponent" is CR 102.3's "a
+#: player is never their own opponent" on the role (``opponents_only``), so the
+#: picker cannot offer the caster their own seat for a card that says opponent.
+_COUNTED_TARGET_SEATS: dict[str, dict] = {
+    "target_opponent": {"kind": "player", "opponents_only": True},
+    "target_player": {"kind": "player"},
+}
+
+#: The amount keys a count spec rides under, and the key a nested count is
+#: subtracted under ("…in excess of the number of …", Superior Numbers).
+_COUNT_PAYLOAD_KEYS = ("x_from_count",)
+_NESTED_COUNT_KEYS = ("minus",)
+
+
+def _counted_target_seats(spec, path: tuple = ()) -> list:
+    """``(path, word)`` for every count in *spec* — and its subtrahends —
+    scoped to a seat the sentence targets."""
+    if not isinstance(spec, dict):
+        return []
+    found = []
+    if spec.get("owner") in _COUNTED_TARGET_SEATS:
+        found.append((path, spec["owner"]))
+    for key in _NESTED_COUNT_KEYS:
+        found.extend(_counted_target_seats(spec.get(key), path + (key,)))
+    return found
+
+
+def _with_owner_role(spec: dict, path: tuple, role: str) -> dict:
+    """*spec* with the count at *path* told which role announces its seat."""
+    from ...target_roles import COUNTED_SEAT_ROLE
+
+    if not path:
+        return {**spec, COUNTED_SEAT_ROLE: role}
+    head, *rest = path
+    return {**spec, head: _with_owner_role(spec[head], tuple(rest), role)}
+
+
+def describe_counted_seat_roles(instructions) -> "tuple | None":
+    """A line whose one object target sits beside a **target seat inside its
+    count**, as ordered roles — or None for every other line.
+
+    "Superior Numbers deals damage to **target creature** equal to the number
+    of creatures you control in excess of the number of creatures **target
+    opponent** controls." Two instances of the word "target", so CR 601.2c
+    announces two — the cards' ruling (2008-08-01): "As you cast this, you
+    target a creature and an opponent. The opponent does not have to be that
+    creature's controller." The count is the only reader of the second, and
+    ``count_spec`` lifts the seat onto its ``owner`` rather than a ``targets``
+    description, so the picker derived a creature slot alone and the
+    resolution took the seat from ``context.target`` — the **creature's
+    controller** where that was an opponent, else the first opponent. At three
+    seats the caster could not name the opponent at all.
+
+    So the line becomes the roles walk Lunge's is — the object, then the seat
+    (printed order; neither depends on the other) — and the count is told
+    which role announces its seat (``target_roles.COUNTED_SEAT_ROLE``), which
+    ``handlers/_amounts.count_from_payload`` reads off the announcement rather
+    than off whatever a scope left in ``context.target``. The one step is put
+    inside a ``sequence`` because that is where a step is scoped to its own
+    role (``handlers/control_flow._run``): the damage acts on the creature, and
+    nothing of the seat's.
+
+    Narrow, for the line this must not claim: one instruction, one plain
+    "target" object slot, one targeted seat in its count. Two targeted seats in
+    one count is a walk this does not order and refuses.
+    """
+    from ...subject_filters import untestable_filter_keys
+
+    steps = tuple(instructions)
+    if len(steps) != 1:
+        return None
+    (step,) = steps
+    payload = getattr(step, "payload", None) or {}
+    described = payload.get("targets")
+    if not (
+        isinstance(described, dict)
+        and described.get("kind") == "object"
+        and described.get("quantifier") == "target"
+    ):
+        return None
+    counted = [
+        (key, path, word)
+        for key in _COUNT_PAYLOAD_KEYS
+        for path, word in _counted_target_seats(payload.get(key))
+    ]
+    if not counted:
+        return None
+    if len(counted) != 1:
+        raise LoweringError(
+            "a count scoped to two targeted seats is a walk the roles "
+            "description does not order"
+        )
+    key, path, word = counted[0]
+    narrowing = described.get("filter") or {}
+    object_name = _sequence_role_name(described, set())
+    if (
+        object_name is None
+        or untestable_filter_keys(narrowing)
+        or narrowing.get("controller") in _UNENUMERABLE_CONTROLLERS
+    ):
+        raise LoweringError(
+            "a target beside a seat its count targets announces both "
+            "(CR 601.2c), and the roles walk cannot enumerate the object slot"
+        )
+    object_role = {
+        k: v for k, v in described.items() if k not in _ROLE_STRUCTURAL_KEYS
+    }
+    object_role.update({"role": object_name, "count": 1, "filter": narrowing})
+    seat_role = {"role": "player", **_COUNTED_TARGET_SEATS[word]}
+    roles = [object_role, seat_role]
+    stamped = dataclasses.replace(step, payload={
+        **payload,
+        key: _with_owner_role(payload[key], path, seat_role["role"]),
+        "targets": {
+            **described, "kind": "roles", "roles": roles, "role": object_name,
+        },
+    })
+    return (OracleInstruction("sequence", "", {"steps": (stamped,)}),)
 
 
 #: The role dependency "…and the **next** of the same printed cards, out of the

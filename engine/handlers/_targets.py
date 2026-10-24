@@ -29,6 +29,7 @@ offered it with — and nothing else of the handler package.
 
 from __future__ import annotations
 
+import dataclasses
 from typing import TYPE_CHECKING, Callable, Sequence
 
 
@@ -677,6 +678,42 @@ def resolve_role_player(
     if seat is None or not _role_seat_is_still_a_target(game, context, roles[slot], seat):
         return None
     return seat
+
+
+def announced_context(context: OracleExecutionContext) -> OracleExecutionContext:
+    """*context* with its target channels as the announcement left them.
+
+    The identity for every context no role has scoped yet; for one that has,
+    the three channels it saved before narrowing
+    (``control_flow._role_scoped``). Here, on the floor, because a count reads
+    it as well as the scoping (:func:`announced_role_seat`).
+    """
+    saved = context.announced_targets
+    if saved is None:
+        return context
+    target, ids, indices = saved
+    return dataclasses.replace(
+        context, target=target, target_permanent_id=ids,
+        target_permanent_index=indices,
+    )
+
+
+def announced_role_seat(
+    game: Game, context: OracleExecutionContext, instruction, role: str,
+) -> "int | None":
+    """The seat the announcement named for *instruction*'s player role *role*,
+    whatever role the step being resolved is scoped to — or None where the
+    payload carries no such role or CR 608.2b finds the seat no longer a
+    legal target (:func:`resolve_role_player`).
+
+    "…to target creature equal to … the number of creatures **target
+    opponent** controls." (Superior Numbers.) The step is scoped to the
+    creature, so its ``context.target`` is the creature's controller; the
+    count asks for the opponent role by name, off the channels the
+    announcement left (:func:`announced_context`).
+    """
+    payload = getattr(instruction, "payload", None) or {}
+    return resolve_role_player(game, announced_context(context), payload, role)
 
 
 def _role_seat_is_still_a_target(

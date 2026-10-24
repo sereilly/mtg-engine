@@ -53,6 +53,7 @@ from ._common import flip_coin, flip_coin_for
 from ._conditions import evaluate_state_condition
 from ._filters import permanent_matches_filter
 from ._record_conditions import evaluate_record_condition
+from ._targets import announced_context
 from .offers import (_action_is_takeable, _derived_cost_is_unpayable,
                      _exiled_cards_still_in_exile, _narrow_to_takeable_actions,
                      _offered_seats, _resolved_cost, _resolved_life_cost)
@@ -233,7 +234,7 @@ def _role_scoped(
     )
     if entry is None:  # pragma: no cover - a payload with a name and no list
         return context
-    announced = _announced_context(context)
+    announced = announced_context(context)
     remembered = (
         announced.target, announced.target_permanent_id,
         announced.target_permanent_index,
@@ -390,22 +391,6 @@ def _graveyard_role_scoped(
         target_permanent_id=None,
         target_graveyard_card=stamps if several else stamps[0],
         announced_targets=remembered,
-    )
-
-
-def _announced_context(context: OracleExecutionContext) -> OracleExecutionContext:
-    """*context* with its target channels as the announcement left them.
-
-    The identity for every context no role has scoped yet; for one that has, the
-    three channels it saved before narrowing (see :func:`_role_scoped`).
-    """
-    saved = context.announced_targets
-    if saved is None:
-        return context
-    target, ids, indices = saved
-    return dataclasses.replace(
-        context, target=target, target_permanent_id=ids,
-        target_permanent_index=indices,
     )
 
 
