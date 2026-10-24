@@ -5,8 +5,9 @@ your hand." The server half of the wire, end to end over the HTTP routes: the
 cast, the "you may" (the ordinary ``optional_pay`` offer the client already
 answers), the ``outside_game_pick`` payload a person is shown — only to the
 seat whose sideboard it is — and ``outside_game_pick_confirm``, which re-checks
-the pick against the printed type. The browser half is wave 2's
-(``tests/ui/test_prompt_client_coverage._AWAITING_CLIENT``).
+the pick against the printed type. The browser half is ``app.js``'s
+``renderOutsideGamePickModal``, run against this payload in
+``tests/ui/test_jud_w2g1_client_ui_api.py``.
 """
 from __future__ import annotations
 

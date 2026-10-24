@@ -1269,7 +1269,7 @@ function hasBlockingPromptForAutoPass(state = currentState) {
   // auto-pass sent a pass the server refused (and, crossing the answer on the
   // wire, one it then accepted on the empty stack that followed).
   if (state?.waiting_on_prompt) return true;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getDrawBecomesCounterInfo(state) || getRevealUntilKindInfo(state) || getSkipDrawInfo(state) || getEntryDiscardTollInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getPayAnyAmountInfo(state) || getNumberChoiceInfo(state) || getSecretNumberInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getRepeatProcessInfo(state) || getExileFromHandInfo(state) || getExileHandPileInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getOpponentPicksRevealedInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getDrawBecomesCounterInfo(state) || getRevealUntilKindInfo(state) || getSkipDrawInfo(state) || getEntryDiscardTollInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getOutsideGamePickInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getPayAnyAmountInfo(state) || getNumberChoiceInfo(state) || getSecretNumberInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getRepeatProcessInfo(state) || getExileFromHandInfo(state) || getExileHandPileInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getOpponentPicksRevealedInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
   return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingDiscardCost || pendingPermanentCost || pendingAbilityChoice || pendingChannel || pendingAttackTarget);
 }
 
@@ -3782,6 +3782,21 @@ function getOutsideGameDrawInfo(state = currentState) {
   return info;
 }
 
+// The Wishes (CR 400.11b): a resolving spell's "you may reveal a sorcery card
+// you own from outside the game and put it into your hand" — a step of the
+// spell, held on `pending_choices` until answered (CR 608.2), not Ring of
+// Ma'rûf's replaced draw above. `choices` are the engine's own candidates
+// (sideboard positions, `sideboard_index`); `optional` is the printed "may".
+// Kept with no candidates at all: the engine then takes a decline even of a
+// mandatory pick, and the seat still has to give it, or the game waits.
+function getOutsideGamePickInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.outside_game_pick;
+  if (!info || !Array.isArray(info.choices)) return null;
+  if (Number.isInteger(info.player_seat) && info.player_seat !== seat) return null;
+  return info;
+}
+
 // Forbidden Crypt: pick which card comes back from your graveyard instead of
 // the draw that was replaced.
 function getGraveyardReturnDrawInfo(state = currentState) {
@@ -3937,7 +3952,7 @@ function getPromptBoardTargeting(state = currentState) {
     });
   }
 
-  if (getLampDrawInfo(state) || getOutsideGameDrawInfo(state)) return null;
+  if (getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getOutsideGamePickInfo(state)) return null;
   if (getUpkeepPayInfo(state)) return null;
 
   // A target-bearing upkeep trigger (Vesuvan Doppelganger's re-copy, Erhnam
@@ -4410,7 +4425,7 @@ function isAnyPromptActive(state = currentState) {
   if (getOptionalPayInfo(state)) return true;
   if (getOptionalUntapInfo(state)) return true;
   if (getOpponentDamageInfo(state)) return true;
-  if (getLampDrawInfo(state) || getOutsideGameDrawInfo(state)) return true;
+  if (getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getOutsideGamePickInfo(state)) return true;
   if (getEffectOrderInfo(state)) return true;
   if (getLandTypeChoiceInfo(state)) return true;
   if (getBodyChoiceInfo(state)) return true;
@@ -4452,7 +4467,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getDrawBecomesCounterInfo(state) || getRevealUntilKindInfo(state) || getSkipDrawInfo(state) || getEntryDiscardTollInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getPayAnyAmountInfo(state) || getNumberChoiceInfo(state) || getSecretNumberInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getMadnessCastInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getRepeatProcessInfo(state) || getExileFromHandInfo(state) || getExileHandPileInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getOpponentPicksRevealedInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getOrderTriggersInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getDrawBecomesCounterInfo(state) || getRevealUntilKindInfo(state) || getSkipDrawInfo(state) || getEntryDiscardTollInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getOutsideGamePickInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getPayAnyAmountInfo(state) || getNumberChoiceInfo(state) || getSecretNumberInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getMadnessCastInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getRepeatProcessInfo(state) || getExileFromHandInfo(state) || getExileHandPileInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getOpponentPicksRevealedInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getOrderTriggersInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -6119,28 +6134,63 @@ function applyOpponentDamagePrompt(info) {
 // choice between names. `info.card_names` is authoritative for the count and for
 // the index sent back; `info.cards` carries the art alongside it.
 function renderDrawChoiceModal(info, { title, subtitle, action }) {
+  if (!info) {
+    renderCardPickModal(null);
+    return;
+  }
+  const names = info.card_names || [];
+  const cards = info.cards || [];
+  renderCardPickModal({
+    title,
+    subtitle: subtitle(names.length),
+    entries: names.map((name, i) => ({ name, card: cards[i] })),
+    onPick: (index) => sendAction({ seat, action, hand_index: index }),
+  });
+}
+
+// The card-grid picker the replaced draws above and the Wishes share: one
+// clickable card per entry (art, name, hover preview), and a footer button only
+// when the prompt has a way out (`decline`). `entries[i]` is answered by
+// `onPick(i)` — what `i` means on the wire (a hand slot of a revealed set, a
+// sideboard position) is the caller's, so this never has to know.
+function renderCardPickModal(spec) {
   const modal = document.getElementById("lampDrawModal");
   if (!modal) return;
+  const footer = document.getElementById("lampDrawFooter");
+  const declineBtn = document.getElementById("lampDrawDeclineBtn");
 
-  if (!info) {
+  if (!spec) {
     modal.classList.add("hidden");
+    footer?.classList.add("hidden");
     return;
   }
 
-  const names = info.card_names || [];
-  const cards = info.cards || [];
+  const entries = spec.entries || [];
   modal.classList.remove("hidden");
 
   const titleEl = document.getElementById("lampDrawTitle");
-  if (titleEl) titleEl.textContent = title;
+  if (titleEl) titleEl.textContent = spec.title;
   const subtitleEl = document.getElementById("lampDrawSubtitle");
-  if (subtitleEl) subtitleEl.textContent = subtitle(names.length);
+  if (subtitleEl) subtitleEl.textContent = spec.subtitle;
+
+  if (footer && declineBtn) {
+    footer.classList.toggle("hidden", !spec.decline);
+    if (spec.decline) {
+      declineBtn.textContent = spec.decline.label;
+      declineBtn.onclick = async () => {
+        clearCardPreview();
+        modal.classList.add("hidden");
+        await spec.decline.onClick();
+      };
+    } else {
+      declineBtn.onclick = null;
+    }
+  }
 
   const grid = document.getElementById("lampDrawGrid");
   if (!grid) return;
-  grid.innerHTML = names
-    .map((name, i) => {
-      const card = cards[i];
+  grid.innerHTML = entries
+    .map(({ name, card }, i) => {
       const inner = card?.image_uri
         ? `<img src="${escapeHtml(card.image_uri)}" alt="${escapeHtml(name)}" loading="lazy" />`
         : `<div class="library-card-text-placeholder">${escapeHtml(name)}</div>`;
@@ -6151,7 +6201,7 @@ function renderDrawChoiceModal(info, { title, subtitle, action }) {
 
   grid.querySelectorAll("[data-draw-choice]").forEach((el) => {
     const index = Number(el.dataset.drawChoice);
-    const card = cards[index];
+    const card = entries[index]?.card;
     if (card) {
       el.addEventListener("mouseenter", () => showCardPreview(card));
       el.addEventListener("mouseleave", () => clearCardPreview());
@@ -6159,7 +6209,7 @@ function renderDrawChoiceModal(info, { title, subtitle, action }) {
     const choose = async () => {
       clearCardPreview();
       modal.classList.add("hidden");
-      await sendAction({ seat, action, hand_index: index });
+      await spec.onPick(index);
     };
     el.addEventListener("click", choose);
     el.addEventListener("keydown", (ev) => {
@@ -6168,6 +6218,39 @@ function renderDrawChoiceModal(info, { title, subtitle, action }) {
         choose();
       }
     });
+  });
+}
+
+// The Wishes' pick (`outside_game_pick`), on the card grid Ring of Ma'rûf's
+// replaced draw uses, titled by the card that asks rather than by the Ring.
+// The entries are the engine's candidates (Burning Wish offers only the
+// sorceries), each answered by its `sideboard_index`. Decline is drawn only
+// where the engine takes one: the printed "may" (`optional`), or a pick with
+// nothing left to take — which the engine accepts as an answer even of a
+// mandatory step, and which the seat must still give or the game waits.
+function renderOutsideGamePickModal(info) {
+  const choices = info.choices || [];
+  const name = info.card_name || "Outside the game";
+  const reveal = info.reveal ? " It is revealed to every player." : "";
+  renderCardPickModal({
+    title: name,
+    subtitle: choices.length
+      ? `${info.optional ? "You may choose" : "Choose"} a card you own from outside the game ` +
+        `to put into your hand (${choices.length} available).${reveal}`
+      : "No card you own from outside the game can be chosen.",
+    entries: choices.map((choice) => ({ name: choice.name, card: choice.card })),
+    onPick: (i) =>
+      sendAction({
+        seat,
+        action: "outside_game_pick_confirm",
+        sideboard_index: choices[i].sideboard_index,
+      }),
+    decline: info.optional || choices.length === 0
+      ? {
+          label: choices.length ? "Decline" : "Continue",
+          onClick: () => sendAction({ seat, action: "outside_game_pick_confirm", accept: false }),
+        }
+      : null,
   });
 }
 
@@ -6194,6 +6277,11 @@ function renderDrawChoiceModals(state) {
         `Choose a card you own from outside the game to put into your hand ` +
         `(${n} available).`,
     });
+    return;
+  }
+  const wish = getOutsideGamePickInfo(state);
+  if (wish) {
+    renderOutsideGamePickModal(wish);
     return;
   }
   const crypt = getGraveyardReturnDrawInfo(state);
@@ -8589,6 +8677,28 @@ function applyChooseCardsInHandPrompt(info) {
   });
 }
 
+// Whether the entry exile's picks so far (`[{index, counter}]`) are an answer
+// the engine takes, and what its Confirm says. A printed count is owed exactly
+// (Frankenstein's Monster's X). "Exile **any number of** creature cards from
+// your graveyard" (Sutured Ghoul) owes none — `count` is 0 and `any_number`
+// says so — so every selection from none to all of `legal_indices` is one.
+// Gated on `count` alone, Confirm was ready only at zero: a 0/0 that dies was
+// the one thing a person could do.
+function entryExileConfirmState(info, selected) {
+  const counters = Array.isArray(info.counters) ? info.counters : [];
+  const wanted = Number(info.count) || 0;
+  const n = selected.length;
+  const ready = info.any_number
+    ? n <= (info.legal_indices || []).length
+    : n === wanted;
+  return {
+    ready: ready && (counters.length === 0 || selected.every((pick) => pick.counter)),
+    label: info.any_number
+      ? (n === 0 ? "Exile nothing" : `Exile ${n} card${n === 1 ? "" : "s"}`)
+      : `Confirm (${n}/${wanted})`,
+  };
+}
+
 function applyEntryExilePrompt(info) {
   const panel = q("activationPanel");
   const title = q("promptTitle");
@@ -8610,12 +8720,15 @@ function applyEntryExilePrompt(info) {
   const counters = Array.isArray(info.counters) ? info.counters : [];
   entryExileSelected = entryExileSelected.filter((pick) => legal.has(pick.index));
   const wanted = Number(info.count) || 0;
+  const anyNumber = !!info.any_number;
   const cards = Array.isArray(info.cards) ? info.cards : [];
   const nameAt = (index) => (cards[index] && cards[index].name) || `card ${index}`;
 
   title.textContent = `${info.card_name} - exile from your graveyard`;
   body.textContent =
-    `Exile ${wanted} card${wanted === 1 ? "" : "s"} from your graveyard` +
+    (anyNumber
+      ? "Exile any number of these cards from your graveyard — choosing none is legal"
+      : `Exile ${wanted} card${wanted === 1 ? "" : "s"} from your graveyard`) +
     (counters.length > 1 ? ", and choose the counter each one places." : ".");
 
   const cardButtons = info.legal_indices
@@ -8652,15 +8765,13 @@ function applyEntryExilePrompt(info) {
           .join("")
       : "";
 
-  const ready =
-    entryExileSelected.length === wanted &&
-    (counters.length === 0 || entryExileSelected.every((pick) => pick.counter));
+  const { ready, label: tally } = entryExileConfirmState(info, entryExileSelected);
   steps.innerHTML =
     `<div class="prompt-choice-column">${cardButtons}</div>` +
     counterRows +
     `<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn"` +
     `${ready ? "" : " disabled"} data-entry-exile-confirm="1">` +
-    `Confirm (${entryExileSelected.length}/${wanted})</button></div>`;
+    `${tally}</button></div>`;
 
   steps.querySelectorAll("[data-entry-exile-index]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -11683,10 +11794,10 @@ function renderActivationPrompt() {
     return;
   }
 
-  // Aladdin's Lamp and Ring of Ma'rûf have their own card-grid modal
-  // (renderDrawChoiceModals), so they claim the prompt slot without rendering
-  // into the text prompt panel.
-  if (getLampDrawInfo() || getOutsideGameDrawInfo()) {
+  // Aladdin's Lamp, Ring of Ma'rûf and the Wishes have their own card-grid
+  // modal (renderDrawChoiceModals), so they claim the prompt slot without
+  // rendering into the text prompt panel.
+  if (getLampDrawInfo() || getOutsideGameDrawInfo() || getOutsideGamePickInfo()) {
     panel.classList.add("hidden");
     return;
   }
@@ -12358,7 +12469,8 @@ function renderActivationPrompt() {
     const picked = pending.picked || [];
     // "Sacrifice X lands" announces X by the lands named (CR 601.2b), so any
     // number is an answer and the count is what X becomes.
-    const purpose = pending.purpose === "attack" ? "attack"
+    const purpose = pending.purposeText ? pending.purposeText
+      : pending.purpose === "attack" ? "attack"
       : pending.purpose === "block" ? "block"
         : pending.purpose === "cast" ? "cast it" : "activate this ability";
     const pileOwner = pending.pileSeat === seat
@@ -15031,6 +15143,18 @@ function confirmPermanentCost() {
   if (!pending.announcesX && !pending.anyNumber && picked.length !== pending.count) return;
   pendingPermanentCost = null;
   renderActivationPrompt();
+  if (pending.specialAction) {
+    // CR 116.2d: the price is paid as the action is taken, on the channels an
+    // activation's own price travels on (slots for graveyard cards, an id for
+    // the permanent).
+    const fields = pending.zone === "graveyard"
+      ? { cost_graveyard_indices: picked }
+      : { cost_permanent_id: picked[0] };
+    sendSpecialAction(pending.specialAction, fields)
+      .then(() => updateActionHint(`${pending.cardName}: ignored until end of turn.`))
+      .catch((e) => updateActionHint(e.message, true));
+    return;
+  }
   if (pending.zone === "graveyard") {
     // The whole set by slot, an empty one included for "any number of": the
     // engine reads a named list as the payment and pays nothing it was not
@@ -16264,6 +16388,10 @@ function roleTargetNoun(role) {
   // caster would recognise, so the *printed noun* the lowering named the role
   // with is what is shown - "artifact card", for Goblin Welder's second slot.
   if (roleReadsAGraveyard(role)) return role.role || "card in a graveyard";
+  // CR 115.4's "any target" as one role of several (Shieldmage Advocate's
+  // second): a creature, a player or a planeswalker, so a pill or a card
+  // answers it. The spec kind is "any", which said "Choose the any…".
+  if (role.kind === "any") return "any target";
   // A role whose object is a **seat** rather than an object in any zone
   // ("Target player gains control of target permanent you control", Donate).
   // The caster clicks a life pill for it, so the word has to be the one on the
@@ -16286,6 +16414,13 @@ const SEAT_ROLE_KINDS = ["player", "player_or_planeswalker"];
 /** Whether this role is answered by clicking a player rather than a card. */
 function roleChoosesAPlayer(role) {
   return !!role && SEAT_ROLE_KINDS.includes(role.kind);
+}
+
+/** Whether a player's pill is *an* answer to this role — a seat role, or
+ * CR 115.4's "any target" ("any"), which a card answers as well. The options
+ * the walk offers (`roleOptions`) are still what decides which seats. */
+function roleAcceptsAPlayer(role) {
+  return roleChoosesAPlayer(role) || (!!role && role.kind === "any");
 }
 
 /** Whether this role's objects are chosen from a graveyard rather than a board. */
@@ -16311,7 +16446,10 @@ function roleTargetsHint() {
   const role = p.roles[p.roleChosen.length];
   if (!role) return `${p.cardName}: every target chosen.`;
   const step = `${p.roleChosen.length + 1} of ${p.roles.length}`;
-  return `Choose the ${roleTargetNoun(role)} for ${p.cardName} (${step}).`;
+  const noun = roleTargetNoun(role);
+  // "Choose any target", not "Choose the any target".
+  const article = /^any\b/.test(noun) ? "" : "the ";
+  return `Choose ${article}${noun} for ${p.cardName} (${step}).`;
 }
 
 function startCastRolesTargetPrompt(card, castAction = "cast", extra = null) {
@@ -17322,10 +17460,13 @@ function startCastChosenSourceStage(pending, spec, body) {
 // hint and the error handling are the same whichever kind of source was clicked.
 function sendCastWithChosenSource(pending, extraFields) {
   const body = { ...pending.__sourceBody, ...extraFields };
+  // A roles walk on an *ability* reaches this stage too (Shieldmage Advocate:
+  // two targets, then "a source of your choice"), and it is activated.
+  const activating = body.action === "activate";
   clearPendingCastTargeting();
-  updateActionHint(`Casting ${pending.cardName}...`);
+  updateActionHint(`${activating ? "Activating" : "Casting"} ${pending.cardName}...`);
   sendAction(body)
-    .then(() => updateActionHint(`Cast ${pending.cardName}.`))
+    .then(() => updateActionHint(`${activating ? "Activated" : "Cast"} ${pending.cardName}.`))
     .catch((e) => updateActionHint(e.message, true))
     .finally(() => clearPendingHandCast());
 }
@@ -17697,7 +17838,7 @@ function handlePlayerTargetClick(targetSeat) {
   // walk alone — a click on a face while the walk wants a permanent is a
   // mis-click, and answering it would fill the wrong slot.
   if (pendingCastTarget.targetKind === "roles") {
-    if (roleChoosesAPlayer(currentRole(pendingCastTarget))) chooseRolePlayer(targetSeat);
+    if (roleAcceptsAPlayer(currentRole(pendingCastTarget))) chooseRolePlayer(targetSeat);
     return;
   }
   if (pendingCastTarget.targetKind !== "player" && pendingCastTarget.targetKind !== "any") return;
@@ -23448,7 +23589,79 @@ const SPECIAL_ACTION_LABELS = {
   // CR 116.2c — an offer a permanent makes for as long as the effect its own
   // ability created is running (Tempest's Licids).
   end_own_continuous_effect: (name) => `End ${name}'s effect`,
+  // CR 116.2d — an Aura's offer to the player whose creature it holds
+  // ("…may sacrifice a permanent / exile three cards from their graveyard for
+  // that player to ignore this effect until end of turn": Volrath's Curse,
+  // Lost in Thought). Without a label the button was dropped, and the offer
+  // was one no person could take.
+  ignore_attached_static_until_eot: (name) => `Ignore ${name} until end of turn`,
 };
+
+// The price a CR 116.2d offer names, chosen before the action is sent: which
+// graveyard cards pay "exile three cards from their graveyard"
+// (`exile_from_graveyard`, by slot on `cost_graveyard_indices`) or which
+// permanent pays "sacrifice a permanent of their choice" (`sacrifice_choices`,
+// by id on `cost_permanent_id`). On the set picker every other cost a player
+// names is chosen on, so it says what it is for and has its Cancel. Returns
+// true when a picker opened (or the price was refused); false when the entry
+// names no price to choose.
+function startSpecialActionCostPrompt(entry) {
+  const name = entry.name || "it";
+  const purposeText = `ignore ${name} until end of turn`;
+  const exiled = Number(entry.exile_from_graveyard || 0);
+  if (exiled > 0) {
+    const pile = currentState?.players?.[seat]?.graveyard || [];
+    const options = pile.map((card, index) => ({
+      id: index,
+      name: (card && typeof card === "object" && card.name) || `card ${index + 1}`,
+    }));
+    if (options.length < exiled) {
+      SFX.onError();
+      updateActionHint(`Too few cards in your graveyard to ${purposeText}.`, true);
+      return true;
+    }
+    pendingPermanentCost = {
+      card: null, cardName: name, verb: "exile", zone: "graveyard", pileSeat: seat,
+      noun: "card", count: exiled, anyNumber: false, announcesX: false,
+      options, picked: [], purposeText, specialAction: entry, remaining: [], chosen: [],
+    };
+    renderActivationPrompt();
+    updateActionHint(`Choose ${exiled} cards to exile from your graveyard to ${purposeText}.`);
+    return true;
+  }
+  if (Array.isArray(entry.sacrifice_choices)) {
+    const options = entry.sacrifice_choices
+      .filter((choice) => Number.isInteger(choice?.permanent_id))
+      .map((choice) => ({ id: choice.permanent_id, name: choice.name }));
+    pendingPermanentCost = {
+      card: null, cardName: name, verb: "sacrifice", noun: "permanent", count: 1,
+      anyNumber: false, announcesX: false, options, picked: [], purposeText,
+      specialAction: entry, remaining: [], chosen: [],
+    };
+    renderActivationPrompt();
+    updateActionHint(`Choose a permanent to sacrifice to ${purposeText}.`);
+    return true;
+  }
+  return false;
+}
+
+// The special action itself, with whatever price was chosen for it.
+function sendSpecialAction(entry, fields = {}) {
+  // `seat` is not optional. It is the one field `GameActionRequest`
+  // requires of every action, `sendAction` does not add it, and this was
+  // the single call site of 124 that left it out — so every CR 116 special
+  // action the UI has ever offered answered a click with a 422 and no
+  // visible error at all. Pinned from the wire side by
+  // `tests/ui/test_special_action_wire.py`.
+  return sendAction({
+    seat,
+    action: "special_action",
+    hand_index: entry.hand_index,
+    permanent_id: entry.permanent_id,
+    special_action_kind: entry.kind,
+    ...fields,
+  });
+}
 
 function renderSpecialActions(state, hasPriority) {
   const host = q("specialActions");
@@ -23467,21 +23680,11 @@ function renderSpecialActions(state, hasPriority) {
     button.addEventListener("click", () => {
       // Whichever address the entry carries: a hand slot for CR 116.2e and a
       // permanent id for 116.2c/116.2d. The server decides from the same two
-      // fields, so the client never has to know which kinds are which.
-      //
-      // `seat` is not optional. It is the one field `GameActionRequest`
-      // requires of every action, `sendAction` does not add it, and this was
-      // the single call site of 124 that left it out — so every CR 116 special
-      // action the UI has ever offered answered a click with a 422 and no
-      // visible error at all. Pinned from the wire side by
-      // `tests/ui/test_special_action_wire.py`.
-      sendAction({
-        seat,
-        action: "special_action",
-        hand_index: entry.hand_index,
-        permanent_id: entry.permanent_id,
-        special_action_kind: entry.kind,
-      });
+      // fields, so the client never has to know which kinds are which. A
+      // price the taker chooses (CR 116.2d's graveyard cards or sacrifice) is
+      // asked first, and the action goes out from that picker's Confirm.
+      if (startSpecialActionCostPrompt(entry)) return;
+      sendSpecialAction(entry).catch((e) => updateActionHint(e.message, true));
     });
     host.appendChild(button);
   }

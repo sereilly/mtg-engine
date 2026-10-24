@@ -154,5 +154,9 @@ def test_a_face_click_answers_the_walk_rather_than_sending_a_cast():
 
     body = app_js_function_body("handlePlayerTargetClick")
     assert 'pendingCastTarget.targetKind === "roles"' in body
-    assert "roleChoosesAPlayer(currentRole(pendingCastTarget))" in body
+    # Asked through `roleAcceptsAPlayer` since Judgment's Shieldmage Advocate:
+    # a seat role *or* CR 115.4's "any target" role, which a pill answers as
+    # well as a card (tests/ui/test_jud_w2g1_client_ui_api.py drives it).
+    assert "roleAcceptsAPlayer(currentRole(pendingCastTarget))" in body
+    assert "roleChoosesAPlayer(role)" in app_js_function_body("roleAcceptsAPlayer")
     assert "chooseRolePlayer(targetSeat)" in body

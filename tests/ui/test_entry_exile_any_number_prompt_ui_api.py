@@ -8,8 +8,8 @@ nothing, which enters the Ghoul as a 0/0 that dies. So the payload says
 ``any_number`` outright, and this holds the server half: the flag is sent, the
 legal positions are the creature cards only, and an answer of any size up to
 them is accepted by the action the client sends. The browser half — a Confirm
-ready at every selection size when ``any_number`` is set — is the wave-2 client
-group's (``web/static/app.js``'s ``applyEntryExilePrompt``).
+ready at every selection size when ``any_number`` is set — is ``app.js``'s
+``entryExileConfirmState``, run in ``tests/ui/test_jud_w2g1_client_ui_api.py``.
 """
 from __future__ import annotations
 

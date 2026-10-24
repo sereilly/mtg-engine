@@ -693,6 +693,16 @@ def available_permanent_special_actions(game: "Game", seat: int) -> list[dict]:
                 offer = PERMANENT_SPECIAL_ACTIONS[kind].offer(game, permanent)
                 if offer is not None and offer.exile_from_graveyard:
                     entry["exile_from_graveyard"] = offer.exile_from_graveyard
+                # …and which permanents a "sacrifice a permanent **of their
+                # choice**" price may be paid with (Volrath's Curse), by id —
+                # the list the action's ``sacrificed`` is checked against, so a
+                # client offers exactly what the engine will take. Without it
+                # a person could only take the engine's default pick.
+                if offer is not None and offer.sacrifice is not None:
+                    entry["sacrifice_choices"] = [
+                        {"permanent_id": candidate.permanent_id, "name": candidate.card.name}
+                        for candidate in _sacrificeable(game, seat, offer)
+                    ]
                 entries.append(entry)
     return entries
 
