@@ -50,7 +50,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ODY | 335 | 507 | 89.7% | 89.7% | 69.6% | 295 |
 | TOR | 143 | 261 | 86.2% | 86.2% | 68.2% | 138 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| JUD *(measured)* | 143 | 241 | 73.4% | 69.7% | 46.1% | 98 |
+| JUD *(measured)* | 143 | 241 | 76.3% | 73.0% | 49.4% | 106 |
 | **All (shipped)** | **7884** | **11645** | **90.6%** | **90.0%** | **62.3%** | **6139** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -63,8 +63,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 662 | 341 | expected a subject |  |
-| 168 | 87 | unrecognized effect verb |  |
+| 661 | 340 | expected a subject |  |
+| 167 | 86 | unrecognized effect verb |  |
 | 136 | 75 | unconsumed text |  |
 | 65 | 46 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
@@ -76,7 +76,6 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 6 | 1 | a counted redirect off the source moves the damage onto one chosen target |  |
 | 6 | 1 | unsupported life-loss target 'owner' |  |
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
-| 5 | 5 | expected a zone name |  |
 | 4 | 1 | the sacrifice prompt cannot test this restriction |  |
 | 4 | 1 | expected 'that' |  |
 | 4 | 1 | expected a destination zone after 'return' |  |
@@ -88,6 +87,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 3 | 3 | expected a keyword ability |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
+| 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
 
 ## Cards executing through the grammar
 
@@ -3799,6 +3799,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Counter target spell.`
 - **Forced March**
   - `Destroy all creatures with mana value X or less.`
+- **Forcemage Advocate**
+  - `{T}: Return target card from an opponent's graveyard to their hand. Put a +1/+1 counter on target creature.`
 - **Foreshadow**
   - `Choose a card name, then target opponent mills a card. If a card with the chosen name was milled this way, you draw a card.`
   - `Draw a card at the beginning of the next turn's upkeep.`
@@ -3897,6 +3899,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Funeral March**
   - `When enchanted creature leaves the battlefield, its controller sacrifices a creature of their choice.`
   - `When enchanted creature leaves the battlefield, its controller sacrifices a creature of their choice.`
+- **Funeral Pyre**
+  - `Exile target card from a graveyard. Its owner creates a 1/1 white Spirit creature token with flying.`
 - **Fungal Bloom**
   - `{G}{G}: Put a spore counter on target Fungus.`
 - **Fungal Rebirth**
@@ -6769,6 +6773,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{B}: This creature gets +1/+1 until end of turn.`
 - **Nantuko Shrine**
   - `Whenever a player casts a spell, that player creates X 1/1 green Squirrel creature tokens, where X is the number of cards in all graveyards with the same name as that spell.`
+- **Nantuko Tracer**
+  - `When this creature enters, you may put target card from a graveyard on the bottom of its owner's library.`
 - **Narcissism**
   - `{G}, Discard a card: Target creature gets +2/+2 until end of turn.`
   - `{G}, Sacrifice this enchantment: Target creature gets +2/+2 until end of turn.`
@@ -6960,6 +6966,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Each player reveals their hand, chooses one card of each color from it, then discards all other nonland cards.`
 - **Null Brooch**
   - `{2}, {T}, Discard your hand: Counter target noncreature spell.`
+- **Nullmage Advocate**
+  - `{T}: Return two target cards from an opponent's graveyard to their hand. Destroy target artifact or enchantment.`
 - **Nurturing Licid**
   - `{G}, {T}: This creature loses this ability and becomes an Aura enchantment with enchant creature. Attach it to target creature. You may pay {G} to end this effect.`
   - `{G}: Regenerate enchanted creature.`
@@ -7799,6 +7807,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{X}, {T}: Target creature you control gets +X/+X until end of turn. Destroy it at the beginning of the next end step.`
 - **Pulsating Illusion**
   - `Discard a card: This creature gets +4/+4 until end of turn. Activate only once each turn.`
+- **Pulsemage Advocate**
+  - `{T}: Return three target cards from an opponent's graveyard to their hand. Return target creature card from your graveyard to the battlefield.`
 - **Pulverize**
   - `Destroy all artifacts.`
 - **Puppet Master**
@@ -9030,6 +9040,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever enchanted creature becomes tapped, this Aura deals 3 damage to that creature's controller unless that player pays {3}.`
 - **Selenia, Dark Angel**
   - `Pay 2 life: Return Selenia to its owner's hand.`
+- **Selfless Exorcist**
+  - `{T}: Exile target creature card from a graveyard. That card deals damage equal to its power to this creature.`
 - **Selfless Savior**
   - `Sacrifice this creature: Another target creature you control gains indestructible until end of turn. (Damage and effects that say "destroy" don't destroy it.)`
 - **Sengir Autocrat**
@@ -9212,6 +9224,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Creatures you control get +0/+2 until end of turn.`
 - **Shield of the Ages**
   - `{2}: Prevent the next 1 damage that would be dealt to you this turn.`
+- **Shieldmage Advocate**
+  - `{T}: Return target card from an opponent's graveyard to their hand. Prevent all damage that would be dealt to any target this turn by a source of your choice.`
 - **Shifty Doppelganger**
   - `{3}{U}, Exile this creature: You may put a creature card from your hand onto the battlefield. If you do, that creature gains haste until end of turn. At the beginning of the next end step, sacrifice that creature. If you do, return this card to the battlefield.`
 - **Shimian Night Stalker**
@@ -9863,6 +9877,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever a creature enters, destroy all other creatures that share a color with it. They can't be regenerated.`
 - **Springing Tiger**
   - `Threshold — This creature gets +2/+2 as long as there are seven or more cards in your graveyard.`
+- **Spurnmage Advocate**
+  - `{T}: Return two target cards from an opponent's graveyard to their hand. Destroy target attacking creature.`
 - **Squall**
   - `Squall deals 2 damage to each creature with flying.`
   - `Squall deals 2 damage to each creature with flying.`
