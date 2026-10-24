@@ -70,12 +70,6 @@ def _sweep_amount(instruction: OracleInstruction, context: OracleExecutionContex
     return resolve_amount(instruction.payload.get("amount", 0), context.x_value)
 
 
-#: The last item of a sweep's loop: its summary, run once every recipient has
-#: been dealt to. A sentinel *item* rather than a line after the loop, because
-#: work written after a resumable loop does not run when a step suspends
-#: (``engine/resumption.py``).
-_SWEEP_DONE = object()
-
 #: The item of the players-and-creatures sweep that deals to the creatures,
 #: read off the board when the loop reaches it -- after the players, as before.
 _THE_CREATURES = object()
@@ -86,15 +80,11 @@ def _sweep(game: Game, recipients, hit, done) -> None:
 
     The one loop every sweep here runs, so a recipient whose event stops to
     ask (CR 616.1e) takes the rest of the sweep with it and the answer brings
-    it back. Must be the last thing its caller does."""
-    def step(item) -> None:
-        if item is _SWEEP_DONE:
-            if done is not None:
-                done()
-            return
-        hit(item)
-
-    run_resumable(game, [*recipients, _SWEEP_DONE], step)
+    it back. *done* -- the summary -- is the loop's own last step
+    (``run_resumable``'s ``then``) rather than a line after it, because work
+    written after a resumable loop does not run when a step suspends. Must be
+    the last thing its caller does."""
+    run_resumable(game, recipients, hit, then=done)
 
 
 @effect_handler("deal_damage_each_creature_and_player")

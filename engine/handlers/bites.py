@@ -19,6 +19,7 @@ Split out of ``damage.py`` at the 2,000-line cap's split round.
 
 from __future__ import annotations
 
+from ..resumption import run_resumable
 from ._common import apply_damage_to_creature
 from ._filters import permanent_matches_filter
 from ._targets import (recorded_permanent_ids, attached_host,
@@ -183,6 +184,11 @@ def bound_bites_source(game, instruction, context):
     if instruction.payload.get("cards_from") is not None:
         _exiled_card_bites_source(game, instruction, context, target)
         return True, "resolved"
+    # Each biter's power is read before any of them deals (CR 608.2h), and the
+    # damage is one resumable loop: a bite whose event stops to ask which
+    # effect applies first (CR 616.1e) takes the bites behind it with it,
+    # rather than letting them land before the answer (``engine/resumption.py``).
+    biters = []
     for permanent_id in recorded:
         biter = game.permanent_by_id(permanent_id)
         if biter is None or not biter.is_creature:
@@ -190,13 +196,19 @@ def bound_bites_source(game, instruction, context):
             # creature deals no damage (CR 608.2's last-known information is
             # about *reading* it, not about acting from a graveyard).
             continue
+        biters.append((biter, biter.effective_power))
+
+    def bite(entry) -> None:
+        biter, power = entry
         apply_damage_to_creature(
-            game, target, biter.effective_power, biter,
-            log_message=lambda dealt, biter=biter: (
+            game, target, power, biter,
+            log_message=lambda dealt: (
                 f"{biter.card.name} deals {dealt} damage to {target.card.name}"
             ),
             asks=True,
         )
+
+    run_resumable(game, biters, bite)
     return True, "resolved"
 
 
@@ -217,6 +229,7 @@ def _exiled_card_bites_source(game, instruction, context, target) -> None:
     list it is found in names its owner — the seat a CDA's "you" names for an
     object with no controller (CR 109.5).
     """
+    biters = []
     for card in context.results.get(str(instruction.payload["cards_from"])) or ():
         owner_seat = next(
             (
@@ -229,9 +242,16 @@ def _exiled_card_bites_source(game, instruction, context, target) -> None:
             game.log.append(f"{context.card.name}: {card.name} is no longer in exile")
             continue
         power = max(0, game.card_power_outside_battlefield(card, owner_seat))
+        biters.append((card, owner_seat, power))
+
+    # One resumable loop, for ``bound_bites_source``'s reason: a bite that
+    # stops to ask (CR 616.1e) takes the bites behind it with it. The last
+    # thing this function does, and its caller returns straight after it.
+    def bite(entry) -> None:
+        card, owner_seat, power = entry
         apply_damage_to_creature(
             game, target, power, card,
-            log_message=lambda dealt, card=card: (
+            log_message=lambda dealt: (
                 f"{card.name} deals {dealt} damage to {target.card.name}"
             ),
             asks=True,
@@ -243,6 +263,8 @@ def _exiled_card_bites_source(game, instruction, context, target) -> None:
             # and wrong for a card.
             source_seat=owner_seat,
         )
+
+    run_resumable(game, biters, bite)
 
 
 @effect_handler("bound_bites_player")
@@ -275,6 +297,7 @@ def bound_bites_player(game, instruction, context):
     key = instruction.payload.get("permanents_from")
     recorded = recorded_permanent_ids(context, key)
     card = context.card
+    biters = []
     for permanent_id in recorded:
         biter = game.permanent_by_id(permanent_id)
         if biter is None or not biter.is_creature:
@@ -284,9 +307,14 @@ def bound_bites_player(game, instruction, context):
         if seat is None or not 0 <= seat < len(game.players):
             game.log.append(f"{card.name}: no player for the damage to land on")
             continue
-        victim = game.players[seat]
+        biters.append((biter, game.players[seat], max(0, biter.effective_power)))
 
-        def _report(dealt: int, victim=victim, biter=biter) -> None:
+    # One resumable loop, for ``bound_bites_source``'s reason: a bite whose
+    # event stops to ask (CR 616.1e) takes the bites behind it with it.
+    def bite(entry) -> None:
+        biter, victim, power = entry
+
+        def _report(dealt: int) -> None:
             context.results["damage_dealt"] = dealt
             if dealt:
                 game.log.append(
@@ -294,9 +322,10 @@ def bound_bites_player(game, instruction, context):
                 )
 
         game._deal_damage_to_player(
-            victim, max(0, biter.effective_power), source=biter,
-            then=_report, asks=True,
+            victim, power, source=biter, then=_report, asks=True,
         )
+
+    run_resumable(game, biters, bite)
     return True, "resolved"
 
 
@@ -372,14 +401,26 @@ def each_matching_bites_itself(game, instruction, context):
     white would shrug off Wave of Reckoning and a lifelinking one would gain its
     controller nothing.
 
-    The amount is ``effective_power``, CR 613's computed value read as the
-    damage is dealt rather than a printed number. Reading it inside the loop is
-    the same answer as reading it up front: state-based actions do not run until
-    the spell finishes resolving (CR 704.3), so nothing here dies or shrinks
-    part-way and every creature deals what it had.
+    The amount is ``effective_power``, CR 613's computed value rather than a
+    printed number, and it is read **once, for every creature, before any of
+    them is dealt to**: CR 608.2h determines the information an effect needs
+    once, as the effect is applied, and CR 608.2f processes the action on each
+    creature simultaneously. Reading it inside the loop gave the same numbers
+    while nothing happened between two creatures; now that a creature's event
+    can stop to ask (below), and the creatures behind it bite on a later
+    request, the powers are fixed first so that nothing done in between — an
+    answer, a shield's own rider — can reach a number already determined.
 
     A zero-power creature is not dealt to at all rather than dealt 0 — CR 120.8:
     damage of 0 is not damage, so nothing is marked and no damage trigger fires.
+
+    **Each creature's event may stop to ask** which of two applicable effects
+    applies first (CR 616.1e) — a Phantom's own counter shield beside
+    protection from white, say. So the set is one resumable loop
+    (``engine/resumption.py``) with the summary as its last step: the creatures
+    behind the one that asked bite when the answer arrives, and the line is
+    written once, after them. The loop dealt without ``asks`` before, so the
+    seat got the default and was never asked (round ``kg``).
     """
     from ..subject_filters import subject_matches
 
@@ -392,7 +433,7 @@ def each_matching_bites_itself(game, instruction, context):
         else None
     )
     defending = defending_player_seat(game, context)
-    struck: list[str] = []
+    biters: list = []
     for perm in list(game.all_permanents()):
         if not subject_matches(
             game, perm, described, observer=observer,
@@ -403,15 +444,23 @@ def each_matching_bites_itself(game, instruction, context):
         amount = max(0, int(perm.effective_power))
         if amount <= 0:
             continue
-        apply_damage_to_creature(game, perm, amount, perm)
-        struck.append(f"{perm.card.name} ({amount})")
-    if not struck:
-        game.log.append(f"{context.card.name} found nothing to damage")
-    else:
-        game.log.append(
-            f"{context.card.name}: each creature dealt damage to itself — "
-            + ", ".join(struck)
-        )
+        biters.append((perm, amount))
+    struck = [f"{perm.card.name} ({amount})" for perm, amount in biters]
+
+    def bite(entry) -> None:
+        perm, amount = entry
+        apply_damage_to_creature(game, perm, amount, perm, asks=True)
+
+    def summary() -> None:
+        if not struck:
+            game.log.append(f"{context.card.name} found nothing to damage")
+        else:
+            game.log.append(
+                f"{context.card.name}: each creature dealt damage to itself — "
+                + ", ".join(struck)
+            )
+
+    run_resumable(game, biters, bite, then=summary)
     return True, "resolved"
 
 

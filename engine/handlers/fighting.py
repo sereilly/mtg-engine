@@ -17,6 +17,7 @@ Split out of ``damage.py`` at the 2,000-line cap's split round.
 
 from __future__ import annotations
 
+from ..resumption import run_resumable
 from ._amounts import resolve_amount
 from ._common import apply_damage_to_creature, apply_temp_pt_boost
 from ._filters import permanent_matches_filter
@@ -76,24 +77,32 @@ def _exchange_fight_damage(game, fighter, opponent) -> None:
 
     Both powers are read *before* either is dealt: a fighter killed by the
     first half has still dealt its own damage.
+
+    The two halves are one resumable loop (``engine/resumption.py``), and so
+    this must be the last thing its callers do. Either half's event may stop to
+    ask its recipient's controller which effect applies first (CR 616.1e); the
+    second half used to be dealt straight past the first one's question, so
+    the opponent's creature had been answered for before its own controller
+    was. Now the second half waits for the first's answer.
     """
     fighter_power = fighter.effective_power
     opponent_power = opponent.effective_power
     game.log.append(f"{fighter.card.name} fights {opponent.card.name}")
-    apply_damage_to_creature(
-        game, opponent, fighter_power, fighter,
-        log_message=lambda dealt: (
-            f"{fighter.card.name} deals {dealt} damage to {opponent.card.name}"
-        ),
-        asks=True,
-    )
-    apply_damage_to_creature(
-        game, fighter, opponent_power, opponent,
-        log_message=lambda dealt: (
-            f"{opponent.card.name} deals {dealt} damage to {fighter.card.name}"
-        ),
-        asks=True,
-    )
+
+    def half(entry) -> None:
+        dealer, victim, power = entry
+        apply_damage_to_creature(
+            game, victim, power, dealer,
+            log_message=lambda dealt: (
+                f"{dealer.card.name} deals {dealt} damage to {victim.card.name}"
+            ),
+            asks=True,
+        )
+
+    run_resumable(game, [
+        (fighter, opponent, fighter_power),
+        (opponent, fighter, opponent_power),
+    ], half)
 
 
 @effect_handler("prepare_then_interact")

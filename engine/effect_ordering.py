@@ -38,9 +38,16 @@ The caller supplies the re-run, because an event is more than its replacements �
 a draw nothing replaces still has to draw — and only the caller knows what doing
 it again means. A caller that cannot offer one simply does not, and every seat
 takes the default there: a missing capability at one declared place rather than
-a branch scattered through the process. Every damage path can now offer one,
-combat included, because each carries its consequences as a ``then`` and each
-runs inside a loop that records the work behind it (``engine/resumption.py``).
+a branch scattered through the process. Every damage call in
+``engine/handlers`` offers one, and so does the combat damage step, because
+each carries its consequences as a ``then`` and each runs inside a loop that
+records the work behind it (``engine/resumption.py``) — held statically by
+``tests/engine/test_kg_damage_handler_asks.py``. A damage event dealt where no
+such loop holds the work behind it does not: an upkeep toll or sweep resolved
+inline (``engine/phases/upkeep_effects.py``), a prompt's answer
+(``mixins/stack/choices/``), a land play's rider, a redirect applied inside
+another event (``replacements/redirects.py``). There every seat takes the
+default.
 
 A non-interactive seat is never asked, so AI and headless play stay entirely
 synchronous.

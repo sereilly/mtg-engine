@@ -79,14 +79,31 @@ class _RestOfLoop:
         self.resume()
 
 
-def run_resumable(game, items: Iterable[Any], step: Callable[[Any], None]) -> None:
+#: The item ``run_resumable`` appends for its *then*: one past the caller's own
+#: items, so nothing a caller passes can be mistaken for it.
+_THEN = object()
+
+
+def run_resumable(
+    game, items: Iterable[Any], step: Callable[[Any], None],
+    *, then: Callable[[], None] | None = None,
+) -> None:
     """Run *step* over *items*, stopping if one of them suspends.
 
     The rest of the loop is recorded on ``game.resume_stack`` while each step
     runs and removed again once it returns without suspending, so the stack only
     ever holds work that is genuinely still owed.
+
+    *then* is the loop's **last step**, run once after every item: the work a
+    caller would otherwise write after the call — a summary of what the loop
+    did, a record about the whole of it — which would not run when an item
+    suspends (this module's docstring). As a step of the loop it is recorded
+    with the rest and runs after the last item whichever way the loop gets
+    there: straight through, or when the answer brings it back.
     """
     items = list(items)
+    if then is not None:
+        items.append(_THEN)
 
     def run_from(index: int) -> None:
         for position in range(index, len(items)):
@@ -98,7 +115,10 @@ def run_resumable(game, items: Iterable[Any], step: Callable[[Any], None]) -> No
             # ``PendingChoicesMixin.suspended_beyond``.
             owed = game.owed_suspensions()
             try:
-                step(items[position])
+                if items[position] is _THEN:
+                    then()
+                else:
+                    step(items[position])
             finally:
                 rest.live = False
             if game.suspended_beyond(owed):
