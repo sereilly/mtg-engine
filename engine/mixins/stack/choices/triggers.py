@@ -708,6 +708,31 @@ class TriggerChoicesMixin:
             )
         if item is not None:
             standing = self._default_opposing_seat(choice.player_index)
+            # **A seat the trigger's count is taken on** ("…add X mana …, where
+            # X is the number of Islands target opponent controls", Carpet of
+            # Flowers) is the one exception to the standing seat: the seat
+            # changes nothing but the number, so a seat nobody asked names the
+            # opponent it comes out largest on
+            # (``ai_target_sides.best_counted_target_seat``) — the standing
+            # seat first among equals.
+            from ....ai_target_sides import best_counted_target_seat
+
+            seats = sorted(
+                (
+                    target["seat"] for target in targets
+                    if target.get("kind") == "player"
+                ),
+                key=lambda seat: seat != standing,
+            )
+            counted = (
+                best_counted_target_seat(
+                    self, choice.player_index,
+                    (getattr(item, "ability_instruction", None),), seats, item.card,
+                )
+                if seats else None
+            )
+            if counted is not None:
+                return self._resolve_trigger_target(choice, seat=counted)
             for target in targets:
                 if target.get("kind") == "player" and target.get("seat") == standing:
                     return self._resolve_trigger_target(choice, seat=standing)

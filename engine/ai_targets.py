@@ -33,6 +33,7 @@ import re
 
 from .ai_weighed_cast import SPELL_TYPES
 from .ai_target_sides import (
+    best_counted_target_seat,
     entry_trigger_target_side,
     role_target_sides,
     several_target_slot_sides,
@@ -350,6 +351,17 @@ def _preferred_role_option(
     """
     if not options or options[0].get("kind") != "player":
         return options[0]
+    # …and where the seat is the one a **count** is taken on ("…in excess of
+    # the number of creatures target opponent controls", Superior Numbers),
+    # which seat is the one the count comes out best on
+    # (``ai_target_sides.best_counted_target_seat``): every option is already
+    # an opponent, so the side is settled and only the number is left.
+    counted = best_counted_target_seat(
+        game, caster_index, compile_card_oracle(card).instructions,
+        [option.get("seat") for option in options], card,
+    )
+    if counted is not None:
+        return next(option for option in options if option.get("seat") == counted)
     wanted = _choose_target_for_spell(card, caster_index, game)
     return next(
         (option for option in options if option.get("seat") == wanted), options[0]
@@ -545,8 +557,27 @@ def _choose_several_targets(
     # Derived, not name-keyed: any card printing the same tail is covered the
     # day it is ingested. A spell whose X the *caster* announces (Shattered
     # Crypt's {X} cost) has no answer here and keeps the behaviour it had.
+    # …counted on the opponent this seat names: Reap's "target opponent" is a
+    # target of the same announcement (``target_descriptions.
+    # COUNTED_SEAT_TARGET``) and every legal one fixes a different X, so which
+    # to name is the one whose X is largest (``best_counted_target_seat``). It
+    # rides the cast's seat field — the pile is the caster's own whatever it
+    # says — so it is the seat this chooser returns.
+    counted_seat = None
+    counted_options = game._counted_seats(caster_index, card, spec)
+    if counted_options:
+        counted_seat = best_counted_target_seat(
+            game, caster_index, program.instructions,
+            sorted(
+                counted_options,
+                key=lambda seat: seat != game._default_opposing_seat(caster_index),
+            ),
+            card,
+        )
     announced = (
-        game.announced_cast_x(caster_index, card, mode_index=_announced_mode(card))
+        game.announced_cast_x(
+            caster_index, card, mode_index=_announced_mode(card), seat=counted_seat,
+        )
         if (spec or {}).get("x_targets") else None
     )
     # "Exile **two** target artifacts" (Dust to Dust): a printed count is the
@@ -655,6 +686,10 @@ def _choose_several_targets(
         seat = next((seat for seat in order if by_seat.get(seat)), None)
         if seat is None:
             return ()
+        if counted_seat is not None:
+            # The cards out of the caster's own pile, the seat field naming the
+            # opponent the X was counted on.
+            return counted_seat, by_seat[seat][:maximum], None
         return seat, by_seat[seat][:maximum], None
 
     # Which board each slot wants, derived from the compiled program rather than

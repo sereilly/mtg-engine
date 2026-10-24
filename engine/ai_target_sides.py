@@ -1339,3 +1339,129 @@ __all__ = [
     "toggle_target_order",
     "toggles_its_target",
 ]
+
+
+# -- Which opponent a count is taken on ---------------------------------------
+#
+# "…equal to the number of creatures you control in excess of the number of
+# creatures **target opponent** controls" (Superior Numbers); "…where X is the
+# number of black permanents **target opponent** controls" (Reap); "…add X
+# mana …, where X is the number of Islands **target opponent** controls"
+# (Carpet of Flowers). The seat is a target the caster chooses (CR 601.2c /
+# 603.3d), and the only thing it changes is a number: which side of the table
+# it belongs on is settled by the printed word ("opponent"), and which
+# opponent is a **valuation** — the one the count comes out largest on. Read
+# off the compiled program, so every card printing the template is aimed the
+# day it is ingested.
+
+#: The count ``owner`` words that name a seat the sentence targets — the
+#: lowering's ``count_spec`` lift (``grammar/lowering/_amounts``).
+_COUNTED_TARGET_OWNERS = frozenset({"target_opponent", "target_player"})
+
+#: Where a step beneath a wrapper sits, for the walk below.
+_COUNT_STEP_KEYS = ("steps", "action", "then", "else", "otherwise")
+
+
+def _counts_a_target_seat(spec) -> bool:
+    """Whether a count spec — or a count subtracted from it — is taken on a
+    seat the sentence targets."""
+    if not isinstance(spec, dict):
+        return False
+    return spec.get("owner") in _COUNTED_TARGET_OWNERS or _counts_a_target_seat(
+        spec.get("minus")
+    )
+
+
+#: The payload keys a count spec rides under: an amount defined by one
+#: (``x_from_count``) and a printed amount multiplied by one (``per_each``:
+#: "you gain 2 life **for each** black and/or red creature target opponent
+#: controls", Honorable Scout).
+_COUNT_KEYS = ("x_from_count", "per_each")
+
+#: The payload keys naming who an effect **acts on**. A step whose recipient
+#: is the targeted seat itself ("target player draws a card for each basic
+#: land type among lands they control", Allied Strategies) does not count on
+#: the seat beside acting on it — it acts on it, which side of the table the
+#: effect is good for decides, and a count-only valuation would hand an
+#: opponent the cards.
+_RECIPIENT_KEYS = ("recipient", "who")
+
+
+def _seat_count_spec(instructions) -> "dict | None":
+    """The first count under *instructions* that is taken on a targeted seat
+    **and only counted there**, or None."""
+    for instruction in instructions or ():
+        payload = getattr(instruction, "payload", None) or {}
+        acted_on = any(
+            payload.get(key) in _COUNTED_TARGET_OWNERS for key in _RECIPIENT_KEYS
+        )
+        for count_key in _COUNT_KEYS:
+            spec = payload.get(count_key)
+            if _counts_a_target_seat(spec):
+                return None if acted_on else spec
+        for key in _COUNT_STEP_KEYS:
+            nested = payload.get(key)
+            if isinstance(nested, (list, tuple)):
+                found = _seat_count_spec(nested)
+                if found is not None:
+                    return found
+    return None
+
+
+def _as_counted_on_the_target(spec: dict) -> dict:
+    """*spec* with every half read off ``context.target``: the announcement's
+    role binding (``target_roles.COUNTED_SEAT_ROLE``) dropped, which is the
+    question this asks — what would the count be *if* this seat were named."""
+    from .target_roles import COUNTED_SEAT_ROLE
+
+    unbound = {key: value for key, value in spec.items() if key != COUNTED_SEAT_ROLE}
+    if isinstance(spec.get("minus"), dict):
+        unbound["minus"] = _as_counted_on_the_target(spec["minus"])
+    return unbound
+
+
+def counted_target_seat_amount(
+    game, chooser: int, instructions, seat: int, card: CardDefinition | None = None,
+) -> "int | None":
+    """The amount *instructions*' targeted-seat count comes to if *seat* is
+    the seat named — the damage, the cards, the mana — or None where nothing
+    under them counts on a targeted seat.
+
+    Through ``handlers/_amounts.count_from_payload``, the evaluator the
+    resolution itself uses, so the number weighed is the number spent. A
+    ``per_each`` count is the multiplier, which orders the seats the way the
+    product does.
+    """
+    spec = _seat_count_spec(instructions)
+    if spec is None or not 0 <= seat < len(game.players):
+        return None
+    from .game_types import OracleExecutionContext
+    from .handlers._amounts import count_from_payload
+
+    context = OracleExecutionContext(
+        caster=game.players[chooser], target=game.players[seat], card=card,
+    )
+    return int(count_from_payload(game, context, _as_counted_on_the_target(spec)))
+
+
+def best_counted_target_seat(
+    game, chooser: int, instructions, seats, card: CardDefinition | None = None,
+) -> "int | None":
+    """Of *seats* — the legal answers, in the picker's order — the one the
+    targeted-seat count under *instructions* is largest on; None where
+    nothing there counts on a targeted seat. Ties keep the picker's order.
+
+    Largest, because every printing counts what the effect is *sized* by: the
+    damage dealt, the cards returned, the mana added. A count subtracted from
+    another is already folded in (the difference is what is weighed), so the
+    opponent with the fewest creatures is Superior Numbers' best.
+    """
+    best: "int | None" = None
+    best_amount: "int | None" = None
+    for seat in seats:
+        amount = counted_target_seat_amount(game, chooser, instructions, seat, card)
+        if amount is None:
+            return None
+        if best_amount is None or amount > best_amount:
+            best, best_amount = seat, amount
+    return best
