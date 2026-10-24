@@ -50,7 +50,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ODY | 335 | 507 | 89.7% | 89.7% | 69.6% | 295 |
 | TOR | 143 | 261 | 86.2% | 86.2% | 68.2% | 138 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| JUD *(measured)* | 143 | 241 | 83.8% | 81.7% | 57.3% | 116 |
+| JUD *(measured)* | 143 | 241 | 84.6% | 83.4% | 58.9% | 118 |
 | **All (shipped)** | **7884** | **11645** | **90.6%** | **90.0%** | **62.3%** | **6139** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -64,10 +64,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
 | 653 | 332 | expected a subject |  |
-| 166 | 85 | unrecognized effect verb |  |
+| 165 | 84 | unrecognized effect verb |  |
 | 132 | 71 | unconsumed text |  |
 | 65 | 46 | granted ability in quotes | phase 3 (quoted abilities) |
-| 34 | 34 | unrecognized activation cost |  |
+| 33 | 33 | unrecognized activation cost |  |
 | 29 | 7 | expected what this creature can't block, or a duration |  |
 | 21 | 15 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
 | 20 | 18 | expected 'unless defending player controls' |  |
@@ -678,6 +678,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{2}{W}, Discard a card: This creature gets +1/+2 until end of turn.`
 - **Aven Warcraft**
   - `Creatures you control get +0/+2 until end of turn.`
+  - `Threshold — If there are seven or more cards in your graveyard, choose a color. Creatures you control also gain protection from the chosen color until end of turn.`
 - **Aven Windreader**
   - `{1}{U}: Target player reveals the top card of their library.`
 - **Avenger en-Dal**
@@ -880,6 +881,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {R} or {W}. This land deals 1 damage to you.`
 - **Battlefield Percher**
   - `{1}{B}: This creature gets +1/+1 until end of turn.`
+- **Battlefield Scrounger**
+  - `Threshold — Put three cards from your graveyard on the bottom of your library: This creature gets +3/+3 until end of turn. Activate only once each turn and only if there are seven or more cards in your graveyard.`
 - **Battlewise Aven**
   - `Threshold — As long as there are seven or more cards in your graveyard, this creature gets +1/+1 and has first strike.`
 - **Bazaar of Baghdad**
@@ -4347,6 +4350,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Grasslands**
   - `{T}, Sacrifice this land: Search your library for a Forest or Plains card, put it onto the battlefield, then shuffle.`
 - **Grave Consequences**
+  - `Each player may exile any number of cards from their graveyard. Then each player loses 1 life for each card in their graveyard.`
   - `Draw a card.`
 - **Grave Defiler**
   - `When this creature enters, reveal the top four cards of your library. Put all Zombie cards revealed this way into your hand and the rest on the bottom of your library in any order.`
@@ -4448,6 +4452,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Draw a card.`
 - **Guiding Spirit**
   - `{T}: If the top card of target player's graveyard is a creature card, put that card on top of that player's library.`
+- **Guiltfeeder**
+  - `Whenever this creature attacks and isn't blocked, defending player loses 1 life for each card in their graveyard.`
 - **Gulf Squid**
   - `When this creature enters, tap all lands target player controls.`
 - **Gurzigost**

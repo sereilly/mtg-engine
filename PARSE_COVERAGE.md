@@ -25,13 +25,8 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**5 unclaimed sentence(s) across 4 supported card(s).**
+**2 unclaimed sentence(s) across 2 supported card(s).**
 
-- **Aven Warcraft**
-  - `creatures you control also gain protection from the chosen color until end of turn`
-- **Grave Consequences**
-  - `each player may exile any number of cards from their graveyard`
-  - `then each player loses 1 life for each card in their graveyard`
 - **Krosan Verge**
   - `{2}, {t}, sacrifice this land: search your library for a forest card and a plains card, put them onto the battlefield tapped, then shuffle`
 - **Mirari's Wake**
