@@ -443,6 +443,46 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
     )
 
 
+def excluding_source(spec: "ast.TargetSpec") -> "ast.TargetSpec | None":
+    """*spec* with a printed "another" read as the **source exclusion**.
+
+    :func:`parse_target_spec` is the reader of the word in front of a noun:
+    "another target creature" and "another permanent" are one object that
+    must differ from an earlier choice of the same sentence, recorded as
+    ``distinct_from_prior`` (CR 601.2c's "another" target; Enchantment
+    Alteration's untargeted "another permanent"). A position in which nothing
+    earlier was chosen — a cost ("Sacrifice **another** creature",
+    Hobblefiend), a trigger's subject ("Whenever **another** creature
+    enters"), the object of a counters event — has only the ability's own
+    source for the word to differ from (CR 113.7), which is the filter's
+    ``other_than_source`` and nothing else: the same field "other than this
+    creature" and "up to two **other** target creatures" set.
+
+    So the distinctness becomes the exclusion and is cleared, rather than
+    being left beside it for a reader that would then have two answers. One
+    helper for every parse position that knows nothing precedes it, so what
+    "another" means there is stated once. A *target* cannot know that while it
+    is parsed — "another target creature" may be the second of two — so a
+    lone one is read the same way later, at the lowering, where the whole
+    sentence is in view (``lowering/_targets._targets_payload``).
+
+    **None** for "another **enchanted** <noun>": the noun parser reads
+    "enchanted creature" as the Aura's host (CR 303.4b), a referent rather than
+    a set, and a referent has nothing to be "another" of. Each of the readers
+    this replaced refused the phrase (its quantifier was "this", which none of
+    them admits), so the caller refuses it still rather than admitting a
+    host-reference with an exclusion bolted on. No card in the pool prints it.
+    """
+    if not spec.distinct_from_prior:
+        return spec
+    if spec.filter.is_enchanted:
+        return None
+    return dataclasses.replace(
+        spec, distinct_from_prior=False,
+        filter=dataclasses.replace(spec.filter, other_than_source=True),
+    )
+
+
 def parse_recipient(stream: TokenStream) -> ast.Recipient | None:
     """Parse either a player reference or a quantified object reference."""
     player = parse_player_ref(stream)

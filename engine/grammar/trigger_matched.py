@@ -29,7 +29,7 @@ from . import ast
 from .errors import GrammarError
 from .lexer import PT
 from .nouns import parse_object_filter
-from .references import parse_target_spec
+from .references import excluding_source, parse_target_spec
 from .phrases import (
     _accept_number,
     _identifies_one_object,
@@ -263,8 +263,9 @@ def _accept_subject_becomes_target(
     mark = stream.mark()
     # "Whenever **another** permanent you control becomes the target …" (Cloud
     # Cover). "Another" sits where the article does, so it is read here and
-    # folded onto the filter's exclusion field — ``parse_subject_filter_at``'s
-    # idiom, spelled out because this reader takes its noun through
+    # folded onto the filter's exclusion field — the meaning
+    # ``references.excluding_source`` gives the word for the cost and subject
+    # readers, spelled out because this reader takes its noun through
     # ``parse_object_filter`` and so reads its own article.
     another = bool(stream.accept_word("another"))
     if not another and not stream.accept_word("a", "an"):
@@ -333,19 +334,16 @@ def _parse_matched_event(
         if token is not None and token.kind == PT and token.text == "+1/+1":
             stream.advance()
             if stream.accept_phrase("counters", "are", "put", "on"):
-                # "another" sits where the article does, so it is read here
-                # and folded onto the filter's existing exclusion field —
-                # the idiom `_parse_cost_object` and the condition parser
-                # already use, rather than a noun-parser quantifier that
-                # would change every targeted line in the pool.
-                another = bool(stream.accept_word("another"))
+                # "…put on **another** non-Hydra creature you control".
+                # The word is `parse_target_spec`'s, and an event's object
+                # has no earlier choice to differ from, so it is the source
+                # exclusion (`excluding_source`, CR 113.7).
                 subject = parse_target_spec(stream)
                 if subject is not None:
-                    filt = subject.filter
-                    if another:
-                        filt = replace(filt, other_than_source=True)
+                    subject = excluding_source(subject)
+                if subject is not None:
                     return ast.TriggerEvent(
-                        "counters_put_on_creature", word, subject=filt,
+                        "counters_put_on_creature", word, subject=subject.filter,
                     )
     stream.reset(mark)
     cast = _parse_cast_event(stream, word)

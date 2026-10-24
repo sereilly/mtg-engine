@@ -36,7 +36,6 @@ and sits beside it in `static_lines` now.
 """
 
 import dataclasses
-from dataclasses import replace
 
 from ..pt import pt_counter_deltas
 from . import ast
@@ -65,8 +64,8 @@ from .prices import (_accept_conjoined_life_cost,  # noqa: F401
 # Re-exported under the names this module used, so no caller changed.
 from .references import (PAIR_ORDINALS,  # noqa: F401
                          _parse_further_subjects, _parse_that_object,
-                         parse_bound_subject, parse_pair_ordinal_subject,
-                         parse_target_spec)
+                         excluding_source, parse_bound_subject,
+                         parse_pair_ordinal_subject, parse_target_spec)
 from .stream import TokenStream
 from .zones import accept_zone_possessive
 from .vocabulary import (BASIC_LAND_WORDS,  # noqa: F401 — re-exported
@@ -334,13 +333,6 @@ def parse_subject_filter_at(
     :func:`parse_subject_filter`.
     """
     mark = stream.mark()
-    # "another" sits where the article does, so it is read here and folded onto
-    # the filter's exclusion field — the idiom `_parse_cost_object` and the
-    # counters event above already use, rather than a noun-parser quantifier
-    # that would change every targeted line in the pool. It leaves a bare noun
-    # behind ("another **Rogue you control**"), which the noun parser quantifies
-    # as the sweep "all"; without "another" the article has to be printed.
-    another = bool(stream.accept_word("another"))
     # "When **the** creature put onto the battlefield with this enchantment
     # dies" (Diabolic Servitude). The definite article, which names *one*
     # described object where "a" names any — the same reading
@@ -355,20 +347,29 @@ def parse_subject_filter_at(
     # becoming "a creature" and firing a trigger on every creature on the
     # table. That widening is the one failure this function's docstring is
     # about.
-    definite = not another and bool(stream.accept_word("the"))
+    definite = bool(stream.accept_word("the"))
     try:
         spec = parse_target_spec(stream)
     except GrammarError:
         stream.reset(mark)
         return None
-    wanted = "all" if (another or plural or definite) else "a"
-    if spec is None or spec.quantifier != wanted:
+    # "**another** Rogue you control …" (a trigger's subject). The word is
+    # `parse_target_spec`'s — an untargeted "a" that must differ from an
+    # earlier choice — and a subject has no earlier choice, so it is the
+    # source exclusion (`excluding_source`, CR 113.7). Admitted in the counted
+    # position too, exactly as the reader this replaced admitted it: the word
+    # only excludes, and the count in front says how many.
+    another = spec is not None and spec.distinct_from_prior and not spec.targeted
+    if another:
+        spec = excluding_source(spec)
+    wanted = "a" if another else ("all" if (plural or definite) else "a")
+    if spec is None or spec.quantifier != wanted or (another and definite):
         stream.reset(mark)
         return None
     if definite and not _identifies_one_object(spec.filter):
         stream.reset(mark)
         return None
-    return replace(spec.filter, other_than_source=True) if another else spec.filter
+    return spec.filter
 
 
 
