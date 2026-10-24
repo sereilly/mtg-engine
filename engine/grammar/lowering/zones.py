@@ -245,6 +245,11 @@ def _lower_put_on_library_bottom(node: ast.PutOnLibraryBottom) -> tuple[OracleIn
     always meant to this kind."""
     spec = node.target
     if node.to_owner == "owner":
+        if (
+            isinstance(spec, ast.TargetSpec) and spec.filter.is_card
+            and spec.filter.zone == "graveyard"
+        ):
+            return _lower_any_graveyard_card_on_library_bottom(node)
         return _lower_permanent_on_library_bottom(node)
     if (
         isinstance(spec, ast.TargetSpec) and not spec.targeted
@@ -281,6 +286,40 @@ def _lower_put_on_library_bottom(node: ast.PutOnLibraryBottom) -> tuple[OracleIn
             _graveyard_to_hand_payload(filt),
         ),
     )
+
+
+def _lower_any_graveyard_card_on_library_bottom(
+    node: ast.PutOnLibraryBottom,
+) -> tuple[OracleInstruction, ...]:
+    """"…put target card **from a graveyard** on the bottom of **its owner's**
+    library." (Nantuko Tracer.)
+
+    Epitaph Golem's bottoming with the pile left open: a card in a graveyard is
+    in its owner's (CR 404.1), so "its owner's library" is the library beside
+    whichever pile the card was chosen from and the handler needs only the
+    announced seat — Endbringer's Revel's reading of "from a graveyard to its
+    owner's hand", on the same ``any_graveyard`` key the picker
+    (``payload_target_specs._graveyard_return_spec``) already reads.
+
+    Only "a graveyard" is admitted. Any printed possessive on the pile ("your",
+    "an opponent's", "target player's") is a scope this lowering would have to
+    carry onto the picker and the gate, and it carries none — so it refuses
+    rather than offering every graveyard for a card that names one.
+    """
+    spec = node.target
+    if not isinstance(spec, ast.TargetSpec) or not _is_target(spec):
+        raise LoweringError("the bottoming handler reads one chosen card", node=node)
+    filt = spec.filter
+    if filt.zone_owner is not None:
+        raise LoweringError(
+            "a graveyard card bottomed into its owner's library is read only "
+            "from \"a graveyard\"", node=node,
+        )
+    if _restrictions_beyond(filt, _BOTTOMING_HONOURED_FIELDS):
+        raise LoweringError("no bottoming handler honours this restriction", node=node)
+    payload = _graveyard_to_hand_payload(filt)
+    payload["any_graveyard"] = True
+    return (OracleInstruction("put_graveyard_card_on_library_bottom", "", payload),)
 
 
 def _lower_permanent_on_library_bottom(
