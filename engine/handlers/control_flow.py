@@ -875,13 +875,14 @@ def _offer_to_seat(
     """
     player = game.players[player_index]
     # **The offer is about the board as it stands now**, and the entry outlives
-    # this call: an ``optional_pay`` does not suspend its loop, so "for each of
-    # those creatures, its controller may pay …" (Winter's Chill) arms every
-    # prompt before any is answered, and by then the loop has moved on and
-    # restored the iteration it was on. The context is a dataclass, so a replace
-    # freezes the per-iteration binding while leaving the resolution's
-    # scratchpad shared by reference — which is exactly CR 608.2h's split
-    # between what an offer was about and what the resolution knows.
+    # this call. An ``optional_pay`` suspends its loop (CR 608.2c), so "for
+    # each of those creatures, its controller may pay …" (Winter's Chill) asks
+    # about one creature at a time — but the answer still arrives after this
+    # call has returned, and an iteration's binding is restored by the loop's
+    # own last step. The context is a dataclass, so a replace freezes the
+    # per-iteration binding while leaving the resolution's scratchpad shared by
+    # reference — which is exactly CR 608.2h's split between what an offer was
+    # about and what the resolution knows.
     context = dataclasses.replace(context)
     if aim:
         # See ``_NAMED_SEAT_ACTORS``: the player word inside the offer names

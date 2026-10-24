@@ -414,6 +414,17 @@ register_choice(
     # ability and nothing else while one of these is owed
     # (``web/actions.py``): nobody has priority in the middle of a resolution.
     also_answers=("tap", "activate"),
+    # **An offer is a step of the resolution that makes it** (CR 608.2c: the
+    # instructions are followed in the order written), so the steps behind it
+    # wait for the answer. It did not suspend, on the argument that only a
+    # step *reading* the answer needs to wait and that one could be folded
+    # into the offer's branch (``lowering/sequences._fold_into_offer``) — and
+    # every other step behind an offer ran before an interactive seat had
+    # answered: Grip of Amnesia drew its card before the counter was decided,
+    # Twitch drew before the caster chose whether to tap, Death Wish took the
+    # life before the wish was made. The census is
+    # ``tests/regressions/test_jud_w2g2_offer_tail_census.py``.
+    suspends=True,
 )
 
 register_choice(

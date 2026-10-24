@@ -698,11 +698,14 @@ def test_w1g5_delaying_shield_asks_once_per_counter_at_upkeep(
     game.resolve_upkeep(0)
     game.resolve_top_of_stack()
     assert _w1g5_delay_counters(shield) == 0
-    assert [c.kind for c in game.pending_choices] == ["optional_pay"] * len(answers)
+    # One counter's offer at a time: the offer suspends the loop over the
+    # counters (CR 608.2c), and each answer makes the next offer.
     for accept in answers:
+        assert [c.kind for c in game.pending_choices] == ["optional_pay"]
         assert game.resolve_pending_choice(
             "optional_pay", 0, accept=accept, card_name="Delaying Shield",
         )
+    assert game.pending_choices == []
     _w1g5_resolve_stack(game)
 
     assert alice.life == life

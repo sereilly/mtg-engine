@@ -1094,8 +1094,15 @@ def test_rebirth_offers_every_seat_its_own_decision(set_pool):
     result = game.cast_from_hand(0, "Rebirth")
 
     assert result.supported, result.details
-    assert sorted(e["player_index"] for e in game.pending_optional_pays) == [0, 1, 2]
-    assert all(p.ante == [] for p in players), "nothing happens before the answers"
+    # One seat at a time, in turn order (CR 101.4): the offer suspends the
+    # resolution, so each answer is what arms the next seat's prompt.
+    asked = []
+    while game.pending_optional_pays:
+        assert all(p.ante == [] for p in players), "nothing happens before the answers"
+        (owed,) = game.pending_optional_pays
+        asked.append(owed["player_index"])
+        assert game.confirm_optional_pay(asked[-1], accept=False)
+    assert asked == [0, 1, 2]
 
 
 def test_a_seat_that_accepts_antes_its_own_card_and_goes_to_twenty(set_pool):
@@ -1104,6 +1111,7 @@ def test_a_seat_that_accepts_antes_its_own_card_and_goes_to_twenty(set_pool):
     game, players = _r32_rebirth_game(set_pool, lives=[5, 5])
 
     game.cast_from_hand(0, "Rebirth")
+    assert game.confirm_optional_pay(0, accept=False)
     assert game.confirm_optional_pay(1, accept=True)
 
     assert [c.name for c in players[1].ante] == ["P2Card0"]
