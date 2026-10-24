@@ -225,6 +225,13 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
     # "X target lands": the count is the announced X rather than a printed
     # number, so it is not known until the ability is activated.
     exactly_x = False
+    # "…return **up to that many** target permanents…" (Cephalid Constable.)
+    # Not an X at all: CR 107.3 gives a triggered ability's count the number
+    # its own text names, and "that many" names the firing event's quantity.
+    # Kept beside ``exactly_x`` — every reader of a several-target count still
+    # sees a count unknown at parse time — so the lowering that knows the event
+    # can say where the number is read, and every other one can refuse it.
+    that_many: "ast.ThatMuch | None" = None
 
     # Whether the word "target" is printed — recorded, not merely consumed:
     # "up to four lands" (Rewind) names no targets and is chosen on
@@ -282,6 +289,8 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
                 # returned one card of however many X allowed with nothing
                 # anywhere saying so.
                 count, exactly_x = 0, True
+                if isinstance(amount, ast.ThatMuch):
+                    that_many = amount
         if stream.at_word("other") and stream.peek_word(1) == "target":
             stream.advance()
             other_before_target = True
@@ -428,6 +437,7 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
     return ast.TargetSpec(
         quantifier, filt, count,
         count_from_x=exactly_x,
+        count_amount=that_many,
         distinct_from_prior=distinct_from_prior, targeted=targeted,
         same_controller=same_controller,
     )

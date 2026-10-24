@@ -571,6 +571,13 @@ def bounce_target_creature(game: Game, instruction: OracleInstruction, context: 
             game.players.index(context.caster) if context.caster in game.players
             else None
         )
+        # "…up to that many target permanents **that player** controls"
+        # (Cephalid Constable). The seat the damage event froze, which the
+        # matcher cannot answer without and refuses closed — the singular
+        # branch below learned this from Sigil of Sleep; this one returned
+        # nothing at all, every time, while the picker had offered exactly that
+        # player's permanents.
+        that_player = frozen_that_player_seat(game, context)
         # Handed **into** the resolver as its predicate rather than applied to
         # what it returns, and that is the whole of the fix: its default
         # predicate is ``p.is_creature``, so a bare
@@ -582,6 +589,7 @@ def bounce_target_creature(game: Game, instruction: OracleInstruction, context: 
             predicate=lambda perm: subject_matches(
                 game, perm, described,
                 observer=observer, source=context.source_permanent,
+                that_player=that_player,
             ),
         )
         for perm in chosen:

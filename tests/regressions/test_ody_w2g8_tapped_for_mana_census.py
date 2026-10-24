@@ -451,9 +451,12 @@ NON_MANA_TAP_TRIGGERS_RESOLVED_INLINE = frozenset({
 #: included: Overabundance's damage and Winter's Night's untap lock are part
 #: of an ability that adds mana, so they resolve with it and cannot be
 #: responded to (Overabundance's ruling of 2004-10-04 says so of the damage).
+#: Judgment's Mirari's Wake joined when its "add one mana of any type that land
+#: produced" (Mana Flare's clause with the subject left implied) compiled: it
+#: adds mana, so it is a mana ability by the same rule.
 TRIGGERED_MANA_ABILITIES = frozenset({
     "Gauntlet of Might", "Mana Flare", "Snowfall", "Vernal Bloom",
-    "Overabundance", "Winter's Night",
+    "Overabundance", "Winter's Night", "Mirari's Wake",
 })
 
 

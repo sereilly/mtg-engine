@@ -307,7 +307,10 @@ def _targets_only(recipient: ast.Recipient) -> dict[str, object]:
     return payload
 
 
-def _describe_several_targets(payload: dict[str, object], recipient: ast.TargetSpec) -> None:
+def _describe_several_targets(
+    payload: dict[str, object], recipient: ast.TargetSpec,
+    *, that_many_from_trigger: str | None = None,
+) -> None:
     """Record an "up to N target …" description, N > 1, on *payload*.
 
     Separate from :func:`_describe_targets` and opted into per call site, which
@@ -337,6 +340,19 @@ def _describe_several_targets(payload: dict[str, object], recipient: ast.TargetS
         # picker that offers nothing.
         "count": "x" if recipient.count_from_x else recipient.count,
     }
+    # "…return **up to that many** target permanents…" (Cephalid Constable.)
+    # The count is the firing event's quantity, not an announced X — so the
+    # caller that knows the event names the trigger-context key it is read
+    # from (``x_from_trigger``), which the trigger's target prompt sizes itself
+    # by. A caller that names none refuses: read as an X, a trigger's "that
+    # many" is a number nobody announced.
+    if isinstance(recipient.count_amount, ast.ThatMuch):
+        if that_many_from_trigger is None:
+            raise LoweringError(
+                "'up to that many' targets with no event quantity to count by",
+                node=recipient,
+            )
+        payload["targets"]["x_from_trigger"] = that_many_from_trigger
     if recipient.quantifier in ("one_or_more", "any_number"):
         # No printed maximum, so the cap is however many legal targets there
         # are — a number that only exists once the picker has enumerated them
@@ -377,6 +393,12 @@ def _describe_several_card_targets(
     if not recipient.targeted:
         raise LoweringError(
             "this 'up to N' names no targets; the choice belongs to resolution",
+            node=recipient,
+        )
+    if isinstance(recipient.count_amount, ast.ThatMuch):
+        # :func:`_describe_several_targets`' refusal, for the same reason.
+        raise LoweringError(
+            "'up to that many' target cards with no event quantity to count by",
             node=recipient,
         )
     payload["targets"] = {

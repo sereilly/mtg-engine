@@ -803,6 +803,14 @@ def _from_targets_payload(targets) -> dict | None:
         # than a number: how many the caster may name depends on what they can
         # pay, which is knowable at the picker and nowhere earlier.
         flags = {**flags, "x_targets": True}
+        # "…return **up to that many** target permanents…" (Cephalid
+        # Constable.) The same unknown count, known at a *trigger's* picker
+        # instead: the number its firing event froze under this key (CR 107.3:
+        # a triggered ability's count is the one its text names). Carried
+        # beside ``x_targets`` so a reader that knows only that flag still
+        # treats the count as unknown here.
+        if targets.get("x_from_trigger"):
+            flags = {**flags, "x_from_trigger": targets["x_from_trigger"]}
     elif targets.get("unbounded"):
         # "One or more target creatures" names no maximum. `legality.py` turns
         # this into a `max_targets` once it knows how many legal targets exist,

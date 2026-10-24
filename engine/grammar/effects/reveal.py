@@ -51,7 +51,7 @@ from .. import ast
 from ..amounts import parse_amount, parse_equal_to
 from ..errors import GrammarError
 from ..nouns import parse_object_filter
-from ..phrases import accept_a_card_at_random_from_hand
+from ..phrases import accept_a_card_at_random_from_hand, accept_article_descriptions
 from ..references import parse_player_ref
 from ..stream import TokenStream
 from ._reveal_until import _accept_reveal_until_from_top
@@ -267,19 +267,13 @@ def _accept_reveal_library_opponent_chooses(
         return None
     for word in ("an", "opponent", "chooses", "from", "among", "them"):
         stream.expect_word(word)
-    described: list[ast.ObjectFilter] = []
-    while True:
-        stream.expect_word("a", "an")
-        described.append(parse_object_filter(stream))
-        # ", a land card" / ", and a …" / " and a …": the list goes on only
-        # where another article follows, so the sentence's own full stop ends
-        # it and a pair joined by a bare "and" is the same list.
-        joined = stream.mark()
-        stream.accept_punct(",")
-        stream.accept_word("and")
-        if not stream.at_word("a", "an"):
-            stream.reset(joined)
-            break
+    # ", a land card" / ", and a …" / " and a …": the list goes on only where
+    # another article follows, so the sentence's own full stop ends it and a
+    # pair joined by a bare "and" is the same list. The shared reader, which
+    # Krosan Verge's search reads the same list with.
+    described = accept_article_descriptions(stream)
+    if described is None:
+        raise stream.error("expected the cards the opponent chooses")
     if not stream.accept_punct("."):
         raise stream.error("expected where the chosen cards go")
     for word in ("you", "put", "the", "chosen", "cards", "into", "your", "hand"):
@@ -291,7 +285,7 @@ def _accept_reveal_library_opponent_chooses(
     # line. The final full stop is the sequence parser's.
     stream.expect_word("then")
     stream.expect_word("shuffle")
-    return ast.RevealLibraryOpponentChooses(tuple(described))
+    return ast.RevealLibraryOpponentChooses(described)
 
 
 def _accept_counted_reveal_sorting_by_name(

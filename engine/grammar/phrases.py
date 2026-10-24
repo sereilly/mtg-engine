@@ -588,6 +588,42 @@ def _parse_card_alternatives(
     return tuple(alternatives)
 
 
+def accept_article_descriptions(
+    stream: TokenStream,
+) -> tuple[ast.ObjectFilter, ...] | None:
+    """``a <noun phrase>[, a <noun phrase>…][, and a <noun phrase>]`` at the
+    cursor — one description per article, in the printed order — or None with
+    the cursor where it was.
+
+    A **list** of separate objects, each its own pick, where
+    :func:`_parse_card_alternatives` above reads an "or" union that one object
+    satisfies. Two families read it: the reveal an opponent picks from ("a
+    creature card, a land card, and a noncreature, nonland card", Guided
+    Passage) and the search with one find per description ("a Forest card and
+    a Plains card", Krosan Verge). The list goes on only where another article
+    follows, so a description's own comma ("a noncreature, nonland card") stays
+    inside it and the clause after the list ("…, put them …") ends it.
+    """
+    mark = stream.mark()
+    described: list[ast.ObjectFilter] = []
+    while True:
+        if not stream.accept_word("a", "an"):
+            stream.reset(mark)
+            return None
+        try:
+            described.append(parse_object_filter(stream))
+        except GrammarError:
+            stream.reset(mark)
+            return None
+        joined = stream.mark()
+        stream.accept_punct(",")
+        stream.accept_word("and")
+        if not stream.at_word("a", "an"):
+            stream.reset(joined)
+            break
+    return tuple(described)
+
+
 # ---------------------------------------------------------------------------
 # "…of an opponent's choice"
 # ---------------------------------------------------------------------------

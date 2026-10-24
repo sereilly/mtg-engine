@@ -517,6 +517,18 @@ def _accept_record_condition(stream: TokenStream) -> "ast.Condition | None":
     ):
         return ast.ExiledThisWayShareAName()
     stream.reset(named_mark)
+    # "If **two or more of those cards have the same name**, repeat this
+    # process." (Scalpelexis.) The same relation over the cards the exile in
+    # front of it just wrote, and "two or more" is "any two" — CR 201.2a's
+    # "two or more objects have the same name" is the rule's own wording. The
+    # lowering demands the exile's record, so "those cards" cannot name a pile
+    # nothing exiled.
+    if stream.accept_phrase(
+        "two", "or", "more", "of", "those", "cards", "have", "the", "same",
+        "name",
+    ):
+        return ast.ExiledThisWayShareAName()
+    stream.reset(named_mark)
     # "…until **you put a card into your hand**" (the same card's other
     # stopping clause). Whether a step of this effect put one there; the
     # lowering refuses it with no such step in front of it.

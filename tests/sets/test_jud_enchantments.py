@@ -684,4 +684,202 @@ def test_w1g9_infectious_rage_with_no_legal_host_stays_in_the_graveyard(set_pool
 # ==== W1G10 ==========================================================
 # W1G10's tests go between this line and the "end W1G10" line.
 
+from engine import Game as _W1G10Game, PlayerState as _W1G10PlayerState
+from engine.board_payment import board_can_pay as _w1g10_board_can_pay
+from engine.models import Permanent as _W1G10Permanent
+
+
+def _w1g10_table(set_pool):
+    island = set_pool("LEA")["Island"]
+    game = _W1G10Game(players=[
+        _W1G10PlayerState(name=f"P{seat}", life=20, library=[island] * 10)
+        for seat in range(2)
+    ])
+    game.enforce_mana_costs = True
+    game.interactive_seats = set()
+    game.start_turn(0)
+    return game
+
+
+def _w1g10_put(game, card, seat):
+    permanent = _W1G10Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    permanent.tapped = False
+    return permanent
+
+
+def _w1g10_pool(game, seat):
+    return {s: n for s, n in game.players[seat].mana_pool.items() if n}
+
+
+def test_w1g10_mirari_s_wake_doubles_its_controller_s_land_mana(set_pool):
+    """"Whenever you tap a land for mana, add one mana of any type that land
+    produced." A triggered mana ability (CR 605.1b) resolved inside the tap
+    (CR 605.4a): a Forest tapped by the Wake's controller makes {G}{G}, and a
+    Badlands asked for {R} makes {R}{R} — the type it produced, not one of the
+    controller's choosing (ruling 2021-06-18)."""
+    jud, lea = set_pool("JUD"), set_pool("LEA")
+    game = _w1g10_table(set_pool)
+    _w1g10_put(game, jud["Mirari's Wake"], 0)
+    forest = _w1g10_put(game, lea["Forest"], 0)
+    badlands = _w1g10_put(game, lea["Badlands"], 0)
+    game._settle()
+
+    assert game.tap_land_for_mana(0, "Forest", permanent_id=forest.permanent_id)
+    assert _w1g10_pool(game, 0) == {"G": 2}
+    assert game.tap_land_for_mana(
+        0, "Badlands", "R", permanent_id=badlands.permanent_id
+    )
+    assert _w1g10_pool(game, 0) == {"G": 2, "R": 2}
+    assert any("Mirari's Wake: P0 added {R}" in line for line in game.log)
+
+
+def test_w1g10_mirari_s_wake_ignores_an_opponent_s_tap(set_pool):
+    """"Whenever **you** tap" — the opponent's Forest makes its one {G}."""
+    jud, lea = set_pool("JUD"), set_pool("LEA")
+    game = _w1g10_table(set_pool)
+    _w1g10_put(game, jud["Mirari's Wake"], 0)
+    theirs = _w1g10_put(game, lea["Forest"], 1)
+    game._settle()
+
+    assert game.tap_land_for_mana(1, "Forest", permanent_id=theirs.permanent_id)
+    assert _w1g10_pool(game, 1) == {"G": 1}
+    assert _w1g10_pool(game, 0) == {}
+
+
+def test_w1g10_mirari_s_wake_counts_in_what_the_board_can_pay(set_pool):
+    """What the castable highlight and the auto-payment ask beforehand
+    (``board_payment``) is what the tap will make: two Mountains pay {3}{R}
+    under the Wake and not without it. And creatures its controller controls
+    get +1/+1 — the opponent's do not."""
+    jud, lea = set_pool("JUD"), set_pool("LEA")
+    game = _w1g10_table(set_pool)
+    _w1g10_put(game, lea["Mountain"], 0)
+    _w1g10_put(game, lea["Mountain"], 0)
+    game._settle()
+    cost = {"R": 1, "generic": 3}
+    assert not _w1g10_board_can_pay(game, 0, cost)
+
+    _w1g10_put(game, jud["Mirari's Wake"], 0)
+    mine = _w1g10_put(game, lea["Grizzly Bears"], 0)
+    theirs = _w1g10_put(game, lea["Grizzly Bears"], 1)
+    game._settle()
+    assert _w1g10_board_can_pay(game, 0, cost)
+    assert (mine.effective_power, mine.effective_toughness) == (3, 3)
+    assert (theirs.effective_power, theirs.effective_toughness) == (2, 2)
+
+
+def _w1g10_mist_game(set_pool, seat0, seat1, *, graveyards=((), ())):
+    """Two seats with permanents (card names) and graveyards (card names),
+    Mist of Stagnation on seat 0's side, every other permanent tapped."""
+    from tests.helpers import resolve_stack
+
+    pool = {**set_pool("LEA"), **set_pool("JUD")}
+    island = pool["Island"]
+    game = _W1G10Game(players=[
+        _W1G10PlayerState(
+            name=f"P{seat}", life=20, library=[island] * 8,
+            graveyard=[pool[name] for name in graveyards[seat]],
+        )
+        for seat in range(2)
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    mist = _w1g10_put(game, pool["Mist of Stagnation"], 0)
+    sides = []
+    for seat, names in ((0, seat0), (1, seat1)):
+        placed = [_w1g10_put(game, pool[name], seat) for name in names]
+        for permanent in placed:
+            permanent.tapped = True
+        sides.append(placed)
+    game._settle()
+
+    def take_turn(seat):
+        game.start_turn(seat)
+        for _ in range(4):
+            game.auto_resolve_pending_choices()
+            if not resolve_stack(game):
+                break
+
+    return game, mist, sides, take_turn
+
+
+def test_w1g10_mist_of_stagnation_untaps_one_per_graveyard_card(set_pool):
+    """"Permanents don't untap during their controllers' untap steps. At the
+    beginning of each player's upkeep, that player chooses a permanent for each
+    card in their graveyard, then untaps those permanents."
+
+    The untap step untaps nothing of anyone's (CR 502.3); the upkeep player
+    with two cards in their graveyard untaps two permanents, and a seat
+    nobody asks picks its own tapped ones. The other seat, with an empty
+    graveyard, gets nothing back on its own upkeep."""
+    game, _, (mine, theirs), take_turn = _w1g10_mist_game(
+        set_pool,
+        ["Forest", "Forest", "Forest", "Grizzly Bears"],
+        ["Mountain", "Mountain"],
+        graveyards=(("Lightning Bolt", "Giant Growth"), ()),
+    )
+
+    take_turn(1)
+    assert all(permanent.tapped for permanent in theirs), (
+        "an empty graveyard untaps nothing, and the untap step untapped nothing"
+    )
+    assert all(permanent.tapped for permanent in mine)
+
+    take_turn(0)
+    assert [permanent.tapped for permanent in mine] == [False, False, True, True]
+    assert all(permanent.tapped for permanent in theirs)
+
+
+def test_w1g10_mist_of_stagnation_counts_the_upkeep_players_graveyard(set_pool):
+    """"…for each card in **their** graveyard" is the upkeep player's pile, not
+    the Mist controller's: on seat 1's upkeep seat 1's three cards count, and
+    seat 0's own graveyard of one does not."""
+    game, _, (mine, theirs), take_turn = _w1g10_mist_game(
+        set_pool,
+        ["Forest", "Forest"],
+        ["Mountain", "Mountain", "Mountain", "Mountain"],
+        graveyards=(("Lightning Bolt",), ("Hill Giant", "Hill Giant", "Dark Ritual")),
+    )
+    take_turn(1)
+    assert [permanent.tapped for permanent in theirs] == [False, False, False, True]
+    assert all(permanent.tapped for permanent in mine)
+
+
+def test_w1g10_mist_of_stagnation_asks_the_upkeep_player_and_any_permanent_counts(set_pool):
+    """An interactive upkeep player is asked for exactly as many as their
+    graveyard holds, out of **every** permanent — "a permanent", not one they
+    control — and the ones named are untapped, an opponent's included."""
+    game, _, (mine, theirs), _ = _w1g10_mist_game(
+        set_pool,
+        ["Forest", "Forest"],
+        ["Mountain", "Mountain"],
+        graveyards=((), ("Lightning Bolt", "Dark Ritual")),
+    )
+    game.interactive_seats = {0, 1}
+    game.start_turn(1)
+    for _ in range(4):
+        if not game.stack or not game.resolve_top_of_stack():
+            break
+
+    prompts = [c for c in game.pending_choices if c.kind == "permanent_set_choice"]
+    assert len(prompts) == 1, [c.kind for c in game.pending_choices]
+    prompt = prompts[0]
+    assert prompt.player_index == 1
+    assert (prompt.data["up_to"], prompt.data["at_least"]) == (2, 2)
+    offered = {perm.permanent_id for perm in game.live_permanent_set_choices(prompt)}
+    assert {perm.permanent_id for perm in mine + theirs} <= offered
+    assert not game.confirm_permanent_set_choice(1, [theirs[0].permanent_id]), (
+        "one permanent is not one for each card"
+    )
+    assert game.confirm_permanent_set_choice(
+        1, [theirs[1].permanent_id, mine[0].permanent_id]
+    )
+    from tests.helpers import resolve_stack
+
+    resolve_stack(game)
+    assert [permanent.tapped for permanent in theirs] == [True, False]
+    assert [permanent.tapped for permanent in mine] == [False, True]
+
 # ==== end W1G10 ======================================================

@@ -129,6 +129,13 @@ def test_no_card_in_the_pool_loses_a_word_to_the_expansion(_r28_pool):
     other legends that print a short name (Kangee, Darigaaz, Crosis, Dromar,
     Rith, Treva) carry it before a comma, which is the name's own first part
     and is not this expansion's to write.
+
+    Judgment added one: Balthor the Defiled's activated ability is paid with
+    "Exile Balthor". The legend naming itself in its own cost, and "Balthor" is
+    not a word the game uses to describe objects, so the expansion is right to
+    write the whole name: the cost reader then sees the card's own name and
+    reads the cost as exiling the source (ruling 2013-07-01: the ability can
+    only be activated while Balthor is on the battlefield).
     """
     changed = {
         card.name
@@ -153,4 +160,5 @@ def test_no_card_in_the_pool_loses_a_word_to_the_expansion(_r28_pool):
         "Crovax the Cursed",
         "Volrath the Fallen",
         "Mageta the Lion",
+        "Balthor the Defiled",
     }

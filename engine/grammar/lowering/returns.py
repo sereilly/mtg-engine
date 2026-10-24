@@ -477,7 +477,26 @@ def _lower_return_to_zone(
         and subject.filter.card_types in ((), ("creature",))
     ):
         several: dict[str, object] = {}
-        _describe_several_targets(several, subject)
+        # "Whenever this creature deals combat damage to a player, return **up
+        # to that many** target permanents that player controls to their
+        # owner's hand." (Cephalid Constable.) The ceiling is the damage the
+        # event dealt, read where every other bare "that many" under this
+        # trigger is (``_back_reference_payload``) — and only off the event:
+        # the targets are chosen as the ability goes on the stack (CR 603.3d),
+        # before any step of it has run to record a number.
+        from_trigger = None
+        if isinstance(subject.count_amount, ast.ThatMuch):
+            back = _back_reference_payload(subject.count_amount, produced, event)
+            from_trigger = back.get("amount_from_trigger")
+            if from_trigger is None:
+                raise LoweringError(
+                    "'up to that many' targets are chosen before this effect "
+                    "has recorded any number",
+                    node=node,
+                )
+        _describe_several_targets(
+            several, subject, that_many_from_trigger=from_trigger
+        )
         return (OracleInstruction("bounce_target_creature", "", several),)
     # "Return up to two target creature cards from your graveyard to your hand."
     # (Sanguine Indulgence.) The same instruction as the one-card return - the

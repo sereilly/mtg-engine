@@ -28,6 +28,7 @@ import dataclasses
 from .. import ast
 from ..errors import GrammarError
 from ..nouns import parse_object_filter
+from ..phrases import _parse_per_each_objects
 from ..rebinding import statement_bound_target
 from ..references import parse_player_ref, parse_recipient, parse_target_spec
 from ..stream import TokenStream
@@ -405,6 +406,30 @@ def parse_player_chooses_permanent(
     if spec.quantifier != "a" or spec.count != 1:
         stream.reset(mark)
         return None
+    # "…that player chooses a permanent **for each card in their graveyard**,
+    # then untaps those permanents." (Mist of Stagnation.) Equipoise's counted
+    # choice with the count printed behind the noun rather than in front of
+    # the sentence: the article is singular because the trailing clause says
+    # how many, so it is the same node — a set sized by a count the resolution
+    # takes (``count_amount``) — and the same plural lowering. Only a pick from
+    # the battlefield and only where the clause ends, the rule every branch of
+    # this production keeps.
+    per_each = stream.mark()
+    counted, beyond_first = _parse_per_each_objects(stream)
+    if counted is not None:
+        if (
+            not beyond_first
+            and spec.filter.zone == "battlefield"
+            and not spec.filter.is_card
+            and _at_clause_end(stream)
+        ):
+            return ast.ChoosePermanent(
+                chooser,
+                dataclasses.replace(
+                    spec, quantifier="up_to", count_amount=ast.CountOf(counted)
+                ),
+            )
+        stream.reset(per_each)
     host_for_source = False
     if stream.accept_phrase("that", "this", "card", "could", "enchant"):
         host_for_source = True

@@ -29,7 +29,8 @@ from ._common import (_describe_targets, _filter_payload, _is_source, _is_target
                       _restrictions_beyond)
 from ._amounts import count_spec
 from ._events import (CHOSEN_PERMANENT as _ATTACH_HOST_KEY,
-                      CHOSEN_PLAYER, _EVENT_SUBJECT_CONTROLLERS,
+                      CHOSEN_PLAYER, EVENT_SUBJECT_PLAYER,
+                      _EVENT_SUBJECT_CONTROLLERS,
                       _EVENT_SUBJECT_PLAYERS, _RECORDED_PERMANENTS)
 from ._seats import _CHOOSER_SEATS
 
@@ -279,6 +280,40 @@ def _side_spec(described: "ast.ObjectFilter", node) -> dict:
     return spec
 
 
+#: Whose pile a counted choice's possessive names, per chooser. "…chooses a
+#: permanent for each card in **their** graveyard": the pronoun agrees with
+#: the sentence's subject, so the pile is the chooser's — the seat the
+#: count is then taken on. The noun parser reads a bare "their" as ``owner``.
+_CHOOSER_PILE_WORDS: frozenset[str] = frozenset({"owner", "that_player"})
+
+
+def _chooser_pile_count(
+    counted: "ast.ObjectFilter", chooser: "ast.PlayerRef", event: str | None, node,
+) -> dict:
+    """The count spec for "…for each card in their graveyard" behind a choice.
+
+    The pile is the chooser's own, and the scope is the seat that chooser
+    resolves to: the ability's controller for "you … your graveyard", the
+    seat the firing event froze for "that player … their graveyard". Any
+    other pairing names a pile this has no seat for and refuses, because a
+    count taken on the wrong player's graveyard is a choice of the wrong size.
+    """
+    owner = counted.zone_owner.kind if counted.zone_owner is not None else None
+    if chooser.kind == "you" and owner == "you":
+        return count_spec(counted, node)
+    if (
+        chooser.kind == "that_player"
+        and event in _EVENT_SUBJECT_PLAYERS
+        and owner in _CHOOSER_PILE_WORDS
+    ):
+        spec = count_spec(dataclasses.replace(counted, zone_owner=None), node)
+        spec["owner"] = EVENT_SUBJECT_PLAYER
+        return spec
+    raise LoweringError(
+        "a counted choice counts the chooser's own pile", node=node
+    )
+
+
 def _lower_choose_permanents(
     node: ast.ChoosePermanent, produced: frozenset[str],
     event: str | None = None,
@@ -323,10 +358,20 @@ def _lower_choose_permanents(
         # It is a **floor as well as a ceiling**: the sentence says how many are
         # chosen, not how many may be. A ceiling alone would let a seat with
         # nothing to gain by it choose none, which is a card that does nothing.
-        computed["count_from"] = _side_spec(_excess_left(spec.count_amount, node), node)
-        computed["count_from"]["minus"] = _side_spec(
-            _excess_right(spec.count_amount, node), node
-        )
+        if isinstance(spec.count_amount, ast.CountOf):
+            # "…that player chooses a permanent **for each card in their
+            # graveyard**…" (Mist of Stagnation.) One set counted rather than
+            # the difference of two, scoped to the seat the possessive names.
+            computed["count_from"] = _chooser_pile_count(
+                spec.count_amount.filter, node.chooser, event, node
+            )
+        else:
+            computed["count_from"] = _side_spec(
+                _excess_left(spec.count_amount, node), node
+            )
+            computed["count_from"]["minus"] = _side_spec(
+                _excess_right(spec.count_amount, node), node
+            )
         computed["exact_count"] = True
         # "…a land **that player** controls." The picked-from battlefield is a
         # seat, and ``subject_matches`` refuses a controller it has nobody to
@@ -404,6 +449,12 @@ def _lower_choose_permanents(
     controller_record = PER_OBJECT_SEAT_RECORDS["controller"]
     if node.chooser.kind == "that_player" and controller_record in produced:
         payload["chooser_seat_record"] = controller_record
+    elif node.chooser.kind == "that_player" and event in _EVENT_SUBJECT_PLAYERS:
+        # "At the beginning of each player's upkeep, **that player** chooses…"
+        # (Mist of Stagnation.) The seat the step's announcement froze
+        # (CR 603.10) — the singular pick's reading of the same pronoun
+        # (Rising Waters), and a different seat every firing.
+        payload["chooser"] = EVENT_SUBJECT_PLAYER
     elif node.chooser.kind in _CHOOSER_SEATS and node.chooser.kind != "that_player":
         payload["chooser"] = _CHOOSER_SEATS[node.chooser.kind]
         announced = _ANNOUNCED_CHOOSERS.get(node.chooser.kind)

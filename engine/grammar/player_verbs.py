@@ -62,6 +62,7 @@ from .effects import (
     _parse_discard_revealed_unless_pay_life,
     _parse_draw,
     _parse_exile_entire_library,
+    parse_player_exiles_top_of_library,
     _parse_extra_turn,
     _parse_mill,
     parse_choose_each_then_return,
@@ -237,6 +238,13 @@ def parse_player_subject_verb(
         emptied = _parse_exile_entire_library(stream, source_spec)
         if emptied is not None:
             return emptied
+        # "**That player** exiles the top four cards of their library."
+        # (Scalpelexis.) The imperative top-of-library exile with a printed
+        # subject; it differs from the whole-library reading above on the
+        # word after the verb, so neither can claim the other.
+        topped = parse_player_exiles_top_of_library(stream, source_spec)
+        if topped is not None:
+            return topped
         at_random = parse_exile_random_card_from_hand(stream, source_spec)
         if at_random is not None:
             return at_random

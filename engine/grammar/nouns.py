@@ -359,9 +359,32 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
             # Taking "green" alone would end the noun phrase at "or", leaving
             # "or white creature" unconsumed and refusing the whole line, which
             # is exactly how Abomination refused.
+            #
+            # The word printed in front of the first colour, for the
+            # distributive spelling below: "**all** black and **all** red
+            # creature cards" repeats it before each colour.
+            quantifier = stream.peek_word(-1)
             d.colors.append(COLOR_WORDS[word])
             stream.advance()
             while True:
+                # "Each player returns **all black and all red** creature cards
+                # from their graveyard…" (Balthor the Defiled). The union again,
+                # with the sweep's quantifier printed before each colour and the
+                # head noun once: one set, every card that is black or red, which
+                # is what ``colors`` describes. Only the quantifier that opened
+                # the phrase may repeat ("all black and each red" is no printed
+                # English), so the word is compared rather than listed, and only
+                # the two sweep words qualify.
+                if (
+                    quantifier in ("all", "each")
+                    and stream.at_word("and")
+                    and stream.peek_word(1) == quantifier
+                    and stream.peek_word(2) in COLOR_WORDS
+                ):
+                    stream.advance(2)
+                    d.colors.append(COLOR_WORDS[str(stream.peek_word())])
+                    stream.advance()
+                    continue
                 # "each **white and/or blue** creature" (Evaporate) — the same
                 # union with the printed conjunction spelled out. The lexer
                 # drops the slash, so it arrives as the two words "and or", and

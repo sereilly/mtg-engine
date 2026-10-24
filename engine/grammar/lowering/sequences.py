@@ -184,6 +184,38 @@ def _fold_into_offer(
     return instructions[:offer_index] + (rebuilt,) + instructions[offer_index + 1:]
 
 
+def _prefer_tapped_for_untap(
+    instructions: tuple[OracleInstruction, ...],
+    lowered: tuple[OracleInstruction, ...],
+) -> tuple[OracleInstruction, ...]:
+    """*instructions* with a plural pick marked to prefer tapped permanents by
+    default, when the step *lowered* behind it untaps exactly what it chose.
+
+    "…that player chooses a permanent for each card in their graveyard, **then
+    untaps those permanents**." (Mist of Stagnation.) Rising Waters' singular
+    pick carries the same preference (``lowering/tapping.py``, where both halves
+    are built together): an untapped permanent is a legal answer, and CR
+    701.26b makes untapping it do nothing, so a seat nobody asks takes tapped
+    ones first. A *preference* over the same candidates, never a narrowing —
+    the prompt still offers every permanent. Here because this is the one place
+    that sees the pick and the untap behind it as a pair.
+    """
+    if not instructions or len(lowered) != 1:
+        return instructions
+    pick, untap = instructions[-1], lowered[0]
+    if (
+        pick.kind != "choose_permanents"
+        or untap.kind != "untap_recorded_permanents"
+        or untap.payload.get("permanents_from") != pick.payload.get("result_key")
+    ):
+        return instructions
+    return instructions[:-1] + (
+        OracleInstruction(
+            pick.kind, pick.value, {**pick.payload, "default_prefers": "tapped"}
+        ),
+    )
+
+
 def _lower_steps(
     steps: tuple[ast.Statement, ...],
     produced: frozenset[str],
@@ -323,6 +355,7 @@ def _lower_steps(
                 step, count=ast.Var("x") if counted_once else previous.count
             )
         lowered = lower_statement(step, produced, event=event, event_subject=event_subject, whole_effect=False)
+        instructions = _prefer_tapped_for_untap(instructions, lowered)
         if counted_once is not None:
             draw = instructions[-1]
             bare = {k: v for k, v in draw.payload.items() if k != X_FROM_COUNT}

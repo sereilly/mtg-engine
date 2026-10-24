@@ -243,9 +243,13 @@ def _lower_tap(
     # the handler reads the record. Asked first, because the branches below
     # read a bound quantifier as nothing they know and would refuse by the
     # wrong name.
+    #
+    # "…chooses a permanent for each card in their graveyard, **then untaps
+    # those permanents**." (Mist of Stagnation.) The same bound plural the
+    # other way: the set is the one the choice in front of it recorded, and
+    # ``untap_recorded_permanents`` reads a record by id exactly as its tap
+    # twin does.
     if spec.quantifier == "those" and not spec.targeted:
-        if not isinstance(node, ast.Tap):
-            raise LoweringError("no handler untaps a bound set", node=node)
         # "Those creatures" restates a set an earlier step chose, so there is
         # nothing here for an adjective to narrow — a filter carrying one would
         # be dropped, and the tap would reach permanents the printed phrase
@@ -269,7 +273,9 @@ def _lower_tap(
             )
         return (
             OracleInstruction(
-                "tap_recorded_permanents", "", {"permanents_from": recorded[0]}
+                "tap_recorded_permanents" if isinstance(node, ast.Tap)
+                else "untap_recorded_permanents",
+                "", {"permanents_from": recorded[0]},
             ),
         )
     # "…and you tap **that creature**." (Mind Whip.) Under a trigger whose

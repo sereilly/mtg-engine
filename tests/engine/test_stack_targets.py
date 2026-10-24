@@ -748,6 +748,15 @@ _UNANNOUNCED_TRIGGER_TARGETS = frozenset({
     # like any other (tests/sets/test_ody_enchantments_w2g4.py); it is this
     # context-free drive that has no seat to give it.
     "Karmic Justice#0",
+    # Judgment's ingest. "…return **up to that many** target permanents **that
+    # player** controls to their owner's hand" (Cephalid Constable) — Spark
+    # Mage's seat and a count to go with it: both are the damage event's, and
+    # this context-free drive has neither, so the ceiling it reads off the
+    # trigger's context is nothing and "up to" names nothing. Driven through a
+    # real combat damage step (tests/sets/test_jud_creatures.py, W1G10) the
+    # damaged player's permanents are offered, as many as the damage dealt, and
+    # the ones named go back to their owner's hand.
+    "Cephalid Constable#0",
     # no picker derived
     "The Abyss#0", "Rysorian Badger#0", "Goblin Grenadiers#0",
     "Carpet of Flowers#0", "Erithizon#0", "Ley Line#0", "Tolarian Kraken#0",

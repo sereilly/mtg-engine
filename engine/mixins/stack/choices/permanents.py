@@ -631,6 +631,15 @@ class PermanentChoicesMixin:
             from ....ai_cast_gates import given_back_first
 
             own = given_back_first(own, asking)
+        # "…then untaps those permanents." (Mist of Stagnation.) The singular
+        # pick's ``default_prefers: "tapped"`` (Rising Waters), honoured the
+        # same way: stable, so board order still breaks every tie, and over
+        # the same candidates — a preference, never a narrowing.
+        tapped_first = (
+            (choice.data.get("_payload") or {}).get("default_prefers") == "tapped"
+        )
+        if tapped_first:
+            own = sorted(own, key=lambda perm: not perm.tapped)
         picks = own[:limit]
         if len(picks) < floor:
             # **A floor is not a ceiling, and the own-only rule is about the
@@ -640,9 +649,10 @@ class PermanentChoicesMixin:
             # ceiling unspent — it would be declining an instruction. Filled in
             # board order from whatever is left, which is this policy's
             # determinism one step further rather than a valuation.
-            picks = picks + [perm for perm in live if perm not in picks][
-                : floor - len(picks)
-            ]
+            rest = [perm for perm in live if perm not in picks]
+            if tapped_first:
+                rest = sorted(rest, key=lambda perm: not perm.tapped)
+            picks = picks + rest[: floor - len(picks)]
         chosen = [pid for pid in (self.permanent_id_of(perm) for perm in picks)
                   if pid is not None]
         if not self._resolve_permanent_set_choice(choice, chosen):

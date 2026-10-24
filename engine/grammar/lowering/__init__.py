@@ -186,6 +186,7 @@ from .zones import (
 
     _lower_put_on_library_top,
     _lower_exile_graveyard_position,
+    _lower_exchange_zones,
     _lower_sacrifice_and_return_targets,
     _lower_random_graveyard_card_fate,
 )
@@ -692,6 +693,7 @@ __all__ = [
     "_lower_ante_offer_ownership_exchange",
     "_lower_random_reveal_ownership_exchange",
     "_lower_exile_graveyard_position",
+    "_lower_exchange_zones",
     "_lower_sacrifice_and_return_targets",
     "_lower_random_graveyard_card_fate",
     "_lower_exile_top_of_library",
