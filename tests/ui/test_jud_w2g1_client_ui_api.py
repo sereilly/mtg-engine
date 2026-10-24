@@ -481,3 +481,335 @@ def test_shieldmage_s_any_target_role_takes_a_creature_too(set_pool):
     assert bears.damage_marked == 0, "the shield is around the creature named"
     game._deal_damage_to_player(game.players[0], 3, source=giant)
     assert game.players[0].life == 17, "and not around its controller"
+
+
+# ---------------------------------------------------------------------------
+# 5. Cost flag ``library_bottom_cost`` — Battlefield Scrounger
+# ---------------------------------------------------------------------------
+
+_PICKER_PRELUDE = r'''
+let seat = INPUT.seat;
+let currentState = INPUT.state;
+let pendingPermanentCost = null;
+let pendingCastCost = INPUT.pendingCastCost || null;
+let pendingAutoTap = null;
+const sent = [];
+const hints = [];
+const resumed = [];
+const continued = [];
+const SFX = { onError() {} };
+const EMPTY_TARGET_SPEC = { kind: "none", requires_target: false, valid_targets: [] };
+function sendAction(body) { sent.push(body); return Promise.resolve(); }
+function renderActivationPrompt() {}
+function updateActionHint(message) { hints.push(message); }
+function resumeActivationAfterCost(card, activation, fields) { resumed.push({ activation, fields }); }
+function startCastCostPrompt() { return false; }
+function continueCastAfterCost(card) { continued.push({ card: card.name, cost: pendingCastCost }); }
+'''
+
+_PICKER_FUNCTIONS = [
+    "targetSpecOf", "castCostSpec", "specIsACost", "graveyardCardNoun",
+    "activationGraveyardCostSpec", "startActivationGraveyardCostPrompt",
+    "startZoneWayCostPrompt", "normalizeCardName", "togglePermanentCost",
+    "confirmPermanentCost", "sendSpecialAction",
+]
+
+
+def _run_picker(body: str, payload: dict) -> dict:
+    return run_app_js(
+        _PICKER_FUNCTIONS, body, payload,
+        prelude=_PICKER_PRELUDE + _app_js_const("ACTIVATION_COST_FLAGS"),
+    )
+
+
+_SCROUNGER_BODY = r'''
+const card = currentState.players[0].battlefield.find((c) => c.name === "Battlefield Scrounger");
+const opened = startActivationGraveyardCostPrompt(card, card.name, 0, 0, null);
+const verb = pendingPermanentCost?.verb;
+const offered = (pendingPermanentCost?.options || []).map((option) => option.name);
+for (const slot of INPUT.clicks) togglePermanentCost(slot);
+await confirmPermanentCost();
+return { opened, verb, offered, resumed, hints };
+'''
+
+
+@needs_node
+def test_battlefield_scrounger_puts_the_three_picked_cards_on_the_bottom_in_order(set_pool):
+    from engine.models import Permanent
+
+    sid, _session_, game = _session(6071)
+    jud, lea = set_pool("JUD"), set_pool("LEA")
+    scrounger = Permanent(card=jud["Battlefield Scrounger"])
+    game._put_permanent_onto_battlefield(0, scrounger, None)
+    scrounger.metadata.pop("summoning_sickness_turn", None)
+    pile = ["Lightning Bolt", "Hill Giant", "Dark Ritual", "Giant Growth",
+            "Forest", "Island", "Swamp", "Plains"]
+    game.players[0].graveyard = [lea[name] for name in pile]
+    game.start_priority_window(0)
+
+    # Swamp, then Lightning Bolt and Island — with a change of mind on the way.
+    out = _run_picker(_SCROUNGER_BODY, {"state": _state(sid), "seat": 0,
+                                        "clicks": [6, 0, 4, 4, 5]})
+    assert out["opened"] is True and out["verb"] == "bottom"
+    assert out["offered"] == pile
+    assert "in order" in out["hints"][0]
+    (resume,) = out["resumed"]
+    assert resume["fields"] == {"cost_graveyard_indices": [6, 0, 5]}
+
+    activated = _act(sid, seat=0, action="activate", permanent_id=scrounger.permanent_id,
+                     **resume["fields"])
+    assert activated.status_code == 200, activated.json()
+    assert [card.name for card in game.players[0].library[-3:]] == ["Swamp", "Lightning Bolt", "Island"]
+    assert [card.name for card in game.players[0].graveyard] == [
+        "Hill Giant", "Dark Ritual", "Giant Growth", "Forest", "Plains",
+    ]
+
+
+# ---------------------------------------------------------------------------
+# 6. Flashback costs that take permanents or graveyard cards
+# ---------------------------------------------------------------------------
+
+_ZONE_COST_BODY = r'''
+const entry = currentState.castable_from_zones.find((e) => e.name === INPUT.name);
+const way = entry.ways.find((w) => w.keyword === "flashback");
+const card = currentState.players[0].graveyard[entry.index];
+const opened = startZoneWayCostPrompt(card, way);
+const offered = (pendingPermanentCost?.options || []).map((option) => option.name);
+const announcesX = !!pendingPermanentCost?.announcesX;
+for (const id of INPUT.clicks) togglePermanentCost(id);
+await confirmPermanentCost();
+return { opened, offered, announcesX, continued, choice: way.cost_choice };
+'''
+
+
+def _flashback_board(set_pool, *, graveyard: list[str], board: list[str]):
+    from engine.models import Permanent
+
+    sid, _session_, game = _session(6072)
+    pool = {**set_pool("LEA"), **set_pool("ODY"), **set_pool("TOR"), **set_pool("JUD")}
+    game.players[0].graveyard = [pool[name] for name in graveyard]
+    for name in board:
+        permanent = Permanent(card=pool[name])
+        game._put_permanent_onto_battlefield(0, permanent, None)
+        permanent.metadata.pop("summoning_sickness_turn", None)
+    game.start_priority_window(0)
+    return sid, game
+
+
+def _zone_cast(sid: str, name: str, clicks: list) -> dict:
+    return _run_picker(_ZONE_COST_BODY, {"state": _state(sid), "seat": 0, "name": name,
+                                         "clicks": clicks})
+
+
+@needs_node
+def test_flash_of_insight_exiles_the_blue_cards_picked_and_x_is_their_number(set_pool):
+    sid, game = _flashback_board(
+        set_pool, graveyard=["Flash of Insight", "Lightning Bolt", "Counterspell",
+                             "Ancestral Recall", "Lord of Atlantis"],
+        board=["Island", "Island"],
+    )
+    game.enforce_mana_costs = False
+    choice_slots = {c["name"]: c["index"] for c in _zone_cast(sid, "Flash of Insight", [])["choice"]["choices"]}
+    assert set(choice_slots) == {"Counterspell", "Ancestral Recall", "Lord of Atlantis"}, (
+        "the blue cards, the spell itself withheld (CR 601.2a)"
+    )
+    out = _zone_cast(sid, "Flash of Insight", [choice_slots["Counterspell"], choice_slots["Lord of Atlantis"]])
+    assert out["opened"] is True and out["announcesX"] is True
+    (cont,) = out["continued"]
+    assert cont["cost"] == {"cost_graveyard_indices": [2, 4], "x_value": 2}
+
+    cast = _act(sid, seat=0, action="cast", card_name="Flash of Insight", from_zone="graveyard",
+                alternative_cost=True, **cont["cost"])
+    assert cast.status_code == 200, cast.json()
+    assert [card.name for card in game.players[0].exile] == ["Counterspell", "Lord of Atlantis"]
+    assert "Ancestral Recall" in [card.name for card in game.players[0].graveyard]
+
+
+@needs_node
+def test_firecat_blitz_sacrifices_the_mountains_picked(set_pool):
+    sid, game = _flashback_board(
+        set_pool, graveyard=["Firecat Blitz"], board=["Mountain", "Mountain", "Mountain"],
+    )
+    game.enforce_mana_costs = False
+    mountains = [p.permanent_id for p in game.controlled_by(0)]
+    out = _zone_cast(sid, "Firecat Blitz", [mountains[0], mountains[2]])
+    assert out["offered"] == ["Mountain"] * 3
+    (cont,) = out["continued"]
+    assert cont["cost"] == {"alternative_cost_permanent_ids": [mountains[0], mountains[2]], "x_value": 2}
+
+    cast = _act(sid, seat=0, action="cast", card_name="Firecat Blitz", from_zone="graveyard",
+                alternative_cost=True, **cont["cost"])
+    assert cast.status_code == 200, cast.json()
+    assert [p.permanent_id for p in game.controlled_by(0) if p.card.name == "Mountain"] == [mountains[1]]
+    for seat in (0, 1):
+        _act(sid, seat=seat, action="pass_priority")
+    assert len([p for p in game.controlled_by(0) if p.card.name != "Mountain"]) == 2, "X = 2 Cats"
+
+
+@needs_node
+def test_battle_screech_taps_the_three_white_creatures_picked(set_pool):
+    sid, game = _flashback_board(
+        set_pool, graveyard=["Battle Screech"],
+        board=["Savannah Lions", "Savannah Lions", "Savannah Lions", "Savannah Lions"],
+    )
+    lions = [p.permanent_id for p in game.controlled_by(0)]
+    out = _zone_cast(sid, "Battle Screech", [lions[3], lions[1], lions[0]])
+    assert out["announcesX"] is False
+    (cont,) = out["continued"]
+    assert cont["cost"] == {"alternative_cost_permanent_ids": [lions[3], lions[1], lions[0]]}
+    cast = _act(sid, seat=0, action="cast", card_name="Battle Screech", from_zone="graveyard",
+                alternative_cost=True, **cont["cost"])
+    assert cast.status_code == 200, cast.json()
+    tapped = {p.permanent_id for p in game.controlled_by(0) if p.tapped}
+    assert tapped == {lions[0], lions[1], lions[3]}
+
+
+@needs_node
+def test_a_short_pick_of_a_fixed_count_is_not_sent(set_pool):
+    sid, _game = _flashback_board(
+        set_pool, graveyard=["Battle Screech"],
+        board=["Savannah Lions", "Savannah Lions", "Savannah Lions"],
+    )
+    out = _zone_cast(sid, "Battle Screech", [1])
+    assert out["continued"] == [], "two short of 'tap three' is not a payment (CR 601.2h)"
+
+
+_CONTINUE_PRELUDE = r'''
+let seat = 0;
+let pendingAutoTap = null;
+let cleared = 0;
+const hints = [];
+function startCastTargetCascade() { return false; }
+function normalizeCardName(card) { return card.name; }
+function getDefaultTargetSeat() { return 1; }
+function sendAction() { return Promise.reject(new Error(INPUT.error)); }
+function updateActionHint(message) { hints.push(message); }
+function renderActivationPrompt() {}
+function clearPendingHandCast() { cleared += 1; }
+'''
+
+
+@needs_node
+def test_a_cast_refused_for_mana_after_its_cost_was_picked_opens_the_auto_tap():
+    """``continueCastAfterCost`` ended the cast on any refusal — so a flashback
+    whose Mountains had just been chosen, refused only because the lands were
+    untapped, threw the choice away with the error. A mana refusal now opens
+    the auto-tap the plain cast opens, keeping the cast for its retry."""
+    body = r'''
+continueCastAfterCost({ name: "Firecat Blitz" });
+await new Promise((resolve) => setTimeout(resolve, 0));
+return { autoTap: pendingAutoTap && pendingAutoTap.actionBody, cleared, hints };
+'''
+    funcs = ["continueCastAfterCost", "isManaRefusal"]
+    mana = run_app_js(funcs, body, {"error": "insufficient mana for Firecat Blitz's flashback cost ({R}{R})"},
+                      prelude=_CONTINUE_PRELUDE)
+    assert mana["autoTap"] == {"seat": 0, "action": "cast", "card_name": "Firecat Blitz", "target_seat": 1}
+    assert mana["cleared"] == 0
+    other = run_app_js(funcs, body, {"error": "no legal target"}, prelude=_CONTINUE_PRELUDE)
+    assert other["autoTap"] is None and other["cleared"] == 1
+
+
+# ---------------------------------------------------------------------------
+# 7. Casting from an opponent's graveyard — Shaman's Trance
+# ---------------------------------------------------------------------------
+
+def test_an_opened_card_in_an_opponent_s_graveyard_carries_its_cast_spec(set_pool):
+    """The opponent's pile is serialized for its owner, so its cards carry no
+    target spec, and a click on Lightning Bolt sent a bare cast — no target
+    prompt at all. The entry now carries the card as this seat would cast it,
+    and the client's click hands that card to the cast chain."""
+    from engine.models import Permanent
+    from tests.helpers import app_js_function_body
+
+    sid, _session_, game = _session(6073)
+    jud, lea = set_pool("JUD"), set_pool("LEA")
+    game.enforce_mana_costs = False
+    game.players[0].hand = [jud["Shaman's Trance"]]
+    game.players[1].graveyard = [lea["Lightning Bolt"], lea["Forest"]]
+    giant = Permanent(card=lea["Hill Giant"])
+    game._put_permanent_onto_battlefield(1, giant, None)
+    game.start_priority_window(0)
+    assert _act(sid, seat=0, action="cast", card_name="Shaman's Trance").status_code == 200
+    for seat in (0, 1):
+        assert _act(sid, seat=seat, action="pass_priority").status_code == 200
+
+    state = _state(sid)
+    entries = {e["name"]: e for e in state["castable_from_zones"]}
+    bolt = entries["Lightning Bolt"]
+    assert bolt["owner_seat"] == 1
+    assert "target_spec" not in state["players"][1]["graveyard"][0], "the pile is the owner's"
+    assert bolt["card"]["target_spec"]["kind"] == "any"
+    assert entries["Forest"]["card"]["name"] == "Forest"
+    assert "zoneEntry?.card || card" in app_js_function_body("renderZoneCards")
+
+    cast = _act(sid, seat=0, action="cast", card_name="Lightning Bolt", from_zone="graveyard",
+                target_permanent_id=giant.permanent_id)
+    assert cast.status_code == 200, cast.json()
+    for seat in (0, 1):
+        _act(sid, seat=seat, action="pass_priority")
+    assert "Hill Giant" in [card.name for card in game.players[1].graveyard]
+    assert [card.name for card in game.players[1].graveyard].count("Lightning Bolt") == 1
+
+
+# ---------------------------------------------------------------------------
+# 8. ``choose_card_name``'s bound — Cabal Therapy
+# ---------------------------------------------------------------------------
+
+_NAME_PRELUDE = r'''
+const answers = INPUT.search;
+async function fetch(url) {
+  const query = decodeURIComponent(url.split("query=")[1].split("&")[0]);
+  return { ok: true, json: async () => answers[query.toLowerCase()] || { cards: [] } };
+}
+'''
+
+
+@needs_node
+def test_cabal_therapy_s_bound_is_shown_and_a_land_name_is_not_sent(set_pool):
+    sid, _session_, game = _session(6074)
+    jud = set_pool("JUD")
+    game.enforce_mana_costs = False
+    game.players[0].hand = [jud["Cabal Therapy"]]
+    game.start_priority_window(0)
+    assert _act(sid, seat=0, action="cast", card_name="Cabal Therapy", target_seat=1).status_code == 200
+    for seat in (0, 1):
+        assert _act(sid, seat=seat, action="pass_priority").status_code == 200
+    info = _state(sid)["choose_card_name"]
+    assert info["excluded_card_type"] == "land"
+
+    # What the catalog search the client asks answers, keyed as the client's
+    # stub looks it up (the route itself matches case-insensitively).
+    search = {
+        name.lower(): client.get("/api/cards/search", params={"query": name, "limit": 20}).json()
+        for name in ("forest", "Lightning Bolt")
+    }
+    out = run_app_js(
+        ["chooseCardNameBound", "chooseCardNameBarred"],
+        "return { bound: chooseCardNameBound(INPUT.info), "
+        "forest: await chooseCardNameBarred(INPUT.info, 'forest'), "
+        "bolt: await chooseCardNameBarred(INPUT.info, 'Lightning Bolt'), "
+        "unknown: await chooseCardNameBarred(INPUT.info, 'Not A Card') };",
+        {"info": info, "search": search},
+        prelude=_NAME_PRELUDE,
+    )
+    assert out["bound"] == "a nonland card name"
+    assert out["forest"] == "Forest is a land card: Cabal Therapy names a nonland card name."
+    assert out["bolt"] is None and out["unknown"] is None
+    # The engine agrees with both answers.
+    assert _act(sid, seat=0, action="choose_card_name_confirm", card_name="Forest").status_code == 400
+    named = _act(sid, seat=0, action="choose_card_name_confirm", card_name="Lightning Bolt")
+    assert named.status_code == 200, named.json()
+
+
+@needs_node
+def test_the_other_printed_bounds_read_as_the_card_prints_them():
+    out = run_app_js(
+        ["chooseCardNameBound"],
+        "return INPUT.map((info) => chooseCardNameBound(info));",
+        [{}, {"card_type": "creature"}, {"exclude_basic_land_names": True},
+         {"card_type": "artifact"}],
+    )
+    assert out == [
+        "a card name", "a creature card name",
+        "a card name other than a basic land card name", "an artifact card name",
+    ]

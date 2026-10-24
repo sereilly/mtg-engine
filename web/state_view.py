@@ -72,6 +72,7 @@ from .presence import seat_is_connected
 from .runtime import store
 from .seats import _build_rematch_info, _seat_type, _winner
 from .serialization import (
+    _serialize_card,
     _serialize_card_summary,
     _serialize_modes,
     _serialize_player,
@@ -771,6 +772,61 @@ def _zone_cast_price(game, player_index: int, spell, permission) -> str:
     return mana_cost_label(owed) if any(owed.values()) else ""
 
 
+def _zone_cast_cost_choice(
+    game, player_index: int, cost, *, spell_graveyard_slot: int | None,
+) -> dict | None:
+    """What a zone cast's alternative cost asks its caster to **choose**
+    (CR 601.2b), or None when it names nothing to choose.
+
+    "Flashback—Sacrifice a Mountain" (Lava Dart), "…, Sacrifice X Mountains"
+    (Firecat Blitz), "Tap three untapped white creatures you control" (Battle
+    Screech), "…, Exile X blue cards from your graveyard" (Flash of Insight):
+    the cast action takes the answer (``alternative_cost_permanent_ids`` by id,
+    ``cost_graveyard_indices`` by slot of the pile as it stands, the spell
+    still in it) and refuses a partial one, but nothing told a client which
+    permanents or cards could be named — so every person's flashback paid with
+    the engine's default pick. The candidates are the engine's own lists, the
+    ones the CR 601.2h gate counts and the payment takes from.
+
+    ``x`` says the count *is* the X the cast announces (CR 107.3a), so the
+    number named is the X sent; otherwise ``count`` is owed exactly.
+    """
+    if cost is None:
+        return None
+    payment = game.alternative_cost_permanent_payment(cost)
+    if payment is not None:
+        verb, count = payment
+        counted_x = verb == "sacrifice" and bool(cost.sacrifice_count_x)
+        return {
+            "zone": "battlefield",
+            "verb": verb,
+            "x": counted_x,
+            "count": None if counted_x else count,
+            "choices": [
+                {"id": perm.permanent_id, "name": perm.card.name}
+                for perm in game._additional_cost_candidates(
+                    player_index, cost, giving_up=verb
+                )
+            ],
+        }
+    if getattr(cost, "exile_graveyard_filter", None) is not None:
+        counted_x = bool(cost.exile_graveyard_count_x)
+        pile = game.players[player_index].graveyard
+        return {
+            "zone": "graveyard",
+            "verb": "exile",
+            "x": counted_x,
+            "count": None if counted_x else cost.exiled_from_graveyard(None),
+            "choices": [
+                {"index": slot, "name": pile[slot].name}
+                for slot in game._graveyard_exile_candidates(
+                    player_index, cost, spell_slot=spell_graveyard_slot,
+                )
+            ],
+        }
+    return None
+
+
 def _zone_cast_options(session: Session, player_index: int) -> list[dict]:
     """``castable_from_zones`` as a person needs it: for each card a permission
     opens, **every way** it may be cast, what each is charged, and whether each
@@ -828,6 +884,19 @@ def _zone_cast_options(session: Session, player_index: int) -> list[dict]:
                 continue
             spell, permission = found
             cost = permission.cost
+            way: dict = {}
+            choice = _zone_cast_cost_choice(
+                game, player_index, cost,
+                spell_graveyard_slot=(
+                    entry["index"]
+                    if zone == "graveyard" and entry["owner_seat"] == player_index
+                    else None
+                ),
+            )
+            if choice is not None:
+                # Which permanents or graveyard cards the price may be paid
+                # with, so the caster names them (`_zone_cast_cost_choice`).
+                way["cost_choice"] = choice
             ways.append({
                 # What the cast action carries to pick this permission when
                 # both kinds cover the card (``alternative_cost: true``).
@@ -845,9 +914,18 @@ def _zone_cast_options(session: Session, player_index: int) -> list[dict]:
                     zone_index=entry["index"] if entry["owner_seat"] == player_index else None,
                     permission=permission,
                 ),
+                **way,
             })
         entry["ways"] = ways
         entry["castable_now"] = any(way["castable_now"] for way in ways)
+        if entry["owner_seat"] != player_index:
+            # A card in **another player's** pile that a grant opens to this
+            # seat (Shaman's Trance's "cast spells from other players'
+            # graveyards", Grinning Totem's exiled card): that pile is
+            # serialized for its owner, so its cards carry no cast spec — and
+            # the cast prompts read the targets, X and costs off the spec. So
+            # the card rides here as *this* seat would cast it.
+            entry["card"] = _serialize_card(card, game, player_index, from_zone=zone)
     return entries
 
 
