@@ -17,6 +17,7 @@ about how much it read.
 from __future__ import annotations
 
 from engine.card_loader import load_cards, manifest_set_paths
+from engine.faces import compilation_units
 from web.prompt_values import offer_wording
 
 
@@ -36,7 +37,9 @@ def test_no_offer_declines_into_an_activation_cost():
     worded = 0
     leaked = []
     for path in manifest_set_paths(include_measured=True):
-        for card in load_cards(path):
+        # Each face of a split card in its place: the offer is printed on a
+        # half, and the whole card's text box is empty (CR 709.3a).
+        for card in compilation_units(load_cards(path)):
             if card.name in seen:
                 continue
             seen.add(card.name)
