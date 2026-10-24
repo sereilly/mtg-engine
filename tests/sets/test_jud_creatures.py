@@ -384,6 +384,37 @@ def test_w1g1_genesis_does_nothing_on_an_opponents_upkeep(set_pool):
     assert game.players[0].hand == []
     assert not any(land.tapped for land in lands)
 
+# -- Glory (drive list: supported on arrival) ----------------------------------
+
+
+def test_w1g1_glory_from_the_graveyard_gives_protection_from_the_colour_named(set_pool):
+    """"{2}{W}: Choose a color. Creatures you control gain protection from the
+    chosen color until end of turn. Activate only if this card is in your
+    graveyard." Activated from the graveyard, the colour is asked as the
+    ability resolves (CR 608.2d), and the protection it names stops a
+    Lightning Bolt aimed at the creature (CR 702.16b). On the battlefield the
+    ability is refused for not functioning there (CR 113.6b)."""
+    jud, lea = set_pool("JUD"), set_pool("LEA")
+    game = _w1g1_table(set_pool, interactive={0})
+    bears = _w1g1_put(game, lea["Grizzly Bears"], 0)
+    game.players[0].graveyard.append(jud["Glory"])
+
+    assert game.activate_from_graveyard(0, "Glory", ability_index=0).supported
+    game.resolve_top_of_stack()
+    (owed,) = [c for c in game.pending_choices if c.kind == "color_choice"]
+    assert game.confirm_color_choice(0, "R")
+    _w1g1_resolve_stack(game)
+    game._settle()
+
+    game.players[1].hand.append(lea["Lightning Bolt"])
+    bolt = game.queue_from_hand(1, "Lightning Bolt", target_permanent_ids=[bears.permanent_id])
+    assert not bolt.supported, bolt.details
+
+    on_board = _w1g1_table(set_pool)
+    _w1g1_put(on_board, jud["Glory"], 0)
+    refused = on_board.queue_permanent_ability(0, "Glory", ability_index=0)
+    assert not refused.supported and "graveyard" in refused.details
+
 # ==== end W1G1 ======================================================
 
 
