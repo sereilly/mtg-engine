@@ -2,10 +2,11 @@
 
 The handler twin of ``engine/grammar/lowering/cards.py``, under its name: a card
 *arriving* — in a hand by a draw (CR 121), in a graveyard by a mill (CR 701.17),
-back on the top or the bottom of the library by a scry (CR 701.22) or a surveil
-— and the draw replacements an ability arms for later ("the next time you would
-draw a card this turn, instead …"), which ``Game._draw_with_replacements``
-consumes at the next draw. Every draw here is made through that seam.
+back on the top or the bottom of the library by a scry (CR 701.22) or a surveil,
+in a hand from outside the game (CR 400.11b, the Wishes) — and the draw
+replacements an ability arms for later ("the next time you would draw a card
+this turn, instead …"), which ``Game._draw_with_replacements`` consumes at the
+next draw. Every draw here is made through that seam.
 
 Split out of ``zones.py`` at the 2,000-line cap's split round, when that module
 stood at 11,769 lines. Cards already *in* a hand are ``hand.py``'s, and the

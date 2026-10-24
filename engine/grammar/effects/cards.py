@@ -6,7 +6,9 @@ mill brings Helm of Obedience's loop and the sentence that reads it. The rest
 is the **revealed hand**: the bare reveal and the three acts it carries
 (``_parse_reveal_hand``), the card revealed at random, Duress's paragraph, the
 two "discards … unless they pay life" offers and Stromgald Spy's standing
-reveal.
+reveal. And one arrival from nowhere a library holds: the Wishes' card brought
+in from outside the game (``parse_put_outside_game_card_into_hand``, CR
+400.11b), the draw's other way into a hand.
 
 **The first line ended "searching, revealing" until the Phase 0 before
 Odyssey**, over a sentence about the filter a library search carries — a

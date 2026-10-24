@@ -1,4 +1,6 @@
-"""Lowering cards off the top of a library: draw, mill, scry.
+"""Lowering cards off the top of a library: draw, mill, scry — and the other
+way a card arrives in a hand, brought in from outside the game (the Wishes,
+CR 400.11b), with the next-draw replacement that substitutes one for a draw.
 
 The other flows this module used to hold have families of their own: mana
 production in `mana.py`, the hidden-zone flows in `library.py` (the look) and

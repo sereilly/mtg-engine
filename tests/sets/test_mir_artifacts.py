@@ -1408,13 +1408,16 @@ def test_w3g2_destroying_the_tome_does_not_unarm_the_draw(set_pool):
 def test_w3g2_the_other_two_cards_printing_this_opener_keep_their_hooks(set_pool):
     """The sweep this production owes. Three cards in the pool print "The next
     time you would draw a card this turn, instead …", and the other two —
-    Aladdin's Lamp and Ring of Ma'rûf — carry inner sentences this grammar does
-    not read.
+    Aladdin's Lamp and Ring of Ma'rûf — carried inner sentences this grammar
+    did not read.
 
     A production that consumed the opener and then fell through would have
     taken their lines away and left them doing nothing; because it parses the
-    inner sentence as an ordinary statement, the whole line refuses and the
-    compiler goes on to ``card_hooks`` as it always did. Asserted as
+    inner sentence as an ordinary statement, Aladdin's Lamp's line refuses and
+    the compiler goes on to ``card_hooks`` as it always did. Ring of Ma'rûf's
+    inner sentence is read since the Judgment Wishes, and its lowering hands
+    the pick to the draw interceptor that already implemented it — so it,
+    too, arms its own replacement and not the general one. Asserted as
     *behaviour* — both cards still arm their own replacement — rather than as a
     claim about which registry read the line.
     """

@@ -280,9 +280,13 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     # the opener has matched the sentence behind "instead" is parsed as an
     # ordinary statement: a line that consumed the opener and then fell through
     # would be read as though the replacement were not printed at all. That is
-    # also what leaves the two card hooks theirs — their inner sentences are
-    # not ones this grammar reads, so the line fails here and the compiler goes
-    # on to `card_hooks`.
+    # also what leaves Aladdin's Lamp's card hook its own — its inner sentence
+    # is not one this grammar reads, so the line fails here and the compiler
+    # goes on to `card_hooks`. Ring of Ma'rûf's was the second such hook until
+    # the Judgment Wishes gave "put a card you own from outside the game into
+    # your hand" a production; its line is read here now, and its lowering
+    # hands the pick to the draw interceptor that implements it
+    # (`lowering/cards._lower_next_draw_replacement`).
     if stream.at_word("the"):
         next_time = stream.mark()
         stream.advance()
