@@ -688,8 +688,22 @@ class PileChoicesMixin:
             # and which. Written even for an empty pick — an *absent* key is a
             # back-reference with no producer, which is a different thing from
             # a producer that took nothing.
-            context.results[EXILED_THIS_WAY_OBJECTS] = list(cards)
-            context.results[EXILED_THIS_WAY] = len(cards)
+            #
+            # "**Each player** may exile any number of cards from their
+            # graveyard" (Grave Consequences) arms one of these per seat over
+            # one resolution, so each answer *adds* to the record its handler
+            # zeroed, rather than the last seat's overwriting the rest.
+            payload = choice.data.get("_payload") or {}
+            if payload.get("graveyard_owner") in ("each_player", "each_opponent"):
+                context.results[EXILED_THIS_WAY_OBJECTS] = [
+                    *(context.results.get(EXILED_THIS_WAY_OBJECTS) or ()), *cards,
+                ]
+                context.results[EXILED_THIS_WAY] = (
+                    int(context.results.get(EXILED_THIS_WAY, 0) or 0) + len(cards)
+                )
+            else:
+                context.results[EXILED_THIS_WAY_OBJECTS] = list(cards)
+                context.results[EXILED_THIS_WAY] = len(cards)
         self.discard_pending_choice(choice)
 
     def _resolve_graveyard_exile_pick(

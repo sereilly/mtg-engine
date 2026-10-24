@@ -30,7 +30,7 @@ from ..oracle_types import (EXILED_BY_SEAT, EXILED_THIS_WAY,
 from ..tokens import CREATED_TOKEN_RESULT_KEY, tokens_created_with
 from ._amounts import resolve_amount
 from ._filters import (_card_matches_filter, graveyard_card_matches,
-                       permanent_matches_filter)
+                       graveyard_slots_matching, permanent_matches_filter)
 from ._targets import (_resolve_graveyard_slots, frozen_that_player_seat,
                        resolve_target_permanent, resolve_target_permanents)
 from .registry import effect_handler
@@ -876,6 +876,57 @@ def _exile_announced_graveyard_slots(
     return True, "resolved"
 
 
+#: The pile owners that name **a set of seats, each picking from its own
+#: graveyard** — "Each player may exile any number of cards from their
+#: graveyard" (Grave Consequences, through
+#: ``lowering/_collapses._each_player_optional_graveyard_exile``).
+_EACH_SEAT_PILES = frozenset({"each_player", "each_opponent"})
+
+
+def _each_seat_picks_from_own_graveyard(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """One ``graveyard_exile_pick`` per seat, each out of that seat's own
+    pile, offered in turn order (CR 101.4: the active player first).
+
+    "Any number of" has no printed ceiling, so each seat's count is the number
+    of cards in its pile the phrase admits, sized here where the pile is in
+    hand, with ``up_to`` making zero an answer — which is why the "may" in
+    front of the sentence collapsed into this rather than arming an offer. A
+    seat with nothing to exile is not asked (CR 101.3: there is no choice).
+
+    The pick suspends, so the sentence behind this one ("Then each player
+    loses 1 life for each card in their graveyard") waits for the last seat's
+    answer. ``exiled_this_way`` is the **total** over every seat — the answers
+    add to it (``_record_graveyard_exile``) rather than each overwriting the
+    last, so a later "for each card exiled this way" reads every pile.
+    """
+    caster_index = game.players.index(context.caster)
+    if instruction.payload.get("graveyard_owner") == "each_opponent":
+        seats = [s for s in game.opponents_of(caster_index) if not game.players[s].lost]
+    else:
+        total = len(game.players)
+        active = game.active_player_index or 0
+        seats = sorted(
+            (i for i, p in enumerate(game.players) if not p.lost),
+            key=lambda i: ((i - active) % total, i),
+        )
+    context.results[EXILED_THIS_WAY_OBJECTS] = []
+    context.results[EXILED_THIS_WAY] = 0
+    for seat in seats:
+        player = game.players[seat]
+        available = len(graveyard_slots_matching(
+            dict(instruction.payload), player.graveyard, context.card
+        ))
+        if available <= 0:
+            game.log.append(f"{player.name} has no card to exile from their graveyard")
+            continue
+        game.arm_graveyard_exile_pick(
+            seat, seat, {**instruction.payload, "count": available}, context
+        )
+    return True, "resolved"
+
+
 @effect_handler("exile_cards_from_graveyard")
 def exile_cards_from_graveyard(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"…exile up to two target creature cards from defending player's
@@ -986,6 +1037,8 @@ def exile_cards_from_graveyard(game: Game, instruction: OracleInstruction, conte
         return _exile_announced_graveyard_slots(
             game, instruction, context, context.caster
         )
+    if owner in _EACH_SEAT_PILES:
+        return _each_seat_picks_from_own_graveyard(game, instruction, context)
     # The two seats a firing event froze, each read off the key its fire site
     # stamps: CR 506.2's defender, and — "target card from **that player's**
     # graveyard" on a damage trigger (Zombie Cannibal) — the player the damage

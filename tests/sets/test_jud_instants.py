@@ -564,6 +564,106 @@ def test_w1g7_toxic_stench_names_only_a_nonblack_creature(set_pool, catalog_by_n
     assert not refused.supported
     assert game.is_on_battlefield(knight)
 
+
+# --- Aven Warcraft ------------------------------------------------------------
+
+
+def test_w1g7_aven_warcraft_below_threshold_asks_nothing_and_grants_nothing(
+    set_pool, catalog_by_name,
+):
+    """Six cards: +0/+2 only. No colour is asked, and a Lightning Bolt still
+    reaches the Bears (2/4 after the spell, so it survives the 3)."""
+    game = _w1g7_table(set_pool, catalog_by_name, 6, interactive={0})
+    bears = _w1g7_put(game, 0, "Grizzly Bears")
+    _w1g7_cast(game, 0, "Aven Warcraft")
+
+    assert game.pending_choice_of("color_choice") is None
+    assert (bears.effective_power, bears.effective_toughness) == (2, 4)
+    _w1g7_cast(game, 1, "Lightning Bolt", target_permanent_ids=[bears.permanent_id])
+    assert bears.damage_marked == 3
+
+
+def test_w1g7_aven_warcraft_at_threshold_protects_from_the_named_colour(
+    set_pool, catalog_by_name,
+):
+    """Seven cards: the caster names red as the spell resolves (CR 608.2d), and
+    the grant that follows reads that answer — a Bolt can no longer target the
+    Bears, while a black Terror still can."""
+    game = _w1g7_table(set_pool, catalog_by_name, 7, interactive={0})
+    bears = _w1g7_put(game, 0, "Grizzly Bears")
+    game.players[0].hand.append(game._w1g7_card("Aven Warcraft"))
+    assert game.cast_from_hand(0, "Aven Warcraft").supported
+    game.resolve_top_of_stack()
+    assert game.pending_choice_of("color_choice", 0) is not None
+    assert game.resolve_pending_choice("color_choice", 0, mana_color="R")
+    _w1g7_resolve(game)
+    assert (bears.effective_power, bears.effective_toughness) == (2, 4)
+
+    game.players[1].hand.append(game._w1g7_card("Lightning Bolt"))
+    refused = game.cast_from_hand(1, "Lightning Bolt", target_permanent_ids=[bears.permanent_id])
+    assert not refused.supported
+    _w1g7_cast(game, 1, "Terror", target_permanent_ids=[bears.permanent_id])
+    assert not game.is_on_battlefield(bears)
+
+
+# --- Grave Consequences -------------------------------------------------------
+
+
+def _w1g7_grave_table(set_pool, catalog_by_name, *, interactive=()):
+    game = _w1g7_table(set_pool, catalog_by_name, 3, interactive=interactive)
+    game.players[1].graveyard = [game._w1g7_card("Grizzly Bears")] * 4
+    game.players[0].hand.append(game._w1g7_card("Grave Consequences"))
+    assert game.cast_from_hand(0, "Grave Consequences").supported
+    return game
+
+
+def test_w1g7_grave_consequences_waits_for_every_seat_before_the_loss(
+    set_pool, catalog_by_name,
+):
+    """Both seats asked, in turn order, how many of their own graveyard to
+    exile; nobody loses life until the last answer is in, and then each loses
+    one per card left in their own pile. The caster exiles one of three (and
+    loses two — the spell itself is on the stack, not in the pile), the
+    opponent keeps all four and loses four; the caster draws a card."""
+    game = _w1g7_grave_table(set_pool, catalog_by_name, interactive={0, 1})
+    game.resolve_top_of_stack()
+    owed = [(c.kind, c.player_index, c.data["count"]) for c in game.pending_choices]
+    assert owed == [("graveyard_exile_pick", 0, 3), ("graveyard_exile_pick", 1, 4)]
+
+    assert game.confirm_graveyard_exile_pick(0, [0])
+    assert [p.life for p in game.players] == [20, 20], "still waiting on seat 1"
+    assert game.confirm_graveyard_exile_pick(1, [])
+    _w1g7_resolve(game)
+
+    assert [p.life for p in game.players] == [18, 16]
+    assert [len(p.exile) for p in game.players] == [1, 0]
+    assert len(game.players[0].hand) == 1
+    assert [c.name for c in game.players[0].graveyard][-1] == "Grave Consequences"
+
+
+def test_w1g7_grave_consequences_seat_may_exile_only_its_own_pile(
+    set_pool, catalog_by_name,
+):
+    """A slot past the end of the answering seat's own graveyard is refused
+    with the prompt kept — the pick is out of that seat's pile and no other."""
+    game = _w1g7_grave_table(set_pool, catalog_by_name, interactive={0, 1})
+    game.resolve_top_of_stack()
+    assert not game.confirm_graveyard_exile_pick(0, [3])
+    assert game.pending_choice_of("graveyard_exile_pick", 0) is not None
+
+
+def test_w1g7_grave_consequences_unasked_seats_exile_everything(
+    set_pool, catalog_by_name,
+):
+    """The stated default for a seat nobody asks is the most it may take
+    (``_default_graveyard_exile_pick``): both piles are exiled and nobody
+    loses life."""
+    game = _w1g7_grave_table(set_pool, catalog_by_name)
+    _w1g7_resolve(game)
+
+    assert [p.life for p in game.players] == [20, 20]
+    assert [len(p.exile) for p in game.players] == [3, 4]
+
 # ==== end W1G7 ======================================================
 
 

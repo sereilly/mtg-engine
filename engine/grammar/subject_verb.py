@@ -250,6 +250,19 @@ def parse_subject_verb(
         and source_spec.kind in RECORD_DESCRIBED_SEATS
     ):
         stream.accept_word("then")
+    # "Creatures you control get +0/+2 until end of turn. / Threshold — If …,
+    # choose a color. Creatures you control **also** gain protection from the
+    # chosen color until end of turn." (Aven Warcraft.) "In addition to what
+    # was already done to them" — which the steps of an effect, done in printed
+    # order, already are: the word adds nothing and narrows nothing. Read here,
+    # between subject and verb, for the reason "each" above is, and only in
+    # front of the two grant verbs that print it, so it cannot be taken as the
+    # opening of some other clause.
+    if stream.at_word("also") and stream.peek(1) is not None and (
+        stream.peek(1).kind == WORD
+        and stream.peek(1).text in ("gain", "gains", "get", "gets")
+    ):
+        stream.advance()
     stream.last_subject = source_spec
     after_subject = stream.mark()
 

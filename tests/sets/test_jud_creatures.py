@@ -1316,6 +1316,92 @@ def test_w1g3_shieldmage_advocate_still_shields_with_its_card_gone(set_pool):
 
 # ==== W1G7 ==========================================================
 # W1G7's tests go between this line and the "end W1G7" line.
+#
+# Guiltfeeder: "Whenever this creature attacks and isn't blocked, defending
+# player loses 1 life for each card in their graveyard." The pile counted is
+# the defending player's own (CR 506.2's seat, frozen by the declare-blockers
+# fire site), never the attacker's.
+
+from engine import Game as _W1G7Game, PlayerState as _W1G7PlayerState
+from engine.models import Permanent as _W1G7Permanent
+from tests.helpers import _nosick as _w1g7_nosick, resolve_stack as _w1g7_resolve
+
+
+def _w1g7_guiltfeeder_table(set_pool, catalog_by_name, graveyards):
+    """One seat per entry of *graveyards* (how many Islands each holds), a
+    Guiltfeeder on seat 0's battlefield, awake."""
+    island = catalog_by_name["Island"]
+    game = _W1G7Game(players=[
+        _W1G7PlayerState(name=f"P{seat}", library=[island] * 10,
+                         graveyard=[island] * count)
+        for seat, count in enumerate(graveyards)
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.active_player_index = 0
+    game.current_turn_phase = "main1"
+    feeder = _W1G7Permanent(card=set_pool("JUD")["Guiltfeeder"])
+    game._put_permanent_onto_battlefield(0, feeder, None)
+    _w1g7_resolve(game)
+    _w1g7_nosick(feeder)
+    return game, feeder
+
+
+def _w1g7_attack(game, defender, blocks=None):
+    """Seat 0 attacks *defender* with everything; *blocks* declared; then the
+    declare-blockers step's priority window, where the trigger resolves."""
+    game._set_phase_and_step("combat", "declare_attackers")
+    slots = [
+        slot for slot, perm in enumerate(game.players[0].battlefield)
+        if perm.is_creature
+    ]
+    ok, why = game.declare_attackers(0, slots, defending_player_index=defender)
+    assert ok, why
+    game.advance_combat_phase()
+    ok, why = game.declare_blockers(defender, dict(blocks or {}))
+    assert ok, why
+    _w1g7_resolve(game)
+    game.advance_combat_phase()
+    _w1g7_resolve(game)
+
+
+def test_w1g7_guiltfeeder_unblocked_drains_the_defender_by_their_graveyard(
+    set_pool, catalog_by_name,
+):
+    """Five cards in the defender's graveyard, three in the attacker's: the
+    defender loses five as the trigger resolves, before the 0/4 deals its no
+    combat damage, and the attacker loses nothing."""
+    game, _feeder = _w1g7_guiltfeeder_table(set_pool, catalog_by_name, [3, 5])
+    _w1g7_attack(game, 1)
+
+    assert game.players[1].life == 15
+    assert game.players[0].life == 20
+    assert "Guiltfeeder: P1 lost 5 life (20 -> 15)" in game.log
+
+
+def test_w1g7_guiltfeeder_blocked_does_nothing(set_pool, catalog_by_name):
+    """Fear lets a black creature block it, and a blocked Guiltfeeder's
+    trigger never fires."""
+    game, _feeder = _w1g7_guiltfeeder_table(set_pool, catalog_by_name, [0, 5])
+    knight = _W1G7Permanent(card=catalog_by_name["Black Knight"])
+    game._put_permanent_onto_battlefield(1, knight, None)
+    _w1g7_resolve(game)
+    _w1g7_attack(game, 1, blocks={0: 0})
+
+    assert game.players[1].life == 20
+    assert not any("Guiltfeeder:" in line and "lost" in line for line in game.log)
+
+
+def test_w1g7_guiltfeeder_counts_the_attacked_players_pile_at_a_table_of_three(
+    set_pool, catalog_by_name,
+):
+    """Three seats, the Guiltfeeder attacking the third: it is that seat's
+    graveyard (four cards) that is counted and that seat that loses — not the
+    first opponent in seat order, whose graveyard holds nine."""
+    game, _feeder = _w1g7_guiltfeeder_table(set_pool, catalog_by_name, [0, 9, 4])
+    _w1g7_attack(game, 2)
+
+    assert [p.life for p in game.players] == [20, 20, 16]
 
 # ==== end W1G7 ======================================================
 

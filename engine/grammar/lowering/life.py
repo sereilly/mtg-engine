@@ -98,6 +98,24 @@ _PER_SEAT_NUMBER_RECORDS = frozenset({SECRET_NUMBERS_BY_SEAT, MANA_PAID_BY_SEAT}
 _REVEALED_FEWEST_SEATS = frozenset({"revealed_fewest", "each_revealed_fewest"})
 
 
+def _counts_the_losers_own_pile(player: "ast.PlayerRef", filt) -> bool:
+    """Whether a per-card life loss's printed graveyard is **the losing
+    seat's own** — the only pile ``target_loses_life`` counts, once per
+    victim.
+
+    "…for each card in **their** graveyard" is the loser's whoever loses
+    (Guiltfeeder's defender, Grave Consequences' each player, Liliana's target
+    opponent); "…in **your** graveyard" is the loser's only when the loser is
+    you. Any other owner ("an opponent's graveyard", "all graveyards") is a
+    pile the handler has no channel for, and refusing it names the clause
+    rather than counting the wrong player's cards.
+    """
+    owner = getattr(filt.zone_owner, "kind", None)
+    if owner in (None, "owner"):
+        return True
+    return owner == "you" and player.kind == "you"
+
+
 def _lower_gain_life(
     node: ast.GainLife,
     produced: frozenset[str] = frozenset(),
@@ -430,22 +448,33 @@ def _lower_lose_life(
         }
     # "…for each creature card in their graveyard" (Liliana, Death Mage) — the
     # loss is multiplied by a zone count of the losing player's.
+    #
+    # "Whenever this creature attacks and isn't blocked, **defending player**
+    # loses 1 life for each card in their graveyard." (Guiltfeeder.) "…Then
+    # **each player** loses 1 life for each card in their graveyard." (Grave
+    # Consequences.) The same count for any losing seat: the handler counts
+    # each victim's *own* pile, so what the gate holds is that the printed
+    # pile **is** the loser's — "their" graveyard, or "your" graveyard when
+    # the loser is you. It held a seat instead ("target opponent" only), and
+    # that admitted "your graveyard" after a target opponent, which the
+    # handler would have counted out of the opponent's pile. The recipient is
+    # then whatever the branches below make of the subject, the gate each of
+    # them already puts in front of its word ("defending player" only under an
+    # event that froze one) included.
     elif node.per_each is not None:
         filt = node.per_each
-        if node.player.kind != "target_opponent" or filt.zone != "graveyard":
+        if filt.zone != "graveyard" or not _counts_the_losers_own_pile(
+            node.player, filt
+        ):
             raise LoweringError(
-                "the per-each life loss reads a target opponent's graveyard", node=node
+                "the per-each life loss counts the losing player's own graveyard",
+                node=node,
             )
         payload["per_each"] = {
             "zone": "graveyard",
             "owner": (filt.zone_owner.kind if filt.zone_owner else "owner"),
             "card_types": list(filt.card_types),
         }
-        # The narrowing, for the reason the plain branch below records it: the
-        # gate above admits only "target opponent", so a bare `player` spec
-        # offered the ability's own controller (CR 102.2/102.3).
-        _describe_targets(payload, node.player)
-        return (OracleInstruction("target_loses_life", "", payload),)
     # "**That player**" after an event that was *about an object*: the object's
     # controller. Massacre Wurm's dead creature is in a graveyard by the time
     # the trigger resolves and Gloom Sower's blocker may have left combat, so
