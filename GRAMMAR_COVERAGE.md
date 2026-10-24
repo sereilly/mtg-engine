@@ -50,7 +50,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ODY | 335 | 507 | 89.7% | 89.7% | 69.6% | 295 |
 | TOR | 143 | 261 | 86.2% | 86.2% | 68.2% | 138 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| JUD *(measured)* | 143 | 241 | 84.6% | 83.4% | 58.9% | 118 |
+| JUD *(measured)* | 143 | 241 | 86.3% | 85.9% | 61.0% | 122 |
 | **All (shipped)** | **7884** | **11645** | **90.6%** | **90.0%** | **62.3%** | **6139** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -65,7 +65,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ---: | ---: | --- | --- |
 | 653 | 332 | expected a subject |  |
 | 165 | 84 | unrecognized effect verb |  |
-| 132 | 71 | unconsumed text |  |
+| 129 | 68 | unconsumed text |  |
 | 65 | 46 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 29 | 7 | expected what this creature can't block, or a duration |  |
@@ -79,15 +79,15 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4 | 1 | the sacrifice prompt cannot test this restriction |  |
 | 4 | 1 | expected 'that' |  |
 | 4 | 1 | expected a destination zone after 'return' |  |
-| 4 | 4 | an Aura's continuous grant is derived by engine/auras.py |  |
 | 3 | 1 | expected 'of' |  |
 | 3 | 3 | unrecognized "can't be" restriction |  |
 | 3 | 1 | expected 'top' |  |
+| 3 | 3 | an Aura's continuous grant is derived by engine/auras.py |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
-| 2 | 2 | expected 'card' |  |
 | 1 | 1 | expected what to gain control of |  |
+| 1 | 1 | the source-class shield is armed on its controller, not on a chosen recipient |  |
 
 ## Cards executing through the grammar
 
@@ -1571,6 +1571,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Cephalid Illusionist**
   - `Whenever this creature becomes the target of a spell or ability, mill three cards.`
   - `{2}{U}, {T}: Prevent all combat damage that would be dealt to and dealt by target creature you control this turn.`
+- **Cephalid Inkshrouder**
+  - `Discard a card: This creature gains shroud until end of turn and can't be blocked this turn. (A creature with shroud can't be the target of spells or abilities.)`
 - **Cephalid Looter**
   - `{T}: Target player draws a card, then discards a card.`
 - **Cephalid Retainer**
@@ -3334,6 +3336,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Exile target nonwhite attacking creature. You gain life equal to its toughness.`
 - **Exorcist**
   - `{1}{W}, {T}: Destroy target black creature.`
+- **Exoskeletal Armor**
+  - `Enchanted creature gets +X/+X, where X is the number of creature cards in all graveyards.`
 - **Exotic Curse**
   - `Domain — Enchanted creature gets -1/-1 for each basic land type among lands you control.`
 - **Exotic Disease**
@@ -5012,6 +5016,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Infected Vermin**
   - `{2}{B}: This creature deals 1 damage to each creature and each player.`
   - `Threshold — {3}{B}: This creature deals 3 damage to each creature and each player. Activate only if there are seven or more cards in your graveyard.`
+- **Infectious Rage**
+  - `When enchanted creature dies, choose a creature at random this Aura can enchant. Return this card to the battlefield attached to that creature.`
 - **Infernal Contract**
   - `Draw four cards. You lose half your life, rounded up.`
   - `Draw four cards. You lose half your life, rounded up.`
@@ -6266,6 +6272,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Masked Blackguard**
   - `{2}{B}: This creature gets +1/+1 until end of turn.`
 - **Masked Gorgon**
+  - `Green creatures and white creatures have protection from Gorgons.`
   - `Threshold — This creature has protection from green and from white as long as there are seven or more cards in your graveyard.`
 - **Massacre**
   - `All creatures get -2/-2 until end of turn.`
@@ -6955,6 +6962,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Nomad Decoy**
   - `{W}, {T}: Tap target creature.`
   - `Threshold — {W}{W}, {T}: Tap two target creatures. Activate only if there are seven or more cards in your graveyard.`
+- **Nomad Mythmaker**
+  - `{W}, {T}: Put target Aura card from a graveyard onto the battlefield under your control attached to a creature you control.`
 - **Nomad Stadium**
   - `{T}: Add {W}. This land deals 1 damage to you.`
   - `Threshold — {W}, {T}, Sacrifice this land: You gain 4 life. Activate only if there are seven or more cards in your graveyard.`
