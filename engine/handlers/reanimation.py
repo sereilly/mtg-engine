@@ -329,13 +329,15 @@ def _reanimate_onto_chosen_host(
         context.results["its_mana_value"] = 0
         return True, "resolved"
     described = dict(instruction.payload.get("attach_filter") or {})
-    hosts = [
+    # The printed narrowing first, then W1G4's CR 303.4f host list over what
+    # it leaves — the same list Replenish's and Worldgorger's returns offer, so
+    # "what may this Aura card enter attached to" has one answer.
+    hosts = returning_aura_hosts(game, seat, card, [
         perm for perm in game.all_permanents()
         if subject_matches(
             game, perm, described, observer=seat, source=context.source_permanent,
         )
-        and enchant_card_refusal(game, card, seat, perm) is None
-    ]
+    ])
 
     def stays() -> None:
         game.log.append(
