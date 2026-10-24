@@ -62,6 +62,8 @@ log), not instruction kinds alone.
 
 # ==== W1G8 ==========================================================
 # W1G8's tests go between this line and the "end W1G8" line.
+import pytest as _w1g8_pytest
+
 from engine import Game as _w1g8_Game
 from engine import PlayerState as _w1g8_PlayerState
 from tests.helpers import resolve_stack as _w1g8_resolve_stack
@@ -486,6 +488,60 @@ def test_w1g8_shamans_trance_on_an_opponents_turn_stops_their_graveyard_land_dro
     assert _w1g8_zone_names(game.players[1].graveyard) == ["Mountain"]
     assert game.cast_from_hand(1, "Mountain").supported
     assert [p.card.name for p in game.controlled_by(1)] == ["Mountain"]
+
+
+def test_w1g8_envelop_counters_a_sorcery_and_offers_no_instant(set_pool):
+    """Drive list: "Counter target sorcery spell." A Mind Twist is offered and
+    countered; a Lightning Bolt is not offered and naming it is refused."""
+    jud, lea = set_pool("JUD"), set_pool("LEA")
+    game = _w1g8_duel()
+    game.players[1].hand.append(lea["Mind Twist"])
+    game.players[0].hand.extend([lea["Island"], lea["Island"]])
+    assert game.queue_from_hand(
+        1, "Mind Twist", target_player_index=0, x_value=2,
+    ).supported
+    game.players[0].hand.append(jud["Envelop"])
+    assert [t["name"] for t in game.cast_target_spec(0, jud["Envelop"])["valid_targets"]] == ["Mind Twist"]
+    assert game.queue_from_hand(0, "Envelop", target_stack_index=0).supported
+    _w1g8_resolve_stack(game)
+    assert _w1g8_zone_names(game.players[0].hand) == ["Island", "Island"]
+    assert _w1g8_zone_names(game.players[1].graveyard) == ["Mind Twist"]
+
+    game = _w1g8_duel()
+    game.players[1].hand.append(lea["Lightning Bolt"])
+    assert game.queue_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+    game.players[0].hand.append(jud["Envelop"])
+    assert game.cast_target_spec(0, jud["Envelop"])["valid_targets"] == []
+    assert not game.cast_from_hand(0, "Envelop", target_stack_index=0).supported
+
+
+@_w1g8_pytest.mark.parametrize("name, power, toughness, first_strike", [
+    ("Guided Strike", 3, 2, True),
+    ("Sudden Strength", 5, 5, False),
+])
+def test_w1g8_the_cantrip_pumps_last_the_turn_and_draw(set_pool, name, power, toughness, first_strike):
+    """Drive list: "Target creature gets +1/+0 and gains first strike until end
+    of turn. Draw a card." / "+3/+3 … Draw a card." Both halves happen, and the
+    pump ends at cleanup (CR 514.2)."""
+    from engine.models import Permanent
+    from tests.helpers import _nosick
+
+    lea = set_pool("LEA")
+    game = _w1g8_duel()
+    bears = _nosick(Permanent(card=lea["Grizzly Bears"]))
+    game.players[0].battlefield.append(bears)
+    game.players[0].library.extend([lea["Island"]] * 2)
+    game.players[0].hand.append(set_pool("JUD")[name])
+    assert game.cast_from_hand(
+        0, name, target_permanent_ids=[bears.permanent_id], target_player_index=0,
+    ).supported
+    _w1g8_resolve_stack(game)
+    assert (bears.effective_power, bears.effective_toughness) == (power, toughness)
+    assert game._has_keyword(bears, "first strike") is first_strike
+    assert _w1g8_zone_names(game.players[0].hand) == ["Island"]
+    game.resolve_cleanup_step(0)
+    assert (bears.effective_power, bears.effective_toughness) == (2, 2)
+    assert not game._has_keyword(bears, "first strike")
 
 
 def test_w1g8_shamans_trance_ends_with_the_turn(set_pool):
