@@ -255,14 +255,18 @@ def test_w2g6_a_kicker_is_not_paid_to_destroy_the_casters_own_enchantment(_w2g6_
 
 
 def test_w2g6_where_a_chosen_name_is_looked_for_is_read_off_the_next_sentence(_w2g6_pool):
-    """Five cards choose a card name as a step of their own (the three naming
+    """Six cards choose a card name as a step of their own (the three naming
     paragraphs with whole-effect handlers are not this). Three then look among
     the chooser's own cards; Foreshadow and Predict mill a *target* player and
-    look among what was milled, which is nobody's own zone to read a name off -
+    look among what was milled, and Cabal Therapy looks in a *target*
+    player's hand - nobody's own zone to read a name off -
     ``tests/ai/test_ai_chosen_name_mill.py`` is where that default is held.
 
     A reviewed inventory of the shipped pool. Predict joined at Odyssey's
-    promotion, and the review was that its answer is Foreshadow's."""
+    promotion, and the review was that its answer is Foreshadow's. Cabal
+    Therapy joined at Judgment's, and its answer is Foreshadow's one zone
+    over: ``chosen_name_is_read_off_the_targets_hand`` reads it, and the mill
+    test's census holds it as "the target's hand"."""
     found = {}
     for card, program in compiled_units(_w2g6_pool.values()):
         roots = [
@@ -279,6 +283,10 @@ def test_w2g6_where_a_chosen_name_is_looked_for_is_read_off_the_next_sentence(_w
         "Cursed Scroll": "hand",
         "Foreshadow": None,
         "Predict": None,
+        # Judgment's promotion: "Choose a nonland card name. Target player
+        # reveals their hand and discards all cards with that name." The
+        # target's hand, which is no zone of the chooser's own.
+        "Cabal Therapy": None,
     }
 
     invented = _mk_card(

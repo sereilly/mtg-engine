@@ -46,9 +46,9 @@
       "hooked_lines_pct_of_supported": 0.0
     },
     "ARN": {
-      "entries_per_100_supported_cards": 23.1,
-      "hooked_cards_pct_of_supported": 20.5,
-      "hooked_lines_pct_of_supported": 13.1
+      "entries_per_100_supported_cards": 21.8,
+      "hooked_cards_pct_of_supported": 19.2,
+      "hooked_lines_pct_of_supported": 12.1
     },
     "ATQ": {
       "entries_per_100_supported_cards": 3.5,
@@ -81,6 +81,11 @@
       "hooked_lines_pct_of_supported": 0.0
     },
     "INV": {
+      "entries_per_100_supported_cards": 0.0,
+      "hooked_cards_pct_of_supported": 0.0,
+      "hooked_lines_pct_of_supported": 0.0
+    },
+    "JUD": {
       "entries_per_100_supported_cards": 0.0,
       "hooked_cards_pct_of_supported": 0.0,
       "hooked_lines_pct_of_supported": 0.0

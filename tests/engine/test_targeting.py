@@ -546,9 +546,20 @@ def test_the_agreement_ratchet_still_examines_the_card_that_broke_it(supported_c
     # `derive_activation_spec`. Driven: its picker offers the creature cards
     # in both graveyards and nothing else, and a card from either returns
     # under Chainer's controller, black and a Nightmare.
+    # Nomad Mythmaker (JUD) is the seventh, reviewed at Judgment's promotion
+    # rehearsal, and two shapes the inventory already holds at once: Coffin
+    # Queen's activated ability and Iridescent Drake's Aura card ("{W}, {T}:
+    # Put target Aura card from a graveyard onto the battlefield under your
+    # control attached to a creature you control."). Not a card that needs
+    # `legality.py`'s text fallback: `derive_activation_spec` answers it
+    # (`graveyard_creature`, `card_type: aura`, no `own_graveyard_only`, which
+    # is what `any_graveyard` says). Driven: its picker offers the Aura cards
+    # in both graveyards and nothing else, an Aura from either arrives under
+    # Mythmaker's controller on a creature it controls, and naming a creature
+    # card or a land is refused.
     assert widened == {
         "Hymn of Rebirth", "Necromancy", "Reanimate", "Coffin Queen",
-        "Iridescent Drake", "Chainer, Dementia Master",
+        "Iridescent Drake", "Chainer, Dementia Master", "Nomad Mythmaker",
     }
 
 

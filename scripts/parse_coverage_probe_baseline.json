@@ -226,6 +226,13 @@
   ]
  },
  {
+  "card": "Aven Warcraft",
+  "clause": "if there are seven or more cards in your graveyard, choose a color. creatures you control also gain protection from the chosen color until end of turn",
+  "ignored": [
+   "also"
+  ]
+ },
+ {
   "card": "Avenging Druid",
   "clause": "you may reveal cards from the top of your library until you reveal a land card. if you do, put that card onto the battlefield and put all other cards revealed this way into your graveyard",
   "ignored": [
@@ -256,6 +263,13 @@
  {
   "card": "Balthor the Stout",
   "clause": "another target barbarian creature gets +1/+0 until end of turn",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
+  "card": "Barbarian Bully",
+  "clause": "this creature gets +2/+2 until end of turn unless a player has this creature deal 4 damage to them",
   "ignored": [
    "creature"
   ]
@@ -410,6 +424,13 @@
   ]
  },
  {
+  "card": "Book Burning",
+  "clause": "any player may have book burning deal 6 damage to them. if no one does, target player mills six cards",
+  "ignored": [
+   "have"
+  ]
+ },
+ {
   "card": "Bottomless Vault",
   "clause": "if this land is tapped, put a storage counter on it",
   "ignored": [
@@ -446,6 +467,14 @@
   ]
  },
  {
+  "card": "Breaking Point",
+  "clause": "any player may have breaking point deal 6 damage to them. if no one does, destroy all creatures. creatures destroyed this way can't be regenerated",
+  "ignored": [
+   "have",
+   "all"
+  ]
+ },
+ {
   "card": "Breath of Darigaaz",
   "clause": "breath of darigaaz deals 1 damage to each creature without flying and each player. if this spell was kicked, it deals 4 damage to each creature without flying and each player instead",
   "ignored": [
@@ -457,6 +486,13 @@
   "clause": "change the base power and toughness of all creatures that dealt damage to it this turn to 0/2",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Browbeat",
+  "clause": "any player may have browbeat deal 5 damage to them. if no one does, target player draws three cards",
+  "ignored": [
+   "have"
   ]
  },
  {
@@ -959,6 +995,13 @@
   ]
  },
  {
+  "card": "Dwarven Driller",
+  "clause": "destroy target land unless its controller has this creature deal 2 damage to them",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
   "card": "Dwarven Hold",
   "clause": "if this land is tapped, put a storage counter on it",
   "ignored": [
@@ -982,6 +1025,13 @@
  {
   "card": "Dwarven Pony",
   "clause": "target dwarf creature gains mountainwalk until end of turn",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
+  "card": "Dwarven Scorcher",
+  "clause": "this creature deals 1 damage to target creature unless that creature's controller has this creature deal 2 damage to them",
   "ignored": [
    "creature"
   ]
@@ -1495,6 +1545,13 @@
   "ignored": [
    "each",
    "creature"
+  ]
+ },
+ {
+  "card": "Grip of Amnesia",
+  "clause": "counter target spell unless its controller exiles all cards from their graveyard",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -2050,6 +2107,13 @@
   ]
  },
  {
+  "card": "Krosan Reclamation",
+  "clause": "target player shuffles up to two target cards from their graveyard into their library",
+  "ignored": [
+   "target"
+  ]
+ },
+ {
   "card": "Kyren Sniper",
   "clause": "you may have this creature deal 1 damage to target player or planeswalker",
   "ignored": [
@@ -2438,6 +2502,13 @@
   "ignored": [
    "creature",
    "creature"
+  ]
+ },
+ {
+  "card": "Mirari's Wake",
+  "clause": "add one mana of any type that land produced",
+  "ignored": [
+   "any"
   ]
  },
  {
@@ -3905,6 +3976,13 @@
   ]
  },
  {
+  "card": "Swirling Sandstorm",
+  "clause": "swirling sandstorm deals 5 damage to each creature without flying if there are seven or more cards in your graveyard",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "Sworn Defender",
   "clause": "this creature's power becomes the toughness of target creature blocking or being blocked by this creature minus 1 until end of turn, and its toughness becomes 1 plus the power of that creature until end of turn",
   "ignored": [
@@ -4592,6 +4670,20 @@
  {
   "card": "Word of Undoing",
   "clause": "return target creature and all white auras you own attached to it to their owners' hands",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Worldgorger Dragon",
+  "clause": "exile all other permanents you control",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Wormfang Behemoth",
+  "clause": "exile all cards from your hand",
   "ignored": [
    "all"
   ]

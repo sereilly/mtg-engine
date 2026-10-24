@@ -107,6 +107,7 @@
     "Phantom Monster",
     "Roc of Kher Ridges",
     "Scryb Sprites",
+    "Suntail Hawk",
     "Tormented Angel",
     "Willow Faerie",
     "Wind Drake"
@@ -139,6 +140,18 @@
     "Warthog"
   ],
   [
+    "Argothian Swine",
+    "Crash of Rhinos",
+    "Giant Warthog",
+    "Goliath Beetle",
+    "Iron Tusk Elephant",
+    "Jhovall Rider",
+    "Moorish Cavalry",
+    "Pygmy Razorback",
+    "War Mammoth",
+    "Wild Elephant"
+  ],
+  [
     "Elvish Archers",
     "Halberdier",
     "Hornet Cobra",
@@ -149,17 +162,6 @@
     "Serra Zealot",
     "Stone-Throwing Devils",
     "Youthful Knight"
-  ],
-  [
-    "Argothian Swine",
-    "Crash of Rhinos",
-    "Goliath Beetle",
-    "Iron Tusk Elephant",
-    "Jhovall Rider",
-    "Moorish Cavalry",
-    "Pygmy Razorback",
-    "War Mammoth",
-    "Wild Elephant"
   ],
   [
     "Benalish Hero",
@@ -372,6 +374,18 @@
     "Sphere of Truth"
   ],
   [
+    "Anurid Barkripper",
+    "Krosan Beast",
+    "Metamorphic Wurm",
+    "Springing Tiger"
+  ],
+  [
+    "Ardent Militia",
+    "Border Patrol",
+    "Jhovall Queen",
+    "Standing Troops"
+  ],
+  [
     "Bloated Toad",
     "Darkwatch Elves",
     "Disciple of Grace",
@@ -438,9 +452,9 @@
     "Zuran Spellcaster"
   ],
   [
-    "Ardent Militia",
-    "Jhovall Queen",
-    "Standing Troops"
+    "Aggressive Urge",
+    "Defiant Strike",
+    "Sudden Strength"
   ],
   [
     "Army of Allah",
@@ -518,11 +532,6 @@
     "Whiptongue Frog"
   ],
   [
-    "Krosan Beast",
-    "Metamorphic Wurm",
-    "Springing Tiger"
-  ],
-  [
     "Lone Wolf",
     "Pride of Lions",
     "Thorn Elemental"
@@ -557,10 +566,6 @@
   [
     "Adarkar Sentinel",
     "Dragon Engine"
-  ],
-  [
-    "Aggressive Urge",
-    "Defiant Strike"
   ],
   [
     "Aladdin's Ring",
@@ -1031,6 +1036,10 @@
     "Shadow Rider"
   ],
   [
+    "Nantuko Disciple",
+    "Thriss, Nantuko Primus"
+  ],
+  [
     "Noble Elephant",
     "War Elephant"
   ],
@@ -1065,6 +1074,10 @@
   [
     "Phantasmal Forces",
     "Spindrift Drake"
+  ],
+  [
+    "Phantom Nomad",
+    "Phantom Tiger"
   ],
   [
     "Phyrexian Battleflies",
@@ -1169,5 +1182,9 @@
   [
     "Wall of Fire",
     "Wall of Lava"
+  ],
+  [
+    "Wormfang Newt",
+    "Wormfang Turtle"
   ]
 ]
