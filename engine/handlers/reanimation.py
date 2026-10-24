@@ -367,6 +367,10 @@ def _reanimate_onto_chosen_host(
             game, instruction, context, caster, source_player, position,
             only_that_card, card_type, host,
         )
+        if context.results.get(REANIMATED_PERMANENTS):
+            game.log.append(
+                f"{card.name} entered the battlefield attached to {host.card.name}"
+            )
 
     if not hosts:
         stays()
