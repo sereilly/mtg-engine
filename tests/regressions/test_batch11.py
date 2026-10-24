@@ -386,7 +386,9 @@ class TestVesuvanDoppelganger:
         game.resolve_upkeep(
             0,
             optional_choices={"Vesuvan Doppelganger": True},
-            trigger_targets={"Vesuvan Doppelganger": (1, 0)},
+            # Answered by the chosen creature's id (the `id` on its
+            # `valid_targets` entry), never by its battlefield slot.
+            trigger_targets={"Vesuvan Doppelganger": p2.battlefield[0].permanent_id},
         )
         assert dop.copied_from == "Black Knight"
         assert dop.effective_power == 2 and dop.effective_toughness == 2

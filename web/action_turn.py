@@ -366,15 +366,30 @@ def _action_resolve_optional_trigger(session, req, seat_type):
     if choice.get("mandatory") and not req.accept:
         raise HTTPException(status_code=400, detail="this trigger is mandatory and can't be declined")
     if choice.get("needs_target") and req.accept:
-        if req.target_seat is None or req.target_permanent_index is None:
+        # The answer is filed as the chosen permanent's **id** (CR 400.7) —
+        # what each `valid_targets` entry carries and what the engine reads
+        # (`UpkeepStepMixin._upkeep_target_pick`). It was the (seat, slot)
+        # pair, which the step read again later: a permanent leaving in
+        # between moved the slot onto its neighbour. `target_permanent_id` is
+        # the address to send (a stale one is the preamble's 404); a seat and
+        # slot are still accepted, and turned into the id of what is in that
+        # slot now, while it still means what the client clicked.
+        if req.target_permanent_id is not None:
+            target_id = req.target_permanent_id
+        elif req.target_seat is not None and req.target_permanent_index is not None:
+            named = session.game.permanent_at(req.target_seat, req.target_permanent_index)
+            if named is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="that permanent is no longer on the battlefield",
+                )
+            target_id = named.permanent_id
+        else:
             raise HTTPException(status_code=400, detail="this trigger requires a target choice")
-        valid = {
-            (t.get("seat"), t.get("index"))
-            for t in choice.get("valid_targets", [])
-        }
-        if (req.target_seat, req.target_permanent_index) not in valid:
+        valid = {t.get("id") for t in choice.get("valid_targets", [])}
+        if target_id not in valid:
             raise HTTPException(status_code=400, detail="invalid target for this trigger")
-        session.optional_trigger_targets[key] = (req.target_seat, req.target_permanent_index)
+        session.optional_trigger_targets[key] = target_id
 
     session.optional_trigger_resolved[key] = bool(req.accept)
 

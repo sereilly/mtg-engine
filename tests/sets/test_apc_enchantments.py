@@ -1041,7 +1041,8 @@ def test_w1g6_ana_sanctuary_never_pumps_a_bystander_for_an_illegal_pick(set_pool
     giant = theirs[1]
 
     game.resolve_upkeep(
-        0, defer_priority=True, trigger_targets={sanctuary.permanent_id: (1, 0)},
+        0, defer_priority=True,
+        trigger_targets={sanctuary.permanent_id: theirs[0].permanent_id},
     )
     _w1g6_resolve_stack(game)
 
@@ -1053,7 +1054,8 @@ def test_w1g6_ana_sanctuary_never_pumps_a_bystander_for_an_illegal_pick(set_pool
         set_pool, mine=["Ana Sanctuary", "Prodigal Sorcerer"], theirs=["Forest", "Hill Giant"],
     )
     game.resolve_upkeep(
-        0, defer_priority=True, trigger_targets={mine[0].permanent_id: (1, 1)},
+        0, defer_priority=True,
+        trigger_targets={mine[0].permanent_id: theirs[1].permanent_id},
     )
     _w1g6_resolve_stack(game)
     assert (theirs[1].effective_power, theirs[1].effective_toughness) == (4, 4)

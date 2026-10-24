@@ -184,8 +184,8 @@ def test_two_targeted_upkeep_triggers_each_ask_their_own_target(set_pool):
     }
 
     game.resolve_upkeep(0, trigger_targets={
-        first.permanent_id: (1, 0),   # Grizzly Bears
-        second.permanent_id: (1, 1),  # Hill Giant
+        first.permanent_id: bears.permanent_id,
+        second.permanent_id: giant.permanent_id,
     })
     resolve_stack(game)
 
@@ -214,7 +214,7 @@ def test_a_second_targeted_trigger_is_not_answered_by_the_firsts_pick(set_pool):
     game = _upkeep_game(mine, theirs)
 
     # Only the *second* Djinn is answered, and it picks the Hill Giant.
-    game.resolve_upkeep(0, trigger_targets={second.permanent_id: (1, 1)})
+    game.resolve_upkeep(0, trigger_targets={second.permanent_id: giant.permanent_id})
     resolve_stack(game)
 
     # The unanswered one took the first legal candidate rather than the Hill
@@ -250,8 +250,8 @@ def test_two_afiya_groves_move_a_counter_onto_two_different_creatures(set_pool):
     }
 
     game.resolve_upkeep(0, trigger_targets={
-        grove_a.permanent_id: (0, 2),  # Grizzly Bears
-        grove_b.permanent_id: (0, 3),  # Hill Giant
+        grove_a.permanent_id: bears.permanent_id,
+        grove_b.permanent_id: giant.permanent_id,
     })
     resolve_stack(game)
 

@@ -741,7 +741,7 @@ def test_halfdane_is_never_offered_himself_and_honours_the_chosen_target(set_poo
     offered = {t["name"] for t in prompts[0]["valid_targets"]}
     assert offered == {"Own Bear", "Their Ogre"}
 
-    game.resolve_upkeep(0, trigger_targets={"Halfdane": (1, 0)})
+    game.resolve_upkeep(0, trigger_targets={"Halfdane": theirs.permanent_id})
     assert (halfdane.effective_power, halfdane.effective_toughness) == (4, 4)
 
 

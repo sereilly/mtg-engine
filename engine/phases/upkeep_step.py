@@ -790,7 +790,10 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             if not grants_ability(perm, RECOPY_EACH_UPKEEP):
                 continue
             valid_targets = [
-                {"kind": "permanent", "seat": s, "index": i, "name": p.card.name}
+                {
+                    "kind": "permanent", "seat": s, "index": i,
+                    "id": p.permanent_id, "name": p.card.name,
+                }
                 for s, player in enumerate(self.players)
                 for i, p in enumerate(player.battlefield)
                 if p is not perm and self._is_creature(p)
@@ -824,26 +827,62 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             if perm.is_creature and perm is not source
         ]
 
+    def _upkeep_target_pick(
+        self, source: Permanent, trigger_targets: dict | None
+    ) -> "tuple[bool, Permanent | None]":
+        """Whether *source*'s upkeep trigger was given a target at its prompt,
+        and the permanent that answer names — None where it has left.
+
+        **An answer is a ``permanent_id``** (CR 400.7), the ``id`` each
+        ``valid_targets`` entry carries. It was a ``(seat, battlefield
+        index)`` pair: a *slot*, read again when the step resolved, so a
+        permanent leaving in between renumbered the slot onto its neighbour
+        and every reader below acted on whichever permanent slid in — or, past
+        the end of the list, took the engine's first candidate instead of the
+        player's. Nothing resolves between the prompt and this step today; an
+        id makes that a fact about the answer rather than about the gate.
+
+        A pair is refused outright rather than read as a stale answer: a
+        caller still writing slots would otherwise lose every choice it makes,
+        silently.
+        """
+        chosen = (trigger_targets or {}).get(source.permanent_id)
+        if chosen is None:
+            return False, None
+        if isinstance(chosen, bool) or not isinstance(chosen, int):
+            raise TypeError(
+                f"{source.card.name}'s upkeep target is answered by the chosen "
+                f"permanent's permanent_id, not {chosen!r}"
+            )
+        return True, self.permanent_by_id(chosen)
+
     def _resolve_upkeep_trigger_target(
         self, source: Permanent, trigger_targets: dict | None, candidates: list[Permanent]
     ) -> Permanent | None:
-        """The target a human picked for *source*'s mandatory targeted upkeep
-        trigger, or — for AI/headless play, or a stale pick whose permanent has
-        since left the battlefield — the first legal candidate. Returns None
-        with no candidates (CR 603.3d: a trigger with no legal target is removed
-        from the stack).
+        """The target its controller picked for *source*'s mandatory targeted
+        upkeep trigger, or — for a seat nobody asked (AI/headless play) — the
+        first legal candidate. Returns None with no candidates (CR 603.3d: a
+        trigger with no legal target is removed from the stack).
+
+        **A pick that no longer names a legal target is not replaced.** It
+        fell back to the first candidate, so a player's choice became the
+        engine's without a word; the target they chose is gone or illegal, and
+        CR 608.2b removes an ability whose every target is (the step resolves
+        this trigger as it puts it on the stack, so the two checks are one).
 
         Keyed by *source*'s ``permanent_id``. It took the printed name, which
         is one answer for every copy: CR 603.3d chooses a target per ability,
         by its controller, as it goes on the stack."""
-        chosen = (trigger_targets or {}).get(source.permanent_id)
-        if chosen is not None:
-            seat, index = chosen
-            if 0 <= seat < len(self.players) and 0 <= index < len(self.players[seat].battlefield):
-                candidate = self.players[seat].battlefield[index]
-                if any(candidate is perm for perm in candidates):
-                    return candidate
-        return candidates[0] if candidates else None
+        answered, picked = self._upkeep_target_pick(source, trigger_targets)
+        if not answered:
+            return candidates[0] if candidates else None
+        if picked is not None and any(picked is perm for perm in candidates):
+            return picked
+        self.log.append(
+            f"{source.card.name}'s upkeep trigger does nothing: the target "
+            "chosen for it is no longer a legal one (CR 608.2b)"
+        )
+        return None
 
     def _printed_target_upkeep_trigger(self, trig, controller) -> tuple | None:
         """The target-prompt entry an upkeep trigger's own instruction supplies,
@@ -998,8 +1037,13 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                     "mandatory": True,
                     "prompt": build_prompt(perm.card.name),
                     "needs_target": target_noun,
+                    # ``id`` is the answer (``_upkeep_target_pick``); the seat
+                    # and slot are where the client draws the highlight.
                     "valid_targets": [
-                        {"kind": "permanent", "seat": s, "index": i, "name": p.card.name}
+                        {
+                            "kind": "permanent", "seat": s, "index": i,
+                            "id": p.permanent_id, "name": p.card.name,
+                        }
                         for s, player in enumerate(self.players)
                         for i, p in enumerate(player.battlefield)
                         if any(p is c for c in candidates)
@@ -1036,12 +1080,14 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         # has to sacrifice something — fall back to the first land.
         return self._force_sacrifice_first_land(controller, source) if chosen is not None else None
 
-    def resolve_upkeep(self, player_index: int, human_choices: dict[int | str, bool] | None = None, optional_choices: dict[int | str, bool] | None = None, defer_priority: bool = False, mana_prevention: dict[int | str, int] | None = None, sacrifice_choices: dict[int | str, int] | None = None, trigger_targets: dict[int | str, tuple[int, int]] | None = None) -> None:
+    def resolve_upkeep(self, player_index: int, human_choices: dict[int | str, bool] | None = None, optional_choices: dict[int | str, bool] | None = None, defer_priority: bool = False, mana_prevention: dict[int | str, int] | None = None, sacrifice_choices: dict[int | str, int] | None = None, trigger_targets: dict[int | str, int] | None = None) -> None:
         """Run this seat's upkeep step, carrying out the prompt answers in hand.
 
         Every answer map is keyed by ``Permanent.permanent_id``; a string key is
         the legacy shorthand for "every copy of this card"
-        (:meth:`_upkeep_answers_by_permanent`).
+        (:meth:`_upkeep_answers_by_permanent`). *trigger_targets*' **values**
+        are ids too — the ``id`` of the ``valid_targets`` entry chosen
+        (:meth:`_upkeep_target_pick`).
 
         The step's turn-based half is one window for CR 603.3b
         (``putting_triggers_on_stack``): everything "at the beginning of the
@@ -1057,7 +1103,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             )
         self._close_or_defer_step("beginning", "upkeep", defer_priority)
 
-    def _resolve_upkeep_actions(self, player_index: int, human_choices: dict[int | str, bool] | None = None, optional_choices: dict[int | str, bool] | None = None, mana_prevention: dict[int | str, int] | None = None, sacrifice_choices: dict[int | str, int] | None = None, trigger_targets: dict[int | str, tuple[int, int]] | None = None) -> None:
+    def _resolve_upkeep_actions(self, player_index: int, human_choices: dict[int | str, bool] | None = None, optional_choices: dict[int | str, bool] | None = None, mana_prevention: dict[int | str, int] | None = None, sacrifice_choices: dict[int | str, int] | None = None, trigger_targets: dict[int | str, int] | None = None) -> None:
         """The upkeep step up to its priority window (:meth:`resolve_upkeep`)."""
         # Every prompt answer, re-keyed to the permanent it is about, before
         # anything reads one. See :meth:`_upkeep_answers_by_permanent` — this is
@@ -1321,7 +1367,9 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                         # falls back to the first legal candidate, which is
                         # the answer for an AI seat and the wrong one for a
                         # player who was just asked.
-                        picked = (trigger_targets or {}).get(permanent.permanent_id)
+                        answered, named = self._upkeep_target_pick(
+                            permanent, trigger_targets
+                        )
                         # …and it is an answer to CR 603.3d's choice, so it
                         # has to be one that choice would have accepted. The
                         # stamp below reads as "the event made the choice",
@@ -1331,18 +1379,29 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                         # handler unchecked, and the handler's own fallback
                         # then acted on whichever bystander it scanned first.
                         # Set aside instead: the trigger goes on the stack
-                        # with nothing announced and chooses for itself.
+                        # with nothing announced and chooses for itself — a
+                        # seat that is asked is asked again, from the legal
+                        # list. So is a pick whose permanent has *gone*: the
+                        # answer is an id, and an id names that permanent or
+                        # nothing, never the one now in its slot.
+                        picked = None
                         picked_from_its_list = False
-                        if picked is not None:
+                        if answered and named is not None:
                             legal = self._upkeep_trigger_legal_targets(
                                 permanent, controller_seat, trig
                             )
-                            named = self.permanent_at(picked[0], picked[1])
                             if legal is not None and not any(
                                 named is allowed for allowed in legal
                             ):
                                 picked = None
                             else:
+                                # The slot is read now, as the object goes on
+                                # the stack, and ``_stamp_stack_targets`` turns
+                                # it straight back into this id.
+                                picked = (
+                                    self.controller_index_of(named),
+                                    self.battlefield_index_of(named),
+                                )
                                 # A pick the ability's own list accepted is a
                                 # target chosen for it (CR 603.3d), and says so
                                 # on the stack object — which is what lets CR
@@ -1583,14 +1642,16 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                 continue
             if optional_choices is None or not optional_choices.get(perm.permanent_id, False):
                 continue
-            chosen = (trigger_targets or {}).get(perm.permanent_id)
+            # The chosen creature by id: one that has left is no answer at all,
+            # never the creature that took its battlefield slot.
+            _answered, candidate = self._upkeep_target_pick(perm, trigger_targets)
             source = None
-            if chosen is not None:
-                seat, index = chosen
-                if 0 <= seat < len(self.players) and 0 <= index < len(self.players[seat].battlefield):
-                    candidate = self.players[seat].battlefield[index]
-                    if candidate is not perm and self._is_creature(candidate):
-                        source = candidate
+            if (
+                candidate is not None
+                and candidate is not perm
+                and self._is_creature(candidate)
+            ):
+                source = candidate
             if source is None:
                 self.log.append(f"{perm.card.name}: no valid creature chosen to copy")
                 continue

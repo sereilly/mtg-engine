@@ -122,7 +122,7 @@ def test_spiteful_bully_hits_a_creature_its_controller_controls(set_pool):
         "Spiteful Bully", "Craw Wurm",
     ]
     assert _upkeep(
-        game, trigger_targets={bully.permanent_id: (0, game.battlefield_index_of(wurm))},
+        game, trigger_targets={bully.permanent_id: wurm.permanent_id},
     ) == ["Spiteful Bully"]
     resolve_stack(game)
 
@@ -157,7 +157,7 @@ def test_an_upkeep_pick_the_trigger_could_not_choose_is_set_aside(set_pool):
         set_pool, mine=["Spiteful Bully", "Autumn Willow", "Craw Wurm"], interactive=True,
     )
     bully, willow, wurm = mine
-    illegal = {bully.permanent_id: (0, game.battlefield_index_of(willow))}
+    illegal = {bully.permanent_id: willow.permanent_id}
 
     assert _upkeep(game, trigger_targets=illegal) == ["Spiteful Bully"]
     (prompt,) = game.pending_choices
@@ -170,7 +170,7 @@ def test_an_upkeep_pick_the_trigger_could_not_choose_is_set_aside(set_pool):
 
     game, mine, _theirs = _table(set_pool, mine=["Spiteful Bully", "Autumn Willow", "Craw Wurm"])
     bully, willow, wurm = mine
-    _upkeep(game, trigger_targets={bully.permanent_id: (0, game.battlefield_index_of(willow))})
+    _upkeep(game, trigger_targets={bully.permanent_id: willow.permanent_id})
     resolve_stack(game)
     assert willow.damage_marked == 0
     assert bully.damage_marked + wurm.damage_marked == 3

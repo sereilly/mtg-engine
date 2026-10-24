@@ -107,9 +107,10 @@ class Session:
     # Shadow returning from the graveyard), and the answers collected so far.
     optional_trigger_choices: list[dict] = field(default_factory=list)
     optional_trigger_resolved: dict[str, bool] = field(default_factory=dict)
-    # Target chosen alongside an accepted optional trigger (Vesuvan Doppelganger's
-    # upkeep re-copy): card name -> (seat, battlefield index).
-    optional_trigger_targets: dict[str, tuple[int, int]] = field(default_factory=dict)
+    # Target chosen alongside an accepted upkeep trigger (Vesuvan Doppelganger's
+    # re-copy, Erhnam Djinn's grant): prompt key -> the chosen permanent's
+    # ``permanent_id`` — never its battlefield slot, which renumbers.
+    optional_trigger_targets: dict[str, int] = field(default_factory=dict)
     # "Pay any amount of mana to prevent that much damage" upkeep triggers (Power
     # Leak). Each choice carries the card name and the max preventable damage; the
     # player's chosen amount per card is collected in the resolved map.
