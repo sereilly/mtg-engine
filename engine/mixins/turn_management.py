@@ -856,9 +856,8 @@ class TurnManagementMixin:
         """Whether *land*'s own rules text still gives it a mana ability the
         walk in :meth:`_land_mana_abilities` would find — never for a land
         whose type an effect set, which lost that text (CR 305.7). "Own" is
-        its copiable values (CR 613.2c, ``copies.copiable_card``): what it
-        prints or copied, before any layer-6 grant."""
-        from ..copies import copiable_card
+        ``Permanent.card_through_layer_3``: what it prints, copies (CR 707.2)
+        or was rewritten to say (CR 612), before any layer-6 grant."""
         from ..land_types import lost_abilities_to_type_change
         from ..mana_payment import is_mana_ability
 
@@ -867,7 +866,7 @@ class TurnManagementMixin:
         return any(
             ability.supported and ability.instruction is not None
             and (is_mana_ability(ability) or ability.instruction.kind == "if_then")
-            for ability in compile_card_oracle(copiable_card(land)).activated_abilities
+            for ability in compile_card_oracle(land.card_through_layer_3).activated_abilities
         )
 
     def _default_tap_symbols(self, land, mana_ability) -> tuple[str, ...]:
