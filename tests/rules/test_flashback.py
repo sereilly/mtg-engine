@@ -21,6 +21,7 @@ written, every card printing it was in one.
 """
 from __future__ import annotations
 
+import dataclasses
 import random
 import re
 from functools import lru_cache
@@ -28,6 +29,7 @@ from functools import lru_cache
 import pytest
 
 import engine.handlers.stack as stack_handlers
+import engine.turn_replacements as turn_records
 from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units, whole_card
@@ -591,8 +593,20 @@ def _snapshot(game, card) -> tuple:
         for permission in game.cast_permissions
         if permission.cards and permission.cost is not None
     )
+    # Judgment (integrator, at the W1G8 merge): a shield that answers sources
+    # of one colour — Prismatic Strands' "Prevent all damage that sources of
+    # the color of your choice would deal this turn" — lets a colourless probe
+    # through, so the census read it as a spell that moved nothing. The probes
+    # also come from one card of each colour (a card is a damage source as a
+    # spell is), each kind once.
+    coloured = tuple(_pool()[n] for n in _GRAVEYARD_SUPPLIES)
     probes = tuple(
         (_damage_dealt(game, player, 3), _damage_dealt(game, player, 3, combat=True))
+        + tuple(
+            (_damage_dealt(game, player, 3, source=source),
+             _damage_dealt(game, player, 3, source=source, combat=True))
+            for source in coloured
+        )
         for player in game.players
     )
     # W1G7 (TOR): a one-turn rule a resolving spell leaves on the game —
@@ -602,6 +616,16 @@ def _snapshot(game, card) -> tuple:
     rules = tuple(
         repr(entry)
         for entry in game.blocking_restrictions_until_eot + game.attack_restrictions_until_eot
+    )
+    # Judgment (integrator, at the W1G8 merge): the same for a turn record
+    # (``engine/turn_replacements.py``) — Flaring Pain's "Damage can't be
+    # prevented this turn" takes prevention away, and on a board with no
+    # prevention effect for it to switch off no probe can show that. Each
+    # record without its CR 614.5 key, which is an identity, not an effect.
+    rules += tuple(
+        repr({k: v for k, v in dataclasses.asdict(record).items() if k != "key"})
+        for event in (turn_records.DAMAGE, turn_records.DRAW, turn_records.DAMAGE_PREVENTION)
+        for record in turn_records.armed_turn_replacements(game, event)
     )
     return (tuple(seats), tuple(game.extra_phases_remaining()), tuple(grants), probes, rules)
 
