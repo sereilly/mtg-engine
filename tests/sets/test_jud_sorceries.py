@@ -314,6 +314,32 @@ def test_w1g7_threshold_sorceries_pickers_name_what_the_cards_print(set_pool):
     }
     assert _w1g7_derive_cast_spec(fate, _w1g7_compile(fate)) is None
 
+
+@_w1g7_pytest.mark.parametrize(("others", "swept"), [(6, False), (7, True)])
+def test_w1g7_swirling_sandstorm_needs_threshold_and_spares_fliers(
+    set_pool, catalog_by_name, others, swept,
+):
+    """Drive list. Ruling 2004-10-04: "This card does nothing if you don't
+    have seven cards in your graveyard when it resolves." With seven, 5 damage
+    to each creature without flying — the caster's own Craw Wurm included —
+    and the Suntail Hawk is untouched."""
+    from engine.models import Permanent
+
+    game = _w1g7_table(set_pool, catalog_by_name, ["Island"] * others)
+    board = {}
+    for seat, name in ((1, "Grizzly Bears"), (1, "Suntail Hawk"), (0, "Craw Wurm")):
+        board[name] = Permanent(card=game._w1g7_card(name))
+        game._put_permanent_onto_battlefield(seat, board[name], None)
+    _w1g7_resolve_stack(game)
+    game.players[0].hand.append(game._w1g7_card("Swirling Sandstorm"))
+    assert game.cast_from_hand(0, "Swirling Sandstorm").supported
+    _w1g7_resolve_stack(game)
+
+    assert game.is_on_battlefield(board["Grizzly Bears"]) is not swept
+    assert game.is_on_battlefield(board["Craw Wurm"]) is not swept
+    assert game.is_on_battlefield(board["Suntail Hawk"])
+    assert board["Suntail Hawk"].damage_marked == 0
+
 # ==== end W1G7 ======================================================
 
 

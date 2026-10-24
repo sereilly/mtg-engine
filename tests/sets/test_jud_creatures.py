@@ -1524,6 +1524,28 @@ def test_w1g7_scrounger_picker_asks_for_three_of_its_own_graveyard(set_pool):
     }
     assert spec_is_a_cost(spec)
 
+
+def test_w1g7_ancestors_chosen_gains_a_life_per_card_in_its_graveyard(
+    set_pool, catalog_by_name,
+):
+    """Drive list: cast out of the hand with five cards in its controller's
+    graveyard and three in the opponent's, its entry trigger gains five — its
+    own pile, and not counting itself (it is on the battlefield)."""
+    island = catalog_by_name["Island"]
+    game = _W1G7Game(players=[
+        _W1G7PlayerState(name="P0", library=[island] * 5, graveyard=[island] * 5,
+                         hand=[set_pool("JUD")["Ancestor's Chosen"]]),
+        _W1G7PlayerState(name="P1", library=[island] * 5, graveyard=[island] * 3),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.active_player_index = 0
+    game.current_turn_phase = "main1"
+    assert game.cast_from_hand(0, "Ancestor's Chosen").supported
+    _w1g7_resolve(game)
+
+    assert [p.life for p in game.players] == [25, 20]
+
 # ==== end W1G7 ======================================================
 
 
