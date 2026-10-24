@@ -12,6 +12,16 @@ same source, and how much is one question for the whole family
 ``engine/grammar/lowering/_sweeps.py``.
 
 Split out of ``damage.py`` at the 2,000-line cap's split round.
+
+**Every recipient's event may stop to ask** (CR 616.1e). A creature with two
+applicable effects -- Phantom Centaur's counter shield and its protection from
+black, under Pestilence -- has its controller choose which applies first, and
+that is a question the damage event asks an interactive seat and then re-runs
+on the answer (``asks=True``). So each sweep is a resumable loop over its
+recipients (:func:`_sweep`): the recipients behind the one that asked are still
+dealt to when the answer arrives, and the summary line is the loop's last step.
+These sweeps called the damage entry points without ``asks``, so the seat got
+the default and never saw the question (Judgment's W1G2 measured it; W2G2).
 """
 
 from __future__ import annotations
@@ -21,6 +31,7 @@ from typing import TYPE_CHECKING
 from ..dexterity import flip_lands_on
 from ..models import Permanent
 from ..named_counters import counters_on
+from ..resumption import run_resumable
 from ._amounts import resolve_amount
 from ._common import apply_damage_to_creature, damage_dealer
 from ._targets import defending_player_seat
@@ -59,12 +70,43 @@ def _sweep_amount(instruction: OracleInstruction, context: OracleExecutionContex
     return resolve_amount(instruction.payload.get("amount", 0), context.x_value)
 
 
+#: The last item of a sweep's loop: its summary, run once every recipient has
+#: been dealt to. A sentinel *item* rather than a line after the loop, because
+#: work written after a resumable loop does not run when a step suspends
+#: (``engine/resumption.py``).
+_SWEEP_DONE = object()
+
+#: The item of the players-and-creatures sweep that deals to the creatures,
+#: read off the board when the loop reaches it -- after the players, as before.
+_THE_CREATURES = object()
+
+
+def _sweep(game: Game, recipients, hit, done) -> None:
+    """*hit* each of *recipients* in turn and then run *done*, resumably.
+
+    The one loop every sweep here runs, so a recipient whose event stops to
+    ask (CR 616.1e) takes the rest of the sweep with it and the answer brings
+    it back. Must be the last thing its caller does."""
+    def step(item) -> None:
+        if item is _SWEEP_DONE:
+            if done is not None:
+                done()
+            return
+        hit(item)
+
+    run_resumable(game, [*recipients, _SWEEP_DONE], step)
+
+
 @effect_handler("deal_damage_each_creature_and_player")
 def deal_damage_each_creature_and_player(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     card = context.card
     amount = _sweep_amount(instruction, context)
-    _mass_damage_players_and_creatures(game, damage_dealer(context), amount, lambda perm: True)
-    game.log.append(f"{card.name} dealt {amount} damage to each creature and each player")
+    _mass_damage_players_and_creatures(
+        game, damage_dealer(context), amount, lambda perm: True,
+        done=lambda: game.log.append(
+            f"{card.name} dealt {amount} damage to each creature and each player"
+        ),
+    )
     return True, "resolved"
 
 
@@ -75,7 +117,9 @@ def _has_flying(perm: Permanent) -> bool:
     return perm.has_keyword("flying")
 
 
-def _mass_damage_players_and_creatures(game: Game, source, damage: int, creature_predicate) -> None:
+def _mass_damage_players_and_creatures(
+    game: Game, source, damage: int, creature_predicate, done=None,
+) -> None:
     """Earthquake/Hurricane sweep: damage every player, then every creature
     passing the predicate, then destroy the lethally damaged as one SBA batch.
 
@@ -86,13 +130,26 @@ def _mass_damage_players_and_creatures(game: Game, source, damage: int, creature
     point from Earthquake and grew no counter across five shipped sets. The
     per-creature triggers are correct here rather than batched: CR 603.2 puts
     one on the stack per creature dealt to, and the state-based sweep that kills
-    them still runs once, after."""
-    for player in game.players:
-        game._deal_damage_to_player(player, damage, source=source)
-    for player in game.players:
-        for perm in list(player.battlefield):
-            if perm.is_creature and creature_predicate(perm):
-                apply_damage_to_creature(game, perm, damage, source)
+    them still runs once, after.
+
+    One resumable loop (:func:`_sweep`): the players, then the creatures, then
+    *done* -- each event free to stop and ask its recipient's controller which
+    effect applies first (CR 616.1e)."""
+    def hit_creature(perm: Permanent) -> None:
+        apply_damage_to_creature(game, perm, damage, source, asks=True)
+
+    def hit(item) -> None:
+        if item is _THE_CREATURES:
+            _sweep(game, [
+                perm
+                for player in game.players
+                for perm in list(player.battlefield)
+                if perm.is_creature and creature_predicate(perm)
+            ], hit_creature, None)
+            return
+        game._deal_damage_to_player(item, damage, source=source, asks=True)
+
+    _sweep(game, [*game.players, _THE_CREATURES], hit, done)
 
 
 @effect_handler("earthquake_damage")
@@ -100,9 +157,12 @@ def earthquake_damage(game: Game, instruction: OracleInstruction, context: Oracl
     card = context.card
     damage = _sweep_amount(instruction, context)
     _mass_damage_players_and_creatures(
-        game, damage_dealer(context), damage, lambda perm: not _has_flying(perm)
+        game, damage_dealer(context), damage, lambda perm: not _has_flying(perm),
+        done=lambda: game.log.append(
+            f"{card.name} dealt {damage} earthquake damage to each non-flying "
+            "creature and each player"
+        ),
     )
-    game.log.append(f"{card.name} dealt {damage} earthquake damage to each non-flying creature and each player")
     return True, "resolved"
 
 
@@ -110,8 +170,13 @@ def earthquake_damage(game: Game, instruction: OracleInstruction, context: Oracl
 def hurricane_damage(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     card = context.card
     damage = _sweep_amount(instruction, context)
-    _mass_damage_players_and_creatures(game, damage_dealer(context), damage, _has_flying)
-    game.log.append(f"{card.name} dealt {damage} hurricane damage to each flying creature and each player")
+    _mass_damage_players_and_creatures(
+        game, damage_dealer(context), damage, _has_flying,
+        done=lambda: game.log.append(
+            f"{card.name} dealt {damage} hurricane damage to each flying "
+            "creature and each player"
+        ),
+    )
     return True, "resolved"
 
 
@@ -156,10 +221,10 @@ def deal_damage_to_random_creatures(
                 f"{card.name} landed on {perm.card.name} and dealt {dealt} damage"
             ),
             then=_after,
+            asks=True,
         )
 
-    for perm in hits:
-        _hit(perm)
+    _sweep(game, hits, _hit, None)
     return True, "resolved"
 
 
@@ -172,13 +237,22 @@ def deal_damage_each_attacking_creature(
     batch so simultaneous lethal damage kills together."""
     card = context.card
     damage = _sweep_amount(instruction, context)
-    struck = 0
-    for player in game.players:
-        for perm in list(player.battlefield):
-            if perm.is_creature and perm.attacking:
-                apply_damage_to_creature(game, perm, damage, damage_dealer(context))
-                struck += 1
-    game.log.append(f"{card.name} dealt {damage} damage to each of {struck} attacking creatures")
+    struck = [
+        perm
+        for player in game.players
+        for perm in list(player.battlefield)
+        if perm.is_creature and perm.attacking
+    ]
+    _sweep(
+        game, struck,
+        lambda perm: apply_damage_to_creature(
+            game, perm, damage, damage_dealer(context), asks=True,
+        ),
+        lambda: game.log.append(
+            f"{card.name} dealt {damage} damage to each of {len(struck)} "
+            "attacking creatures"
+        ),
+    )
     return True, "resolved"
 
 
@@ -281,7 +355,9 @@ def deal_damage_each_matching(
     # direction that narrows to nothing — and Exodus's Salamander logged "found
     # nothing to damage" every time its only ability resolved.
     defending = defending_player_seat(game, context)
-    struck = []
+    # The set is fixed as the effect begins (CR 611.2c), with each member's
+    # amount: one list, then one resumable loop over it.
+    recipients = []
     for perm in list(game.all_permanents()):
         if not subject_matches(
             game, perm, described, observer=observer,
@@ -298,16 +374,29 @@ def deal_damage_each_matching(
             # not dealt to.
             if dealt <= 0:
                 continue
+        recipients.append((perm, dealt))
+    struck = [
+        f"{perm.card.name} ({dealt})" if per_recipient else perm.card.name
+        for perm, dealt in recipients
+    ]
+
+    def hit(entry) -> None:
+        perm, dealt = entry
         # The dealer is the permanent (CR 120.7) — for the bite because the
         # sentence made the source the dealer, and for every other branch
         # because the rule does. ``dealer`` already folds a spell back to its
         # printed card, so Pyroclasm is unchanged.
-        apply_damage_to_creature(game, perm, dealt, biter if biter is not None else dealer)
-        struck.append(f"{perm.card.name} ({dealt})" if per_recipient else perm.card.name)
-    if not struck:
-        game.log.append(f"{card.name} found nothing to damage")
-    elif per_recipient is not None:
-        game.log.append(f"{card.name} dealt damage to {', '.join(struck)}")
-    else:
-        game.log.append(f"{card.name} dealt {damage} damage to {', '.join(struck)}")
+        apply_damage_to_creature(
+            game, perm, dealt, biter if biter is not None else dealer, asks=True,
+        )
+
+    def summary() -> None:
+        if not struck:
+            game.log.append(f"{card.name} found nothing to damage")
+        elif per_recipient is not None:
+            game.log.append(f"{card.name} dealt damage to {', '.join(struck)}")
+        else:
+            game.log.append(f"{card.name} dealt {damage} damage to {', '.join(struck)}")
+
+    _sweep(game, recipients, hit, summary)
     return True, "resolved"
