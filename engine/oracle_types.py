@@ -819,21 +819,13 @@ class ActivatedAbilityCost:
     #: Last for ``remove_counter_filter``'s stated reason — the positional
     #: arguments ``parse_activated_ability_cost`` passes are at the front.
     mill_cards: int = 0
-    #: Battlefield Scrounger: "Threshold — **Put three cards from your
-    #: graveyard on the bottom of your library**: This creature gets +3/+3
-    #: until end of turn." How many cards the payer chooses out of their own
-    #: graveyard and puts on the bottom of their library. Zero is "no such
-    #: cost".
-    #:
-    #: Not a value of ``exile_zone`` beside ``exile_filter``, though the choice
-    #: is the same one (which N cards out of the payer's pile, named on
-    #: ``cost_graveyard_indices``): every reader of that pair is reading an
-    #: *exile* — what ``exiled_for_cost`` records, what the client says, what
-    #: CR 605.1a's fourth criterion asks — and this payment exiles nothing and
+    #: Battlefield Scrounger: "**Put three cards from your graveyard on the
+    #: bottom of your library**: …". How many cards the payer picks out of
+    #: their own pile (named on ``cost_graveyard_indices``); zero is "no such
+    #: cost". Not a value of ``exile_zone``: every reader of that field reads an
+    #: *exile* (``exiled_for_cost``, the client's verb, CR 605.1a), and this
     #: moves cards **to a library**. CR 118.3 makes it unpayable from a pile
-    #: holding fewer cards than the count.
-    #:
-    #: Last for ``mill_cards``' stated reason.
+    #: holding fewer cards. Last for ``mill_cards``' stated reason.
     graveyard_to_library_bottom: int = 0
 
     @property
