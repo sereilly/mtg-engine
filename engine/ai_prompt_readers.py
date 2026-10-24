@@ -628,11 +628,35 @@ def toll_branch_loss(
             cards += min(amount, len(player.hand))
         elif kind == "ante_top_card":
             cards += 1
+        elif kind == "mill_target_player" and payload.get("recipient") is None:
+            # "…target player mills six cards" (Book Burning's unpaid branch).
+            # The announced player, who is this seat exactly when the
+            # resolution's target is (``target_player`` among *recipients*);
+            # another seat's library is no loss of this seat's.
+            amount = payload.get("amount")
+            if not isinstance(amount, int) or not payload.get("targets"):
+                return None
+            if "target_player" in recipients:
+                milled += amount
         elif kind == "mill_target_player":
             amount = payload.get("amount")
             if not isinstance(amount, int) or payload.get("recipient") not in recipients:
                 return None
             milled += amount
+        elif kind == "destroy_all_creatures":
+            # "…destroy all creatures. Creatures destroyed this way can't be
+            # regenerated." (Breaking Point's unpaid branch.) This seat's share
+            # of the sweep — its own creatures the destruction would take, read
+            # the way ``destroy_sweeps._sweep_by_type`` reads them: through
+            # layer 4 (``is_creature``), sparing what is indestructible and,
+            # unless the card forbids it, what has a regeneration shield up.
+            regenerates = not payload.get("bypass_regeneration")
+            permanents.extend(
+                permanent for permanent in game.controlled_by(player_index)
+                if permanent.is_creature
+                and not game._has_keyword(permanent, "indestructible")
+                and not (regenerates and permanent.regeneration_shield > 0)
+            )
         elif kind == "tap_self":
             taps_source = True
         else:

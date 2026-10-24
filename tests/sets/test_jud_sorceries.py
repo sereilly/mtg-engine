@@ -180,6 +180,74 @@ def test_w1g5_breaking_point_taken_spares_the_board(set_pool):
     assert _w1g5.names(game, 1) == ["Grizzly Bears"]
 
 
+def _w1g5_headless(set_pool, name, *, theirs=(), mine=(), their_life=20, target=None):
+    """*name* cast by seat 0 with nobody interactive — every link answered by
+    the stated policy — and the game settled."""
+    game = _w1g5.table(set_pool, hands=([name], []))
+    game.players[1].life = their_life
+    for seat, board in ((0, mine), (1, theirs)):
+        for creature in board:
+            _w1g5.put(game, set_pool, seat, creature)
+    game.start_turn(0)
+    targets = {} if target is None else {"target_player_index": target}
+    result = game.cast_from_hand(0, name, **targets)
+    assert result.supported, result.details
+    _w1g5.settle(game)
+    return game
+
+
+@_w1g5_pytest.mark.parametrize(
+    "theirs, takes_six",
+    [
+        ((), False),                                     # nothing to save
+        (("Craw Wurm", "Hill Giant", "Serra Angel"), True),  # worth more than 6
+    ],
+)
+def test_w1g5_a_seat_nobody_asks_weighs_breaking_points_six_against_its_own_creatures(
+    set_pool, theirs, takes_six
+):
+    """"Pay tolls" took the six every time — a seat with an empty board paid
+    6 life to save nothing. The decline of a link is priced as the unpaid
+    branch for *this* seat: its own creatures the sweep would take."""
+    game = _w1g5_headless(set_pool, "Breaking Point", theirs=theirs)
+
+    assert game.players[1].life == (14 if takes_six else 20)
+    assert _w1g5.names(game, 1) == (sorted(theirs) if takes_six else [])
+
+
+def test_w1g5_the_caster_pays_breaking_point_to_keep_a_bigger_board(set_pool):
+    """The caster is asked first (CR 101.4) and is a seat like any other here:
+    with more to lose than six life, it takes the six itself."""
+    game = _w1g5_headless(
+        set_pool, "Breaking Point",
+        mine=("Craw Wurm", "Serra Angel"), theirs=("Grizzly Bears",),
+    )
+
+    assert [player.life for player in game.players] == [14, 20]
+    assert _w1g5.names(game, 0) == ["Craw Wurm", "Serra Angel"]
+
+
+def test_w1g5_a_seat_nobody_asks_lets_book_burning_mill_it(set_pool):
+    """Six cards off the top of a library are priced far below six life."""
+    game = _w1g5_headless(set_pool, "Book Burning", target=1)
+
+    assert game.players[1].life == 20
+    assert len(game.players[1].library) == 14
+
+
+@_w1g5_pytest.mark.parametrize("life, takes_five", [(20, True), (5, False)])
+def test_w1g5_a_seat_nobody_asks_takes_browbeats_five_but_never_with_the_game(
+    set_pool, life, takes_five
+):
+    """Three cards to somebody else is a trade nothing here prices, so the
+    standing policy pays — and a price that kills is never paid for a penalty
+    nobody can price."""
+    game = _w1g5_headless(set_pool, "Browbeat", their_life=life, target=0)
+
+    assert game.players[1].life == (life - 5 if takes_five else life)
+    assert len(game.players[0].hand) == (0 if takes_five else 3)
+
+
 @_w1g5_pytest.mark.parametrize("name", ["Browbeat", "Book Burning", "Breaking Point"])
 def test_w1g5_the_offer_holds_the_spell_on_the_stack_until_it_is_answered(set_pool, name):
     """CR 608.2: the spell is still resolving while a seat is being asked, so
