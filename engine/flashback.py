@@ -373,6 +373,8 @@ def flashback_permission(
     from .cast_permissions import CastPermission
     from .search_filters import card_has_type
 
+    from .cast_permissions import as_though_yours_seat
+
     spell = card if spell is None else spell
     cost = printed_flashback_cost(spell)
     if cost is None:
@@ -381,12 +383,20 @@ def flashback_permission(
         return None
     if not 0 <= player_index < len(game.players):
         return None
+    zone_seat = None
     if not any(entry is card for entry in game.players[player_index].graveyard):
-        return None
+        # "…as though those cards were in your graveyard." (Shaman's Trance;
+        # ruling 2004-10-04: "You can use Flashback on cards to cast them.")
+        # Another seat's pile counts as the caster's own for the keyword's
+        # "from your graveyard", and the cast leaves *that* pile — the card is
+        # still its owner's, and its owner's exile is where flashback sends it.
+        zone_seat = as_though_yours_seat(game, player_index, card, "graveyard")
+        if zone_seat is None:
+            return None
     return CastPermission(
         player_index=player_index, zone="graveyard", mode="cast",
         cards=[card], duration=None, source_name=FLASHBACK_SOURCE,
-        exile_instead=True, cost=cost,
+        exile_instead=True, cost=cost, zone_player_index=zone_seat,
     )
 
 

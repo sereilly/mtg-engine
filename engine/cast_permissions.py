@@ -133,6 +133,15 @@ class CastPermission:
     #: one a cast uses is the caster's announcement (CR 601.2b), which
     #: :func:`permission_for` takes as ``costed``.
     cost: "AlternativeCost | None" = None
+    #: "…from other players' graveyards this turn **as though those cards were
+    #: in your graveyard**." (Shaman's Trance.) CR 609.4: for the grantee the
+    #: cards in :attr:`zone_seat`'s pile count as being in their own graveyard
+    #: for what a card permits of itself *there* — flashback's "from your
+    #: graveyard" (CR 702.34a; ruling 2004-10-04, "You can use Flashback on
+    #: cards to cast them"). Read by :func:`_as_though_yours_seats`; nothing
+    #: else about the cards moves (they are still the other player's, and
+    #: their activated abilities stay theirs — the card's other 2004 ruling).
+    as_though_yours: bool = False
 
     @property
     def zone_seat(self) -> int:
@@ -225,6 +234,16 @@ def _covers(
             return False
         if not any(entry is card for entry in _zone_cards(game, permission)):
             return False
+    elif permission.zone_player_index is not None and not any(
+        entry is card for entry in _zone_cards(game, permission)
+    ):
+        # A blanket grant over **another seat's** pile (Shaman's Trance) covers
+        # what is in that pile and nothing else. Every blanket grant before it
+        # opened the grantee's own zone, which the cast path's seat walk
+        # already scopes; this one, asked about a card in the grantee's own
+        # graveyard, would otherwise answer first and shadow the card's own
+        # flashback with a grant for the wrong pile.
+        return False
     return True
 
 
@@ -510,6 +529,31 @@ def _permissions_for(
         own = flashback_permission(game, player_index, card, spell)
         if own is not None:
             yield own
+
+
+def as_though_yours_seat(game, player_index: int, card, zone: str) -> int | None:
+    """The seat whose *zone* holds *card* "as though it were in your
+    graveyard" for *player_index*, or None.
+
+    "You may play lands and cast spells from other players' graveyards this
+    turn **as though those cards were in your graveyard**." (Shaman's Trance.)
+    The one reader of :attr:`CastPermission.as_though_yours`: a live grant of
+    the player's, over another seat's pile that holds the card by identity.
+    Asked by the permissions a card prints about *itself* in "your graveyard"
+    — flashback (``flashback.flashback_permission``) — so a card in an
+    opponent's graveyard is flashed back by the Trance's caster, from there.
+    """
+    for permission in getattr(game, "cast_permissions", ()):
+        if permission.player_index != player_index or not permission.as_though_yours:
+            continue
+        if permission.zone != zone:
+            continue
+        seat = permission.zone_seat
+        if seat == player_index or not 0 <= seat < len(game.players):
+            continue
+        if any(entry is card for entry in getattr(game.players[seat], zone)):
+            return seat
+    return None
 
 
 def consume(game, permission: CastPermission, card) -> None:

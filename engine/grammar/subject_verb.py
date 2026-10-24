@@ -55,6 +55,7 @@ from .effects import (
     parse_block_count_grant,
     parse_cant_activate_nonmana_abilities,
     parse_cant_cast_spell_types,
+    parse_cant_play_from_zone,
     parse_cant_play_lands,
     _parse_gain_control,
     _parse_assigns_combat_damage_as_unblocked,
@@ -527,6 +528,13 @@ def parse_subject_verb(
             lands = parse_cant_play_lands(stream, source_spec)
             if lands is not None:
                 return lands
+            # "Other players **can't play lands or cast spells from their
+            # graveyards** this turn." (Shaman's Trance.) Both verbs scoped to
+            # one zone — a reader of its own beside the two single-verb ones,
+            # each of which refuses this sentence at "or".
+            from_zone = parse_cant_play_from_zone(stream, source_spec)
+            if from_zone is not None:
+                return from_zone
             # "Until end of turn, target player **can't cast instant or sorcery
             # spells**, and that player **can't activate abilities that aren't
             # mana abilities**." (Abeyance.) Two more readers beside the two

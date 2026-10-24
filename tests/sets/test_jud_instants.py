@@ -395,6 +395,114 @@ def test_w1g8_spelljack_casts_an_x_spell_for_x_equal_to_zero(set_pool):
     assert game.players[1].life == 20
     assert _w1g8_zone_names(game.players[1].graveyard) == ["Fireball"]
 
+
+# --- Shaman's Trance --------------------------------------------------------
+
+def _w1g8_tranced(set_pool) -> "_w1g8_Game":
+    """Seat 0 resolves Shaman's Trance on its own turn. Seat 1's graveyard holds
+    a Lightning Bolt, a Firebolt and a Mountain; seat 0's holds a Lightning
+    Bolt of its own. Costs waived."""
+    lea, ody = set_pool("LEA"), set_pool("ODY")
+    game = _w1g8_duel()
+    game.players[0].hand.append(set_pool("JUD")["Shaman's Trance"])
+    game.players[0].graveyard.append(lea["Lightning Bolt"])
+    game.players[1].graveyard.extend([lea["Lightning Bolt"], ody["Firebolt"], lea["Mountain"]])
+    assert game.cast_from_hand(0, "Shaman's Trance").supported
+    _w1g8_resolve_stack(game)
+    return game
+
+
+def test_w1g8_shamans_trance_opens_other_players_graveyards_to_its_caster(set_pool):
+    """"You may play lands and cast spells from other players' graveyards this
+    turn as though those cards were in your graveyard." Seat 0 casts seat 1's
+    Bolt (it goes back to its owner's graveyard, CR 608.2n), plays seat 1's
+    Mountain as its land drop, and flashes back seat 1's Firebolt (ruling
+    2004-10-04: "You can use Flashback on cards to cast them") — exiled to its
+    owner's exile. Its own graveyard is not one the sentence opens."""
+    from engine.cast_permissions import playable_from_zones
+
+    game = _w1g8_tranced(set_pool)
+    offered = {(entry["owner_seat"], entry["name"]) for entry in playable_from_zones(game, 0)}
+    assert offered == {(1, "Lightning Bolt"), (1, "Firebolt"), (1, "Mountain")}
+
+    assert game.cast_from_hand(0, "Lightning Bolt", from_zone="graveyard", target_player_index=1).supported
+    _w1g8_resolve_stack(game)
+    assert game.players[1].life == 17
+    assert "Lightning Bolt" in _w1g8_zone_names(game.players[1].graveyard)
+
+    assert game.cast_from_hand(0, "Mountain", from_zone="graveyard").supported
+    mountain = next(p for p in game.controlled_by(0) if p.card.name == "Mountain")
+    assert "Mountain" not in _w1g8_zone_names(game.players[1].graveyard)
+    # Played by seat 0, still seat 1's card (CR 108.3): it dies into seat 1's pile.
+    assert game.owner_index_of(mountain) == 1
+
+    flashed = game.queue_from_hand(
+        0, "Firebolt", from_zone="graveyard", target_player_index=1,
+        alternative_cost=True,
+    )
+    assert flashed.supported, flashed.details
+    assert game.stack[-1].flashback
+    _w1g8_resolve_stack(game)
+    assert game.players[1].life == 15
+    assert _w1g8_zone_names(game.players[1].exile) == ["Firebolt"]
+
+
+def test_w1g8_shamans_trance_closes_other_players_graveyards_to_them(set_pool):
+    """"Other players can't play lands or cast spells from their graveyards this
+    turn." Seat 1 may not flash back its own Firebolt nor play its Mountain out
+    of its graveyard — and the cast is refused before anything is spent."""
+    game = _w1g8_tranced(set_pool)
+    game.enforce_mana_costs = True
+    game.players[1].mana_pool.update({"R": 1, "C": 4})
+    refused = game.cast_from_hand(1, "Firebolt", from_zone="graveyard", target_player_index=0)
+    assert not refused.supported
+    assert "can't play lands or cast spells from their graveyard" in refused.details
+    assert game.players[1].mana_pool["R"] == 1
+    assert "Firebolt" in _w1g8_zone_names(game.players[1].graveyard)
+    assert game.players[0].life == 20
+
+
+def test_w1g8_shamans_trance_on_an_opponents_turn_stops_their_graveyard_land_drop(set_pool):
+    """Both verbs are printed, so the ban binds a land drop too (CR 305.1) —
+    which matters on the opponent's own turn, where the instant is cast in
+    their upkeep: with their graveyard opened by another effect, their
+    Mountain still may not be played from it, while one from hand may."""
+    from engine.cast_permissions import grant_permission
+
+    lea = set_pool("LEA")
+    game = _w1g8_duel(active=1)
+    game.players[0].hand.append(set_pool("JUD")["Shaman's Trance"])
+    game.players[1].graveyard.append(lea["Mountain"])
+    game.players[1].hand.append(lea["Mountain"])
+    grant_permission(
+        game, player_index=1, zone="graveyard", mode="play", cards=None,
+        duration="end_of_turn", source_name="Test Opened Graveyard",
+    )
+    assert game.cast_from_hand(0, "Shaman's Trance").supported
+    _w1g8_resolve_stack(game)
+    refused = game.cast_from_hand(1, "Mountain", from_zone="graveyard")
+    assert not refused.supported
+    assert "can't play lands or cast spells from their graveyard" in refused.details
+    assert _w1g8_zone_names(game.players[1].graveyard) == ["Mountain"]
+    assert game.cast_from_hand(1, "Mountain").supported
+    assert [p.card.name for p in game.controlled_by(1)] == ["Mountain"]
+
+
+def test_w1g8_shamans_trance_ends_with_the_turn(set_pool):
+    """"This turn" on both halves: after the cleanup sweep (CR 514.2) and the
+    next turn's bookkeeping, seat 0 has no permission over seat 1's pile and
+    seat 1 may flash its own Firebolt back again."""
+    from engine.cast_permissions import playable_from_zones
+
+    game = _w1g8_tranced(set_pool)
+    game.resolve_cleanup_step(0)
+    game.begin_turn_bookkeeping(1)
+    assert playable_from_zones(game, 0) == []
+    game.start_turn(1)
+    cast = game.cast_from_hand(1, "Firebolt", from_zone="graveyard", target_player_index=0)
+    assert cast.supported, cast.details
+    assert game.players[0].life == 18
+
 # ==== end W1G8 ======================================================
 
 

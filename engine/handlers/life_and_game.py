@@ -1263,3 +1263,30 @@ def forbid_land_plays_this_turn(game: Game, instruction: OracleInstruction, cont
     record(game, game.players.index(victim))
     game.log.append(f"{victim.name} can't play lands this turn ({context.card.name})")
     return True, "resolved"
+
+
+@effect_handler("forbid_zone_plays_this_turn")
+def forbid_zone_plays_this_turn(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Other players can't play lands or cast spells from their graveyards
+    this turn." (Shaman's Trance, CR 601.3 and CR 305.1.)
+
+    Every opponent of the effect's controller (``Game.opponents_of``: CR 800.4a
+    makes a player who has left nobody's opponent), each banned from their own
+    pile through ``spell_prohibitions``' record, which the cast-prohibition
+    row reads for a cast and a land drop alike.
+    """
+    from ..spell_prohibitions import forbid_zone_plays_this_turn as record
+
+    if context.caster not in game.players:
+        return True, "resolved"
+    zone = str(instruction.payload.get("zone", "graveyard"))
+    seats = list(game.opponents_of(game.players.index(context.caster)))
+    for seat in seats:
+        record(game, seat, zone)
+    if seats:
+        game.log.append(
+            ", ".join(game.players[seat].name for seat in seats)
+            + f" can't play lands or cast spells from their {zone} this turn "
+            f"({context.card.name})"
+        )
+    return True, "resolved"

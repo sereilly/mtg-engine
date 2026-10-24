@@ -236,6 +236,14 @@ class Game(
     # controls alone. By ``permanent_id``, so CR 400.7's returning permanent —
     # a new object with a new id — is not still banned.
     permanent_activations_forbidden_this_turn: set[int] = field(default_factory=set)
+    # "Other players can't play lands or cast spells **from their graveyards**
+    # this turn." (Shaman's Trance.) The fourth of the family, keyed by seat
+    # and narrowed by *zone* — which neither the type-keyed cast ban nor the
+    # bare land ban above can say, and folding it into either would stop that
+    # player's hand too. Read and cleared through `spell_prohibitions.py`.
+    zones_forbidden_this_turn: dict[int, tuple[str, ...]] = field(
+        default_factory=dict
+    )
     # "The next instant or sorcery spell you cast this turn can't be countered."
     # (Overmaster, Insist.) What a resolved spell promised a spell its
     # controller has not cast yet, as ``counter_conditions.NextSpellPromise``

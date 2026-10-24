@@ -432,20 +432,44 @@ def _lower_cast_permission(
                 "an unbounded blanket zone permission is a different card",
                 node=node,
             )
-        return (
-            OracleInstruction(
-                "grant_cast_permission", "",
-                {
-                    "zone": "graveyard",
-                    "mode": node.mode,
-                    "blanket": True,
-                    "card_types": tuple(node.card_types),
-                    "position": node.position,
-                    "exile_instead": node.exile_instead,
-                    "duration": "end_of_turn",
-                },
-            ),
-        )
+        payload: dict[str, object] = {
+            "zone": "graveyard",
+            "mode": node.mode,
+            "blanket": True,
+            "card_types": tuple(node.card_types),
+            "position": node.position,
+            "exile_instead": node.exile_instead,
+            "duration": "end_of_turn",
+        }
+        if node.zone_owner != "you":
+            # "…from **other players'** graveyards …" (Shaman's Trance.) Whose
+            # piles the grant opens, emitted only when it is not the caster's
+            # own, so the Will's and the Strip's payloads are byte-identical.
+            # Every other seat's whole pile, so nothing narrows it: a class or
+            # a position here is a sentence nobody has printed.
+            if node.zone_owner != "other_players":
+                raise LoweringError(
+                    f"no blanket permission opens {node.zone_owner!r}'s zone",
+                    node=node,
+                )
+            if node.card_types or node.position is not None:
+                raise LoweringError(
+                    "a permission over other players' graveyards is printed "
+                    "whole", node=node,
+                )
+            payload["zone_owners"] = "other_players"
+        if node.as_though_yours:
+            # "…as though those cards were in your graveyard." Only over
+            # another seat's pile — over the caster's own the words say
+            # nothing — and carried so the cards' own graveyard permission
+            # (flashback) reaches the grantee there.
+            if node.zone_owner == "you":
+                raise LoweringError(
+                    "'as though in your graveyard' over your own graveyard",
+                    node=node,
+                )
+            payload["as_though_yours"] = True
+        return (OracleInstruction("grant_cast_permission", "", payload),)
 
     if node.what == "spells_at_instant_speed":
         # "You may cast creature spells this turn as though they had flash."

@@ -776,6 +776,26 @@ class CantPlayLands:
 
 
 @dataclass(frozen=True)
+class CantPlayFromZone:
+    """``<players> can't play lands or cast spells from their <zone>s <duration>.``
+    (Shaman's Trance's first sentence.)
+
+    CR 601.3 and CR 305.1 withdrawn together for one zone: both verbs are
+    printed, so the prohibition binds a land drop as well as a cast, and only
+    out of the named zone — "their graveyards", each player's own. Its own node
+    beside :class:`CantPlayLands` and :class:`CantCastSpellTypes`, because what
+    it narrows is *where from* rather than *what*, and a graveyard ban folded
+    into either would stop that player's hand as well.
+
+    The duration is required, for those two nodes' reason.
+    """
+
+    player: PlayerRef
+    zone: str
+    duration: Duration
+
+
+@dataclass(frozen=True)
 class CantCastSpellTypes:
     """``<player> can't cast <types> spells <duration>.`` (Abeyance.)
 

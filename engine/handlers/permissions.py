@@ -386,6 +386,33 @@ def grant_cast_permission(game: Game, instruction: OracleInstruction, context: O
         game.log.append(f"{caster.name} may cast {chosen.name} from their graveyard")
         return True, "resolved"
 
+    if payload.get("blanket") and payload.get("zone_owners") == "other_players":
+        # "You may play lands and cast spells from other players' graveyards
+        # this turn as though those cards were in your graveyard." (Shaman's
+        # Trance.) One grant per other seat's pile (``zone_player_index``, the
+        # field Grinning Totem's cross-seat grant already reads), each over the
+        # whole pile and re-asked of the board on every read for the Strip's
+        # reason below. ``as_though_yours`` is what lets the cards' own
+        # graveyard permission — flashback — reach the grantee there.
+        others = [
+            seat for seat in range(len(game.players))
+            if seat != caster_index and not game.players[seat].lost
+        ]
+        for seat in others:
+            grant_permission(
+                game, player_index=caster_index,
+                zone=payload.get("zone", "graveyard"),
+                mode=payload.get("mode", "play"), cards=None,
+                duration=duration, source_name=source_name,
+                zone_player_index=seat,
+                as_though_yours=bool(payload.get("as_though_yours")),
+            )
+        game.log.append(
+            f"{caster.name} may play lands and cast spells from other players' "
+            "graveyards this turn"
+        )
+        return True, "resolved"
+
     if payload.get("blanket"):
         # "Until end of turn, you may cast instant and sorcery spells from the
         # top of your graveyard." (Bösium Strip.) No card is named, so

@@ -277,8 +277,13 @@ def _card_castable_now(
     # however well the timing, the targets and the mana line up. The one
     # predicate the cast path refuses with (`engine/cast_prohibitions.py`), so
     # a card that glows is one the click will not be refused for. Asked of the
-    # half for a split card (the recursion above), which is CR 709.3a.
-    if cast_prohibition(game, player_index, card) is not None:
+    # half for a split card (the recursion above), which is CR 709.3a. And of
+    # the zone the cast leaves: "Other players can't play lands or cast spells
+    # from their graveyards this turn" (Shaman's Trance) binds a graveyard
+    # cast and no other, and the cast path asks with the zone.
+    if cast_prohibition(
+        game, player_index, card, from_zone=from_zone or "hand",
+    ) is not None:
         return False
 
     # CR 702.8b: flash casts any time an instant could be cast, so both timing

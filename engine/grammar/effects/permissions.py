@@ -287,6 +287,32 @@ def _parse_cast_permission(stream: TokenStream) -> ast.Statement | None:
     # Refuses without consuming, like every arm around it.
     if mode == "play":
         both_mark = stream.mark()
+        if stream.accept_phrase(
+            "lands", "and", "cast", "spells", "from", "other", "players'",
+            "graveyards",
+        ):
+            # "You may play lands and cast spells **from other players'
+            # graveyards** this turn **as though those cards were in your
+            # graveyard**." (Shaman's Trance.) The Will's sentence over every
+            # other seat's pile instead of the caster's own; the "as though"
+            # (CR 609.4) is carried, because it is what lets the caster use a
+            # card's own graveyard permission there — flashback (ruling
+            # 2004-10-04: "You can use Flashback on cards to cast them").
+            _trailing_duration()
+            as_though_yours = bool(stream.accept_phrase(
+                "as", "though", "those", "cards", "were", "in", "your",
+                "graveyard",
+            ))
+            return ast.CastPermission(
+                mode="play", what="spells_from_zone", grantee=grantee,
+                card_types=(), zone="graveyard", position=None,
+                until_end_of_turn=until_eot,
+                until_your_next_upkeep=next_upkeep,
+                until_your_next_turn=next_turn,
+                zone_owner="other_players",
+                as_though_yours=as_though_yours,
+            )
+        stream.reset(both_mark)
         if stream.accept_phrase("lands", "and", "cast", "spells", "from"):
             zone_of = _parse_zone(stream)
             if zone_of.name in ("graveyard", "exile") and (
@@ -611,6 +637,34 @@ def parse_cant_play_lands(
         stream.reset(mark)
         return None
     return ast.CantPlayLands(subject, duration)
+
+
+def parse_cant_play_from_zone(
+    stream: TokenStream, subject: "ast.Recipient"
+) -> "ast.CantPlayFromZone | None":
+    """``… can't play lands or cast spells from their graveyards this turn.``
+    (Shaman's Trance.) The verb only — the subject has already been read.
+
+    Both verbs are required, in this order, and so is the zone: "can't play
+    lands" alone is :func:`parse_cant_play_lands`' sentence (Solfatara), and
+    "can't cast spells" alone is Orim's Chant's — each stops the player's hand
+    as well, which this one does not. Non-consuming on refusal, for those two
+    readers' reason. The window is required too: a durationless graveyard ban
+    is a permanent's static ability and nothing here could end it.
+    """
+    if not isinstance(subject, ast.PlayerRef):
+        return None
+    mark = stream.mark()
+    if not stream.accept_phrase(
+        "play", "lands", "or", "cast", "spells", "from", "their", "graveyards",
+    ):
+        stream.reset(mark)
+        return None
+    duration = _parse_duration(stream)
+    if duration.kind != "this_turn":
+        stream.reset(mark)
+        return None
+    return ast.CantPlayFromZone(subject, "graveyard", duration)
 
 
 #: The card types a printed "can't cast <types> spells" may name. The same list
