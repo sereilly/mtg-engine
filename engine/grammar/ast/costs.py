@@ -388,6 +388,21 @@ class PutHandCardOnLibraryCost:
 
 
 @dataclass(frozen=True)
+class PutGraveyardCardsOnLibraryBottomCost:
+    """"Put three cards from your graveyard on the bottom of your library" in
+    front of a colon (Battlefield Scrounger).
+
+    :class:`PutHandCardOnLibraryCost`'s sibling one zone over, and its own
+    node for that node's reason: the payment ends in a library, not in a
+    graveyard or exile, so no reader of an exile or a discard may be handed
+    it. The payer picks *which* cards (CR 601.2b through CR 602.2b) out of
+    their own pile, unnarrowed, so a count is all it carries; CR 118.3 makes
+    a graveyard holding fewer cards unable to pay it at all.
+    """
+    count: int = 1
+
+
+@dataclass(frozen=True)
 class ExileGraveyardPositionCost:
     """"Exile the top card of your graveyard" (Alms, Nature's Kiss) / "Exile the
     top creature card of your graveyard" (Necratog, Zombie Scavengers) in front
@@ -480,7 +495,7 @@ Cost = Union[
     EventSpellManaCost,
     PayManaPerCounterCost, ExileSelf,
     ExileCost, ExileTopOfLibraryCost, ExileGraveyardPositionCost,
-    PutHandCardOnLibraryCost, MillCost,
+    PutHandCardOnLibraryCost, PutGraveyardCardsOnLibraryBottomCost, MillCost,
     RemoveCounterCost, PayAttachedManaCost,
     ReturnSelfToHandCost
 ]

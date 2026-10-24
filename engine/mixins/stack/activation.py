@@ -609,7 +609,7 @@ class AbilityActivationMixin:
             return_cost_permanents, sacrifice_also_permanent,
             sacrifice_attached_permanent, sacrifice_cost_permanent,
             sacrifice_cost_set, sacrificed_for_cost, tap_cost_permanents,
-            untap_cost_permanent,
+            untap_cost_permanent, library_bottom_cost_cards,
         ) = payers
 
         required_cost = dict(ability.cost.mana)
@@ -863,6 +863,7 @@ class AbilityActivationMixin:
             tap_cost_permanents=tap_cost_permanents,
             target_permanent_index=target_permanent_index,
             untap_cost_permanent=untap_cost_permanent,
+            library_bottom_cost_cards=library_bottom_cost_cards,
         )
 
         instruction = ability.instruction

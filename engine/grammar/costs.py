@@ -211,6 +211,35 @@ def _accept_exile_top_of_library(
     return ast.ExileTopOfLibraryCost(count)
 
 
+def _accept_graveyard_cards_to_library_bottom(
+    stream: TokenStream,
+) -> "ast.PutGraveyardCardsOnLibraryBottomCost | None":
+    """``a card`` / ``<N> cards`` ``from your graveyard on the bottom of your
+    library`` after a cost's "Put" — or None with the cursor unmoved.
+
+    Every word expected, the way the hand twin beside it is: "from target
+    player's graveyard" is somebody else's pile and a cost no payment path has
+    a seat for, and "on top of your library" is another payment. The count is
+    the article or a printed number of two or more (``_accept_cost_count``),
+    which is exactly what ``activation_costs._graveyard_to_library_bottom_cost``
+    charges.
+    """
+    mark = stream.mark()
+    count = None
+    if stream.accept_phrase("a", "card"):
+        count = 1
+    else:
+        counted = _accept_cost_count(stream)
+        if isinstance(counted, ast.Fixed) and stream.accept_word("cards"):
+            count = counted.value
+    if count is None or not stream.accept_phrase(
+        "from", "your", "graveyard", "on", "the", "bottom", "of", "your", "library",
+    ):
+        stream.reset(mark)
+        return None
+    return ast.PutGraveyardCardsOnLibraryBottomCost(count)
+
+
 def _parse_counter_removal_cost(stream: TokenStream) -> ast.RemoveCounterCost:
     """``Remove a <kind> counter from this <permanent>`` (Scavenging Ghoul).
 
@@ -753,6 +782,17 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
                 "library",
             ):
                 costs.append(ast.PutHandCardOnLibraryCost())
+                stream.accept_punct(",")
+                continue
+            # "Put **three cards from your graveyard on the bottom of your
+            # library**" (Battlefield Scrounger). The hand cost's sibling one
+            # zone over, read here for that one's reason: the counter branch
+            # below would take the article and refuse at "card". The payer
+            # picks which cards; nothing narrows them, so a narrowed noun
+            # ("three creature cards") is not this cost and is left unread.
+            graveyard_bottom = _accept_graveyard_cards_to_library_bottom(stream)
+            if graveyard_bottom is not None:
+                costs.append(graveyard_bottom)
                 stream.accept_punct(",")
                 continue
             if stream.accept_word("a", "an"):

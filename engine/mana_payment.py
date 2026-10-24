@@ -472,9 +472,11 @@ MANA_PRODUCING_KINDS: frozenset[str] = frozenset({
 #: activated ability is a mana ability only if "its cost and effect don't move
 #: any card to or from a library". Milling (Millikin, Charmed Pendant) and
 #: exiling the top of a library move one *from* it; a card put from a hand on
-#: top moves one *to* it.
+#: top moves one *to* it, and so do cards put from a graveyard on the bottom
+#: (Battlefield Scrounger).
 LIBRARY_MOVING_COSTS: tuple[str, ...] = (
     "mill_cards", "exile_top_of_library", "hand_to_library_top",
+    "graveyard_to_library_bottom",
 )
 
 #: The effect half of the same criterion, asked **the other way round**. Every

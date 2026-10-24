@@ -268,6 +268,15 @@ class ActivationPaymentMixin:
                 f"{len(controller.hand)} card(s) in hand and its cost puts "
                 f"{cost.hand_to_library_top} on top of their library"
             )
+        # "Put three cards from your graveyard on the bottom of your library"
+        # (Battlefield Scrounger): CR 118.3 — a pile one card short pays none.
+        if cost.graveyard_to_library_bottom > len(controller.graveyard):
+            return (
+                f"{name}: {controller.name} has "
+                f"{len(controller.graveyard)} card(s) in their graveyard and its "
+                f"cost puts {cost.graveyard_to_library_bottom} on the bottom of "
+                "their library"
+            )
         if cost.exile_top_of_library > len(controller.library):
             return (
                 f"{name}: {controller.name} has "

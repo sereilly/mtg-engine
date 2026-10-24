@@ -33,6 +33,9 @@ COST_PICKER_FLAGS = (
     # +1/+1 counter from a creature you control" (Spike Rogue), "Put a card
     # from your hand on top of your library" (Hidden Retreat, Penance).
     "untap_cost", "put_counter_cost", "remove_counter_cost", "library_top_cost",
+    # "Put three cards from your graveyard on the bottom of your library"
+    # (Battlefield Scrounger).
+    "library_bottom_cost",
 )
 
 
@@ -390,6 +393,21 @@ def _cost_picker_specs(cost, *, announced: dict | None = None) -> list[dict]:
             "own_only": True,
             "library_top_cost": True,
             "count": int(cost.hand_to_library_top),
+        })
+    if getattr(cost, "graveyard_to_library_bottom", 0):
+        # "**Put three cards from your graveyard on the bottom of your
+        # library**: …" (Battlefield Scrounger). The graveyard exile picker's
+        # list — the payer's own pile, any card — with this cost's verb: the
+        # charger reads the answer on ``cost_graveyard_indices`` exactly as
+        # the exile does, and takes the order named as the order the cards go
+        # down (CR 401.4). ``count`` is always stated: the payer names exactly
+        # that many.
+        specs.append({
+            "kind": GRAVEYARD_TARGET_KIND,
+            "own_graveyard_only": True,
+            "any_card": True,
+            "library_bottom_cost": True,
+            "count": int(cost.graveyard_to_library_bottom),
         })
     return specs
 

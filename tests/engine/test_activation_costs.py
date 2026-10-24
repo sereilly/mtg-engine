@@ -247,6 +247,16 @@ def test_every_admitted_cost_clause_is_charged(pool):
                         f"{card.name}: charged {charged.mill_cards} mill(s) "
                         f"for {cost.count}"
                     )
+                # "Put three cards from your graveyard on the bottom of your
+                # library" (Battlefield Scrounger): how many, as the mill.
+                if isinstance(cost, ast.PutGraveyardCardsOnLibraryBottomCost) and (
+                    charged.graveyard_to_library_bottom != cost.count
+                ):
+                    unpaid.append(
+                        f"{card.name}: charged "
+                        f"{charged.graveyard_to_library_bottom} card(s) to the "
+                        f"library bottom for {cost.count}"
+                    )
                 if isinstance(cost, ast.DiscardCost) and not cost.last_drawn:
                     # "Discard your hand" and "Discard this card" are their own
                     # fields, not counts — one is never unpayable and the other

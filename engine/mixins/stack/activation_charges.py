@@ -97,7 +97,7 @@ class ActivationChargesMixin:
         life_owed, return_cost_permanents, sacrifice_also_permanent,
         sacrifice_attached_permanent, sacrifice_cost_permanent,
         sacrifice_cost_set, sacrificed_for_cost, tap_cost_permanents,
-        untap_cost_permanent)``.
+        untap_cost_permanent, library_bottom_cost_cards)``.
         """
         # Jandor's Ring: "Discard the last card you drew this turn" is an
         # additional cost — the card the gate above found still in hand,
@@ -708,6 +708,24 @@ class ActivationChargesMixin:
                 return SimulationResult(
                     permanent.card.name, False, "unsupported", details
                 )
+        # "Put three cards from your graveyard on the bottom of your library"
+        # (Battlefield Scrounger). Resolved to the *cards* now, for the chosen
+        # exile's reason above: a slot is not an address once anything leaves
+        # the pile, and nothing between here and the payment moves a card.
+        library_bottom_cost_cards: tuple = ()
+        if ability.cost.graveyard_to_library_bottom:
+            chosen = self._choose_graveyard_to_library_bottom(
+                ability.cost, controller, controller_index,
+                None if ability.cost.exile_filter is not None
+                else cost_graveyard_indices,
+            )
+            if isinstance(chosen, str):
+                details = f"{permanent.card.name}: {chosen}"
+                self.log.append(details)
+                return SimulationResult(
+                    permanent.card.name, False, "unsupported", details
+                )
+            library_bottom_cost_cards = chosen
         return (
             alternative_mana, cost_hand_index, counter_cost_permanent,
             counter_removal_permanent, counters_removed_for_cost,
@@ -717,8 +735,57 @@ class ActivationChargesMixin:
             return_cost_permanents, sacrifice_also_permanent,
             sacrifice_attached_permanent, sacrifice_cost_permanent,
             sacrifice_cost_set, sacrificed_for_cost, tap_cost_permanents,
-            untap_cost_permanent,
+            untap_cost_permanent, library_bottom_cost_cards,
         )
+
+    def _choose_graveyard_to_library_bottom(
+        self, cost, controller, controller_index: int, named_slots,
+    ) -> "tuple | str":
+        """Which cards of the payer's own graveyard a "Put N cards from your
+        graveyard on the bottom of your library" cost moves, as ``(slot,
+        card)`` pairs **in the order they go down** — or why the naming is
+        refused (CR 601.2h through CR 602.2b). Both halves of each pair, for
+        idiom 11: two copies of a card in one pile are one object, so the
+        payment removes by slot and checks the card is still the one there.
+
+        The payer names them on ``cost_graveyard_indices``, the channel every
+        chosen graveyard cost answers on, and the order named is the order
+        CR 401.4 lets the owner put them on the bottom in, so the one answer
+        is both choices. A slot that names no card, or one card twice, or more
+        cards than the cost takes is refused with nothing spent; naming fewer
+        is not — the rest are the deterministic pick, which for a seat naming
+        nothing is the least valuable cards first
+        (``ai_prompt_readers.graveyard_price_order``, the order Gurzigost's
+        bottom-of-the-library toll gives up its pile in).
+        """
+        from ...ai_prompt_readers import graveyard_price_order
+
+        wanted = int(cost.graveyard_to_library_bottom)
+        pile = controller.graveyard
+        named = [slot for slot in (named_slots or ())]
+        for slot in named:
+            if not (
+                isinstance(slot, int) and not isinstance(slot, bool)
+                and 0 <= slot < len(pile)
+            ):
+                return f"no card at graveyard position {slot} to put on the bottom for its cost"
+        if len(set(named)) != len(named):
+            return f"graveyard positions {named} name one card more than once for its cost"
+        if len(named) > wanted:
+            return f"its cost puts {wanted} card(s) on the bottom, and {len(named)} were named"
+        if len(pile) < wanted:
+            return (
+                f"{controller.name} has {len(pile)} card(s) in their graveyard "
+                f"and its cost puts {wanted} on the bottom of their library"
+            )
+        default = graveyard_price_order(self, controller_index, list(range(len(pile))))
+        chosen = list(named)
+        for slot in default:
+            if len(chosen) >= wanted:
+                break
+            if slot not in chosen:
+                chosen.append(slot)
+        return tuple((slot, pile[slot]) for slot in chosen)
 
     def _pay_activation_costs(
         self, *, ability, ability_lower, activation_caps, controller,
@@ -731,6 +798,7 @@ class ActivationChargesMixin:
         sacrifice_attached_permanent, sacrifice_cost_permanent,
         sacrifice_cost_set, sacrifice_tax_victims, tap_cost_permanents,
         target_permanent_index, untap_cost_permanent,
+        library_bottom_cost_cards=(),
     ):
         """Every cost but the mana, paid at one moment once the mana payment
         has gone through (CR 601.2h through CR 602.2b), so nothing here
@@ -1102,6 +1170,33 @@ class ActivationChargesMixin:
                     f"{controller.name} put {paid.name} on top of their library "
                     f"to activate {permanent.card.name}"
                 )
+
+        # "Put three cards from your graveyard on the bottom of your library"
+        # (Battlefield Scrounger). Out of the pile highest slot first — every
+        # removal renumbers the slots behind it — each checked to still hold the
+        # card chosen (and found again by identity if it does not), then onto
+        # the bottom through the library seam in the order the payer named them,
+        # which is CR 401.4's arrangement.
+        if library_bottom_cost_cards:
+            pile = controller.graveyard
+            for slot, card in sorted(
+                library_bottom_cost_cards, key=lambda pair: pair[0], reverse=True
+            ):
+                if not (0 <= slot < len(pile) and pile[slot] is card):
+                    slot = next(
+                        index for index, held in enumerate(pile) if held is card
+                    )
+                del pile[slot]
+            for _slot, card in library_bottom_cost_cards:
+                self.put_card_into_library(
+                    controller, card, position="bottom", from_battlefield=None,
+                )
+            self.log.append(
+                f"{controller.name} put "
+                + ", ".join(card.name for _slot, card in library_bottom_cost_cards)
+                + " from their graveyard on the bottom of their library "
+                f"to activate {permanent.card.name}"
+            )
 
         if ability.cost.exile_top_of_library:
             from_library = [
