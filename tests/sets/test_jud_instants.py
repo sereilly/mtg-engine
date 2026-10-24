@@ -1317,6 +1317,36 @@ def test_w1g8_shamans_trance_ends_with_the_turn(set_pool):
     assert cast.supported, cast.details
     assert game.players[0].life == 18
 
+
+def test_w1g8_shamans_trance_beside_an_opened_own_graveyard_still_opens_theirs(set_pool):
+    """Yawgmoth's Will, then Shaman's Trance: seat 0 may cast out of its own
+    graveyard under the Will **and** out of seat 1's under the Trance. The
+    Will's grant over seat 0's graveyard answered for seat 1's cards too and
+    shadowed the Trance's (``cast_permissions._covers``), so nothing could be
+    cast out of seat 1's pile at all — measured at the Judgment integration
+    chain, where the AI never proposed a Trance out of an opened graveyard."""
+    from engine.cast_permissions import playable_from_zones
+
+    lea, ody = set_pool("LEA"), set_pool("ODY")
+    game = _w1g8_duel()
+    game.players[0].hand.extend([
+        set_pool("USG")["Yawgmoth's Will"], set_pool("JUD")["Shaman's Trance"],
+    ])
+    game.players[0].graveyard.append(lea["Lightning Bolt"])
+    game.players[1].graveyard.extend([ody["Firebolt"], lea["Mountain"]])
+    for name in ("Yawgmoth's Will", "Shaman's Trance"):
+        assert game.cast_from_hand(0, name).supported
+        _w1g8_resolve_stack(game)
+
+    offered = {(entry["owner_seat"], entry["name"]) for entry in playable_from_zones(game, 0)}
+    assert offered == {(0, "Lightning Bolt"), (1, "Firebolt"), (1, "Mountain")}
+    cast = game.cast_from_hand(0, "Firebolt", from_zone="graveyard", target_player_index=1)
+    assert cast.supported, cast.details
+    _w1g8_resolve_stack(game)
+    assert game.players[1].life == 18
+    assert game.cast_from_hand(0, "Mountain", from_zone="graveyard").supported
+    assert "Mountain" in {p.card.name for p in game.controlled_by(0)}
+
 # ==== end W1G8 ======================================================
 
 

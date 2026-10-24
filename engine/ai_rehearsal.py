@@ -348,6 +348,8 @@ class Rehearsal:
         its hand it could not before (CR 601.3: "you may play cards from your
         graveyard this turn") — fleeting like mana, and like mana not
         nothing: it is spent on a cast this rehearsal is not a rehearsal of.
+        Only a cast the caster **could make** there and then
+        (:func:`_could_make_now`): one nobody can pay for is spent on nothing.
     """
 
     accepted: bool
@@ -1090,6 +1092,72 @@ def _casts_open(game, seat: int) -> frozenset:
     )
 
 
+def _opened_a_cast(game, seat: int, could_cast: frozenset, spell_name) -> bool:
+    """Whether *game* — a copy on which a cast of *spell_name* has just
+    resolved — lets *seat* make a cast from outside its hand that the table
+    with nothing cast did not (*could_cast*, :func:`_casts_open`), its own card
+    aside, **and that it could make now** (:func:`_could_make_now`).
+
+    A flashback card cast from a hand is a graveyard card its owner may cast,
+    and that is the card spent, not a cast gained. A permission over cards the
+    seat cannot pay for is a permission spent on nothing: Shaman's Trance
+    opening three {50} cards in an opponent's graveyard, with forty mana
+    floating, was proposed for it at ``SPELL_BASE_SCORE`` (the ODY zone-cast
+    census, measured at the Judgment integration chain)."""
+    return any(
+        permitted.spell.name != spell_name
+        and (permitted.zone, permitted.spell.name) not in could_cast
+        and _could_make_now(game, seat, permitted)
+        for permitted in permitted_casts(game, seat)
+    )
+
+
+def _could_make_now(game, seat: int, permitted) -> bool:
+    """Whether *seat* could make the cast *permitted* (a ``PermittedCast``) on
+    *game* as it stands — the engine's own gates, asked in the order the cast
+    path asks them, none of them a rehearsal:
+
+    * nothing forbids it (CR 601.3, ``cast_prohibition``, which also binds a
+      land play);
+    * it is the time for it: a land drop left at sorcery timing for a land
+      (CR 305.1–305.2), sorcery timing (CR 307.1) unless the spell may be cast
+      as an instant (``casts_at_instant_speed``);
+    * the price can be paid — the alternative cost the permission requires
+      through the cast path's gate for what it asks beside mana (CR 601.2h),
+      and the mana through the payment planner (``ai_payment._cost_for`` under
+      the permission, CR 601.2f over it; ``_plan_land_taps``) out of what the
+      seat has left. An X is priced at 0, the least it may announce.
+    """
+    from .ai_payment import _cost_for, _paying_for, _plan_land_taps
+    from .ai_weighed_cast import casting_under
+    from .cast_prohibitions import cast_prohibition
+    from .cast_timing import a_sorcery_could_be_cast, casts_at_instant_speed
+
+    spell = permitted.spell
+    if cast_prohibition(game, seat, spell, from_zone=permitted.zone) is not None:
+        return False
+    if spell.primary_type == "land":
+        return a_sorcery_could_be_cast(game, seat) and game._may_play_another_land(seat)
+    if not (
+        casts_at_instant_speed(spell, game, seat) or a_sorcery_could_be_cast(game, seat)
+    ):
+        return False
+    own_graveyard_slot = (
+        permitted.index
+        if permitted.zone == "graveyard" and permitted.owner_seat == seat else None
+    )
+    if permitted.cost is not None and game._unpayable_alternative_cost(
+        seat, spell, permitted.cost, spell_hand_index=None,
+        spell_graveyard_slot=own_graveyard_slot,
+    ) is not None:
+        return False
+    if not game.enforce_mana_costs:
+        return True
+    player = game.players[seat]
+    with casting_under(permitted), _paying_for(spell):
+        return _plan_land_taps(game, player, _cost_for(game, player, spell, None)) is not None
+
+
 def rehearse(
     game, seat: int, perform, *, spell_name: str | None = None,
     leaves_hand: bool = True, key=None, carried=None, detach: bool = False,
@@ -1227,12 +1295,8 @@ def _rehearse(
             for was, player in zip(pools, clone.players)
             for symbol, amount in player.mana_pool.items()
         )
-        # A cast it opened, its own card aside: a flashback card cast from a
-        # hand is a graveyard card its owner may cast, and that is the card
-        # spent, not a cast gained.
-        opened_a_cast = any(
-            name != spell_name
-            for _zone, name in _casts_open(clone, seat) - untouched["could_cast"]
+        opened_a_cast = _opened_a_cast(
+            clone, seat, untouched["could_cast"], spell_name,
         )
         reading = _measured(clone, through_combat=through_combat)
         now = standing_swing(untouched["now"], reading["now"], seat)
