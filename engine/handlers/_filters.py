@@ -44,6 +44,46 @@ def _zone_card_colors(card, *, game=None, owner=None) -> tuple[str, ...]:
     return tuple(card_colors(game, card, owner))
 
 
+#: The zones a card a resolution recorded can be found in afterwards — every
+#: zone that is not the battlefield or the stack, which is where the cards these
+#: records hold went (a mill, a discard, a reveal, a sacrifice's card).
+_RECORD_ZONES = ("hand", "graveyard", "library", "exile")
+
+
+def recorded_card_owner(game, context, card):
+    """The seat whose card *card* is, when an earlier step of this resolution
+    recorded it ("milled this way", "revealed this way", "sacrificed this
+    way") and the record kept the card alone.
+
+    The matcher's colour test needs it (CR 613.1, 108.3: under its owner's
+    Celestial Dawn a nonland card off the battlefield is white). A recorded
+    card has been put into its owner's zone (CR 400.3), so the seat is the one
+    whose hand, graveyard, library or exile holds **that object** now -- and
+    when several do (a deck repeats one ``CardDefinition`` per copy, and both
+    decks may hold it), the record's subject: the resolution's target player,
+    else its controller, the reading ``revealed_chosen_color_count`` makes.
+    None when there is no game to ask.
+    """
+    if game is None:
+        return None
+    holders = [
+        player for player in game.players
+        if any(
+            held is card
+            for zone in _RECORD_ZONES
+            for held in (getattr(player, zone, None) or ())
+        )
+    ]
+    if len(holders) == 1:
+        return holders[0]
+    target = getattr(context, "target", None)
+    for subject in (target, getattr(context, "caster", None)):
+        if subject is not None and any(subject is player for player in game.players):
+            if not holders or any(subject is player for player in holders):
+                return subject
+    return holders[0] if holders else None
+
+
 def _zone_card_creature_types(
     card, *, printed=(), game=None, owner=None
 ) -> frozenset[str]:
@@ -281,10 +321,18 @@ def permanent_effective_colors(perm: Permanent) -> set[str]:
     return perm.effective_colors
 
 
-def graveyard_card_matches(spec: dict, card) -> bool:
+def graveyard_card_matches(spec: dict, card, *, game=None, owner=None) -> bool:
     """Whether *card* is a legal choice for a graveyard target described by
     *spec* — or by an instruction payload, which carries the same key names
     because the spec is derived from it.
+
+    *game* and *owner* (the seat whose graveyard holds the card, an index or a
+    ``PlayerState``) are what its **colour** is asked with: a card in a
+    graveyard is an object (CR 109.1), CR 613.1 applies the layers to it, and
+    "the same is true for … nonland cards you own that aren't on the
+    battlefield" (Celestial Dawn) is a layer-5 effect over exactly that card.
+    A caller that names neither gets the printed colours, which every caller
+    got before this took them.
 
     ``permanent_matches_filter``'s sibling one zone over, and here for the same
     reason: **one predicate, three readers.** The picker that offers the card,
@@ -316,9 +364,16 @@ def graveyard_card_matches(spec: dict, card) -> bool:
     # so a two-colour phrase offered one colour and silently refused the other —
     # the narrowing this predicate exists to keep honest, in the direction that
     # takes cards away from the player.
+    #
+    # Through ``_zone_card_colors``, the reader the hand and library matchers
+    # already ask, with the pile's owner: under its owner's Celestial Dawn a
+    # red creature card in that graveyard is white, so Dreams of the Dead may
+    # return it and Crypt Angel's "blue or red" may not.
     colors = spec.get("graveyard_colors")
-    if colors and not any(color in card.colors for color in colors):
-        return False
+    if colors:
+        held_colors = _zone_card_colors(card, game=game, owner=owner)
+        if not any(color in held_colors for color in colors):
+            return False
     # "target **Griffin** card" (Mtenda Griffin). Off the printed type line,
     # which for a card outside the battlefield is the whole of what there is
     # (CR 613.1) -- the same reader ``card_matches_filter`` uses for the
@@ -408,7 +463,9 @@ def excluded_graveyard_slot(spec: dict, graveyard, source_card) -> int | None:
     )
 
 
-def graveyard_slots_matching(spec: dict, graveyard, source_card=None) -> list[int]:
+def graveyard_slots_matching(
+    spec: dict, graveyard, source_card=None, *, game=None, owner=None,
+) -> list[int]:
     """The slots of *graveyard* an unannounced pick described by *spec* may
     take: every card :func:`graveyard_card_matches` admits, less the one slot
     :func:`excluded_graveyard_slot` takes out for a printed "other than this
@@ -419,11 +476,15 @@ def graveyard_slots_matching(spec: dict, graveyard, source_card=None) -> list[in
     — the gate counting the source's own slot would offer Ichorid's exile over
     a graveyard holding nothing but Ichorid, and the pick would then have
     nothing to take while "if you do" returned it anyway.
+
+    *game* and *owner* (whose *graveyard* this is) are handed to the predicate
+    for its colour test (CR 613.1).
     """
     excluded = excluded_graveyard_slot(spec, graveyard, source_card)
     return [
         index for index, card in enumerate(graveyard)
-        if index != excluded and graveyard_card_matches(spec, card)
+        if index != excluded
+        and graveyard_card_matches(spec, card, game=game, owner=owner)
     ]
 
 
@@ -1143,10 +1204,13 @@ def seats_matching_deed(game, context, seats, deed) -> list:
         # ``card_only_filter`` puts on the lowering that built this payload.
         by_seat = (context.results or {}).get(SACRIFICED_CARDS_BY_SEAT) or {}
         described = deed.get("filter") or {}
+        # With the sacrificing seat as the card's: it controlled what it
+        # sacrificed, so a colour its own static set (Celestial Dawn's "nonland
+        # permanents you control are white") is the colour the card had.
         return [
             seat for seat in seats
             if any(
-                _card_matches_filter(card, described)
+                _card_matches_filter(card, described, game=game, owner=seat)
                 for card in (by_seat.get(seat) or ())
             )
         ]

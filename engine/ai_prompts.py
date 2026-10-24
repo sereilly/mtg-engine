@@ -169,7 +169,7 @@ def choose_search_cards(
             for index, card in enumerate(
                 player.library if zone == "library" else player.graveyard
             )
-            if search_matches(card, working)
+            if search_matches(card, working, game=game, owner=player_index)
         ]
         entries.sort(
             key=lambda entry: -sign * _score_tutor_choice(game, player_index, entry[2])
@@ -180,7 +180,8 @@ def choose_search_cards(
                 break
             trial = kept + [entry]
             if None not in slot_assignment(
-                [card for _zone, _index, card in trial], working
+                [card for _zone, _index, card in trial], working,
+                game=game, owner=player_index,
             ):
                 kept = trial
         return [{"zone": zone, "index": index} for zone, index, _card in kept]
@@ -190,7 +191,9 @@ def choose_search_cards(
         for zone in tuple(working.get("zones", ("library",))):
             cards = player.library if zone == "library" else player.graveyard
             for index, card in enumerate(cards):
-                if (zone, index) in taken or not search_matches(card, working):
+                if (zone, index) in taken or not search_matches(
+                    card, working, game=game, owner=player_index,
+                ):
                     continue
                 score = sign * _score_tutor_choice(game, player_index, card)
                 if best is None or score > best_score:

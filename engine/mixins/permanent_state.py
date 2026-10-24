@@ -789,7 +789,9 @@ class PermanentStateMixin:
             from ..handlers._filters import _card_matches_filter
 
             if any(
-                _card_matches_filter(card, described)
+                _card_matches_filter(
+                    card, described, game=self, owner=caster_index,
+                )
                 for card in self.players[caster_index].graveyard
             ):
                 self.arm_pending_choice(

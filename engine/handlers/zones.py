@@ -80,7 +80,9 @@ def put_graveyard_cards_on_library_top(
         # "may this card be chosen?". This arm read `card_type in type_line`,
         # which is the same answer for the one key it knew and no answer at all
         # for "any card" (Misinformation) or a supertype (Lodestone Bauble).
-        return graveyard_card_matches(instruction.payload, card)
+        return graveyard_card_matches(
+            instruction.payload, card, game=game, owner=victim,
+        )
 
     # "Any number" prints no maximum, so the cap is the pile itself; "up to
     # three" prints one, and the description the lowering built carries it.
@@ -344,7 +346,7 @@ def put_graveyard_card_on_library_bottom(game: Game, instruction: OracleInstruct
     # (CR 608.2b: an illegal target is not acted on). The empty payload is
     # Epitaph Golem's "target card", which any card answers.
     if instruction.payload and not graveyard_card_matches(
-        instruction.payload, caster.graveyard[idx]
+        instruction.payload, caster.graveyard[idx], game=game, owner=caster,
     ):
         game.log.append(
             f"{context.card.name}: the chosen card is no longer a legal target"

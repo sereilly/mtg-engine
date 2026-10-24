@@ -186,7 +186,10 @@ def search_matches(card, data: dict, *, game=None, owner=None) -> bool:
     # name carries the semantics it already has one module over.
     wanted_colors = restrictions.get("any_colors") or ()
     if wanted_colors:
-        colors = card_colors(card, game=game, owner=owner)
+        # Asked of the seat whose zone holds the card, not of the chooser:
+        # "cards **you own**" is CR 108.3's owner, and a search may look in
+        # another player's library (``searched_seat``).
+        colors = card_colors(card, game=game, owner=_zone_owner(data, owner))
         if not any(str(symbol).upper() in colors for symbol in wanted_colors):
             return False
     # "a **basic** land card" (Cultivate). A supertype is printed on the type
@@ -286,7 +289,8 @@ def search_matches(card, data: dict, *, game=None, owner=None) -> bool:
     # of them and a per-card test cannot know which it will be asked to be.
     slots = restrictions.get(ONE_OF_EACH)
     if slots and not any(
-        search_matches(card, slot, game=game, owner=owner) for slot in slots
+        search_matches(card, slot, game=game, owner=_zone_owner(data, owner))
+        for slot in slots
     ):
         return False
     return True
@@ -377,6 +381,15 @@ def slot_assignment(cards, data: dict, *, game=None, owner=None) -> list[int | N
     for slot_index, card_index in holder.items():
         assigned[card_index] = slot_index
     return assigned
+
+
+def _zone_owner(data: dict, owner):
+    """The seat whose zone a search looks in, as :func:`search_matches`' *owner*
+    may be spelled: the payload's ``zone_seat`` when it names one, the caller's
+    seat (an index or a ``PlayerState``) otherwise -- :func:`searched_seat`'s
+    answer, without assuming the caller handed it an index."""
+    seat = data.get("zone_seat")
+    return owner if seat is None else int(seat)
 
 
 def searched_seat(data: dict, chooser_seat: int) -> int:

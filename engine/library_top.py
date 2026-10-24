@@ -291,7 +291,9 @@ def top_castable(game, player_index: int, card) -> bool:
             if match is None:
                 continue
             described = _filter_for(match.group("subject"))
-            if described is not None and card_matches_any(card, (described,)):
+            if described is not None and card_matches_any(
+                card, (described,), game=game, owner=player_index,
+            ):
                 return True
     return False
 
@@ -330,7 +332,9 @@ def granted_top_abilities(game, permanent) -> tuple[str, ...]:
         if match is None:
             continue
         described = _filter_for(match.group("subject").removeprefix("a ").removeprefix("an "))
-        if described is None or not card_matches_any(top, (described,)):
+        if described is None or not card_matches_any(
+            top, (described,), game=game, owner=seat,
+        ):
             continue
         granted.extend(
             raw.strip()

@@ -737,7 +737,7 @@ def card_only_filter(
     return dict(payload)
 
 
-def card_matches_any(card, alternatives) -> bool:
+def card_matches_any(card, alternatives, *, game=None, owner=None) -> bool:
     """Whether *card* answers any one of the printed alternatives.
 
     "Discard a land card **or** Shrine card" is a union across two different
@@ -748,12 +748,19 @@ def card_matches_any(card, alternatives) -> bool:
 
     No alternatives is no narrowing, which is the honest reading of "Discard a
     card": every card in hand pays it.
+
+    *game* and *owner* (whose zone holds the card; a spell's controller) are
+    handed to the matcher for its colour and creature-type tests, which a
+    seat's static can change off the battlefield (Celestial Dawn, CR 613.1).
     """
     from .handlers._filters import _card_matches_filter
 
     if not alternatives:
         return True
-    return any(_card_matches_filter(card, dict(alt)) for alt in alternatives)
+    return any(
+        _card_matches_filter(card, dict(alt), game=game, owner=owner)
+        for alt in alternatives
+    )
 
 
 #: The layer-computed reader for each characteristic a source-relative bound

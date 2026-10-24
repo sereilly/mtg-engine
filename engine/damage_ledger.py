@@ -369,6 +369,11 @@ def last_cast_that_damaged_seat(game, seat: int, described: dict) -> CastEntry |
     from .handlers._filters import _card_matches_filter
 
     for cast in reversed(casts_that_damaged_seat(game, seat)):
-        if _card_matches_filter(_cast_as_it_was(game, cast), described):
+        # ``owner=None`` on purpose: ``_cast_as_it_was`` has already folded the
+        # spell's colours (the caster's seat and any Lace) onto the card, and
+        # asking the seat a second time would let a Dawn override a newer Lace.
+        if _card_matches_filter(
+            _cast_as_it_was(game, cast), described, game=game, owner=None,
+        ):
             return cast
     return None

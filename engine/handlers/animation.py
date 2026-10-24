@@ -142,7 +142,7 @@ def _animation_size(
 
 
 def _grant_animation_protection(
-    perm, payload: dict, context: OracleExecutionContext
+    game, perm, payload: dict, context: OracleExecutionContext
 ) -> None:
     """"…with protection from each of that spell's colors." (Opal Titan.)
 
@@ -161,8 +161,20 @@ def _grant_animation_protection(
     """
     if not payload.get("protection_from_triggering_spell_colors"):
         return
-    cast_card = (context.trigger_context or {}).get("cast_card")
-    symbols = set(getattr(cast_card, "colors", None) or ())
+    # The spell's colours as the object it is (CR 613.1): the stack object the
+    # fire site froze (``cast_item``) through the one reader of a spell's
+    # colour, so a Lace on it and its controller's Celestial Dawn both count;
+    # the card with its caster's seat when no object rode the event.
+    frozen = context.trigger_context or {}
+    cast_item = frozen.get("cast_item")
+    if cast_item is not None:
+        symbols = set(game._stack_item_colors(cast_item))
+    else:
+        from ..object_colors import card_colors
+
+        symbols = set(card_colors(
+            game, frozen.get("cast_card"), frozen.get("caster_index"),
+        ))
     for word, symbol in _COLOR_WORD_TO_SYMBOL.items():
         if symbol in symbols:
             grant_protection_flag(perm, word)
@@ -259,7 +271,7 @@ def _animate_self(
     set_base_pt(source, power, toughness, until_eot=until_eot)
     source.metadata[record_key] = _animation_record(payload)
     _grant_animation_abilities(source, payload, until_eot=until_eot)
-    _grant_animation_protection(source, payload, context)
+    _grant_animation_protection(game, source, payload, context)
     _record_animation_colors(source, payload, until_eot=until_eot)
     # A permanent that became a creature is one a creature-scoped static now
     # reaches, and where that static applies is layer 4's question for the
@@ -390,7 +402,7 @@ def _animate_target(
     set_base_pt(target, power, toughness, until_eot=until_eot)
     target.metadata[record_key] = _animation_record(payload)
     _grant_animation_abilities(target, payload, until_eot=until_eot)
-    _grant_animation_protection(target, payload, context)
+    _grant_animation_protection(game, target, payload, context)
     _record_animation_colors(target, payload, until_eot=until_eot)
     # See ``_animate_self``: layer 4 is decided for the whole board, at the
     # resolution seam.
@@ -455,7 +467,7 @@ def animate_matching_until_eot(game: Game, instruction: OracleInstruction, conte
         set_base_pt(permanent, power, toughness, until_eot=True)
         permanent.metadata[ANIMATE_UNTIL_EOT] = dict(record)
         _grant_animation_abilities(permanent, payload, until_eot=True)
-        _grant_animation_protection(permanent, payload, context)
+        _grant_animation_protection(game, permanent, payload, context)
         _record_animation_colors(permanent, payload, until_eot=True)
         animated.append(permanent)
     if not animated:

@@ -167,7 +167,9 @@ def _applies_unpayable_entry_cost(game, payload: dict) -> bool:
     available = sum(
         1
         for card in game.players[payload["controller_index"]].graveyard
-        if _card_matches_filter(card, described)
+        if _card_matches_filter(
+            card, described, game=game, owner=payload["controller_index"],
+        )
     )
     return available < count
 

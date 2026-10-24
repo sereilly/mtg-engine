@@ -711,7 +711,12 @@ def spells_cast_matching(game: "Game", seat: int, payload: dict) -> bool:
     cast = game.players[seat].spells_cast_this_turn
     if not payload:
         return bool(cast)
-    return any(_card_matches_filter(spell, payload) for spell in cast)
+    # With the casting seat as the spell's (CR 109.5): its colour was the one
+    # its controller's statics gave it (Celestial Dawn's "spells you control").
+    return any(
+        _card_matches_filter(spell, payload, game=game, owner=seat)
+        for spell in cast
+    )
 
 
 def _an_opponent_cast(game: "Game", caster_index: int, payload: dict) -> bool:
@@ -729,7 +734,7 @@ def _an_opponent_cast(game: "Game", caster_index: int, payload: dict) -> bool:
     from .handlers._filters import _card_matches_filter
 
     return any(
-        _card_matches_filter(spell, payload)
+        _card_matches_filter(spell, payload, game=game, owner=seat)
         for seat in game.opponents_of(caster_index)
         for spell in game.players[seat].spells_cast_this_turn
     )

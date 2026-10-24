@@ -865,8 +865,16 @@ class LibrarySearchChoicesMixin:
         )
 
     @staticmethod
-    def _exile_search_matches(card, data: dict) -> bool:
-        from ....search_filters import card_has_type
+    def _exile_search_matches(card, data: dict, *, game=None, owner=None) -> bool:
+        """Whether *card* answers the exile search's printed noun phrase.
+
+        *game* and *owner* (whose library or graveyard holds the card) are what
+        its colour is asked with — CR 613.1 applies the layers to a card in
+        either zone, and under its owner's Celestial Dawn a red instant is
+        white, so "red instant and/or sorcery cards" (Chandra, Heart of Fire)
+        finds none of them. The same reader ``search_matches`` asks.
+        """
+        from ....search_filters import card_colors, card_has_type
 
         card_types = tuple(data.get("card_types") or ())
         colors = tuple(data.get("colors") or ())
@@ -879,8 +887,10 @@ class LibrarySearchChoicesMixin:
             card_has_type(card, wanted) for wanted in card_types
         ):
             return False
-        if colors and not any(color in card.colors for color in colors):
-            return False
+        if colors:
+            held = card_colors(card, game=game, owner=owner)
+            if not any(color in held for color in colors):
+                return False
         return True
 
     def _resolve_search_exile(self, choice: PendingChoice, picks: list) -> bool:
@@ -902,7 +912,9 @@ class LibrarySearchChoicesMixin:
             if (zone, index) in seen:
                 return False
             seen.add((zone, index))
-            if not self._exile_search_matches(source[index], choice.data):
+            if not self._exile_search_matches(
+                source[index], choice.data, game=self, owner=choice.player_index,
+            ):
                 return False
             cleaned.append((zone, index))
         # "Search your library for **three** cards" (Foresight). A printed
@@ -1001,7 +1013,9 @@ class LibrarySearchChoicesMixin:
             for index, card in enumerate(
                 caster.graveyard if zone == "graveyard" else caster.library
             )
-            if self._exile_search_matches(card, choice.data)
+            if self._exile_search_matches(
+                card, choice.data, game=self, owner=choice.player_index,
+            )
         ]
         maximum = choice.data.get("maximum")
         if maximum is not None:

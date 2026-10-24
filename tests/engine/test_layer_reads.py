@@ -336,12 +336,10 @@ PRINTED_COLOR_BASELINE: dict[str, int] = {
     "copies.py": 1,             # the copiable values a copy starts from
     # A weight over a card with no board in hand. AI tuning, not a rule.
     "ai_valuation.py": 1,       # a valuation predicate with no game to ask
-    # Known gaps, both named in the 6ED w1g3 report rather than left silent:
-    # `graveyard_card_matches` has nineteen call sites and takes neither a game
-    # nor the pile's owner, and `_exile_search_matches` is a staticmethod. Both
-    # want the seat threaded to them, which is its own round.
-    "handlers/_filters.py": 1,  # graveyard_card_matches takes no game or owner yet
-    "mixins/stack/choices/search.py": 1,  # _exile_search_matches is a staticmethod
+    # The two known gaps the 6ED w1g3 report named — `graveyard_card_matches`
+    # and `_exile_search_matches`, which took neither a game nor the pile's
+    # owner — were drained by round kg: both take `game=`/`owner=` and every
+    # call hands them over (`tests/engine/test_kg_colour_off_battlefield_reads.py`).
 }
 
 

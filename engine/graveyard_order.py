@@ -91,7 +91,9 @@ def positions_satisfying(graveyard: list, card: Any, spec: dict) -> list[int]:
     ]
 
 
-def positions_named(graveyard: list, spec: dict) -> list[int]:
+def positions_named(
+    graveyard: list, spec: dict, *, game=None, owner=None,
+) -> list[int]:
     """The graveyard indices "the top <n> <described> cards" names, or ``[]``.
 
     *spec* is the payload ``grammar.graveyard_position_payload_for`` builds:
@@ -131,7 +133,9 @@ def positions_named(graveyard: list, spec: dict) -> list[int]:
     wanted = max(int(spec.get("count", 1) or 1), 0)
     found: list[int] = []
     for index in order:
-        if described and not _card_matches_filter(graveyard[index], dict(described)):
+        if described and not _card_matches_filter(
+            graveyard[index], dict(described), game=game, owner=owner,
+        ):
             continue
         found.append(index)
         if len(found) >= wanted:

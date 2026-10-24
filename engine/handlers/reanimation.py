@@ -54,7 +54,7 @@ def _holds_a_reanimable_card(player, index, card_filter, card_type="creature") -
 
     def eligible(card) -> bool:
         return card_has_type(card, card_type) and (
-            card_filter is None or card_filter(card)
+            card_filter is None or card_filter(card, player)
         )
 
     if isinstance(index, int):
@@ -71,7 +71,7 @@ def _reanimable_slot(player, card_filter, card_type="creature"):
     """
     for index, card in enumerate(getattr(player, "graveyard", ())):
         if card_has_type(card, card_type) and (
-            card_filter is None or card_filter(card)
+            card_filter is None or card_filter(card, player)
         ):
             yield index
             return
@@ -217,8 +217,16 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
             game.players.index(caster) if caster in game.players else None
         )
 
-        def card_filter(card, _spec=spec, _host=attach_host, _seat=caster_seat):
-            if _spec and not graveyard_card_matches(_spec, card):
+        # Asked with the pile's owner (*owner*, the seat whose graveyard is
+        # being looked in): the card's colour is the one its owner's statics
+        # give it (CR 613.1) — under a Celestial Dawn a red creature card is
+        # white, and "white or black creature card" takes it.
+        def card_filter(
+            card, owner=None, *, _spec=spec, _host=attach_host, _seat=caster_seat,
+        ):
+            if _spec and not graveyard_card_matches(
+                _spec, card, game=game, owner=owner,
+            ):
                 return False
             if _host is None:
                 return True
@@ -532,7 +540,9 @@ def reanimate_aura_onto_source(game: Game, instruction: OracleInstruction, conte
     if not (
         isinstance(idx, int)
         and 0 <= idx < len(caster.graveyard)
-        and graveyard_card_matches(spec, caster.graveyard[idx])
+        and graveyard_card_matches(
+            spec, caster.graveyard[idx], game=game, owner=caster,
+        )
     ):
         # The same order every other reanimation falls back through: an AI seat
         # announces the ability without naming a slot, so the first legal card
@@ -544,7 +554,7 @@ def reanimate_aura_onto_source(game: Game, instruction: OracleInstruction, conte
             (
                 slot
                 for slot, card in enumerate(caster.graveyard)
-                if graveyard_card_matches(spec, card)
+                if graveyard_card_matches(spec, card, game=game, owner=caster)
             ),
             None,
         )
@@ -971,7 +981,9 @@ def reanimate_graveyard_position(game: Game, instruction: OracleInstruction, con
         )
         return True, "no graveyard"
     victim = game.players[seat]
-    taken = positions_named(victim.graveyard, dict(instruction.payload))
+    taken = positions_named(
+        victim.graveyard, dict(instruction.payload), game=game, owner=victim,
+    )
     if not taken:
         game.log.append(
             f"{victim.name}'s graveyard has nothing {context.card.name} can "
@@ -1076,7 +1088,9 @@ def reanimate_announced_cards(game: Game, instruction: OracleInstruction, contex
     def _eligible(card) -> bool:
         # The picker's own predicate, asked here so the resolution and the
         # announcement cannot disagree about which cards were legal.
-        return graveyard_card_matches(instruction.payload, card)
+        return graveyard_card_matches(
+            instruction.payload, card, game=game, owner=caster,
+        )
 
     picked = _resolve_graveyard_slots(caster, context, len(caster.graveyard), _eligible)
     for card in picked:

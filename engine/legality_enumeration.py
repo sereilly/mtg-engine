@@ -971,7 +971,8 @@ class TargetEnumerationMixin:
         return [
             {"kind": "hand_card", "seat": caster_index, "hand_index": index, "name": held.name}
             for index, held in enumerate(hand)
-            if index != spell_index and card_matches_any(held, alternatives)
+            if index != spell_index
+            and card_matches_any(held, alternatives, game=self, owner=caster_index)
         ]
 
     def _enumerate_graveyard_creatures(
@@ -1004,13 +1005,17 @@ class TargetEnumerationMixin:
         # disagree about a phrase the target vocabulary above has no key for.
         cost_filter = spec.get("cost_filter") if spec.get("exile_cost") else None
 
-        def eligible(card) -> bool:
+        # *seat* is whose graveyard holds the card: its colour is the one its
+        # owner's statics give it (CR 613.1, Celestial Dawn).
+        def eligible(card, seat) -> bool:
             if cost_filter:
                 from .handlers._filters import _card_matches_filter
 
-                if not _card_matches_filter(card, cost_filter):
+                if not _card_matches_filter(
+                    card, cost_filter, game=self, owner=seat,
+                ):
                     return False
-            return graveyard_card_matches(spec, card)
+            return graveyard_card_matches(spec, card, game=self, owner=seat)
 
         for seat, player in enumerate(self.players):
             if spec.get("own_graveyard_only") and seat != caster_index:
@@ -1040,7 +1045,7 @@ class TargetEnumerationMixin:
                 if seat == caster_index else None
             )
             for idx, card in enumerate(player.graveyard):
-                if idx != excluded and idx != leaving and eligible(card):
+                if idx != excluded and idx != leaving and eligible(card, seat):
                     targets.append({"kind": "graveyard", "seat": seat, "index": idx, "name": card.name})
         return targets
 

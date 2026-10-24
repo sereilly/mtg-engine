@@ -335,7 +335,9 @@ def roles_still_legal(
             stamp = resolve_role_graveyard_card(game, context, payload, role.get("role"))
             if stamp is None or game.graveyard_index_of(stamp) is None:
                 return False
-            if not graveyard_card_matches(role, stamp.card):
+            if not graveyard_card_matches(
+                role, stamp.card, game=game, owner=stamp.seat,
+            ):
                 return False
             if not _role_relation_still_holds(game, role, roles, resolved, stamp):
                 return False

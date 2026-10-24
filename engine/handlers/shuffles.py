@@ -211,7 +211,9 @@ def shuffle_graveyard_into_library(game: Game, instruction: OracleInstruction, c
         )
         picked = _resolve_graveyard_slots(
             player, context, limit,
-            lambda card: graveyard_card_matches(instruction.payload, card),
+            lambda card: graveyard_card_matches(
+                instruction.payload, card, game=game, owner=player,
+            ),
         )
         # ``_resolve_graveyard_slots`` has already taken them out of the pile,
         # highest slot first, which is the only way two copies of one card can
@@ -232,7 +234,10 @@ def shuffle_graveyard_into_library(game: Game, instruction: OracleInstruction, c
     # is one loop rather than two paths.
     described = instruction.payload.get("cards")
     if described:
-        moving = [c for c in player.graveyard if graveyard_card_matches(described, c)]
+        moving = [
+            c for c in player.graveyard
+            if graveyard_card_matches(described, c, game=game, owner=player)
+        ]
     else:
         moving = list(player.graveyard)
     moved = len(moving)

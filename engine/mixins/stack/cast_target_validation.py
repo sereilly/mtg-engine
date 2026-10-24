@@ -1127,19 +1127,23 @@ class CastTargetValidationMixin:
                 for slot in slots:
                     if not isinstance(slot, int) or not (0 <= slot < len(named.graveyard)):
                         return False, f"no valid target for {card.name}"
-                    if not graveyard_card_matches(primary.payload, named.graveyard[slot]):
+                    if not graveyard_card_matches(
+                        primary.payload, named.graveyard[slot],
+                        game=self, owner=named,
+                    ):
                         return False, f"no valid target for {card.name}"
             elif isinstance(target_permanent_index, int):
                 if wrong_seat:
                     return False, f"no valid target for {card.name}"
                 if not (0 <= target_permanent_index < len(named.graveyard)) or (
                     not graveyard_card_matches(
-                        primary.payload, named.graveyard[target_permanent_index]
+                        primary.payload, named.graveyard[target_permanent_index],
+                        game=self, owner=named,
                     )
                 ):
                     return False, f"no valid target for {card.name}"
             elif not any(
-                graveyard_card_matches(primary.payload, c)
+                graveyard_card_matches(primary.payload, c, game=self, owner=player)
                 for player in sources
                 for c in player.graveyard
             ) and not _may_name_nobody():

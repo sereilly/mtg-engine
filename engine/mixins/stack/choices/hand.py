@@ -62,7 +62,9 @@ class HandChoicesMixin:
         return [
             index for index, card in enumerate(hand)
             if (allowed is None or index in allowed)
-            and card_matches_any(card, alternatives)
+            and card_matches_any(
+                card, alternatives, game=self, owner=choice.player_index,
+            )
         ]
 
     def _resolve_discard(self, choice: PendingChoice, hand_indices: list[int], to_library: bool) -> bool:

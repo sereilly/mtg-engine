@@ -64,8 +64,11 @@ def _return_graveyard_card_to_owners_hand(
     """
     caster = context.caster
 
-    def _eligible(card) -> bool:
-        return graveyard_card_matches(instruction.payload, card)
+    def _eligible(card, pile_owner) -> bool:
+        # With the pile's owner, whose statics colour the card (CR 613.1).
+        return graveyard_card_matches(
+            instruction.payload, card, game=game, owner=pile_owner,
+        )
 
     named = context.target if context.target in game.players else None
     # "…from **an opponent's** graveyard to their hand" (the Advocates). The
@@ -88,7 +91,9 @@ def _return_graveyard_card_to_owners_hand(
             game.log.append(f"{context.card.name}: no card was returned from a graveyard")
             return True, "resolved"
         count = int((instruction.payload.get("targets") or {}).get("count") or 1)
-        picked = _resolve_graveyard_slots(named, context, count, _eligible)
+        picked = _resolve_graveyard_slots(
+            named, context, count, lambda card: _eligible(card, named),
+        )
         for chosen in picked:
             game.put_card_into_hand(named, chosen)
             game.log.append(
@@ -103,7 +108,7 @@ def _return_graveyard_card_to_owners_hand(
         if (
             named is not None
             and 0 <= index < len(named.graveyard)
-            and _eligible(named.graveyard[index])
+            and _eligible(named.graveyard[index], named)
         ):
             found = (named, index)
     else:
@@ -114,7 +119,7 @@ def _return_graveyard_card_to_owners_hand(
                 if player is not None
                 and not (opponents_only and player is caster)
                 for slot, card in enumerate(player.graveyard)
-                if _eligible(card)
+                if _eligible(card, player)
             ),
             None,
         )
@@ -168,7 +173,9 @@ def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstru
         # The picker's predicate, not a third spelling of it. The payload and
         # the spec carry the same key names because one is derived from the
         # other, so there is one answer to "may this card be chosen?".
-        return graveyard_card_matches(instruction.payload, card)
+        return graveyard_card_matches(
+            instruction.payload, card, game=game, owner=caster,
+        )
 
     def _eligible_slot(index: int) -> bool:
         """The same question asked of a *position*, which is what the printed
@@ -347,7 +354,9 @@ def return_chosen_cards_from_graveyard_to_hand(
         amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
 
     def _eligible(card) -> bool:
-        return graveyard_card_matches(instruction.payload, card)
+        return graveyard_card_matches(
+            instruction.payload, card, game=game, owner=caster,
+        )
 
     available = sum(1 for card in caster.graveyard if _eligible(card))
     amount = min(amount, available)

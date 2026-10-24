@@ -220,7 +220,7 @@ def _revealed_drawn_card_filter(
         return True
     from .handlers._filters import _card_matches_filter
 
-    return _card_matches_filter(card, dict(described))
+    return _card_matches_filter(card, dict(described), game=game, owner=drawer)
 
 
 # The controller clause of a "whenever a <filter> becomes tapped" condition, as
@@ -653,8 +653,15 @@ def _damage_dealt_filter(
             # sentence asks about the spell.
             if damager is None or not payload.get("damager_includes_spells"):
                 return False
+            # …and the spell's colour is the *object's* (CR 613.1), asked with
+            # the seat that controls it: a Lightning Bolt its controller's
+            # Celestial Dawn has made white is not a red spell.
+            from .object_colors import object_colors
+
             colour = payload["damager_filter"].get("color_filter")
-            if colour not in (getattr(damager, "colors", ()) or ()):
+            if colour not in object_colors(
+                game, damager, event.payload.get("damager_seat"),
+            ):
                 return False
         elif not trigger_subject_matches(
             game, trig, "damager", damager, observer=observer, source=permanent,

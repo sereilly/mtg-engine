@@ -615,7 +615,9 @@ class ProtectionMixin:
             # the targets of blue spells **or abilities from blue sources**."
             # (Spellbane Centaur) is printed on some other permanent entirely.
             if any(
-                source_is_in_class(self, ability_source, source_class)
+                source_is_in_class(
+                    self, ability_source, source_class, seat=caster_index,
+                )
                 for source_class in (
                     ability_source_immunity_classes(target)
                     | board_target_immunity_classes(self, target, ABILITY_SOURCE)

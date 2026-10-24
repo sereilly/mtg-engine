@@ -648,7 +648,9 @@ class AdditionalCastCostsMixin:
             held
             for position, held in enumerate(self.players[caster_index].hand)
             if position != spell_hand_index
-            and card_matches_any(held, cost.discard_filters)
+            and card_matches_any(
+                held, cost.discard_filters, game=self, owner=caster_index,
+            )
         ]
 
     def _resolve_discard_cost_cards(
@@ -726,7 +728,10 @@ class AdditionalCastCostsMixin:
             # not a cheaper cost — refused rather than quietly slid onto a legal
             # one, which is the same answer the activation path gives the
             # identical cost.
-            if not card_matches_any(hand[position], discarding.discard_filters):
+            if not card_matches_any(
+                hand[position], discarding.discard_filters,
+                game=self, owner=caster_index,
+            ):
                 return [], (
                     f"{card.name} can't be cast: {hand[position].name} does "
                     f"not answer its additional cost (CR 601.2b)"
@@ -765,7 +770,8 @@ class AdditionalCastCostsMixin:
             for index, held in enumerate(self.players[caster_index].graveyard)
             # *spell_slot*: the spell being cast out of this pile, withheld by
             # position (CR 601.2a) — a second copy beside it is another card.
-            if index != spell_slot and _card_matches_filter(held, described)
+            if index != spell_slot
+            and _card_matches_filter(held, described, game=self, owner=caster_index)
         ]
 
     @staticmethod
@@ -1136,7 +1142,10 @@ class AdditionalCastCostsMixin:
                     index = next(
                         (
                             i for i, held in enumerate(caster.hand)
-                            if card_matches_any(held, cost.discard_filters)
+                            if card_matches_any(
+                                held, cost.discard_filters,
+                                game=self, owner=caster,
+                            )
                         ),
                         None,
                     )
@@ -1158,7 +1167,10 @@ class AdditionalCastCostsMixin:
                         index = random.choice(
                             [
                                 i for i, held in enumerate(caster.hand)
-                                if card_matches_any(held, cost.discard_filters)
+                                if card_matches_any(
+                                    held, cost.discard_filters,
+                                    game=self, owner=caster,
+                                )
                             ]
                         )
                         named_discards = []

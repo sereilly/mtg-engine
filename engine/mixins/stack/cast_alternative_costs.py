@@ -132,7 +132,9 @@ class AlternativeCastCostsMixin:
             held
             for position, held in enumerate(self.players[caster_index].hand)
             if position != spell_hand_index
-            and card_matches_any(held, wanted or ())
+            and card_matches_any(
+                held, wanted or (), game=self, owner=caster_index,
+            )
         ]
         if cost.shares_color_with_spell:
             # "…a card **that shares a color with that spell**" (Dream Halls).
@@ -660,7 +662,8 @@ class AlternativeCastCostsMixin:
             from ...graveyard_order import positions_named
 
             if not positions_named(
-                caster.graveyard, cost.exile_graveyard_position
+                caster.graveyard, cost.exile_graveyard_position,
+                game=self, owner=caster,
             ):
                 return (
                     f"{card.name} can't be cast: {caster.name}'s graveyard "
@@ -1047,7 +1050,8 @@ class AlternativeCastCostsMixin:
             from ...graveyard_order import positions_named
 
             taken = positions_named(
-                caster.graveyard, cost.exile_graveyard_position
+                caster.graveyard, cost.exile_graveyard_position,
+                game=self, owner=caster,
             )
             paid = [caster.graveyard[index] for index in taken]
             # Highest index first: the positions were found against the pile as
@@ -1111,7 +1115,9 @@ class AlternativeCastCostsMixin:
             paying = next(
                 (
                     held for held in caster.hand
-                    if card_matches_any(held, cost.exile_from_hand)
+                    if card_matches_any(
+                        held, cost.exile_from_hand, game=self, owner=caster,
+                    )
                 ),
                 None,
             )

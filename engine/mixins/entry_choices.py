@@ -102,7 +102,9 @@ class EntryChoicesMixin:
         return [
             index
             for index, card in enumerate(graveyard)
-            if _card_matches_filter(card, described)
+            if _card_matches_filter(
+                card, described, game=self, owner=choice.player_index,
+            )
         ]
 
     def _resolve_entry_exile(self, choice, picks) -> bool:
