@@ -1193,6 +1193,18 @@ register_choice(
     # A graveyard is a public zone (CR 400.2), so a seatless viewer sees the
     # pile the chooser is looking at — unlike every hand pick in this file.
     spectator_visible=True,
+    # "**Each player** may exile any number of cards from their graveyard"
+    # (Grave Consequences) queues one pick per seat, made in turn order
+    # (CR 101.4) — the answer action takes the oldest. So only the oldest is
+    # open: the next seat's picker was shown at once, and its Confirm was a
+    # bare "not your choice" until the seat before it had answered.
+    is_open=lambda game, choice: next(
+        (
+            queued for spec, queued in game.iter_pending_prompts()
+            if spec.kind == "graveyard_exile_pick"
+        ),
+        None,
+    ) is choice,
 )
 
 register_choice(

@@ -1737,7 +1737,21 @@ function activatedAbilityText(card) {
   // click's own question, asked ahead of the gate.
   if (card.abilities_lost) return "";
   const granted = Array.isArray(card.granted_abilities) ? card.granted_abilities : [];
-  return [(card.oracle_text || "").trim(), ...granted].filter(Boolean).join("\n");
+  // `oracle_text` is the *effective* text (`Permanent.effective_card`), which
+  // already carries every granted line — so a grant listed in
+  // `granted_abilities` too was read twice: Scathe Zombies under Zombie Master
+  // offered "{B}: Regenerate" twice (the second an ability index the engine
+  // does not have), and a Swamp under Riftstone Portal opened a menu of two
+  // identical "{T}: Add {G} or {W}" buttons in place of its W/G/B fan, with no
+  // way to tap it for {B}. A grant is added only where the text lacks it.
+  const text = (card.oracle_text || "").trim();
+  const said = new Set(
+    text.split("\n").map((line) => line.trim().toLowerCase().replace(/\s+/g, " ")),
+  );
+  const missing = granted.filter(
+    (line) => !said.has(String(line || "").trim().toLowerCase().replace(/\s+/g, " ")),
+  );
+  return [text, ...missing].filter(Boolean).join("\n");
 }
 
 // "Equip {1}" / "Equip legendary creature {3}" (reminder text already
@@ -10782,16 +10796,28 @@ function renderPermanentSetChoiceModal(info) {
   const limit = Number(info.up_to || 0);
   const subtitle = document.getElementById("permanentSetChoiceSubtitle");
   if (subtitle) {
-    subtitle.textContent = `${info.card_name}: ${info.prompt || `Choose up to ${limit}.`}`;
+    subtitle.textContent = `${info.card_name}: ${info.prompt || "Choose permanents."}` +
+      ` ${permanentSetChoiceCountText(info)}`;
   }
   const list = document.getElementById("permanentSetChoiceList");
   const confirmBtn = document.getElementById("permanentSetChoiceConfirmBtn");
+  const syncConfirm = () => {
+    if (!confirmBtn) return;
+    const state = permanentSetChoiceConfirmState(info, permanentSetChoiceSelected.size);
+    confirmBtn.disabled = !state.ready;
+    confirmBtn.textContent = state.label;
+  };
   if (list) {
     list.innerHTML = (info.candidates || [])
       .map((entry) => {
         const selectedClass = permanentSetChoiceSelected.has(entry.id) ? " selected" : "";
         const owner = entry.seat === seat ? "yours" : "opponent's";
-        return `<div class="library-card-choice${selectedClass}" data-id="${entry.id}"><div class="library-card-text-placeholder">${escapeHtml(entry.name)}</div><div class="library-card-choice-name">${owner}</div></div>`;
+        // Whether it is tapped, read off the board: Mist of Stagnation's
+        // choice is what *untaps*, and a tile that did not say which were
+        // tapped asked the player to remember the board behind the modal.
+        const tapped = (currentState?.players?.[entry.seat]?.battlefield || [])
+          .some((perm) => perm && perm.id === entry.id && perm.tapped);
+        return `<div class="library-card-choice${selectedClass}" data-id="${entry.id}"><div class="library-card-text-placeholder">${escapeHtml(entry.name)}</div><div class="library-card-choice-name">${owner}${tapped ? " · tapped" : ""}</div></div>`;
       })
       .join("") || `<div class="modal-empty-note">Nothing to choose.</div>`;
     list.querySelectorAll(".library-card-choice").forEach((el) => {
@@ -10801,18 +10827,51 @@ function renderPermanentSetChoiceModal(info) {
         else if (permanentSetChoiceSelected.size < limit) permanentSetChoiceSelected.add(id);
         else return;
         el.classList.toggle("selected");
+        syncConfirm();
       });
     });
   }
+  syncConfirm();
   if (confirmBtn && !confirmBtn.dataset.bound) {
     confirmBtn.dataset.bound = "1";
     confirmBtn.addEventListener("click", async () => {
       const ids = [...permanentSetChoiceSelected];
       permanentSetChoiceSelected = new Set();
       modal.classList.add("hidden");
-      await sendAction({ seat, action: "permanent_set_choice_confirm", target_permanent_ids: ids });
+      try {
+        await sendAction({ seat, action: "permanent_set_choice_confirm", target_permanent_ids: ids });
+      } catch (e) {
+        // Refused (the prompt is kept): put the modal back with the picks
+        // still made. It used to stay hidden — nothing re-rendered it, and
+        // the game sat waiting on a prompt the player could no longer see.
+        permanentSetChoiceSelected = new Set(ids);
+        renderPermanentSetChoiceModal(getPermanentSetChoiceInfo());
+        updateActionHint(e.message, true);
+      }
     });
   }
+}
+
+// How many a permanent-set choice owes, as the player reads it: Mist of
+// Stagnation's "a permanent for each card in their graveyard" is a floor equal
+// to its ceiling (`at_least` = `up_to`), Raiding Party's "up to two" has no
+// floor. The modal ignored `at_least`, so Confirm sent a short answer the
+// engine refuses.
+function permanentSetChoiceCountText(info) {
+  const most = Number(info?.up_to || 0);
+  const least = Math.min(Number(info?.at_least || 0), most);
+  if (least > 0 && least === most) return `Choose exactly ${most}.`;
+  if (least > 0) return `Choose from ${least} to ${most}.`;
+  return `Choose up to ${most}.`;
+}
+
+function permanentSetChoiceConfirmState(info, chosen) {
+  const most = Number(info?.up_to || 0);
+  const least = Math.min(Number(info?.at_least || 0), most);
+  return {
+    ready: chosen >= least && chosen <= most,
+    label: least > 0 ? `Confirm (${chosen}/${least === most ? most : least})` : `Confirm (${chosen})`,
+  };
 }
 
 // Cataclysm and Limited Resources: "…chooses <slots>, then sacrifices the
@@ -16518,6 +16577,10 @@ function roleTargetNoun(role) {
   // … deals 3 damage to target creature", Suffocating Blast). The spec kind is
   // the picker's name for the zone ("stack"); the caster is asked for a spell.
   if (roleChoosesASpell(role)) return "spell";
+  // The printed noun where the lowering named the role with one ("artifact or
+  // enchantment", Nullmage Advocate's third slot): the spec kind "permanent"
+  // told the player nothing about what glows.
+  if (role.kind === "permanent" && role.role) return String(role.role).replace(/_/g, " ");
   return role.kind || "permanent";
 }
 
@@ -16566,7 +16629,25 @@ function roleTargetsHint() {
   const noun = roleTargetNoun(role);
   // "Choose any target", not "Choose the any target".
   const article = /^any\b/.test(noun) ? "" : "the ";
-  return `Choose ${article}${noun} for ${p.cardName} (${step}).`;
+  return `Choose ${article}${noun} for ${p.cardName} (${step}).${roleGraveyardOrderNote(p)}`;
+}
+
+// "Return two target cards from an opponent's graveyard" (the Advocates) is a
+// walk over one pile in its order — each later card must have been put there
+// after the one before (`later_in_same_graveyard_role`), so a set is named
+// once rather than in every order. The glow already says which cards can come
+// next; this says why the newest card does not glow for the first pick.
+function roleGraveyardOrderNote(p) {
+  const index = p.roleChosen.length;
+  const role = p.roles[index];
+  const next = p.roles[index + 1];
+  if (role?.relation === "later_in_same_graveyard_role") {
+    return " It must have been put into that graveyard after the card before it — the glowing ones were.";
+  }
+  if (next?.relation === "later_in_same_graveyard_role") {
+    return " Cards from one graveyard are chosen oldest first (the rightmost card is the oldest).";
+  }
+  return "";
 }
 
 function startCastRolesTargetPrompt(card, castAction = "cast", extra = null) {
@@ -19563,8 +19644,15 @@ function renderZoneCards(
   // Slots already chosen for an "up to N" graveyard prompt, so a second click
   // reads as a deselect rather than as a repeat of the same choice.
   const chosenSlots = pendingCastTarget?.severalGraveyard || null;
+  // …and the cards a roles walk has already named out of a pile (the
+  // Advocates' first card while the second is asked), which were not marked:
+  // the only sign a click had landed was the hint's step number.
+  const roleSlots = pendingCastTarget?.targetKind === "roles"
+    ? (pendingCastTarget.roleChosen || []).filter((t) => t.zone === "graveyard")
+    : [];
   const isChosenGraveyardTarget = (index) =>
-    !!chosenSlots && chosenSlots.some((t) => t.seat === zoneSeat && t.idx === index);
+    (!!chosenSlots && chosenSlots.some((t) => t.seat === zoneSeat && t.idx === index))
+    || roleSlots.some((t) => t.seat === zoneSeat && t.idx === index);
   for (let index = cards.length - 1; index >= 0; index--) {
     const card = cards[index];
     // A card exiled **face down** (CR 406.3, Knowledge Vault) reaches the
@@ -19579,7 +19667,7 @@ function renderZoneCards(
     }
     const el = createCardElement(card, {
       compact: true, showManaCost: false,
-      selected: graveyardTargeting && isChosenGraveyardTarget(index),
+      selected: (graveyardTargeting || roleSlots.length > 0) && isChosenGraveyardTarget(index),
       // The same cyan glow a castable card in hand gets, from the same kind of
       // backend answer (`playable_command_indices`): mana on the board, timing,
       // and CR 903.8's tax all said yes *right now*.

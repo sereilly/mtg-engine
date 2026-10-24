@@ -374,7 +374,7 @@ _ROLES_FUNCTIONS = [
     "chooseRoleTarget", "advanceRoleWalk", "confirmRoleTargets",
     "handlePlayerTargetClick", "rolePermanentPicks", "restartRoleWalkForRequirement",
     "targetRequirementOf", "targetRequirementMet", "startCastChosenSourceStage",
-    "sendCastWithChosenSource",
+    "sendCastWithChosenSource", "roleGraveyardOrderNote",
 ]
 
 _ROLES_PRELUDE = r'''
@@ -813,3 +813,158 @@ def test_the_other_printed_bounds_read_as_the_card_prints_them():
         "a card name", "a creature card name",
         "a card name other than a basic land card name", "an artifact card name",
     ]
+
+
+# ---------------------------------------------------------------------------
+# The click list: what clicking the wave-1 branches turned up
+# ---------------------------------------------------------------------------
+
+def _board(set_pool, seed: int, mine=(), theirs=(), *, my_graveyard=(), their_graveyard=()):
+    from engine.models import Permanent
+
+    sid, _session_, game = _session(seed)
+    pool = {**set_pool("LEA"), **set_pool("JUD")}
+    placed = {0: [], 1: []}
+    for seat, names in ((0, mine), (1, theirs)):
+        for name in names:
+            permanent = Permanent(card=pool[name])
+            game._put_permanent_onto_battlefield(seat, permanent, None)
+            permanent.metadata.pop("summoning_sickness_turn", None)
+            placed[seat].append(permanent)
+    game.players[0].graveyard = [pool[name] for name in my_graveyard]
+    game.players[1].graveyard = [pool[name] for name in their_graveyard]
+    game._recompute_continuous_effects()
+    game.start_priority_window(0)
+    return sid, game, placed
+
+
+@needs_node
+def test_a_granted_ability_is_offered_once_not_twice(set_pool):
+    """``oracle_text`` is the effective text, which already carries every
+    granted line, and ``activatedAbilityText`` appended ``granted_abilities``
+    as well: Scathe Zombies under Zombie Master offered "{B}: Regenerate" twice,
+    and a Swamp under Riftstone Portal opened a menu of two "{T}: Add {G} or
+    {W}" buttons — with no way to tap it for {B} — in place of its W/G/B fan."""
+    sid, _game, _placed = _board(
+        set_pool, 6075, mine=["Zombie Master", "Scathe Zombies", "Swamp"],
+        my_graveyard=["Riftstone Portal"],
+    )
+    battlefield = {c["name"]: c for c in _state(sid)["players"][0]["battlefield"]}
+    zombies, swamp = battlefield["Scathe Zombies"], battlefield["Swamp"]
+    assert zombies["granted_abilities"], "the grant is listed apart from the text"
+    assert swamp["produced_mana"] == ["W", "G", "B"]
+
+    texts = run_app_js(
+        ["activatedAbilityText"],
+        "return INPUT.map((card) => activatedAbilityText(card).split('\\n'));",
+        [zombies, swamp],
+    )
+    assert [line.lower() for line in texts[0]] == ["{b}: regenerate this permanent."]
+    assert len([line for line in texts[1] if "{G} or {W}" in line]) == 1
+    assert texts[1][0].startswith("("), "the basic land's own {B} line stays reminder text"
+
+
+_WALK_ONLY_BODY = r'''
+const card = currentState.players[0].battlefield.find((c) => c.name === INPUT.name);
+startCastRolesTargetPrompt(card, "activate", { sourcePermanentIndex: 0, abilityIndex: null });
+const hints = [roleTargetsHint()];
+for (const [s, i] of INPUT.clicks) {
+  chooseRoleTarget(s, i, "graveyard");
+  hints.push(roleTargetsHint());
+}
+return hints;
+'''
+
+
+@needs_node
+def test_an_advocate_s_pile_walk_says_it_is_in_pile_order(set_pool):
+    """Nullmage Advocate's two cards are a walk over one pile in its order
+    (``later_in_same_graveyard_role``): the newest card does not glow for the
+    first pick, and nothing said why. The hint now does — and its third slot
+    is named "artifact or enchantment", not "permanent"."""
+    sid, _game, _placed = _board(
+        set_pool, 6076, mine=["Nullmage Advocate"], theirs=["Sol Ring"],
+        their_graveyard=["Lightning Bolt", "Grizzly Bears", "Dark Ritual"],
+    )
+    hints = run_app_js(
+        _ROLES_FUNCTIONS, _WALK_ONLY_BODY,
+        {"state": _state(sid), "seat": 0, "name": "Nullmage Advocate", "clicks": [[1, 0], [1, 2]]},
+        prelude=_ROLES_PRELUDE + _app_js_const("SEAT_ROLE_KINDS"),
+    )
+    assert hints[0] == (
+        "Choose the first card for Nullmage Advocate (1 of 3). "
+        "Cards from one graveyard are chosen oldest first (the rightmost card is the oldest)."
+    )
+    assert hints[1].startswith("Choose the second card for Nullmage Advocate (2 of 3). It must")
+    assert hints[2] == "Choose the artifact or enchantment for Nullmage Advocate (3 of 3)."
+
+
+@needs_node
+def test_mist_of_stagnation_s_confirm_waits_for_one_per_graveyard_card(set_pool):
+    """The permanent-set modal ignored ``at_least``: Confirm sent a short
+    answer, the engine kept the prompt, and the modal — hidden on the click —
+    never came back. It now says how many, marks which are tapped, and is
+    ready only at the count the engine takes."""
+    sid, game, placed = _board(
+        set_pool, 6077, mine=["Mist of Stagnation", "Island", "Grizzly Bears"],
+        theirs=["Hill Giant"], my_graveyard=["Lightning Bolt", "Dark Ritual"],
+    )
+    for permanent in placed[0][1:] + placed[1]:
+        permanent.tapped = True
+    # Both seats are people; a turn started outside an action has not been
+    # told so yet (the action dispatch is what marks them).
+    game.interactive_seats = {0, 1}
+    game.active_player_index = 1
+    game.start_turn(0)  # the upkeep trigger resolves into the prompt
+    info = _state(sid)["permanent_set_choice"]
+    assert (info["up_to"], info["at_least"]) == (2, 2)
+
+    out = run_app_js(
+        ["permanentSetChoiceCountText", "permanentSetChoiceConfirmState"],
+        "return { text: permanentSetChoiceCountText(INPUT), "
+        "states: [0, 1, 2].map((n) => permanentSetChoiceConfirmState(INPUT, n)) };",
+        info,
+    )
+    assert out["text"] == "Choose exactly 2."
+    assert out["states"] == [
+        {"ready": False, "label": "Confirm (0/2)"},
+        {"ready": False, "label": "Confirm (1/2)"},
+        {"ready": True, "label": "Confirm (2/2)"},
+    ]
+    island, giant = placed[0][1], placed[1][0]
+    short = _act(sid, seat=0, action="permanent_set_choice_confirm",
+                 target_permanent_ids=[island.permanent_id])
+    assert short.status_code == 400, "the engine refuses what Confirm no longer sends"
+    done = _act(sid, seat=0, action="permanent_set_choice_confirm",
+                target_permanent_ids=[island.permanent_id, giant.permanent_id])
+    assert done.status_code == 200, done.json()
+    assert not island.tapped and not giant.tapped and placed[0][2].tapped
+
+
+def test_grave_consequences_asks_the_second_seat_only_after_the_first(set_pool):
+    """"Each player may exile …" queues one pick per seat, answered in turn
+    order (CR 101.4) — the answer action takes the oldest. Seat 1 was shown
+    its picker at once, and its Confirm was a bare "not your choice"; now it
+    sees nothing until seat 0 has answered, and then its own pick."""
+    sid, session, game = _session(6078)
+    jud, lea = set_pool("JUD"), set_pool("LEA")
+    game.enforce_mana_costs = False
+    game.players[0].hand = [jud["Grave Consequences"]]
+    game.players[0].graveyard = [lea["Lightning Bolt"], lea["Hill Giant"]]
+    game.players[1].graveyard = [lea["Counterspell"]]
+    game.start_priority_window(0)
+    assert _act(sid, seat=0, action="cast", card_name="Grave Consequences").status_code == 200
+    for seat in (0, 1):
+        assert _act(sid, seat=seat, action="pass_priority").status_code == 200
+
+    first, second = _state(sid, 0), _state(sid, 1)
+    assert first["graveyard_exile_pick"]["player_seat"] == 0
+    assert second["graveyard_exile_pick"] is None
+    assert second["waiting_on_prompt"] is True, "seat 1 waits rather than acts"
+
+    assert _act(sid, seat=0, action="graveyard_exile_confirm", graveyard_indices=[0]).status_code == 200
+    then = _state(sid, 1)["graveyard_exile_pick"]
+    assert then["player_seat"] == 1 and then["legal_indices"] == [0]
+    assert _act(sid, seat=1, action="graveyard_exile_confirm", graveyard_indices=[]).status_code == 200
+    assert [card.name for card in game.players[0].exile] == ["Lightning Bolt"]
+    assert game.players[0].life == 19 and game.players[1].life == 19
