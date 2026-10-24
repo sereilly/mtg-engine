@@ -52,6 +52,7 @@ from .mixins.stack import (
     permanent_matches_enchant_noun,
 )
 from .target_restrictions import forbidden_target
+from .target_roles import OPTIONAL_ROLE
 from .models import CardDefinition
 from .oracle import compile_card_oracle
 from .oracle_types import cost_target_count
@@ -398,12 +399,14 @@ def _choose_role_targets(
     # ...and under the mode being weighed (`_announced_mode`): asked with no
     # mode the game answers "modal" and walks no chain, which is why Reign of
     # Chaos — two bullets, both of them roles — was never cast by an AI seat.
-    options = game.cast_target_spec(
+    announced = game.cast_target_spec(
         caster_index, card, optional_cost_payments=offers,
         mode_index=_announced_mode(card), from_zone=_cast_zone(card),
-    ).get("valid_targets") or []
+    )
+    options = announced.get("valid_targets") or []
     picks = _role_chain(
         options, role_target_sides(card, offers), 0, caster_index, card, game,
+        optional=optional_role_levels(spec_roles(announced)),
     )
     if not picks:
         return ()
@@ -464,9 +467,18 @@ def _names_x_targets(card: CardDefinition) -> bool:
     return isinstance(described, dict) and described.get("quantifier") == "exactly"
 
 
+def optional_role_levels(roles) -> frozenset:
+    """The positions of *roles* an announcement may leave unanswered
+    (``target_roles.OPTIONAL_ROLE``, Primal Might's "up to one" fight)."""
+    return frozenset(
+        position for position, role in enumerate(roles or ())
+        if isinstance(role, dict) and role.get(OPTIONAL_ROLE)
+    )
+
+
 def _role_chain(
     options: list[dict], sides, level: int, caster_index: int,
-    card: CardDefinition, game: Game,
+    card: CardDefinition, game: Game, *, optional: frozenset = frozenset(),
 ) -> "list[dict] | None":
     """One pick per role from *options* down, each on the side its role wants
     (``sides[level]``) — or None when no such chain exists.
@@ -475,6 +487,14 @@ def _role_chain(
     the cast gate accepts. A level offering seats is answered by
     `_preferred_role_option` alone, as it always was; a level offering
     permanents tries each on the wanted side in the enumeration's order.
+
+    **An optional role** (*optional*, by level) is answered where it can be and
+    left unanswered where it cannot: "…then it fights **up to one** target
+    creature you don't control" with nothing on the other side to fight is
+    still a pump the gate accepts, and a chain that refused it would leave
+    Primal Might in hand. Only the walk's last role is ever optional
+    (``target_descriptions._slot_roles_spec``), so stopping there is the
+    announcement ending.
     """
     if not options:
         return []
@@ -504,10 +524,11 @@ def _role_chain(
     for pick in candidates:
         rest = _role_chain(
             pick.get("next") or [], sides, level + 1, caster_index, card, game,
+            optional=optional,
         )
         if rest is not None:
             return [pick, *rest]
-    return None
+    return [] if level in optional else None
 
 
 def _choose_several_targets(

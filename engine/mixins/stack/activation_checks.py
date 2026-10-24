@@ -285,9 +285,10 @@ class ActivationChecksMixin:
         one thing an activation writes before the activation is known to be
         legal. Every cost below checks its payability where it is announced and
         pays further down, so a refused activation has nothing to give back —
-        except this, which has to be written *first*: the target gate
-        enumerates "target creature with the chosen ability", and a word chosen
-        after it would narrow nothing. CR 733.1, reached through CR 601.2 and
+        except this, which is written *first*, as CR 601.2b announces it. The
+        target gate does not read it back: it is handed the same word through
+        :meth:`announced_chosen_keyword`, because the AI asks that gate before
+        any activation has recorded anything. CR 733.1, reached through CR 601.2 and
         CR 602.2b, reverses the entire action ("any payments already made are
         canceled"), so ``queue_permanent_ability`` takes the record back when
         the activation is refused.
@@ -306,16 +307,13 @@ class ActivationChecksMixin:
         options = tuple(getattr(ability.cost, "chosen_keyword_options", ()) or ())
         if not options:
             return None
-        if chosen_keyword:
-            word = str(chosen_keyword).strip().lower()
-            if word not in options:
-                return (
-                    f"{permanent.card.name} offers "
-                    + ", ".join(options)
-                    + f", not {word!r}"
-                )
-        else:
-            word = self._default_chosen_ability(permanent, options)
+        word = self.announced_chosen_keyword(ability, chosen_keyword)
+        if word is None:
+            return (
+                f"{permanent.card.name} offers "
+                + ", ".join(options)
+                + f", not {str(chosen_keyword).strip().lower()!r}"
+            )
         if reversal_ledger is not None:
             reversal_ledger.append((
                 permanent,
@@ -325,6 +323,27 @@ class ActivationChecksMixin:
         permanent.metadata[CHOSEN_ABILITY] = word
         self.log.append(f"{permanent.card.name}: chose {word}")
         return None
+
+    def announced_chosen_keyword(self, ability, chosen_keyword=None) -> "str | None":
+        """The word a "Choose A, B, or C" cost clause announces for
+        *chosen_keyword* (Phyrexian Splicer): the named word when the printed
+        list offers it, the deterministic default when none was named, and
+        None for a word outside the list — or for an ability with no list.
+
+        One answer to "which word is this activation announcing?" for the two
+        readers that must agree on it: :meth:`_announce_chosen_ability`, which
+        records it, and the target gate (``activation_target_refusal``), which
+        enumerates "target creature with the chosen ability" with it. The gate
+        is also asked by the AI *before* anything is recorded, so it cannot
+        read the record — the record is the last activation's word.
+        """
+        options = tuple(getattr(getattr(ability, "cost", None), "chosen_keyword_options", ()) or ())
+        if not options:
+            return None
+        if chosen_keyword:
+            word = str(chosen_keyword).strip().lower()
+            return word if word in options else None
+        return self._default_chosen_ability(None, options)
 
     def _default_chosen_ability(self, permanent, options: tuple[str, ...]) -> str:
         """The stated policy for a seat that names no ability: the first printed
@@ -348,7 +367,7 @@ class ActivationChecksMixin:
     def _settled_activation_division(
         self, *, ability, controller_index, divided_targets, permanent,
         target_permanent_ids, target_permanent_index, target_player_index,
-        target_role_refs, x_value,
+        target_role_refs, x_value, chosen_keyword=None,
     ):
         """The announcement settled once its targets are named (CR 601.2d
         through CR 602.2b): the division resolved to ids before a cost can
@@ -391,6 +410,7 @@ class ActivationChecksMixin:
             target_role_refs=target_role_refs,
             divided_targets=divided_targets,
             x_value=int(x_value or 0),
+            chosen_keyword=chosen_keyword,
         )
         if required_refusal is not None:
             self.log.append(required_refusal)

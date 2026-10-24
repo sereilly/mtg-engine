@@ -40,6 +40,7 @@ from .targeting import (
     spec_roles,
     usable_activated_abilities,
 )
+from .target_descriptions import with_chosen_keyword
 from .target_roles import ROLES_TARGET_KIND
 from .cost_pickers import spec_is_a_cost
 from .legality import (
@@ -301,12 +302,36 @@ class AbilityTargetsMixin:
             # has no arm for a roles spec, so an ability described this way was
             # handed an empty list and refused for want of a target it could
             # not enumerate.
-            spec["valid_targets"] = self._role_target_walk(
-                controller_index, card, spec, (), for_cast=False,
-                source_permanent=source_permanent,
-                ability_instruction=ability_instruction,
-                ability_source=source_permanent,
-            )
+            if offered:
+                # …and where a role says "with the chosen ability", the walk
+                # depends on a word nobody has chosen yet. One walk per printed
+                # option, so the browser swaps in the tree for the word it was
+                # given; ``valid_targets`` is the walk for the word a seat that
+                # names none is given (``announced_chosen_keyword``), which is
+                # the walk the gate will read when such a seat activates. The
+                # source's record is never read here: it is the *last*
+                # activation's word, not this one's.
+                walks = {
+                    word: self._role_target_walk(
+                        controller_index, card, with_chosen_keyword(spec, word),
+                        (), for_cast=False,
+                        source_permanent=source_permanent,
+                        ability_instruction=ability_instruction,
+                        ability_source=source_permanent,
+                    )
+                    for word in offered
+                }
+                spec["valid_targets_by_keyword"] = walks
+                spec["valid_targets"] = walks[
+                    self.announced_chosen_keyword(spec_ability)
+                ]
+            else:
+                spec["valid_targets"] = self._role_target_walk(
+                    controller_index, card, spec, (), for_cast=False,
+                    source_permanent=source_permanent,
+                    ability_instruction=ability_instruction,
+                    ability_source=source_permanent,
+                )
             # …and CR 609.7a's chosen source beside the roles (Shieldmage
             # Advocate's "by a source of your choice"): the client's roles walk
             # runs the source stage after its last role when the spec says
@@ -352,8 +377,22 @@ class AbilityTargetsMixin:
             narrow_offer(self, controller_index, spec)
         return spec
 
+    def _spec_as_announced(self, spec: dict, ability, chosen_keyword=None) -> dict:
+        """*spec* with "with the chosen ability" holding the word this
+        announcement makes (``announced_chosen_keyword``: the named word, or the
+        default a seat naming none is given), or *spec* itself for every
+        ability whose cost chooses no word.
+
+        The gates are asked about an announcement that has not been recorded
+        yet — the AI asks before it activates — so the word travels to them
+        rather than being read off the source, whose record is the previous
+        activation's."""
+        word = self.announced_chosen_keyword(ability, chosen_keyword)
+        return with_chosen_keyword(spec, word) if word else spec
+
     def activation_offer(
         self, controller_index: int, source_permanent, ability, *, x_value=None,
+        chosen_keyword=None,
     ) -> dict:
         """*ability*'s target spec with **every legal target** enumerated —
         the list :meth:`activation_target_refusal` checks a named target
@@ -370,7 +409,7 @@ class AbilityTargetsMixin:
             source_permanent, "permanent_id"
         ) else None
         spec, _ = _activation_spec([ability])
-        spec = dict(spec)
+        spec = self._spec_as_announced(dict(spec), ability, chosen_keyword)
         self._size_activation_x_targets(controller_index, spec, ability, source)
         if spec.get("x_targets") and x_value is not None:
             spec.pop("x_targets", None)
@@ -396,7 +435,7 @@ class AbilityTargetsMixin:
         self, controller_index: int, source_permanent, ability, *,
         target_player_index=None, target_permanent_index=None,
         target_permanent_ids=None, target_role_refs=None, divided_targets=None,
-        x_value=None,
+        x_value=None, chosen_keyword=None,
     ) -> str | None:
         """CR 602.2b under a requirement an opponent's permanent prints: why
         this activation's whole announcement is not one the activator may
@@ -409,7 +448,8 @@ class AbilityTargetsMixin:
         if not _ability_picker_is_a_target(ability):
             return None
         spec = self.activation_offer(
-            controller_index, source_permanent, ability, x_value=x_value
+            controller_index, source_permanent, ability, x_value=x_value,
+            chosen_keyword=chosen_keyword,
         )
         if spec.get("kind") in _UNOBLIGED_ACTIVATION_KINDS or spec.get("also_stack"):
             return None
@@ -560,11 +600,16 @@ class AbilityTargetsMixin:
         self, controller_index: int, source_permanent, ability, *,
         target_player_index=None, target_permanent_index=None,
         target_permanent_ids=None, target_stack_item=None,
-        target_role_refs=None, x_value=None,
+        target_role_refs=None, x_value=None, chosen_keyword=None,
     ) -> str | None:
         """CR 602.2b/601.2c enforced once, before any cost is paid: an ability
         that targets cannot be activated unless a legal target exists, and a
         *named* target must itself be legal.
+
+        *chosen_keyword* is the word a "Choose flying, first strike, trample,
+        or shadow" cost announces (CR 601.2b, before these targets), which
+        "target creature with the chosen ability" is judged by; None is the
+        default word a seat naming none is given (:meth:`_spec_as_announced`).
 
         The same ``valid_targets`` the web picker is handed (engine derives it
         from the compiled program), so the list offered and the list enforced
@@ -597,6 +642,7 @@ class AbilityTargetsMixin:
         if announced is not None:
             return announced
         spec, _ = _activation_spec([ability])
+        spec = self._spec_as_announced(spec, ability, chosen_keyword)
         kind = spec.get("kind")
         # Above every early return below, because the two shapes that accepted
         # a stray stack object are the two that return first.

@@ -21,7 +21,7 @@ here.
 from __future__ import annotations
 
 from .oracle_types import SPELL_OR_OBJECT_TARGET
-from .target_roles import ROLES_TARGET_KIND, role_dependency
+from .target_roles import OPTIONAL_ROLE, ROLES_TARGET_KIND, role_dependency
 
 
 # An instruction's type_filter, as a target kind. Filters naming more than one
@@ -230,6 +230,23 @@ def _narrowing_flags(source: dict) -> dict:
         # reason exactly: the seat choosing is the one it is relative to, and
         # a picker without it offers every creature on the board.
         flags["attacked_you_this_turn"] = True
+    if source.get("chosen_keyword"):
+        # "target creature **with the chosen ability**" (Phyrexian Splicer).
+        # A narrowing whose word is a fact about the *announcement*: the cost
+        # clause's "Choose flying, first strike, trample, or shadow" is
+        # announced before the targets (CR 602.2b through CR 601.2b–c), and
+        # the activation records it on the ability's source before its target
+        # gate runs (``Game._announce_chosen_ability``). So the flag says the
+        # narrowing exists, and the enumerator answers it the way it answers
+        # ``blocked_by_source`` — a relation to the source it holds. A picker
+        # built before anything was chosen carries the word itself here
+        # instead (``with_chosen_keyword``), one walk per printed option.
+        #
+        # Left off, it was a printed restriction enforced by nothing at
+        # announcement: slot 0 offered every creature, and naming one without
+        # the word paid the cost and granted it to slot 1 anyway — shadow out
+        # of nowhere.
+        flags["chosen_keyword"] = True
     # A printed subtype or supertype narrowing, carried whole under ``filter``
     # — the spec form `spec_only_subtype` already reads and the enumerator
     # already applies through ``subject_matches`` (legality's own loop), so the
@@ -364,6 +381,30 @@ _GRAVEYARD_ROLE_KEYS = (
 )
 
 
+def with_chosen_keyword(spec: dict, word: str) -> dict:
+    """*spec* as it reads once *word* has been chosen for "with the chosen
+    ability" — every ``chosen_keyword`` narrowing (the spec's own and each
+    role's) holding the word instead of pointing at the source's record.
+
+    For the one reader that has to enumerate **before** anything is chosen:
+    the activation picker (``activation_target_spec``), which builds the walk
+    each printed option would allow so the browser can offer the right tree
+    once the word is clicked. Every other reader asks with the flag and reads
+    the word the activation recorded."""
+    def substituted(described: dict) -> dict:
+        if described.get("chosen_keyword") is True:
+            return {**described, "chosen_keyword": str(word)}
+        return described
+
+    out = substituted(dict(spec))
+    if isinstance(out.get("roles"), list):
+        out["roles"] = [
+            substituted(role) if isinstance(role, dict) else role
+            for role in out["roles"]
+        ]
+    return out
+
+
 def roles_spec(targets: dict) -> dict | None:
     """The ordered-role spec a ``kind: "roles"`` description means.
 
@@ -495,21 +536,28 @@ def _slot_roles_spec(targets: dict, slot_filters: list) -> dict | None:
     role by its ``kind`` and its step ("Choose the creature for Triangle of War
     (2 of 2)") — and these slots often share a printed noun, which is exactly
     what ``describe_independent_target_roles`` refuses to name.
+
+    **A slot the card lets the caster leave empty is an optional role**
+    (:data:`OPTIONAL_ROLE`): "…it fights **up to one** target creature you
+    don't control" (Primal Might). The walk may stop before it
+    (``legality_roles.role_announcement``) — CR 601.2c's "up to one" may name
+    none — and everything it does name is held to that slot's own narrowing.
+    This used to return None for such a card, leaving it on one shared list
+    whose intersection of "you control" and "you don't control" was nothing:
+    the picker offered every creature for both slots and the gate admitted an
+    announcement aimed the wrong way round, which then resolved doing nothing.
+    Only the **last** slot can be optional: skipping it ends the announcement,
+    which the tree can say; a skipped slot with a mandatory one behind it is a
+    branch the walk has no node for, and the lowering refuses that shape
+    (``lowering/_targets._optional_slot_key``) rather than let it reach here.
     """
     if all(slot == slot_filters[0] for slot in slot_filters[1:]):
         return None
-    if targets.get("optional_slots"):
-        # "…it fights **up to one** target creature an opponent controls"
-        # (Primal Might). CR 601.2c lets that slot be left empty, and a roles
-        # walk has no way to say so — every role is answered or the announcement
-        # is refused. Converting it would turn an optional target into a
-        # required one, which is a *different* wrongness rather than a smaller
-        # one: the shared list at least lets the card be cast the way it prints.
-        #
-        # So the shared-list reading stays for these, with its own narrowing
-        # loss intact, and the remainder is recorded in SET_PLAYBOOK's Known
-        # gaps rather than papered over. An optional role is the piece that
-        # closes it.
+    optional = set(targets.get("optional_slots") or ())
+    if optional - {len(slot_filters) - 1}:
+        # A skippable slot with a slot behind it. The lowering refuses every
+        # such description, so nothing reaches here; answered None rather than
+        # roles that would make the slot mandatory, for the lowering's reason.
         return None
     roles: list[dict] = []
     for position, slot in enumerate(slot_filters):
@@ -523,6 +571,8 @@ def _slot_roles_spec(targets: dict, slot_filters: list) -> dict | None:
             # about one slot and silent about the other.
             return None
         described["role"] = f"slot_{position}"
+        if position in optional:
+            described[OPTIONAL_ROLE] = True
         roles.append(described)
     return {"kind": ROLES_TARGET_KIND, "roles": roles}
 
@@ -723,14 +773,12 @@ def _from_targets_payload(targets) -> dict | None:
         roles = _slot_roles_spec(targets, slot_filters)
         if roles is not None:
             return roles
-        # Still one shared list: either the slots agree, or one of them is
-        # optional and roles cannot say so. A narrowing may then only be applied
-        # when **every** slot has it — a flag only one slot carries would hide a
-        # target another slot legitimately admits, which is what kept Garruk,
-        # Savage Herald's -2 from ever biting an opponent's creature. That loses
-        # a slot's own restriction, which is the whole reason the roles
-        # conversion above exists; it survives here only for the shapes that
-        # cannot take it.
+        # Still one shared list, because the slots agree. A narrowing may then
+        # only be applied when **every** slot has it — a flag only one slot
+        # carries would hide a target another slot legitimately admits, which
+        # is what kept Garruk, Savage Herald's -2 from ever biting an
+        # opponent's creature. Where the slots agree that loses nothing; where
+        # they differ the roles conversion above has taken the description.
         per_slot = [_narrowing_flags(slot or {}) for slot in slot_filters]
         flags = {
             key: value

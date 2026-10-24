@@ -164,6 +164,11 @@ class ActivationAction:
     # beside the ability (`ai_abilities._madness_discard_index`): the discard is then a
     # cast for less rather than a card spent (CR 702.35a).
     cost_hand_index: int | None = None
+    # The word a "Choose flying, first strike, trample, or shadow" cost
+    # announces (Phyrexian Splicer, CR 601.2b). None is the engine's default
+    # (`Game.announced_chosen_keyword`); the policy names one when the default's
+    # walk has no chain on the boards it wants (`ai_abilities._keyword_walk_order`).
+    chosen_keyword: str | None = None
 
 
 @dataclass(frozen=True)

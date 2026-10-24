@@ -473,6 +473,9 @@ class AbilityActivationMixin:
             # function's stated default for a headless or AI seat (see the
             # "Remove X counters" branch below) — so it may name no target.
             x_value=int(x_value or 0),
+            # …and "with the chosen ability" from the word announced just above
+            # (CR 601.2b precedes 601.2c), the same word the record holds.
+            chosen_keyword=chosen_keyword,
         )
         if target_refusal is not None:
             self.log.append(target_refusal)
@@ -568,6 +571,7 @@ class AbilityActivationMixin:
             target_permanent_index=target_permanent_index,
             target_player_index=target_player_index,
             target_role_refs=target_role_refs, x_value=x_value,
+            chosen_keyword=chosen_keyword,
         )
         if isinstance(division, SimulationResult):
             return division

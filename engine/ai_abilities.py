@@ -51,7 +51,7 @@ from .targeting import (
     usable_activated_abilities,
 )
 from .target_descriptions import SINGLE_GRAVEYARD
-from .target_roles import role_is_seat
+from .target_roles import OPTIONAL_ROLE, role_is_seat
 from .cost_pickers import spec_is_a_cost
 from .ai_payment import _plan_land_taps, tap_planned_lands
 from .ai_rehearsal import Rehearsal, deliberating, rehearse
@@ -445,21 +445,32 @@ def _activation_candidate(
     # does nothing, which is the shape `refused_casts` exists to make
     # visible one step later.
     target_role_refs: list[dict] | None = None
+    # The word a "Choose flying, first strike, trample, or shadow" cost
+    # announces (Phyrexian Splicer). None is the engine's default, kept
+    # wherever the default's walk has a chain; another printed word is named
+    # only where it does not, because which creatures "with the chosen
+    # ability" admits is the whole of what the word decides.
+    chosen_keyword: str | None = None
     if spec_roles(spec):
-        target_role_refs = _choose_activation_role_targets(
-            game, player_index, permanent_index,
+        side = (
             # A side only for a chain that announces a **seat** — the three
             # abilities this walk could not answer at all until it grew an
             # arm for one (see the function). Every other roles ability
             # keeps the first-option walk it has always had: giving those a
             # side too is the right policy and a different change, one that
             # moves what the AI does with every card already activating.
-            side=(
-                _activation_target_side(permanent, ability.instruction)
-                if any(role_is_seat(role) for role in spec_roles(spec))
-                else None
-            ),
+            _activation_target_side(permanent, ability.instruction)
+            if any(role_is_seat(role) for role in spec_roles(spec))
+            else None
         )
+        for word in _keyword_walk_order(game, ability):
+            target_role_refs = _choose_activation_role_targets(
+                game, player_index, permanent_index, side=side,
+                chosen_keyword=word,
+            )
+            if target_role_refs is not None:
+                chosen_keyword = word
+                break
         if target_role_refs is None:
             # No legal chain. Skipped rather than proposed: CR 602.2b fills
             # every role or the activation is refused with nothing paid,
@@ -674,6 +685,7 @@ def _activation_candidate(
         target_player_index=target,
         target_permanent_index=target_permanent_index,
         target_role_refs=target_role_refs,
+        chosen_keyword=chosen_keyword,
     ) is not None:
         return None
     # …and what an opponent's Flagbearer demands of that announcement
@@ -685,6 +697,7 @@ def _activation_candidate(
         target_player_index=target,
         target_permanent_index=target_permanent_index,
         target_role_refs=target_role_refs,
+        chosen_keyword=chosen_keyword,
     ) is not None:
         required_slot = (
             _required_activation_target(
@@ -721,6 +734,7 @@ def _activation_candidate(
         land_tap_colors=tap_colors,
         cost_hand_index=madness_discard,
         ability_index=ability_index,
+        chosen_keyword=chosen_keyword,
     )
     if ability_index is not None:
         # A land's ability: proposed only where carrying it out on a copy of
@@ -761,6 +775,8 @@ def _rehearse_activation(
             action.ability_index, action.target_player_index,
             repr(action.target_permanent_index), repr(action.target_role_refs),
             action.land_tap_indices, action.land_tap_colors,
+        ) + (
+            ("keyword", action.chosen_keyword) if action.chosen_keyword else ()
         ) + (("through_combat",) if through_combat else ()),
         without=paid_for if taps else None,
         without_key=(
@@ -784,6 +800,7 @@ def _queue_activation(table: Game, seat: int, action: ActivationAction):
         target_role_refs=planned.target_role_refs,
         ability_index=planned.ability_index,
         cost_hand_index=planned.cost_hand_index,
+        chosen_keyword=planned.chosen_keyword,
     )
 
 
@@ -905,9 +922,25 @@ def _activation_target_side(permanent: Permanent, instruction) -> str | None:
     return ability_target_side(instruction) or instruction_target_side(instruction)
 
 
+def _keyword_walk_order(game: Game, ability) -> list:
+    """The words to try for a "Choose flying, first strike, trample, or
+    shadow" cost (Phyrexian Splicer), best first: None — the engine's own
+    default (``Game.announced_chosen_keyword``), so an activation the default
+    serves is proposed exactly as it always was — then every other printed
+    word in order. ``[None]`` for an ability whose cost chooses no word."""
+    options = tuple(
+        getattr(getattr(ability, "cost", None), "chosen_keyword_options", ()) or ()
+    )
+    if not options:
+        return [None]
+    default = game.announced_chosen_keyword(ability)
+    return [None, *(word for word in options if word != default)]
+
+
 def _choose_activation_role_targets(
     game: Game, player_index: int, permanent_index: int,
     side: str | None = None, ability_index: int = 0,
+    chosen_keyword: str | None = None,
 ) -> "list[dict] | None":
     """One object per **role** for an activated ability, or None when no legal
     chain exists.
@@ -938,11 +971,24 @@ def _choose_activation_role_targets(
     board in seat order, so without it Scorn's -X/-X would land on the
     activator's own creature whenever the activator sits first. A level with
     no pick on the wanted side is "no legal chain", the single-target block's
-    rule above and for its reason.
+    rule above and for its reason — **unless the role is optional**
+    (``target_roles.OPTIONAL_ROLE``), where the chain stops there instead.
+
+    *chosen_keyword* walks the tree for that word of a "Choose flying, …"
+    cost (``valid_targets_by_keyword``); None walks the default word's.
     """
-    options = game.activation_target_spec(
+    offered = game.activation_target_spec(
         player_index, permanent_index, ability_index=ability_index,
-    ).get("valid_targets") or []
+    )
+    options = (
+        (offered.get("valid_targets_by_keyword") or {}).get(chosen_keyword)
+        if chosen_keyword is not None
+        else offered.get("valid_targets")
+    ) or []
+    optional = frozenset(
+        position for position, role in enumerate(spec_roles(offered))
+        if role.get(OPTIONAL_ROLE)
+    )
     # **One side per role, not one for the chain** — the derivation the cast
     # side asks (`ai_target_sides.role_target_sides`), over this ability's own
     # roles. "Target creature with the chosen ability loses it and **another
@@ -1014,7 +1060,7 @@ def _choose_activation_role_targets(
             tail = chain(rest, position + 1)
             if tail is not None:
                 return [ref, *tail]
-        return None
+        return [] if position in optional else None
 
     return chain(options, 0) if options else None
 
