@@ -250,8 +250,10 @@ def _parse_cast_permission(stream: TokenStream) -> ast.Statement | None:
         # "You may cast **it** without paying its mana cost **for as long as it
         # remains exiled**." (Planeswalker's Mischief.) The trailing clause is
         # what pins the pronoun to an exiled card, so it is required here
-        # rather than merely read — see ``_cast_it_while_exiled``.
-        or (mode == "cast" and _cast_it_while_exiled(stream))
+        # rather than merely read — see ``_cast_it_while_exiled``. "You may
+        # **play** it …" (Spelljack) is the same sentence over a countered
+        # spell's card: the verb is read as printed and the pin is the same.
+        or (mode in ("cast", "play") and _cast_it_while_exiled(stream))
     ):
         # "…**without paying its mana cost**." (Temporal Aperture.) CR 118.9's
         # waiver over a named card, which is the same ``free`` flag the blanket

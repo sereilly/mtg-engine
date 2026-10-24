@@ -93,6 +93,7 @@ def choose_card_name(game: Game, instruction: OracleInstruction, context: Oracle
     # the second one. Aimed at another seat it keeps the public evidence —
     # *that* seat's graveyard — and never reads the library it is milling.
     from ..ai_prompt_readers import (
+        chosen_name_is_read_off_the_targets_hand,
         chosen_name_is_read_off_the_targets_library,
         chosen_name_own_zone,
     )
@@ -101,31 +102,44 @@ def choose_card_name(game: Game, instruction: OracleInstruction, context: Oracle
         chosen_name_own_zone(context.card, instruction)
         if context.card is not None else None
     )
-    milled_seat = None
-    if (
-        own_zone is None
-        and context.card is not None
-        and chosen_name_is_read_off_the_targets_library(context.card, instruction)
-    ):
-        milled_seat = next(
-            (index for index, player in enumerate(game.players)
-             if player is context.target),
-            None,
-        )
+    # **The sixth card looks in a hand.** "Choose a nonland card name. Target
+    # player reveals their hand and discards all cards with that name." (Cabal
+    # Therapy.) The *targeted* player's hand, hidden until the name is fixed
+    # (ruling 2016-06-08) — so the evidence is that player's graveyard, not the
+    # first opponent's (a different seat at a table of three), and a seat that
+    # aims the spell at itself names out of the hand it can see. The library
+    # reader's arrangement exactly, one zone over: ``looked_at_seat`` is whose
+    # zone is read, and ``own_target_zone`` the zone the chooser reads when it
+    # is its own.
+    looked_at_seat = None
+    own_target_zone = None
+    if own_zone is None and context.card is not None:
+        for reads_it, zone in (
+            (chosen_name_is_read_off_the_targets_library, "library"),
+            (chosen_name_is_read_off_the_targets_hand, "hand"),
+        ):
+            if reads_it(context.card, instruction):
+                looked_at_seat = next(
+                    (index for index, player in enumerate(game.players)
+                     if player is context.target),
+                    None,
+                )
+                own_target_zone = zone
+                break
     if own_zone is not None:
         default_name = _commonest_visible_name(
             game, seat, (own_zone,), exclude_basics=no_basics, card_type=card_type,
             excluded_type=excluded_type,
         )
-    elif milled_seat == seat:
+    elif looked_at_seat == seat:
         default_name = _commonest_visible_name(
-            game, seat, ("library",), exclude_basics=no_basics, card_type=card_type,
-            excluded_type=excluded_type,
+            game, seat, (own_target_zone,), exclude_basics=no_basics,
+            card_type=card_type, excluded_type=excluded_type,
         )
     else:
         default_name = _commonest_visible_name(
             game,
-            milled_seat if milled_seat is not None
+            looked_at_seat if looked_at_seat is not None
             else next(iter(game.opponents_of(seat)), seat),
             ("graveyard",), exclude_basics=no_basics, card_type=card_type,
             excluded_type=excluded_type,

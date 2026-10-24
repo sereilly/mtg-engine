@@ -1031,6 +1031,19 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
             _redirect_countered_card(
                 game, card, countered, str(destination), counterer=context.caster
             )
+            # "…exile it instead of putting it into its owner's graveyard. You
+            # may play it without paying its mana cost for as long as it
+            # remains exiled." (Spelljack.) The card this counter sent to exile,
+            # under the one key every "cards exiled this way" reads
+            # (``_records._PRODUCES_FOR_PAYLOAD_WITHOUT``). Read off the zone
+            # rather than assumed: a flashed-back spell is exiled by its own
+            # keyword (CR 702.34a — ruling 2004-10-04: Spelljack "can be used on
+            # a spell cast using Flashback") and lands in the same place, and a
+            # card something diverted is in no exile and permits nothing.
+            if destination == "exile":
+                owner = game.players[countered.owner_index]
+                exiled = any(held is countered.card for held in owner.exile)
+                context.results["exiled_cards"] = [countered.card] if exiled else []
         else:
             # CR 701.6a: "its **owner's** graveyard" (CR 108.3).
             game._bin_spell_card(

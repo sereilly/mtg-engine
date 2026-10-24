@@ -307,6 +307,94 @@ def test_w1g8_flash_of_insight_from_hand_looks_at_x(set_pool):
     assert len(player.hand) == 1 and len(player.library) == 2
     assert "P1 is looking at the top 3 cards of their library" in game.log
 
+
+# --- Spelljack ------------------------------------------------------------
+
+def _w1g8_spelljacked(set_pool, name: str, *, from_zone: str = "hand", **cast) -> "_w1g8_Game":
+    """Seat 1 casts *name* at seat 0; seat 0 answers with Spelljack, paying
+    {3}{U}{U}{U} for it, and the stack is drained. Costs enforced from then on."""
+    game = _w1g8_duel(active=1)
+    spell = (set_pool("ODY") if name == "Firebolt" else set_pool("LEA"))[name]
+    getattr(game.players[1], "graveyard" if from_zone == "graveyard" else "hand").append(spell)
+    assert game.queue_from_hand(1, name, from_zone=from_zone, **cast).supported
+    game.players[0].hand.append(set_pool("JUD")["Spelljack"])
+    assert game.queue_from_hand(0, "Spelljack", target_stack_index=0).supported
+    _w1g8_resolve_stack(game)
+    game.enforce_mana_costs = True
+    return game
+
+
+def test_w1g8_spelljack_counters_exiles_and_lets_its_caster_cast_the_card_free(set_pool):
+    """"Counter target spell. If that spell is countered this way, exile it
+    instead of putting it into its owner's graveyard. You may play it without
+    paying its mana cost for as long as it remains exiled." The Bolt never
+    resolves; it waits in its owner's exile, and Spelljack's caster casts it
+    there with an empty pool. Ruling 2004-10-04: "If you cast an instant or
+    sorcery, it goes to its owner's graveyard when it resolves.\""""
+    game = _w1g8_spelljacked(set_pool, "Lightning Bolt", target_player_index=0)
+    assert game.players[0].life == 20
+    assert _w1g8_zone_names(game.players[1].exile) == ["Lightning Bolt"]
+    assert game.players[1].graveyard == []
+    # Seat 1 may not cast its own card back; seat 0 may, and for nothing.
+    game.start_turn(0)
+    assert not game.cast_from_hand(1, "Lightning Bolt", from_zone="exile", target_player_index=0).supported
+    assert not any(game.players[0].mana_pool.values())
+    cast = game.cast_from_hand(0, "Lightning Bolt", from_zone="exile", target_player_index=1)
+    assert cast.supported, cast.details
+    _w1g8_resolve_stack(game)
+    assert game.players[1].life == 17
+    assert game.players[1].exile == []
+    assert _w1g8_zone_names(game.players[1].graveyard) == ["Lightning Bolt"]
+    assert game.players[0].graveyard == [] or _w1g8_zone_names(game.players[0].graveyard) == ["Spelljack"]
+
+
+def test_w1g8_spelljack_permission_lasts_for_as_long_as_the_card_remains_exiled(set_pool):
+    """CR 611.2a's duration stated as a zone: the turn ending does not end it,
+    and the card leaving exile does."""
+    from engine.cast_permissions import expire_end_of_turn, permission_for
+
+    game = _w1g8_spelljacked(set_pool, "Lightning Bolt", target_player_index=0)
+    bolt = game.players[1].exile[0]
+    expire_end_of_turn(game)
+    assert permission_for(game, 0, bolt, "exile") is not None
+    game.players[1].exile.remove(bolt)
+    game.players[1].graveyard.append(bolt)
+    assert permission_for(game, 0, bolt, "exile") is None
+
+
+def test_w1g8_spelljack_on_a_flashed_back_spell(set_pool):
+    """Ruling 2004-10-04: "This spell can be used on a spell cast using
+    Flashback." The flashed-back Firebolt is exiled (by its own keyword, CR
+    702.34a, and by Spelljack's replacement — one exile either way), and its
+    new controller may cast it from there, as an ordinary cast this time: it
+    goes to its owner's graveyard when it resolves, not to exile."""
+    game = _w1g8_spelljacked(
+        set_pool, "Firebolt", from_zone="graveyard", target_player_index=0,
+    )
+    assert game.players[0].life == 20
+    assert _w1g8_zone_names(game.players[1].exile) == ["Firebolt"]
+    game.start_turn(0)
+    cast = game.cast_from_hand(0, "Firebolt", from_zone="exile", target_player_index=1)
+    assert cast.supported, cast.details
+    assert not game.stack or not game.stack[-1].flashback
+    _w1g8_resolve_stack(game)
+    assert game.players[1].life == 18
+    assert _w1g8_zone_names(game.players[1].graveyard) == ["Firebolt"]
+
+
+def test_w1g8_spelljack_casts_an_x_spell_for_x_equal_to_zero(set_pool):
+    """"(If it has X in its mana cost, X is 0.)" — CR 107.3b: cast while paying
+    neither its mana cost nor an alternative cost that includes X, a Fireball
+    announced at five deals nothing."""
+    game = _w1g8_spelljacked(set_pool, "Fireball", x_value=3, target_player_index=0)
+    assert game.players[0].life == 20
+    game.start_turn(0)
+    cast = game.cast_from_hand(0, "Fireball", from_zone="exile", x_value=5, target_player_index=1)
+    assert cast.supported, cast.details
+    _w1g8_resolve_stack(game)
+    assert game.players[1].life == 20
+    assert _w1g8_zone_names(game.players[1].graveyard) == ["Fireball"]
+
 # ==== end W1G8 ======================================================
 
 

@@ -232,7 +232,16 @@ def _lower_cast_permission(
         )
 
     if node.what == "exiled_this_way":
-        if node.free and not (node.mode == "cast" and node.while_exiled):
+        # "You may **play** it without paying its mana cost for as long as it
+        # remains exiled." (Spelljack.) The card is a countered *spell*'s, so
+        # the only way it can be played is cast (CR 305.9: a land "can't be
+        # cast as a spell", so no land card was ever on the stack to be
+        # countered); "play" is admitted beside "cast" on the while-exiled
+        # waiver and on nothing else — the turn-scoped "play" grants stay
+        # unwaivable.
+        if node.free and not (
+            node.mode in ("cast", "play") and node.while_exiled
+        ):
             # "You may cast it **without paying its mana cost** for as long as
             # it remains exiled." (Planeswalker's Mischief.) The one waiver an
             # exiled card is printed with, and it is carried below. Every other
