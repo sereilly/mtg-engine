@@ -1461,6 +1461,22 @@ SACRIFICED_COUNT = "sacrificed_count"
 LIFE_LOST_THIS_WAY = "life_lost_this_way"
 
 
+#: How much life a permanent's **own entry trigger** made its controller lose,
+#: noted on that permanent (CR 607.1). "When this creature enters, you lose all
+#: but 1 life. / When this creature leaves the battlefield, you gain life equal
+#: to **the life you lost when it entered**." (Soulgorger Orgg.) The two
+#: abilities are linked: the second refers only to what the first did, "and not
+#: by any other ability" — so the record is written by the entry trigger's loss
+#: alone (the lowering marks it ``noted_on_source``, being the one layer that
+#: knows which ability a sentence belongs to), lives on the ``Permanent`` the
+#: way the linked-exile pile does (``engine/linked_exile.py``) so it survives the
+#: permanent leaving, and is read by ``target_gains_life``'s
+#: ``amount_from_source``. A permanent that returns is a new object with no
+#: record (CR 400.7); one that left before its entry trigger resolved had its
+#: leave trigger read nothing, and the note made afterwards is never read.
+LIFE_LOST_WHEN_ENTERED = "life_lost_when_entered"
+
+
 #: How many cards a "puts the cards from their hand on top of their library"
 #: step moved (Jester's Mask). The ``results`` key the handler writes and the
 #: ``produced`` marker the "search that player's library for **that many**

@@ -432,6 +432,89 @@ def test_w1g4_worldgorger_dragon_killed_in_response_exiles_for_good(set_pool):
     ]
     assert _w1g4_names(game, 1) == ["Forest", "Hill Giant"]
 
+
+# --- Soulgorger Orgg: "you lose all but 1 life" / "you gain life equal to the
+# life you lost when it entered" (CR 607.1) ---------------------------------
+
+
+def _w1g4_terror(game, set_pool, victim):
+    """Destroy *victim* with Terror (cast by seat 1, so no life of seat 0's
+    moves with it)."""
+    game.players[1].hand.append(set_pool("LEA")["Terror"])
+    result = game.queue_from_hand(
+        1, "Terror", target_player_index=game.controller_index_of(victim),
+        target_permanent_ids=[victim.permanent_id],
+    )
+    assert result.supported, game.log[-5:]
+    _w1g4_drain(game)
+
+
+def test_w1g4_soulgorger_orgg_takes_all_but_1_life_and_gives_it_back(set_pool):
+    game = _w1g4_game(set_pool, hand=["Soulgorger Orgg"])
+    p0 = game.players[0]
+    game.cast_from_hand(0, "Soulgorger Orgg")
+    _w1g4_drain(game)
+    assert p0.life == 1, game.log[-4:]
+
+    # The number is the one the entry took, not a recount: life gained since
+    # is kept, and the 19 comes back on top of it.
+    game._gain_life(p0, 5, "test")
+    assert p0.life == 6
+    _w1g4_terror(game, set_pool, _w1g4_named(game, 0, "Soulgorger Orgg"))
+
+    assert p0.life == 25
+    assert [c.name for c in p0.graveyard] == ["Soulgorger Orgg"]
+
+
+def test_w1g4_soulgorger_orgg_at_1_life_takes_nothing_and_returns_nothing(set_pool):
+    game = _w1g4_game(set_pool, hand=["Soulgorger Orgg"])
+    p0 = game.players[0]
+    p0.life = 1
+    game.cast_from_hand(0, "Soulgorger Orgg")
+    _w1g4_drain(game)
+    assert p0.life == 1
+
+    _w1g4_terror(game, set_pool, _w1g4_named(game, 0, "Soulgorger Orgg"))
+    assert p0.life == 1
+
+
+def test_w1g4_soulgorger_orgg_killed_in_response_keeps_the_life_lost(set_pool):
+    game = _w1g4_game(set_pool, hand=["Soulgorger Orgg"])
+    p0 = game.players[0]
+    game.queue_from_hand(0, "Soulgorger Orgg")
+    game.resolve_top_of_stack()
+    orgg = _w1g4_named(game, 0, "Soulgorger Orgg")
+    assert game.stack and p0.life == 20
+
+    _w1g4_terror(game, set_pool, orgg)
+
+    # The leave trigger resolved first, with nothing noted to give back; the
+    # entry trigger then took all but 1, and nothing is left to return it.
+    assert p0.life == 1
+
+
+def test_w1g4_a_returned_soulgorger_orgg_is_a_new_object_with_no_note(set_pool):
+    # CR 400.7: the Orgg that comes back remembers nothing. Two of them on one
+    # battlefield each give back only what their own entry took.
+    game = _w1g4_game(set_pool, hand=["Soulgorger Orgg", "Soulgorger Orgg"])
+    p0 = game.players[0]
+    game.cast_from_hand(0, "Soulgorger Orgg")
+    _w1g4_drain(game)
+    first = _w1g4_named(game, 0, "Soulgorger Orgg")
+    game._gain_life(p0, 9, "test")  # 10
+    game.cast_from_hand(0, "Soulgorger Orgg")
+    _w1g4_drain(game)
+    assert p0.life == 1
+    second = next(
+        p for p in game.controlled_by(0)
+        if p.card.name == "Soulgorger Orgg" and p is not first
+    )
+
+    _w1g4_terror(game, set_pool, second)
+    assert p0.life == 10
+    _w1g4_terror(game, set_pool, first)
+    assert p0.life == 29
+
 # ==== end W1G4 ======================================================
 
 

@@ -309,6 +309,7 @@ def target_loses_life(game: Game, instruction: OracleInstruction, context: Oracl
     # items they revealed" (Goblin Game) — was handed to a board counter that
     # has no such key.
     per_seat = instruction.payload.get(X_FROM_COUNT_PER_RECIPIENT)
+    lost_by_this_step = 0
     for victim in victims:
         loss = (
             per_recipient_amount(game, context, per_seat, victim)
@@ -345,9 +346,21 @@ def target_loses_life(game: Game, instruction: OracleInstruction, context: Oracl
         context.results[LIFE_LOST_THIS_WAY] = (
             int(context.results.get(LIFE_LOST_THIS_WAY, 0) or 0) + loss
         )
+        lost_by_this_step += loss
         game.log.append(
             f"{card.name}: {victim.name} lost {loss} life ({before} -> {victim.life})"
         )
+    # "When this creature enters, you lose all but 1 life. / When this creature
+    # leaves the battlefield, you gain life equal to **the life you lost when it
+    # entered**." (Soulgorger Orgg.) The lowering marks a permanent's own entry
+    # trigger's loss (``noted_on_source``); the note is what was actually lost,
+    # on the ``Permanent`` — CR 607.1's linked record, read by
+    # ``target_gains_life``'s ``amount_from_source``. Written even when the
+    # source has left already: nothing will read it then, which is the ruling's
+    # outcome for every Nightmare that leaves before its entry resolves.
+    noted_key = instruction.payload.get("noted_on_source")
+    if noted_key is not None and context.source_permanent is not None:
+        context.source_permanent.metadata[str(noted_key)] = lost_by_this_step
     return True, "resolved"
 
 
@@ -624,6 +637,18 @@ def target_gains_life(game: Game, instruction: OracleInstruction, context: Oracl
             max(0, int(bound.effective_card.cmc or 0)) if bound is not None else 0,
             card.name,
         )
+        return True, "resolved"
+    noted_key = instruction.payload.get("amount_from_source")
+    if noted_key is not None:
+        # "…you gain life equal to **the life you lost when it entered**."
+        # (Soulgorger Orgg.) What the source's own entry trigger took, noted on
+        # the ``Permanent`` by ``target_loses_life`` (CR 607.1) — read off the
+        # object the resolution holds, which under a leaves-the-battlefield
+        # trigger is the departed permanent, still carrying its record. No
+        # note (the entry trigger had not resolved when it left) gains nothing.
+        source = context.source_permanent
+        noted = 0 if source is None else int(source.metadata.get(str(noted_key), 0) or 0)
+        game._gain_life(gainer, max(0, noted), card.name)
         return True, "resolved"
     if instruction.payload.get("amount_from_bound_power"):
         bound = (context.trigger_context or {}).get("bound_permanent_id")
