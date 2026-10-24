@@ -1575,7 +1575,7 @@ class CombatDamageStepMixin:
                 if 0 <= controller_index < len(self.players):
                     self._gain_life(self.players[controller_index], amount, source_name="lifelink")
 
-            self.check_state_based_actions()
+            self._check_after_turn_based_actions()
             self._prune_combat_state()
 
             if sum(life_lost_by_defender.values()) > 0:

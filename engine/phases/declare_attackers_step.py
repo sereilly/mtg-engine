@@ -398,7 +398,13 @@ class DeclareAttackersStepMixin:
                 self._announce_attack_declaration(controller_index, declared)
                 self._fire_delayed_attack_triggers(controller_index, unique_indices)
         # CR 508.2: once attackers have been declared (the turn-based action of the
-        # declare attackers step), the active player receives priority.
+        # declare attackers step), the active player receives priority — after
+        # the state-based check CR 704.3 makes first. The declaration can make
+        # one due: an attacker tapped by attacking ends its own "as long as
+        # this creature is untapped" (Juniper Order Advocate's +1/+1), a cost
+        # sacrificed a lord. This went straight to the window, so the
+        # creature that was now lethally damaged was still there to be pumped.
+        self._check_after_turn_based_actions()
         self.start_priority_window(self.active_player_index)
         return True, "declared attackers"
 

@@ -372,6 +372,9 @@ class DrawStepMixin:
         # one test, a three-seat fixture whose players had no libraries and so
         # drew from nothing on the first turn (CR 103.8c: only a two-player
         # game skips that draw) — a test passing on the defect.
-        self.check_state_based_actions()
+        #
+        # The check is made by ``_close_or_defer_step``, which every exit of
+        # this step goes through, the skipped draws included
+        # (``_check_after_turn_based_actions``).
         self._close_or_defer_step(phase, step, defer_priority)
         return drawn

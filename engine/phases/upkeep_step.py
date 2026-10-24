@@ -1691,5 +1691,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         # CR 704.3: state-based actions are checked before a player receives
         # priority. Several upkeep effects deal damage inline (Cyclone's wind
         # counters, the pay-or-suffer family), and this is what destroys what
-        # they killed — the handlers no longer sweep for themselves.
-        self.check_state_based_actions()
+        # they killed — the handlers no longer sweep for themselves. Inside the
+        # step's CR 603.3b window, so what dies here triggers beside the
+        # upkeep's own triggers and is ordered with them.
+        self._check_after_turn_based_actions()

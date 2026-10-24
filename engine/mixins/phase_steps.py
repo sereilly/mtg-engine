@@ -83,6 +83,32 @@ class PhaseStepsMixin:
         """
         self.check_state_based_actions()
 
+    def _check_after_turn_based_actions(self) -> bool:
+        """The state-based check a step makes once its turn-based actions are
+        done and before any player receives priority in it (CR 703.3: they are
+        "dealt with first … before state-based actions are checked … and
+        before players receive priority"; CR 704.3, CR 117.3a). True when it
+        performed anything.
+
+        Each step whose turn-based action can make a state-based action due
+        calls it at that moment — the untap (a static that ended, a permanent
+        phased out), the draw (CR 704.5b), each declaration (an attacker's tap
+        ending an "as long as it's untapped" lord, a life payment to block),
+        combat damage, and cleanup (CR 514.3a: an "until end of turn" pump or
+        control change ending) — and so do the upkeep and the end step, which
+        carry out "at the beginning of …" effects inline before their windows
+        open. The declarations went straight to ``start_priority_window`` and
+        cleanup checked only when something had triggered, so a creature the
+        attack had just made lethal was still there when the attacker got
+        priority, a defender at 0 life could resolve a trigger that saved
+        them, and a Giant Growth's creature at 0 toughness lived into the next
+        turn (``tests/rules/test_kg_steps_turn_based_state_check.py``).
+
+        Named, as :meth:`_check_between_resolutions` is, so a census can switch
+        every one of them off at once and see what each was holding up.
+        """
+        return self.check_state_based_actions()
+
     def _window_may_close(self, *, waits: bool) -> bool:
         """With the stack empty: whether the step's priority window is over.
 
@@ -233,10 +259,17 @@ class PhaseStepsMixin:
 
     def _close_or_defer_step(self, phase: str, step: str, defer_priority: bool) -> None:
         """End a step, or — when defer_priority is set — leave a priority window open
-        for the active player so a caller can hand priority to another player."""
+        for the active player so a caller can hand priority to another player.
+
+        Either way a player is about to receive priority in it, so the state
+        is checked first (:meth:`_check_after_turn_based_actions`) — on every
+        exit, which for the draw step includes the ones that skip the draw:
+        what the step did before deciding to skip (a Nafs Asp's life loss,
+        Halfdane's P/T reverting) is still on the board."""
         if not self._receives_priority(step):
             self._on_step_or_phase_end(phase, step)
             return
+        self._check_after_turn_based_actions()
         if defer_priority:
             self.start_priority_window(self.active_player_index)
             return

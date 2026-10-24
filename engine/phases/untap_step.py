@@ -790,5 +790,5 @@ class UntapStepMixin:
         # so untapping is never observable without its consequences. Old Man of
         # the Sea's steal lasts "for as long as this creature remains tapped":
         # untapping it must hand the creature back before anyone sees the board.
-        self.check_state_based_actions()
+        self._check_after_turn_based_actions()
         return untapped
