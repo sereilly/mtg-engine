@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import dataclasses
 
-from ...oracle_types import OracleInstruction
+from ...oracle_types import LAST_TARGET_OWNER, OracleInstruction
 from ...tokens import default_token_name
 from .. import ast
 from ..errors import LoweringError
@@ -440,10 +440,14 @@ def _lower_create_token(
         # the token goes to the controller the exile step of this same effect
         # recorded — so that step must exist, exactly as "that much" demands
         # its damage producer.
+        #
+        # "**Its owner** creates …" (Funeral Pyre) is the other seat, and the
+        # same demand of a different record (``LAST_TARGET_OWNER``).
         if node.recipient not in produced:
+            seat = "owner" if node.recipient == LAST_TARGET_OWNER else "controller"
             raise LoweringError(
-                "back-reference to the exiled permanent's controller with no "
-                "exile in this effect",
+                f"back-reference to the removed object's {seat} with no step "
+                "in this effect recording it",
                 node=node,
             )
         payload["recipient"] = node.recipient

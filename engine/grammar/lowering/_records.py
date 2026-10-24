@@ -497,7 +497,13 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # And the graveyard exile, which is what "If **it** was a creature card"
     # reads (Scavenging Ooze) — the same key, because the question the
     # back-reference asks is the same one: what did this effect just exile?
-    "exile_target_graveyard_card": "exiled_cards",
+    #
+    # …and **whose card it was**: "Exile target card from a graveyard. **Its
+    # owner** creates a 1/1 white Spirit creature token with flying." (Funeral
+    # Pyre.) A card in a graveyard is in its owner's (CR 404.1) and has no
+    # controller at all (CR 108.4a), so the owner is the one seat the sentence
+    # can name — Path of Peace's record, written as the card is taken.
+    "exile_target_graveyard_card": ("exiled_cards", LAST_TARGET_OWNER),
     # "Remove a pupa counter from this Aura. **If you can't**, …" (Cocoon).
     # The removal records whether a counter was there to remove, and the
     # if-you-can't branch reads the record back, negated.

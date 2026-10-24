@@ -24,7 +24,8 @@ from ..linked_exile import link_exiled_card
 from ..models import Permanent
 from ..oracle_types import (EXILED_BY_SEAT, EXILED_THIS_WAY,
                             EXILED_THIS_WAY_OBJECTS, LAST_TARGET_CONTROLLER,
-                            LAST_TARGET_NAME, PER_OBJECT_SEAT_RECORDS,
+                            LAST_TARGET_NAME, LAST_TARGET_OWNER,
+                            PER_OBJECT_SEAT_RECORDS,
                             SWEPT_OWNER_SEATS)
 from ..tokens import CREATED_TOKEN_RESULT_KEY, tokens_created_with
 from ._amounts import resolve_amount
@@ -716,6 +717,10 @@ def exile_target_graveyard_card(game: Game, instruction: OracleInstruction, cont
     exiled = owner.graveyard.pop(index)
     owner.exile.append(exiled)
     context.results["exiled_cards"] = [exiled]
+    # Whose card it was, for "**Its owner** creates …" (Funeral Pyre): the pile
+    # it was taken from is its owner's (CR 404.1), and the record is written as
+    # it moves (CR 608.2h) under the key Path of Peace's owner already reads.
+    context.results[LAST_TARGET_OWNER] = game.players.index(owner)
     game.log.append(f"{card.name} exiled {exiled.name} from {owner.name}'s graveyard")
     return True, "resolved"
 

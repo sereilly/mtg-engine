@@ -17,7 +17,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..models import CardDefinition, Permanent
-from ..oracle_types import EVENT_SUBJECT_LAST_KNOWN, LAST_TARGET_CONTROLLER
+from ..oracle_types import (EVENT_SUBJECT_LAST_KNOWN, LAST_TARGET_CONTROLLER,
+                            LAST_TARGET_OWNER)
 from ..tokens import (CHOSEN_TOKEN_RECORDS, CREATED_TOKEN_RESULT_KEY,
                       CREATED_TOKENS_RESULT_KEY, CREATED_WITH_PERMANENT_ID,
                       default_token_name, make_token_card)
@@ -304,9 +305,14 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
     # recorded. No record means nothing was exiled — the referent never
     # existed, so no token either (CR 608.2b's "does as much as it can" cuts
     # both ways: there is no controller to hand a token to).
-    if payload.get("recipient") == LAST_TARGET_CONTROLLER:
-        recorded = context.results.get(LAST_TARGET_CONTROLLER)
-        if not isinstance(recorded, int):
+    # "**Its owner** creates …" (Funeral Pyre) is the same back-reference to the
+    # other seat the step recorded — the card it exiled was in a graveyard, so
+    # it had an owner and no controller (CR 108.4a).
+    if payload.get("recipient") in (LAST_TARGET_CONTROLLER, LAST_TARGET_OWNER):
+        recorded = context.results.get(payload["recipient"])
+        if not isinstance(recorded, int) or game.players[recorded].lost:
+            # A seat that has left the game gets no token (CR 800.4a), the
+            # answer ``token_recipient_seats`` gives every other recipient.
             game.log.append(f"{card.name}: nothing was exiled, so no token is created")
             return True, "resolved"
         controller_index = recorded
