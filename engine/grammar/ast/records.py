@@ -571,8 +571,13 @@ class CoinFlipResult:
     A back-reference to a flip made earlier in the same resolution, never a
     board state — which is why lowering refuses one with no ``FlipCoin`` in
     front of it (the rule round 33 wrote down for "that much").
+
+    ``who`` is the printed pronoun: "you", or "they" for the player who
+    flipped in the sentence before ("that player flips a coin. If **they**
+    lose the flip, …", Planar Chaos).
     """
     won: bool = True
+    who: str = "you"
 @dataclass(frozen=True)
 class RevealedCardIs:
     """``if it's a <filter>`` — a *present-tense* test on a card a previous

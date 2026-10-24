@@ -135,6 +135,22 @@ def discard_all_matching(
                 described_filter, colors_of_sacrificed_for_cost=False
             )
             carried["any_colors_from_cost"] = SACRIFICED_FOR_COST
+        # "Choose a nonland card name. Target player reveals their hand and
+        # discards all cards **with that name**." (Cabal Therapy.) The name an
+        # earlier step of this resolution chose (CR 608.2d), split off and
+        # carried for the colour's reason above. Only on a spell's own
+        # sentence behind the naming step: under a trigger "that name" is the
+        # event's (``name_from_event``'s other reader), and with no producer
+        # the words name nothing — and "all cards" is the whole hand.
+        if (
+            described_filter.name_from_event
+            and event is None
+            and "chosen_card_name" in produced
+        ):
+            described_filter = dataclasses.replace(
+                described_filter, name_from_event=False
+            )
+            carried["name_from"] = "chosen_card_name"
         described_filter, shared = hand_name_relation(described_filter, node)
         carried.update(shared)
         described = chargeable_card_filter(described_filter)

@@ -310,7 +310,13 @@ class FlipCoin:
     sentences that follow it, because how many there are is a property of the
     card and not of the flip: Tavern Swindler reads only the win, Mijae Djinn
     only the loss, Bottle of Suleiman both.
+
+    ``flipper`` is who flips (CR 705.2: only that player wins or loses):
+    ``"you"``, the effect's controller, for every printing but one, and
+    ``"that_player"`` for "Whenever a player casts a spell, **that player
+    flips a coin**." (Planar Chaos) — the seat the firing event named.
     """
+    flipper: str = "you"
 
 
 @dataclass(frozen=True)
@@ -411,10 +417,15 @@ class ChooseCardName:
     ``other_than_basic_land`` is the other printed bound: "Choose a card name
     **other than a basic land card name**" (Desperate Research). Carried for
     the same reason and honoured in the same place.
+
+    ``excluded_card_type`` is the bound stated as the type the named card must
+    *not* have: "Choose a **nonland** card name." (Cabal Therapy, and Meddling
+    Mage's entry choice, which already carries it under the same name.)
     """
 
     card_type: str | None = None
     other_than_basic_land: bool = False
+    excluded_card_type: str | None = None
 
 
 @dataclass(frozen=True)

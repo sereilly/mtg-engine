@@ -232,6 +232,13 @@ _BY_NODE_TYPE: dict[type, object] = {
                     {"exclude_basic_land_names": True}
                     if node.other_than_basic_land else {}
                 ),
+                # "Choose a **nonland** card name." (Cabal Therapy.) Under
+                # the key Meddling Mage's entry choice already carries, which
+                # the prompt's answer check reads.
+                **(
+                    {"excluded_card_type": node.excluded_card_type}
+                    if node.excluded_card_type else {}
+                ),
             },
         ),
     ),

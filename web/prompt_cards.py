@@ -289,6 +289,11 @@ def _choose_card_name(ctx: PromptContext, choices: list) -> dict:
     # printed bound, told to the player for the reason the type is.
     if choice.data.get("exclude_basic_land_names"):
         prompt["exclude_basic_land_names"] = True
+    # "Choose a **nonland** card name" (Cabal Therapy): the bound stated as the
+    # type the name must not have — refused by the answer check, so the player
+    # has to be told it.
+    if choice.data.get("excluded_card_type"):
+        prompt["excluded_card_type"] = choice.data["excluded_card_type"]
     return prompt
 
 

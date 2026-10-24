@@ -162,6 +162,15 @@ def _parse_flip_coin(stream: TokenStream) -> ast.Statement | None:
     if stream.accept_phrase("flip", "a", "coin"):
         return _accept_flip_run_tail(stream) or ast.FlipCoin()
     stream.reset(mark)
+    # "Whenever a player casts a spell, **that player flips a coin**."
+    # (Planar Chaos.) The flipper is the seat the firing event named, so the
+    # win or the loss is theirs (CR 705.2) — a field, not a second node,
+    # because what is flipped and what the result means are the same. No run
+    # tail: no card prints "that player flips a coin until …", and admitting
+    # one would be a reading nothing tests.
+    if stream.accept_phrase("that", "player", "flips", "a", "coin"):
+        return ast.FlipCoin(flipper="that_player")
+    stream.reset(mark)
     return None
 
 

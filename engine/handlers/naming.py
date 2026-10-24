@@ -61,6 +61,10 @@ def choose_card_name(game: Game, instruction: OracleInstruction, context: Oracle
     # printed bound, carried to the prompt and obeyed by the default exactly as
     # the type is.
     no_basics = bool(instruction.payload.get("exclude_basic_land_names"))
+    # "Choose a **nonland** card name" (Cabal Therapy): the type the named
+    # card must not have, carried to the prompt under the key its answer check
+    # reads and obeyed by the default the same way.
+    excluded_type = instruction.payload.get("excluded_card_type") or None
     # A non-interactive seat names the commonest card it may legally know of
     # **in the place the name will be looked for**. That place is the
     # sentence behind the choice, and three of the four cards printing one
@@ -111,10 +115,12 @@ def choose_card_name(game: Game, instruction: OracleInstruction, context: Oracle
     if own_zone is not None:
         default_name = _commonest_visible_name(
             game, seat, (own_zone,), exclude_basics=no_basics, card_type=card_type,
+            excluded_type=excluded_type,
         )
     elif milled_seat == seat:
         default_name = _commonest_visible_name(
             game, seat, ("library",), exclude_basics=no_basics, card_type=card_type,
+            excluded_type=excluded_type,
         )
     else:
         default_name = _commonest_visible_name(
@@ -122,12 +128,14 @@ def choose_card_name(game: Game, instruction: OracleInstruction, context: Oracle
             milled_seat if milled_seat is not None
             else next(iter(game.opponents_of(seat)), seat),
             ("graveyard",), exclude_basics=no_basics, card_type=card_type,
+            excluded_type=excluded_type,
         )
     game.arm_pending_choice(
         "choose_card_name", seat,
         card_name=context.card.name if context.card is not None else "",
         card_type=card_type,
         **({"exclude_basic_land_names": True} if no_basics else {}),
+        **({"excluded_card_type": excluded_type} if excluded_type else {}),
         default_name=default_name,
         record=context.results,
     )
@@ -172,7 +180,7 @@ def name_and_strip(game: Game, instruction: OracleInstruction, context: OracleEx
 
 def _commonest_visible_name(
     game, seat: int, zones, *, exclude_basics: bool = True,
-    card_type: str | None = None,
+    card_type: str | None = None, excluded_type: str | None = None,
 ) -> str:
     """The name a non-interactive seat picks: the one appearing most often in
     *zones* of *seat*'s cards, ties broken by name so a seed replays exactly.
@@ -188,9 +196,13 @@ def _commonest_visible_name(
     **creature** card name" (Wood Sage) bounds what may legally be named, and a
     default outside the bound is a headless game breaking a rule the prompt
     enforces. Nothing matching leaves the name empty, which is what a seat with
-    no legal answer it can see actually has.
+    no legal answer it can see actually has. ``excluded_type`` is the same
+    bound stated negatively ("Choose a **nonland** card name", Cabal Therapy),
+    asked through the reader the prompt's answer check uses.
     """
     from collections import Counter
+
+    from ..search_filters import card_has_type
 
     player = game.players[seat]
     counts: Counter = Counter()
@@ -199,6 +211,8 @@ def _commonest_visible_name(
             if exclude_basics and "basic" in (card.type_line or "").lower():
                 continue
             if card_type and card.primary_type != card_type:
+                continue
+            if excluded_type and card_has_type(card, excluded_type):
                 continue
             counts[card.name] += 1
     if not counts:

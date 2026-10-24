@@ -543,8 +543,18 @@ def parse_choose_card_name(stream: TokenStream) -> "ast.Statement | None":
         stream.reset(mark)
         return None
     card_type = None
+    excluded_card_type = None
     if (word := stream.peek_word()) in CARD_TYPES and word != "card":
         card_type = word
+        stream.advance()
+    elif (
+        isinstance(word, str) and word.startswith("non")
+        and word[3:] in CARD_TYPES and word[3:] != "card"
+    ):
+        # "Choose a **nonland** card name." (Cabal Therapy.) The same bound
+        # stated as the type the named card must not have — carried, never
+        # consumed, for the reason the positive type above is.
+        excluded_card_type = word[3:]
         stream.advance()
     if stream.accept_phrase("card", "name"):
         # "…**other than a basic land card name**." (Desperate Research.) The
@@ -562,6 +572,7 @@ def parse_choose_card_name(stream: TokenStream) -> "ast.Statement | None":
         if not strips and (stream.exhausted or stream.at_punct(".", ",")):
             return ast.ChooseCardName(
                 card_type=card_type, other_than_basic_land=no_basics,
+                excluded_card_type=excluded_card_type,
             )
     stream.reset(mark)
     return None

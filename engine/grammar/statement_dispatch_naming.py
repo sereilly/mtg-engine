@@ -353,6 +353,21 @@ def lower_naming_statement(
         # CR 705.1: the flip is the whole sentence, and it takes no payload. What
         # happens next is the conditional sentences after it, which read the
         # result this one records (`_PRODUCES`).
+        if statement.flipper == "that_player":
+            # "…**that player** flips a coin." (Planar Chaos.) The seat the
+            # firing event named, under the key every other "that player" in
+            # a trigger reads — so the win or the loss is announced as that
+            # player's (CR 705.2), and an event that froze no seat flips for
+            # nobody rather than for the trigger's controller.
+            return (
+                OracleInstruction(
+                    "flip_coin", "", {"flipper": "event_subject_player"}
+                ),
+            )
+        if statement.flipper != "you":
+            raise LoweringError(
+                f"no flip is made by {statement.flipper!r}", node=statement,
+            )
         return (OracleInstruction("flip_coin", "", {}),)
 
     if isinstance(statement, ast.DrawGame):

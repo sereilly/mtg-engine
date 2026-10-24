@@ -138,8 +138,10 @@ def parse_imperative_verb(
     # (Chaos Orb's) falls through untouched.
     # "**You** flip a coin" is the same sentence with its subject printed
     # (Amulet of Quoz), so the gate admits the pronoun too and the production
-    # refuses quietly for every other "you …" line.
-    if stream.at_word("flip", "you"):
+    # refuses quietly for every other "you …" line. "**That player** flips a
+    # coin" (Planar Chaos) is the same sentence about the event's seat, and
+    # every other "that …" line is refused just as quietly.
+    if stream.at_word("flip", "you", "that"):
         flip = _parse_flip_coin(stream)
         if flip is not None:
             return flip
