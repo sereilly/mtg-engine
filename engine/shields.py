@@ -884,8 +884,10 @@ def make_color_shield(
 
 
 def make_subject_shield(
-    source_filter: dict, seat: int | None = None, source_name: str | None = None,
+    source_filter: dict | None, seat: int | None = None,
+    source_name: str | None = None,
     *, any_recipient: bool = False, combat_only: bool = False,
+    colors: tuple[str, ...] = (),
 ) -> Shield:
     """A blanket shield against every source a printed noun phrase describes.
 
@@ -899,12 +901,24 @@ def make_subject_shield(
     turn" (Snag) prints no recipient, so it stops that damage to whoever it was
     headed for — the caster's face or an opponent's. *combat_only* is the
     printed "combat" (see :class:`Shield`).
+
+    *colors* is the source colour a Circle records, on the blanket: "Prevent
+    all damage that sources of **the color of your choice** would deal this
+    turn" (Prismatic Strands). With *source_filter* None the colour is the
+    whole narrowing — CR 615.9's recheck through ``damage_source_colors``,
+    which answers for a spell as well as a permanent, where a noun phrase can
+    only be asked of a permanent.
     """
+    if source_filter is None and not colors:
+        # A blanket with nothing narrowing it would stop every source's
+        # damage to everyone — a card nobody printed.
+        raise ValueError("a subject shield narrows by a phrase or a colour")
     return Shield(
         kind=PREVENT_FROM_SUBJECT,
         amount=None,
         uses=None,
-        source_filter=dict(source_filter),
+        colors=tuple(colors),
+        source_filter=None if source_filter is None else dict(source_filter),
         filter_seat=seat,
         source_name=source_name,
         any_recipient=any_recipient,

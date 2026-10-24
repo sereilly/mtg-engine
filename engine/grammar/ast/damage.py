@@ -446,6 +446,22 @@ class DamageCantBePreventedOrRedirected:
 
 
 @dataclass(frozen=True)
+class DamageCantBePrevented:
+    """"Damage can't be prevented this turn." (Flaring Pain.)
+
+    :class:`DamageCantBePreventedOrRedirected`'s sentence with neither of its
+    narrowings: no subject, so it is said of **every** damage event for the
+    duration, and no "or dealt instead", so CR 614.9's redirections still
+    apply — it switches off CR 615 alone, as Urza's Rage's "and the damage
+    can't be prevented" does for one spell's damage. Its own node rather than a
+    subject-less variant of that one, because every reader of that one reads
+    both halves of the clause, and a reader that took this for it would lock
+    the redirects too.
+    """
+    duration: Duration = field(default_factory=Duration)
+
+
+@dataclass(frozen=True)
 class PreventedRider:
     """CR 615.5's additional effect — the sentence printed *after* a prevention.
 

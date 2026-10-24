@@ -235,6 +235,13 @@ def standings(game, *, now: bool = True) -> tuple:
 _PLAYER_BOOKKEEPING = frozenset({
     "hand", "graveyard", "library", "exile", "mana_pool", "battlefield",
     "spells_cast_this_turn",
+    # How many turn records (``engine/turn_replacements.py``) the seat has
+    # ever armed — the counter that gives each one its CR 614.5 identity, not
+    # an effect. The records themselves are read (``_turn_replacements``) and
+    # are gone once the turn is; the counter never goes back down, so read as
+    # a field it made every such spell a lasting change: Flaring Pain ("Damage
+    # can't be prevented this turn") was cast into an empty board, twice.
+    "_turn_replacements_armed",
 })
 #: The same for the game's own fields: the table itself (read separately),
 #: the log, the stack and who has priority, and the per-turn ledgers a cast

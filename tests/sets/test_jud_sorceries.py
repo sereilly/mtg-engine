@@ -27,6 +27,54 @@ log), not instruction kinds alone.
 # ==== W1G2 ==========================================================
 # W1G2's tests go between this line and the "end W1G2" line.
 
+import pytest as _w1g2_pytest
+
+from engine import Game as _W1G2Game, PlayerState as _W1G2PlayerState
+from engine.models import Permanent as _W1G2Permanent
+from tests.helpers import resolve_stack as _w1g2_resolve_stack
+
+
+@_w1g2_pytest.mark.parametrize(
+    ("graveyard", "survives", "damage", "counters"),
+    [(0, True, 0, 2), (7, False, 6, 2)],
+    ids=["four-damage-prevented", "threshold-six-unpreventable"],
+)
+def test_w1g2_lightning_surge_against_a_phantom(
+    set_pool, catalog_by_name, graveyard, survives, damage, counters,
+):
+    """Lightning Surge, from the drive list, against Phantom Centaur (3
+    counters, 2/0). Without threshold its 4 damage is prevented for a counter.
+    With seven cards in its caster's graveyard it deals 6 "and the damage can't
+    be prevented": the 6 is marked, and the Phantom still pays its counter
+    (2022-12-08: "the damage is dealt and a +1/+1 counter is removed",
+    CR 615.12) — so a 4/1 takes 6 and dies."""
+    jud = set_pool("JUD")
+    island = catalog_by_name["Island"]
+    game = _W1G2Game(players=[
+        _W1G2PlayerState(name="Alice", library=[island] * 5),
+        _W1G2PlayerState(name="Bob", library=[island] * 5,
+                         graveyard=[island] * graveyard),
+    ])
+    game.enforce_mana_costs = False
+    game.active_player_index = 1
+    game.current_turn_phase = "main1"
+    centaur = _W1G2Permanent(card=jud["Phantom Centaur"])
+    game._put_permanent_onto_battlefield(0, centaur, None)
+    _w1g2_resolve_stack(game)
+    game.players[1].hand.append(jud["Lightning Surge"])
+    result = game.cast_from_hand(
+        1, "Lightning Surge", target_player_index=0,
+        target_permanent_ids=[centaur.permanent_id],
+    )
+    assert result.supported, result.details
+    _w1g2_resolve_stack(game)
+    damage_marked = centaur.damage_marked
+    game._settle()
+
+    assert game.is_on_battlefield(centaur) is survives
+    assert damage_marked == damage
+    assert int(centaur.metadata.get("plus_counters", 0)) == counters
+
 # ==== end W1G2 ======================================================
 
 

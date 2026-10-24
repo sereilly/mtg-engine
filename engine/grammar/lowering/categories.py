@@ -416,6 +416,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # that is the machinery it switches off, and GRAMMAR_CATEGORIES is
     # unchanged.
     "lock_damage_to_target": "prevention",
+    "forbid_damage_prevention": "prevention",
     "grant_source_class_prevention_shield": "prevention",
     # Its mirror with the printed phrase on the recipient end (Sivvi's Ruse):
     # the same blanket, describing what it protects rather than what it stops.

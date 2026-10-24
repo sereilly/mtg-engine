@@ -36,6 +36,7 @@ by 120.4c it already has been.
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -51,6 +52,7 @@ from .replacements import (
     take_replaced,
     was_replaced,
 )
+from .turn_replacements import damage_prevention_forbidden
 
 
 @dataclass(frozen=True)
@@ -312,14 +314,56 @@ def damage_candidates(recipient, event: dict | None = None) -> list[Candidate]:
     covered without knowing the clause exists.
     """
     candidates = shield_candidates() + replacement_candidates(damage_kind(recipient))
-    if damage_locked(recipient) or (event is not None and event_locked(event)):
-        candidates = [c for c in candidates if not c.prevents_or_redirects]
+    redirect_lock = damage_locked(recipient) or (
+        event is not None and event_locked(event)
+    )
     # "…and the damage can't be prevented" (Urza's Rage): prevention alone, for
-    # any recipient. After the wider lock rather than instead of it — an event
-    # carrying both has lost its redirects above and has nothing left here.
-    if event is not None and event.get(EVENT_PREVENTION_LOCK):
-        candidates = [c for c in candidates if not c.prevents]
+    # any recipient — and "Damage can't be prevented this turn" (Flaring Pain),
+    # which `deal_damage` turns into the same mark on every event it covers.
+    # The wider lock above implies it.
+    prevention_lock = redirect_lock or (
+        event is not None and bool(event.get(EVENT_PREVENTION_LOCK))
+    )
+    if redirect_lock or prevention_lock:
+        kept: list[Candidate] = []
+        for candidate in candidates:
+            if candidate.prevents and prevention_lock:
+                # CR 615.12: the prevention effect is still applied — it
+                # prevents nothing, and its additional effect takes place. A
+                # contender declaring that half (a Phantom's counter, Nine
+                # Lives') stays in the set with the half as its whole effect;
+                # every other one has nothing left to do and leaves.
+                # It is no longer a contender that prevents anything, so it
+                # says so: a reader asking "would this damage be stopped?"
+                # (the AI's combat probe) must not count a rider as a shield.
+                if candidate.unpreventable_apply is not None:
+                    kept.append(dataclasses.replace(
+                        candidate, apply=candidate.unpreventable_apply,
+                        prevents=False, prevents_or_redirects=False,
+                    ))
+                continue
+            if candidate.prevents_or_redirects and redirect_lock:
+                continue
+            kept.append(candidate)
+        candidates = kept
     return sorted(candidates, key=lambda candidate: candidate.order)
+
+
+def mark_turn_unpreventable(game, event: dict) -> None:
+    """"Damage can't be prevented this turn." (Flaring Pain.) The turn-long
+    sentence becomes the per-event mark Urza's Rage's "and the damage can't be
+    prevented" already puts on its own damage — so a turn-wide sentence and a
+    one-spell sentence are one question for every reader of the mark
+    (``damage_candidates``, CR 615.12's riders).
+
+    Called by :func:`deal_damage`, the one seam every event passes through, and
+    by anything that builds a damage event to *ask about* rather than to deal
+    (``ai_combat._would_be_prevented``): a probe that skipped it would read a
+    Circle of Protection as stopping damage Flaring Pain has made
+    unpreventable.
+    """
+    if not event.get(EVENT_PREVENTION_LOCK) and damage_prevention_forbidden(game, event):
+        event[EVENT_PREVENTION_LOCK] = True
 
 
 def _settled(game, event: dict) -> bool:
@@ -366,6 +410,7 @@ def deal_damage(game, event: dict, *, restart: Callable[[], Any] | None = None) 
     # to fill the key in. `setdefault`, so a caller that genuinely knows better
     # can say so.
     event.setdefault("source_seat", damage_source_seat(game, event.get("source")))
+    mark_turn_unpreventable(game, event)
     kind = damage_kind(event["recipient"])
     trace = apply_in_order(
         game,

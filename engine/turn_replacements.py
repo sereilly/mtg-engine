@@ -68,6 +68,28 @@ from .shields import END_OF_TURN
 DAMAGE = "damage"
 #: One draw (CR 121.2).
 DRAW = "draw"
+#: "Damage can't be prevented this turn." (Flaring Pain.) Not a replacement at
+#: all — it takes CR 615's prevention away from every damage event it answers
+#: (CR 615.12), so no interceptor in ``engine/replacements/`` reads it. It is
+#: here for the lifetime: the spell has left the stack, the effect lasts the
+#: turn, and this module is where a resolution records such an effect and the
+#: one cleanup sweep ends it. ``damage_events.deal_damage`` is its reader — it
+#: marks each answering event with Urza's Rage's per-event lock, so the
+#: turn-wide sentence and the one-spell sentence are one question — and the
+#: DAMAGE record's narrowings (``combat_only``, ``source_creature``,
+#: ``recipient_creature``) are tested on it by :func:`damage_record_answers`,
+#: so a card printing "Combat damage can't be prevented this turn" is a field
+#: rather than a mechanism.
+DAMAGE_PREVENTION = "damage_prevention"
+
+
+def damage_prevention_forbidden(game, event: dict) -> bool:
+    """Whether a turn-long record says this damage event can't be prevented.
+    Pure."""
+    return any(
+        damage_record_answers(record, event)
+        for record in armed_turn_replacements(game, DAMAGE_PREVENTION)
+    )
 
 
 @dataclass
@@ -75,7 +97,7 @@ class TurnReplacement:
     """One replacement effect a resolution created, sitting on its controller.
 
     seat               -- the seat controlling the effect (CR 109.5's "you")
-    event              -- DAMAGE or DRAW
+    event              -- DAMAGE, DRAW or DAMAGE_PREVENTION
     source_name        -- the card whose resolution created it, for the log
     key                -- this effect's identity (CR 614.5)
     combat_only        -- "would deal **combat** damage"

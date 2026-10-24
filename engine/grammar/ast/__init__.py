@@ -225,6 +225,7 @@ from .damage import (
     ChosenSourceNextDamage,
     TurnDamageReplacement,
     RedirectDamage,
+    DamageCantBePrevented,
     DamageCantBePreventedOrRedirected,
     DamageRedirectOffer,
     DamageReducedByPaidMana,
@@ -703,6 +704,7 @@ __all__ = [
     "TurnDamageReplacement",
     "DamageRedirectOffer",
     "RedirectDamage",
+    "DamageCantBePrevented",
     "DamageCantBePreventedOrRedirected",
     "DamageReducedByPaidMana",
     # characteristics
