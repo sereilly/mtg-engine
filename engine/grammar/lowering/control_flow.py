@@ -48,6 +48,7 @@ from ._collapses import (event_seat_performs, offered_seat_performs,
                          without_restated_target,
                          _each_player_optional_discard,
                          _each_player_optional_draw,
+                         _each_player_optional_graveyard_exile,
                          _each_player_optional_pay_mana,
                          _each_player_optional_tap,
                          _referent_seat_optional_draw)
@@ -734,6 +735,7 @@ def _lower_may(
         _each_player_optional_discard,
         _each_player_optional_pay_mana,
         _each_player_optional_draw,
+        _each_player_optional_graveyard_exile,
         _each_player_optional_tap,
         _may_assign_as_unblocked_static,
     ):

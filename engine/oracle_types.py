@@ -819,6 +819,14 @@ class ActivatedAbilityCost:
     #: Last for ``remove_counter_filter``'s stated reason — the positional
     #: arguments ``parse_activated_ability_cost`` passes are at the front.
     mill_cards: int = 0
+    #: Battlefield Scrounger: "**Put three cards from your graveyard on the
+    #: bottom of your library**: …". How many cards the payer picks out of
+    #: their own pile (named on ``cost_graveyard_indices``); zero is "no such
+    #: cost". Not a value of ``exile_zone``: every reader of that field reads an
+    #: *exile* (``exiled_for_cost``, the client's verb, CR 605.1a), and this
+    #: moves cards **to a library**. CR 118.3 makes it unpayable from a pile
+    #: holding fewer cards. Last for ``mill_cards``' stated reason.
+    graveyard_to_library_bottom: int = 0
 
     @property
     def is_loyalty(self) -> bool:

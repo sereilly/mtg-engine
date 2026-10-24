@@ -386,6 +386,175 @@ def test_w1g5_the_offer_holds_the_spell_on_the_stack_until_it_is_answered(set_po
 
 # ==== W1G7 ==========================================================
 # W1G7's tests go between this line and the "end W1G7" line.
+#
+# Threshold "instead" sorceries: the second paragraph replaces the first when
+# seven or more cards are in the caster's graveyard as the spell resolves
+# (CR 608.2c), and exactly one of the two ever happens.
+
+import pytest as _w1g7_pytest
+
+from engine import Game as _W1G7Game, PlayerState as _W1G7PlayerState
+from engine.oracle import compile_card_oracle as _w1g7_compile
+from engine.targeting import derive_cast_spec as _w1g7_derive_cast_spec
+from tests.helpers import resolve_stack as _w1g7_resolve_stack
+
+
+def _w1g7_table(set_pool, catalog_by_name, graveyard=()):
+    """Two seats; seat 0's graveyard holds *graveyard* (card names), mana off."""
+    jud = set_pool("JUD")
+
+    def card(name):
+        return jud[name] if name in jud else catalog_by_name[name]
+
+    island = catalog_by_name["Island"]
+    game = _W1G7Game(players=[
+        _W1G7PlayerState(name="Alice", library=[island] * 10,
+                         graveyard=[card(name) for name in graveyard]),
+        _W1G7PlayerState(name="Bob", library=[island] * 10),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.active_player_index = 0
+    game.current_turn_phase = "main1"
+    game._w1g7_card = card
+    return game
+
+
+def _w1g7_bears(game, seat):
+    return [p for p in game.controlled_by(seat) if p.card.name == "Bear Token"]
+
+
+@_w1g7_pytest.mark.parametrize(("others", "bears"), [(6, 2), (7, 4)])
+def test_w1g7_grizzly_fate_makes_four_bears_only_at_threshold(
+    set_pool, catalog_by_name, others, bears,
+):
+    """Two 2/2 green Bears, or four instead with seven cards in the graveyard
+    — never six: the pair is one effect."""
+    game = _w1g7_table(set_pool, catalog_by_name, ["Island"] * others)
+    game.players[0].hand.append(game._w1g7_card("Grizzly Fate"))
+    assert game.cast_from_hand(0, "Grizzly Fate").supported
+    _w1g7_resolve_stack(game)
+
+    made = _w1g7_bears(game, 0)
+    assert len(made) == bears
+    assert all(
+        (p.effective_power, p.effective_toughness) == (2, 2) for p in made
+    )
+    assert _w1g7_bears(game, 1) == []
+    assert [c.name for c in game.players[0].graveyard][-1] == "Grizzly Fate"
+
+
+def test_w1g7_grizzly_fate_flashed_back_does_not_count_itself(
+    set_pool, catalog_by_name,
+):
+    """Ruling 2013-04-15: "At the time this spell is resolving, it is on the
+    stack and not in the graveyard. This means that you should not count this
+    card when determining whether the Threshold effect occurs." Six other
+    cards plus Grizzly Fate is seven before the flashback cast and six while it
+    resolves: two Bears, and the card is exiled (CR 702.34a)."""
+    game = _w1g7_table(
+        set_pool, catalog_by_name, ["Island"] * 6 + ["Grizzly Fate"]
+    )
+    result = game.cast_from_hand(0, "Grizzly Fate", from_zone="graveyard")
+    assert result.supported, result.details
+    _w1g7_resolve_stack(game)
+
+    assert len(_w1g7_bears(game, 0)) == 2
+    assert [c.name for c in game.players[0].exile] == ["Grizzly Fate"]
+    assert len(game.players[0].graveyard) == 6
+
+
+@_w1g7_pytest.mark.parametrize(
+    ("others", "to_hand", "to_battlefield"), [(4, True, False), (5, False, True)],
+)
+def test_w1g7_stitch_together_returns_to_hand_or_to_the_battlefield(
+    set_pool, catalog_by_name, others, to_hand, to_battlefield,
+):
+    """The target creature card counts toward the seven: with it, a Hill Giant
+    and four Islands (six) it goes to the hand, with five Islands (seven) it
+    enters the battlefield instead — the one card the spell targeted either
+    way, and never the Giant."""
+    game = _w1g7_table(
+        set_pool, catalog_by_name,
+        ["Island"] * others + ["Hill Giant", "Grizzly Bears"],
+    )
+    caster = game.players[0]
+    stitch = game._w1g7_card("Stitch Together")
+    caster.hand.append(stitch)
+    bears_slot = len(caster.graveyard) - 1
+    offered = {t["name"] for t in game.cast_target_spec(0, stitch)["valid_targets"]}
+    assert offered == {"Hill Giant", "Grizzly Bears"}
+    assert game.cast_from_hand(
+        0, "Stitch Together", target_player_index=0,
+        target_permanent_index=bears_slot,
+    ).supported
+    _w1g7_resolve_stack(game)
+
+    assert ("Grizzly Bears" in [c.name for c in caster.hand]) is to_hand
+    on_board = [p.card.name for p in game.controlled_by(0)]
+    assert ("Grizzly Bears" in on_board) is to_battlefield
+    assert "Hill Giant" in [c.name for c in caster.graveyard]
+    assert "Hill Giant" not in on_board
+
+
+def test_w1g7_stitch_together_with_its_target_gone_does_nothing(
+    set_pool, catalog_by_name,
+):
+    """CR 608.2b: its one target left the graveyard in response, so the spell
+    does not resolve — no other creature card is returned in its place, by
+    either arm."""
+    game = _w1g7_table(
+        set_pool, catalog_by_name, ["Island"] * 6 + ["Hill Giant", "Grizzly Bears"],
+    )
+    caster = game.players[0]
+    caster.hand.append(game._w1g7_card("Stitch Together"))
+    assert game.queue_from_hand(
+        0, "Stitch Together", target_player_index=0,
+        target_permanent_index=len(caster.graveyard) - 1,
+    ).supported
+    caster.exile.append(caster.graveyard.pop())     # the Bears, in response
+    _w1g7_resolve_stack(game)
+
+    assert [p.card.name for p in game.controlled_by(0)] == []
+    assert "Hill Giant" in [c.name for c in caster.graveyard]
+    assert "Hill Giant" not in [c.name for c in caster.hand]
+
+
+def test_w1g7_threshold_sorceries_pickers_name_what_the_cards_print(set_pool):
+    """Stitch Together names a creature card in its caster's own graveyard;
+    Grizzly Fate names nothing."""
+    jud = set_pool("JUD")
+    stitch, fate = jud["Stitch Together"], jud["Grizzly Fate"]
+    assert _w1g7_derive_cast_spec(stitch, _w1g7_compile(stitch)) == {
+        "kind": "graveyard_creature", "own_graveyard_only": True,
+    }
+    assert _w1g7_derive_cast_spec(fate, _w1g7_compile(fate)) is None
+
+
+@_w1g7_pytest.mark.parametrize(("others", "swept"), [(6, False), (7, True)])
+def test_w1g7_swirling_sandstorm_needs_threshold_and_spares_fliers(
+    set_pool, catalog_by_name, others, swept,
+):
+    """Drive list. Ruling 2004-10-04: "This card does nothing if you don't
+    have seven cards in your graveyard when it resolves." With seven, 5 damage
+    to each creature without flying — the caster's own Craw Wurm included —
+    and the Suntail Hawk is untouched."""
+    from engine.models import Permanent
+
+    game = _w1g7_table(set_pool, catalog_by_name, ["Island"] * others)
+    board = {}
+    for seat, name in ((1, "Grizzly Bears"), (1, "Suntail Hawk"), (0, "Craw Wurm")):
+        board[name] = Permanent(card=game._w1g7_card(name))
+        game._put_permanent_onto_battlefield(seat, board[name], None)
+    _w1g7_resolve_stack(game)
+    game.players[0].hand.append(game._w1g7_card("Swirling Sandstorm"))
+    assert game.cast_from_hand(0, "Swirling Sandstorm").supported
+    _w1g7_resolve_stack(game)
+
+    assert game.is_on_battlefield(board["Grizzly Bears"]) is not swept
+    assert game.is_on_battlefield(board["Craw Wurm"]) is not swept
+    assert game.is_on_battlefield(board["Suntail Hawk"])
+    assert board["Suntail Hawk"].damage_marked == 0
 
 # ==== end W1G7 ======================================================
 

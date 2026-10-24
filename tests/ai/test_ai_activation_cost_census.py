@@ -66,6 +66,9 @@ NON_MANA_COSTS = (
     "sacrifice_filter", "sacrifice_attached", "tap_count", "return_to_hand_count",
     "untap_filter", "put_counter_filter", "remove_counter_filter",
     "sacrifice_also_filter", "tap_attached", "exile_filter", "mana_from_attached",
+    # JUD W1G7: "Put three cards from your graveyard on the bottom of your
+    # library" (Battlefield Scrounger).
+    "graveyard_to_library_bottom",
 )
 
 #: Proposed and refused for their cost on the poor board, on 053649ac.

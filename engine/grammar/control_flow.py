@@ -115,6 +115,79 @@ def _attach_otherwise(stream: TokenStream, steps: list[ast.Statement]) -> bool:
     return True
 
 
+#: The sentences that produce a **value and no effect of their own** — each
+#: node's docstring says so in those words — so a conditional whose whole arm
+#: is one of them has not finished its arm: the sentence that reads the value
+#: is the rest of it.
+_VALUE_CHOICES = (
+    ast.ChooseColor, ast.ChooseNumber, ast.ChooseCardName,
+    ast.ChooseCreatureType, ast.ChooseCardType, ast.ChooseOpponent,
+)
+
+
+def _reads_a_choice(node) -> bool:
+    """Whether *node* reads a value an earlier "choose …" sentence produced —
+    "protection from **the chosen color**", "creatures **of the chosen type**",
+    a filter's ``chosen_color``. A walk over the node's fields rather than a
+    list of statement kinds, because the reference can sit anywhere a noun
+    phrase or a keyword can."""
+    if isinstance(node, str):
+        return "chosen" in node
+    if isinstance(node, (tuple, list)):
+        return any(_reads_a_choice(each) for each in node)
+    if dataclasses.is_dataclass(node) and not isinstance(node, type):
+        for field in dataclasses.fields(node):
+            value = getattr(node, field.name)
+            if value is True and "chosen" in field.name:
+                return True
+            if value is not None and not isinstance(value, (bool, int)) and (
+                _reads_a_choice(value)
+            ):
+                return True
+    return False
+
+
+def _attach_to_conditional_choice(
+    stream: TokenStream, steps: list[ast.Statement]
+) -> bool:
+    """``Threshold — If there are seven or more cards in your graveyard,
+    choose a color. Creatures you control also gain protection from the
+    chosen color until end of turn.`` (Aven Warcraft.)
+
+    The condition's arm is a choice, and a choice does nothing until a later
+    sentence reads it — so the sentence reading it is the **rest of that arm**,
+    not a step after the conditional. As a step it would run whether or not the
+    threshold held, granting protection from a colour nobody chose (or from
+    whatever an earlier resolution left recorded). The arm that already ran
+    is the only one whose value the sentence can mean.
+
+    Gated on both halves and refusing without consuming: the conditional has
+    no second arm and its arm is exactly one value-producing choice
+    (``_VALUE_CHOICES``), and the next sentence is a whole statement that
+    reads a chosen value (``_reads_a_choice``). A sentence that reads nothing
+    the arm chose is not part of it and is left to the loop.
+    """
+    last = steps[-1] if steps else None
+    if not (
+        isinstance(last, ast.Conditional)
+        and last.otherwise is None
+        and not last.negated
+        and isinstance(last.then, _VALUE_CHOICES)
+    ):
+        return False
+    mark = stream.mark()
+    try:
+        rest = parse_statement(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return False
+    if not _reads_a_choice(rest):
+        stream.reset(mark)
+        return False
+    steps[-1] = replace(last, then=ast.Sequence((last.then, rest)))
+    return True
+
+
 def _attach_tied_life_draw(stream: TokenStream, steps: list[ast.Statement]) -> bool:
     """``…the player with the highest life total wins the game. If two or more
     players are tied for highest life total, the game is a draw.`` (Celestial

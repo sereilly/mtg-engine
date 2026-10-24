@@ -128,6 +128,7 @@ def _graveyard_cost_refusal(cost) -> str | None:
         ("exile_top_of_library", "a library-exile cost"),
         ("mill_cards", "a mill cost"),
         ("hand_to_library_top", "a put-a-card-on-your-library cost"),
+        ("graveyard_to_library_bottom", "a graveyard-to-library cost"),
         ("pay_life", "a life cost"),
         ("loyalty", "a loyalty cost"),
         ("loyalty_x_sign", "a loyalty cost"),

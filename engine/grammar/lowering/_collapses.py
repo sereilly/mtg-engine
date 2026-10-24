@@ -392,6 +392,78 @@ def without_restated_target(
     )
 
 
+def _each_player_optional_graveyard_exile(
+    node: ast.May,
+) -> tuple[OracleInstruction, ...] | None:
+    """"Each player may exile **any number of** cards from their graveyard."
+    (Grave Consequences.)
+
+    :func:`_each_player_optional_discard`'s twin one zone over, collapsed for
+    its two reasons. "Any number" already lets a seat exile none, so the "may"
+    adds no answer the graveyard pick does not have; and the sentence behind it
+    ("Then each player loses 1 life for each card in their graveyard") has to
+    run after every seat has answered, which the ``graveyard_exile_pick``
+    prompt waits for (it suspends) and an offer per seat does not.
+
+    The pile is each seat's **own** ("their"), and the instruction is the
+    graveyard exile every other unannounced pick lowers onto
+    (``exile_cards_from_graveyard``), with the seat set as its pile owner and
+    no printed count: the ceiling is each pile's size, which only the
+    resolution knows.
+
+    Deliberately narrow, exactly as its siblings are: an offer with a cost, an
+    if-you-do or an otherwise is a second decision the pick cannot carry; a
+    narrowing beyond one card type, a duration, counters or a face-down rider
+    is a shape the pick does not perform, and the ordinary offer refuses it.
+    """
+    action = node.action
+    if (
+        node.cost is not None
+        or node.then is not None
+        or node.otherwise is not None
+        or node.reflexive is not None
+        or node.starting_with is not None
+        or not isinstance(node.actor, ast.PlayerRef)
+        or node.actor.kind not in _EACH_SEAT_ACTORS
+        or not isinstance(action, ast.Exile)
+        or action.actor is not None
+        or action.duration.kind is not None
+        or action.counters
+        or action.face_down
+        or action.same_zone
+        or not isinstance(action.subject, ast.TargetSpec)
+    ):
+        return None
+    spec = action.subject
+    filt = spec.filter
+    if (
+        spec.targeted
+        or spec.quantifier != "any_number"
+        or filt.zone != "graveyard"
+        or not filt.is_card
+        or getattr(filt.zone_owner, "kind", None) != "owner"
+    ):
+        return None
+    if len(filt.card_types) > 1 or _restrictions_beyond(
+        filt, frozenset({"card_types", "zone", "zone_owner", "is_card"})
+    ):
+        raise LoweringError(
+            "the each-player graveyard exile reads one card type", node=node
+        )
+    pile: dict[str, object] = {
+        "graveyard_owner": node.actor.kind,
+        "up_to": True,
+        "any_number": True,
+    }
+    if filt.card_types:
+        pile["card_type"] = filt.card_types[0]
+    else:
+        # ``graveyard_card_matches`` reads an absent type as "creature card";
+        # "cards" names any card, said out loud.
+        pile["any_card"] = True
+    return (OracleInstruction("exile_cards_from_graveyard", "", pile),)
+
+
 def _each_player_optional_tap(
     node: ast.May,
 ) -> tuple[OracleInstruction, ...] | None:

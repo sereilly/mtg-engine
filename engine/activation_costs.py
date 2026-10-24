@@ -389,6 +389,34 @@ def _mill_cost(cost_lower: str) -> int:
     return number if number >= 2 else 0
 
 
+_GRAVEYARD_TO_LIBRARY_BOTTOM_COST = re.compile(
+    r"\bput (an?|\w+) cards? from your graveyard on the bottom of your library"
+    r"\s*(?=,|$)"
+)
+
+
+def _graveyard_to_library_bottom_cost(cost_lower: str) -> int:
+    """How many cards a "Put N cards from your graveyard on the bottom of your
+    library" cost clause moves, or 0.
+
+    Battlefield Scrounger. The charging half of ``grammar/costs.py``'s
+    ``_accept_graveyard_cards_to_library_bottom``, admitting what that admits:
+    the article or a printed number of two or more, the payer's own pile and
+    the bottom of their own library, and nothing between the noun and "from" —
+    "three creature cards" names a narrowing this charger would drop. The
+    regex delimits the count and ``_NUMBER_WORDS`` reads it, the split every
+    counted clause in this file makes.
+    """
+    match = _GRAVEYARD_TO_LIBRARY_BOTTOM_COST.search(cost_lower)
+    if match is None:
+        return 0
+    word = match.group(1)
+    if word in ("a", "an"):
+        return 1
+    number = int(word) if word.isdigit() else _NUMBER_WORDS.get(word, 0)
+    return number if number >= 2 else 0
+
+
 _CONJOINED_SELF_COST = re.compile(
     rf"\b(sacrifice|exile) (?!this\b)([^,:]+?) and this (?:{_SELF_COST_NOUNS})\b"
     r"\s*(?=,|$)"
@@ -1097,4 +1125,5 @@ def parse_activated_ability_cost(
         untap_filter=_chargeable_untap_cost(cost_lower),
         chosen_keyword_options=_chosen_keyword_options(cost_lower),
         mill_cards=_mill_cost(cost_lower),
+        graveyard_to_library_bottom=_graveyard_to_library_bottom_cost(cost_lower),
     )

@@ -52,6 +52,9 @@ _COST_FLAGS = (
     # Rogue) — and the hand card "put on top of your library" (Hidden Retreat,
     # Penance).
     "untap_cost", "put_counter_cost", "remove_counter_cost", "library_top_cost",
+    # JUD W1G7: cards out of the payer's graveyard onto the bottom of their
+    # library (Battlefield Scrounger).
+    "library_bottom_cost",
 )
 
 # The gaps this guard found the day it was written are closed (round 52), so the
@@ -218,6 +221,8 @@ def _chosen_cost_flags(cost) -> list[str]:
         flags.append("remove_counter_cost")
     if getattr(cost, "hand_to_library_top", 0):
         flags.append("library_top_cost")
+    if getattr(cost, "graveyard_to_library_bottom", 0):
+        flags.append("library_bottom_cost")
     if (
         cost.discard_cards or getattr(cost, "discard_count_x", False)
     ) and not getattr(cost, "discard_at_random", False):

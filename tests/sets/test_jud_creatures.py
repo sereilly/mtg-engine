@@ -2107,6 +2107,236 @@ def test_w1g5_barbarian_bully_with_an_empty_hand_cannot_pay_its_discard(set_pool
 
 # ==== W1G7 ==========================================================
 # W1G7's tests go between this line and the "end W1G7" line.
+#
+# Guiltfeeder: "Whenever this creature attacks and isn't blocked, defending
+# player loses 1 life for each card in their graveyard." The pile counted is
+# the defending player's own (CR 506.2's seat, frozen by the declare-blockers
+# fire site), never the attacker's.
+
+import pytest as _w1g7_pytest
+
+from engine import Game as _W1G7Game, PlayerState as _W1G7PlayerState
+from engine.models import Permanent as _W1G7Permanent
+from tests.helpers import _nosick as _w1g7_nosick, resolve_stack as _w1g7_resolve
+
+
+def _w1g7_guiltfeeder_table(set_pool, catalog_by_name, graveyards):
+    """One seat per entry of *graveyards* (how many Islands each holds), a
+    Guiltfeeder on seat 0's battlefield, awake."""
+    island = catalog_by_name["Island"]
+    game = _W1G7Game(players=[
+        _W1G7PlayerState(name=f"P{seat}", library=[island] * 10,
+                         graveyard=[island] * count)
+        for seat, count in enumerate(graveyards)
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.active_player_index = 0
+    game.current_turn_phase = "main1"
+    feeder = _W1G7Permanent(card=set_pool("JUD")["Guiltfeeder"])
+    game._put_permanent_onto_battlefield(0, feeder, None)
+    _w1g7_resolve(game)
+    _w1g7_nosick(feeder)
+    return game, feeder
+
+
+def _w1g7_attack(game, defender, blocks=None):
+    """Seat 0 attacks *defender* with everything; *blocks* declared; then the
+    declare-blockers step's priority window, where the trigger resolves."""
+    game._set_phase_and_step("combat", "declare_attackers")
+    slots = [
+        slot for slot, perm in enumerate(game.players[0].battlefield)
+        if perm.is_creature
+    ]
+    ok, why = game.declare_attackers(0, slots, defending_player_index=defender)
+    assert ok, why
+    game.advance_combat_phase()
+    ok, why = game.declare_blockers(defender, dict(blocks or {}))
+    assert ok, why
+    _w1g7_resolve(game)
+    game.advance_combat_phase()
+    _w1g7_resolve(game)
+
+
+def test_w1g7_guiltfeeder_unblocked_drains_the_defender_by_their_graveyard(
+    set_pool, catalog_by_name,
+):
+    """Five cards in the defender's graveyard, three in the attacker's: the
+    defender loses five as the trigger resolves, before the 0/4 deals its no
+    combat damage, and the attacker loses nothing."""
+    game, _feeder = _w1g7_guiltfeeder_table(set_pool, catalog_by_name, [3, 5])
+    _w1g7_attack(game, 1)
+
+    assert game.players[1].life == 15
+    assert game.players[0].life == 20
+    assert "Guiltfeeder: P1 lost 5 life (20 -> 15)" in game.log
+
+
+def test_w1g7_guiltfeeder_blocked_does_nothing(set_pool, catalog_by_name):
+    """Fear lets a black creature block it, and a blocked Guiltfeeder's
+    trigger never fires."""
+    game, _feeder = _w1g7_guiltfeeder_table(set_pool, catalog_by_name, [0, 5])
+    knight = _W1G7Permanent(card=catalog_by_name["Black Knight"])
+    game._put_permanent_onto_battlefield(1, knight, None)
+    _w1g7_resolve(game)
+    _w1g7_attack(game, 1, blocks={0: 0})
+
+    assert game.players[1].life == 20
+    assert not any("Guiltfeeder:" in line and "lost" in line for line in game.log)
+
+
+def test_w1g7_guiltfeeder_counts_the_attacked_players_pile_at_a_table_of_three(
+    set_pool, catalog_by_name,
+):
+    """Three seats, the Guiltfeeder attacking the third: it is that seat's
+    graveyard (four cards) that is counted and that seat that loses — not the
+    first opponent in seat order, whose graveyard holds nine."""
+    game, _feeder = _w1g7_guiltfeeder_table(set_pool, catalog_by_name, [0, 9, 4])
+    _w1g7_attack(game, 2)
+
+    assert [p.life for p in game.players] == [20, 20, 16]
+
+
+# Battlefield Scrounger: "Threshold — Put three cards from your graveyard on
+# the bottom of your library: This creature gets +3/+3 until end of turn.
+# Activate only once each turn and only if there are seven or more cards in
+# your graveyard."
+
+_W1G7_PILE = (
+    "Island", "Grizzly Bears", "Lightning Bolt", "Hill Giant", "Swamp",
+    "Forest", "Giant Growth", "Mountain",
+)
+
+
+def _w1g7_scrounger_table(set_pool, catalog_by_name, cards_in_graveyard):
+    island = catalog_by_name["Island"]
+    game = _W1G7Game(players=[
+        _W1G7PlayerState(
+            name="P0", library=[island] * 5,
+            graveyard=[catalog_by_name[n] for n in _W1G7_PILE[:cards_in_graveyard]],
+        ),
+        _W1G7PlayerState(name="P1", library=[island] * 5),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.active_player_index = 0
+    game.current_turn_phase = "main1"
+    scrounger = _W1G7Permanent(card=set_pool("JUD")["Battlefield Scrounger"])
+    game._put_permanent_onto_battlefield(0, scrounger, None)
+    _w1g7_resolve(game)
+    _w1g7_nosick(scrounger)
+    return game, scrounger
+
+
+def test_w1g7_scrounger_needs_threshold_before_its_cost_is_paid(
+    set_pool, catalog_by_name,
+):
+    """Six cards: refused by the restriction with nothing moved (CR 602.5 — a
+    player can't begin to activate an ability that's prohibited, so it is
+    asked before the cost)."""
+    game, scrounger = _w1g7_scrounger_table(set_pool, catalog_by_name, 6)
+    result = game.activate_permanent_ability(0, "Battlefield Scrounger")
+
+    assert not result.supported
+    assert "seven or more cards in your graveyard" in result.details
+    assert len(game.players[0].graveyard) == 6 and len(game.players[0].library) == 5
+    assert scrounger.effective_power == 3
+
+
+def test_w1g7_scrounger_pays_three_cards_and_resolves_below_threshold(
+    set_pool, catalog_by_name,
+):
+    """Exactly seven: three go to the bottom of the library and the ability
+    still resolves at four — the 2022-12-08 ruling ("If activating the ability
+    causes that number to fall below seven, the ability still resolves as
+    normal"). A seat that names nothing gives up its least valuable cards (the
+    three lands), and the ability is then refused a second time this turn."""
+    game, scrounger = _w1g7_scrounger_table(set_pool, catalog_by_name, 7)
+    result = game.activate_permanent_ability(0, "Battlefield Scrounger")
+    assert result.supported, result.details
+    _w1g7_resolve(game)
+
+    owner = game.players[0]
+    assert (scrounger.effective_power, scrounger.effective_toughness) == (6, 6)
+    assert len(owner.graveyard) == 4
+    assert sorted(c.name for c in owner.library[5:]) == ["Forest", "Island", "Swamp"]
+    again = game.activate_permanent_ability(0, "Battlefield Scrounger")
+    assert not again.supported and "once each turn" in again.details
+
+
+def test_w1g7_scrounger_named_cards_go_down_in_the_order_named(
+    set_pool, catalog_by_name,
+):
+    """The payer names the three on ``cost_graveyard_indices``, and the order
+    named is the order they reach the bottom (CR 401.4)."""
+    game, _scrounger = _w1g7_scrounger_table(set_pool, catalog_by_name, 8)
+    result = game.activate_permanent_ability(
+        0, "Battlefield Scrounger", cost_graveyard_indices=[2, 0, 7],
+    )
+    assert result.supported, result.details
+
+    owner = game.players[0]
+    assert [c.name for c in owner.library[5:]] == ["Lightning Bolt", "Island", "Mountain"]
+    assert "Lightning Bolt" not in [c.name for c in owner.graveyard]
+
+
+@_w1g7_pytest.mark.parametrize(
+    ("named", "why"),
+    [
+        ([2, 2, 7], "more than once"),
+        ([1, 2, 3, 4], "4 were named"),
+        ([9], "no card at graveyard position 9"),
+    ],
+)
+def test_w1g7_scrounger_refuses_a_bad_naming_with_nothing_paid(
+    set_pool, catalog_by_name, named, why,
+):
+    game, _scrounger = _w1g7_scrounger_table(set_pool, catalog_by_name, 8)
+    result = game.activate_permanent_ability(
+        0, "Battlefield Scrounger", cost_graveyard_indices=named,
+    )
+
+    assert not result.supported and why in result.details
+    assert len(game.players[0].graveyard) == 8 and len(game.players[0].library) == 5
+
+
+def test_w1g7_scrounger_picker_asks_for_three_of_its_own_graveyard(set_pool):
+    """The cost is a payment, not a target (CR 601.2b): a picker over the
+    payer's own pile, any card, three of them, answered on the cost field."""
+    from engine.cost_pickers import spec_is_a_cost
+    from engine.oracle import compile_card_oracle
+    from engine.targeting import derive_activation_spec
+
+    card = set_pool("JUD")["Battlefield Scrounger"]
+    (ability,) = compile_card_oracle(card).activated_abilities
+    spec = derive_activation_spec(ability)
+    assert spec == {
+        "kind": "graveyard_creature", "own_graveyard_only": True,
+        "any_card": True, "library_bottom_cost": True, "count": 3,
+    }
+    assert spec_is_a_cost(spec)
+
+
+def test_w1g7_ancestors_chosen_gains_a_life_per_card_in_its_graveyard(
+    set_pool, catalog_by_name,
+):
+    """Drive list: cast out of the hand with five cards in its controller's
+    graveyard and three in the opponent's, its entry trigger gains five — its
+    own pile, and not counting itself (it is on the battlefield)."""
+    island = catalog_by_name["Island"]
+    game = _W1G7Game(players=[
+        _W1G7PlayerState(name="P0", library=[island] * 5, graveyard=[island] * 5,
+                         hand=[set_pool("JUD")["Ancestor's Chosen"]]),
+        _W1G7PlayerState(name="P1", library=[island] * 5, graveyard=[island] * 3),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.active_player_index = 0
+    game.current_turn_phase = "main1"
+    assert game.cast_from_hand(0, "Ancestor's Chosen").supported
+    _w1g7_resolve(game)
+
+    assert [p.life for p in game.players] == [25, 20]
 
 # ==== end W1G7 ======================================================
 
