@@ -197,7 +197,9 @@ def _lower_chosen_source_blanket(
       would deal this turn" (Rith's Charm) names only the source, so it stops
       that source's damage to whoever it was headed for. That is Penance's
       ``any_recipient`` reach on the same seat-held shield, and it is carried
-      as that flag rather than as a second kind;
+      as that flag rather than as a second kind — **or is "any target"**
+      (Shieldmage Advocate), announced and carried as ``recipient: "target"``
+      with its description, so the shield is armed around what was named;
     * no colour or type narrows the choice (``from_filter`` is the empty
       phrase). A narrowed one — "a red source of your choice" — is a property
       the shield would have to recheck and this payload carries none;
@@ -214,7 +216,22 @@ def _lower_chosen_source_blanket(
             node=node,
         )
     any_recipient = node.to is None
-    if (not any_recipient and not _is_you(node.to)) or node.to_others:
+    # "Prevent all damage that would be dealt to **any target** this turn by a
+    # source of your choice." (Shieldmage Advocate.) The blanket around an
+    # announced recipient rather than its controller — Circle of Despair's
+    # any-target shield (``grant_whole_prevention_shield``'s ``recipient:
+    # "target"``) without "the next time": CR 615.1 puts a shield around a
+    # player or a permanent, and the description beside it is what makes the
+    # picker ask for one (CR 115.4) as well as for the source (CR 609.7a).
+    targeted = (
+        isinstance(node.to, ast.TargetSpec)
+        and node.to.quantifier == "any_target"
+        and node.to.filter == ast.ObjectFilter()
+    )
+    if (
+        (not any_recipient and not targeted and not _is_you(node.to))
+        or node.to_others
+    ):
         raise LoweringError(
             "the chosen-source blanket protects its controller, or names no "
             "recipient at all", node=node
@@ -240,6 +257,18 @@ def _lower_chosen_source_blanket(
             "the chosen-source blanket lasts exactly this turn", node=node
         )
     payload: dict[str, object] = {}
+    if targeted:
+        if node.prevented_rider is not None or node.source_shares_spent_mana_color:
+            # Both riders read the controller's own payment or pay the
+            # controller, and this shield may stand around an opponent's
+            # creature; no card prints the pair, and borrowing either would pay
+            # or check the wrong seat.
+            raise LoweringError(
+                "an any-target chosen-source blanket carries no rider",
+                node=node,
+            )
+        payload["recipient"] = "target"
+        payload["targets"] = {"quantifier": "any_target", "kind": "any"}
     if any_recipient:
         # Emitted only when the sentence prints no recipient, so Samite
         # Ministration's and Protective Sphere's payloads stay byte-identical.

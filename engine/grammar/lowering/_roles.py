@@ -783,7 +783,22 @@ def describe_graveyard_card_roles(instructions) -> "tuple | None":
         and other_described.get("kind") == "object"
         and other_described.get("quantifier") == "target"
     )
-    if other_spec.get("kind") != GRAVEYARD_TARGET_KIND and not other_is_object:
+    # "…Prevent all damage that would be dealt to **any target** this turn by a
+    # source of your choice." (Shieldmage Advocate.) CR 115.4's union as one
+    # role — the walk enumerates it as ``_enumerate_targets`` does any "any"
+    # spec, players and permanents both — and the source the sentence chooses
+    # (CR 609.7a, not a target) as the announcement's second stage, which the
+    # roles description carries whole (``requires_source``).
+    other_is_any = (
+        isinstance(other_described, dict)
+        and other_described.get("kind") == "any"
+        and other_spec.get("kind") == "any"
+        and set(other_spec) <= {"kind", "requires_source"}
+    )
+    if (
+        other_spec.get("kind") != GRAVEYARD_TARGET_KIND
+        and not other_is_object and not other_is_any
+    ):
         if not other_spec or other_spec.get("kind") == "none":
             # The second step targets nothing (a draw, a life gain): one
             # announcement, already described by the first step alone.
@@ -825,6 +840,9 @@ def describe_graveyard_card_roles(instructions) -> "tuple | None":
             if key not in _ROLE_STRUCTURAL_KEYS
         }
         other_role.update({"role": other_name, "count": 1, "filter": narrowing})
+    elif other_is_any:
+        other_name = "any target"
+        other_role = {"role": other_name, "kind": "any", "count": 1}
     else:
         if other_spec.get("max_targets") not in (None, 1):
             raise LoweringError(
@@ -836,14 +854,15 @@ def describe_graveyard_card_roles(instructions) -> "tuple | None":
             other_name = f"other {other_name}"
         (other_role,) = _graveyard_step_roles(other_spec, names=(other_name,))
     roles.append(other_role)
+    source_stage = {"requires_source": True} if other_spec.get("requires_source") else {}
     cards_targets = {
         **(cards_step.payload.get("targets") or {"quantifier": "target"}),
         "kind": "roles", "roles": roles, "role": names[0],
-        "role_group": list(names),
+        "role_group": list(names), **source_stage,
     }
     other_targets = {
         **(other_described if isinstance(other_described, dict) else {"quantifier": "target"}),
-        "kind": "roles", "roles": roles, "role": other_name,
+        "kind": "roles", "roles": roles, "role": other_name, **source_stage,
     }
     return (
         dataclasses.replace(

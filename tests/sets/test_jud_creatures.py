@@ -510,6 +510,98 @@ def test_w1g3_an_advocate_card_that_left_its_pile_is_not_replaced(set_pool):
     assert _w1g3_names(victim.hand) == ["Terror"]
     assert _w1g3_names(victim.graveyard) == ["Swamp", "Craw Wurm", "Icy Manipulator"]
 
+
+# Shieldmage Advocate: "…Prevent all damage that would be dealt to any target
+# this turn by a source of your choice." The second role is CR 115.4's union —
+# a player or a permanent — and the source is CR 609.7a's choice beside the
+# roles (``requires_source``), named on the activation's source fields.
+
+from engine.handlers._common import apply_damage_to_creature as _w1g3_damage_creature
+
+
+def _w1g3_shieldmage(set_pool):
+    return _w1g3_advocate_game(
+        set_pool, "Shieldmage Advocate", their_board=("Grizzly Bears", "Hill Giant"),
+    )
+
+
+def test_w1g3_shieldmage_advocate_offers_a_card_and_any_target_and_asks_for_a_source(set_pool):
+    game, advocate, (bears, giant) = _w1g3_shieldmage(set_pool)
+    spec = game.activation_target_spec(0, 0)
+    assert [role["role"] for role in spec["roles"]] == ["card", "any target"]
+    assert spec["requires_source"]
+    assert {(t["seat"], t["name"]) for t in spec["source_targets"]} >= {
+        (1, "Grizzly Bears"), (1, "Hill Giant"),
+    }
+    second = {
+        (node["kind"], node["seat"], node.get("index"))
+        for node in spec["valid_targets"][0]["next"]
+    }
+    # Both players and every creature: "any target" (CR 115.4).
+    assert second == {
+        ("player", 0, None), ("player", 1, None),
+        ("permanent", 0, game.battlefield_index_of(advocate)),
+        ("permanent", 1, game.battlefield_index_of(bears)),
+        ("permanent", 1, game.battlefield_index_of(giant)),
+    }
+
+
+def test_w1g3_shieldmage_advocate_shields_its_controller_from_the_chosen_source(set_pool):
+    game, _advocate, (bears, giant) = _w1g3_shieldmage(set_pool)
+    result = game.activate_permanent_ability(
+        0, "Shieldmage Advocate",
+        target_role_refs=[{"graveyard_seat": 1, "graveyard_index": 1}, {"seat": 0}],
+        source_seat=1, source_permanent_index=game.battlefield_index_of(bears),
+    )
+    assert result.supported, result.details
+    _w1g3_resolve(game)
+
+    assert _w1g3_names(game.players[1].hand) == ["Hill Giant"]
+    me = game.players[0]
+    game._deal_damage_to_player(me, 2, source=bears)
+    game._deal_damage_to_player(me, 2, source=bears)        # all of it, all turn
+    assert me.life == 20
+    game._deal_damage_to_player(me, 3, source=giant)        # another source
+    assert me.life == 17
+    assert game.players[1].life == 20
+
+
+def test_w1g3_shieldmage_advocate_shields_a_creature_and_only_from_its_source(set_pool):
+    game, advocate, (bears, giant) = _w1g3_shieldmage(set_pool)
+    result = game.activate_permanent_ability(
+        0, "Shieldmage Advocate",
+        target_role_refs=_w1g3_refs((1, 0), advocate),
+        source_seat=1, source_permanent_index=game.battlefield_index_of(giant),
+    )
+    assert result.supported, result.details
+    _w1g3_resolve(game)
+
+    _w1g3_damage_creature(game, advocate, 3, giant)
+    assert advocate.damage_marked == 0
+    _w1g3_damage_creature(game, advocate, 2, bears)
+    assert advocate.damage_marked == 2
+    # The player beside it is not shielded: the shield is around what was named.
+    game._deal_damage_to_player(game.players[0], 3, source=giant)
+    assert game.players[0].life == 17
+
+
+def test_w1g3_shieldmage_advocate_still_shields_with_its_card_gone(set_pool):
+    """CR 608.2b: one of two targets illegal, the ability still resolves —
+    the card is not returned and the shield is still armed."""
+    game, _advocate, (bears, _giant) = _w1g3_shieldmage(set_pool)
+    assert game.queue_permanent_ability(
+        0, "Shieldmage Advocate",
+        target_role_refs=[{"graveyard_seat": 1, "graveyard_index": 2}, {"seat": 0}],
+        source_seat=1, source_permanent_index=game.battlefield_index_of(bears),
+    ).supported
+    victim = game.players[1]
+    victim.exile.append(victim.graveyard.pop(2))           # Terror, in response
+    _w1g3_resolve(game)
+
+    assert victim.hand == []
+    game._deal_damage_to_player(game.players[0], 2, source=bears)
+    assert game.players[0].life == 20
+
 # ==== end W1G3 ======================================================
 
 

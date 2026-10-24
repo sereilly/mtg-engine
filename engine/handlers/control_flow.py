@@ -259,6 +259,25 @@ def _role_scoped(
             context, target_permanent_index=None, target_permanent_id=None,
             announced_targets=remembered,
         )
+    if entry.get("kind") == "any" and _named_a_seat(announced, payload, role):
+        # "…Prevent all damage that would be dealt to **any target** this turn
+        # by a source of your choice." (Shieldmage Advocate.) CR 115.4's union
+        # as a role, answered by a player here — the seat the announcement
+        # recorded for this slot (``target_roles.ROLE_SEATS``), in the channel
+        # a one-target "any target" effect reads its player from. Answered by a
+        # permanent it falls through to the permanent arm below.
+        from ..target_roles import recorded_role_seats, payload_role_slot
+
+        slot = payload_role_slot(payload, role)
+        recorded = recorded_role_seats(announced) or []
+        seat = recorded[slot] if slot is not None and slot < len(recorded) else None
+        if not isinstance(seat, int) or game.players[seat].lost:
+            return context if wrapper else None
+        return dataclasses.replace(
+            context, target=game.players[seat],
+            target_permanent_index=None, target_permanent_id=None,
+            announced_targets=remembered,
+        )
     if entry.get("kind") == "graveyard_card":
         # "Return two target cards from an opponent's graveyard to their hand.
         # Destroy target artifact or enchantment." (Nullmage Advocate.) A role
@@ -317,6 +336,23 @@ def _role_scoped(
         target_permanent_id=game.permanent_id_of(permanent),
         announced_targets=remembered,
     )
+
+
+def _named_a_seat(announced: OracleExecutionContext, payload: dict, role: str) -> bool:
+    """Whether the announcement answered *role* — an "any target" role — with a
+    player: its slot recorded a seat (``target_roles.ROLE_SEATS``) and no
+    permanent id."""
+    from ..target_roles import payload_role_slot, recorded_role_seats
+
+    slot = payload_role_slot(payload, role)
+    recorded = recorded_role_seats(announced)
+    if slot is None or recorded is None or slot >= len(recorded):
+        return False
+    ids = announced.target_permanent_id
+    named_permanent = (
+        isinstance(ids, list) and slot < len(ids) and isinstance(ids[slot], int)
+    )
+    return not named_permanent and isinstance(recorded[slot], int)
 
 
 def _graveyard_role_scoped(

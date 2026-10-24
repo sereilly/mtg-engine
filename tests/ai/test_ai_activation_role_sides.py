@@ -77,6 +77,9 @@ _PRINTED_SIDES = {
     "Nullmage Advocate": (None, None, "opponent"),
     "Pulsemage Advocate": (None, None, None, None),
     "Spurnmage Advocate": (None, None, "opponent"),
+    # "…Prevent all damage that would be dealt to any target …": a shield,
+    # so a permanent it names is one of the activator's own.
+    "Shieldmage Advocate": (None, "you"),
 }
 
 

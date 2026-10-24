@@ -1263,7 +1263,8 @@ class AbilityActivationMixin:
         announcement names at most one seat, which is every roles ability and
         spell the pool held before "target player … another target player"
         (Cultural Exchange) and leaves each of them exactly as it was. The
-        scalar is then the **first** seat named. Both announcement paths call
+        scalar is then the **first** seat named. One seat **beside a graveyard
+        stamp** records the list too, for the reason given at its line below. Both announcement paths call
         this — an activation always has, and a cast handed ``target_role_refs``
         does (``casting._cast_onto_stack``) — so a seat per role has one
         spelling going in and one coming out.
@@ -1310,7 +1311,18 @@ class AbilityActivationMixin:
             stamps.append(
                 self.graveyard_target_at(ref.get("graveyard_seat"), index)
             )
-        several = len([named for named in seats if named is not None]) > 1
+        named_seats = [named for named in seats if named is not None]
+        # …and a seat named **beside a card in a graveyard** ("Return target
+        # card from an opponent's graveyard to their hand. Prevent all damage
+        # that would be dealt to any target …", Shieldmage Advocate, naming a
+        # player for the second). The scalar cannot hold that seat: the
+        # resolution writes the stamped card's pile onto it
+        # (``resolution._run_stack_item_resolution``), so the player the
+        # announcement named would be read back as the graveyard's owner.
+        beside_a_card = bool(named_seats) and any(
+            stamp is not None for stamp in stamps
+        )
+        several = len(named_seats) > 1 or beside_a_card
         return ids, indices, stamps, seat, (seats if several else None)
 
     def tap_permanent(

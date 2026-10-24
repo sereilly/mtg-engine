@@ -774,6 +774,36 @@ def grant_chosen_source_blanket_shield(
     if chosen is None or seat is None:
         game.log.append(f"{granted_by}: no source of damage to choose")
         return True, "resolved"
+    # "Prevent all damage that would be dealt to **any target** this turn by a
+    # source of your choice." (Shieldmage Advocate.) The shield stands around
+    # the announced player or permanent (CR 615.1), read through the reader
+    # Circle of Despair's any-target shield uses — a permanent first, then the
+    # player — and the source comes from the announcement's own source field,
+    # never from the target channel the recipient spent. A recipient gone by
+    # now is CR 608.2b's illegal target and is not protected; nothing else is.
+    if instruction.payload.get("recipient") == "target":
+        # "Any target" admits a player (CR 115.4) — spelled ``any_target`` on
+        # the description's quantifier, which survives the description becoming
+        # one role of an announcement (its ``kind`` is then ``roles``).
+        described = instruction.payload.get("targets") or {}
+        protected = _shield_target(
+            game, context,
+            allow_player=described.get("kind") == "any"
+            or described.get("quantifier") == "any_target",
+        )
+        if protected is None:
+            game.log.append(f"{granted_by}: nothing is there to protect")
+            return True, "resolved"
+        add_shield(protected, make_chosen_source_blanket(
+            chosen, seat, granted_by, colors=colors,
+        ))
+        source_card = getattr(chosen, "card", chosen)
+        game.log.append(
+            f"{granted_by}: all damage {getattr(source_card, 'name', 'a source')} "
+            f"would deal to {getattr(protected, 'name', None) or protected.card.name} "
+            "this turn will be prevented"
+        )
+        return True, "resolved"
     # "Prevent all damage a source of your choice would deal this turn."
     # (Rith's Charm.) No recipient printed, so the same shield reaches every
     # recipient that source would damage — the flag, not a second shield.

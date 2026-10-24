@@ -1279,6 +1279,12 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     "exile_cards_from_graveyard": _graveyard_exile_pile_spec,
     "grant_prevention_shield": _prevention_shield_spec,
     "grant_whole_prevention_shield": _whole_prevention_shield_spec,
+    # The blanket around one chosen source is the same two answers: the flat
+    # source prompt Samite Ministration and Protective Sphere have always run,
+    # and — announcing a recipient as Circle of Despair does — "…dealt to **any
+    # target** this turn by a source of your choice" (Shieldmage Advocate), the
+    # target first and ``requires_source`` for the second stage.
+    "grant_chosen_source_blanket_shield": _whole_prevention_shield_spec,
     # Honorable Passage names its protected object the way Circle of
     # Despair does — "would deal damage to **any target**" — and its
     # chosen source the way every CR 615.8 shield does. Same two
