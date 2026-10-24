@@ -8,8 +8,9 @@ weighing rather than stating:
 * **a library** — which card a search finds (:func:`choose_search_card`,
   :func:`choose_search_cards`), how a scry or a rearrangement leaves the top,
   which finds of a pile bought back a card at a time are kept
-  (:func:`slow_pile_picks`) — each card weighed by what casting it would be
-  worth (``ai_scoring._score_tutor_choice``);
+  (:func:`slow_pile_picks`) and which card a Wish brings in from outside the
+  game (:func:`choose_outside_game_card`) — each card weighed by what casting
+  it would be worth (``ai_scoring._score_tutor_choice``);
 * **a price** — whether a toll's penalty loses less than paying it
   (:func:`toll_decline_is_smaller_loss`), whether an offer's trade is worth
   taking (:func:`offer_trade_is_worth_taking`) or buys its own source's
@@ -208,6 +209,30 @@ def choose_search_cards(
                 "named_among": [n for n in among if name_key(n) != name_key(card.name)],
             }
     return picks
+
+
+def choose_outside_game_card(
+    game: Game, player_index: int, candidates: list[int]
+) -> int | None:
+    """The sideboard position of the card a seat nobody asks brings in from
+    outside the game (the Wishes, CR 400.11b), or None with nothing to offer.
+
+    *candidates* is the engine's own list (``handlers.cards.
+    outside_game_candidates``), never a second reading of the card: the AI is
+    offered exactly what a person is. Weighed as a library search's find is
+    (``_score_tutor_choice``) — a sideboard is a pile its owner looks through
+    in full, which is the search's situation — the best first, the earliest
+    position between equals so a seed reproduces the pick.
+    """
+    if not candidates:
+        return None
+    sideboard = game.players[player_index].sideboard
+    return max(
+        candidates,
+        key=lambda index: (
+            _score_tutor_choice(game, player_index, sideboard[index]), -index,
+        ),
+    )
 
 
 #: How many cards a seat nobody asks exiles into a pile that returns **one card

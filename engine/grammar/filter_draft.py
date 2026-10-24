@@ -216,6 +216,9 @@ class _FilterDraft:
     # "…**on the battlefield**" (An-Havva Constable) — see
     # ``ast.ObjectFilter.on_the_battlefield``.
     on_the_battlefield: bool = False
+    # "…**from outside the game**" (the Wishes) — see
+    # ``ast.ObjectFilter.outside_the_game``.
+    outside_the_game: bool = False
     named: str | None = None
     #: See ``ast.ObjectFilter.not_named`` / ``not_named_source`` /
     #: ``with_protection_from``.
@@ -398,6 +401,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         chosen_by_opponent=d.chosen_by_opponent,
         not_chosen_this_way=d.not_chosen_this_way,
         on_the_battlefield=d.on_the_battlefield,
+        outside_the_game=d.outside_the_game,
         dealt_damage_to_source_this_turn=d.dealt_damage_to_source_this_turn,
         characteristic_vs_source=d.characteristic_vs_source,
         superlative=d.superlative,

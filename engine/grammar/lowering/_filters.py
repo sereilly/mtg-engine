@@ -385,6 +385,13 @@ CONDITIONALLY_EMITTED_FIELDS: dict[str, str] = {
     # ``_amounts.count_spec`` reads it, because it is the one reader with
     # somewhere to put a scope (``owner: "all"``).
     "on_the_battlefield": "on_the_battlefield",
+    # "…a card you own **from outside the game**" (the Wishes). CR 400.11's
+    # "not a zone", so ``zone`` stays "battlefield" and ``to_payload`` emits
+    # nothing: a lowering that built a payload and did not know the field
+    # would look for the card on the battlefield, or in whatever zone its
+    # handler defaults to, instead of in the player's sideboard. Only the
+    # outside-the-game pick (``lowering/cards``) reads it.
+    "outside_the_game": "outside_the_game",
     # "…for each **basic land type among** lands you control" (domain). Not a
     # narrowing of the set at all but a statement about what a *count* of it
     # counts, so ``to_payload`` emits nothing — and a lowering that built a

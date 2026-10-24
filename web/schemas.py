@@ -149,6 +149,7 @@ ActionKind = Literal[
     "modal_mode_targets_confirm",
     "lamp_draw_confirm",
     "outside_game_draw_confirm",
+    "outside_game_pick_confirm",
     "graveyard_return_draw_confirm",
     "assign_defender_piles",
     "assign_attacker_piles",
@@ -459,6 +460,11 @@ class GameActionRequest(BaseModel):
     # picked. Its own field rather than `hand_index`, because the zone is
     # not the answering seat's and not a hand.
     graveyard_index: int | None = Field(default=None, ge=0)
+    # The Wishes (`outside_game_pick_confirm`): which card of the answering
+    # seat's sideboard comes in from outside the game (CR 400.11a). Its own
+    # field for `graveyard_index`'s reason — a sideboard is not a hand, and
+    # not a zone at all (CR 400.11) — with `accept: false` the decline.
+    sideboard_index: int | None = Field(default=None, ge=0)
     # Thieves' Auction: which of the cards still unclaimed this seat is taking.
     # Its own field rather than an index into anybody's exile *zone*, because
     # the pile is the resolution's — a seat's exile holds everything that ever

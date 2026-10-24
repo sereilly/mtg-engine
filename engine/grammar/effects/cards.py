@@ -801,6 +801,61 @@ def parse_put_milled_card_onto_battlefield(
     return ast.PutMilledCardOntoBattlefield()
 
 
+def parse_put_outside_game_card_into_hand(
+    stream: TokenStream,
+) -> "ast.PutOutsideGameCardIntoHand | None":
+    """``Reveal a <filter> card you own from outside the game and put it into
+    your hand.`` / ``Put a card you own from outside the game into your hand.``
+    (The five Judgment Wishes, Death Wish without the reveal; Ring of Ma'rûf's
+    sentence behind "instead".)
+
+    One production for both verbs, because they are one effect (CR 400.11b's
+    card brought into the game) and the reveal is the only difference — a
+    field of the node rather than a second node, so a reader cannot handle one
+    spelling and miss the other.
+
+    Declines **without consuming** until the noun phrase turns out to be
+    scoped outside the game: "reveal" and "put" open dozens of sentences whose
+    own productions have better refusal sites than this one. Once it has —
+    the three words nothing else reads — a tail it does not know is a refusal
+    *here*, naming the words it expected, rather than a fall-through to a
+    production that would fail on a word this one already read.
+
+    Ownership ("you own") and the card noun are recorded, not required: the
+    lowering checks them, beside every other word the phrase may print.
+    """
+    mark = stream.mark()
+    if stream.accept_word("reveal"):
+        revealed = True
+    elif stream.accept_word("put"):
+        revealed = False
+    else:
+        return None
+    if not stream.accept_word("a", "an"):
+        stream.reset(mark)
+        return None
+    try:
+        card = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not card.outside_the_game:
+        stream.reset(mark)
+        return None
+    # "…and put **it** into your hand" after a reveal, "…**into** your hand"
+    # after a put: the destination is the whole of what follows, every word
+    # required. Another zone ("…onto the battlefield", "…into your library")
+    # is a different effect this node cannot carry.
+    tail = ("and", "put", "it", "into", "your", "hand") if revealed else (
+        "into", "your", "hand",
+    )
+    if not stream.accept_phrase(*tail):
+        raise stream.error(
+            "expected '" + " ".join(tail) + "' after a card from outside the game"
+        )
+    return ast.PutOutsideGameCardIntoHand(card, revealed)
+
+
 def _parse_random_card_from_hand(
     stream: TokenStream, player: ast.PlayerRef
 ) -> "ast.RevealRandomFromHand | None":

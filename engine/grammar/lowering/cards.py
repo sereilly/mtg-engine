@@ -24,7 +24,9 @@ from ._amounts import halved_count_spec, per_card_count_spec
 # evaluator cannot answer.
 from ._counted_damage import (_READABLE_COST_SACRIFICE_CHARACTERISTICS,
                               revealed_cards_count_spec)
+from ...subject_filters import card_only_filter
 from ._common import (
+    _PAYLOAD_HONOURED_FILTER_FIELDS,
     dropped_narrowings,
     _REST_OF_TURN,
     _amount_payload,
@@ -71,6 +73,19 @@ def _lower_next_draw_replacement(
     """
     if not effect:
         raise LoweringError("this replacement has no effect", node=node)
+    if effect == (_UNNARROWED_OUTSIDE_GAME_PICK,):
+        # "…instead put a card you own from outside the game into your hand."
+        # (Ring of Ma'rûf.) The draw interceptor that carries out exactly this
+        # substitute already exists (``replacements/draws.py``'s
+        # ``DRAW_FROM_OUTSIDE``): its prompt is a CR 614 replacement choice
+        # answered *inside* the draw it replaced, its resolver makes the draws
+        # queued behind it (CR 121.2), CR 616.1e's ordering offers it by name,
+        # and the client answers it. Its line was a card hook until the Wishes
+        # gave the inner sentence a production; the hook is gone and the
+        # sentence is handed to the interceptor that implements it. Any other
+        # inner sentence — a narrowed pick included — takes the general armed
+        # replacement below, whose effect runs the pick as an ordinary prompt.
+        return (OracleInstruction("arm_outside_game_draw_replacement", "", {}),)
     # Several sentences behind one "instead" are one replacement's effect
     # (CR 608.2), so they compose the way every other multi-step effect does.
     instruction = (
@@ -80,6 +95,77 @@ def _lower_next_draw_replacement(
     return (
         OracleInstruction("arm_draw_replacement", "", {"instruction": instruction}),
     )
+
+
+#: "Put a card you own from outside the game into your hand", lowered: no
+#: narrowing, no reveal, nobody offered a way out — see
+#: :func:`_lower_next_draw_replacement`.
+_UNNARROWED_OUTSIDE_GAME_PICK = OracleInstruction(
+    "put_outside_game_card_into_hand", "", {"card_filter": {}}
+)
+
+
+def _lower_put_outside_game_card_into_hand(
+    node: "ast.PutOutsideGameCardIntoHand",
+) -> tuple[OracleInstruction, ...]:
+    """"[You may] reveal a sorcery card you own from outside the game and put
+    it into your hand." / "[You may] put a card you own from outside the game
+    into your hand." (The Judgment Wishes.)
+
+    One card out of the caster's sideboard (CR 400.11a, 100.4), picked by the
+    caster, among the cards the printed phrase admits — so the phrase is the
+    rule the candidates come from, and every narrowing in it has to survive
+    into a payload the card matcher can test (``card_only_filter``). A word it
+    cannot test refuses the line: a pick offered wider than the card prints is
+    a Burning Wish that fetches a creature.
+
+    **"You own" is required, and honoured by where the handler looks.** CR
+    400.11a puts a *player's* sideboard outside the game and CR 108.3 makes the
+    player who brings a card in its owner; the handler reads the caster's own
+    sideboard and nobody else's, so the word is consumed by that rather than
+    by a payload key, and a phrase without it names cards nothing here can
+    say whose they are.
+
+    ``reveal`` rides only when printed (CR 701.20a), so the unrevealed pick is
+    the bare payload Ring of Ma'rûf's sentence lowers to as well. The "you
+    may" in front of a Wish is the ordinary offer around this step
+    (``control_flow._lower_may``); bare, the pick is mandatory, which is Ring
+    of Ma'rûf's "instead put a card".
+    """
+    filt = node.card
+    if not (filt.is_card and filt.outside_the_game):
+        raise LoweringError(
+            "a card brought in from outside the game is a card", node=node
+        )
+    if filt.owner != "you":
+        raise LoweringError(
+            "a card from outside the game is one its owner brings in, and this "
+            "phrase does not say 'you own'",
+            node=node,
+        )
+    honoured = _PAYLOAD_HONOURED_FILTER_FIELDS | {"is_card", "outside_the_game"}
+    if _restrictions_beyond(filt, honoured):
+        raise LoweringError(
+            "the outside-the-game pick cannot test that card phrase: "
+            + ", ".join(_restrictions_beyond(filt, honoured)),
+            node=node,
+        )
+    payload = filt.to_payload()
+    # Honoured by the sideboard the handler opens — see above.
+    payload.pop("owner", None)
+    described = card_only_filter(payload)
+    dropped = tuple(
+        field for field in dropped_narrowings(filt, payload)
+        if field != "outside_the_game"
+    )
+    if described is None or dropped:
+        raise LoweringError(
+            "the outside-the-game pick cannot test that card phrase", node=node
+        )
+    pick: dict[str, object] = {"card_filter": described}
+    if node.revealed:
+        pick["reveal"] = True
+    return (OracleInstruction("put_outside_game_card_into_hand", "", pick),)
 
 
 #: The single-number scratchpad key a step writes, and the per-seat map it

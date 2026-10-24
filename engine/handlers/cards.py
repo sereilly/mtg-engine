@@ -205,6 +205,63 @@ def arm_outside_game_draw_replacement(game: Game, instruction: OracleInstruction
     return True, "resolved"
 
 
+def outside_game_candidates(game: Game, payload: dict, player) -> list[int]:
+    """The sideboard positions "a <filter> card you own from outside the game"
+    may be answered with (CR 400.11a).
+
+    ``Game._outside_game_choices`` first — the one reader of what may come in at
+    all, which keeps ante cards out of a game not played for ante (CR 407.3)
+    and applies CR 903.11a's bars in a Commander game — and then the printed
+    phrase, through the card matcher every pick out of a zone asks. A card the
+    phrase does not admit is not offered, and the answer is checked against
+    this same list, so the prompt cannot be answered wider than it was asked.
+
+    Public and singular for ``put_from_hand_candidates``' reason: the handler,
+    the prompt's renderer, its resolver and the offer's "is this takeable?"
+    are four readers of one rule.
+    """
+    seat = game.players.index(player)
+    described = dict(payload.get("card_filter") or {})
+    return [
+        index for index in game._outside_game_choices(seat)
+        if _card_matches_filter(
+            player.sideboard[index], described, game=game, owner=player
+        )
+    ]
+
+
+@effect_handler("put_outside_game_card_into_hand")
+def put_outside_game_card_into_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"You may reveal a sorcery card you own from outside the game and put it
+    into your hand." (Burning Wish; Death Wish prints "put" with no reveal.)
+
+    CR 400.11b's card brought into the game, one, and the caster picks which —
+    so the pick *is* the effect, and it is an ``outside_game_pick`` prompt over
+    the caster's own sideboard rather than the first card that matches. An
+    interactive seat is asked and the resolution waits for the answer (CR
+    608.2); every other seat takes the stated default where the effect stands.
+
+    The "you may" is the offer around this step (``control_flow.may``), which
+    is not made when nothing qualifies (``offers._action_is_takeable``); bare,
+    the pick is mandatory. With nothing to pick the step is an offer never
+    made rather than declined, and it says so — CR 608.2b's "as much as
+    possible" is nothing, and Death Wish's life loss behind it still happens
+    (its 2007-05-01 ruling: "If you fail to find something, you still lose
+    half your life, rounded up").
+    """
+    player = context.caster
+    seat = game.players.index(player)
+    name = context.card.name if context.card is not None else "Effect"
+    if not outside_game_candidates(game, instruction.payload, player):
+        game.log.append(
+            f"{player.name} has no card outside the game {name} could put into "
+            "their hand"
+        )
+        return True, "resolved"
+    game.arm_outside_game_pick(seat, instruction.payload, context)
+    return True, "resolved"
+
+
 @effect_handler("arm_draw_replacement")
 def arm_draw_replacement(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"The next time you would draw a card this turn, instead <effect>."

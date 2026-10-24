@@ -367,11 +367,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         'turn by artifacts':
             _line('gain_twice_artifact_damage_taken', 'spell_pattern'),
     },
-    "Ring of Ma'rûf": {
-        "{5}, {t}, exile this artifact: the next time you would draw a card this "
-        "turn, instead put a card you own from outside the game into your hand":
-            _line("arm_outside_game_draw_replacement", "activated_draw"),
-    },
     'Rohgahh of Kher Keep': {
         # The consequence names the card's own kobold tribe and hands the whole
         # pile to an opponent — no second card, real or plausibly printable,

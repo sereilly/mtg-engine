@@ -884,6 +884,21 @@ class ObjectFilter:
     #: ``_ZONE_NOUNS`` on exactly this argument — "a production that needs it
     #: should say so explicitly"; this is that explicit reading.
     on_the_battlefield: bool = False
+    #: "…a sorcery card you own **from outside the game**" (the Judgment
+    #: Wishes; Ring of Ma'rûf; CR 701.48a's learn prints the same words).
+    #: CR 400.11: "Outside the game is not a zone", so it is not a value of
+    #: ``zone`` — every reader of that field answers "battlefield" or one of
+    #: the zones it knows, and a sixth spelling would be read by whichever
+    #: branch happened to be the ``else``. CR 400.11a puts a player's
+    #: sideboard there, and that is what the one handler written for it reads
+    #: (``Game._outside_game_choices``).
+    #:
+    #: ``on_the_battlefield``'s footing exactly: never emitted by
+    #: ``to_payload`` and listed in ``lowering/_filters.
+    #: CONDITIONALLY_EMITTED_FIELDS``, so every lowering but the one written
+    #: for it refuses the phrase by name rather than reading a card in some
+    #: game zone instead.
+    outside_the_game: bool = False
     #: "…for each **basic land type among** lands you control" (domain,
     #: CR 207.2c's ability word: Wayfaring Giant, Tribal Flames). What is
     #: counted is not the objects this phrase describes but the *distinct

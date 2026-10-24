@@ -430,15 +430,52 @@ class DrawsAndDiscardsMixin:
         ]
 
     def _finish_outside_game_draw(self, player_index: int, chosen_index: int) -> None:
-        """Move the chosen sideboard card into hand."""
+        """Move the chosen sideboard card into hand (Ring of Ma'rûf)."""
+        self.bring_card_from_outside_game(
+            player_index, chosen_index, source_name="Ring of Ma'rûf"
+        )
+
+    def bring_card_from_outside_game(
+        self, player_index: int, sideboard_index: int, *,
+        source_name: str, revealed: bool = False,
+    ):
+        """CR 400.11b: the card at *sideboard_index* of this player's sideboard
+        brought into the game, into their hand. The card, or None when the
+        position names nothing (or the hand seam sent it elsewhere).
+
+        The one mover for both readers of "a card you own from outside the
+        game" — Ring of Ma'rûf's replaced draw and a Wish's pick — so *which*
+        cards may come in is ``_outside_game_choices`` and *how* one comes in
+        is this, and the two sentences cannot drift apart on either. Through
+        ``put_card_into_hand`` for CR 903.9b's reason, the seam every "put into
+        a hand" goes through.
+
+        **Named in the log only when the sentence revealed it** (CR 701.20a).
+        ``game.log`` is one list every seat and spectator reads, and a card
+        that goes from a sideboard (private, like a hand — ``web/serialization``
+        never sends another seat's) into a hand is a card nobody else learns,
+        which is ``find_is_public``'s rule for a find. Ring of Ma'rûf's line
+        named its card for as long as it existed; Death Wish prints no reveal
+        and Burning Wish does, and the log now tells them apart.
+        """
         player = self.players[player_index]
-        if not (0 <= chosen_index < len(player.sideboard)):
-            return
-        card = player.sideboard.pop(chosen_index)
-        if self.put_card_into_hand(player, card):
+        if not (0 <= sideboard_index < len(player.sideboard)):
+            return None
+        card = player.sideboard.pop(sideboard_index)
+        if not self.put_card_into_hand(player, card):
+            return None
+        if revealed:
+            self.record_reveal(player_index, [card.name])
             self.log.append(
-                f"{player.name} put {card.name} into their hand from outside the game (Ring of Ma'rûf)"
+                f"{player.name} revealed {card.name} from outside the game and "
+                f"put it into their hand ({source_name})"
             )
+        else:
+            self.log.append(
+                f"{player.name} put a card they own from outside the game into "
+                f"their hand ({source_name})"
+            )
+        return card
 
     def discard_cause_seat(self, cause_seat: int | None = None) -> int | None:
         """Which seat's spell or ability is causing a discard happening *now*

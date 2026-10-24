@@ -106,6 +106,12 @@ ACTIVATED_LABELS: dict[str, str] = {
     # the payload's business, and reading it off the leaf is the guess this
     # table's own note calls wrong in proportion to how well the wrapper works.
     "arm_draw_replacement": "activated_replacement",
+    # --- Judgment ---------------------------------------------------------
+    # Ring of Ma'rûf's line left `card_hooks.CARD_LINE_INSTRUCTIONS` when the
+    # Wishes gave its "instead put a card you own from outside the game into
+    # your hand" a production. The hook labelled it `activated_draw`; carried
+    # here so retiring the hook does not re-bucket the card.
+    "arm_outside_game_draw_replacement": "activated_draw",
     # --- Homelands ------------------------------------------------------
     # An enchantment any player may destroy by paying life (Aether Storm),
     # the expansion sweep Golgothian Sylex already had a production for

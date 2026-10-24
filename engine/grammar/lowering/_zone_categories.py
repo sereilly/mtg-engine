@@ -297,6 +297,16 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # gate walks into it for the same reason: what the line touches is
     # what the armed effect touches.
     "arm_draw_replacement": "zones",
+    # "…instead put a card you own from outside the game into your hand."
+    # (Ring of Ma'rûf.) The armed replacement above with its one substitute
+    # already implemented by a draw interceptor of its own — see
+    # `lowering/cards._lower_next_draw_replacement` — so the same family.
+    "arm_outside_game_draw_replacement": "zones",
+    # "You may reveal a sorcery card you own from outside the game and put it
+    # into your hand." (The Judgment Wishes.) CR 400.11b: a card brought into
+    # the game, from a player's sideboard into their hand — the from-hand
+    # pick's shape with the other end moved.
+    "put_outside_game_card_into_hand": "zones",
     # "Until end of turn, if target player would draw a card, instead that
     # player skips that draw and you draw a card." (Plagiarize.) A draw
     # replacement like the one above, for the turn rather than once, and in

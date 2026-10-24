@@ -435,6 +435,15 @@ def _parse_postmodifiers(
         if stream.accept_phrase("on", "the", "battlefield"):
             d.on_the_battlefield = True
             continue
+        # "a sorcery card you own **from outside the game**" (the Wishes, Ring
+        # of Ma'rûf). Not a zone either (CR 400.11: "Outside the game is not a
+        # zone"), so it sets a field of its own for the battlefield phrase's
+        # reason above — and it is read *before* the zone scope below, which
+        # would take "from", find no zone noun behind it, and stop the loop with
+        # the three words unread.
+        if stream.accept_phrase("from", "outside", "the", "game"):
+            d.outside_the_game = True
+            continue
         # "from your graveyard" / "in an opponent's graveyard" — which zone the
         # objects are in, and whose. Both halves are one answer (CR 404.1), and
         # they left for `zones` at the size guard; the loop's three outcomes ride

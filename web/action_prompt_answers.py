@@ -956,6 +956,27 @@ def _action_put_from_hand_confirm(session, req, seat_type):
     if not session.game.confirm_put_from_hand_choice(req.seat, hand_index):
         raise HTTPException(status_code=400, detail="invalid card choice")
 
+@action_handler("outside_game_pick_confirm")
+def _action_outside_game_pick_confirm(session, req, seat_type):
+    # The Wishes: the seat picks a card of its sideboard to bring in from
+    # outside the game (sideboard_index), or declines (accept=False). The
+    # engine re-checks the pick against the candidate rule the prompt was
+    # drawn from, so a client offering the whole sideboard cannot turn Burning
+    # Wish into a fetch of any card — and it refuses a decline of a pick the
+    # sentence made mandatory.
+    pending = next(
+        (c for c in session.game.pending_choices_of("outside_game_pick")), None
+    )
+    if pending is None:
+        raise HTTPException(status_code=400, detail="no outside-the-game pick pending")
+    if req.seat != pending.player_index:
+        raise HTTPException(status_code=400, detail="not your choice")
+    sideboard_index = None if req.accept is False else req.sideboard_index
+    if sideboard_index is None and req.accept is not False:
+        raise HTTPException(status_code=400, detail="sideboard_index is required")
+    if not session.game.confirm_outside_game_pick(req.seat, sideboard_index):
+        raise HTTPException(status_code=400, detail="invalid card choice")
+
 @action_handler("choose_cards_in_hand_confirm")
 def _action_choose_cards_in_hand_confirm(session, req, seat_type):
     # Sylvan Library: the seat picks which of its eligible cards the next step
