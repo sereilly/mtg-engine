@@ -298,7 +298,10 @@ def restates_target(spec, bound: "ast.TargetSpec") -> bool:
     — and every type it names must be one the target *must* have: any of them
     where the target's types are conjoined ("artifact creature") or single,
     all of them where they are alternatives ("artifact or creature"). A noun
-    that names no type ("that spell", "that card") restates anything.
+    that names no type ("that spell") restates anything; "that card" restates
+    a target that is a *card* ("target creature card from your graveyard …
+    that card", Stitch Together) and nothing else — the word is the parser's
+    ``is_card``, and a card is not what a permanent target names.
 
     The zone is not compared: a back-reference is parsed with no zone in view
     ("counter **that spell**" carries the battlefield default) and it is the
@@ -313,6 +316,7 @@ def restates_target(spec, bound: "ast.TargetSpec") -> bool:
     head_only = replace(
         spec.filter, card_types=(), type_match=bound.filter.type_match,
         zone=bound.filter.zone,
+        is_card=spec.filter.is_card and not bound.filter.is_card,
     )
     if head_only != replace(
         ast.ObjectFilter(), type_match=bound.filter.type_match,

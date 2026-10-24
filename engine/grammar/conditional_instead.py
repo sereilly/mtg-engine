@@ -362,11 +362,21 @@ def _accept_resized_this_way(stream: TokenStream, replaced):
 #: spell still announces its target player whichever arm resolves (CR 601.2c:
 #: the choice is made as it is cast, when nobody knows which sentence will
 #: run), and both arms are what the cast spec is derived from.
+#:
+#: `CreateToken` and `ReturnToZone` joined them for Judgment's threshold
+#: spells -- "Create two 2/2 green Bear creature tokens. / Threshold -- Create
+#: four 2/2 green Bear creature tokens instead if …" (Grizzly Fate) and "Return
+#: target creature card from your graveyard to your hand. / Threshold -- Return
+#: **that card** from your graveyard to the battlefield instead if …" (Stitch
+#: Together). The token pair names nobody, so it is held to making its tokens
+#: for the same seat (`_same_token_recipient`); the return points back at the
+#: replaced sentence's one card target, a row of `_INSTEAD_SUBJECT_FIELDS`.
 _REPLACEABLE = (
     ast.GainLife, ast.AddMana, ast.DealDamage,
     ast.Discard, ast.Pump, ast.PreventDamage,
     ast.CounterSpell, ast.Destroy, ast.SearchLibrary,
     ast.LoseLife, ast.Draw, ast.Sacrifice,
+    ast.CreateToken, ast.ReturnToZone,
 )
 
 #: What a replacement may go on to do **after** it has said the replaced
@@ -421,6 +431,8 @@ def _same_shape(replaced, replacement) -> bool:
     """
     if _continues(replaced, replacement):
         return True
+    if _acts_on_the_replaced_target(replaced, replacement):
+        return True
     if type(replacement) is not type(replaced):
         return False
     if not isinstance(replaced, ast.Sequence):
@@ -429,6 +441,39 @@ def _same_shape(replaced, replacement) -> bool:
         type(new) is type(old)
         for new, old in zip(replacement.steps, replaced.steps)
     )
+
+
+def _acts_on_the_replaced_target(replaced, replacement) -> bool:
+    """Whether *replacement* is another action done to **the one object the
+    replaced sentence targeted**, named by pointing back at it.
+
+    "Target nonblack creature gets -1/-1 until end of turn. / Threshold — If
+    there are seven or more cards in your graveyard, **instead destroy that
+    creature**. It can't be regenerated." (Toxic Stench.) A different verb, so
+    not the replaced sentence said again — but the same announcement: "that
+    creature" has no antecedent but the first sentence's target, and the spell
+    names that target as it is cast whichever arm resolves (CR 601.2c). That
+    shared target is the agreement ``_same_shape`` asks of a same-kind pair,
+    and it is asked here instead of the kind:
+
+    * the replaced sentence names exactly one announced object target
+      (``_one_announced_object``);
+    * the replacement is one kind the rider replaces, with a single-subject
+      row in ``_INSTEAD_SUBJECT_FIELDS``, whose subject **points back** — a
+      replacement naming its own target ("instead destroy target creature")
+      would be a second announcement only one arm uses, and refuses.
+
+    Whether the word can name that target ("that creature" after "target
+    nonblack creature", not after "target artifact") is
+    ``_instead_inherits_subject``'s question, asked next as for every pair.
+    """
+    if type(replacement) is type(replaced) or not isinstance(replacement, _REPLACEABLE):
+        return False
+    field = _INSTEAD_SUBJECT_FIELDS.get(type(replacement))
+    if field is None or not _one_announced_object(replaced):
+        return False
+    named = getattr(replacement, field)
+    return not isinstance(named, tuple) and _points_back(named)
 
 
 def _continues(replaced, replacement) -> bool:
@@ -586,6 +631,7 @@ _INSTEAD_SUBJECT_FIELDS = {
     ast.LoseLife: "player",
     ast.Draw: "player",
     ast.Sacrifice: "player",
+    ast.ReturnToZone: "subject",
 }
 
 #: The object back-references: a pronoun, a demonstrative, and the marker
@@ -694,6 +740,24 @@ def _resized_damage(replaced, replacement):
     return replace(replaced, amount=replacement.amount)
 
 
+def _same_token_recipient(replaced, replacement) -> bool:
+    """Whether a token sentence's replacement makes its tokens for the seat the
+    replaced one does — always true of a pair that is not about tokens.
+
+    "Create two 2/2 green Bear creature tokens. … Create four … instead"
+    (Grizzly Fate) names nobody in either arm: the tokens are the caster's
+    whichever resolves. A replacement making them for somebody the first
+    sentence did not name ("target opponent creates …") would be an
+    announcement only one arm could use (CR 601.2c), so it refuses the rider.
+    """
+    if not isinstance(replaced, ast.CreateToken):
+        return True
+    return (
+        replacement.recipient == replaced.recipient
+        and replacement.recipient_players == replaced.recipient_players
+    )
+
+
 def _instead_inherits_subject(replaced, replacement):
     """*replacement* with every back-reference to *replaced*'s subject
     resolved, or None when one points at something *replaced* did not name.
@@ -731,13 +795,18 @@ def _instead_inherits_subject(replaced, replacement):
         return type(replacement)((head, *steps[1:]))
     field = _INSTEAD_SUBJECT_FIELDS.get(type(replaced))
     if field is None:
-        return replacement
-    named, original = getattr(replacement, field), getattr(replaced, field)
+        return replacement if _same_token_recipient(replaced, replacement) else None
+    # The replacement's own field: the same as *replaced*'s for a same-kind
+    # pair, and its own row for another verb done to the replaced target
+    # (``_acts_on_the_replaced_target``, Toxic Stench's "instead destroy that
+    # creature" after a pump).
+    own = _INSTEAD_SUBJECT_FIELDS.get(type(replacement), field)
+    named, original = getattr(replacement, own), getattr(replaced, field)
     if not isinstance(named, tuple):
         resolved = _instead_subject(named, original)
         if resolved is None:
             return None
-        return replacement if resolved is named else replace(replacement, **{field: resolved})
+        return replacement if resolved is named else replace(replacement, **{own: resolved})
     if not named:
         return _resized_damage(replaced, replacement)
     # A recipient list, compared position by position. A list of another

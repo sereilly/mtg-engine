@@ -461,6 +461,108 @@ def test_w1g3_funeral_pyre_whose_card_left_in_response_makes_no_spirit(set_pool)
 
 # ==== W1G7 ==========================================================
 # W1G7's tests go between this line and the "end W1G7" line.
+#
+# Threshold and the graveyard counted.
+
+import pytest as _w1g7_pytest
+
+from engine import Game as _W1G7Game, PlayerState as _W1G7PlayerState
+from engine.models import Permanent as _W1G7Permanent
+from engine.oracle import compile_card_oracle as _w1g7_compile
+from engine.targeting import derive_cast_spec as _w1g7_derive_cast_spec
+from tests.helpers import _nosick as _w1g7_nosick, resolve_stack as _w1g7_resolve
+
+
+def _w1g7_table(set_pool, catalog_by_name, graveyard=0, *, interactive=()):
+    """Two seats with libraries; seat 0 holds *graveyard* Islands in its
+    graveyard. Mana off; a card lookup over Judgment first."""
+    jud = set_pool("JUD")
+
+    def card(name):
+        return jud[name] if name in jud else catalog_by_name[name]
+
+    island = catalog_by_name["Island"]
+    game = _W1G7Game(players=[
+        _W1G7PlayerState(name="Alice", library=[island] * 10,
+                         graveyard=[island] * graveyard),
+        _W1G7PlayerState(name="Bob", library=[island] * 10),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game.active_player_index = 0
+    game.current_turn_phase = "main1"
+    game._w1g7_card = card
+    return game
+
+
+def _w1g7_put(game, seat, name):
+    permanent = _W1G7Permanent(card=game._w1g7_card(name))
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    _w1g7_resolve(game)
+    _w1g7_nosick(permanent)
+    return permanent
+
+
+def _w1g7_cast(game, seat, name, **announcement):
+    game.players[seat].hand.append(game._w1g7_card(name))
+    result = game.cast_from_hand(seat, name, **announcement)
+    assert result.supported, result.details
+    _w1g7_resolve(game)
+    return result
+
+
+# --- Toxic Stench -----------------------------------------------------------
+
+
+@_w1g7_pytest.mark.parametrize(("graveyard", "destroyed"), [(6, False), (7, True)])
+def test_w1g7_toxic_stench_shrinks_or_destroys_its_one_target(
+    set_pool, catalog_by_name, graveyard, destroyed,
+):
+    """-1/-1 below threshold; "instead destroy that creature" at it — the same
+    creature, never both effects."""
+    game = _w1g7_table(set_pool, catalog_by_name, graveyard)
+    giant = _w1g7_put(game, 1, "Hill Giant")
+    _w1g7_cast(game, 0, "Toxic Stench", target_permanent_ids=[giant.permanent_id])
+
+    assert game.is_on_battlefield(giant) is not destroyed
+    if destroyed:
+        assert [c.name for c in game.players[1].graveyard] == ["Hill Giant"]
+    else:
+        assert (giant.effective_power, giant.effective_toughness) == (2, 2)
+
+
+def test_w1g7_toxic_stench_at_threshold_cannot_be_regenerated(
+    set_pool, catalog_by_name,
+):
+    """"It can't be regenerated." Uthden Troll's regeneration shield is up and
+    the destruction goes through it anyway (CR 701.19c)."""
+    game = _w1g7_table(set_pool, catalog_by_name, 7)
+    troll = _w1g7_put(game, 1, "Uthden Troll")
+    assert game.activate_permanent_ability(1, "Uthden Troll").supported
+    _w1g7_resolve(game)
+    _w1g7_cast(game, 0, "Toxic Stench", target_permanent_ids=[troll.permanent_id])
+
+    assert not game.is_on_battlefield(troll)
+    assert [c.name for c in game.players[1].graveyard] == ["Uthden Troll"]
+
+
+def test_w1g7_toxic_stench_names_only_a_nonblack_creature(set_pool, catalog_by_name):
+    """"Target nonblack creature": the picker offers the Giant and not the
+    Black Knight, and naming the Knight is refused before anything is paid —
+    so the threshold arm cannot reach a black creature either."""
+    game = _w1g7_table(set_pool, catalog_by_name, 7)
+    _w1g7_put(game, 1, "Hill Giant")
+    knight = _w1g7_put(game, 1, "Black Knight")
+    stench = game._w1g7_card("Toxic Stench")
+    assert _w1g7_derive_cast_spec(stench, _w1g7_compile(stench)) == {
+        "kind": "creature", "filter": {"exclude_colors": ["B"]},
+    }
+    offered = [t["name"] for t in game.cast_target_spec(0, stench)["valid_targets"]]
+    assert offered == ["Hill Giant"]
+    game.players[0].hand.append(stench)
+    refused = game.cast_from_hand(0, "Toxic Stench", target_permanent_ids=[knight.permanent_id])
+    assert not refused.supported
+    assert game.is_on_battlefield(knight)
 
 # ==== end W1G7 ======================================================
 
