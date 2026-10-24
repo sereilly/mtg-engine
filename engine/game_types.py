@@ -180,6 +180,13 @@ CHOICE_KEYS = (
     # one seat. Written only where there are two or more seat roles —
     # ``target_roles.ROLE_SEATS`` names the key and says who reads it.
     "role_seats",
+    # The word a "Choose flying, first strike, trample, or shadow" cost
+    # announced (Phyrexian Splicer, CR 601.2b through CR 602.2b), carried by
+    # the ability that announced it. The record on the source
+    # (``handlers._chosen.CHOSEN_ABILITY``, the same name) is the *latest*
+    # activation's, so with two on the stack the earlier one resolved with the
+    # later one's word. Written only for an ability whose cost chooses one.
+    "chosen_ability",
 )
 
 

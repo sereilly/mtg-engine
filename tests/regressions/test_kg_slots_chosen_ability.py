@@ -163,6 +163,44 @@ def test_the_gate_reads_this_announcement_not_the_last_ones_record():
     assert _first_names(spec["valid_targets_by_keyword"]["flying"]) == ["Serra Angel"]
 
 
+def test_each_activation_resolves_with_the_word_it_announced():
+    """Two activations on the stack: Splicer moves trample, is untapped in
+    response (Twiddle), and moves flying. The first resolved with the second's
+    word, because the word was read off the source's record — the latest
+    activation's — rather than off the object that announced it."""
+    splicer = _nosick(Permanent(card=_POOL["Phyrexian Splicer"]))
+    bear = _nosick(Permanent(card=_POOL["Grizzly Bears"]))
+    angel = Permanent(card=_POOL["Serra Angel"])
+    trampler = Permanent(card=_POOL["Force of Nature"])
+    game = Game(players=[
+        PlayerState("P1", battlefield=[splicer, bear], hand=[_POOL["Twiddle"]],
+                    library=[_POOL["Forest"]] * 5),
+        PlayerState("P2", battlefield=[angel, trampler], library=[_POOL["Forest"]] * 5),
+    ])
+    game.enforce_mana_costs = False
+
+    assert game.queue_permanent_ability(
+        0, "Phyrexian Splicer", permanent_index=0, chosen_keyword="trample",
+        target_permanent_ids=[trampler.permanent_id, bear.permanent_id],
+    ).supported
+    assert splicer.tapped
+    assert game.queue_from_hand(
+        0, "Twiddle", target_permanent_ids=[splicer.permanent_id],
+    ).supported
+    game.resolve_top_of_stack()
+    assert game.confirm_optional_pay(0, accept=True)   # "You may tap or untap"
+    assert not splicer.tapped, "Twiddle untapped the Splicer in response"
+    assert game.queue_permanent_ability(
+        0, "Phyrexian Splicer", permanent_index=0, chosen_keyword="flying",
+        target_permanent_ids=[angel.permanent_id, bear.permanent_id],
+    ).supported
+    resolve_stack(game)
+
+    assert game._has_keyword(bear, "flying") and game._has_keyword(bear, "trample")
+    assert not game._has_keyword(angel, "flying")
+    assert not game._has_keyword(trampler, "trample")
+
+
 def test_with_no_creature_holding_any_word_the_ability_cannot_be_activated():
     game, splicer, bear, theirs = _table(theirs_flier=False)
 
