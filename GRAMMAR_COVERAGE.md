@@ -50,7 +50,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ODY | 335 | 507 | 89.7% | 89.7% | 69.6% | 295 |
 | TOR | 143 | 261 | 86.2% | 86.2% | 68.2% | 138 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| JUD *(measured)* | 143 | 241 | 78.4% | 76.3% | 52.3% | 107 |
+| JUD *(measured)* | 143 | 241 | 80.9% | 78.8% | 54.8% | 112 |
 | **All (shipped)** | **7884** | **11645** | **90.6%** | **90.0%** | **62.3%** | **6139** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -63,9 +63,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 660 | 339 | expected a subject |  |
+| 656 | 335 | expected a subject |  |
 | 167 | 86 | unrecognized effect verb |  |
-| 135 | 74 | unconsumed text |  |
+| 134 | 73 | unconsumed text |  |
 | 65 | 46 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
 | 29 | 7 | expected what this creature can't block, or a duration |  |
@@ -775,6 +775,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Draw a card.`
 - **Banshee**
   - `{X}, {T}: This creature deals half X damage, rounded down, to any target, and half X damage, rounded up, to you.`
+- **Barbarian Bully**
+  - `Discard a card at random: This creature gets +2/+2 until end of turn unless a player has this creature deal 4 damage to them. Activate only once each turn.`
 - **Barbarian Guides**
   - `{2}{R}, {T}: Choose a land type. Target creature you control gains snow landwalk of the chosen type until end of turn. Return that creature to its owner's hand at the beginning of the next end step. (It can't be blocked as long as defending player controls a snow land of that type.)`
 - **Barbarian Lunatic**
@@ -1156,6 +1158,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Threshold — As long as there are seven or more cards in your graveyard, this creature gets +2/+2 and has "When this creature becomes the target of a spell or ability, sacrifice it."`
 - **Booby Trap**
   - `When the chosen player draws a card with the chosen name, sacrifice this artifact. If you do, this artifact deals 10 damage to that player.`
+- **Book Burning**
+  - `Any player may have Book Burning deal 6 damage to them. If no one does, target player mills six cards.`
 - **Book of Rass**
   - `{2}, Pay 2 life: Draw a card.`
 - **Boomerang**
@@ -1230,6 +1234,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `As long as this card is in your graveyard and you control a Forest, creatures you control have trample.`
 - **Breach**
   - `Target creature gets +2/+0 and gains fear until end of turn. (It can't be blocked except by artifact creatures and/or black creatures.)`
+- **Breaking Point**
+  - `Any player may have Breaking Point deal 6 damage to them. If no one does, destroy all creatures. Creatures destroyed this way can't be regenerated.`
 - **Breaking Wave**
   - `Simultaneously untap all tapped creatures and tap all untapped creatures.`
 - **Breakthrough**
@@ -1276,6 +1282,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}{R}{R}: This creature deals 1 damage to any target and 1 damage to you.`
   - `{1}{R}{R}: This creature deals 1 damage to any target and 1 damage to you.`
   - `{1}{R}{R}: This creature deals 1 damage to any target and 1 damage to you.`
+- **Browbeat**
+  - `Any player may have Browbeat deal 5 damage to them. If no one does, target player draws three cards.`
 - **Brown Ouphe**
   - `{1}{G}, {T}: Counter target activated ability from an artifact source. (Mana abilities can't be targeted.)`
 - **Browse**
@@ -4409,6 +4417,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{2}, {T}, Sacrifice this artifact: Search target opponent's library for a card and exile it. Then that player shuffles. Until the beginning of your next upkeep, you may play that card. At the beginning of your next upkeep, if you haven't played it, put it into its owner's graveyard.`
   - `{2}, {T}, Sacrifice this artifact: Search target opponent's library for a card and exile it. Then that player shuffles. Until the beginning of your next upkeep, you may play that card. At the beginning of your next upkeep, if you haven't played it, put it into its owner's graveyard.`
 - **Grip of Amnesia**
+  - `Counter target spell unless its controller exiles all cards from their graveyard.`
   - `Draw a card.`
 - **Grizzled Wolverine**
   - `{R}: This creature gets +2/+0 until end of turn. Activate only during the declare blockers step, only if at least one creature is blocking this creature, and only once each turn.`
@@ -11662,6 +11671,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Target creature gains forestwalk until end of turn. (It can't be blocked as long as defending player controls a Forest.)`
 - **Weatherseed Treefolk**
   - `When this creature dies, return it to its owner's hand.`
+- **Web of Inertia**
+  - `At the beginning of combat on each opponent's turn, that player may exile a card from their graveyard. If the player doesn't, creatures they control can't attack you this turn.`
 - **Welkin Hawk**
   - `When this creature dies, you may search your library for a card named Welkin Hawk, reveal that card, put it into your hand, then shuffle.`
 - **Well of Discovery**
