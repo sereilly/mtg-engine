@@ -192,7 +192,77 @@ def _composes_instructions(payload) -> bool:
     return False
 
 
-def test_a_wrapper_kind_never_borrows_a_leaf_effects_bucket(grammar_abilities):
+def activated_shapes(cards) -> list[tuple[str, str, str, bool]]:
+    """``(name, kind, label, wrapper)`` for every activated ability the grammar
+    reads: the label the table gives it **now** — its row, or the
+    ``activated_<category>`` default when the kind has none — and whether the
+    kind composes other instructions.
+
+    The label is asked of ``front_ends._grammar_instruction`` rather than read
+    off the compiled ability, because programs are cached for the process and
+    the question is what the *table* says: a backwards validation that edits the
+    table (``tests/engine/test_kg_kinds_wrapper_labels.py``) must see its edit.
+    """
+    shapes: list[tuple[str, str, str, bool]] = []
+    for card in compilation_units(cards):
+        program = oracle.compile_card_oracle(card)
+        for ability in program.activated_abilities:
+            if ability.instruction is None:
+                continue
+            read = front_ends._grammar_instruction(ability.source_line, card.name, activated=True)
+            if not read:
+                continue
+            _instruction, label = read
+            shapes.append((
+                card.name, ability.instruction.kind, label,
+                _composes_instructions(ability.instruction.payload),
+            ))
+    return shapes
+
+
+def triggered_shapes(cards) -> list[tuple[str, str, str, str, bool, bool]]:
+    """``(name, condition, kind, label, wrapper, by_condition)`` for every
+    trigger the grammar reads, with the label the tables give it now and
+    whether it came from ``TRIGGERED_LABELS_BY_CONDITION``."""
+    shapes: list[tuple[str, str, str, str, bool, bool]] = []
+    for card in compilation_units(cards):
+        program = oracle.compile_card_oracle(card)
+        for trig in program.triggered_abilities:
+            if trig.instruction is None:
+                continue
+            condition = trig.condition.kind
+            read = front_ends._grammar_instruction(
+                trig.source_line, card.name, condition_kind=condition
+            )
+            if not read:
+                continue
+            _instruction, label = read
+            kind = trig.instruction.kind
+            shapes.append((
+                card.name, condition, kind, label,
+                _composes_instructions(trig.instruction.payload),
+                (condition, kind) in TRIGGERED_LABELS_BY_CONDITION,
+            ))
+    return shapes
+
+
+def borrowed_buckets(pairs) -> list[tuple[str, str, list[str]]]:
+    """``(wrapper kind, label, the leaf kinds producing it too)`` from
+    ``(kind, label, wrapper)`` triples — every wrapper whose label is also a
+    leaf effect's bucket. A kind is never compared with itself."""
+    wrappers: dict[str, set[str]] = {}
+    leaves: dict[str, set[str]] = {}
+    for kind, label, wrapper in pairs:
+        (wrappers if wrapper else leaves).setdefault(label, set()).add(kind)
+    return sorted(
+        (kind, label, sorted(leaves[label] - {kind}))
+        for label, kinds in wrappers.items()
+        for kind in kinds
+        if leaves.get(label, set()) - {kind}
+    )
+
+
+def test_a_wrapper_kind_never_borrows_a_leaf_effects_bucket():
     """A composed effect is labelled by its shape, never by one of its steps.
 
     `sequence` read `activated_damage` and `if_then` read `activated_mana` for
@@ -208,27 +278,55 @@ def test_a_wrapper_kind_never_borrows_a_leaf_effects_bucket(grammar_abilities):
     label also being produced by a kind that composes nothing. A shape label
     (`activated_sequence`, `activated_conditional`, `activated_optional`) is
     unshared by construction, so it passes without being named here.
-    """
-    activated, _triggered = grammar_abilities
-    wrappers: set[str] = set()
-    leaves: set[str] = set()
-    for card in compilation_units(load_catalog()):
-        program = oracle.compile_card_oracle(card)
-        for ability in program.activated_abilities:
-            if ability.instruction is None or ability.instruction.kind not in ACTIVATED_LABELS:
-                continue
-            side = wrappers if _composes_instructions(ability.instruction.payload) else leaves
-            side.add(ability.instruction.kind)
 
-    borrowed = sorted(
-        (kind, ACTIVATED_LABELS[kind], sorted(
-            leaf for leaf in leaves if ACTIVATED_LABELS[leaf] == ACTIVATED_LABELS[kind]
-        ))
-        for kind in wrappers
-        if any(ACTIVATED_LABELS[leaf] == ACTIVATED_LABELS[kind] for leaf in leaves)
-    )
+    **Asked of the label each ability gets**, row or default. Until the kg
+    round the population was the table's rows: a kind missing from
+    ``ACTIVATED_LABELS`` was skipped, so a wrapper defaulting to
+    ``activated_<category>`` on a leaf's bucket — or a leaf defaulting onto a
+    wrapper's — stayed invisible until its row was added, and the row could
+    then be added under whatever label made this pass. (`unless_player_pays`
+    was the wrapper this let through on its own row: filed under
+    `activated_control`, and passing only because no control leaf had been
+    filed there yet.)
+    """
+    shapes = activated_shapes(load_catalog())
+    wrapped = {kind for _name, kind, _label, wrapper in shapes if wrapper}
+    # A floor on what was examined: the pool composes effects through more than
+    # half a dozen wrapper kinds, and `sequence` alone is on dozens of abilities.
+    assert len(wrapped) >= 6 and len(shapes) >= 1000, (len(wrapped), len(shapes))
+
+    borrowed = borrowed_buckets((kind, label, wrapper) for _n, kind, label, wrapper in shapes)
     assert not borrowed, (
         "activated wrapper kinds whose label is also a leaf effect's bucket — "
         "the wrapper cannot say what the ability is for, so give it a label "
         f"naming its shape: {borrowed}"
+    )
+
+
+def test_a_triggered_wrapper_row_never_borrows_a_leaf_effects_bucket():
+    """The same rule on the triggered side, for the rows that can break it.
+
+    A trigger's wrapper is labelled one of two ways. ``TRIGGERED_LABELS_BY_CONDITION``
+    lets the *condition* name the moment (``("upkeep_self", "may")`` is
+    `upkeep_effect`, the word the upkeep leaves share) — that is the table's
+    design, so those rows are out of this check. A row in ``TRIGGERED_LABELS``
+    is **condition-blind**: it labels the wrapper under every condition that
+    reaches it, so it can only honestly name the shape (`triggered_sequence`,
+    `triggered_repeated`). Measured at the kg round, three did not:
+    `create_delayed_trigger` read `triggered_token` on some forty triggers of
+    which three make a token, `choose_one` read `triggered_pump` (and labelled
+    every printed modal trigger a pump through ``ability_lines``), and
+    `unless_player_pays` read `upkeep_effect` for any condition at all.
+    """
+    shapes = triggered_shapes(load_catalog())
+    blind = [
+        (kind, label, wrapper)
+        for _name, _condition, kind, label, wrapper, by_condition in shapes
+        if not (wrapper and by_condition)
+    ]
+    assert sum(1 for *_rest, wrapper in blind if wrapper) >= 50, "no wrapper examined"
+    borrowed = borrowed_buckets(blind)
+    assert not borrowed, (
+        "condition-blind TRIGGERED_LABELS rows for a wrapper kind whose label is "
+        f"also a leaf effect's bucket — name the shape instead: {borrowed}"
     )
