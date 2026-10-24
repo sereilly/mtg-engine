@@ -273,10 +273,10 @@ PRINTED_READ_BASELINE: dict[str, int] = {
     # `_unattach_illegal_auras` and its callers are the CR 704.5m/n sweep and
     # changing what it matches is a rules round, not a guard one.
     "mixins/game_ending.py": 5,   # 3 Aura (Licid-class debt), Saga, Role
-    # both Aura — Licid-class debt, see above: the leave transition and the
-    # move to a graveyard, which were one module (`mixins/helpers.py`).
-    "mixins/control_seam.py": 1,
-    "mixins/deaths.py": 1,
+    # (The leave transition and the move to a graveyard held one Aura read
+    # each — ``mixins/control_seam.py`` and ``mixins/deaths.py``. They ask
+    # ``has_type("aura")`` since round kg: a Gliding Licid that left its host
+    # left it flying, and a Dominating Licid's creature stayed stolen.)
     # `mixins/stack/casting.py` used to be exempt here, on the reason "an object
     # on the stack is not a permanent and has no layers applied to it". The
     # first half is true and the second was the mistake this list is meant to
@@ -389,22 +389,21 @@ _PRINTED_PRIMARY_TYPE = re.compile(r"\.card\.primary_type\b")
 
 #: module -> how many ``.card.primary_type`` reads survive in it.
 #:
-#: **Triaged, all but one module.** There were 51 across eighteen modules and
-#: no entry carried a reason. The 43 outside the AI's policy have each been
-#: asked whether they mean the card or the permanent: 37 meant the permanent
-#: and ask ``has_type`` / ``is_creature`` now
-#: (``tests/rules/test_printed_type_reads_of_a_permanent.py`` drives the first
-#: of each shape — the live one was an "Enchant artifact" Aura aimed at an
-#: Artifact Creature, which resolved into the graveyard), and the six below
-#: mean something else and say what. Lower an entry when you drain one; the
-#: only rule the guard enforces is that no entry may rise.
+#: **Triaged, every module.** There were 51 across eighteen modules and no
+#: entry carried a reason. Each has been asked whether it means the card or
+#: the permanent: 46 meant the permanent and ask ``has_type`` /
+#: ``is_creature`` now (``tests/rules/test_printed_type_reads_of_a_permanent.py``
+#: drives the first of each shape — the live one was an "Enchant artifact"
+#: Aura aimed at an Artifact Creature, which resolved into the graveyard), and
+#: the five below mean a spell and say so. The last eight were the AI's: the
+#: attack and block choosers' and ``ai_abilities``' at Judgment, and the
+#: land-drop ranking's and the three land counts in ``ai_scoring.py`` at round
+#: kg (``tests/ai/test_kg_layers_ai_land_reads.py``) — every one a count of
+#: the seat's *lands on the battlefield*, so a Clone that had copied a Forest
+#: was not one. The death seam's read, the ninth, went at kg too
+#: (``tests/regressions/test_kg_layers_what_died.py``). Lower an entry when
+#: you drain one; the only rule the guard enforces is that no entry may rise.
 PRIMARY_TYPE_BASELINE: dict[str, int] = {
-    # **Untriaged still**: which cards a weight reaches (``choose_*``'s
-    # counts of an opponent's lands and creatures). Each wants the judgement
-    # the others got, in the module whose round it is. (One module,
-    # ``ai_policy.py``, until the 2,000-line split.)
-    "ai_policy.py": 1,
-    "ai_scoring.py": 3,
     # **A spell on the stack, not a permanent.** ``item.card`` is the card as
     # it was cast — for a split card the half (CR 709.3b) — and CR 613 has no
     # permanent to ask: "copy target instant or sorcery spell" (Fork), "an
@@ -414,16 +413,12 @@ PRIMARY_TYPE_BASELINE: dict[str, int] = {
     "handlers/spell_copies.py": 2,  # Fork's target: an instant or sorcery spell
     "mixins/stack/cast_target_validation.py": 2,  # …and the cast gate for the same target
     "mixins/stack/resolution.py": 1,  # a copy of an instant or sorcery
-    # **A permanent that has already left.** "…if a creature dealt damage by
-    # this creature this turn **died**" (Krovikan Vampire): the ledger is
-    # written after the permanent is off the battlefield, where ``is_creature``
-    # would be asked of an object the derived layer-4 records have already
-    # dropped. What it wants is last-known information (CR 603.10a) — whether
-    # it *was* a creature as it died — and the printed word is the
-    # approximation: a land an animator had made a creature dies unrecorded.
-    # Its fix is a "was a creature" stamp at the removal seam, not a
-    # different read here.
-    "mixins/deaths.py": 1,
+    # (``mixins/deaths.py`` held one more, "…if a creature dealt damage by
+    # this creature this turn **died**" (Krovikan Vampire), on the reasoning
+    # that a permanent already off the battlefield could not be asked
+    # ``is_creature``. It can: nothing recomputes an object off the
+    # battlefield, so its layer inputs are its last-known ones (CR 603.10a),
+    # and the death seam reads ``was_creature`` once as the permanent leaves.)
 }
 
 

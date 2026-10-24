@@ -313,10 +313,14 @@ def _land_drop_value(
             continue
         for symbol in re.findall(r"\{([^}]+)\}", card.mana_cost or ""):
             wanted.update(part for part in symbol.upper().split("/") if part in "WUBRG")
+    # The seat's lands are permanents, so "is this a land?" is layer 4's
+    # answer (CR 613.1d): a Clone that copied a Forest is a Forest on a card
+    # printed "Creature — Shapeshifter", and its green was missed. The hand's
+    # cards above are cards, where the printed line is all there is.
     made = {
         symbol
         for permanent in game.controlled_by(player_index)
-        if permanent.card.primary_type == "land"
+        if permanent.has_type("land")
         for symbol in _land_symbols(game, permanent)
     }
     makes = set(land.produced_mana or ()) & wanted

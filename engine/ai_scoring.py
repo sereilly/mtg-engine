@@ -544,8 +544,11 @@ def _tutor_score(game: Game, player_index: int, card: CardDefinition) -> float:
     target = _choose_target_for_spell(card, player_index, game, x_value)
     score = _score_cast(game, player_index, card, target, x_value)
 
+    # A land on the battlefield is a permanent, asked through layer 4
+    # (CR 613.1d) — a Clone that copied a Forest is one; a land in hand is a
+    # card, where the printed line is the whole answer.
     lands_available = sum(
-        1 for perm in game.controlled_by(player) if perm.card.primary_type == "land"
+        1 for perm in game.controlled_by(player) if perm.has_type("land")
     ) + sum(
         1 for hand_card in player.hand if hand_card.primary_type == "land"
     )
@@ -564,7 +567,7 @@ def _tutor_score(game: Game, player_index: int, card: CardDefinition) -> float:
                 player.mana_pool.get(symbol, 0) for symbol in _MANA_SYMBOLS
             ) + sum(
                 1 for permanent in game.controlled_by(player)
-                if permanent.card.primary_type == "land" and not permanent.tapped
+                if permanent.has_type("land") and not permanent.tapped
             )
             score -= min(5.0, max(0.0, float(card.cmc) - available))
 
@@ -754,10 +757,12 @@ def _score_cast(
     caster = game.players[caster_index]
 
     if card.primary_type == "land":
+        # *card* is the land being weighed — a card, read as printed; the
+        # caster's untapped lands are permanents, read through layer 4.
         untapped_lands = sum(
             1
             for perm in game.controlled_by(caster)
-            if perm.card.primary_type == "land" and not perm.tapped
+            if perm.has_type("land") and not perm.tapped
         )
         return 1.0 if untapped_lands < 4 else 0.2
 
