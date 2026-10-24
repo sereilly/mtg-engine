@@ -24,6 +24,7 @@ import pytest
 
 from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_paths
+from engine.modal_triggers import modal_trigger_mode_spec, modal_trigger_modes
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compiled_units
 from engine.target_descriptions import ANNOUNCED_SEAT
@@ -458,10 +459,6 @@ _UNANNOUNCED_REMAINDER = {
     # controls": the creatures are announced as the division's targets, which
     # they are not, and the opponent only as the seat they sit on.
     "Dwarven Catapult#cast",
-    # A modal trigger chooses its mode and then that mode's target
-    # (CR 700.2a/603.3d); the census reads the trigger whole, which has no
-    # one spec to announce a seat on.
-    "Relic Bind#trig0",
 }
 
 
@@ -496,9 +493,21 @@ def _announcements(card, program):
             yield (f"act{index}", ability.source_line.split(":", 1)[-1],
                    lambda ability=ability: derive_activation_spec(ability))
     for index, trigger in enumerate(program.triggered_abilities):
-        if trigger.instruction is not None:
-            yield (f"trig{index}", trigger.source_line,
-                   lambda trigger=trigger: derive_instruction_spec([trigger.instruction]))
+        if trigger.instruction is None:
+            continue
+        modes = modal_trigger_modes(trigger.instruction)
+        if modes:
+            # "Whenever enchanted artifact becomes tapped, choose one — • This
+            # Aura deals 1 damage to target player or planeswalker. • Target
+            # player gains 1 life." (Relic Bind.) The mode is chosen and then
+            # *that mode's* target (CR 700.2a, 603.3d), so each mode is its own
+            # announcement, read off its own label.
+            for position, mode in enumerate(modes):
+                yield (f"trig{index}.{position}", mode.get("label") or "",
+                       lambda mode=mode: modal_trigger_mode_spec(mode))
+            continue
+        yield (f"trig{index}", trigger.source_line,
+               lambda trigger=trigger: derive_instruction_spec([trigger.instruction]))
 
 
 def test_every_printed_target_seat_is_announced():
@@ -509,7 +518,8 @@ def test_every_printed_target_seat_is_announced():
     Validated backwards: run on the round's base (``c42aec75``) it names
     eleven — Drafna's Restoration, Gaea's Blessing, Dwell on the Past, Krosan
     Reclamation, Reap, Superior Numbers, Carpet of Flowers, Instigator, Fiery
-    Justice, and the two left below. (Keeper of the Dead announced its seat
+    Justice, Dwarven Catapult (left below) and Relic Bind, read whole there
+    and mode by mode here. (Keeper of the Dead announced its seat
     and left its *creature* to the handler: that is the slot half,
     ``test_sequence_target_roles``' seat-and-object ratchet.)"""
     examined = 0
