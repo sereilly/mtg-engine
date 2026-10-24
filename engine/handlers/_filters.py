@@ -4,9 +4,13 @@ The handler half of what a printed noun phrase means: the payload the grammar
 writes (``engine.grammar.ast.ObjectFilter.to_payload``), asked of one object.
 Two matchers, because the object is two kinds of thing. A permanent has
 computed characteristics, so :func:`permanent_matches_filter` reads its types,
-colours, P/T and keywords through the layer system; a card in a zone has none,
-so :func:`_card_matches_filter` and :func:`graveyard_card_matches` read what is
-printed on it. The printed state words ("tapped", "attacking", "enchanted")
+colours, P/T and keywords through the layer system; a card in a zone has no
+layer stack of its own, so :func:`_card_matches_filter` and
+:func:`graveyard_card_matches` read what is printed on it — except its
+**colour** (both matchers) and its creature types (the first), which a seat's
+static can set off the battlefield (Celestial Dawn, Conspiracy; CR 613.1).
+Those are asked with the ``game=`` and ``owner=`` every caller hands over
+(``tests/engine/test_kg_colour_off_battlefield_reads.py``). The printed state words ("tapped", "attacking", "enchanted")
 are one table, :data:`_STATE_TESTS`, with its readers beside it, and the two
 seat narrowings — "each player who controls a white creature", "each player
 who sacrificed a Plains this way" — are the same question asked of a player.
