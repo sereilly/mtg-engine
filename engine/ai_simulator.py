@@ -1123,6 +1123,10 @@ def _play_activations(
             # Which card a "Discard a card" cost takes, when the policy named
             # one (a card with madness, `ai_abilities._madness_discard_index`).
             cost_hand_index=activation_action.cost_hand_index,
+            # Which ability: a land's non-mana ability is named by its index
+            # (its first is the mana ability the engine would otherwise take);
+            # None, the engine's first, for everything else.
+            ability_index=activation_action.ability_index,
         )
         _resolve_pending_choices(game)
         report.interaction_count += 1

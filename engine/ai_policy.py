@@ -52,7 +52,7 @@ from .ai_weighed_cast import (
     permitted_casts,
     castable_commanders,
 )
-from .ai_rehearsal import Rehearsal, deliberating, rehearse
+from .ai_rehearsal import deliberating
 from .ai_valuation import entry_sacrifice_is_unavoidable, is_mana_ability
 from .faces import castable_faces
 from .game import Game
@@ -93,7 +93,13 @@ from .ai_targets import (
     _chosen_stack_target,
 )
 from .ai_divisions import choose_divided_targets
-from .ai_abilities import choose_activation_action, _ACTIVATIONS_SET_ASIDE
+from .ai_abilities import (
+    choose_activation_action,
+    _abilities_weighed,
+    _ACTIVATIONS_SET_ASIDE,
+    _queue_activation,
+    _rehearse_activation,
+)
 from .ai_casts import (
     _priced_candidate,
     _cast_candidate,
@@ -367,58 +373,6 @@ def choose_instant_speed_activation(
     return None
 
 
-def _rehearse_activation(
-    game: Game, seat: int, action: ActivationAction,
-) -> Rehearsal | None:
-    """What activating *action* would do, carried out on a scratch copy of
-    the game (``ai_rehearsal.rehearse``) the way `activate_chosen_ability`
-    carries it out — the planned lands tapped, the ability put on the stack —
-    against the same copy with the same lands tapped and nothing activated."""
-
-    def perform(table):
-        return _queue_activation(table, seat, action)
-
-    def paid_for(table, _carried) -> None:
-        pool = table.players[seat].mana_pool
-        floating = dict(pool)
-        tap_planned_lands(table, seat, action)
-        pool.clear()
-        pool.update(floating)
-
-    taps = bool(action.land_tap_indices)
-    return rehearse(
-        game, seat, perform, spell_name=None, leaves_hand=False,
-        label=f"{action.permanent_name}'s ability",
-        key=(
-            "activation", seat, action.permanent_name, action.permanent_index,
-            action.ability_index, action.target_player_index,
-            repr(action.target_permanent_index), repr(action.target_role_refs),
-            action.land_tap_indices, action.land_tap_colors,
-        ),
-        without=paid_for if taps else None,
-        without_key=(
-            ("paid", action.land_tap_indices, action.land_tap_colors)
-            if taps else None
-        ),
-    )
-
-
-def _queue_activation(table: Game, seat: int, action: ActivationAction):
-    """*action* paid for and put on *table*'s stack — the queue form, which
-    leaves it there for the table to answer (CR 117.3c)."""
-    planned = tap_planned_lands(table, seat, action)
-    return table.queue_permanent_ability(
-        seat,
-        planned.permanent_name,
-        target_player_index=planned.target_player_index,
-        permanent_index=planned.permanent_index,
-        target_permanent_index=planned.target_permanent_index,
-        target_role_refs=planned.target_role_refs,
-        ability_index=planned.ability_index,
-        cost_hand_index=planned.cost_hand_index,
-    )
-
-
 def activate_chosen_ability(game: Game, seat: int, action: ActivationAction):
     """Carry out `choose_instant_speed_activation`'s *action* on *game*: the
     engine's result."""
@@ -428,20 +382,18 @@ def activate_chosen_ability(game: Game, seat: int, action: ActivationAction):
 def holds_an_ability_it_could_activate(game: Game, player_index: int) -> bool:
     """Whether `choose_activation_action` has anything to look at: an
     untapped permanent *player_index* controls that is not summoning sick,
-    whose first usable ability is not a mana ability — the chooser's own first
-    gates, asked before it is. (The chooser also passes over lands; asked
-    here, a land whose first ability is not a mana ability only sends the
-    question on to it.)"""
+    with an ability the chooser weighs (`ai_abilities._abilities_weighed`: a
+    land's non-mana abilities, anything else's first) that is not a mana
+    ability — the chooser's own first gates, asked before it is."""
     for permanent in game.controlled_by(player_index):
         if permanent.tapped:
             continue
         if game._is_summoning_sick(permanent):
             continue
-        ability = next(iter(game.usable_abilities_of(permanent)), None)
-        if (
-            ability is not None
-            and ability.instruction is not None
+        if any(
+            ability.instruction is not None
             and not is_mana_ability(ability.instruction)
+            for _index, ability in _abilities_weighed(game, permanent)
         ):
             return True
     return False

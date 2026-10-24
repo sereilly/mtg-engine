@@ -319,15 +319,17 @@ def test_a_granted_ability_is_activated(rows):
         assert row["by_subject"] and not row["refused"], row
 
 
-def test_a_land_given_an_ability_is_still_left_alone(rows):
-    """Measured and left: 'Enchanted land has "{T}: This land deals 1 damage
-    to any target."' (Barbed Field). The chooser passes over every land, as
-    it does a land's own printed abilities (a Mishra's Factory, a Maze of
-    Ith): what a land is tapped for is the payment planner's question, and
-    this chooser has no way to weigh a ping against the mana. Pinned so that
-    the day it is weighed, this says so."""
+def test_a_land_given_an_ability_is_weighed(rows):
+    """'Enchanted land has "{T}: This land deals 1 damage to any target."'
+    (Barbed Field). This was pinned as left alone — the chooser passed over
+    every land, its own printed abilities (a Mishra's Factory, a Maze of Ith)
+    and the ones an Aura gave it alike — "so that the day it is weighed, this
+    says so". It is weighed now (JUD wave 2): a land's non-mana abilities are
+    rehearsed by their own index (`ai_abilities._land_ability_worth`), and a
+    ping that leaves the opponent a point down is one to make with a land
+    nothing else this main phase wanted."""
     by_key = {tag(row): row for row in rows}
-    assert not by_key[("Barbed Field", "worn")]["proposed"]
+    assert by_key[("Barbed Field", "worn")]["proposed"]
 
 
 def test_a_clone_of_a_pinger_pings():

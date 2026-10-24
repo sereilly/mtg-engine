@@ -192,6 +192,9 @@ def _ai_step(session: Session) -> bool:
             target_permanent_index=activation_action.target_permanent_index,
             target_role_refs=activation_action.target_role_refs,
             cost_hand_index=activation_action.cost_hand_index,
+            # A land's non-mana ability by its index; None (the engine's
+            # first) for everything else — see `ai_abilities._abilities_weighed`.
+            ability_index=activation_action.ability_index,
         )
         _auto_resolve_ai_pending(session)
 
