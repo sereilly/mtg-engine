@@ -140,6 +140,11 @@ def test_mtenda_griffin_returns_a_griffin_card_not_the_bear(catalog_by_name):
 _NOT_A_NARROWING = frozenset({
     "any_card", "card_type", "card_types", "targets", "any_graveyard",
     "exclude_source_card", "x_from_count",
+    # "…from **an opponent's** graveyard to their hand" (Judgment's Advocates):
+    # the zone's scope again, beside ``any_graveyard`` and only ever with it —
+    # which pile, not which card — and read by the any-graveyard handler the
+    # ``any_graveyard`` key routes to before the fallback is reached.
+    "opponent_graveyard_only",
 })
 
 
