@@ -94,6 +94,7 @@ from .ai_cast_gates import (
     _caster_can_make_its_sacrifices,
     _entry_gate_gives_back_more_than_it_brings,
     _caster_holds_a_hand_pick_entrant,
+    _exchange_shrinks_the_library,
 )
 from .ai_targets import (
     _cast_graveyard_denial,
@@ -1010,6 +1011,10 @@ def _cast_candidate_announcing(
         # creature card revealed this way with the lowest mana value puts it
         # onto the battlefield." With no creature card of its own to pick, the
         # caster's Stronghold Gambit can only hand the opponent a free one.
+        return None
+    if _exchange_shrinks_the_library(game, player_index, card):
+        # "Exchange your graveyard and library." With fewer cards in the
+        # graveyard than in the library the cast is turns given away.
         return None
     tap_indices: tuple[int, ...] = ()
     tap_colors: tuple[str, ...] = ()

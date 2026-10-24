@@ -407,7 +407,32 @@ def _helps_the_player_it_names(instruction: OracleInstruction) -> bool:
         return True
     if kind in _SEAT_DENIAL_KINDS or kind in _SEAT_NO_SIDE_KINDS:
         return False
+    if _bins_flashback_cards(instruction):
+        return True
     return activation_target_side(instruction) == "you"
+
+
+def _bins_flashback_cards(instruction: OracleInstruction) -> bool:
+    """Whether *instruction* searches the named player's library for cards
+    **with flashback** and puts them into that player's graveyard ("Search
+    target player's library for up to three cards with flashback and put them
+    into that player's graveyard", Quiet Speculation).
+
+    A gift to that player, whatever a standing reads: a card with flashback in
+    a graveyard is a spell its owner may cast from there (CR 702.34a), so the
+    finds are cards gained rather than cards lost — and aimed at an opponent
+    the search hands them three spells. Read off the payload (the search's
+    destination and its restriction), never a name, so any printing of the
+    sentence is aimed the same way.
+    """
+    if instruction.kind != "search_library":
+        return False
+    payload = instruction.payload or {}
+    restrictions = payload.get("restrictions") or {}
+    return (
+        payload.get("destination") == "graveyard"
+        and restrictions.get("with_keyword") == "flashback"
+    )
 
 
 def cast_helps_the_player_it_names(

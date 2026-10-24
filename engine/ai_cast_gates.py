@@ -20,7 +20,8 @@ every turn):
   (:func:`_caster_holds_a_hand_pick_entrant`), and an entry gate that gives
   back more than it brings (:func:`_entry_gate_gives_back_more_than_it_brings`,
   with :func:`given_back_first`, the order a seat returns its own permanents
-  in).
+  in), and an exchange of graveyard and library that would leave fewer cards
+  to draw (:func:`_exchange_shrinks_the_library`).
 
 The engine's own gate is asked wherever there is one, for the reason every
 affordability question in the policy is: a policy that judged a cost by its
@@ -637,3 +638,34 @@ def _caster_holds_a_hand_pick_entrant(
         return bool(evaluate_condition(game, context, guard))
 
     return all(any(enters(entry, c) for c in held) for entry in entries)
+
+
+def _exchange_shrinks_the_library(
+    game: Game, caster_index: int, card: CardDefinition
+) -> bool:
+    """Whether *card* exchanges its caster's graveyard and library
+    (``exchange_zones``) while the graveyard holds fewer cards than the
+    library — the cast that leaves its caster fewer cards to draw.
+
+    "Exchange your graveyard and library. Then shuffle your library."
+    (Morality Shift.) What it costs is turns: CR 704.5b ends the game for a
+    player who would draw from an empty library, and no standing this policy
+    reads counts a library short of empty — so a seat with two cards in its
+    graveyard cast it into a two-card library and lost three turns later.
+    Read off the compiled program, so it names no card; the spell itself is
+    not counted on either side, because it reaches the graveyard only once
+    the exchange is done (CR 608.2n).
+    """
+    from .ai_weighed_cast import _effect_steps
+
+    program = compile_card_oracle(card)
+    exchanges = any(
+        step.kind == "exchange_zones"
+        and sorted((step.payload or {}).get("zones") or ()) == ["graveyard", "library"]
+        for instruction in program.instructions
+        for step in _effect_steps(instruction)
+    )
+    if not exchanges:
+        return False
+    player = game.players[caster_index]
+    return len(player.graveyard) < len(player.library)

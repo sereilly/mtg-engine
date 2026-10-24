@@ -54,6 +54,7 @@ from .target_descriptions import SINGLE_GRAVEYARD
 from .target_roles import role_is_seat
 from .cost_pickers import spec_is_a_cost
 from .ai_payment import _plan_land_taps
+from .ai_weighed_cast import _effect_steps
 from .ai_actions import ActivationAction, HandActivationAction
 from .ai_scoring import (
     choose_attack_target,
@@ -589,6 +590,13 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
         # whole effect is nothing, and the cost is still paid: Belbe's Portal
         # spent {3} every turn of NEM's simulation to log that it had no card.
         if not _hand_entry_has_a_card(game, player_index, permanent, ability.instruction):
+            continue
+        # "{B}{B}{B}, Exile Balthor: Each player returns all black and all red
+        # creature cards from their graveyard to the battlefield." The Portal's
+        # floor one zone over: a sweep out of the graveyards whose piles hold
+        # nothing for the activator is a cost (here the source itself) paid to
+        # return nothing — or to return only an opponent's creatures.
+        if not _graveyard_sweep_favours_the_seat(game, player_index, ability.instruction):
             continue
         if game.activation_target_refusal(
             player_index, permanent, ability,
@@ -1182,6 +1190,49 @@ def _hand_entry_has_a_card(
         if not put_from_hand_candidates(
             game, {**payload, "card_filter": described}, player
         ):
+            return False
+    return True
+
+
+def _graveyard_sweep_favours_the_seat(
+    game: Game, player_index: int, instruction
+) -> bool:
+    """Whether every "return all <cards> from <graveyard(s)> to the
+    battlefield" step of an ability returns more cards for *player_index*
+    than for the rest of the table — True for an ability with no such step.
+
+    The matcher is the handler's own (``handlers._filters._card_matches_filter``),
+    so the count is of exactly the cards the resolution would move. "Each
+    player returns" is a sweep over every living seat, and what comes back
+    under an opponent's control is a cost, not a gain; a sweep of the seat's
+    own pile only needs one card.
+    """
+    from .handlers._filters import _card_matches_filter
+
+    for step in _effect_steps(instruction):
+        if step.kind != "return_all_cards_from_graveyard":
+            continue
+        payload = step.payload or {}
+        if payload.get("destination", "battlefield") != "battlefield":
+            continue
+        described = dict(payload.get("filter") or {})
+
+        def returned(seat: int) -> int:
+            player = game.players[seat]
+            return sum(
+                1 for card in player.graveyard
+                if _card_matches_filter(card, described, game=game, owner=player)
+            )
+
+        own = returned(player_index)
+        if payload.get("who") == "each_player":
+            others = sum(
+                returned(seat) for seat, player in enumerate(game.players)
+                if seat != player_index and not player.lost
+            )
+            if own <= others:
+                return False
+        elif own == 0:
             return False
     return True
 
