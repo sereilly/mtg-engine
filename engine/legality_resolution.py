@@ -482,23 +482,15 @@ class ResolutionTargetsMixin:
         # …and the pile's **owner**, where the pile's owner is a target ("…from
         # target player's graveyard", Drafna's Restoration; "Target player
         # shuffles up to three target cards from their graveyard", Gaea's
-        # Blessing): one more target of the same announcement, legal while the
-        # seat is still one the cast gate would let it name — so a player who
-        # gained shroud in response, with no card named or every card gone, is
-        # every target illegal (the latter card's 2018-04-27 ruling has the
-        # player shuffle their library when only the *cards* went). Its address
-        # is None: a lone seat is not blanked (``stack_targets.
-        # blank_illegal_targets``), and the handler that reads it asks the same
-        # question before acting (``handlers/_targets.pile_owner_still_a_target``).
-        pile_owners = (
-            self._pile_owner_seats(item.caster_index, card, spec)
-            if holder is item else None
-        )
-        if pile_owners is not None:
-            seat = getattr(holder, "target_player_index", None)
-            if not isinstance(seat, int):
-                seat = self._spell_default_seat(item.caster_index)
-            legality.append(seat in pile_owners)
+        # Blessing) — or the opponent a count was taken on (Reap): one more
+        # target of the same announcement (:meth:`_announced_seat_verdict`).
+        # So a player who gained shroud in response, with no card named or
+        # every card gone, is every target illegal (Gaea's Blessing's
+        # 2018-04-27 ruling has the player shuffle their library when only the
+        # *cards* went).
+        verdict = self._announced_seat_verdict(item, card, spec, holder)
+        if verdict is not None:
+            legality.append(verdict)
             if addresses is not None:
                 addresses.append(None)
         stack_target = getattr(holder, "target_stack_item", None)
@@ -647,9 +639,41 @@ class ResolutionTargetsMixin:
             found.append(
                 (target.kind, target.channel, target.position, target.permanent_id)
             )
+        # "…divided as you choose among any number of targets. **Target
+        # opponent** gains 5 life." (Fiery Justice.) The opponent beside the
+        # division is a target of its own — the card's 2017-03-14 ruling: "If
+        # all targets become illegal, including the target opponent for the
+        # life-gaining effect, Fiery Justice doesn't resolve."
+        verdict = self._announced_seat_verdict(item, card, spec, holder)
+        if verdict is not None:
+            legality.append(verdict)
+            found.append(None)
         if addresses is not None:
             addresses.extend(found)
         return legality
+
+    def _announced_seat_verdict(self, item, card, spec, holder) -> "bool | None":
+        """CR 608.2b for a seat announced beside a spec's own slots
+        (``target_descriptions.ANNOUNCED_SEAT``): whether the seat the item
+        recorded is still one its description admits — or None for a spec
+        that announces none, and for a holder other than the item (a chosen
+        mode carries no seat of its own).
+
+        Its address is None for :meth:`blank_illegal_resolution_targets`: a
+        lone seat is not blanked (``stack_targets.blank_illegal_targets``),
+        and each handler acting on it asks the same question first
+        (``handlers/_targets.pile_owner_still_a_target``,
+        ``named_seat_still_a_target``).
+        """
+        if holder is not item:
+            return None
+        offered = self._announced_seats(item.caster_index, card, spec)
+        if offered is None:
+            return None
+        seat = getattr(holder, "target_player_index", None)
+        if not isinstance(seat, int):
+            seat = self._spell_default_seat(item.caster_index)
+        return seat in offered
 
     def stale_comparison_refusal(self, item) -> str | None:
         """CR 608.2b for **a printed comparison between two seats**, and for

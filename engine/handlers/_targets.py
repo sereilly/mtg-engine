@@ -749,6 +749,37 @@ def pile_owner_still_a_target(
     )
 
 
+def named_seat_still_a_target(
+    game: Game, context: OracleExecutionContext, payload: dict,
+) -> bool:
+    """CR 608.2b's per-target half for a step whose own ``targets`` names a
+    **player** (``{"kind": "player", …}``): whether ``context.target`` is
+    still one that description admits.
+
+    "…divided as you choose among any number of targets. **Target opponent**
+    gains 5 life." (Fiery Justice.) A seat beside another target — the
+    whole-object half is ``legality_resolution._announced_seat_verdict`` — so
+    the spell may resolve with this one illegal, and then it is not affected.
+    For a lone seat the whole-object rule has already removed the spell, and
+    the answer here agrees.
+
+    True for a step that describes no player target: nothing to re-ask.
+    """
+    from ..target_descriptions import _from_targets_payload
+
+    described = (payload or {}).get("targets")
+    if not isinstance(described, dict) or described.get("kind") != "player":
+        return True
+    spec = _from_targets_payload(described)
+    if not isinstance(spec, dict):
+        return True
+    seat = next(
+        (index for index, player in enumerate(game.players) if player is context.target),
+        None,
+    )
+    return seat is not None and _role_seat_is_still_a_target(game, context, spec, seat)
+
+
 def _role_seat_is_still_a_target(
     game: Game, context: OracleExecutionContext, role: dict, seat: int,
 ) -> bool:

@@ -4,7 +4,8 @@ import dataclasses
 from typing import TYPE_CHECKING
 
 from ._amounts import count_from_payload, per_recipient_amount, resolve_amount
-from ._targets import bound_permanent, stack_target_controller_seat
+from ._targets import (bound_permanent, named_seat_still_a_target,
+                       stack_target_controller_seat)
 from ..exiled_records import source_object
 from ..life_prohibitions import life_gain_banned
 from ..named_counters import counters_on
@@ -598,6 +599,20 @@ def target_gains_life(game: Game, instruction: OracleInstruction, context: Oracl
         gainer = game.players[seat]
     else:
         gainer = context.caster if recipient == "caster" else context.target
+        # "…divided as you choose among any number of targets. **Target
+        # opponent** gains 5 life." (Fiery Justice.) The opponent is a target of
+        # its own beside the division, so the spell resolves while any of its
+        # targets is legal — and "won't affect" this one where it no longer is
+        # (CR 608.2b; the card's 2017-03-14 ruling). Asked of the step's own
+        # description, through the list the cast gate held the seat to.
+        if recipient == "target" and not named_seat_still_a_target(
+            game, context, instruction.payload,
+        ):
+            game.log.append(
+                f"{card.name}: {getattr(gainer, 'name', 'nobody')} is no longer "
+                "a legal target (608.2b)"
+            )
+            return True, "resolved"
     # "You gain life equal to the damage dealt" — the amount is whatever the
     # preceding damage instruction in this same resolution actually dealt, which
     # it recorded in the context scratchpad. This is what lets damage-then-gain

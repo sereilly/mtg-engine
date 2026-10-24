@@ -897,30 +897,34 @@ GRAVEYARD_TARGET_KIND = "graveyard_creature"
 #: pile its first card came from.
 SINGLE_GRAVEYARD = "single_graveyard"
 
-#: "…target cards from **target player's** graveyard" (Drafna's Restoration;
-#: "Target player shuffles up to three target cards from their graveyard",
-#: Gaea's Blessing, Dwell on the Past, Krosan Reclamation). The pile's owner
-#: is a **target** of the same announcement (CR 601.2c: every instance of the
-#: word), and the spec says so with the seat description it answers — a
-#: ``{"kind": "player", …}`` spec of its own, read by every reader of a
-#: target player: the graveyard enumerator offers cards only out of a pile
-#: whose owner that description admits (shroud, a player who left the game),
-#: the cast gate holds the named seat to it even when no card is named, and
-#: CR 608.2b re-asks it at resolution. The seat travels on the field a
-#: graveyard spec's pile always has, ``target_player_index``.
-PILE_OWNER_TARGET = "pile_owner_target"
-
-#: "Return up to X target cards from **your** graveyard to your hand, where X
-#: is the number of black permanents **target opponent** controls as you cast
-#: this spell." (Reap.) The count's seat is a target of the same announcement
-#: (CR 601.2c; the card's 2008-04-01 ruling: "This card has received errata so
-#: that it now targets a specific opponent") — chosen **before** the cards,
-#: since it fixes how many may be named. The spec carries the player
-#: description it is chosen by, for a graveyard spec scoped to the caster's
-#: own pile (``own_graveyard_only``), whose ``target_player_index`` therefore
-#: names no pile and is free to name this seat (``Game.graveyard_target_seat``
-#: has always read the caster's pile for such a spec, whatever the field said).
-#: Read by ``bare_announcements.announced_counted_seat`` (the seat an
-#: announcement names, or the first legal one), ``Game.announced_cast_x`` (the
-#: X counted on it) and the cast gate (CR 601.2c).
-COUNTED_SEAT_TARGET = "counted_seat_target"
+#: A **seat** the announcement names beside the spec's own slots, on the
+#: field every cast already carries (``target_player_index``), and the player
+#: description it is chosen by — a ``{"kind": "player", …}`` spec of its own.
+#: CR 601.2c: every instance of the word "target" is announced, and these are
+#: the instances a spec's one slot cannot carry:
+#:
+#: * the **owner of the pile** its cards are chosen from — "…target cards from
+#:   **target player's** graveyard" (Drafna's Restoration), "**Target player**
+#:   shuffles up to three target cards from their graveyard" (Gaea's
+#:   Blessing, Dwell on the Past, Krosan Reclamation). The pile follows the
+#:   seat: the graveyard enumerator offers cards only out of a pile whose
+#:   owner the description admits (shroud, a player who left the game);
+#: * the seat a **count** is taken on, beside a pick out of the caster's own
+#:   pile — "Return up to X target cards from **your** graveyard …, where X is
+#:   the number of black permanents **target opponent** controls" (Reap; the
+#:   2008-04-01 rulings: errata "so that it now targets a specific opponent",
+#:   counted "during announcement"). An ``own_graveyard_only`` spec's pile is
+#:   the caster's whatever the field says (``Game.graveyard_target_seat``), so
+#:   the field is free to name the opponent, and the X is counted on it;
+#: * a seat **beside a division** — "Fiery Justice deals 5 damage divided as
+#:   you choose among any number of targets. **Target opponent** gains 5
+#:   life." The division's entries carry their own seats, so the field names
+#:   the opponent.
+#:
+#: One key, read by: ``bare_announcements.announced_seat`` (the seat named, or
+#: the first the description admits — the cast writes it onto the
+#: announcement), the cast gate (CR 601.2c, whatever the cards or shares
+#: named), ``Game.announced_cast_x`` (a count taken on it) and CR 608.2b's
+#: whole-object re-check, with the handlers that act on the seat asking the
+#: per-target half.
+ANNOUNCED_SEAT = "announced_seat"

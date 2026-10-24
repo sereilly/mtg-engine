@@ -35,7 +35,7 @@ from .targeting import (
     spec_roles,
 )
 from .cost_pickers import spec_is_a_cost
-from .target_descriptions import COUNTED_SEAT_TARGET
+from .target_descriptions import ANNOUNCED_SEAT
 from .legality import (
     _unnamed_single_pile_refusal,
     _UNCHECKED_CAST_TARGET_KINDS,
@@ -381,6 +381,18 @@ class CastTargetGatesMixin:
             optional_cost_payments=optional_cost_payments,
             mode_index=mode_index,
         )
+        # **A seat announced beside the spec's own slots** first
+        # (``target_descriptions.ANNOUNCED_SEAT``): the owner of a pile
+        # ("…target cards from target player's graveyard", Drafna's
+        # Restoration), the opponent a count is taken on (Reap), the opponent
+        # beside a division (Fiery Justice). Asked whatever else was named —
+        # "up to three" cards may be none and a division names its own seats —
+        # because the seat is announced either way (CR 601.2c).
+        seat_refusal = self._announced_seat_refusal(
+            caster_index, card, spec, target_player_index, mode_index=mode_index,
+        )
+        if seat_refusal is not None:
+            return seat_refusal
         if spec is None or spec.get("kind") in _UNCHECKED_CAST_TARGET_KINDS:
             return None
         if spec_roles(spec):
@@ -434,13 +446,8 @@ class CastTargetGatesMixin:
         # and nothing ever says the announcement was illegal, which is an
         # ability that works more often than the card allows.
         # …counted on the seat the announcement named (Reap's "target
-        # opponent", ``target_descriptions.COUNTED_SEAT_TARGET``), which is a
-        # target in its own right and held to its description first.
-        counted_refusal = self._counted_seat_refusal(
-            caster_index, card, spec, target_player_index, mode_index=mode_index,
-        )
-        if counted_refusal is not None:
-            return counted_refusal
+        # opponent", ``target_descriptions.ANNOUNCED_SEAT``), held to its
+        # description above.
         announced = self.announced_cast_x(
             caster_index, card, mode_index=mode_index, seat=target_player_index,
         )
@@ -467,30 +474,6 @@ class CastTargetGatesMixin:
             # enumeration offers. Ids are not read here: a card in a graveyard
             # is not a permanent (CR 115.2) and has no ``permanent_id``.
             #
-            # **The pile's owner first, where the pile's owner is a target**
-            # ("…target cards from target player's graveyard", Drafna's
-            # Restoration; "Target player shuffles up to three target cards
-            # from their graveyard", Gaea's Blessing). Asked whatever the
-            # count of cards: "up to three" and "any number of" may name none,
-            # and the player is still announced (CR 601.2c) — the seat a cast
-            # names, else the one it resolves at (``_spell_default_seat``),
-            # which is a target like any other.
-            pile_owners = self._pile_owner_seats(caster_index, card, spec)
-            if pile_owners is not None:
-                seat = (
-                    target_player_index if isinstance(target_player_index, int)
-                    else self._spell_default_seat(caster_index)
-                )
-                if seat not in pile_owners:
-                    who = (
-                        self.players[seat].name
-                        if isinstance(seat, int) and 0 <= seat < len(self.players)
-                        else f"seat {seat}"
-                    )
-                    return (
-                        f"{card.name}: {who} can't be chosen as its target "
-                        "player (CR 601.2c)"
-                    )
             if not indices:
                 # CR 601.2c gates what was *named*. A cast that owed a card
                 # and named none has had the picker's first one named for it
@@ -516,11 +499,12 @@ class CastTargetGatesMixin:
             }
             # The pile the indices count into. For a spell whose seat field
             # names the seat its count is taken on (Reap,
-            # ``target_descriptions.COUNTED_SEAT_TARGET``) that is the caster's
+            # ``target_descriptions.ANNOUNCED_SEAT``) that is the caster's
             # own pile, the one ``Game.graveyard_target_seat`` stamps for a spec
             # scoped to it; everywhere else the field names the pile.
             seats = (
-                [caster_index] if spec.get(COUNTED_SEAT_TARGET)
+                [caster_index]
+                if spec.get(ANNOUNCED_SEAT) and spec.get("own_graveyard_only")
                 else [target_player_index] if target_player_index is not None
                 else list(range(len(self.players)))
             )
@@ -588,23 +572,22 @@ class CastTargetGatesMixin:
                 return refused
         return None
 
-    def _counted_seat_refusal(
-        self, caster_index: int, card: CardDefinition, spec: dict,
+    def _announced_seat_refusal(
+        self, caster_index: int, card: CardDefinition, spec: dict | None,
         target_player_index, *, mode_index: int | None = None,
     ) -> str | None:
-        """CR 601.2c for a **counted target seat**
-        (``target_descriptions.COUNTED_SEAT_TARGET``): "…where X is the number
-        of black permanents **target opponent** controls" (Reap). The seat the
-        announcement names — or the first legal one, for a cast that named the
-        caster's own pile or nothing (``bare_announcements.
-        announced_counted_seat``) — must be one the description admits. None
-        for a spec without one."""
-        from .bare_announcements import announced_counted_seat
+        """CR 601.2c for a seat announced beside a spec's own slots
+        (``target_descriptions.ANNOUNCED_SEAT``). The seat the announcement
+        names — or the one ``bare_announcements.announced_seat`` takes for a
+        cast that named nobody, or its caster where the description cannot
+        admit them — must be one the description admits. None for a spec
+        without one."""
+        from .bare_announcements import announced_seat
 
-        offered = self._counted_seats(caster_index, card, spec)
+        offered = self._announced_seats(caster_index, card, spec)
         if offered is None:
             return None
-        seat = announced_counted_seat(
+        seat = announced_seat(
             self, caster_index, card, target_player_index, mode_index=mode_index,
         )
         if seat in offered:
@@ -614,7 +597,7 @@ class CastTargetGatesMixin:
             if isinstance(seat, int) and 0 <= seat < len(self.players)
             else "nobody"
         )
-        return f"{card.name}: {who} can't be chosen as its target opponent (CR 601.2c)"
+        return f"{card.name}: {who} can't be chosen as its target player (CR 601.2c)"
 
     def _cast_player_target_refusal(
         self, caster_index: int, card: CardDefinition, program, spec: dict, *,

@@ -93,15 +93,15 @@ class CastTargetSpecMixin:
         specific opponent"; 2008-04-01: "The count … is done during
         announcement"), and the spell is scoped to its caster's own pile, so
         that field names no pile and carries the opponent
-        (``target_descriptions.COUNTED_SEAT_TARGET``). Read through
-        ``bare_announcements.announced_counted_seat``, which answers a seat
+        (``target_descriptions.ANNOUNCED_SEAT``). Read through
+        ``bare_announcements.announced_seat``, which answers a seat
         named nowhere — the picker asks with none, the browser sends the
         caster's own pile — with the first one the description admits, the
         seat the cast itself will then stamp. This said "no seat is taken from
         the caller" while the field meant only the pile, and at three seats
         the count fell to the first opponent whatever the caster meant.
         """
-        from .bare_announcements import announced_counted_seat
+        from .bare_announcements import announced_seat
         from .game_types import OracleExecutionContext
         from .handlers._amounts import count_from_payload
         from .targeting import cast_time_count_spec
@@ -113,7 +113,7 @@ class CastTargetSpecMixin:
             return None
         caster = self.players[caster_index]
         target = caster
-        counted = announced_counted_seat(
+        counted = announced_seat(
             self, caster_index, card, seat, mode_index=mode_index,
         )
         if isinstance(counted, int) and 0 <= counted < len(self.players):
@@ -280,11 +280,11 @@ class CastTargetSpecMixin:
             spec.pop("x_targets", None)
             spec["max_targets"] = announced
             # …and where X is counted on a seat the caster chooses (Reap's
-            # "target opponent", ``target_descriptions.COUNTED_SEAT_TARGET``),
+            # "target opponent", ``target_descriptions.ANNOUNCED_SEAT``),
             # the X each legal seat would fix, so a picker asking for the seat
             # first can cap the cards by it. ``defined_x`` above is the default
             # seat's — the one a cast naming none is announced at.
-            counted = self._counted_seats(caster_index, card, spec)
+            counted = self._announced_seats(caster_index, card, spec)
             if counted is not None:
                 spec["defined_x_by_seat"] = {
                     seat: self.announced_cast_x(

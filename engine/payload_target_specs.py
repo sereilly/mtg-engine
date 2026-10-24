@@ -17,9 +17,9 @@ out of ``engine/targeting.py`` at the 2,000-line cap.
 
 from __future__ import annotations
 
-from .target_descriptions import (COUNTED_SEAT_TARGET, GRAVEYARD_TARGET_KIND,
-                                  PILE_OWNER_TARGET, SINGLE_GRAVEYARD,
-                                  _from_targets_payload, _narrowing_flags)
+from .target_descriptions import (ANNOUNCED_SEAT, GRAVEYARD_TARGET_KIND,
+                                  SINGLE_GRAVEYARD, _from_targets_payload,
+                                  _narrowing_flags)
 
 
 #: The payload key a computed amount's count spec is stamped under. Spelled here
@@ -419,11 +419,11 @@ def _graveyard_return_spec(payload: dict) -> dict:
     # "…up to X target cards from your graveyard …, where X is the number of
     # black permanents **target opponent** controls as you cast this spell."
     # (Reap.) The count's seat is a target too
-    # (``target_descriptions.COUNTED_SEAT_TARGET``) — carried only beside the
+    # (``target_descriptions.ANNOUNCED_SEAT``) — carried only beside the
     # caster's own pile, where the announcement's seat field names no pile.
     counted = player_pronoun_spec((payload.get(_X_FROM_COUNT) or {}).get("owner"))
     if counted is not None and spec.get("own_graveyard_only"):
-        spec[COUNTED_SEAT_TARGET] = counted
+        spec[ANNOUNCED_SEAT] = counted
     return spec
 
 
@@ -1045,10 +1045,10 @@ def _graveyard_to_library_spec(payload: dict) -> dict:
     # "…from **target player's** graveyard" (Drafna's Restoration), "**Target
     # player** shuffles … target cards from their graveyard" (Gaea's
     # Blessing): the pile's owner is a target too, and the spec carries the
-    # description it is chosen by (``target_descriptions.PILE_OWNER_TARGET``).
+    # description it is chosen by (``target_descriptions.ANNOUNCED_SEAT``).
     pile_owner = player_pronoun_spec(payload.get("graveyard_owner"))
     if pile_owner is not None:
-        spec[PILE_OWNER_TARGET] = pile_owner
+        spec[ANNOUNCED_SEAT] = pile_owner
     described = payload.get("targets") or {}
     if described.get("unbounded"):
         spec["unbounded_targets"] = True

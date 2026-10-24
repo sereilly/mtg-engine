@@ -65,7 +65,7 @@ from .oracle import compile_card_oracle
 from .stack_targets import names_a_target
 from .target_requirements import narrow_offer
 from .targeting import (
-    activation_target_slot, cast_target_slot,
+    activation_target_slot, cast_target_slot, derive_cast_spec,
     graveyard_target_spec, spec_offers_a_player, spec_roles,
 )
 from .target_roles import ROLES_TARGET_KIND
@@ -74,32 +74,32 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
     from .game import Game
 
 
-def announced_counted_seat(
+def announced_seat(
     game: "Game", caster_index: int, card, named_seat, *,
     mode_index: int | None = None,
 ) -> "int | None":
-    """The seat a cast's **counted target seat** names, or None for a spell
-    whose count names none (``target_descriptions.COUNTED_SEAT_TARGET``).
+    """The seat a cast's **announced seat** names, or None for a spell whose
+    spec announces none (``target_descriptions.ANNOUNCED_SEAT``: the owner of
+    a pile, the seat a count is taken on, a seat beside a division).
 
-    "Return up to X target cards from your graveyard to your hand, where X is
-    the number of black permanents **target opponent** controls as you cast
-    this spell." (Reap.) The seat rides ``target_player_index``, which for a
-    spell scoped to its caster's own pile names no pile — so a seat named
-    there that is not the caster's own *is* the announcement's choice, and is
-    returned as it stands for the gate to judge (CR 601.2c).
-
-    **The caster's own seat, or none, names nothing**: it is what a caller
-    picking cards out of its own graveyard sends as "the pile", and a player
-    is never their own opponent (CR 102.3). Such an omission is answered the
-    way this module answers every other, once and as the spell is announced:
-    the first seat the description admits, in standing order (the opposing
-    seat first). None of them → the seat stays as named and the gate refuses.
+    The seat rides ``target_player_index``. A seat named there is the
+    announcement's choice and is returned as it stands for the gate to judge
+    (CR 601.2c) — **except the caster's own where the description cannot admit
+    it**: "target opponent" never names its caster (CR 102.3), so a caster's
+    seat there says only what a caller picking cards out of its own graveyard
+    sends as "the pile" (Reap), or what a cast that named nobody carries. Such
+    an omission is answered the way this module answers every other, once and
+    as the spell is announced: the first seat the description admits, in
+    standing order (the opposing seat first). None of them → the seat stays as
+    named and the gate refuses.
     """
-    spec = graveyard_target_spec(card, compile_card_oracle(card), mode_index=mode_index)
-    offered = game._counted_seats(caster_index, card, spec)
+    spec = derive_cast_spec(card, compile_card_oracle(card), mode_index=mode_index)
+    offered = game._announced_seats(caster_index, card, spec)
     if offered is None:
         return None
-    if isinstance(named_seat, int) and named_seat != caster_index:
+    if isinstance(named_seat, int) and not isinstance(named_seat, bool) and (
+        named_seat != caster_index or caster_index in offered
+    ):
         return named_seat
     standing = game._default_opposing_seat(caster_index)
     ordered = sorted(offered, key=lambda seat: (seat != standing, seat))

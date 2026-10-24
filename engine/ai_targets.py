@@ -559,12 +559,15 @@ def _choose_several_targets(
     # Crypt's {X} cost) has no answer here and keeps the behaviour it had.
     # …counted on the opponent this seat names: Reap's "target opponent" is a
     # target of the same announcement (``target_descriptions.
-    # COUNTED_SEAT_TARGET``) and every legal one fixes a different X, so which
+    # ANNOUNCED_SEAT``) and every legal one fixes a different X, so which
     # to name is the one whose X is largest (``best_counted_target_seat``). It
     # rides the cast's seat field — the pile is the caster's own whatever it
     # says — so it is the seat this chooser returns.
     counted_seat = None
-    counted_options = game._counted_seats(caster_index, card, spec)
+    counted_options = (
+        game._announced_seats(caster_index, card, spec)
+        if (spec or {}).get("own_graveyard_only") else None
+    )
     if counted_options:
         counted_seat = best_counted_target_seat(
             game, caster_index, program.instructions,
