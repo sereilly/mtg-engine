@@ -1236,7 +1236,31 @@ def exile_recorded_permanent(game: Game, instruction: OracleInstruction, context
 
     Nothing recorded, or a permanent that has left since, exiles nothing —
     CR 608.2b doing as much as it can rather than a failure.
+
+    **Recorded as exiled with the ability's source**, when the source is a
+    permanent (CR 610.3) — what ``exile_target_permanent`` and
+    ``exile_all_matching`` have always done, and for their stated reason: the
+    entry carries no ``ends_on``, so it is inert for every card that never
+    asks, and it is everything for the Wormfang Nightmares, whose "return the
+    exiled card to the battlefield under its owner's control" reads that pile
+    and nothing else. A spell (Cannibalize) has no source permanent and
+    records nothing.
+
+    The source is linked **even when it has already left** — the departed
+    ``Permanent`` object is the one the resolution holds. "If Wormfang Drake
+    leaves the battlefield before its enters-the-battlefield ability resolves,
+    the leaves-the-battlefield ability will trigger and resolve first. It
+    won't return anything. … If you exile a creature you control, it will be
+    exiled indefinitely." (2022-12-08.) Two linked abilities (CR 607.2a), not
+    an "until" duration: the exile still happens, and nothing is left that
+    will ever read the record — so ``until_leaves_has_ended`` is deliberately
+    not asked here.
+
+    **A token ceases to exist** rather than going to exile (CR 111.7), and is
+    not recorded: there is no card for "the exiled card" to name.
     """
+    from ..linked_exile import link_exiled_card
+
     recorded = one_recorded_permanent_id(
         context, instruction.payload.get("permanents_from")
     )
@@ -1247,11 +1271,15 @@ def exile_recorded_permanent(game: Game, instruction: OracleInstruction, context
     # CR 400.3: a card put into exile is still owned by whoever owns it, and the
     # departure is the one transition every leaves-the-battlefield rule rides.
     owner_index = game.owner_index_of(victim)
+    if owner_index is None:
+        owner_index = game.players.index(context.caster)
     exiled = victim.card
+    is_token = bool(victim.metadata.get("is_token"))
     game.remove_from_battlefield(victim)
-    game.players[
-        owner_index if owner_index is not None else game.players.index(context.caster)
-    ].exile.append(exiled)
+    if not is_token:
+        game.players[owner_index].exile.append(exiled)
+        if context.source_permanent is not None:
+            link_exiled_card(context.source_permanent, exiled, owner_index)
     game.log.append(f"{context.card.name}: {exiled.name} was exiled")
     return True, "resolved"
 

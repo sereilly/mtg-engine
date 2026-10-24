@@ -1110,6 +1110,12 @@ def _entry_exile(ctx: PromptContext, choices: list) -> dict:
         "caster_seat": choice.player_index,
         "card_name": choice.data.get("card_name", ""),
         "count": int(choice.data.get("count", 0)),
+        # "…exile **any number of** creature cards from your graveyard."
+        # (Sutured Ghoul.) No count is owed: any selection from none to every
+        # legal card is an answer, and ``count`` is 0. A client reading only
+        # ``count`` would offer exactly zero — a 0/0 that dies — so the flag
+        # says the Confirm is ready at every size.
+        "any_number": bool(choice.data.get("any_number")),
         "counters": list(choice.data.get("counters") or ()),
         "cards": [ctx.serialize_card(card) for card in player.graveyard],
         "legal_indices": ctx.game._entry_exile_candidates(choice),

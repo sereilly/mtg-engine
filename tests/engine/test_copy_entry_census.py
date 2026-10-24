@@ -226,13 +226,21 @@ def _sweep_clones() -> tuple[int, int, list[str]]:
         if card.primary_type != "creature":
             continue
         examined += 1
-        game, fired = _recording_game(hand=[clone_card])
+        game, fired = _recording_game()
         original = Permanent(card=card)
         game._put_permanent_onto_battlefield(1, original, None)
         present = _settled(game, original)
         own = _fired_from(fired, original, instructions)
         if not present:
             continue
+        # The Clone reaches seat 0's hand only once the original's own entry
+        # has settled. Dealt in with the hand, it was a card the original's
+        # trigger could reach: "When this creature enters, **each player**
+        # discards a card." (Earsplitting Rats, Judgment) discarded it, and the
+        # cast below raised "Card not in hand: Clone" for the whole sweep. The
+        # comparison is about what the Clone fires, so nothing the original
+        # does may decide whether there is a Clone to cast.
+        game.put_card_into_hand(game.players[0], clone_card)
         slot = game.battlefield_index_of(original)
         seat = game.controller_index_of(original)
         if cast_prohibition(game, 0, clone_card) is not None:

@@ -240,9 +240,29 @@ def _at_clause_end(stream: TokenStream) -> bool:
     )
 
 
+def _accept_and_exiles_it(stream: TokenStream) -> bool:
+    """Consume ``and exiles it`` ending its sentence, or nothing.
+
+    The tail of "an opponent chooses a permanent you control other than this
+    creature **and exiles it**" (Wormfang Crab). Whole or not at all: a
+    pronoun with anything behind it is a different sentence, and the cursor is
+    left where it was so the caller's refusal stands.
+    """
+    mark = stream.mark()
+    if (
+        stream.accept_word("and")
+        and stream.accept_word("exiles", "exile")
+        and stream.accept_word("it")
+        and (stream.exhausted or stream.at_punct(".", ";"))
+    ):
+        return True
+    stream.reset(mark)
+    return False
+
+
 def parse_player_chooses_permanent(
     stream: TokenStream, chooser: "ast.PlayerRef"
-) -> "ast.ChoosePermanent | None":
+) -> "ast.ChoosePermanent | ast.Conjunction | None":
     """``<player> chooses <noun phrase> [that this card could enchant].``
     ``<player> chooses up to <N> <noun phrase>.``
 
@@ -368,6 +388,23 @@ def parse_player_chooses_permanent(
             and not spec.filter.is_card
         ):
             return ast.ChoosePermanent(chooser, spec)
+        # "…an opponent chooses a permanent you control other than this
+        # creature **and exiles it**." (Wormfang Crab.) The pick and the act on
+        # it in one sentence: the chooser performs the exile, and "it" is the
+        # permanent just chosen — which the lowering reads off the pick's own
+        # record (``CHOSEN_PERMANENT`` in ``produced``), the arrangement "exile
+        # it" already has behind a reanimation or a token maker. The verb is
+        # the whole of the tail and it must end the clause, so any other
+        # second verb keeps whatever refusal it had.
+        if (
+            spec.filter.zone == "battlefield"
+            and not spec.filter.is_card
+            and _accept_and_exiles_it(stream)
+        ):
+            return ast.Conjunction((
+                ast.ChoosePermanent(chooser, spec),
+                ast.Exile(ast.TargetSpec("it", ast.ObjectFilter(is_source=True))),
+            ))
         # Anything else this production has no answer for, and a choice made
         # from a wider set than the card names is not the card. Refused rather
         # than admitted with the clause dropped.

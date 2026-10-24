@@ -114,13 +114,24 @@ class EntryChoicesMixin:
         size. The count is exact rather than "up to": the card says *X* cards,
         and a short answer is the case the CR 614 interceptor already refused
         the entry for.
+
+        **…except "any number of"** (Sutured Ghoul, ``any_number``): no count
+        is owed, so any answer from none to every candidate is one, and no
+        counter is bought. ``link_to_entering`` records each exiled card *with*
+        the entering permanent (CR 607.2b) for the ability that reads "the
+        exiled cards" — the Ghoul's CDA, which sums them.
         """
         player = self.players[choice.player_index]
         permanent = choice.data.get("_entering_permanent") or choice.data.get("permanent")
         wanted = int(choice.data.get("count", 0))
         offered = tuple(choice.data.get("counters") or ())
         legal = set(self._entry_exile_candidates(choice))
-        if not isinstance(picks, list) or len(picks) != wanted:
+        if not isinstance(picks, list):
+            return False
+        if choice.data.get("any_number"):
+            if len(picks) > len(legal):
+                return False
+        elif len(picks) != wanted:
             return False
         chosen: list[tuple[int, str | None]] = []
         seen: set[int] = set()
@@ -145,6 +156,12 @@ class EntryChoicesMixin:
             card = player.graveyard.pop(index)
             player.exile.append(card)
             exiled.append((card, counter))
+        if choice.data.get("link_to_entering") and permanent is not None:
+            from ..linked_exile import link_exiled_card
+
+            # In graveyard order, which is the order a player reads the pile.
+            for card, _counter in reversed(exiled):
+                link_exiled_card(permanent, card, choice.player_index)
         for _card, counter in exiled:
             if counter is None or permanent is None:
                 continue
@@ -178,10 +195,17 @@ class EntryChoicesMixin:
         that dies to any ping it trades with and ``+0/+2`` leaves one that never
         kills anything, and the balanced counter is the only one that both
         survives and threatens.
+
+        **"Any number of"** (Sutured Ghoul): every candidate. Each card the
+        Ghoul exiles is what its size is made of, and a 0/0 entering with an
+        empty pile dies to the state-based check — so for a seat nobody asks
+        the most is the only answer that is never the worst one.
         """
         player = self.players[choice.player_index]
         wanted = int(choice.data.get("count", 0))
         offered = tuple(choice.data.get("counters") or ())
+        if choice.data.get("any_number"):
+            wanted = len(self._entry_exile_candidates(choice))
         candidates = sorted(
             self._entry_exile_candidates(choice),
             key=lambda index: (player.graveyard[index].cmc or 0, index),

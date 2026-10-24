@@ -794,6 +794,48 @@ def exile_cards_on_enter(line: str, card_name: str | None = None) -> dict | None
     return {"count": count, "filter": described_cards, "counters": counters}
 
 
+#: "As this creature enters, exile **any number of** creature cards from your
+#: graveyard." (Sutured Ghoul.) :data:`EXILE_CARDS_ON_ENTER`'s entry exile with
+#: the count taken away: nothing is owed, so there is no "if you can't" and no
+#: interceptor, zero is a legal answer, and each card buys no counter. What the
+#: cards buy is the line beside it — "…power is equal to the total power of the
+#: exiled cards …", a CDA over the pile this links to the permanent
+#: (``characteristic_defining``'s row) — which is why the entry state records
+#: them *with* the permanent rather than merely exiling them.
+EXILE_ANY_NUMBER_ON_ENTER = re.compile(
+    r"^as this [a-z]+ enters, exile any number of (?P<phrase>.+?) from your "
+    r"graveyard$"
+)
+
+
+def exile_any_number_on_enter(line: str, card_name: str | None = None) -> dict | None:
+    """The card filter naming what may be exiled as the permanent enters, or
+    None when the line is not :data:`EXILE_ANY_NUMBER_ON_ENTER`.
+
+    Read by the support gate (through :func:`enter_effect_line`) and by the
+    entry state that arms the pick, so what is claimed and what is offered are
+    one reading of one string. The noun phrase goes through the one noun parser
+    and must be cards with no zone of their own ("from your graveyard" is the
+    sentence's) and no narrowing the card matcher cannot test — the picker
+    lists one graveyard with no observer and no source behind it, so a
+    restriction it cannot answer would offer cards the sentence does not name.
+    """
+    from .grammar.lowering._common import dropped_narrowings
+    from .grammar.phrases import parse_subject_filter
+    from .subject_filters import card_only_filter
+
+    match = EXILE_ANY_NUMBER_ON_ENTER.match(_self_normalized(line, card_name))
+    if match is None:
+        return None
+    described = parse_subject_filter(match.group("phrase"), plural=True)
+    if described is None or described.zone != "battlefield" or not described.is_card:
+        return None
+    payload = described.to_payload()
+    if dropped_narrowings(described, payload):
+        return None
+    return card_only_filter(payload)
+
+
 #: "If this land would enter, sacrifice an untapped Mountain instead. If you do,
 #: put this land onto the battlefield. If you don't, put it into its owner's
 #: graveyard." (Balduvian Trading Post, Heart of Yavimaya, Kjeldoran Outpost,
@@ -1315,6 +1357,13 @@ def enter_effect_line(line: str, card_name: str | None = None) -> str | None:
     # is carried out cannot describe different cards.
     if exile_cards_on_enter(normalized) is not None:
         return "exiles cards from your graveyard as it enters"
+    # "As this creature enters, exile any number of creature cards from your
+    # graveyard." (Sutured Ghoul.) The same entry exile with no count to owe
+    # and no counters to buy: performed by the entry state through the same
+    # ``entry_exile`` prompt, which links each card to the permanent for the
+    # CDA that sums "the exiled cards" (CR 607.2b).
+    if exile_any_number_on_enter(normalized) is not None:
+        return "exiles any number of cards from your graveyard as it enters"
     # The three-sentence entry toll (the Alliances sac lands). Claimed here for
     # the reason the entry above is: all three sentences are one CR 614.1a
     # replacement, the sacrifice performed by the entry state and the "if you

@@ -18,6 +18,8 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
+from ..aura_attachment import (attach_aura, is_aura_card,
+                               returning_aura_hosts)
 from ..linked_exile import (LEAVES, UNTAPPED, link_exiled_card,
                             take_linked_entries, take_linked_entry_at,
                             until_leaves_has_ended)
@@ -26,6 +28,7 @@ from ..linked_exile import (LEAVES, UNTAPPED, link_exiled_card,
 from ..linked_exile import face_down_exiled_cards
 from ..models import Permanent
 from ..oracle_types import EXILED_BY_SEAT, PUT_INTO_HAND_THIS_WAY
+from ..resumption import run_resumable
 from ._filters import _card_matches_filter, permanent_matches_filter
 from ._targets import resolve_target_permanent
 from .registry import effect_handler
@@ -504,6 +507,16 @@ def put_exiled_with_source(game: Game, instruction: OracleInstruction, context: 
         game.players.index(context.caster)
         if instruction.payload.get("under_control_of") == "chooser" else None
     )
+    if zone == "battlefield" and any(is_aura_card(e["card"]) for e in entries):
+        # "When this creature leaves the battlefield, return the exiled cards
+        # to the battlefield under their owners' control." (Worldgorger
+        # Dragon, whose entry exiled every other permanent its controller had —
+        # Auras among them.) Each Aura needs a host chosen as it enters
+        # (CR 303.4f) and stays in exile with none (CR 303.4g); see
+        # :func:`_return_pile_with_aura_hosts`. Every pile with no Aura in it
+        # takes the plain loop below, as it always has.
+        _return_pile_with_aura_hosts(game, entries, context, controller_index)
+        return True, "resolved"
     for entry in entries:
         owner = game.players[int(entry["owner_index"])]
         if entry["card"] not in owner.exile:
@@ -527,6 +540,147 @@ def put_exiled_with_source(game: Game, instruction: OracleInstruction, context: 
         if onto_battlefield:
             game._recompute_continuous_effects()
     return True, "resolved"
+
+
+def _returning_linked_aura_key(position: int) -> str:
+    """The scratchpad key one returning Aura's chosen host is written under."""
+    return f"returning_linked_aura_host:{position}"
+
+
+def _return_pile_with_aura_hosts(game, entries, context, controller_index) -> None:
+    """Put a linked pile onto the battlefield, each Aura card in it attached to
+    a host its controller chooses as it enters.
+
+    "If an Aura is exiled with Worldgorger Dragon and then returns to the
+    battlefield, the player who controls the Aura as it enters the battlefield
+    chooses what it will enchant. An Aura put onto the battlefield this way
+    doesn't target anything … but the Aura's enchant ability restricts what it
+    can be attached to. If the Aura can't legally be attached to anything, it
+    stays exiled. It can't enter the battlefield enchanting a permanent that
+    enters the battlefield at the same time." (2022-12-08.) Every clause is
+    CR 303.4f/g, and every one is already answered for Replenish's graveyard
+    return — so this is that handler's plan with a pile in place of a
+    graveyard, through the same two readers (``aura_attachment.is_aura_card``,
+    ``returning_aura_hosts``), the same prompt (``permanent_choice`` with
+    ``legal_host_for_card``) and the same AI pick
+    (``ai_targets.choose_returning_aura_host``).
+
+    The board is read **once, before anything moves**: the cards enter
+    together, so a host must already be there. The entries were drained from
+    the record by the caller, so an Aura that stays exiled stays exiled for
+    good — nothing links it to anything any more, which is what "it stays
+    exiled" means.
+
+    One step per question and a last one that moves everything, through
+    ``run_resumable`` — the last thing this function does, and its caller
+    returns straight after (``engine/resumption.py``'s rule).
+    """
+    from ..ai_targets import choose_returning_aura_host
+
+    already_there = list(game.all_permanents())
+    hosts: dict[int, object] = {}
+    asks: list[tuple[int, int, object, list]] = []
+    for position, entry in enumerate(entries):
+        card = entry["card"]
+        if not is_aura_card(card):
+            continue
+        owner = int(entry["owner_index"])
+        seat = owner if controller_index is None else int(controller_index)
+        legal = returning_aura_hosts(game, seat, card, already_there)
+        if not legal:
+            hosts[position] = None
+            continue
+        if len(legal) > 1 and seat in game.interactive_seats:
+            asks.append((position, seat, card, legal))
+            continue
+        hosts[position] = (
+            legal[0] if len(legal) == 1
+            else choose_returning_aura_host(game, seat, card, legal)
+        )
+    card_name = getattr(context.card, "name", "") or "Effect"
+
+    def step(ask) -> None:
+        if ask is not None:
+            position, seat, card, legal = ask
+            game.arm_permanent_choice(
+                seat,
+                card_name=card_name,
+                prompt=(
+                    f"Choose what {card.name} enchants as it returns to the "
+                    "battlefield."
+                ),
+                result_key=_returning_linked_aura_key(position),
+                payload={
+                    "legal_host_for_card": card,
+                    "host_controller": seat,
+                    "default_prefers": "returning_aura_host",
+                },
+                context=context,
+                candidates=legal,
+            )
+            return
+        for position, _seat, _card, _legal in asks:
+            chosen = context.results.get(_returning_linked_aura_key(position))
+            hosts[position] = (
+                game.permanent_by_id(chosen) if isinstance(chosen, int) else None
+            )
+        _put_linked_pile_onto_battlefield(
+            game, entries, hosts, controller_index, card_name,
+        )
+
+    run_resumable(game, [*asks, None], step)
+
+
+def _put_linked_pile_onto_battlefield(
+    game, entries, hosts, controller_index, card_name: str,
+) -> None:
+    """Move every entry at once, each Aura attached to its planned host.
+
+    A host is asked once more as the Aura enters — the choice was legal when
+    it was made, and CR 303.4f's "must choose a legal object" is about the
+    moment of entry — through ``returning_aura_hosts`` over that one host, so
+    the offer and the re-check are one predicate. An Aura without one stays in
+    exile (CR 303.4g).
+    """
+    moved: list[str] = []
+    for position, entry in enumerate(entries):
+        owner = game.players[int(entry["owner_index"])]
+        card = entry["card"]
+        if card not in owner.exile:
+            continue
+        seat = (
+            int(entry["owner_index"]) if controller_index is None
+            else int(controller_index)
+        )
+        host = None
+        if position in hosts:
+            host = hosts[position]
+            if host is None or not returning_aura_hosts(game, seat, card, [host]):
+                game.log.append(
+                    f"{card.name} has nothing it could enchant and stays in "
+                    f"{owner.name}'s exile"
+                )
+                continue
+        arrival = game.leave_linked_exile(
+            entry, "battlefield", controller_index=controller_index
+        )
+        if arrival is None:
+            continue
+        if host is not None:
+            # Attached as part of the same move, inside this resolution — the
+            # arrangement Replenish's return keeps, so the Aura is never an
+            # unattached one for CR 704.5m to find.
+            attach_aura(arrival, host)
+            moved.append(f"{card.name} (enchanting {host.card.name})")
+        else:
+            moved.append(card.name)
+    if moved:
+        game.log.append(
+            f"{', '.join(moved)} return to the battlefield ({card_name})"
+        )
+        game._recompute_continuous_effects()
+    else:
+        game.log.append(f"{card_name}: no exiled cards to put back")
 
 
 @effect_handler("exile_graveyard_until_leaves")

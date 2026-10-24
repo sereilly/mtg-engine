@@ -34,13 +34,15 @@ there.
 
 from __future__ import annotations
 
+import dataclasses
+
 from ...oracle_types import OracleInstruction
-from ...subject_filters import card_only_filter
+from ...subject_filters import card_only_filter, untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
 from ._bound_exiles import (_entering_counter_payload, lower_pronoun_exile,
                             lower_restated_noun_exile)
-from ._events import EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS
+from ._events import CHOSEN_PERMANENT, EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS
 from ._piles import OWN_PILE_SEATS, frozen_pile_record, one_card_pile_pick
 from ._sweeps import lower_exile_sweep
 from ._common import (
@@ -292,6 +294,87 @@ def _is_graveyard_pile_exile(subject) -> bool:
         and not subject.targeted
         and subject.filter.is_card
         and subject.filter.zone == "graveyard"
+    )
+
+
+def _is_chosen_permanent_exile(subject) -> bool:
+    """Whether *subject* is "**a <permanent> you control**" — one permanent off
+    the exiling player's own battlefield, named by no target.
+
+    "When this creature enters, exile **a land you control**." (Wormfang Newt,
+    Wormfang Turtle.) "…sacrifice it unless you exile **a creature you control
+    other than this creature**." (Wormfang Drake, read as the toll's price.)
+    """
+    return (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier in ("a", "an")
+        and not subject.targeted
+        and subject.filter.zone == "battlefield"
+        and not subject.filter.is_card
+        and subject.filter.controller == "you"
+    )
+
+
+def _lower_chosen_permanent_exile(
+    node: ast.Exile, subject: ast.TargetSpec
+) -> tuple[OracleInstruction, ...]:
+    """"Exile **a land you control**." (Wormfang Newt, Wormfang Turtle.)
+
+    Chosen, not targeted (CR 115.1): nothing is announced, the controller picks
+    as the ability resolves, and shroud cannot save a permanent from its own
+    controller. So it is the pick-then-act pair the chosen bounce
+    (``_described_returns``, the Karoo lands), the chosen tap (Koskun Falls)
+    and Cannibalize's "exile one of those creatures" already lower to: one
+    ``choose_permanent`` recording the answer under ``CHOSEN_PERMANENT``, and
+    ``exile_recorded_permanent`` acting on the record. No new prompt, no new
+    kind.
+
+    The exile is recorded **with** the ability's source, as every other exile
+    of a permanent is (CR 610.3), which is what lets "When this creature
+    leaves the battlefield, return **the exiled card** to the battlefield"
+    (``put_exiled_with_source``) find it.
+
+    "You control" is lifted into ``controlled_by: chooser`` rather than left in
+    the filter, the chosen bounce's arrangement: it is what the offer gate
+    (``offers._action_is_takeable``) asks of a pick, so the same sentence read
+    as a price — "sacrifice it unless you exile a creature you control other
+    than this creature" (Wormfang Drake) — is withdrawn when there is nothing
+    to give, which is the Drake's ruling: "If you don't control any other
+    creatures as the enters-the-battlefield ability resolves, you must
+    sacrifice Wormfang Drake" (2022-12-08).
+
+    One permanent only: "exile two lands you control" would be the plural
+    pick, which no card in the pool prints yet, and reading its count as one
+    would exile half of what it says.
+    """
+    if (
+        subject.count != 1
+        or subject.count_from_x
+        or subject.count_amount is not None
+    ):
+        raise LoweringError("a chosen exile picks one permanent", node=node)
+    described = _filter_payload(dataclasses.replace(subject.filter, controller=None))
+    untestable = untestable_filter_keys(described)
+    if untestable:
+        raise LoweringError(
+            "the chosen exile cannot test " + ", ".join(sorted(untestable)),
+            node=node,
+        )
+    return (
+        OracleInstruction(
+            "choose_permanent", "",
+            {
+                "filter": described,
+                "result_key": CHOSEN_PERMANENT,
+                "prompt": "Choose a permanent to exile.",
+                "chooser": "you",
+                "optional": False,
+                "controlled_by": "chooser",
+            },
+        ),
+        OracleInstruction(
+            "exile_recorded_permanent", "", {"permanents_from": CHOSEN_PERMANENT}
+        ),
     )
 
 
@@ -661,6 +744,8 @@ def _lower_exile(
     # battlefield permanents and graveyard cards and would refuse this outright.
     if _is_hand_card_exile(subject):
         return (_lower_exile_card_from_hand(node, subject),)
+    if _is_chosen_permanent_exile(subject):
+        return _lower_chosen_permanent_exile(node, subject)
     if (
         not isinstance(subject, ast.TargetSpec)
         or subject.quantifier != "target"

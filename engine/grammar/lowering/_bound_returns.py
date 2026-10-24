@@ -948,6 +948,18 @@ def lower_untargeted_return(
                     )
                 granted.append(bound)
             payload["gaining_abilities"] = tuple(granted)
+        if "exiled_self" in produced:
+            # "Discard two cards: **Exile this creature. Return it** to the
+            # battlefield under its owner's control at the beginning of the
+            # next end step." (Anurid Brushhopper.) The step in front of this
+            # one put the card in exile, so that is the zone "it" is returned
+            # out of (CR 603.6: an ability moving an object looks for it in the
+            # zone it moves it from). Read as the default — the battlefield,
+            # then the graveyards — the Brushhopper logged "no longer in a
+            # graveyard" at the end step and stayed in exile for good. The
+            # cost-side twin is ``lower._returning_from_exile`` (Shifty
+            # Doppelganger), which stamps the same zone when a *cost* exiled it.
+            payload["from"] = "exile"
         return (
             OracleInstruction("return_source_card_to_battlefield", "", payload),
         )

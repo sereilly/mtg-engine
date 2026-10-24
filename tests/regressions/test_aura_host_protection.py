@@ -217,8 +217,11 @@ _CALLERS = {
     # Academy Researchers
     ("engine/handlers/hand.py", "put_from_hand_candidates"),
     # Replenish, Cleansing Meditation: the hosts offered, and asked once more
-    # as each Aura enters
-    ("engine/handlers/reanimation.py", "_legal_returning_aura_hosts"),
+    # as each Aura enters. The offer moved beside the predicate at Judgment,
+    # when Worldgorger Dragon's linked return (``put_exiled_with_source``)
+    # became its second caller; that handler asks it for the re-check too, so
+    # it adds no door of its own.
+    ("engine/aura_attachment.py", "returning_aura_hosts"),
     ("engine/handlers/reanimation.py", "_return_planned_cards"),
 }
 

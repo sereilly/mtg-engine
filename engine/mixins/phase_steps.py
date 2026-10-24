@@ -708,12 +708,31 @@ class PhaseStepsMixin:
         if not self.current_turn_is_extra:
             self.normal_rotation_anchor = self.active_player_index
 
-        if self.extra_turn_queue:
+        while self.extra_turn_queue:
             # LIFO: the most recently created extra turn is taken first (500.7).
             chosen = self.extra_turn_queue.pop()
             pending = self.extra_turns.get(chosen, 0)
             if pending > 0:
                 self.extra_turns[chosen] = pending - 1
+            # **An extra turn is a turn, and "skip your next turn" skips it.**
+            # CR 614.10 makes a skip a replacement of the player's next turn —
+            # "instead of doing [something], do nothing" — and CR 500.7 puts an
+            # extra turn directly after the current one, so for a player owing
+            # both it *is* the next turn. Wormfang Manta is the card that
+            # prints the pair: "When this creature enters, you skip your next
+            # turn. / When this creature leaves the battlefield, you take an
+            # extra turn after this one." Removed the same turn it entered, the
+            # skip eats the extra turn and the controller gains nothing. The
+            # charges used to be asked of the normal rotation alone, so the
+            # extra turn was taken at once and the skip fell on the controller's
+            # *next normal* turn instead — the same count of turns, with one of
+            # them moved ahead of the opponent's.
+            if self.skip_turn_counts.get(chosen, 0) > 0:
+                self._consume_skip(self.skip_turn_counts, chosen)
+                self.log.append(
+                    f"{self.players[chosen].name} skips the extra turn (CR 614.10)"
+                )
+                continue
             self.current_turn_is_extra = True
             return chosen
 

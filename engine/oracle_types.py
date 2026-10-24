@@ -1461,6 +1461,15 @@ SACRIFICED_COUNT = "sacrificed_count"
 LIFE_LOST_THIS_WAY = "life_lost_this_way"
 
 
+#: The life a permanent's **own entry trigger** made its controller lose, noted
+#: on the ``Permanent`` (CR 607.1: "…gain life equal to **the life you lost when
+#: it entered**", Soulgorger Orgg — the reader refers only to what that ability
+#: did). The lowering marks the loss ``noted_on_source``; ``target_gains_life``'s
+#: ``amount_from_source`` reads it, off a departed permanent too. A returning
+#: permanent is a new object with no note (CR 400.7).
+LIFE_LOST_WHEN_ENTERED = "life_lost_when_entered"
+
+
 #: How many cards a "puts the cards from their hand on top of their library"
 #: step moved (Jester's Mask). The ``results`` key the handler writes and the
 #: ``produced`` marker the "search that player's library for **that many**

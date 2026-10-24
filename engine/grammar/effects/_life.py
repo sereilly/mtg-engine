@@ -242,6 +242,26 @@ def accept_life_loss(
     token and falls through.
     """
     mark = stream.mark()
+    # "you lose **all but 1 life**." (Soulgorger Orgg.) CR 119.3's loss of an
+    # amount the resolution computes: the losing player's life total less the
+    # printed number they keep. A subtraction of a constant from a named board
+    # count, so it is the two nodes that already say exactly that —
+    # ``ast.Minus`` (never below zero: "all but 1" of a total of 1 or less is
+    # nothing to lose, not a gain) over ``ast.BoardCount("their_life")``, the
+    # life-total count "half their life" reads below. Whose total is the
+    # loser's, which the lowering reads off the node's player.
+    but_mark = stream.mark()
+    if stream.accept_phrase("all", "but"):
+        try:
+            kept = parse_amount(stream)
+        except GrammarError:
+            kept = None
+        if isinstance(kept, ast.Fixed) and stream.accept_word("life"):
+            player = subject if isinstance(subject, ast.PlayerRef) else ast.PlayerRef("you")
+            return ast.LoseLife(
+                player, ast.Minus(ast.BoardCount("their_life"), kept)
+            )
+    stream.reset(but_mark)
     # "loses **half their life**" (Peer into the Abyss). Read here rather than in
     # `parse_amount`, because the trailing "life" is the *production's* word
     # everywhere else ("loses 3 life") and here it belongs to the quantity —

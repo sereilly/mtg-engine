@@ -17,8 +17,8 @@ counters on one), and the back-references "equal to …" reads.
 from __future__ import annotations
 
 from ..granted_abilities import GRANTER_PHRASE_HEAD, GRANTER_PHRASE_TAIL
-from ..oracle_types import (LIFE_LOST_THIS_WAY, MANA_PAID_BY_SEAT,
-                            SECRET_NUMBERS_BY_SEAT)
+from ..oracle_types import (LIFE_LOST_THIS_WAY, LIFE_LOST_WHEN_ENTERED,
+                            MANA_PAID_BY_SEAT, SECRET_NUMBERS_BY_SEAT)
 from . import ast
 from .errors import GrammarError
 from .lexer import NUMBER, PT, WORD
@@ -622,6 +622,14 @@ def _parse_equal_to_body(stream: TokenStream) -> ast.Amount | None:
     # this effect took any life.
     if stream.accept_phrase("life", "lost", "this", "way"):
         return ast.ThatMuch(LIFE_LOST_THIS_WAY)
+    # "…you gain life equal to **the life you lost when it entered**."
+    # (Soulgorger Orgg.) The same question about a loss, asked of a *different
+    # ability* of the same permanent — CR 607.1's linked pair rather than a
+    # step of this effect — so it names its own record
+    # (``oracle_types.LIFE_LOST_WHEN_ENTERED``), which the lowering reads off
+    # the source rather than off this resolution's scratchpad.
+    if stream.accept_phrase("life", "you", "lost", "when", "it", "entered"):
+        return ast.ThatMuch(LIFE_LOST_WHEN_ENTERED)
 
     # "…you gain life equal to **that damage**." (Vigorous Charge.) "That much"
     # with the noun said out loud: the damage the firing event dealt, or the

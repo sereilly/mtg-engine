@@ -123,6 +123,18 @@ def _count_dynamic_pt(
         # characteristics at all (CR 613.1) — the same reason Wood Elemental's
         # tally rides the permanent rather than being recounted here.
         return int(permanent.metadata.get(str(what)) or 0)
+    if what in ("exiled_total_power", "exiled_total_toughness"):
+        # Sutured Ghoul: "…power is equal to the total power of **the exiled
+        # cards** and its toughness is equal to their total toughness." Not
+        # Dracoplasm's frozen sums: the cards are still there to read, in
+        # exile, and a characteristic-defining ability on one of them keeps
+        # applying (CR 604.3; the 2011-09-22 ruling — "if Dungrove Elder is
+        # exiled this way … Sutured Ghoul's power and toughness will change as
+        # the number of Forests you control changes"). So it is recounted every
+        # refresh, over the pile its own entry exile linked to it (CR 607.2b).
+        return _linked_exile_total(
+            game, permanent, half=0 if what == "exiled_total_power" else 1
+        )
     if what == LIFE_PAID_AS_ENTERED:
         # Nameless Race: the life was paid as the creature entered (CR 614.1c)
         # and nothing on a board records it, so it rides the permanent the same
@@ -201,6 +213,74 @@ def _count_dynamic_pt(
     # sentence rather than part of the counting — a card printed "2 plus" is
     # the same template.
     return total + int(payload.get("plus", 0))
+
+
+def _linked_exile_total(game, permanent: Permanent, *, half: int) -> int:
+    """The summed power (*half* 0) or toughness (*half* 1) of the cards exiled
+    with *permanent* that are still in exile (Sutured Ghoul).
+
+    "The exiled cards" are CR 607.2b's: the ones the permanent's own entry
+    exile linked to it (``linked_exile.linked_entries``), and only while each is
+    still in its owner's exile — a card some other effect has taken out of
+    exile since adds nothing. By identity, because two copies of one card are
+    the same ``CardDefinition`` and the record's entries are the only distinct
+    things there are.
+
+    A stand-in permanent (a card read in exile under another Ghoul) has no
+    record and totals 0 — which is the ruling's "In zones other than the
+    battlefield, Sutured Ghoul's power and toughness are each 0".
+    """
+    from ..linked_exile import linked_entries
+
+    total = 0
+    for entry in linked_entries(permanent):
+        card = entry["card"]
+        owner = int(entry.get("owner_index", 0))
+        if not (0 <= owner < len(game.players)):
+            continue
+        if not any(held is card for held in game.players[owner].exile):
+            continue
+        total += game.card_pt_outside_battlefield(card, owner)[half]
+    return max(0, total)
+
+
+def _cda_halves(game, player, permanent: Permanent, dynamic_pt, value: int):
+    """The (power, toughness) a ``dynamic_pt_count`` instruction defines for
+    *permanent* once its count is *value* — None for a half it leaves alone.
+
+    One mapping for the two places a CDA is applied: the battlefield refresh
+    (``set_cda_pt`` takes None for "leave this one tracking whatever else
+    applies") and :meth:`DynamicCreaturesMixin.card_pt_outside_battlefield`,
+    so a card's ability says one thing in every zone (CR 604.3, 113.6a).
+
+    - "…**power** is equal to" leaves the printed toughness alone (Kinetic
+      Augur is */4), which is why it is not two instruction kinds; "…and its
+      toughness is equal to **that number plus 1**" (Lhurgoyf, printed */1+*)
+      is derived from the same value, so "plus 2" would be the same row.
+    - "…**toughness** is equal to the number of Forests you control" (People
+      of the Woods, a 0/*): the mirror, and the same None.
+    - "…and its toughness is equal to 7 minus that number" (Shapeshifter): the
+      second half derived from the same value, a payload number rather than a
+      second template.
+    - "…power becomes the total power of those creatures **and its toughness
+      becomes their total toughness**" (Dracoplasm): the one shape whose
+      halves are two different numbers, so the second is counted.
+    """
+    payload = dynamic_pt.payload
+    toughness_count = payload.get("toughness_count")
+    if toughness_count is not None:
+        return value, _count_dynamic_pt(
+            game, player, permanent, {**payload, "count": toughness_count}
+        )
+    complement = payload.get("complement")
+    if complement is not None:
+        return value, max(0, int(complement) - value)
+    if payload.get("defines") == "power":
+        bonus = payload.get("toughness_plus")
+        return value, None if bonus is None else value + int(bonus)
+    if payload.get("defines") == "toughness":
+        return None, value
+    return value, value
 
 
 def _add_static_pt(permanent: Permanent, power: int, toughness: int) -> None:
@@ -492,7 +572,7 @@ class DynamicCreaturesMixin:
         anything read the creature.
 
         One function for the two places that count it — the battlefield refresh
-        and :meth:`card_power_outside_battlefield` — so the two cannot disagree
+        and :meth:`card_pt_outside_battlefield` — so the two cannot disagree
         about what a card's ability says.
         """
         spec = dynamic_pt.payload.get("count_spec")
@@ -524,15 +604,28 @@ class DynamicCreaturesMixin:
         finds none and counts 0, which is the answer the rules give a CDA that
         cannot be applied off the battlefield.
 
-        Only the power half: every CDA in the pool that defines power defines it
-        as the counted value, and one that defines toughness alone leaves a
-        printed power the first line answers.
+        The power half of :meth:`card_pt_outside_battlefield`.
         """
-        printed = card.base_power
-        if printed is not None:
-            return printed
+        return self.card_pt_outside_battlefield(card, owner_seat)[0]
+
+    def card_pt_outside_battlefield(self, card, owner_seat: int) -> tuple[int, int]:
+        """The power and toughness of *card* in a zone other than the
+        battlefield, whose owner is *owner_seat* — the printed numbers unless a
+        characteristic-defining ability defines them (above), each half through
+        :func:`_cda_halves`, the battlefield refresh's own mapping.
+
+        Sutured Ghoul sums both halves of the cards it exiled, and its
+        2011-09-22 ruling is the Exorcist's question asked of toughness too:
+        "If any of the creature cards you exile has a characteristic-defining
+        ability that defines its power and/or toughness, that ability will
+        apply … If the characteristic-defining ability can't be applied (for
+        instance, it relies on a choice made as the card enters), then use 0."
+        """
+        power, toughness = card.base_power, card.base_toughness
+        if power is not None and toughness is not None:
+            return power, toughness
         if not (isinstance(owner_seat, int) and 0 <= owner_seat < len(self.players)):
-            return 0
+            return power or 0, toughness or 0
         dynamic_pt = next(
             (
                 instruction for instruction in compile_card_oracle(card).instructions
@@ -540,10 +633,17 @@ class DynamicCreaturesMixin:
             ),
             None,
         )
-        if dynamic_pt is None or dynamic_pt.payload.get("defines") == "toughness":
-            return 0
-        return self._characteristic_defined_count(
-            self.players[owner_seat], Permanent(card=card), dynamic_pt
+        if dynamic_pt is None:
+            return power or 0, toughness or 0
+        player = self.players[owner_seat]
+        stand_in = Permanent(card=card)
+        value = self._characteristic_defined_count(player, stand_in, dynamic_pt)
+        defined_power, defined_toughness = _cda_halves(
+            self, player, stand_in, dynamic_pt, value
+        )
+        return (
+            power if power is not None else int(defined_power or 0),
+            toughness if toughness is not None else int(defined_toughness or 0),
         )
 
     def _refresh_dynamic_creatures(self) -> None:
@@ -618,50 +718,10 @@ class DynamicCreaturesMixin:
                 value = self._characteristic_defined_count(
                     player, permanent, dynamic_pt
                 )
-                # "…**power** is equal to" leaves the printed toughness alone
-                # (Kinetic Augur is */4). ``set_cda_pt`` takes None for "leave
-                # this one tracking whatever else applies", which is exactly the
-                # difference and is why it is not two instruction kinds.
-                # "…and its toughness is equal to 7 minus that number"
-                # (Shapeshifter). The second half is derived from the same
-                # value rather than counted again, which is what makes the
-                # printed total a payload number instead of a second template.
-                # "…power becomes the total power of those creatures **and its
-                # toughness becomes their total toughness**" (Dracoplasm). The
-                # one shape whose two halves are two different numbers, so the
-                # second is counted rather than derived from the first — every
-                # branch below reads one value and computes the other from it.
-                toughness_count = dynamic_pt.payload.get("toughness_count")
-                complement = dynamic_pt.payload.get("complement")
-                if toughness_count is not None:
-                    set_cda_pt(permanent, value, _count_dynamic_pt(
-                        self, player, permanent,
-                        {**dynamic_pt.payload, "count": toughness_count},
-                    ))
-                elif complement is not None:
-                    set_cda_pt(permanent, value, max(0, int(complement) - value))
-                elif dynamic_pt.payload.get("defines") == "power":
-                    # "…and its toughness is equal to **that number plus 1**"
-                    # (Lhurgoyf, printed */1+*). Derived from the same value
-                    # rather than counted again — the same reason Shapeshifter's
-                    # complement is one number and not a second template — so a
-                    # card printed "plus 2" is this row with a different
-                    # payload. Absent, the printed toughness stands (Kinetic
-                    # Augur is */4), which is what the None says.
-                    bonus = dynamic_pt.payload.get("toughness_plus")
-                    set_cda_pt(
-                        permanent,
-                        value,
-                        None if bonus is None else value + int(bonus),
-                    )
-                elif dynamic_pt.payload.get("defines") == "toughness":
-                    # "…**toughness** is equal to the number of Forests you
-                    # control" (People of the Woods, a 0/*). The mirror of the
-                    # branch above and the same None: the printed power keeps
-                    # tracking whatever else applies to it.
-                    set_cda_pt(permanent, None, value)
-                else:
-                    set_cda_pt(permanent, value, value)
+                set_cda_pt(
+                    permanent,
+                    *_cda_halves(self, player, permanent, dynamic_pt, value),
+                )
 
             # A layer-7c bonus whose *size* is computed (Carrion Grub). The
             # spec is the one every reader of a computed amount shares, so the

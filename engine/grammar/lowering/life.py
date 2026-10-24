@@ -43,7 +43,8 @@ the guard fired on the lowering first.
 import dataclasses
 
 from ...oracle_types import (COUNTERED_SPELL_CONTROLLER, LAST_TARGET_CONTROLLER,
-                             LAST_TARGET_OWNER, MANA_PAID_BY_SEAT,
+                             LAST_TARGET_OWNER, LIFE_LOST_WHEN_ENTERED,
+                             MANA_PAID_BY_SEAT,
                              OracleInstruction, SECRET_NUMBERS_BY_SEAT,
                              X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT)
 from .. import ast
@@ -96,6 +97,22 @@ _PER_SEAT_NUMBER_RECORDS = frozenset({SECRET_NUMBERS_BY_SEAT, MANA_PAID_BY_SEAT}
 #: card's tie sentence folded in — every player whose number is the least.
 #: ``handlers/offers._offered_seats`` answers both.
 _REVEALED_FEWEST_SEATS = frozenset({"revealed_fewest", "each_revealed_fewest"})
+
+
+def _all_but_life_kept(amount) -> "int | None":
+    """How much life "all but N life" keeps — N — or None for any other amount.
+
+    The parse's reading of "you lose **all but 1 life**" (Soulgorger Orgg):
+    ``ast.Minus`` of a printed number from the life-total board count. Any other
+    subtraction is somebody else's shape and answers None.
+    """
+    if (
+        isinstance(amount, ast.Minus)
+        and amount.left == ast.BoardCount("their_life")
+        and isinstance(amount.right, ast.Fixed)
+    ):
+        return int(amount.right.value)
+    return None
 
 
 def _lower_gain_life(
@@ -184,6 +201,30 @@ def _lower_gain_life(
     # upkeep was the opponent — the card healing the wrong player.
     if node.player.kind == "that_player" and event in _EVENT_SUBJECT_PLAYERS:
         recipient = EVENT_SUBJECT_PLAYER
+    # "When this creature leaves the battlefield, you gain life equal to **the
+    # life you lost when it entered**." (Soulgorger Orgg.) Not a step of this
+    # effect — the number is what the permanent's own entry trigger took,
+    # noted on the permanent (``oracle_types.LIFE_LOST_WHEN_ENTERED``; the loss
+    # lowering marks it) — so it is read off the source rather than through
+    # the back-reference gate below, which would look for a producer in this
+    # resolution and refuse. Exactly the printed shape: "you", no cap and no
+    # arithmetic on the number, each of which would be a reading nothing here
+    # implements.
+    if isinstance(node.amount, ast.ThatMuch) and (
+        node.amount.source == LIFE_LOST_WHEN_ENTERED
+    ):
+        if (
+            node.amount != ast.ThatMuch(LIFE_LOST_WHEN_ENTERED)
+            or node.player.kind != "you"
+            or cap_payload
+        ):
+            raise LoweringError(
+                "the life lost when it entered is regained by its controller, "
+                "plainly", node=node,
+            )
+        return (OracleInstruction("target_gains_life", "", {
+            "amount_from_source": LIFE_LOST_WHEN_ENTERED, "recipient": "caster",
+        }),)
     # **How much** is `_counted_life`'s, asked with the seat settled above. A
     # gain whose size is read off something — a record, a board, a cost, the
     # firing event — answers or refuses there; None means the amount is the
@@ -252,6 +293,14 @@ def _lower_lose_life(
                 {"iterator": {"players": node.player.kind}, "effect": inner},
             ),
         )
+    # "When this creature enters, you lose **all but 1 life**." (Soulgorger
+    # Orgg.) The loser's own life total less what they keep, so it rides the
+    # per-recipient channel whatever the subject is: that channel counts
+    # against the seat losing the life (owner-blind by design, see Pox below)
+    # and floors the answer at zero (``handlers/_amounts.per_recipient_amount``)
+    # — which is ``ast.Minus``'s "never below zero" made true at the one place
+    # a negative number would otherwise have *given* life to a player at 0.
+    kept = _all_but_life_kept(node.amount)
     # "…and loses **half their life**" (Peer into the Abyss): a number the
     # resolution computes, travelling on the same spec a counted amount does.
     halved = (
@@ -276,7 +325,14 @@ def _lower_lose_life(
         # rather than left where the spec put it.
         halved = dict(halved)
         halved["owner"] = "you" if node.player.kind == "you" else "target"
-    if halved is not None:
+    if kept is not None:
+        payload = {
+            "amount": "x",
+            X_FROM_COUNT_PER_RECIPIENT: {
+                "board_count": "their_life", "owner": "target", "plus": -kept,
+            },
+        }
+    elif halved is not None:
         # "**Each player** loses a third of their life" (Pox). One number per
         # seat, and `X_FROM_COUNT` is resolved once at the dispatch point
         # against `context.target` — so a multi-seat recipient carrying it would
@@ -544,6 +600,17 @@ def _lower_lose_life(
         # "You lose 3 life" (Grim Tutor) — the same recipient key deal_damage
         # and target_gains_life read.
         payload["recipient"] = "caster"
+        if event == "enters_battlefield":
+            # "…you gain life equal to **the life you lost when it entered**."
+            # (Soulgorger Orgg's other ability.) CR 607.1 links the two: the
+            # reader refers only to what *this* ability did, and the lowering
+            # is the one layer that knows a loss is a permanent's own entry
+            # trigger — the handler is handed an instruction, not the ability
+            # it came from. So every such loss notes what it took on its
+            # source, inert for each card whose other abilities never ask
+            # (the linked-exile pile's arrangement: always recorded, read by
+            # the card that prints the second half).
+            payload["noted_on_source"] = LIFE_LOST_WHEN_ENTERED
         return (OracleInstruction("target_loses_life", "", payload),)
     if node.player.kind == "each_opponent":
         payload["recipient"] = "each_opponent"
