@@ -197,6 +197,24 @@ def seat_standing(game, seat: int, *, now: bool = True) -> float:
     return worth
 
 
+def permanent_loss(game, seat: int, permanent) -> float:
+    """What *seat*'s standing (:func:`seat_standing`, read now) loses if
+    *permanent*, which it controls, leaves the battlefield: the permanent's
+    worth, less what the standing had already marked a land beyond the ones a
+    seat needs down by — the spare land a price is best paid with.
+
+    For a seat choosing **which** of its permanents pays a price ("sacrifice a
+    permanent of their choice", CR 116.2d), asked before anything is carried
+    out; what the payment then does to the board is the rehearsal's to read.
+    """
+    loss = permanent_worth(permanent)
+    if permanent.has_type("land"):
+        lands = sum(1 for other in game.controlled_by(seat) if other.has_type("land"))
+        if lands > LANDS_WORTH_KEEPING:
+            loss -= PERMANENT_WORTH + LAND_WORTH - SPARE_LAND_WORTH
+    return loss
+
+
 def standing_swing(before: tuple, after: tuple, seat: int) -> float:
     """How far *seat* moved against the rest of the table between two
     readings (one standing per seat): its own change less every other
@@ -403,6 +421,9 @@ def _every_card(game):
         for zone in (
             player.hand, player.library, player.graveyard, player.exile,
             getattr(player, "command_zone", ()) or (),
+            # Outside the game (CR 400.11a), and the largest pile a seat
+            # holds: a simulated seat's sideboard is the rest of its set.
+            player.sideboard,
         ):
             yield from zone
         for permanent in player.phased_out:
@@ -685,7 +706,15 @@ def position_digest(game) -> dict:
             # arranges the next three draws, has changed something.
             "library": [card.name for card in player.library],
             "fields": {
-                key: repr(value) for key, value in vars(player).items()
+                # The sideboard by name, as a graveyard is — a Wish's pick
+                # leaving it is a change — rather than as the repr of every
+                # card a simulated seat holds there, which is the rest of
+                # its set (`ai_simulator.limited_sideboard`).
+                key: (
+                    repr(sorted(card.name for card in value))
+                    if key == "sideboard" else repr(value)
+                )
+                for key, value in vars(player).items()
                 if key not in _PLAYER_BOOKKEEPING
             },
             "battlefield": sorted(
@@ -1367,6 +1396,7 @@ __all__ = [
     "forget_damage_history",
     "untap_for_the_next_turn",
     "has_a_creature_to_fight_with",
+    "permanent_loss",
     "permanent_worth",
     "position_digest",
     "priced_by_the_fight",

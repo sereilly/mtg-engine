@@ -27,6 +27,7 @@ from engine.ai_abilities import (
     choose_hand_activation_action,
 )
 from engine.ai_payment import tap_planned_lands
+from engine.ai_special_actions import special_action_before_combat
 
 from .prompts import auto_resolve_ai_prompts
 from .session_store import Session
@@ -191,6 +192,9 @@ def _ai_step(session: Session) -> bool:
             target_permanent_index=activation_action.target_permanent_index,
             target_role_refs=activation_action.target_role_refs,
             cost_hand_index=activation_action.cost_hand_index,
+            # A land's non-mana ability by its index; None (the engine's
+            # first) for everything else — see `ai_abilities._abilities_weighed`.
+            ability_index=activation_action.ability_index,
         )
         _auto_resolve_ai_pending(session)
 
@@ -227,6 +231,14 @@ def _ai_step(session: Session) -> bool:
             ability_index=foreign_activation.ability_index,
             source_controller_index=foreign_activation.source_controller_index,
         )
+        _auto_resolve_ai_pending(session)
+
+    # A CR 116.2d offer that buys one of the seat's creatures its attack this
+    # turn (Volrath's Curse, Lost in Thought) — a special action, taken with
+    # priority and before combat, through the chooser and the executor the
+    # simulator shares (`engine.ai_special_actions`). The chooser asks only
+    # in the seat's own main phase with its combat ahead.
+    if special_action_before_combat(game, seat) is not None:
         _auto_resolve_ai_pending(session)
 
     return True

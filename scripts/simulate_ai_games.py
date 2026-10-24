@@ -145,6 +145,28 @@ def main() -> int:
             f"Activations on another seat's permanent: {report.foreign_activations}"
         )
 
+    # CR 116.2c-e: special actions a seat took — a creature bought a turn off
+    # Volrath's Curse or Lost in Thought. Until JUD's wave 2 no AI path took
+    # one, so only a pool printing an offer can move it, and it is shown when
+    # it did.
+    if report.special_actions_taken or report.refused_special_actions:
+        by_kind = ", ".join(
+            f"{count} {kind}"
+            for kind, count in sorted(report.special_actions_taken.items())
+        )
+        print(
+            f"Special actions taken: {sum(report.special_actions_taken.values())}"
+            + (f" ({by_kind})" if by_kind else "")
+        )
+        for reason, count in report.refused_special_actions.most_common(5):
+            print(f"  {count}x declined: {reason}")
+
+    # CR 400.11b: cards brought in from a seat's sideboard (a Wish, Ring of
+    # Ma'rûf). No seat had a sideboard before JUD's wave 2, so only a pool
+    # printing such a card can move it, and it is shown when it did.
+    if report.cards_from_outside_game:
+        print(f"Cards brought in from outside the game: {report.cards_from_outside_game}")
+
     if report.refused_attacks:
         total = sum(report.refused_attacks.values())
         print(f"Attack declarations the engine declined: {total} (the AI proposed an illegal set)")

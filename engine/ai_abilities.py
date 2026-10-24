@@ -53,13 +53,15 @@ from .targeting import (
 from .target_descriptions import SINGLE_GRAVEYARD
 from .target_roles import role_is_seat
 from .cost_pickers import spec_is_a_cost
-from .ai_payment import _plan_land_taps
+from .ai_payment import _plan_land_taps, tap_planned_lands
+from .ai_rehearsal import Rehearsal, deliberating, rehearse
 from .ai_weighed_cast import _effect_steps
 from .ai_actions import ActivationAction, HandActivationAction
 from .ai_scoring import (
     choose_attack_target,
     _permanent_value,
     _score_activation,
+    _worth_proposing,
 )
 from .ai_declarations import legal_attackers
 from .ai_targets import (
@@ -71,7 +73,8 @@ from .ai_targets import (
 
 
 def _required_activation_target(
-    game: Game, player_index: int, permanent_index: int, target
+    game: Game, player_index: int, permanent_index: int, target,
+    ability_index: int = 0,
 ) -> int | None:
     """The slot on seat *target* a one-target ability must be aimed at for
     its activation to obey a target requirement in force, or None when there
@@ -80,7 +83,9 @@ def _required_activation_target(
     """
     from .target_requirements import one_slot
 
-    spec = game.activation_target_spec(player_index, permanent_index, ability_index=0)
+    spec = game.activation_target_spec(
+        player_index, permanent_index, ability_index=ability_index,
+    )
     if not one_slot(spec):
         return None
     return next(
@@ -93,564 +98,729 @@ def _required_activation_target(
 
 
 def choose_activation_action(game: Game, player_index: int) -> ActivationAction | None:
-    from .targeting import GRAVEYARD_TARGET_KIND
+    """The ability this seat activates in its main phase, or None: the best
+    candidate (:func:`_activation_candidate`) over every untapped permanent it
+    controls that is able to act.
 
+    **A land's non-mana abilities are weighed too**, each by its own index
+    (:func:`_abilities_weighed`). This passed over every land, so Krosan
+    Verge's search, Mishra's Factory's animation and every other land ability
+    in the pool (71 on 70 lands, measured at JUD's wave 2) were never
+    activated by an AI seat. A land's *mana* abilities stay the payment
+    planner's (``_plan_land_taps``), and a land ability is proposed only where
+    a rehearsal of it says it leaves the seat ahead (:func:`_land_ability_worth`).
+    It is asked after the turn's casts have tapped what they needed, so the
+    land it taps is one nothing else this main phase wanted.
+    """
     player = game.players[player_index]
 
     best: ActivationAction | None = None
     set_aside = _ACTIVATIONS_SET_ASIDE.get()
-    for permanent_index, permanent in enumerate(player.battlefield):
-        if permanent.tapped or permanent.card.primary_type == "land":
-            continue
-        if game._is_summoning_sick(permanent):
-            continue
-        # One the instant-speed chooser has rehearsed and turned down this
-        # time it was asked (`ai_policy.choose_instant_speed_activation`), so the
-        # next-best is the one proposed.
-        if permanent.permanent_id in set_aside:
-            continue
-
-        # A permanent an effect stripped of its abilities ("loses all
-        # abilities", CR 305.7) has none to propose: the engine refuses every
-        # one, so naming one is a turn spent on a refusal, every turn.
-        if game.lost_abilities_refusal(permanent) is not None:
-            continue
-        # **What the permanent has, not what its card prints** — the engine's
-        # own list (`Game.usable_abilities_of`), which is the one the
-        # activation path indexes into and the browser shows a person. It
-        # compiles the permanent's *effective* card: CR 613's layer 1 gives a
-        # copy the copied object's abilities and layer 6 gives an enchanted
-        # permanent the ones its Aura quotes. This compiled ``permanent.card``,
-        # so a Clone of a Prodigal Sorcerer never pinged in an AI's hands and
-        # a creature wearing Hermetic Study was a creature wearing nothing
-        # (`tests/ai/test_ai_activation_effective_card_census.py`: of 931
-        # cards whose printed self the seat activates, a copy of none).
-        #
-        # The shared reader, not a third copy of its predicate: it carries
-        # CR 113.6's zone read, so a cycling creature's "{2}, Discard this card:
-        # Draw a card." is not on this list at all. Open-coded, the policy
-        # proposed it every main phase and the engine ran it — a free repeatable
-        # draw for a card that was never discarded, on eight of Urza's Saga's
-        # creatures. It is also the list `activation_target_spec` narrows by,
-        # which the `ability_index=0` below already assumes.
-        ability = next(iter(game.usable_abilities_of(permanent)), None)
-        if ability is None or ability.instruction is None:
-            continue
-
-        # A mana ability is activated to *pay* for something (_plan_land_taps
-        # arranges that), never for its own sake: mana added here empties at the
-        # end of the step, and Black Lotus sacrifices itself to add it. The set
-        # this replaced named two instruction kinds that no longer exist, so the
-        # skip had silently stopped happening — see MANA_ABILITY_KINDS.
-        if is_mana_ability(ability.instruction):
-            continue
-
-        # "Return this creature to its owner's hand" (Quicksilver Wall),
-        # "This creature loses flying until end of turn" (Ribbon Snake),
-        # "Destroy this enchantment" (Volrath's Dungeon): an effect that removes
-        # or hampers **its own source**. Mostly a drawback printed for an
-        # opponent to pay for (CR 602.1b), otherwise a rescue that needs a
-        # response window this main-phase chooser never has — and the score
-        # below rates it 2.5 like anything else, so the AI bounced its own wall
-        # for {4} and paid 5 life to destroy its own Dungeon. Read off the
-        # compiled program (`ai_valuation.harms_its_own_source`), the reading
-        # `choose_foreign_activation_action` takes the other way.
-        if harms_its_own_source(ability.instruction):
-            continue
-
-        # A cost paid in permanents or cards is a trade this policy cannot
-        # price: Atog's "+2/+2 until end of turn" is worth an artifact only
-        # sometimes, and the score below reads the *effect* alone. Skipping is
-        # the honest floor — the alternative is an AI that eats its own board
-        # every main phase for a pump that wears off. Derived from the compiled
-        # cost, so it reaches every card printed this way and names none.
-        #
-        # **Except a discard that takes a card with madness** (CR 702.35a)
-        # whose madness cost the board can pay beside the ability: that card
-        # is not spent but offered for less (`_madness_discard_index`), so the
-        # trade is priced — by the offer's own rehearsal when it is made.
-        madness_discard = (
-            _madness_discard_index(
-                game, player_index, ability, dict(ability.cost.mana),
-                paying_for=permanent,
-            )
-            if ability.cost.discard_cards and ability.cost.sacrifice_filter is None
-            else None
-        )
-        if ability.cost.sacrifice_filter is not None or (
-            ability.cost.discard_cards and madness_discard is None
-        ):
-            # A conjoined sacrifice ("a creature **and a Swamp**", Viscerid
-            # Drone) is covered by the clause above rather than by a second
-            # test: the charger never fills `sacrifice_also_filter` without
-            # `sacrifice_filter`, so a second condition would be unreachable
-            # and would read as a claim that it is not.
-            continue
-        # …and the same trade imposed from outside: "Activated abilities of
-        # nontoken Rebels cost an additional "Sacrifice a land"" (Brutal
-        # Suppression), Drought's per-{B} Swamp. Asked of the reader the charger
-        # uses, so a tax the engine would collect is a tax this policy sees.
-        if sacrifice_taxes(
-            game, player_index, ability.cost.mana, "activate", source=permanent,
-        ):
-            continue
-        # "…+X/+0 until end of turn, where X is **the power of the creature
-        # tapped this way**" (Keldon Battlewagon). The effect is as large as the
-        # creature the cost taps, which the score below cannot see — and the
-        # payment's default is the first untapped creature, which for the
-        # Battlewagon is itself: +0/+0 and its own attack spent, every main
-        # phase. Derived from the payload, so it names no card.
-        if "cost_tap_characteristic" in (
-            ability.instruction.payload.get("x_from_count") or {}
-        ):
-            continue
-
-        # "Put a -1/-1 counter on a creature you control" (Wandering Mage). The
-        # same trade one resource over, and the same reason the policy cannot
-        # price it: the score below reads the *effect*, so a shield bought by
-        # permanently shrinking a creature reads as free — and the AI would pay
-        # it every main phase until its own board is gone. Derived from the
-        # compiled cost, so it names no card.
-        if ability.cost.put_counter_filter is not None:
-            continue
-
-        # "{1}{B}, Pay 2 life: …" (Phyrexian Reclamation). Life is the one cost
-        # here the score below never weighed, so the seat paid it every main
-        # phase down to 1 — and then proposed it once more, which the engine
-        # refuses (CR 119.4: a player can pay life only up to their total) and
-        # the simulator counts as a seat doing nothing. The reserve is the one
-        # `FOREIGN_ACTIVATION_LIFE_RESERVE`, `ai_casts.BUYBACK_LIFE_RESERVE` and
-        # `ai_scoring.X_LIFE_RESERVE` already keep, for their reason: the last points of
-        # life are the ones that lose the game.
-        life_cost = int(ability.cost.pay_life or 0)
-        if life_cost and player.life - life_cost < ACTIVATION_LIFE_RESERVE:
-            continue
-
-        # "Remove a +1/+1 counter from a creature you control" (Spike Rogue).
-        # The same trade in the opposite direction and the same reason the
-        # policy cannot price it: the score below reads the *effect*, so moving
-        # a counter from one creature to another reads as a free +1/+1 — and
-        # the AI would shuttle its board's counters onto the Spike every main
-        # phase for no net gain. Derived from the compiled cost, so it names no
-        # card. The self-referring spelling is left alone: that one is priced by
-        # the source's own counters, which the score does read.
-        if ability.cost.remove_counter_filter is not None:
-            continue
-        # …and every cost the score does price still has to be **payable**
-        # (CR 601.2h via CR 602.2b; CR 118.3): "{T}, Remove a javelin counter
-        # from this creature" with none left (Icatian Javelineers), "Exile two
-        # cards from your graveyard" over an empty one (Grim Lavamancer),
-        # "Tap two untapped Spirits you control" with one (Shacklegeist),
-        # "Return a Forest you control" with none (Quirion Ranger). The
-        # activation path refuses each with nothing paid, and this proposed it
-        # again every main phase, the seat's one activation of the turn.
-        #
-        # **Asked of the engine's own gate** (`Game.unpayable_activation_cost`,
-        # the one the activation path refuses with), not of a reading here.
-        # This chooser asked the costs it knew one at a time — the counter
-        # above was the last it learned — and none it did not: on a board that
-        # could pay nothing, 26 abilities in the pool were proposed and
-        # refused for their cost (`tests/ai/test_ai_activation_cost_census.py`).
-        if game.unpayable_activation_cost(player_index, permanent, ability) is not None:
-            continue
-
-        # "Exile the top card of your library" (Royal Herbalist, Phyrexian
-        # Devourer). The same floor one zone over, and the sharper case for it:
-        # the resource spent is the seat's remaining turns (CR 704.5b — a player
-        # who would draw from an empty library loses), which this policy has no
-        # term for at all. Left in, a seat with two mana gains 1 life every turn
-        # until it decks itself, which is a loss traded for nothing.
-        if ability.cost.exile_top_of_library:
-            continue
-
-        # "Exile the top creature card of your graveyard" (Necratog, Zombie
-        # Scavengers), "…the top card…" (Alms, Nature's Kiss). The same floor
-        # one zone over, with a second reason the library cost does not have:
-        # the cost **scans** the pile, so an activation the policy proposes
-        # against a graveyard holding no matching card is refused with nothing
-        # spent — and the policy would propose it again next turn, and every
-        # turn after, which is the "a seat doing nothing all game" shape a
-        # refused action makes. Derived from the compiled cost, so it names no
-        # card.
-        if ability.cost.exile_graveyard_position is not None:
-            continue
-
-        # CR 602.1a and its exceptions: a permanent whose printed permission
-        # closes its ability to *its own controller* — "Only your opponents may
-        # activate this ability" (Clergy of the Holy Nimbus), "Only the
-        # controller of the enchanted creature…" (Merseine) — is an ability
-        # this seat may not activate at all. Asked of the module that enforces
-        # it rather than scored, so the answer is the engine's own; without it
-        # the policy proposed the same refused activation every turn for the
-        # whole game, which is the "a seat doing nothing all game" shape a
-        # refused action makes.
-        if activation_permission_denial(
-            game, player_index, permanent, ability.source_line or ""
-        ):
-            continue
-        # CR 602.5 as **one question** (``engine/activation_prohibitions.py``):
-        # the table the activation path refuses with. The two checks around
-        # this one are three of its ten rows; the other seven this chooser
-        # never asked — City of Solitude's "…activate abilities only during
-        # their own turns", Hand to Hand's "during combat", an Abeyance, an
-        # Interdict, Faith's Fetters, Volrath's Curse, Katabatic Winds — so it
-        # proposed the ability and the engine refused it, the seat's only
-        # activation of the turn, every turn.
-        if activation_prohibition(game, player_index, permanent, ability) is not None:
-            continue
-        # CR 602.5: the printed timing ("Activate only during your upkeep",
-        # Svyelunite Priest; "…only during combat", Arcum's Sleigh) and a
-        # board-wide ban ("Activated abilities of artifacts can't be
-        # activated", Null Rod). This chooser runs in a main phase and asked
-        # neither, so it proposed them and the engine refused them, every
-        # turn, each one the seat's only activation of the turn. The default
-        # seeded runs (every shipped set plus PCY) logged 184 refused
-        # activations at PCY's wave 2 and 47 with this asked; what is left is
-        # costs the board cannot pay (a counter, an exile). Asked of the
-        # tables the engine enforces, so the answer is the engine's.
-        if activation_denial(
-            game, player_index, permanent, ability.source_line or ""
-        ) or global_activation_ban(game, permanent):
-            continue
-
-        # "Pay enchanted creature's mana cost" (Merseine). A cost the compiled
-        # program cannot state — it is whatever the attached permanent's
-        # printed cost is right now — so the tap planner below has nothing to
-        # plan against. Skipping is the same honest floor the cost skips above
-        # take, and it is derived from the compiled cost, so it names no card.
-        if ability.cost.mana_from_attached:
-            continue
-
-        target = _choose_target_for_instruction(ability.instruction, player_index, game)
-        # An equip ability (CR 702.6a): the creature is chosen here, because the
-        # handler declines a target it was not given rather than scanning for
-        # one (a misplaced Equipment is wrong in a way a fizzled pump is not).
-        # Skipped entirely when nothing is worth equipping, so the AI does not
-        # pay {1} every main phase to move a sword onto the creature it is
-        # already on.
-        target_permanent_index: int | list[int] | None = None
-        if ability.instruction.kind == "attach_source_to_target":
-            target_permanent_index = _choose_equip_target(game, player_index, permanent)
-            if target_permanent_index is None:
+    # One deliberation: every land ability weighed here is rehearsed against
+    # the same table with nothing activated.
+    with deliberating():
+        for permanent_index, permanent in enumerate(player.battlefield):
+            if permanent.tapped:
                 continue
-        if ability.instruction.kind == "grant_banding_to_target":
-            # Banding grants go to the controller's own creatures.
-            target = player_index
-            target_creatures = [
-                perm for perm in game.controlled_by(player_index) if perm.is_creature
-            ]
-            if not target_creatures:
+            if game._is_summoning_sick(permanent):
+                continue
+            # One the instant-speed chooser has rehearsed and turned down this
+            # time it was asked (`ai_policy.choose_instant_speed_activation`),
+            # so the next-best is the one proposed.
+            if permanent.permanent_id in set_aside:
                 continue
 
-        # An object-targeted ability (Silent Dart's "deal 3 to target creature",
-        # a "destroy target …") must name a legal permanent, or the activation
-        # is refused with nothing paid (CR 602.2b). Derive the target the way the
-        # picker does and aim it by the effect's category; skip when nothing is
-        # worth (or legal) to target, so the AI does not burn a turn on an
-        # ability it cannot resolve.
-        spec = derive_activation_spec(ability)
-        # "{X}, {T}: Untap **X target** lands." (Candelabra of Tawnos, Alexi,
-        # Orcish Settlers.) CR 601.2c sizes the target list from the X the
-        # activator announces, and this policy announces none — so the engine
-        # reads X as zero and refuses any named target. Proposing the ability
-        # anyway is a refused activation every turn; skipping it is the honest
-        # floor until the policy prices an X. Read off the cost clause the way
-        # the activation path counts its ``{X}`` symbols, so a *defined* X (the
-        # verse cycle's "where X is …") is left to the sizing that answers it.
-        #
-        # And the same floor for **every** ``{X}`` in a cost, not only one that
-        # sizes a target list: "{X}, {T}: This creature deals X damage to target
-        # creature" (Crimson Hellkite) is an X its controller announces
-        # (CR 107.3a), this policy announces none, and the engine reads that as
-        # zero — a tap and a turn spent dealing nothing. It reached the score
-        # below only to crash there on the payload's "x".
-        if "{x}" in (ability.source_line or "").lower().split(":", 1)[0]:
-            continue
-        # An ability naming several targets of *different* kinds, chosen in
-        # dependency order (CR 602.2b reaches CR 601.2c). Asked before the
-        # single-target block below, which has no arm for it: the kind is
-        # "roles", so that block leaves the announcement empty and the ability
-        # goes on the stack with no targets — an activation that resolves and
-        # does nothing, which is the shape `refused_casts` exists to make
-        # visible one step later.
-        target_role_refs: list[dict] | None = None
-        if spec_roles(spec):
-            target_role_refs = _choose_activation_role_targets(
-                game, player_index, permanent_index,
-                # A side only for a chain that announces a **seat** — the three
-                # abilities this walk could not answer at all until it grew an
-                # arm for one (see the function). Every other roles ability
-                # keeps the first-option walk it has always had: giving those a
-                # side too is the right policy and a different change, one that
-                # moves what the AI does with every card already activating.
-                side=(
-                    _activation_target_side(permanent, ability.instruction)
-                    if any(role_is_seat(role) for role in spec_roles(spec))
-                    else None
-                ),
-            )
-            if target_role_refs is None:
-                # No legal chain. Skipped rather than proposed: CR 602.2b fills
-                # every role or the activation is refused with nothing paid,
-                # and the gate would refuse it.
+            # A permanent an effect stripped of its abilities ("loses all
+            # abilities", CR 305.7) has none to propose: the engine refuses
+            # every one, so naming one is a turn spent on a refusal, every turn.
+            if game.lost_abilities_refusal(permanent) is not None:
                 continue
-        object_kinds = {"creature", "artifact", "land", "permanent", "planeswalker"}
-        if (
-            target_permanent_index is None
-            and spec is not None
-            and spec.get("kind") in object_kinds
-            and not spec.get("sacrifice_cost")
-            and not spec.get("discard_cost")
-            # A tap-cost picker (Llanowar Behemoth) names no target either: the
-            # payment is the engine's default for a seat that names nothing.
-            and not spec.get("tap_cost")
-            and not spec.get("return_cost")
-            # …nor an untap picker over an opponent's tapped lands (Benthic
-            # Explorers, PCY W3G5): read as a target, the AI would aim at the
-            # land it untaps and announce a target the ability does not have.
-            # The counter-cost pickers are skipped above, before this block.
-            and not spec.get("untap_cost")
-        ):
-            # The AI activates the first usable ability (selected above), which
-            # is usable_activated_abilities()[0] — the index activation_target_spec
-            # narrows by.
-            legal = game.activation_target_spec(
-                player_index, permanent_index, ability_index=0,
-            ).get("valid_targets") or []
-            perms = [t for t in legal if t.get("kind") == "permanent"]
-            if not perms:
-                continue
-            # Which board, from what the effect does to its target
-            # (`_activation_target_side`) — and **only** that
-            # board. This fell back to "any legal permanent" when the wanted
-            # side had none, which is how a destroy, a tap or a "can't block"
-            # with no opposing target landed on the activator's own creature,
-            # and a pump with no friendly one landed on an opponent's: an
-            # activation that resolves and harms the seat that paid for it.
-            side = _activation_target_side(permanent, ability.instruction)
-            if spec.get("source_of_choice"):
-                # "…a source of your choice…" (CR 609.7a) is not a target, so
-                # no side describes it — and a shield's own category reads
-                # "you", which named the activator's own largest creature as
-                # the thing to be shielded *from* (Bone Mask, Dark Sphere,
-                # Kithkin Armor, Pentagram of the Ages, Protective Sphere,
-                # Righteous Aura). The cast side's answer, for the same phrase.
-                named = _choose_damage_source(game, player_index, perms)
-                if not named:
-                    continue
-                perms = [
-                    t for t in perms if (t["seat"], t["index"]) == (named[0], named[1])
-                ]
-                side = None
-            if side == "you" and ability_denies_its_target(ability.instruction):
-                # "Destroy target … you control" (Rats of Rath), "Return target
-                # land you control to its owner's hand" (Trade Routes): the
-                # printed seat is the activator's and the effect is a denial,
-                # so activating it for its own sake only costs the seat a
-                # permanent. Before this the fallback above aimed Rats of
-                # Rath at whatever it found.
-                continue
-            if side == "you":
-                perms = [t for t in perms if t["seat"] == player_index]
-            elif side == "opponent":
-                perms = [t for t in perms if t["seat"] != player_index]
-            if not perms:
-                continue
-            def _power(t):
-                perm = game.permanent_at(t["seat"], t["index"])
-                return perm.effective_power if perm is not None else 0
-
-            chosen = max(perms, key=_power)
-            target = chosen["seat"]
-            target_permanent_index = chosen["index"]
-            # "{T}: Untap **two** target lands" (Argothian Elder), "Choose two
-            # target blocked attacking creatures" (General Jarkeld): a printed
-            # count names that many (CR 601.2c), and the engine refuses an
-            # activation naming fewer. All on the chosen permanent's seat,
-            # because this action carries one seat beside its slots — the
-            # strongest there first, the order the single pick takes.
-            wanted = spec.get("max_targets")
-            if spec.get("exact_targets") and isinstance(wanted, int) and wanted > 1:
-                beside = sorted(
-                    (t for t in perms if t["seat"] == target),
-                    key=_power, reverse=True,
+            for ability_index, ability in _abilities_weighed(game, permanent):
+                candidate = _activation_candidate(
+                    game, player_index, permanent_index, permanent,
+                    ability, ability_index,
                 )
-                if len(beside) < wanted:
-                    continue
-                target_permanent_index = [t["index"] for t in beside[:wanted]]
-
-        # "{G}: Exile target card from a graveyard." (Scavenging Ooze.) A card
-        # in a graveyard is a target like any other (CR 115.1c), and this
-        # chooser named none: the block above reads battlefield kinds, so the
-        # announcement went out bare and the engine's default answered it —
-        # the picker's first card, which is a stated default for a script and
-        # not a choice. The seat's own pick instead: the pile the effect's
-        # side wants (`_activation_target_side`), and within it the card with
-        # the greatest mana value. Where the effect reads as neither side's —
-        # the Ooze's exile is one — an opposing pile is taken before the
-        # seat's own, which is the order an unnamed target is looked for in
-        # everywhere else. Skipped when nothing on the wanted side is legal,
-        # for the battlefield block's reason — and for the two shapes a block
-        # below names: several cards out of a single pile (``SINGLE_GRAVEYARD``)
-        # and a card exiled to deny it (`_graveyard_denial_target`: an
-        # opponent's pile, the cards its owner could still cast first).
-        if (
-            target_permanent_index is None
-            and spec is not None
-            and spec.get("kind") == GRAVEYARD_TARGET_KIND
-            and not spec_is_a_cost(spec)
-            and not spec.get("source_of_choice")
-            and not spec.get(SINGLE_GRAVEYARD)
-            and not _one_graveyard_card_is_denied(spec, (ability.instruction,))
-        ):
-            cards = [
-                t for t in game.activation_target_spec(
-                    player_index, permanent_index, ability_index=0,
-                ).get("valid_targets") or []
-                if t.get("kind") == "graveyard"
-            ]
-            side = _activation_target_side(permanent, ability.instruction)
-            if side == "you":
-                cards = [t for t in cards if t["seat"] == player_index]
-            elif side == "opponent":
-                cards = [t for t in cards if t["seat"] != player_index]
-            if not cards:
-                continue
-
-            def _mana_value(t):
-                pile = game.players[t["seat"]].graveyard
-                held = pile[t["index"]] if 0 <= t["index"] < len(pile) else None
-                return float(getattr(held, "cmc", 0) or 0)
-
-            if side is None and any(t["seat"] != player_index for t in cards):
-                cards = [t for t in cards if t["seat"] != player_index]
-            chosen = max(cards, key=_mana_value)
-            target = chosen["seat"]
-            target_permanent_index = chosen["index"]
-
-        # "{2}{B}, {T}: Exile up to three target cards from a single
-        # graveyard." (Carrion Beetles, Famished Ghoul.) The cards are announced
-        # (CR 602.2b), so an activation that names none is the legal "up to"
-        # announcement and exiles nothing — a cost paid for no effect, which is
-        # what this seat did with every one of them once the handler stopped
-        # picking for it. Named here the way the cast side names them
-        # (`ai_targets._choose_several_targets`): the maximum, out of one opponent's pile,
-        # and skipped when no opponent has a card to take.
-        if (
-            spec is not None
-            and spec.get(SINGLE_GRAVEYARD)
-            and target_permanent_index is None
-            and not target_role_refs
-        ):
-            piles: dict[int, list[int]] = {}
-            for entry in game.activation_target_spec(
-                player_index, permanent_index, ability_index=0,
-            ).get("valid_targets") or []:
-                if entry.get("kind") == "graveyard" and entry.get("seat") != player_index:
-                    piles.setdefault(int(entry["seat"]), []).append(int(entry["index"]))
-            if not piles:
-                continue
-            target = min(piles)
-            target_permanent_index = piles[target][: int(spec.get("max_targets") or 1)]
-        # "{3}, {T}: Exile target card from a graveyard." (Steamclaw; Crypt
-        # Creeper, Grave Robbers, Scavenging Ooze.) Whose graveyard, named —
-        # the cast side's answer (`_graveyard_denial_target`) over this
-        # ability's own picker. Named nothing, the handler took the first pile
-        # in seat order: the activator's own, from chair 0.
-        if (
-            target_permanent_index is None
-            and not target_role_refs
-            and _one_graveyard_card_is_denied(spec, (ability.instruction,))
-        ):
-            buried = _graveyard_denial_target(
-                game, player_index,
-                game.activation_target_spec(
-                    player_index, permanent_index, ability_index=0,
-                ).get("valid_targets") or [],
-            )
-            if buried is not None:
-                target, target_permanent_index = buried
-
-        # CR 601.2d asked of an ability: a divided announcement ("…divided as
-        # you choose", Serra's Hymn) is one this chooser never makes, and the
-        # engine refuses an activation announced without it — so proposing one
-        # is a turn spent on a refusal, every turn. Then the engine's own
-        # announcement gate (CR 602.2b/601.2c) over exactly what this policy is
-        # about to announce: an ability whose only legal targets are cards in
-        # an empty graveyard (Rootwater Diver, Groundskeeper) passed every
-        # check above, because they look only at battlefield targets, and was
-        # refused with nothing paid. Neither shows in `refused_casts`, which
-        # counts casts; one ten-game run each of USG, TMP and MMQ logged 44
-        # refused Serra's Hymn, 21 Rootwater Diver and 15 Groundskeeper
-        # activations.
-        if spec is not None and spec.get("kind") == "divided":
-            continue
-        # "{3}, {T}: You may put a creature card of the chosen type from your
-        # hand onto the battlefield." With no such card in hand the ability's
-        # whole effect is nothing, and the cost is still paid: Belbe's Portal
-        # spent {3} every turn of NEM's simulation to log that it had no card.
-        if not _hand_entry_has_a_card(game, player_index, permanent, ability.instruction):
-            continue
-        # "{B}{B}{B}, Exile Balthor: Each player returns all black and all red
-        # creature cards from their graveyard to the battlefield." The Portal's
-        # floor one zone over: a sweep out of the graveyards whose piles hold
-        # nothing for the activator is a cost (here the source itself) paid to
-        # return nothing — or to return only an opponent's creatures.
-        if not _graveyard_sweep_favours_the_seat(game, player_index, ability.instruction):
-            continue
-        if game.activation_target_refusal(
-            player_index, permanent, ability,
-            target_player_index=target,
-            target_permanent_index=target_permanent_index,
-            target_role_refs=target_role_refs,
-        ) is not None:
-            continue
-        # …and what an opponent's Flagbearer demands of that announcement
-        # (`Game.activation_target_requirement_refusal`): a seat named alone
-        # for an "any target" ability is re-aimed at the Flagbearer on that
-        # seat, and anything else the gate would refuse is not proposed.
-        if game.activation_target_requirement_refusal(
-            player_index, permanent, ability,
-            target_player_index=target,
-            target_permanent_index=target_permanent_index,
-            target_role_refs=target_role_refs,
-        ) is not None:
-            required_slot = (
-                _required_activation_target(game, player_index, permanent_index, target)
-                if target_permanent_index is None and not target_role_refs
-                else None
-            )
-            if required_slot is None:
-                continue
-            target_permanent_index = required_slot
-
-        land_taps: tuple[int, ...] = ()
-        tap_colors: tuple[str, ...] = ()
-        required = dict(ability.cost.mana)
-        if game.enforce_mana_costs and any(required.values()):
-            plan = _plan_land_taps(game, player, required, paying_for=permanent)
-            if plan is None:
-                continue
-            land_taps, tap_colors = plan
-
-        score = _score_activation(game, player_index, ability.instruction, target)
-        if score <= 0.0:
-            continue
-        candidate = ActivationAction(
-            permanent_name=permanent.card.name,
-            permanent_index=permanent_index,
-            target_player_index=target,
-            land_tap_indices=land_taps,
-            score=score,
-            target_permanent_index=target_permanent_index,
-            target_role_refs=target_role_refs,
-            land_tap_colors=tap_colors,
-            cost_hand_index=madness_discard,
-        )
-        if best is None or candidate.score > best.score:
-            best = candidate
+                if candidate is not None and (
+                    best is None or candidate.score > best.score
+                ):
+                    best = candidate
 
     return best
+
+
+def _abilities_weighed(game: Game, permanent) -> list:
+    """``(ability_index, ability)`` for each ability of *permanent* the
+    main-phase chooser weighs.
+
+    **What the permanent has, not what its card prints** — the engine's own
+    list (`Game.usable_abilities_of`), which is the one the activation path
+    indexes into and the browser shows a person. It compiles the permanent's
+    *effective* card: CR 613's layer 1 gives a copy the copied object's
+    abilities and layer 6 gives an enchanted permanent the ones its Aura
+    quotes. This compiled ``permanent.card``, so a Clone of a Prodigal
+    Sorcerer never pinged in an AI's hands and a creature wearing Hermetic
+    Study was a creature wearing nothing
+    (`tests/ai/test_ai_activation_effective_card_census.py`: of 931 cards
+    whose printed self the seat activates, a copy of none).
+
+    The shared reader, not a third copy of its predicate: it carries CR
+    113.6's zone read, so a cycling creature's "{2}, Discard this card: Draw a
+    card." is not on this list at all. Open-coded, the policy proposed it
+    every main phase and the engine ran it — a free repeatable draw for a card
+    that was never discarded, on eight of Urza's Saga's creatures.
+
+    For anything but a land, the **first** ability, unindexed (the action
+    names none and the engine takes the first it can pay for), as it always
+    has been. For a land, **every ability that is not a mana ability**, each
+    by its index — CR 605.1a asked of the engine's own predicate
+    (``mana_payment.is_mana_ability``), which reads a painland's "Add {W} or
+    {U}. This land deals 1 damage to you." as the mana ability it is.
+    """
+    from .mana_payment import is_mana_ability as is_cr_mana_ability
+
+    usable = game.usable_abilities_of(permanent)
+    # A land now (CR 613 layer 4), as every other reader of a permanent's
+    # type here asks: a Mishra's Factory animated is still a land, and a
+    # land is what the payment planner taps for mana.
+    if not permanent.has_type("land"):
+        first = next(iter(usable), None)
+        return [] if first is None else [(None, first)]
+    return [
+        (index, ability)
+        for index, ability in enumerate(usable)
+        if ability.instruction is not None and not is_cr_mana_ability(ability)
+    ]
+
+
+def _activation_candidate(
+    game: Game, player_index: int, permanent_index: int, permanent,
+    ability, ability_index: int | None,
+) -> ActivationAction | None:
+    """*ability* of the permanent at *permanent_index* as a proposal — gated,
+    aimed, planned and scored — or None when it is not one to make.
+    *ability_index* is its index among the permanent's usable abilities, or
+    None for the first (see :func:`_abilities_weighed`)."""
+    from .targeting import GRAVEYARD_TARGET_KIND
+
+    player = game.players[player_index]
+    # The index every spec question below is asked at.
+    spec_index = 0 if ability_index is None else ability_index
+    if ability is None or ability.instruction is None:
+        return None
+
+    # A mana ability is activated to *pay* for something (_plan_land_taps
+    # arranges that), never for its own sake: mana added here empties at the
+    # end of the step, and Black Lotus sacrifices itself to add it. The set
+    # this replaced named two instruction kinds that no longer exist, so the
+    # skip had silently stopped happening — see MANA_ABILITY_KINDS.
+    if is_mana_ability(ability.instruction):
+        return None
+
+    # "Return this creature to its owner's hand" (Quicksilver Wall),
+    # "This creature loses flying until end of turn" (Ribbon Snake),
+    # "Destroy this enchantment" (Volrath's Dungeon): an effect that removes
+    # or hampers **its own source**. Mostly a drawback printed for an
+    # opponent to pay for (CR 602.1b), otherwise a rescue that needs a
+    # response window this main-phase chooser never has — and the score
+    # below rates it 2.5 like anything else, so the AI bounced its own wall
+    # for {4} and paid 5 life to destroy its own Dungeon. Read off the
+    # compiled program (`ai_valuation.harms_its_own_source`), the reading
+    # `choose_foreign_activation_action` takes the other way.
+    if harms_its_own_source(ability.instruction):
+        return None
+
+    # A cost paid in permanents or cards is a trade this policy cannot
+    # price: Atog's "+2/+2 until end of turn" is worth an artifact only
+    # sometimes, and the score below reads the *effect* alone. Skipping is
+    # the honest floor — the alternative is an AI that eats its own board
+    # every main phase for a pump that wears off. Derived from the compiled
+    # cost, so it reaches every card printed this way and names none.
+    #
+    # **Except a discard that takes a card with madness** (CR 702.35a)
+    # whose madness cost the board can pay beside the ability: that card
+    # is not spent but offered for less (`_madness_discard_index`), so the
+    # trade is priced — by the offer's own rehearsal when it is made.
+    madness_discard = (
+        _madness_discard_index(
+            game, player_index, ability, dict(ability.cost.mana),
+            paying_for=permanent,
+        )
+        if ability.cost.discard_cards and ability.cost.sacrifice_filter is None
+        else None
+    )
+    if ability.cost.sacrifice_filter is not None or (
+        ability.cost.discard_cards and madness_discard is None
+    ):
+        # A conjoined sacrifice ("a creature **and a Swamp**", Viscerid
+        # Drone) is covered by the clause above rather than by a second
+        # test: the charger never fills `sacrifice_also_filter` without
+        # `sacrifice_filter`, so a second condition would be unreachable
+        # and would read as a claim that it is not.
+        return None
+    # …and the same trade imposed from outside: "Activated abilities of
+    # nontoken Rebels cost an additional "Sacrifice a land"" (Brutal
+    # Suppression), Drought's per-{B} Swamp. Asked of the reader the charger
+    # uses, so a tax the engine would collect is a tax this policy sees.
+    if sacrifice_taxes(
+        game, player_index, ability.cost.mana, "activate", source=permanent,
+    ):
+        return None
+    # "…+X/+0 until end of turn, where X is **the power of the creature
+    # tapped this way**" (Keldon Battlewagon). The effect is as large as the
+    # creature the cost taps, which the score below cannot see — and the
+    # payment's default is the first untapped creature, which for the
+    # Battlewagon is itself: +0/+0 and its own attack spent, every main
+    # phase. Derived from the payload, so it names no card.
+    if "cost_tap_characteristic" in (
+        ability.instruction.payload.get("x_from_count") or {}
+    ):
+        return None
+
+    # "Put a -1/-1 counter on a creature you control" (Wandering Mage). The
+    # same trade one resource over, and the same reason the policy cannot
+    # price it: the score below reads the *effect*, so a shield bought by
+    # permanently shrinking a creature reads as free — and the AI would pay
+    # it every main phase until its own board is gone. Derived from the
+    # compiled cost, so it names no card.
+    if ability.cost.put_counter_filter is not None:
+        return None
+
+    # "{1}{B}, Pay 2 life: …" (Phyrexian Reclamation). Life is the one cost
+    # here the score below never weighed, so the seat paid it every main
+    # phase down to 1 — and then proposed it once more, which the engine
+    # refuses (CR 119.4: a player can pay life only up to their total) and
+    # the simulator counts as a seat doing nothing. The reserve is the one
+    # `FOREIGN_ACTIVATION_LIFE_RESERVE`, `ai_casts.BUYBACK_LIFE_RESERVE` and
+    # `ai_scoring.X_LIFE_RESERVE` already keep, for their reason: the last points of
+    # life are the ones that lose the game.
+    life_cost = int(ability.cost.pay_life or 0)
+    if life_cost and player.life - life_cost < ACTIVATION_LIFE_RESERVE:
+        return None
+
+    # "Remove a +1/+1 counter from a creature you control" (Spike Rogue).
+    # The same trade in the opposite direction and the same reason the
+    # policy cannot price it: the score below reads the *effect*, so moving
+    # a counter from one creature to another reads as a free +1/+1 — and
+    # the AI would shuttle its board's counters onto the Spike every main
+    # phase for no net gain. Derived from the compiled cost, so it names no
+    # card. The self-referring spelling is left alone: that one is priced by
+    # the source's own counters, which the score does read.
+    if ability.cost.remove_counter_filter is not None:
+        return None
+    # …and every cost the score does price still has to be **payable**
+    # (CR 601.2h via CR 602.2b; CR 118.3): "{T}, Remove a javelin counter
+    # from this creature" with none left (Icatian Javelineers), "Exile two
+    # cards from your graveyard" over an empty one (Grim Lavamancer),
+    # "Tap two untapped Spirits you control" with one (Shacklegeist),
+    # "Return a Forest you control" with none (Quirion Ranger). The
+    # activation path refuses each with nothing paid, and this proposed it
+    # again every main phase, the seat's one activation of the turn.
+    #
+    # **Asked of the engine's own gate** (`Game.unpayable_activation_cost`,
+    # the one the activation path refuses with), not of a reading here.
+    # This chooser asked the costs it knew one at a time — the counter
+    # above was the last it learned — and none it did not: on a board that
+    # could pay nothing, 26 abilities in the pool were proposed and
+    # refused for their cost (`tests/ai/test_ai_activation_cost_census.py`).
+    if game.unpayable_activation_cost(player_index, permanent, ability) is not None:
+        return None
+
+    # "Exile the top card of your library" (Royal Herbalist, Phyrexian
+    # Devourer). The same floor one zone over, and the sharper case for it:
+    # the resource spent is the seat's remaining turns (CR 704.5b — a player
+    # who would draw from an empty library loses), which this policy has no
+    # term for at all. Left in, a seat with two mana gains 1 life every turn
+    # until it decks itself, which is a loss traded for nothing.
+    if ability.cost.exile_top_of_library:
+        return None
+
+    # "Exile the top creature card of your graveyard" (Necratog, Zombie
+    # Scavengers), "…the top card…" (Alms, Nature's Kiss). The same floor
+    # one zone over, with a second reason the library cost does not have:
+    # the cost **scans** the pile, so an activation the policy proposes
+    # against a graveyard holding no matching card is refused with nothing
+    # spent — and the policy would propose it again next turn, and every
+    # turn after, which is the "a seat doing nothing all game" shape a
+    # refused action makes. Derived from the compiled cost, so it names no
+    # card.
+    if ability.cost.exile_graveyard_position is not None:
+        return None
+
+    # CR 602.1a and its exceptions: a permanent whose printed permission
+    # closes its ability to *its own controller* — "Only your opponents may
+    # activate this ability" (Clergy of the Holy Nimbus), "Only the
+    # controller of the enchanted creature…" (Merseine) — is an ability
+    # this seat may not activate at all. Asked of the module that enforces
+    # it rather than scored, so the answer is the engine's own; without it
+    # the policy proposed the same refused activation every turn for the
+    # whole game, which is the "a seat doing nothing all game" shape a
+    # refused action makes.
+    if activation_permission_denial(
+        game, player_index, permanent, ability.source_line or ""
+    ):
+        return None
+    # CR 602.5 as **one question** (``engine/activation_prohibitions.py``):
+    # the table the activation path refuses with. The two checks around
+    # this one are three of its ten rows; the other seven this chooser
+    # never asked — City of Solitude's "…activate abilities only during
+    # their own turns", Hand to Hand's "during combat", an Abeyance, an
+    # Interdict, Faith's Fetters, Volrath's Curse, Katabatic Winds — so it
+    # proposed the ability and the engine refused it, the seat's only
+    # activation of the turn, every turn.
+    if activation_prohibition(game, player_index, permanent, ability) is not None:
+        return None
+    # CR 602.5: the printed timing ("Activate only during your upkeep",
+    # Svyelunite Priest; "…only during combat", Arcum's Sleigh) and a
+    # board-wide ban ("Activated abilities of artifacts can't be
+    # activated", Null Rod). This chooser runs in a main phase and asked
+    # neither, so it proposed them and the engine refused them, every
+    # turn, each one the seat's only activation of the turn. The default
+    # seeded runs (every shipped set plus PCY) logged 184 refused
+    # activations at PCY's wave 2 and 47 with this asked; what is left is
+    # costs the board cannot pay (a counter, an exile). Asked of the
+    # tables the engine enforces, so the answer is the engine's.
+    if activation_denial(
+        game, player_index, permanent, ability.source_line or ""
+    ) or global_activation_ban(game, permanent):
+        return None
+
+    # "Pay enchanted creature's mana cost" (Merseine). A cost the compiled
+    # program cannot state — it is whatever the attached permanent's
+    # printed cost is right now — so the tap planner below has nothing to
+    # plan against. Skipping is the same honest floor the cost skips above
+    # take, and it is derived from the compiled cost, so it names no card.
+    if ability.cost.mana_from_attached:
+        return None
+
+    target = _choose_target_for_instruction(ability.instruction, player_index, game)
+    # An equip ability (CR 702.6a): the creature is chosen here, because the
+    # handler declines a target it was not given rather than scanning for
+    # one (a misplaced Equipment is wrong in a way a fizzled pump is not).
+    # Skipped entirely when nothing is worth equipping, so the AI does not
+    # pay {1} every main phase to move a sword onto the creature it is
+    # already on.
+    target_permanent_index: int | list[int] | None = None
+    if ability.instruction.kind == "attach_source_to_target":
+        target_permanent_index = _choose_equip_target(game, player_index, permanent)
+        if target_permanent_index is None:
+            return None
+    if ability.instruction.kind == "grant_banding_to_target":
+        # Banding grants go to the controller's own creatures.
+        target = player_index
+        target_creatures = [
+            perm for perm in game.controlled_by(player_index) if perm.is_creature
+        ]
+        if not target_creatures:
+            return None
+
+    # An object-targeted ability (Silent Dart's "deal 3 to target creature",
+    # a "destroy target …") must name a legal permanent, or the activation
+    # is refused with nothing paid (CR 602.2b). Derive the target the way the
+    # picker does and aim it by the effect's category; skip when nothing is
+    # worth (or legal) to target, so the AI does not burn a turn on an
+    # ability it cannot resolve.
+    spec = derive_activation_spec(ability)
+    # "{X}, {T}: Untap **X target** lands." (Candelabra of Tawnos, Alexi,
+    # Orcish Settlers.) CR 601.2c sizes the target list from the X the
+    # activator announces, and this policy announces none — so the engine
+    # reads X as zero and refuses any named target. Proposing the ability
+    # anyway is a refused activation every turn; skipping it is the honest
+    # floor until the policy prices an X. Read off the cost clause the way
+    # the activation path counts its ``{X}`` symbols, so a *defined* X (the
+    # verse cycle's "where X is …") is left to the sizing that answers it.
+    #
+    # And the same floor for **every** ``{X}`` in a cost, not only one that
+    # sizes a target list: "{X}, {T}: This creature deals X damage to target
+    # creature" (Crimson Hellkite) is an X its controller announces
+    # (CR 107.3a), this policy announces none, and the engine reads that as
+    # zero — a tap and a turn spent dealing nothing. It reached the score
+    # below only to crash there on the payload's "x".
+    if "{x}" in (ability.source_line or "").lower().split(":", 1)[0]:
+        return None
+    # An ability naming several targets of *different* kinds, chosen in
+    # dependency order (CR 602.2b reaches CR 601.2c). Asked before the
+    # single-target block below, which has no arm for it: the kind is
+    # "roles", so that block leaves the announcement empty and the ability
+    # goes on the stack with no targets — an activation that resolves and
+    # does nothing, which is the shape `refused_casts` exists to make
+    # visible one step later.
+    target_role_refs: list[dict] | None = None
+    if spec_roles(spec):
+        target_role_refs = _choose_activation_role_targets(
+            game, player_index, permanent_index,
+            # A side only for a chain that announces a **seat** — the three
+            # abilities this walk could not answer at all until it grew an
+            # arm for one (see the function). Every other roles ability
+            # keeps the first-option walk it has always had: giving those a
+            # side too is the right policy and a different change, one that
+            # moves what the AI does with every card already activating.
+            side=(
+                _activation_target_side(permanent, ability.instruction)
+                if any(role_is_seat(role) for role in spec_roles(spec))
+                else None
+            ),
+        )
+        if target_role_refs is None:
+            # No legal chain. Skipped rather than proposed: CR 602.2b fills
+            # every role or the activation is refused with nothing paid,
+            # and the gate would refuse it.
+            return None
+    object_kinds = {"creature", "artifact", "land", "permanent", "planeswalker"}
+    if (
+        target_permanent_index is None
+        and spec is not None
+        and spec.get("kind") in object_kinds
+        and not spec.get("sacrifice_cost")
+        and not spec.get("discard_cost")
+        # A tap-cost picker (Llanowar Behemoth) names no target either: the
+        # payment is the engine's default for a seat that names nothing.
+        and not spec.get("tap_cost")
+        and not spec.get("return_cost")
+        # …nor an untap picker over an opponent's tapped lands (Benthic
+        # Explorers, PCY W3G5): read as a target, the AI would aim at the
+        # land it untaps and announce a target the ability does not have.
+        # The counter-cost pickers are skipped above, before this block.
+        and not spec.get("untap_cost")
+    ):
+        # The AI activates the first usable ability (selected above), which
+        # is usable_activated_abilities()[0] — the index activation_target_spec
+        # narrows by.
+        legal = game.activation_target_spec(
+            player_index, permanent_index, ability_index=spec_index,
+        ).get("valid_targets") or []
+        perms = [t for t in legal if t.get("kind") == "permanent"]
+        if not perms:
+            return None
+        # Which board, from what the effect does to its target
+        # (`_activation_target_side`) — and **only** that
+        # board. This fell back to "any legal permanent" when the wanted
+        # side had none, which is how a destroy, a tap or a "can't block"
+        # with no opposing target landed on the activator's own creature,
+        # and a pump with no friendly one landed on an opponent's: an
+        # activation that resolves and harms the seat that paid for it.
+        side = _activation_target_side(permanent, ability.instruction)
+        if spec.get("source_of_choice"):
+            # "…a source of your choice…" (CR 609.7a) is not a target, so
+            # no side describes it — and a shield's own category reads
+            # "you", which named the activator's own largest creature as
+            # the thing to be shielded *from* (Bone Mask, Dark Sphere,
+            # Kithkin Armor, Pentagram of the Ages, Protective Sphere,
+            # Righteous Aura). The cast side's answer, for the same phrase.
+            named = _choose_damage_source(game, player_index, perms)
+            if not named:
+                return None
+            perms = [
+                t for t in perms if (t["seat"], t["index"]) == (named[0], named[1])
+            ]
+            side = None
+        if side == "you" and ability_denies_its_target(ability.instruction):
+            # "Destroy target … you control" (Rats of Rath), "Return target
+            # land you control to its owner's hand" (Trade Routes): the
+            # printed seat is the activator's and the effect is a denial,
+            # so activating it for its own sake only costs the seat a
+            # permanent. Before this the fallback above aimed Rats of
+            # Rath at whatever it found.
+            return None
+        if side == "you":
+            perms = [t for t in perms if t["seat"] == player_index]
+        elif side == "opponent":
+            perms = [t for t in perms if t["seat"] != player_index]
+        if not perms:
+            return None
+        def _power(t):
+            perm = game.permanent_at(t["seat"], t["index"])
+            return perm.effective_power if perm is not None else 0
+
+        chosen = max(perms, key=_power)
+        target = chosen["seat"]
+        target_permanent_index = chosen["index"]
+        # "{T}: Untap **two** target lands" (Argothian Elder), "Choose two
+        # target blocked attacking creatures" (General Jarkeld): a printed
+        # count names that many (CR 601.2c), and the engine refuses an
+        # activation naming fewer. All on the chosen permanent's seat,
+        # because this action carries one seat beside its slots — the
+        # strongest there first, the order the single pick takes.
+        wanted = spec.get("max_targets")
+        if spec.get("exact_targets") and isinstance(wanted, int) and wanted > 1:
+            beside = sorted(
+                (t for t in perms if t["seat"] == target),
+                key=_power, reverse=True,
+            )
+            if len(beside) < wanted:
+                return None
+            target_permanent_index = [t["index"] for t in beside[:wanted]]
+
+    # "{G}: Exile target card from a graveyard." (Scavenging Ooze.) A card
+    # in a graveyard is a target like any other (CR 115.1c), and this
+    # chooser named none: the block above reads battlefield kinds, so the
+    # announcement went out bare and the engine's default answered it —
+    # the picker's first card, which is a stated default for a script and
+    # not a choice. The seat's own pick instead: the pile the effect's
+    # side wants (`_activation_target_side`), and within it the card with
+    # the greatest mana value. Where the effect reads as neither side's —
+    # the Ooze's exile is one — an opposing pile is taken before the
+    # seat's own, which is the order an unnamed target is looked for in
+    # everywhere else. Skipped when nothing on the wanted side is legal,
+    # for the battlefield block's reason — and for the two shapes a block
+    # below names: several cards out of a single pile (``SINGLE_GRAVEYARD``)
+    # and a card exiled to deny it (`_graveyard_denial_target`: an
+    # opponent's pile, the cards its owner could still cast first).
+    if (
+        target_permanent_index is None
+        and spec is not None
+        and spec.get("kind") == GRAVEYARD_TARGET_KIND
+        and not spec_is_a_cost(spec)
+        and not spec.get("source_of_choice")
+        and not spec.get(SINGLE_GRAVEYARD)
+        and not _one_graveyard_card_is_denied(spec, (ability.instruction,))
+    ):
+        cards = [
+            t for t in game.activation_target_spec(
+                player_index, permanent_index, ability_index=spec_index,
+            ).get("valid_targets") or []
+            if t.get("kind") == "graveyard"
+        ]
+        side = _activation_target_side(permanent, ability.instruction)
+        if side == "you":
+            cards = [t for t in cards if t["seat"] == player_index]
+        elif side == "opponent":
+            cards = [t for t in cards if t["seat"] != player_index]
+        if not cards:
+            return None
+
+        def _mana_value(t):
+            pile = game.players[t["seat"]].graveyard
+            held = pile[t["index"]] if 0 <= t["index"] < len(pile) else None
+            return float(getattr(held, "cmc", 0) or 0)
+
+        if side is None and any(t["seat"] != player_index for t in cards):
+            cards = [t for t in cards if t["seat"] != player_index]
+        chosen = max(cards, key=_mana_value)
+        target = chosen["seat"]
+        target_permanent_index = chosen["index"]
+
+    # "{2}{B}, {T}: Exile up to three target cards from a single
+    # graveyard." (Carrion Beetles, Famished Ghoul.) The cards are announced
+    # (CR 602.2b), so an activation that names none is the legal "up to"
+    # announcement and exiles nothing — a cost paid for no effect, which is
+    # what this seat did with every one of them once the handler stopped
+    # picking for it. Named here the way the cast side names them
+    # (`ai_targets._choose_several_targets`): the maximum, out of one opponent's pile,
+    # and skipped when no opponent has a card to take.
+    if (
+        spec is not None
+        and spec.get(SINGLE_GRAVEYARD)
+        and target_permanent_index is None
+        and not target_role_refs
+    ):
+        piles: dict[int, list[int]] = {}
+        for entry in game.activation_target_spec(
+            player_index, permanent_index, ability_index=spec_index,
+        ).get("valid_targets") or []:
+            if entry.get("kind") == "graveyard" and entry.get("seat") != player_index:
+                piles.setdefault(int(entry["seat"]), []).append(int(entry["index"]))
+        if not piles:
+            return None
+        target = min(piles)
+        target_permanent_index = piles[target][: int(spec.get("max_targets") or 1)]
+    # "{3}, {T}: Exile target card from a graveyard." (Steamclaw; Crypt
+    # Creeper, Grave Robbers, Scavenging Ooze.) Whose graveyard, named —
+    # the cast side's answer (`_graveyard_denial_target`) over this
+    # ability's own picker. Named nothing, the handler took the first pile
+    # in seat order: the activator's own, from chair 0.
+    if (
+        target_permanent_index is None
+        and not target_role_refs
+        and _one_graveyard_card_is_denied(spec, (ability.instruction,))
+    ):
+        buried = _graveyard_denial_target(
+            game, player_index,
+            game.activation_target_spec(
+                player_index, permanent_index, ability_index=spec_index,
+            ).get("valid_targets") or [],
+        )
+        if buried is not None:
+            target, target_permanent_index = buried
+
+    # CR 601.2d asked of an ability: a divided announcement ("…divided as
+    # you choose", Serra's Hymn) is one this chooser never makes, and the
+    # engine refuses an activation announced without it — so proposing one
+    # is a turn spent on a refusal, every turn. Then the engine's own
+    # announcement gate (CR 602.2b/601.2c) over exactly what this policy is
+    # about to announce: an ability whose only legal targets are cards in
+    # an empty graveyard (Rootwater Diver, Groundskeeper) passed every
+    # check above, because they look only at battlefield targets, and was
+    # refused with nothing paid. Neither shows in `refused_casts`, which
+    # counts casts; one ten-game run each of USG, TMP and MMQ logged 44
+    # refused Serra's Hymn, 21 Rootwater Diver and 15 Groundskeeper
+    # activations.
+    if spec is not None and spec.get("kind") == "divided":
+        return None
+    # "{3}, {T}: You may put a creature card of the chosen type from your
+    # hand onto the battlefield." With no such card in hand the ability's
+    # whole effect is nothing, and the cost is still paid: Belbe's Portal
+    # spent {3} every turn of NEM's simulation to log that it had no card.
+    if not _hand_entry_has_a_card(game, player_index, permanent, ability.instruction):
+        return None
+    # "{B}{B}{B}, Exile Balthor: Each player returns all black and all red
+    # creature cards from their graveyard to the battlefield." The Portal's
+    # floor one zone over: a sweep out of the graveyards whose piles hold
+    # nothing for the activator is a cost (here the source itself) paid to
+    # return nothing — or to return only an opponent's creatures.
+    if not _graveyard_sweep_favours_the_seat(game, player_index, ability.instruction):
+        return None
+    if game.activation_target_refusal(
+        player_index, permanent, ability,
+        target_player_index=target,
+        target_permanent_index=target_permanent_index,
+        target_role_refs=target_role_refs,
+    ) is not None:
+        return None
+    # …and what an opponent's Flagbearer demands of that announcement
+    # (`Game.activation_target_requirement_refusal`): a seat named alone
+    # for an "any target" ability is re-aimed at the Flagbearer on that
+    # seat, and anything else the gate would refuse is not proposed.
+    if game.activation_target_requirement_refusal(
+        player_index, permanent, ability,
+        target_player_index=target,
+        target_permanent_index=target_permanent_index,
+        target_role_refs=target_role_refs,
+    ) is not None:
+        required_slot = (
+            _required_activation_target(
+                    game, player_index, permanent_index, target,
+                    ability_index=spec_index,
+                )
+            if target_permanent_index is None and not target_role_refs
+            else None
+        )
+        if required_slot is None:
+            return None
+        target_permanent_index = required_slot
+
+    land_taps: tuple[int, ...] = ()
+    tap_colors: tuple[str, ...] = ()
+    required = dict(ability.cost.mana)
+    if game.enforce_mana_costs and any(required.values()):
+        plan = _plan_land_taps(game, player, required, paying_for=permanent)
+        if plan is None:
+            return None
+        land_taps, tap_colors = plan
+
+    score = _score_activation(game, player_index, ability.instruction, target)
+    if score <= 0.0:
+        return None
+    candidate = ActivationAction(
+        permanent_name=permanent.card.name,
+        permanent_index=permanent_index,
+        target_player_index=target,
+        land_tap_indices=land_taps,
+        score=score,
+        target_permanent_index=target_permanent_index,
+        target_role_refs=target_role_refs,
+        land_tap_colors=tap_colors,
+        cost_hand_index=madness_discard,
+        ability_index=ability_index,
+    )
+    if ability_index is not None:
+        # A land's ability: proposed only where carrying it out on a copy of
+        # the game leaves the seat ahead once the turn is over.
+        worth = _land_ability_worth(game, player_index, candidate)
+        if worth is None:
+            return None
+    return candidate
+
+
+def _rehearse_activation(
+    game: Game, seat: int, action: ActivationAction,
+    *, through_combat: bool = False,
+) -> Rehearsal | None:
+    """What activating *action* would do, carried out on a scratch copy of
+    the game (``ai_rehearsal.rehearse``) the way `activate_chosen_ability`
+    carries it out — the planned lands tapped, the ability put on the stack —
+    against the same copy with the same lands tapped and nothing activated.
+    *through_combat* fights the turn's combat on both copies first, for an
+    ability whose good is gone by the end of the turn."""
+
+    def perform(table):
+        return _queue_activation(table, seat, action)
+
+    def paid_for(table, _carried) -> None:
+        pool = table.players[seat].mana_pool
+        floating = dict(pool)
+        tap_planned_lands(table, seat, action)
+        pool.clear()
+        pool.update(floating)
+
+    taps = bool(action.land_tap_indices)
+    return rehearse(
+        game, seat, perform, spell_name=None, leaves_hand=False,
+        label=f"{action.permanent_name}'s ability",
+        key=(
+            "activation", seat, action.permanent_name, action.permanent_index,
+            action.ability_index, action.target_player_index,
+            repr(action.target_permanent_index), repr(action.target_role_refs),
+            action.land_tap_indices, action.land_tap_colors,
+        ) + (("through_combat",) if through_combat else ()),
+        without=paid_for if taps else None,
+        without_key=(
+            ("paid", action.land_tap_indices, action.land_tap_colors)
+            if taps else None
+        ),
+        through_combat=through_combat,
+    )
+
+
+def _queue_activation(table: Game, seat: int, action: ActivationAction):
+    """*action* paid for and put on *table*'s stack — the queue form, which
+    leaves it there for the table to answer (CR 117.3c)."""
+    planned = tap_planned_lands(table, seat, action)
+    return table.queue_permanent_ability(
+        seat,
+        planned.permanent_name,
+        target_player_index=planned.target_player_index,
+        permanent_index=planned.permanent_index,
+        target_permanent_index=planned.target_permanent_index,
+        target_role_refs=planned.target_role_refs,
+        ability_index=planned.ability_index,
+        cost_hand_index=planned.cost_hand_index,
+    )
+
+
+def _land_ability_worth(
+    game: Game, seat: int, action: ActivationAction,
+) -> float | None:
+    """What activating a land's non-mana ability (*action*) leaves *seat*
+    once the turn is over, or None when that is not a reason to tap the land.
+
+    Rehearsed (:func:`_rehearse_activation`), never scored by the effect's
+    family alone: a land tapped for its ability is a mana not made, and the
+    heuristic score the chooser ranks with prices nothing — so the gate is the
+    measure. Proposed only where the engine took it, it changed something that
+    outlasts the turn, and the lasting swing is positive: Krosan Verge's two
+    lands for one, a ping, a token. **What is gone by the end of the turn is
+    read again through the fight** (``ai_rehearsal.priced_by_the_fight``), as
+    a precombat cast is: a manland's animation is worth the attack it makes,
+    and nothing at all with no combat ahead.
+
+    Unlike a cast, an ability nobody could rehearse is not proposed — no land
+    ability was before, and "could not be weighed" is no reason to start.
+    """
+    from .ai_rehearsal import combat_is_still_to_come, priced_by_the_fight
+
+    rehearsal = _rehearse_activation(game, seat, action)
+    if rehearsal is None or not (rehearsal.accepted and rehearsal.changed):
+        return None
+    if (
+        priced_by_the_fight(rehearsal.now, rehearsal.lasting, rehearsal.fleeting)
+        and combat_is_still_to_come(game, seat)
+    ):
+        fought = _rehearse_activation(game, seat, action, through_combat=True)
+        if fought is not None and fought.accepted:
+            rehearsal = fought
+    if not _worth_proposing(rehearsal) or rehearsal.lasting <= 0.0:
+        return None
+    return rehearsal.lasting
 
 
 #: Permanents `choose_activation_action` passes over, by ``permanent_id``:
@@ -737,7 +907,7 @@ def _activation_target_side(permanent: Permanent, instruction) -> str | None:
 
 def _choose_activation_role_targets(
     game: Game, player_index: int, permanent_index: int,
-    side: str | None = None,
+    side: str | None = None, ability_index: int = 0,
 ) -> "list[dict] | None":
     """One object per **role** for an activated ability, or None when no legal
     chain exists.
@@ -771,7 +941,7 @@ def _choose_activation_role_targets(
     rule above and for its reason.
     """
     options = game.activation_target_spec(
-        player_index, permanent_index, ability_index=0,
+        player_index, permanent_index, ability_index=ability_index,
     ).get("valid_targets") or []
     # **One side per role, not one for the chain** — the derivation the cast
     # side asks (`ai_target_sides.role_target_sides`), over this ability's own

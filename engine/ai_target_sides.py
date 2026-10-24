@@ -1281,6 +1281,49 @@ def ability_denies_its_target(instruction: OracleInstruction | None) -> bool:
     return any(denies_its_target(step) for step in steps)
 
 
+#: The step that taps **or** untaps its target, which way being the state the
+#: target is in (Twiddle's toggle).
+_TOGGLE_KINDS = frozenset({"tap_or_untap_target"})
+
+
+def toggles_its_target(instruction: OracleInstruction | None) -> bool:
+    """Whether *instruction* — wrappers opened ("you may pay {1}{U}. If you do,
+    you may tap or untap target permanent", Telekinetic Bonds) — taps or
+    untaps its target, whichever it is not.
+
+    The one family in ``_NO_SIDE_KINDS`` whose side is not a seat but a
+    **state**: tapping an opponent's untapped creature and untapping one's own
+    tapped one are both the point of it, and the other two answers are the
+    same effect turned against the chooser. So no seat describes it, and a
+    seat nobody asked took the first permanent offered — Telekinetic Bonds
+    paid {1}{U} to tap itself.
+    """
+    if instruction is None:
+        return False
+    return any(step.kind in _TOGGLE_KINDS for step in _effect_steps(instruction))
+
+
+def toggle_target_order(game, chooser: int, permanents: list) -> list:
+    """*permanents* in the order a toggle is best aimed by *chooser*: an
+    opponent's untapped creature (the largest first — an attacker or a
+    blocker taken out of the turn), then one of its own tapped creatures,
+    then an opponent's untapped land, then one of its own tapped lands, then
+    everything else — the toggles that help the other side — in the order
+    offered."""
+
+    def rank(permanent) -> tuple:
+        mine = game.controller_index_of(permanent) == chooser
+        creature = bool(permanent.is_creature)
+        power = permanent.effective_power if creature else 0
+        if not mine and not permanent.tapped:
+            return (0 if creature else 2, -power)
+        if mine and permanent.tapped:
+            return (1 if creature else 3, -power)
+        return (4, 0)
+
+    return sorted(permanents, key=rank)
+
+
 __all__ = [
     "DividedShape",
     "ability_target_side",
@@ -1293,4 +1336,6 @@ __all__ = [
     "several_target_slot_sides",
     "spell_denies_its_own_target",
     "spell_target_side",
+    "toggle_target_order",
+    "toggles_its_target",
 ]

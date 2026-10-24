@@ -216,12 +216,46 @@ def test_the_sweep_examined_the_cards_that_choose_a_graveyard(rows):
     assert len(exiled) >= 11, sorted(exiled)
 
 
+#: Where an exile **pays the exiled card's owner**, denial is not the policy.
+#: "Exile target card from a graveyard. Its owner creates a 1/1 white Spirit
+#: creature token with flying." (Funeral Pyre.) Aimed at an opponent's pile,
+#: as this sweep demanded of every card, it handed the opponent a flier; the
+#: policy now rehearses a card of the caster's own beside the denial
+#: (``ai_targets._better_graveyard_pick``), and on this board — every buried
+#: card worth the same to its owner — the Spirit is worth more than the card.
+#: Derived from the program, never named: a token made for the owner (or
+#: controller) the exile step recorded.
+_PAID_TO_THE_OWNER = frozenset({"last_target_owner", "last_target_controller"})
+
+
+def _exile_pays_its_owner(name: str) -> bool:
+    spell = BY_NAME[name]
+    return any(
+        step.kind == "create_token"
+        and (step.payload or {}).get("recipient") in _PAID_TO_THE_OWNER
+        for step in _walk_program(compile_card_oracle(spell))
+    )
+
+
 def test_graveyard_denial_takes_the_opponents_pile_from_either_chair(rows):
     wrong = sorted(
         f"{row['card']} from chair {row['seat']}: exiled from {sorted(row['from'])}"
-        for row in rows if "AI" in row["from"]
+        for row in rows
+        if "AI" in row["from"] and not _exile_pays_its_owner(row["card"])
     )
     assert wrong == []
+
+
+def test_an_exile_that_pays_its_owner_takes_the_casters_own_card(rows):
+    """The one exception the sweep above makes, measured: it excuses exactly
+    the cards whose exile makes the card's owner a token (Funeral Pyre, the
+    one in the pool), and each of those — from either chair — exiles a card
+    of the caster's own, so the Spirit is the caster's."""
+    paying = sorted({row["card"] for row in rows if _exile_pays_its_owner(row["card"])})
+    assert paying == ["Funeral Pyre"]
+    for row in rows:
+        if row["card"] in paying:
+            assert row["played"] and row["from"] == {"AI"}, row
 
 
 def test_the_chair_does_not_change_what_a_card_does(rows):
@@ -232,6 +266,16 @@ def test_the_chair_does_not_change_what_a_card_does(rows):
         by_card.setdefault(row["card"], {})[row["seat"]] = (row["played"], row["from"])
     differ = sorted(name for name, seats in by_card.items() if seats[0] != seats[1])
     assert differ == []
+
+
+def test_an_exile_that_pays_its_owner_is_not_cast_into_only_an_opponents_pile():
+    """Funeral Pyre with nothing buried of the caster's own: the only exile
+    on offer makes the opponent a 1/1 flier, which the rehearsal reads as the
+    caster behind — so it is held, from either chair."""
+    pyre = BY_NAME["Funeral Pyre"]
+    for seat in (0, 1):
+        random.seed(20261012)
+        assert play(pyre, pyre, seat, yards={"AI": [], "Opp": _yard("Opp")}) is None
 
 
 #: The cards a bare announcement of **one** targeted graveyard card sent to the

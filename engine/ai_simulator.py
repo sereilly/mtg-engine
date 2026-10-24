@@ -26,6 +26,7 @@ from .ai_abilities import (
 )
 from .ai_payment import tap_planned_lands
 from .ai_rehearsal import mid_resolution, rehearsing
+from .ai_special_actions import special_action_before_combat
 from .ai_weighed_cast import permitted_casts
 from .card_loader import load_cards
 from .faces import whole_card
@@ -214,6 +215,21 @@ class SimulationReport:
     #: spell it answers.
     activations_at_instant_speed: Counter[str] = field(default_factory=Counter)
     refused_instant_activations: Counter[str] = field(default_factory=Counter)
+    #: CR 116.2c-e special actions a seat took (`ai_special_actions`), by the
+    #: offer's kind — "ignore_attached_static_until_eot" for a creature bought
+    #: a turn off Volrath's Curse or Lost in Thought. **Empty in every run
+    #: before JUD's wave 2**, and not because nothing was offered: the offer
+    #: stood every main phase and no AI path answered it, so a cursed creature
+    #: never attacked again however cheap the price — and the run read exactly
+    #: as clean as it does now. The refusals among them are beside it.
+    special_actions_taken: Counter[str] = field(default_factory=Counter)
+    refused_special_actions: Counter[str] = field(default_factory=Counter)
+    #: Cards brought into a game from a seat's sideboard (CR 400.11b: a Wish,
+    #: Ring of Ma'rûf), counted off the sideboards at each game's end. **Zero in
+    #: every run before JUD's wave 2**, and necessarily: no seat was dealt a
+    #: sideboard, so the offer was never made and the cast was never proposed.
+    #: A zero over a pool that prints a Wish is that coming back.
+    cards_from_outside_game: int = 0
 
     @property
     def ok(self) -> bool:
@@ -526,6 +542,35 @@ def build_limited_deck(
     return deck
 
 
+def limited_sideboard(
+    cards: dict[str, CardDefinition], deck: Sequence[CardDefinition],
+) -> list[CardDefinition]:
+    """The sideboard of a seat dealt *deck* out of *cards* — CR 100.4b: "In
+    limited play involving individual players, all cards in a player's card
+    pool not included in their deck are in that player's sideboard."
+
+    **The seat's card pool is every card of *cards* but the basic lands**,
+    because that is what :func:`build_limited_deck` built the deck from: it
+    looked at the whole of it (``pool`` there) and chose by colour and cost,
+    so each card it passed over was one it had and did not play. The basics
+    are not part of it — CR 100.2b builds a limited deck from "this product
+    **and basic land cards**", the land station's and nobody's pool, which is
+    why the builder sets them apart too. One copy of each, as the deck's own
+    spells are singletons.
+
+    No randomness: the leftovers of a deck are a function of the deck, so the
+    deal, and every deck dealt before it, is exactly what it was before seats
+    had a sideboard (the run's RNG is not touched). In the order *cards* was
+    loaded in, so a seed reproduces the sideboard positions a Wish picks by.
+    """
+    basics = _basic_land_pool(cards)
+    in_deck = {card.name for card in deck}
+    return [
+        card for name, card in cards.items()
+        if name not in basics and name not in in_deck
+    ]
+
+
 def _zone_counter(game: Game) -> Counter[str]:
     """Every card in the game, by name — the whole board, not one seat's.
 
@@ -547,9 +592,9 @@ def _zone_counter(game: Game) -> Counter[str]:
     400.11a). A Wish or Ring of Ma'rûf brings one of its cards *into* the game
     (CR 400.11b), and counted from the game's zones alone that card read as
     one starting to exist — measured at Judgment with sideboards given to the
-    seats by hand: fourteen false alarms in four games. The deal gives no seat
-    a sideboard today, so nothing this reads has changed for any seeded run;
-    it is the reservoir the invariant has to include the day one does.
+    seats by hand: fourteen false alarms in four games. Every seat is dealt
+    one now (`limited_sideboard`, CR 100.4b), so this is the reservoir the
+    invariant runs over in every game.
     """
     counter: Counter[str] = Counter()
     already: set[int] = set()
@@ -1080,6 +1125,10 @@ def _play_activations(
             # Which card a "Discard a card" cost takes, when the policy named
             # one (a card with madness, `ai_abilities._madness_discard_index`).
             cost_hand_index=activation_action.cost_hand_index,
+            # Which ability: a land's non-mana ability is named by its index
+            # (its first is the mana ability the engine would otherwise take);
+            # None, the engine's first, for everything else.
+            ability_index=activation_action.ability_index,
         )
         _resolve_pending_choices(game)
         report.interaction_count += 1
@@ -1146,6 +1195,27 @@ def _play_activations(
         _execute_foreign_activation(
             game, active, foreign_activation, report, game_index, turn,
         )
+
+
+def _play_special_actions(
+    game: Game, active: int, report: SimulationReport, game_index: int, turn: int
+) -> None:
+    """The CR 116 special action the seat takes before its combat, if any
+    (`ai_special_actions.special_action_before_combat`, which holds the
+    priority the action needs), counted."""
+    taken = special_action_before_combat(game, active)
+    if taken is None:
+        return
+    choice, refusal = taken
+    _resolve_pending_choices(game)
+    report.log_lines.append(
+        f"G{game_index} T{turn} {game.players[active].name} special action "
+        f"{choice.kind} ({choice.name}) -> {refusal or 'taken'}"
+    )
+    if refusal is None:
+        report.special_actions_taken[choice.kind] += 1
+    else:
+        report.refused_special_actions[f"{choice.name}: {refusal}"] += 1
 
 
 def _play_combat_phase(
@@ -1470,18 +1540,28 @@ def run_ai_simulation(
     raised_seen = Counter(ai_rehearsal.REHEARSALS_RAISED)
 
     for game_index in range(1, games + 1):
+        # Each seat's sideboard is the rest of its card pool (CR 100.4b; see
+        # `limited_sideboard` for what the pool is). Until JUD's wave 2 no
+        # seat had one, so a Wish ("…a card you own from outside the game",
+        # CR 400.11b) and Ring of Ma'rûf had nothing to bring in, the
+        # rehearsal read their casts as moving nothing, and no simulated game
+        # ever cast one. Dealt without touching the run's RNG, so every deck
+        # is the one it was.
+        deck_a = build_limited_deck(
+            cards, rng.randint(1, 1_000_000), required=required_cards
+        )
         p1 = PlayerState(
-            name=f"AI-A-{game_index}",
-            library=build_limited_deck(
-                cards, rng.randint(1, 1_000_000), required=required_cards
-            ),
+            name=f"AI-A-{game_index}", library=deck_a,
+            sideboard=limited_sideboard(cards, deck_a),
+        )
+        deck_b = build_limited_deck(
+            cards, rng.randint(1, 1_000_000), required=required_cards
         )
         p2 = PlayerState(
-            name=f"AI-B-{game_index}",
-            library=build_limited_deck(
-                cards, rng.randint(1, 1_000_000), required=required_cards
-            ),
+            name=f"AI-B-{game_index}", library=deck_b,
+            sideboard=limited_sideboard(cards, deck_b),
         )
+        sideboard_sizes = [len(p1.sideboard), len(p2.sideboard)]
         # CR 601.2f-h and 602.2b: a spell or an ability is paid for. This read
         # `Game(players=[p1, p2])`, and `enforce_mana_costs` defaults to False,
         # so in every simulated game this project ever ran nothing cost
@@ -1628,6 +1708,10 @@ def run_ai_simulation(
             # silent, and a second copy of that fallback chain would be a
             # second place for the silence to live.
             if not game.is_game_over():
+                # CR 116.2d: an offer that buys a creature its attack this
+                # turn is taken, if at all, before the attack is declared.
+                _play_special_actions(game, active, report, game_index, turn)
+            if not game.is_game_over():
                 _play_combat_phase(game, active, report, game_index, turn)
 
             # CR 512-514, the half of a turn this loop still did not have
@@ -1673,6 +1757,10 @@ def run_ai_simulation(
             if active_player.life <= 0 or opponent.life <= 0 or active_player.lost or opponent.lost:
                 break
 
+        report.cards_from_outside_game += sum(
+            before - len(player.sideboard)
+            for before, player in zip(sideboard_sizes, game.players)
+        )
         owing = Counter(game._steps_left_owing)
         report.step_changes += owing.pop("_examined", 0)
         report.steps_left_owing.update(owing)

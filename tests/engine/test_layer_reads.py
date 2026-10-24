@@ -403,8 +403,6 @@ PRIMARY_TYPE_BASELINE: dict[str, int] = {
     # counts of an opponent's lands and creatures). Each wants the judgement
     # the others got, in the module whose round it is. (One module,
     # ``ai_policy.py``, until the 2,000-line split.)
-    "ai_abilities.py": 1,
-    "ai_declarations.py": 3,
     "ai_policy.py": 1,
     "ai_scoring.py": 3,
     # **A spell on the stack, not a permanent.** ``item.card`` is the card as

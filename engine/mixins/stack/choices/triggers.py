@@ -807,6 +807,25 @@ class TriggerChoicesMixin:
                     return self._resolve_trigger_target(
                         choice, permanent_id=target["permanent_id"]
                     )
+            # "…you may tap or untap target permanent" (Telekinetic Bonds): a
+            # toggle has no seat to want, only a state — an opponent's
+            # untapped creature, one's own tapped one
+            # (``ai_target_sides.toggle_target_order``). The first permanent
+            # offered was the Bonds itself.
+            from ....ai_target_sides import toggle_target_order, toggles_its_target
+
+            if toggles_its_target(getattr(item, "ability_instruction", None)):
+                offered = [
+                    permanent for target in targets
+                    if target.get("kind") == "permanent"
+                    for permanent in (self.permanent_by_id(target.get("permanent_id")),)
+                    if permanent is not None
+                ]
+                if offered:
+                    best = toggle_target_order(self, choice.player_index, offered)[0]
+                    return self._resolve_trigger_target(
+                        choice, permanent_id=best.permanent_id
+                    )
         first = targets[0]
         if first.get("kind") == "player":
             return self._resolve_trigger_target(choice, seat=first["seat"])
