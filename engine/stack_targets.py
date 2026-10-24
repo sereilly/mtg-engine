@@ -694,9 +694,11 @@ def _printed_target_instances(item: "StackItem") -> int | None:
 
 
 def _is_triggered(item: "StackItem") -> bool:
-    """Whether *item* is a triggered ability — the split ``web/serialization``
-    draws from the same label prefix."""
-    return str(getattr(item, "ability_effect_kind", "") or "").startswith("triggered")
+    """Whether *item* is a triggered ability (CR 113.3c) — ``StackItem.ability_kind``,
+    how it was put on the stack, which ``web/serialization`` reads too. Not the
+    effect label's prefix, which an upkeep trigger's ``upkeep_effect`` and an
+    activated ``triggered_counter`` both get wrong."""
+    return getattr(item, "ability_kind", None) == "triggered"
 
 
 def _candidates(

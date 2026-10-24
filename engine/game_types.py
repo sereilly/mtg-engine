@@ -428,6 +428,26 @@ class StackItem:
         """
         return self.ability_instruction is not None or self.hook_key is not None
 
+    @property
+    def ability_kind(self) -> str | None:
+        """``"activated"`` or ``"triggered"`` for an ability on the stack (CR
+        113.3b–c), None for a spell.
+
+        Read off how the object got here: ``activated`` is the positive mark
+        the three activation paths set (CR 602.2), so every other ability on
+        the stack is a triggered one. **Never off ``ability_effect_kind``**:
+        that is a reporting label (``engine/effect_labels.py``) whose prefix
+        does not follow the ability's kind — the activated table files
+        ``add_counter_to_target`` under ``triggered_counter`` and the triggered
+        tables give hundreds of triggers ``upkeep_effect`` or ``spell_pattern``
+        — and the three readers that took the prefix for the answer had Rust
+        unable to name Serrated Arrows' ability and every upkeep trigger sent
+        to the client as not triggered.
+        """
+        if not self.is_ability:
+            return None
+        return "activated" if self.activated else "triggered"
+
 
 @dataclass
 class OracleExecutionContext:

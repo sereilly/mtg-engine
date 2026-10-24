@@ -1,10 +1,20 @@
 """The reporting label an ability's compiled instruction carries.
 
-``effect_kind`` is a *label*, never dispatch. It reaches three places and no
-others: ``SimulationResult.effect_kind`` (the string the duel scripts and the
-per-card tests report a cast by), ``scripts/support_report.py``'s buckets, and
-``StackItem.ability_effect_kind`` — whose ``triggered_`` prefix is what
-``web/serialization.py`` serializes as a stack item's ``is_triggered``.
+``effect_kind`` is a *label*, never dispatch. It reaches ``SimulationResult.effect_kind``
+(the string the duel scripts and the per-card tests report a cast by),
+``scripts/support_report.py``'s buckets, and ``StackItem.ability_effect_kind``
+(the stack object's own copy of the same report).
+
+**Its prefix says nothing about the ability's kind**, and nothing may read it as
+if it did: ``add_counter_to_target`` is ``triggered_counter`` in the activated
+table, and hundreds of triggers are ``upkeep_effect`` or ``spell_pattern``.
+Whether a stack object is an activated or a triggered ability is
+``StackItem.ability_kind`` — how it was put on the stack. Until the kg round
+three readers took the ``triggered_`` / ``activated_`` prefix for that answer
+(the client's ``is_triggered``, ``stack_targets``' CR 115.7 lists and "counter
+target activated ability"), which is why several notes below justify a row by
+the prefix it gave ``is_triggered``: they record why the row was added, not
+what reads it now.
 
 Its vocabulary was ``engine/parsing/``'s. Each string was named after the rule
 that produced it (``activated_deny_regeneration`` because there was a rule
@@ -13,7 +23,7 @@ matched the same line the grammar had already read. Deleting the registry
 without carrying the vocabulary would therefore have silently re-bucketed 57
 cards — an activated regeneration reported ``activated_regeneration`` where it
 had always said ``activated_regenerate``, and every trigger the grammar reads
-losing the ``triggered_`` prefix that flag depends on.
+losing the ``triggered_`` prefix the client's flag then depended on.
 
 So the vocabulary moves here, which is the move
 ``card_hooks.CardLine.effect_kind`` already made for the lines that became

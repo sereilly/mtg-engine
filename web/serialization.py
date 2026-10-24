@@ -1128,7 +1128,11 @@ def _serialize_stack_item(item, game: Game) -> dict:
         if item.card.primary_type in ("instant", "sorcery"):
             target_name = game.players[item.target_player_index].name
     item_type = "ability" if item.is_ability else "spell"
-    is_triggered = bool(item.ability_effect_kind and item.ability_effect_kind.startswith("triggered_"))
+    # CR 113.3c, read off how the object reached the stack
+    # (``StackItem.ability_kind``) — never off the effect label, whose
+    # ``triggered_`` prefix every `upkeep_effect` trigger lacks and every
+    # `triggered_counter` activation carries.
+    is_triggered = item.ability_kind == "triggered"
     label = item.card.name if item_type == "spell" else f"{item.card.name} ability"
 
     target_permanent_name = None

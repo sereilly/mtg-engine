@@ -154,12 +154,14 @@ def test_the_by_condition_table_only_holds_genuine_ambiguities(
 
 
 def test_a_trigger_the_grammar_reads_keeps_its_triggered_prefix():
-    """The one label consumer that is behaviour, not reporting.
+    """Four grammar-read triggers whose label the parser's deletion would
+    otherwise have changed — each one of the 57 cards it carried.
 
-    `web/serialization.py` serializes a stack item's `is_triggered` from the
-    label's `triggered_` prefix. These four are grammar-read triggers whose
-    prefix therefore has to survive, and each was one of the 57 cards whose
-    label the deletion would otherwise have changed.
+    This was "the one label consumer that is behaviour": `web/serialization.py`
+    serialized a stack item's `is_triggered` from the `triggered_` prefix. It
+    reads ``StackItem.ability_kind`` since the kg round
+    (``tests/regressions/test_kg_kinds_ability_kind_is_structural.py``), so
+    the labels here are the report vocabulary and nothing more.
     """
     catalog = {card.name: card for card in load_catalog()}
     expected = {
