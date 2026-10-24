@@ -52,7 +52,9 @@ from engine.cast_prohibitions import cast_prohibition
 from engine.cast_timing import casts_at_instant_speed
 from engine.classifier import classify_card
 from engine.faces import castable_faces, face_cards
-from engine.activation_zones import HAND
+from engine.activation_zones import GRAVEYARD, HAND, ability_functions_from
+from engine.cost_pickers import spec_is_a_cost
+from engine.subject_filters import subject_matches
 from engine.cycling import expand_cycling_line
 from engine.mixins.stack.card_activation import hand_activation_cost
 from engine.oracle import compile_card_oracle
@@ -61,8 +63,8 @@ from engine.restricted_mana import ACTIVATE, CAST, PaymentPurpose
 from engine.cost_modifiers import (cost_reduction_for_cast, reduce_cost,
                                    spell_cost_tax, spell_symbol_tax)
 from engine.cast_costs import additional_costs
-from engine.targeting import (derive_cast_spec, spec_roles,
-                              usable_activated_abilities)
+from engine.targeting import (derive_activation_spec, derive_cast_spec,
+                              spec_roles, usable_activated_abilities)
 from engine.untap_restrictions import permanent_in_limited_scope
 
 from .prompts import PromptContext, blocking_prompt, render_prompts
@@ -72,6 +74,7 @@ from .presence import seat_is_connected
 from .runtime import store
 from .seats import _build_rematch_info, _seat_type, _winner
 from .serialization import (
+    _serialize_card,
     _serialize_card_summary,
     _serialize_modes,
     _serialize_player,
@@ -714,6 +717,75 @@ def _compute_hand_abilities(session: Session, player_index: int) -> list[dict]:
     return entries
 
 
+def _compute_graveyard_abilities(session: Session, player_index: int) -> list[dict]:
+    """The activated abilities *player_index* may use from their **graveyard**
+    (CR 113.6b/113.6m: Glory's "Activate only if this card is in your
+    graveyard", Ashen Ghoul's and Necrosavant's "Return this card from your
+    graveyard to the battlefield").
+
+    ``Game.activate_from_graveyard`` has taken these since Ice Age's Ashen
+    Ghoul and no gesture in the browser reached it: a graveyard card's click is
+    a cast (a permission's) or nothing, so every such ability was the AI's
+    alone. One entry per (graveyard card, ability), indexed by the *program's*
+    ability index — the index ``activate_from_graveyard`` reads — and asked
+    the questions the hand list asks: ``payable`` (the pool plus the untapped
+    lands), ``prohibited`` (CR 602.5, the activation path's own predicate).
+
+    ``targets`` says the ability names a target. The browser has no picker for
+    a target chosen from a graveyard ability yet, so it shows that entry
+    disabled rather than sending a bare activation the engine would answer
+    with the first legal target (``engine/bare_announcements.py``) — a choice
+    the player did not make. ``sacrifice_choices`` is the "Sacrifice a
+    creature" a cost may name (Necrosavant), by id, the list the engine's own
+    candidate filter gives.
+    """
+    game = session.game
+    window = _casting_window(session, player_index)
+    entries: list[dict] = []
+    for graveyard_index, card in enumerate(game.players[player_index].graveyard):
+        program = compile_card_oracle(card)
+        for ability_index, ability in enumerate(program.activated_abilities):
+            if not ability.supported or ability.instruction is None:
+                continue
+            if ability_functions_from(ability) != GRAVEYARD:
+                continue
+            required = dict(ability.cost.mana or {})
+            payable = True
+            if game.enforce_mana_costs and any(required.values()):
+                payable = window is not None and board_can_pay(
+                    game, player_index, required,
+                    purpose=PaymentPurpose(ACTIVATE, source=card),
+                    nonland_sources=True,
+                )
+            prohibited = activation_prohibition(game, player_index, card, ability)
+            if prohibited is not None:
+                payable = False
+            spec = derive_activation_spec(ability) or {}
+            line = _printed_ability_line(card, ability)
+            entry = {
+                "graveyard_index": graveyard_index,
+                "ability_index": ability_index,
+                "name": card.name,
+                "text": line,
+                "cost_text": _ability_cost_text(line),
+                "payable": payable,
+                "prohibited": prohibited.details if prohibited is not None else None,
+                # A spec naming a kind is a target, unless it is only the
+                # cost's own picker (Necrosavant's "Sacrifice a creature").
+                "targets": spec.get("kind") not in (None, "none") and not spec_is_a_cost(spec),
+            }
+            if ability.cost.sacrifice_filter is not None:
+                entry["sacrifice_choices"] = [
+                    {"permanent_id": perm.permanent_id, "name": perm.card.name}
+                    for perm in game.controlled_by(player_index)
+                    if subject_matches(
+                        game, perm, ability.cost.sacrifice_filter, observer=player_index,
+                    )
+                ]
+            entries.append(entry)
+    return entries
+
+
 def _compute_playable_command_indices(session: Session, player_index: int) -> list[int]:
     """The same answer for the seat's own command zone: which commanders they
     could cast right now (CR 903.8), by the test a card in hand gets — so the
@@ -769,6 +841,61 @@ def _zone_cast_price(game, player_index: int, spell, permission) -> str:
         reduction,
     )
     return mana_cost_label(owed) if any(owed.values()) else ""
+
+
+def _zone_cast_cost_choice(
+    game, player_index: int, cost, *, spell_graveyard_slot: int | None,
+) -> dict | None:
+    """What a zone cast's alternative cost asks its caster to **choose**
+    (CR 601.2b), or None when it names nothing to choose.
+
+    "Flashback—Sacrifice a Mountain" (Lava Dart), "…, Sacrifice X Mountains"
+    (Firecat Blitz), "Tap three untapped white creatures you control" (Battle
+    Screech), "…, Exile X blue cards from your graveyard" (Flash of Insight):
+    the cast action takes the answer (``alternative_cost_permanent_ids`` by id,
+    ``cost_graveyard_indices`` by slot of the pile as it stands, the spell
+    still in it) and refuses a partial one, but nothing told a client which
+    permanents or cards could be named — so every person's flashback paid with
+    the engine's default pick. The candidates are the engine's own lists, the
+    ones the CR 601.2h gate counts and the payment takes from.
+
+    ``x`` says the count *is* the X the cast announces (CR 107.3a), so the
+    number named is the X sent; otherwise ``count`` is owed exactly.
+    """
+    if cost is None:
+        return None
+    payment = game.alternative_cost_permanent_payment(cost)
+    if payment is not None:
+        verb, count = payment
+        counted_x = verb == "sacrifice" and bool(cost.sacrifice_count_x)
+        return {
+            "zone": "battlefield",
+            "verb": verb,
+            "x": counted_x,
+            "count": None if counted_x else count,
+            "choices": [
+                {"id": perm.permanent_id, "name": perm.card.name}
+                for perm in game._additional_cost_candidates(
+                    player_index, cost, giving_up=verb
+                )
+            ],
+        }
+    if getattr(cost, "exile_graveyard_filter", None) is not None:
+        counted_x = bool(cost.exile_graveyard_count_x)
+        pile = game.players[player_index].graveyard
+        return {
+            "zone": "graveyard",
+            "verb": "exile",
+            "x": counted_x,
+            "count": None if counted_x else cost.exiled_from_graveyard(None),
+            "choices": [
+                {"index": slot, "name": pile[slot].name}
+                for slot in game._graveyard_exile_candidates(
+                    player_index, cost, spell_slot=spell_graveyard_slot,
+                )
+            ],
+        }
+    return None
 
 
 def _zone_cast_options(session: Session, player_index: int) -> list[dict]:
@@ -828,6 +955,19 @@ def _zone_cast_options(session: Session, player_index: int) -> list[dict]:
                 continue
             spell, permission = found
             cost = permission.cost
+            way: dict = {}
+            choice = _zone_cast_cost_choice(
+                game, player_index, cost,
+                spell_graveyard_slot=(
+                    entry["index"]
+                    if zone == "graveyard" and entry["owner_seat"] == player_index
+                    else None
+                ),
+            )
+            if choice is not None:
+                # Which permanents or graveyard cards the price may be paid
+                # with, so the caster names them (`_zone_cast_cost_choice`).
+                way["cost_choice"] = choice
             ways.append({
                 # What the cast action carries to pick this permission when
                 # both kinds cover the card (``alternative_cost: true``).
@@ -845,9 +985,18 @@ def _zone_cast_options(session: Session, player_index: int) -> list[dict]:
                     zone_index=entry["index"] if entry["owner_seat"] == player_index else None,
                     permission=permission,
                 ),
+                **way,
             })
         entry["ways"] = ways
         entry["castable_now"] = any(way["castable_now"] for way in ways)
+        if entry["owner_seat"] != player_index:
+            # A card in **another player's** pile that a grant opens to this
+            # seat (Shaman's Trance's "cast spells from other players'
+            # graveyards", Grinning Totem's exiled card): that pile is
+            # serialized for its owner, so its cards carry no cast spec — and
+            # the cast prompts read the targets, X and costs off the spec. So
+            # the card rides here as *this* seat would cast it.
+            entry["card"] = _serialize_card(card, game, player_index, from_zone=zone)
     return entries
 
 
@@ -1201,6 +1350,13 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         # to a seat.
         "hand_abilities": (
             _compute_hand_abilities(session, viewer_seat)
+            if viewer_seat is not None
+            else []
+        ),
+        # …and from a **graveyard** (CR 113.6b: Glory, Ashen Ghoul), which no
+        # browser gesture reached at all (`_compute_graveyard_abilities`).
+        "graveyard_abilities": (
+            _compute_graveyard_abilities(session, viewer_seat)
             if viewer_seat is not None
             else []
         ),

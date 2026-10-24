@@ -301,9 +301,16 @@ def test_116_2d_volraths_curse_can_be_ignored_for_a_turn_by_a_sacrifice():
     ) == "Volrath's Curse is not offering that to A"
 
     game.priority_player_index = 1
+    # The entry names what the price may be paid with — both Armodons, the
+    # enchanted one included ("a permanent"), by id — so a person's client can
+    # ask which one rather than leave it to the engine's default pick.
     assert available_permanent_special_actions(game, 1) == [
         {"permanent_id": curse.permanent_id, "name": "Volrath's Curse",
-         "kind": "ignore_attached_static_until_eot"}
+         "kind": "ignore_attached_static_until_eot",
+         "sacrifice_choices": [
+             {"permanent_id": victim.permanent_id, "name": "Trained Armodon"},
+             {"permanent_id": spare.permanent_id, "name": "Trained Armodon"},
+         ]}
     ]
     assert take_permanent_special_action(
         game, 1, curse, "ignore_attached_static_until_eot", sacrificed=spare

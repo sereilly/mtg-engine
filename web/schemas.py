@@ -17,6 +17,10 @@ ActionKind = Literal[
     # controller, summoning-sickness and tap read in it a question about
     # nothing.
     "activate_hand",
+    # CR 113.6b — an activated ability of a card in the seat's **graveyard**
+    # (Glory, Ashen Ghoul): ``Game.activate_from_graveyard``, its own entry
+    # point for ``activate_hand``'s reason.
+    "activate_graveyard",
     "activate_emblem",
     "channel_mana",
     "special_action",
