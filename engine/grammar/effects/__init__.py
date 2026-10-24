@@ -310,6 +310,7 @@ from .permissions import (
     _parse_targeting_ban,
     parse_cant_activate_nonmana_abilities,
     parse_cant_cast_spell_types,
+    parse_cant_play_from_zone,
     parse_cant_play_lands,
 )
 
@@ -469,6 +470,7 @@ __all__ = [
     "parse_simultaneous_phasing",
     "parse_cant_activate_nonmana_abilities",
     "parse_cant_cast_spell_types",
+    "parse_cant_play_from_zone",
     "parse_cant_play_lands",
     "parse_land_type_swap",
     "_parse_assigns_combat_damage_as_unblocked",

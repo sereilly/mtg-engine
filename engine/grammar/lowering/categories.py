@@ -581,6 +581,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # turn, beside the land-play prohibition they are modelled on.
     "forbid_casting_types_this_turn": "turns",
     "forbid_nonmana_activations_this_turn": "turns",
+    # "Other players can't play lands or cast spells from their graveyards
+    # this turn." (Shaman's Trance.) The two prohibitions above scoped to one
+    # zone, and the same family for their reason.
+    "forbid_zone_plays_this_turn": "turns",
     # "That permanent's activated abilities can't be activated this turn."
     # (Interdict.) The row above with a *permanent* in place of the seat, so the
     # same category: what both change is what may be done for the rest of this

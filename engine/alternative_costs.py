@@ -208,6 +208,30 @@ class AlternativeCost:
     #: than none (CR 601.2h).
     sacrifice_filter: dict | None = None
     sacrifice_count: int = 1
+    #: "Flashback—{R}{R}, **Sacrifice X Mountains**." (Firecat Blitz.) The
+    #: count is CR 107.3a's announced X — the one the mana cost's {X} is
+    #: announced as, and the one the spell's effect then reads — so
+    #: ``sacrifice_count`` is 0 beside it and :meth:`sacrificed_count` is the
+    #: one reader the gate and the payment ask. Only a flashback cost carries
+    #: it: no other alternative cost has an announcement to read X from
+    #: (:func:`alternative_cost_for_line` refuses one).
+    sacrifice_count_x: bool = False
+    #: "Flashback—{1}{U}, **Exile X blue cards from your graveyard**." (Flash of
+    #: Insight.) The *chosen* graveyard exile — any X cards the phrase names, out
+    #: of the caster's own pile — in the ``(filter, count, count_is_x)`` shape
+    #: ``cast_cost_clauses.read_graveyard_exile_clause`` reads for the
+    #: identically printed additional cost (Haunting Misery), so the gate and the
+    #: payment enumerate one list (``_graveyard_exile_candidates``). Its own
+    #: field beside :attr:`exile_graveyard_position` below, because that one is
+    #: the cards on *top* (nothing chosen) and this one is a choice.
+    #:
+    #: ``None`` means "no graveyard exile", never "any card"; the spell itself
+    #: is never one of the cards (CR 601.2a: it is on the stack by then — the
+    #: card's own reminder text, "You can't exile Flash of Insight to pay for its
+    #: own flashback cost").
+    exile_graveyard_filter: dict | None = None
+    exile_graveyard_count: int = 1
+    exile_graveyard_count_x: bool = False
     #: "You may **exile the top three black cards of your graveyard** rather
     #: than pay this spell's mana cost." (Spinning Darkness.) The payload
     #: ``grammar.graveyard_position_payload_for`` builds — ``count``,
@@ -315,6 +339,42 @@ class AlternativeCost:
     #: Catalyst Stone).
     keyword: "str | None" = None
 
+    @property
+    def announces_x(self) -> bool:
+        """Whether this cost has an X in it (CR 107.3a), mana or not.
+
+        "Flashback {X}{R}{R}" (Flaming Gambit) has it in its mana; "Flashback—
+        {1}{U}, Exile X blue cards from your graveyard" (Flash of Insight) has it
+        in a clause that is not mana at all. Both are "an alternative cost that
+        includes X" (CR 107.3b), so paying either keeps the announced X — only
+        an alternative cost with no X anywhere locks X to 0.
+        """
+        return (
+            "{X}" in (self.mana or "").upper()
+            or self.sacrifice_count_x
+            or self.exile_graveyard_count_x
+        )
+
+    def sacrificed_count(self, x_value: "int | None") -> int:
+        """How many permanents this cost sacrifices, given the announced X.
+
+        One reader for the gate, the named-permanent check and the payment,
+        ``AdditionalCost.returned_count``'s arrangement: an X of 0 sacrifices
+        nothing (a legal announcement, CR 107.3a), and a printed count is the
+        printed count — at least one, as it always was.
+        """
+        if self.sacrifice_count_x:
+            return max(0, int(x_value or 0))
+        return max(1, self.sacrifice_count)
+
+    def exiled_from_graveyard(self, x_value: "int | None") -> int:
+        """How many cards this cost exiles from the caster's graveyard, given
+        the announced X — ``AdditionalCost.exiled_from_graveyard``'s twin, and
+        the one reader the gate and the payment share."""
+        if self.exile_graveyard_count_x:
+            return max(0, int(x_value or 0))
+        return self.exile_graveyard_count
+
     def describe(self) -> str:
         """The cost as a player would say it, for a log line and a prompt label.
 
@@ -360,9 +420,22 @@ class AlternativeCost:
             # whether the price is legible before it is taken.
             noun = board_noun(self.sacrifice_filter)
             parts.append(
-                f"sacrifice {_article(noun)} {noun}" if self.sacrifice_count == 1
+                f"sacrifice X {noun}s" if self.sacrifice_count_x
+                else f"sacrifice {_article(noun)} {noun}" if self.sacrifice_count == 1
                 else f"sacrifice {self.sacrifice_count} {noun}s"
             )
+        if self.exile_graveyard_filter is not None:
+            # "…exile X blue cards from your graveyard" (Flash of Insight).
+            # Through the hand exile's describer for its reason: the colour is
+            # the one narrowing this cost prints and must be spelled out.
+            noun = _a_card_answering((self.exile_graveyard_filter,))
+            if noun.startswith(("a ", "an ")):
+                noun = noun.split(" ", 1)[1]
+            count = (
+                "X" if self.exile_graveyard_count_x
+                else str(self.exile_graveyard_count)
+            )
+            parts.append(f"exile {count} {noun}s from your graveyard")
         if self.return_filter is not None:
             noun = board_noun(self.return_filter)
             parts.append(
@@ -501,6 +574,14 @@ _EXILE_FROM_HAND = re.compile(r"^exile (?P<noun>.+) from your hand$")
 #: library or somebody else's graveyard is refused by the reader instead of
 #: being charged against the caster's own pile.
 _EXILE_GRAVEYARD_POSITION = re.compile(r"^exile (the (?:top|bottom) .+)$")
+
+#: "…, **exile X blue cards from your graveyard**." (Flash of Insight's
+#: flashback cost.) A *chosen* exile out of the caster's own pile, delimited
+#: here and read by ``cast_cost_clauses.read_graveyard_exile_clause`` — the
+#: reader the identically printed additional cost (Haunting Misery) uses, which
+#: also checks the zone and its owner, so "from a graveyard" or "from an
+#: opponent's graveyard" refuse there rather than here.
+_EXILE_FROM_GRAVEYARD = re.compile(r"^exile (?P<noun>.+ from your graveyard)$")
 
 _PAY_LIFE = re.compile(r"^pay (\d+) life$")
 
@@ -753,7 +834,8 @@ def _read_cost_clauses(costs: str) -> dict | None:
     is a spell cast for **nothing** — the mana cost has already been replaced
     by whatever was read.
     """
-    from .cast_cost_clauses import read_sacrifice_clause
+    from .cast_cost_clauses import (read_counted_sacrifice_clause,
+                                    read_graveyard_exile_clause)
     from .chargeable_costs import _chargeable_discard_filters
 
     fields: dict = {
@@ -764,6 +846,10 @@ def _read_cost_clauses(costs: str) -> dict | None:
         "shares_color_with_spell": False,
         "sacrifice_filter": None,
         "sacrifice_count": 1,
+        "sacrifice_count_x": False,
+        "exile_graveyard_filter": None,
+        "exile_graveyard_count": 1,
+        "exile_graveyard_count_x": False,
         "exile_graveyard_position": None,
         "return_filter": None,
         "return_count": 1,
@@ -819,6 +905,28 @@ def _read_cost_clauses(costs: str) -> dict | None:
                 # function's all-or-nothing rule.
                 return None
             fields["exile_graveyard_position"] = described
+            continue
+        # "Flashback—{1}{U}, **Exile X blue cards from your graveyard**."
+        # (Flash of Insight.) A *chosen* graveyard exile, read through the
+        # additional cost's own reader (Haunting Misery prints the clause as
+        # one), never a second split of the words — and after the positional
+        # spelling above, which it cannot claim ("the top …" is a position).
+        # That reader checks the zone is the caster's own graveyard and gates
+        # the noun on the card matcher's keys.
+        chosen_pile = _EXILE_FROM_GRAVEYARD.match(clause)
+        if chosen_pile is not None:
+            if fields["exile_graveyard_filter"] is not None:
+                # Two such clauses would need two filters and one field cannot
+                # hold two -- the same refusal every counted clause here makes.
+                return None
+            read = read_graveyard_exile_clause(chosen_pile.group("noun"))
+            if read is None:
+                return None
+            (
+                fields["exile_graveyard_filter"],
+                fields["exile_graveyard_count"],
+                fields["exile_graveyard_count_x"],
+            ) = read
             continue
         # "**return two Islands you control to their owner's hand**" (Gush,
         # Thwart, Tidal Bore). Read through the additional cost's own reader,
@@ -938,13 +1046,19 @@ def _read_cost_clauses(costs: str) -> dict | None:
                 # cheaper cost, which is the direction this file must never
                 # drift in.
                 return None
-            read = read_sacrifice_clause(clause[len("sacrifice "):])
+            # "Sacrifice **X** Mountains" (Firecat Blitz) as well as a count,
+            # through the reader that splits the X arm off the same charger.
+            read = read_counted_sacrifice_clause(clause[len("sacrifice "):])
             if read is None:
                 # The phrase names something the payment path cannot enumerate
                 # or cannot test. Refused whole rather than charged as the part
                 # that was read — the all-or-nothing rule above.
                 return None
-            fields["sacrifice_filter"], fields["sacrifice_count"] = read
+            (
+                fields["sacrifice_filter"],
+                fields["sacrifice_count"],
+                fields["sacrifice_count_x"],
+            ) = read
             continue
         return None
     if (
@@ -952,6 +1066,7 @@ def _read_cost_clauses(costs: str) -> dict | None:
         and fields["exile_from_hand"] is None
         and fields["discard_from_hand"] is None
         and fields["sacrifice_filter"] is None
+        and fields["exile_graveyard_filter"] is None
         and fields["exile_graveyard_position"] is None
         and fields["return_filter"] is None
         and not fields["tap_count"]
@@ -992,7 +1107,11 @@ def alternative_cost_for_line(line: str) -> AlternativeCost | None:
     if match is None:
         return None
     fields = _read_cost_clauses(match.group("costs"))
-    if fields is None:
+    if fields is None or _counts_an_x(fields):
+        # An X in a printed alternative cost has no announcement to come from:
+        # the cast path offers X off the mana cost and a flashback cost, and
+        # this sentence is neither — so it refuses rather than being charged
+        # as the 0 an unmade announcement reads as.
         return None
     condition = match.group("condition")
     read = None if condition is None else read_condition(condition)
@@ -1062,10 +1181,17 @@ def granted_alternative_cost(oracle_text: str) -> "AlternativeCost | None":
         if match is None:
             continue
         fields = _read_cost_clauses(match.group("costs"))
-        if fields is None:
+        if fields is None or _counts_an_x(fields):
             continue
         return AlternativeCost(match.group(0), **fields)
     return None
+
+
+def _counts_an_x(fields: dict) -> bool:
+    """Whether a clause read into *fields* counts by an announced X — which
+    only a flashback cost (``flashback._read_cost``) has a cast announcement
+    for."""
+    return bool(fields.get("sacrifice_count_x") or fields.get("exile_graveyard_count_x"))
 
 
 def granted_alternative_cost_claims_line(line: str) -> bool:
@@ -1090,8 +1216,10 @@ def unread_granted_alternative_cost_sentence(line: str) -> str | None:
     """
     normalized = " ".join(line.strip().lower().split()).rstrip(".")
     match = _GRANTED_ALTERNATIVE_COST.match(normalized)
-    if match is not None and _read_cost_clauses(match.group("costs")) is None:
-        return match.group(0)
+    if match is not None:
+        fields = _read_cost_clauses(match.group("costs"))
+        if fields is None or _counts_an_x(fields):
+            return match.group(0)
     return None
 
 

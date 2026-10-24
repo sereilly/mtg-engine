@@ -79,13 +79,21 @@ def _mk(name: str, mana_cost: str, type_line: str, oracle_text: str) -> CardDefi
 _CENSUS_X = 2
 
 
-def _pay(player, cost: str, short: int = 0) -> None:
+def _pay(player, cost: "str | None", short: int = 0) -> None:
     """Put exactly *cost* in *player*'s pool (generic as colourless), less
     *short* units — so a cast that succeeds leaves nothing behind and a cast
     one mana short has nothing to make it up from. An {X} is priced at
-    :data:`_CENSUS_X`, the value :func:`_announce` announces."""
+    :data:`_CENSUS_X`, the value :func:`_announce` announces.
+
+    *cost* None is a flashback cost with no mana in it at all — "Flashback—
+    Sacrifice a Mountain." (Lava Dart), "Flashback—Tap three untapped white
+    creatures you control." (Battle Screech), Judgment's Cabal Therapy. The
+    census assumed every flashback cost was paid in mana, which held until
+    Odyssey printed these three and Judgment a fourth; there is nothing to
+    put in the pool, and what they cost instead is
+    :func:`_supply_flashback_payment`'s."""
     wanted = mana_cost_from_symbols(
-        re.sub(r"\{X\}", "{%d}" % _CENSUS_X, cost, flags=re.I)
+        re.sub(r"\{X\}", "{%d}" % _CENSUS_X, cost or "", flags=re.I)
     ) or {}
     pool = {symbol: 0 for symbol in "WUBRGC"}
     for symbol, count in wanted.items():
@@ -131,6 +139,127 @@ def _board(card=None, *, zone: str | None = None) -> Game:
     elif card is not None and zone == "graveyard":
         game.players[0].graveyard.insert(0, card)
     return game
+
+
+#: Permanents the census may give seat 0 to pay a flashback cost that takes
+#: permanents ("Sacrifice a Mountain", "Tap three untapped white creatures you
+#: control", "Sacrifice X Mountains"): a basic land of each type and a vanilla
+#: creature of two colours, each doing nothing by itself — so the board a
+#: hand cast and a flashed-back cast are compared on differs from the mirrored
+#: one only by what the cost could eat. Tried in order; the first the cost's
+#: own candidate scan accepts is the one supplied.
+_PERMANENT_SUPPLIES = (
+    "Mountain", "Plains", "Island", "Swamp", "Forest",
+    "Savannah Lions", "Grizzly Bears",
+)
+
+#: Cards for a flashback cost that exiles from its caster's graveyard
+#: ("Exile X blue cards from your graveyard", Flash of Insight) — one instant
+#: of each colour, so whichever colour the phrase names is supplied.
+_GRAVEYARD_SUPPLIES = (
+    "Counterspell", "Lightning Bolt", "Dark Ritual", "Giant Growth",
+    "Healing Salve",
+)
+
+
+def _supply_flashback_payment(game, card, *, short: bool = False) -> dict:
+    """Give seat 0 exactly what *card*'s flashback cost takes beyond mana —
+    or, *short*, one fewer of it — and return what that is: ``{"sacrifice":
+    [permanents], "tap": [permanents], "graveyard": [card names]}``.
+
+    **Exactly**: candidates the board already holds beyond what the cost
+    takes are removed as well, so every candidate is paid and which ones the
+    payment picks is not a question — the prediction
+    (:func:`_charge_what_the_flashback_cost_takes`) needs no copy of the
+    engine's default pick.
+
+    The mirrored board was built for costs paid in mana, and a flashback cost
+    need not be one (CR 702.34a: "Flashback [cost]" is any cost). Lava Dart
+    sacrifices a Mountain the board does not have, Battle Screech taps three
+    untapped white creatures where it has one, Flash of Insight exiles X blue
+    cards from a graveyard holding none — so each was refused as unpayable,
+    and the census read the refusal as a broken keyword. What the cost can take
+    is asked of the engine's own candidate scans (the lists the CR 601.2h gate
+    counts), so the supply is exactly what the gate will accept: no
+    approximation of the printed phrase lives here.
+
+    *short* removes candidates the board already holds beyond one fewer than
+    the cost takes (Cabal Therapy's "Sacrifice a creature" meets the board's
+    own creatures), which is the non-mana half of "one short".
+    """
+    cost = printed_flashback_cost(card)
+    player = game.players[0]
+    by_name = _pool()
+    supplied: dict = {"sacrifice": [], "tap": [], "graveyard": []}
+    wants: list[tuple[str, int]] = []
+    if cost.sacrifice_filter is not None:
+        wants.append(("sacrifice", cost.sacrificed_count(_CENSUS_X)))
+    if cost.tap_count:
+        wants.append(("tap", cost.tap_count))
+    for verb, needed in wants:
+        wanted = needed - 1 if short else needed
+
+        def candidates():
+            return game._additional_cost_candidates(0, cost, giving_up=verb)
+
+        while len(candidates()) > wanted:
+            game.remove_from_battlefield(candidates()[-1])
+        for name in _PERMANENT_SUPPLIES:
+            while len(candidates()) < wanted:
+                supply = _nosick(Permanent(card=by_name[name]))
+                player.battlefield.append(supply)
+                if not any(found is supply for found in candidates()):
+                    player.battlefield.pop()
+                    break
+        assert len(candidates()) == wanted, (card.name, verb, wanted)
+        supplied[verb] = list(candidates())
+    if cost.exile_graveyard_filter is not None:
+        needed = cost.exiled_from_graveyard(_CENSUS_X)
+        wanted = needed - 1 if short else needed
+        # The spell's own slot is withheld when it is cast out of this pile
+        # (CR 601.2a; "You can't exile Flash of Insight to pay for its own
+        # flashback cost"), so it is never counted as supply.
+        own = next((i for i, held in enumerate(player.graveyard) if held is card), None)
+
+        def payers():
+            return game._graveyard_exile_candidates(0, cost, spell_slot=own)
+
+        while len(payers()) > wanted:
+            player.graveyard.pop(payers()[-1])
+        for name in _GRAVEYARD_SUPPLIES:
+            while len(payers()) < wanted:
+                player.graveyard.append(by_name[name])
+                if len(player.graveyard) - 1 not in payers():
+                    player.graveyard.pop()
+                    break
+        assert len(payers()) == wanted, (card.name, "graveyard", wanted)
+        supplied["graveyard"] = [player.graveyard[slot].name for slot in payers()]
+    return supplied
+
+
+def _charge_what_the_flashback_cost_takes(game, card, supplied: dict) -> None:
+    """Pay, on a **hand** cast's settled board, what *card*'s flashback cost
+    takes beyond mana: what the flashed-back cast must then match.
+
+    By hand, not through the engine — the comparison is only worth something
+    if the expectation owes nothing to the payment it checks. Every candidate
+    :func:`_supply_flashback_payment` left is one the cost takes, so there is
+    no pick to reproduce: life is paid (CR 119.4), a sacrificed permanent goes
+    to its owner's graveyard, a tapped one is tapped, and a card exiled from
+    the graveyard is in exile. None of these spells' effects reads what its
+    cost took, which is what lets the charge be laid on after the effect.
+    """
+    cost = printed_flashback_cost(card)
+    player = game.players[0]
+    player.life -= cost.pay_life
+    for permanent in supplied["sacrifice"]:
+        game.remove_from_battlefield(permanent)
+        player.graveyard.append(permanent.card)
+    for permanent in supplied["tap"]:
+        permanent.tapped = True
+    for name in supplied["graveyard"]:
+        slot = next(i for i, held in enumerate(player.graveyard) if held.name == name)
+        player.exile.append(player.graveyard.pop(slot))
 
 
 def _something_to_counter(game) -> None:
@@ -191,6 +320,42 @@ def _rewrites_color_words(card) -> bool:
     )
 
 
+def _keywords_it_takes_away(card) -> tuple[str, ...]:
+    """The keywords *card*'s compiled program removes from its target — "loses
+    flying" (Canopy Claws) — by the instruction it compiles to, not its words."""
+    return tuple(
+        str(word).lower()
+        for instruction in compile_card_oracle(card).instructions
+        if instruction.kind == "remove_target_keyword_until_eot"
+        for word in instruction.payload.get("keywords") or ()
+    )
+
+
+#: A permanent of each card type that does nothing by itself, for a picker the
+#: mirrored board leaves empty: "Destroy target enchantment" (Ray of
+#: Revelation) has nothing to name on a board of creatures, a mana rock and a
+#: land. Circle of Protection: Red only ever acts when activated.
+_INERT_PERMANENTS = {"enchantment": "Circle of Protection: Red"}
+
+
+def _something_to_target(game, spec: dict) -> bool:
+    """Seat 1 gets an inert permanent of the card type an empty picker asks
+    for; True when one was put down.
+
+    The board assumed every flashback card's target was already on it — the
+    assumption ``_something_in_combat`` and ``_something_to_counter`` were
+    each written when a set first broke it. Put down on both boards alike
+    (the hand cast and the flashed-back one each announce through this), and
+    before the "before" snapshot, so they compare the same thing.
+    """
+    wanted = (spec.get("filter") or {}).get("type_filter")
+    name = _INERT_PERMANENTS.get(wanted) if spec.get("kind") == "permanent" else None
+    if name is None:
+        return False
+    game.players[1].battlefield.append(_nosick(Permanent(card=_pool()[name])))
+    return True
+
+
 def _role_refs(game, entries: list) -> list[dict]:
     """The first path through a roles picker (each entry's ``next`` is the
     list for the role after it), as ``target_role_refs``."""
@@ -218,6 +383,8 @@ def _announce(game, card, zone: str) -> dict:
     """
     if _acts_on_creature_tokens(card):
         _creature_tokens_to_act_on(game)
+    if _names_a_card(card):
+        _something_to_name(game)
     keywords = _announce_targets(game, card, zone)
     cost = printed_flashback_cost(card)
     if "{X}" in (card.mana_cost or "").upper() or "{X}" in ((cost.mana if cost else "") or "").upper():
@@ -257,6 +424,36 @@ def _creature_tokens_to_act_on(game) -> None:
         ), metadata={"is_token": True})))
 
 
+def _names_a_card(card) -> bool:
+    """Whether *card*'s program chooses a card name (CR 201.2) — "Choose a
+    nonland card name. Target player reveals their hand and discards all
+    cards with that name." (Cabal Therapy.)"""
+    def steps(instructions):
+        for instruction in instructions:
+            yield instruction
+            yield from steps(instruction.payload.get("steps") or ())
+
+    return any(
+        step.kind == "choose_card_name"
+        for step in steps(compile_card_oracle(card).instructions)
+    )
+
+
+def _something_to_name(game) -> None:
+    """Seat 1 holds a Grizzly Bears, and a second one lies in its graveyard.
+
+    The mirrored board's only card in hand is an Island, and a spell that names
+    a **nonland** card and discards it (Cabal Therapy) found nothing to hit —
+    the census read that as a spell that did nothing. A non-interactive seat
+    names the commonest nonland card it can see in the target's graveyard
+    (``handlers.naming``: public evidence, never the hidden hand), so the second
+    Bears makes that name this one. On both boards alike, before the "before"
+    snapshot."""
+    bears = _pool()["Grizzly Bears"]
+    game.players[1].hand.append(bears)
+    game.players[1].graveyard.append(bears)
+
+
 def _announce_targets(game, card, zone: str) -> dict:
     """The first target *card*'s own picker offers, as cast keywords.
 
@@ -284,14 +481,31 @@ def _announce_targets(game, card, zone: str) -> dict:
     if spec.get("kind") == "divided":
         # The whole amount at the opposing player: a lawful division of one.
         return {"divided_targets": [(1, None, int(spec["division_total"]))]}
+    if not spec.get("valid_targets") and _something_to_target(game, spec):
+        spec = game.cast_target_spec(0, card, from_zone=zone)
+    taken_away = _keywords_it_takes_away(card)
     # The opposing side first, for a player or a permanent: "deals 3 damage to
     # any target, you gain 3 life" aimed at its own caster moves nothing, and
     # the census below has to be able to see that a cast did something. A
     # graveyard card keeps the picker's order, which starts in the caster's
     # own pile — the pile the spell itself is leaving.
+    #
+    # …and a spell that takes a keyword away ("Target creature loses flying
+    # until end of turn", Canopy Claws) at a creature that has it: aimed at the
+    # first creature offered (a Grizzly Bears) it takes nothing from nothing,
+    # and the census cannot tell that from a spell that does nothing.
+    def holds_taken_keyword(entry) -> bool:
+        if not taken_away or entry.get("kind") != "permanent":
+            return False
+        permanent = game.permanent_at(entry["seat"], entry["index"])
+        return any(game._has_keyword(permanent, word) for word in taken_away)
+
     offered = sorted(
         spec.get("valid_targets") or [],
-        key=lambda entry: entry.get("kind") != "graveyard" and entry.get("seat") != 1,
+        key=lambda entry: (
+            not holds_taken_keyword(entry),
+            entry.get("kind") != "graveyard" and entry.get("seat") != 1,
+        ),
     )
     for entry in offered:
         kind = entry.get("kind")
@@ -343,6 +557,12 @@ def _snapshot(game, card) -> tuple:
     arrive, so each seat is dealt 3 of each kind and what got through is
     recorded. So is each permanent's text as layer 3 leaves it: a text change
     (Alter Reality) is visible nowhere else.
+
+    **Flying is a keyword the snapshot reads**, beside haste and trample.
+    Judgment prints a flashback pair about nothing else — "Target creature
+    gains flying until end of turn" (Defy Gravity) and "… loses flying …"
+    (Canopy Claws) — and a snapshot blind to the keyword read both as spells
+    that moved nothing, though each did exactly what it prints.
     """
     def names(zone) -> list[str]:
         return sorted(held.name for held in zone if held is not card)
@@ -353,7 +573,10 @@ def _snapshot(game, card) -> tuple:
             (
                 perm.card.name, perm.effective_power, perm.effective_toughness,
                 perm.tapped, perm.damage_marked,
-                tuple(k for k in ("haste", "trample") if game._has_keyword(perm, k)),
+                tuple(
+                    k for k in ("haste", "trample", "flying")
+                    if game._has_keyword(perm, k)
+                ),
                 bool(perm.metadata.get("cant_be_regenerated_this_turn")),
                 perm.effective_card.oracle_text,
             )
@@ -385,36 +608,49 @@ def _snapshot(game, card) -> tuple:
 
 def _cast_and_settle(card, zone: str):
     """Cast *card* out of seat 0's *zone* on a fresh board, for exactly what
-    that cast costs. Returns ``(game, result, snapshot before)``."""
+    that cast costs. Returns ``(game, result, snapshot before, what the
+    flashback cost takes beyond mana on this board)``.
+
+    Both boards get what the flashback cost would take
+    (:func:`_supply_flashback_payment`), so the hand cast and the flashed-back
+    one start from one board and differ only by the price."""
     random.seed(7)   # a library search shuffles; both casts must shuffle alike
     game = _board(card, zone=zone)
+    supplied = _supply_flashback_payment(game, card)
     keywords = _announce(game, card, zone)
     before = _snapshot(game, card)
     cost = card.mana_cost if zone == "hand" else printed_flashback_cost(card).mana
     _pay(game.players[0], cost)
     result = game.cast_from_hand(0, card.name, from_zone=zone, **keywords)
     _settle(game)
-    return game, result, before
+    return game, result, before, supplied
 
 
 #: What an ``AlternativeCost`` charges beside its mana that this census can
-#: predict, by field. Every other field must hold its default.
-_PREDICTED_CHARGES = ("pay_life",)
+#: predict, by field (:func:`_charge_what_the_flashback_cost_takes`). Every
+#: other field must hold its default.
+_PREDICTED_CHARGES = (
+    "pay_life",
+    # Odyssey's Lava Dart and Judgment's Cabal Therapy ("Sacrifice a Mountain",
+    # "Sacrifice a creature"), Firecat Blitz ("Sacrifice X Mountains").
+    "sacrifice_filter", "sacrifice_count", "sacrifice_count_x",
+    # Battle Screech and Prismatic Strands ("Tap … untapped white creatures").
+    "tap_filter", "tap_count",
+    # Flash of Insight ("Exile X blue cards from your graveyard").
+    "exile_graveyard_filter", "exile_graveyard_count", "exile_graveyard_count_x",
+)
 _NOT_A_CHARGE = ("phrase", "mana", "keyword")
 
 
-def _less_what_the_flashback_cost_charged(after_hand: tuple, card) -> tuple:
-    """The hand cast's snapshot, less what the flashback cost takes beyond its
-    mana: what the flashed-back cast must leave.
+def _every_charge_is_predicted(card) -> None:
+    """The census's guard on itself: a flashback cost charging something
+    :func:`_charge_what_the_flashback_cost_takes` does not lay on the hand
+    cast's board fails here by name, rather than as two boards that merely
+    differ.
 
-    Torment prints "Flashback—{1}{G}, Pay 3 life." (Acorn Harvest, Crippling
-    Fatigue, Deep Analysis, Flash of Defiance, Spirit Flare). Until it was
-    measured every flashback cost in the pool was mana alone and this census
-    compared the two boards whole — so three cards that pay their 3 life
-    correctly read as 17 life where the hand cast read 20. The comparison
-    assumed less than the pool holds; the 3 life is the cost (CR 118.9,
-    CR 119.4), and seat 0 is the payer. A charge this census cannot predict
-    fails here by name rather than as a board that merely differs.
+    Torment printed the first charge beyond mana ("Flashback—{1}{G}, Pay 3
+    life.") and the census grew the life; Odyssey's and Judgment's sacrifices,
+    taps and graveyard exiles are the rest (CR 118.9, CR 702.34a).
     """
     from dataclasses import fields
 
@@ -425,9 +661,6 @@ def _less_what_the_flashback_cost_charged(after_hand: tuple, card) -> tuple:
         and getattr(cost, field.name) != field.default
     }
     assert not unpredicted, f"{card.name}'s flashback cost also charges {unpredicted}"
-    seats, *rest = after_hand
-    life, *zones = seats[0]
-    return ((life - cost.pay_life, *zones), *seats[1:]), *rest
 
 
 # ---------------------------------------------------------------------------
@@ -548,10 +781,12 @@ def test_702_34a_flashed_back_a_card_does_what_it_does_from_hand_and_is_exiled(n
     offers. It does not say what the card *should* do (the per-set files do);
     it says the half that was missing does all of it. The one difference
     allowed is what the flashback cost itself charges beyond mana (Torment's
-    "Pay 3 life").
+    "Pay 3 life", Lava Dart's Mountain, Battle Screech's three taps, Flash of
+    Insight's X blue cards), laid on the hand cast's board by hand.
     """
     card = _pool()[name]
-    from_hand, cast, before = _cast_and_settle(card, "hand")
+    _every_charge_is_predicted(card)
+    from_hand, cast, before, _ = _cast_and_settle(card, "hand")
     assert cast.supported, cast.details
     assert _where(from_hand, card) == ["P1.graveyard"]
     assert not any(from_hand.players[0].mana_pool.values()), "the mana cost was not what was paid"
@@ -559,11 +794,18 @@ def test_702_34a_flashed_back_a_card_does_what_it_does_from_hand_and_is_exiled(n
     # Not vacuous: the cast changed something a snapshot can see.
     assert after_hand != before, f"{name} resolved and nothing moved"
 
-    flashed, cast, _ = _cast_and_settle(card, "graveyard")
+    # What the flashed-back cast must leave: the same hand cast on a fresh
+    # board with the flashback cost's charge laid on by hand. A second cast,
+    # because a snapshot is not a pure read — its damage probes spend a
+    # prevention shield (Embolden) — so each game is snapshotted once.
+    expected, _, _, supplied = _cast_and_settle(card, "hand")
+    _charge_what_the_flashback_cost_takes(expected, card, supplied)
+
+    flashed, cast, _, _ = _cast_and_settle(card, "graveyard")
     assert cast.supported, cast.details
     assert _where(flashed, card) == ["P1.exile"]
     assert not any(flashed.players[0].mana_pool.values()), "the flashback cost was not what was paid"
-    assert _snapshot(flashed, card) == _less_what_the_flashback_cost_charged(after_hand, card)
+    assert _snapshot(flashed, card) == _snapshot(expected, card)
 
 
 @pytest.mark.cr("702.34a", "601.2h")
@@ -571,12 +813,20 @@ def test_702_34a_flashed_back_a_card_does_what_it_does_from_hand_and_is_exiled(n
 def test_702_34a_a_flashback_cost_that_cannot_be_paid_is_a_spell_that_is_not_cast(name):
     """One mana short of the flashback cost — even where that is enough for the
     card's *mana* cost — the cast is refused with nothing spent and the card
-    still in the graveyard."""
+    still in the graveyard.
+
+    A flashback cost with no mana in it ("Flashback—Sacrifice a creature.",
+    Cabal Therapy) cannot be one mana short; it is one *payment* short — a
+    creature fewer than it takes — which is the same CR 601.2h refusal. A cost
+    with mana and more (Flash of Insight's "{1}{U}, Exile X blue cards") is
+    short of the mana with the rest of it on the board."""
     card = _pool()[name]
+    cost = printed_flashback_cost(card)
     game = _board(card, zone="graveyard")
+    _supply_flashback_payment(game, card, short=not cost.mana)
     keywords = _announce(game, card, "graveyard")
     stack_before = len(game.stack)
-    _pay(game.players[0], printed_flashback_cost(card).mana, short=1)
+    _pay(game.players[0], cost.mana, short=1)
     pool_before = dict(game.players[0].mana_pool)
     result = game.cast_from_hand(0, name, from_zone="graveyard", **keywords)
     assert not result.supported
@@ -591,6 +841,7 @@ def test_702_34a_a_flashback_cost_that_cannot_be_paid_is_a_spell_that_is_not_cas
 def test_702_34a_a_flashed_back_spell_that_is_countered_is_exiled(name):
     card = _pool()[name]
     game = _board(card, zone="graveyard")
+    _supply_flashback_payment(game, card)
     keywords = _announce(game, card, "graveyard")
     _pay(game.players[0], printed_flashback_cost(card).mana)
     assert game.queue_from_hand(0, name, from_zone="graveyard", **keywords).supported

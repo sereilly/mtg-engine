@@ -921,6 +921,29 @@ def _pick_x_value(
         return bound
 
     if "{X}" not in _charged_in_place_of_mana_cost(card)[0].upper():
+        # "Flashback—{1}{U}, **Exile X blue cards from your graveyard**" (Flash
+        # of Insight), "Flashback—{R}{R}, **Sacrifice X Mountains**" (Firecat
+        # Blitz): an alternative cost that includes X outside its mana. X is
+        # the caster's announcement, paid in cards or lands, and bounded by
+        # what the CR 601.2h gate counts (``alternative_cost_x_ceiling``, the
+        # spell's own graveyard slot withheld); the mana run above it prints no
+        # X, so mana does not bound it.
+        under = cast_weighed(card)
+        priced = under.cost if under is not None else None
+        if priced is not None and priced.announces_x:
+            seat = next(
+                (i for i, seated in enumerate(game.players) if seated is player), 0
+            )
+            slot = (
+                next(
+                    (i for i, held in enumerate(player.graveyard) if held is card),
+                    None,
+                )
+                if under.zone == "graveyard" else None
+            )
+            return game.alternative_cost_x_ceiling(
+                seat, priced, spell_graveyard_slot=slot,
+            ) or 0
         # CR 107.3b: "If a player is casting a spell that has an {X} in its
         # mana cost, the value of X isn't defined by the text of that spell,
         # and an effect lets that player cast that spell while paying neither

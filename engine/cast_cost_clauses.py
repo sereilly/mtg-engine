@@ -837,6 +837,28 @@ def read_sacrifice_clause(phrase: str) -> tuple[dict, int] | None:
     return None if described is None else (described, 1)
 
 
+def read_counted_sacrifice_clause(phrase: str) -> tuple[dict, int, bool] | None:
+    """What "sacrifice <noun phrase>" charges as ``(filter, count,
+    count_is_x)``, with the one addition CR 107.3a asks for: an **X** where
+    the number stands.
+
+    "Flashback—{R}{R}, **Sacrifice X Mountains**." (Firecat Blitz.) The X arm
+    of :func:`read_sacrifice_clause`, written beside it rather than into it
+    because that reader's two-field answer is what every caller that cannot
+    announce an X unpacks: a caller that can (the flashback cost, whose X the
+    cast announces with the mana cost's) asks this one, and the noun phrase is
+    still read by the one sacrifice charger. The count for an X is 0 — how many
+    is the announcement's, and ``AlternativeCost.sacrificed_count`` is the one
+    reader that turns it into a number.
+    """
+    count, _, rest = phrase.partition(" ")
+    if count == "x" and rest:
+        described = _chargeable_object(rest, "sacrifice", plural=True)
+        return None if described is None else (described, 0, True)
+    read = read_sacrifice_clause(phrase)
+    return None if read is None else (read[0], read[1], False)
+
+
 def read_return_clause(phrase: str) -> tuple[dict, int, bool] | None:
     """What "return <noun phrase> to their owner's hand" charges, as
     ``(filter, count, count_is_x)``, or None.

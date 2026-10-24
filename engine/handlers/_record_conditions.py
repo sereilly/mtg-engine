@@ -810,8 +810,17 @@ def evaluate_record_condition(
             seats = [game.players.index(context.caster)]
         if not seats:
             return False
+        # "…if an opponent cast **a blue spell** this turn." (Seedtime.)
+        # Through ``cast_restrictions.spells_cast_matching``, the one reader of
+        # the record, so this clause and the casting gate that prints the same
+        # words ("Cast this spell only if an opponent cast …") cannot come to
+        # disagree about which casts count. A spell still on the stack was cast
+        # (ruling 2004-10-04: "an unresolved spell still counts").
+        from ..cast_restrictions import spells_cast_matching
+
+        wanted = dict(payload.get("spell_filter") or {})
         cast = any(
-            bool(game.players[seat].spells_cast_this_turn)
+            spells_cast_matching(game, seat, wanted)
             for seat in seats
             if 0 <= seat < len(game.players)
         )

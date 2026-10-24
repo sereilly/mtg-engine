@@ -369,9 +369,31 @@ def flashback_census() -> list[dict]:
                 row["finding"] = "still in the graveyard"
             elif _count(game.players[ME].exile, held) != 1:
                 row["finding"] = "not exiled (CR 702.34a)"
-            elif hand_said is not None and label == "plain" and said != hand_said:
+            elif hand_said is not None and label == "plain" and (
+                _x_aside(said, cost) != _x_aside(hand_said, cost)
+            ):
                 row["finding"] = "announces something else than from hand"
     return rows
+
+
+def _x_aside(said: tuple, cost) -> tuple:
+    """*said* without its X when the flashback cost counts X in something other
+    than mana.
+
+    "Flashback—{1}{U}, Exile X blue cards from your graveyard." (Flash of
+    Insight, Judgment.) The X a hand cast announces is sized by the mana on the
+    board ({X}{1}{U}) and the X a flashback cast announces by the blue cards in
+    the graveyard (CR 107.3a: the cost is what the announcement must be able to
+    pay), so on a board of six Islands and one blue card the two are rightly
+    different numbers. The sweep held them equal because, until Judgment, every
+    flashback X in the pool was an {X} in the flashback cost's own mana. The
+    X is still checked where it can be: the cast it announced was accepted
+    (``result.supported`` above), which is the CR 601.2h gate counting the
+    cards. Everything else in the announcement is held to the hand's.
+    """
+    if cost.announces_x and "{X}" not in (cost.mana or "").upper():
+        return said[:3] + said[4:]
+    return said
 
 
 # --- the twin sweep -----------------------------------------------------------

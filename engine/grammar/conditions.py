@@ -345,6 +345,18 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
     # read as a *back-reference* rather than a board state, because the answer is
     # the value an earlier sentence of this same resolution recorded. Lowering
     # refuses one with no flip in front of it.
+    # "If **they** lose the flip, counter that spell." (Planar Chaos.) The
+    # pronoun is the player who flipped in the sentence before — CR 705.2 lets
+    # nobody else win or lose it — so it reads the same record "you" does, and
+    # the node says which word was printed so the lowering can hold the pair
+    # to one flipper.
+    flip_mark = stream.mark()
+    if stream.accept_word("they"):
+        if stream.accept_phrase("win", "the", "flip"):
+            return ast.CoinFlipResult(won=True, who="they")
+        if stream.accept_phrase("lose", "the", "flip"):
+            return ast.CoinFlipResult(won=False, who="they")
+    stream.reset(flip_mark)
     if stream.accept_word("you"):
         if stream.accept_phrase("win", "the", "flip"):
             return ast.CoinFlipResult(won=True)

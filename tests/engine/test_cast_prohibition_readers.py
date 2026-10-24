@@ -238,13 +238,33 @@ _ROW_CASES = [
 ]
 
 
+#: Rows whose prohibition is about the **zone** a card leaves, so their
+#: scenario is a cast out of that zone rather than out of the hand —
+#: ``row kind -> [(label, card)]``, each run by
+#: :func:`test_w1g8_a_zone_ban_is_refused_unproposed_and_dark`. "Other players
+#: can't play lands or cast spells from their graveyards this turn." (Shaman's
+#: Trance, Judgment.) A hand card never meets this row, so the hand matrix
+#: above can show it neither refusing nor agreeing.
+_ZONE_SCENARIOS: dict[str, list[tuple]] = {
+    "zone_forbidden_this_turn": [
+        ("a spell from its caster's graveyard", "Grizzly Bears"),
+        ("a land from its player's graveyard", "Forest"),
+    ],
+}
+
+
 def test_w2g3_every_prohibition_row_has_a_scenario():
     """A row nobody has shown refusing is a row nobody has shown agreeing."""
     rows = {row.kind: row for row in CAST_PROHIBITIONS}
-    assert set(_SCENARIOS) == set(rows)
+    assert set(_SCENARIOS) | set(_ZONE_SCENARIOS) == set(rows)
+    assert not set(_SCENARIOS) & set(_ZONE_SCENARIOS)
     assert len(rows) >= 13
     for kind, row in rows.items():
-        hands = {scenario[2] for scenario in _SCENARIOS[kind]}
+        hands = {
+            scenario[2] for scenario in _SCENARIOS[kind]
+        } if kind in _SCENARIOS else {
+            scenario[1] for scenario in _ZONE_SCENARIOS[kind]
+        }
         if LAND in row.binds:
             assert any(_POOL[name].primary_type == "land" for name in hands), (
                 f"{kind} binds a land drop and no scenario plays a land"
@@ -288,6 +308,73 @@ def test_w2g3_a_prohibited_cast_is_refused_unproposed_and_dark(
     assert refused.details == found.details
     assert game.log[logged:] == [found.details]
     assert [held.name for held in game.players[0].hand] == [hand_name]
+    assert dict(game.players[0].mana_pool) == pool_before
+    assert not game.stack
+
+
+_ZONE_CASES = [
+    pytest.param(kind, *scenario, id=f"{kind}: {scenario[0]}")
+    for kind, scenarios in _ZONE_SCENARIOS.items()
+    for scenario in scenarios
+]
+
+
+@pytest.mark.parametrize("kind,label,card_name", _ZONE_CASES)
+def test_w1g8_a_zone_ban_is_refused_unproposed_and_dark(session, kind, label, card_name):
+    """The by-row matrix, one zone over: the card sits in its seat's graveyard
+    under a permission that opens it (Yawgmoth's Will's grant), and the three
+    readers — the engine, the AI's proposal and the wire's zone-cast entry —
+    are asked of the cast *out of the graveyard*, without the ban and with it.
+    """
+    from engine.ai_policy import choose_cast_action, choose_land_drop
+    from engine.cast_permissions import grant_permission
+    from engine.spell_prohibitions import forbid_zone_plays_this_turn
+    from web.state_view import _zone_cast_options
+
+    def board(banned: bool):
+        game, _ = _w2g3_board(session, OWN_MAIN, card_name)
+        card = game.players[0].hand.pop()
+        game.players[0].graveyard.append(card)
+        grant_permission(
+            game, player_index=0, zone="graveyard", mode="play", cards=None,
+            duration="end_of_turn", source_name="Test Opened Graveyard",
+        )
+        if banned:
+            forbid_zone_plays_this_turn(game, 0, "graveyard")
+        return game, card
+
+    def proposed(game, card) -> bool:
+        chooser = choose_land_drop if card.primary_type == "land" else choose_cast_action
+        action = chooser(game, 0)
+        return action is not None and action.card_name == card.name and (
+            action.from_zone == "graveyard"
+        )
+
+    def glows(card) -> bool:
+        return any(
+            entry["name"] == card.name and entry["castable_now"]
+            for entry in _zone_cast_options(session, 0)
+            if entry["zone"] == "graveyard"
+        )
+
+    game, card = board(banned=False)
+    assert cast_prohibition(game, 0, card, from_zone="graveyard") is None
+    assert proposed(game, card)
+    assert glows(card)
+    assert game.cast_from_hand(0, card_name, from_zone="graveyard").supported
+
+    game, card = board(banned=True)
+    found = cast_prohibition(game, 0, card, from_zone="graveyard")
+    assert found is not None and found.kind == kind, found
+    # A hand cast of the same card is not this row's business.
+    assert cast_prohibition(game, 0, card, from_zone="hand") is None
+    assert not proposed(game, card)
+    assert not glows(card)
+    pool_before = dict(game.players[0].mana_pool)
+    refused = game.cast_from_hand(0, card_name, from_zone="graveyard")
+    assert not refused.supported
+    assert refused.details == found.details
+    assert [held.name for held in game.players[0].graveyard] == [card_name]
     assert dict(game.players[0].mana_pool) == pool_before
     assert not game.stack
 

@@ -310,7 +310,13 @@ class FlipCoin:
     sentences that follow it, because how many there are is a property of the
     card and not of the flip: Tavern Swindler reads only the win, Mijae Djinn
     only the loss, Bottle of Suleiman both.
+
+    ``flipper`` is who flips (CR 705.2: only that player wins or loses):
+    ``"you"``, the effect's controller, for every printing but one, and
+    ``"that_player"`` for "Whenever a player casts a spell, **that player
+    flips a coin**." (Planar Chaos) — the seat the firing event named.
     """
+    flipper: str = "you"
 
 
 @dataclass(frozen=True)
@@ -411,10 +417,15 @@ class ChooseCardName:
     ``other_than_basic_land`` is the other printed bound: "Choose a card name
     **other than a basic land card name**" (Desperate Research). Carried for
     the same reason and honoured in the same place.
+
+    ``excluded_card_type`` is the bound stated as the type the named card must
+    *not* have: "Choose a **nonland** card name." (Cabal Therapy, and Meddling
+    Mage's entry choice, which already carries it under the same name.)
     """
 
     card_type: str | None = None
     other_than_basic_land: bool = False
+    excluded_card_type: str | None = None
 
 
 @dataclass(frozen=True)
@@ -761,6 +772,26 @@ class CantPlayLands:
     """
 
     player: PlayerRef
+    duration: Duration
+
+
+@dataclass(frozen=True)
+class CantPlayFromZone:
+    """``<players> can't play lands or cast spells from their <zone>s <duration>.``
+    (Shaman's Trance's first sentence.)
+
+    CR 601.3 and CR 305.1 withdrawn together for one zone: both verbs are
+    printed, so the prohibition binds a land drop as well as a cast, and only
+    out of the named zone — "their graveyards", each player's own. Its own node
+    beside :class:`CantPlayLands` and :class:`CantCastSpellTypes`, because what
+    it narrows is *where from* rather than *what*, and a graveyard ban folded
+    into either would stop that player's hand as well.
+
+    The duration is required, for those two nodes' reason.
+    """
+
+    player: PlayerRef
+    zone: str
     duration: Duration
 
 

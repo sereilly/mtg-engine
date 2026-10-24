@@ -25,6 +25,7 @@ import pytest
 
 from engine.ai_policy import choose_cast_action
 from engine.ai_prompt_readers import (
+    chosen_name_is_read_off_the_targets_hand,
     chosen_name_is_read_off_the_targets_library,
     chosen_name_own_zone,
 )
@@ -159,6 +160,11 @@ def test_every_card_that_chooses_a_card_name_has_a_place_to_look():
                     continue
                 if chosen_name_is_read_off_the_targets_library(card, step):
                     readers[card.name] = "the target's library"
+                elif chosen_name_is_read_off_the_targets_hand(card, step):
+                    # The sixth card and the third place (Judgment): "Target
+                    # player reveals their hand and discards all cards with
+                    # that name." (Cabal Therapy.)
+                    readers[card.name] = "the target's hand"
                 else:
                     readers[card.name] = chosen_name_own_zone(card, step) or "nowhere"
 
@@ -167,4 +173,25 @@ def test_every_card_that_chooses_a_card_name_has_a_place_to_look():
     assert readers["Foreshadow"] == "the target's library"
     assert readers["Wood Sage"] == "library"
     assert readers["Cursed Scroll"] == "hand"
+    assert readers["Cabal Therapy"] == "the target's hand"
     assert "nowhere" not in readers.values(), readers
+
+
+def test_cabal_therapy_names_out_of_its_targets_graveyard(pool, set_pool):
+    """"Choose a nonland card name. Target player reveals their hand and
+    discards all cards with that name." The hand is hidden until the name is
+    fixed, so a seat nobody asks names the commonest nonland card in the
+    *targeted* player's graveyard — the public record of their deck — and the
+    Bolt it guessed is what the hand gives up."""
+    pool = {**pool, "Cabal Therapy": set_pool("JUD")["Cabal Therapy"]}
+    game = _duel(
+        pool, "Cabal Therapy", my_library=["Island"] * 3,
+        their_library=["Hill Giant"] * 3,
+        their_graveyard=["Mountain", "Mountain", "Lightning Bolt"],
+    )
+    game.players[OPP].hand.extend([pool["Lightning Bolt"], pool["Hill Giant"]])
+
+    _cast(game, "Cabal Therapy", OPP)
+
+    assert _named(game) == "AI named Lightning Bolt"
+    assert [card.name for card in game.players[OPP].hand] == ["Hill Giant"]

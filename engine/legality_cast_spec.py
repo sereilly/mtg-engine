@@ -969,6 +969,41 @@ class CastTargetSpecMixin:
                 if int((taken or {}).get(offer.symbols, 0) or 0) <= 0:
                     continue
                 bounds.append(self._optional_x_ceiling(caster_index, card, offer))
+        # "Flashback—{1}{U}, **Exile X blue cards from your graveyard**" (Flash
+        # of Insight), "Flashback—{R}{R}, **Sacrifice X Mountains**" (Firecat
+        # Blitz): an X the *alternative* cost a zone's permission requires
+        # counts in cards or lands, which no mana arithmetic prices. The
+        # permission is the one the cast path takes for an announcement that
+        # names none (``permission_for``'s first), and the spell's own slot is
+        # withheld (CR 601.2a).
+        if from_zone != "hand":
+            from .cast_permissions import permission_for
+            from .faces import whole_card
+
+            # The card as the zone holds it, judged as the spell it is cast as
+            # (CR 709.3a) — ``cast_announcement``'s lookup.
+            held_card = whole_card(card)
+            permission = permission_for(
+                self, caster_index, held_card, from_zone, spell=card,
+            )
+            if permission is not None and permission.cost is not None:
+                # The first matching slot, the one the cast path takes
+                # (``legality_enumeration._cast_from_graveyard_slot``'s rule).
+                slot = (
+                    next(
+                        (
+                            index for index, held
+                            in enumerate(caster.graveyard) if held is held_card
+                        ),
+                        None,
+                    )
+                    if from_zone == "graveyard" else None
+                )
+                bound = self.alternative_cost_x_ceiling(
+                    caster_index, permission.cost, spell_graveyard_slot=slot,
+                )
+                if bound is not None:
+                    bounds.append(bound)
         return min(bounds) if bounds else None
 
     def _optional_x_ceiling(

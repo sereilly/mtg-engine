@@ -441,6 +441,13 @@ class StackTargetsMixin:
                 continue
             if not _stack_controller_ok(item, spec, caster_index):
                 continue
+            # "…spell **cast from a graveyard**" (Laquatus's Disdain): the zone
+            # the cast left, through the handler's own reader, so the offer and
+            # the counter name one set.
+            from .handlers.stack import stack_item_cast_from_ok
+
+            if not stack_item_cast_from_ok(item, spec.get("stack_cast_from_zone")):
+                continue
             if color_filter and color_filter not in self._stack_item_colors(item):
                 continue
             stack_any_colors = spec.get("stack_any_colors")

@@ -469,6 +469,21 @@ def discard_all_matching_cards(game: Game, instruction: OracleInstruction, conte
             return True, "resolved"
         filters = dict(filters)
         filters["mana_value"] = {"op": "eq", "value": chosen_number}
+    # "…discards all cards **with that name**." (Cabal Therapy.) The name the
+    # step in front of this one chose (CR 608.2d), resolved into the ordinary
+    # ``named`` key the card matcher reads (CR 201.2a, a split card answering
+    # to either half). **No name means no discard**, for the colour's reason
+    # above: an unnamed choice read as "no narrowing" would empty the hand.
+    name_key = instruction.payload.get("name_from")
+    if name_key is not None:
+        chosen_name = str(context.results.get(str(name_key)) or "").strip()
+        if not chosen_name:
+            game.log.append(
+                f"{context.card.name}: nothing was named, so nothing is discarded"
+            )
+            return True, "resolved"
+        filters = dict(filters)
+        filters["named"] = chosen_name
     # "…discards all cards **of each of the sacrificed creature's colors**."
     # (Mind Extraction.) The fourth record, and the one a *cost* wrote: the
     # permanent the cast sacrificed (CR 601.2h), carried on the stack item's

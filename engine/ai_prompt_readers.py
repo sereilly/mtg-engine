@@ -1001,6 +1001,33 @@ def chosen_name_is_read_off_the_targets_library(card: CardDefinition, instructio
     is why the answer for a milled opponent stays what it was: that seat's
     graveyard, the public evidence of what its deck holds.
     """
+    return _a_later_step_reads_the_name(card, instruction, _TARGET_LIBRARY_NAME_READERS)
+
+
+#: The steps that read a chosen name against **the targeted player's hand**:
+#: "Choose a nonland card name. Target player reveals their hand and discards
+#: all cards with that name." (Cabal Therapy.) The name is chosen as the spell
+#: resolves and before the reveal (ruling 2016-06-08), so the hand is hidden
+#: when it is chosen.
+_TARGET_HAND_NAME_READERS = frozenset({"discard_all_matching_cards"})
+
+
+def chosen_name_is_read_off_the_targets_hand(card: CardDefinition, instruction) -> bool:
+    """Whether *instruction*'s "choose a card name" is looked for in **the
+    target player's hand** (Cabal Therapy) — :func:`chosen_name_is_read_off_the_targets_library`'s
+    question one zone over, read the same way.
+
+    An opponent's hand is a hidden zone (CR 400.2) and it is revealed only
+    after the name is fixed, so the evidence a seat may name from is that
+    player's graveyard — the public record of what their deck holds; a seat
+    that aims the spell at itself sees its own hand outright.
+    """
+    return _a_later_step_reads_the_name(card, instruction, _TARGET_HAND_NAME_READERS)
+
+
+def _a_later_step_reads_the_name(card: CardDefinition, instruction, readers) -> bool:
+    """Whether a step of *readers*' kinds follows *instruction* in the sequence
+    that holds it, found by identity in *card*'s compiled program."""
     program = compile_card_oracle(card)
 
     def search(step) -> bool:
@@ -1014,8 +1041,7 @@ def chosen_name_is_read_off_the_targets_library(card: CardDefinition, instructio
             for position, inner in enumerate(nested):
                 if inner is instruction:
                     return any(
-                        later.kind in _TARGET_LIBRARY_NAME_READERS
-                        for later in nested[position + 1:]
+                        later.kind in readers for later in nested[position + 1:]
                     )
                 if search(inner):
                     return True

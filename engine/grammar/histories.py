@@ -180,6 +180,17 @@ def accept_history_relation(stream: TokenStream, d) -> bool:
     if stream.accept_phrase("played", "by", "your", "opponents"):
         d.played_by = "opponent"
         return True
+    # "Counter target spell **cast from a graveyard**." (Laquatus's Disdain.)
+    # The cast record again, asked of a *spell* rather than a permanent: which
+    # zone CR 601.2a moved the card out of. Only behind a spell phrase (the
+    # noun parser's stack zone) — after a permanent the words would name how it
+    # once arrived, a different record — and "a graveyard" only: "your
+    # graveyard" is a narrower set this branch would silently widen.
+    if d.zone == "stack" and stream.accept_phrase(
+        "cast", "from", "a", "graveyard"
+    ):
+        d.cast_from_zone = "graveyard"
+        return True
     # "destroy all Plains **that weren't chosen this way by any player**"
     # (Raiding Party). A narrowing of the noun phrase rather than an
     # exception clause on the verb, for the reason Season of the Witch's

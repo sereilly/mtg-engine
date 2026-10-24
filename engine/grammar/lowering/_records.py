@@ -906,6 +906,27 @@ _PRODUCES_FOR_PAYLOAD: dict[str, tuple[str, object, str]] = {
 #: the destroy step writes for Broken Visage, so one back-reference reader
 #: answers both verbs. "Each player sacrifices a creature" names several
 #: objects, so "that creature" behind it refuses rather than reading the last.
+#: Records a kind writes for one payload value **while none of the listed keys
+#: is present**, as ``kind -> (payload key, payload value, record, absent
+#: keys)`` — :data:`_PRODUCES_FOR_PAYLOAD`'s shape with the one condition that
+#: table cannot state.
+#:
+#: "Counter target spell. If that spell is countered this way, exile it instead
+#: of putting it into its owner's graveyard. You may play it without paying its
+#: mana cost for as long as it remains exiled." (Spelljack.) The hard counter
+#: exiles the card as it resolves and writes ``exiled_cards`` there, which "you
+#: may play it" reads. A priced counter ("unless its controller pays …",
+#: Syncopate) counters later, from the payment prompt, with no resolution to
+#: write into — so it declares nothing, and a permission behind it would refuse
+#: rather than compile and permit nothing.
+_PRODUCES_FOR_PAYLOAD_WITHOUT: dict[str, tuple[str, object, str, tuple[str, ...]]] = {
+    "counter_top_stack_spell": (
+        "countered_destination", "exile", "exiled_cards",
+        ("unless_pays_x", "unless_pays_amount", "unless_pays_cost"),
+    ),
+}
+
+
 _PRODUCES_FOR_ONE_OBJECT: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "sacrifice_matching_permanent": (
         ("who", "count", "any_number", X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT,
@@ -946,6 +967,14 @@ def _produced_by_kind(instruction) -> frozenset[str]:
     if conditional is not None:
         payload_key, payload_value, record = conditional
         if (instruction.payload or {}).get(payload_key) == payload_value:
+            keys = keys | {record}
+    unless = _PRODUCES_FOR_PAYLOAD_WITHOUT.get(kind)
+    if unless is not None:
+        payload_key, payload_value, record, absent = unless
+        payload = instruction.payload or {}
+        if payload.get(payload_key) == payload_value and not any(
+            key in payload for key in absent
+        ):
             keys = keys | {record}
     return keys
 

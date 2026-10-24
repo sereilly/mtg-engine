@@ -48,6 +48,10 @@ _COUNTER_HONOURED_FILTER_FIELDS = frozenset({
     # ``_refuse_card_questions_of_the_union`` below, which is what makes the
     # word mean something rather than merely be allowed through.
     "also_ability",
+    # "Counter target spell **cast from a graveyard**." (Laquatus's Disdain.)
+    # How the spell was cast, asked of the stack object by the same three
+    # readers: the handler, the picker's spec and the stack enumeration.
+    "cast_from_zone",
 })
 
 #: The ``ObjectFilter`` fields a "spell **or ability**" union may carry beside
@@ -377,6 +381,14 @@ def _lower_counter_spell(
         # aiming at that spell are objects on it (CR 113.7a), so there is
         # nothing to read off the spell itself.
         payload["not_ability_targeted_by_same_name"] = True
+    if filt.cast_from_zone is not None:
+        # "Counter target spell **cast from a graveyard**." (Laquatus's
+        # Disdain.) The zone CR 601.2a moved the card out of, recorded on the
+        # stack object as it was cast — so a flashback cast and any other
+        # graveyard cast answer alike (ruling 2004-10-04), and a copy, which was
+        # never cast, answers no. Only a spell phrase reaches here (the parse
+        # reads the words behind a stack noun alone).
+        payload["cast_from_zone"] = filt.cast_from_zone
     leftover = _restrictions_beyond(filt, _COUNTER_HONOURED_FILTER_FIELDS)
     if leftover:
         raise LoweringError(

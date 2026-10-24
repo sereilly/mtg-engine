@@ -142,6 +142,7 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_keep_chosen_discar
                        _lower_extra_land_plays,
                        _lower_cant_activate_nonmana_abilities,
                        _lower_cant_cast_spell_types,
+                       _lower_cant_play_from_zone,
                        _lower_cant_play_lands,
                        _lower_upkeep_counter_toll,
                        _lower_upkeep_damage_unless_cost,
@@ -233,6 +234,13 @@ _BY_NODE_TYPE: dict[type, object] = {
                     {"exclude_basic_land_names": True}
                     if node.other_than_basic_land else {}
                 ),
+                # "Choose a **nonland** card name." (Cabal Therapy.) Under
+                # the key Meddling Mage's entry choice already carries, which
+                # the prompt's answer check reads.
+                **(
+                    {"excluded_card_type": node.excluded_card_type}
+                    if node.excluded_card_type else {}
+                ),
             },
         ),
     ),
@@ -257,6 +265,7 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.TargetingBan: _lower_targeting_ban,
     ast.ExtraLandPlays: _lower_extra_land_plays,
     ast.CantPlayLands: _lower_cant_play_lands,
+    ast.CantPlayFromZone: _lower_cant_play_from_zone,
     ast.CantCastSpellTypes: _lower_cant_cast_spell_types,
     ast.CantActivateNonManaAbilities: _lower_cant_activate_nonmana_abilities,
     ast.UpkeepCounterToll: _lower_upkeep_counter_toll,

@@ -164,6 +164,22 @@ def _forbidden_this_turn(game, seat, card, from_zone):
     )
 
 
+def _zone_forbidden_this_turn(game, seat, card, from_zone):
+    # "Other players can't play lands or cast spells from their graveyards
+    # this turn." (Shaman's Trance.) A resolved effect's record, like the row
+    # above, narrowed by the zone the card would leave rather than by its type
+    # — and both verbs are printed, so the row binds a land drop as well.
+    from .spell_prohibitions import zone_play_forbidden_this_turn
+
+    if not zone_play_forbidden_this_turn(game, seat, card, from_zone):
+        return None
+    return (
+        "an effect this turn",
+        f"can't play {card.name}: {game.players[seat].name} can't play lands "
+        f"or cast spells from their {from_zone} this turn",
+    )
+
+
 def _global_cast_ban(game, seat, card, from_zone):
     # "Creature spells can't be cast." (Aether Storm.) No seat in the sentence,
     # so every battlefield is asked and its own controller is bound too.
@@ -280,6 +296,7 @@ CAST_PROHIBITIONS: tuple[ProhibitionRow, ...] = (
     ProhibitionRow("controller_cast_ban", _SPELLS, _controller_cast_ban),
     ProhibitionRow("own_cast_ban", _SPELLS, _own_cast_ban),
     ProhibitionRow("casting_forbidden_this_turn", _SPELLS, _forbidden_this_turn),
+    ProhibitionRow("zone_forbidden_this_turn", _BOTH, _zone_forbidden_this_turn),
     ProhibitionRow("global_cast_ban", _SPELLS, _global_cast_ban),
     ProhibitionRow("most_permanents_cast_ban", _SPELLS, _most_permanents_cast_ban),
     ProhibitionRow("spell_cap_ban", _SPELLS, _spell_cap),

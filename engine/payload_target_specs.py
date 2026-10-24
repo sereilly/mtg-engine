@@ -240,6 +240,14 @@ def _counter_spec(payload: dict) -> dict:
         # counter name one set, and a spell cast at one's own land is never
         # offered to a card that could not counter it.
         spec["stack_controller"] = controller
+    cast_from_zone = payload.get("cast_from_zone")
+    if cast_from_zone:
+        # "Counter target spell **cast from a graveyard**." (Laquatus's
+        # Disdain.) How the spell was cast, handed to the enumeration that is
+        # both the announcement gate (CR 601.2c) and the resolution one
+        # (CR 608.2b) — so the card is not cast at a spell from a hand, and a
+        # spell it could not counter is never offered.
+        spec["stack_cast_from_zone"] = cast_from_zone
     if payload.get("also_ability"):
         # "Counter target spell **or ability** that targets a creature."
         # (Diplomatic Escort.) CR 113.7a: an ability on the stack is not a

@@ -677,7 +677,7 @@ class PoolPaymentMixin:
         self, *, card, caster, caster_index, classification, cost_reduction,
         extra_generic_tax, extra_pip_tax, mode_index, target_permanent_ids,
         target_permanent_index, target_player_index, target_stack_item,
-        x_value,
+        x_value, chosen_alternative=None,
     ):
         """The X this cast is for (CR 107.3, CR 601.2b), before any cost is
         paid.
@@ -740,6 +740,20 @@ class PoolPaymentMixin:
                 card, target_player_index, target_permanent_index, target_stack_item,
                 target_permanent_ids,
             )
+        if (
+            resolved_x_value is None
+            and chosen_alternative is not None
+            and chosen_alternative.announces_x
+            and "{X}" not in (chosen_alternative.mana or "").upper()
+        ):
+            # "Flashback—{1}{U}, Exile X blue cards from your graveyard."
+            # (Flash of Insight.) The X this cast pays is counted in cards or
+            # lands, not mana, so the pool says nothing about it: inferred from
+            # the mana cost's {X} below, a caster with mana floating would have
+            # announced — and been charged — an X they never named. Unannounced,
+            # it is the 0 an unmade CR 107.3a announcement reads as everywhere
+            # else in this engine.
+            resolved_x_value = 0
         if resolved_x_value is None and "{X}" in card.mana_cost.upper():
             resolved_x_value = self._infer_x_value(
                 caster, card.mana_cost, extra_generic_tax, x_colors=x_colors,
@@ -838,14 +852,15 @@ class PoolPaymentMixin:
             # `card.mana_cost`, so the taxes above, the commander tax and every
             # "with mana value X" reader still see the printed cost.
             alternative_mana = chosen_alternative.mana
-            if "{X}" in card.mana_cost.upper() and "{X}" not in (
-                alternative_mana or ""
-            ).upper():
+            if "{X}" in card.mana_cost.upper() and not chosen_alternative.announces_x:
                 # CR 107.3b: X is 0 when neither the mana cost nor an
-                # alternative cost that includes X is paid. The one alternative
-                # cost that *does* include it is a granted flashback "equal to
-                # its mana cost" (Recoup) over an X spell, whose X is then the
-                # one the caster announced.
+                # alternative cost that includes X is paid. One that *does*
+                # include it is a granted flashback "equal to its mana cost"
+                # (Recoup) over an X spell, or a printed one with an X in its
+                # mana (Flaming Gambit) — or **outside** its mana: "Flashback—
+                # {1}{U}, Exile X blue cards from your graveyard" (Flash of
+                # Insight) includes X as surely, and its X is the one the
+                # caster announced and the exile was sized by.
                 resolved_x_value = 0
             if self.enforce_mana_costs:
                 # **An alternative cost paid in mana** (CR 702.34a: flashback's

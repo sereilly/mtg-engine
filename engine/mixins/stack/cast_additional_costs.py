@@ -88,11 +88,16 @@ def optional_cost_taken(cost: "AdditionalCost", taken: dict | None) -> bool:
     the gate, the payment and the picker share — an offer the gate refused for
     and the payment then declined to collect would be a spell uncastable for a
     price it never charges.
+
+    An alternative cost has no offer key: once announced it is charged whole
+    (CR 118.9a), so it is "taken" — which is what lets the graveyard-slot
+    check below be asked of a flashback cost's exile (Flash of Insight).
     """
-    if cost.optional_key is None:
+    key = getattr(cost, "optional_key", None)
+    if key is None:
         return True
     try:
-        return int((taken or {}).get(cost.optional_key, 0) or 0) > 0
+        return int((taken or {}).get(key, 0) or 0) > 0
     except (TypeError, ValueError):
         return False
 
@@ -763,6 +768,28 @@ class AdditionalCastCostsMixin:
             if index != spell_slot and _card_matches_filter(held, described)
         ]
 
+    @staticmethod
+    def alternative_takes_named_graveyard_slots(
+        costs: tuple[AdditionalCost, ...], alternative, taken=None,
+    ) -> bool:
+        """Whether ``cost_graveyard_indices`` names the cards the
+        **alternative** cost exiles from the graveyard ("Flashback—{1}{U},
+        Exile X blue cards from your graveyard", Flash of Insight) rather than
+        an additional cost's.
+
+        One channel, and the additional cost has it first: a cast charging
+        both would need two lists, and no card prints both — so the
+        alternative takes the channel only when no charged additional cost
+        exiles from a graveyard. Asked by the CR 601.2h check and the payment,
+        so the two cannot read the list for different costs.
+        """
+        if alternative is None or getattr(alternative, "exile_graveyard_filter", None) is None:
+            return False
+        return not any(
+            cost.exile_graveyard_filter is not None and optional_cost_taken(cost, taken)
+            for cost in costs
+        )
+
     def _named_graveyard_cost_refusal(
         self,
         caster_index: int,
@@ -1261,7 +1288,24 @@ class AdditionalCastCostsMixin:
         unpayable = self._unpayable_alternative_cost(
             caster_index, card, chosen_alternative,
             spell_hand_index=hand_index if from_zone == "hand" else None,
+            # "Flashback—{1}{U}, Exile X blue cards from your graveyard" (Flash
+            # of Insight): the announced X sizes the cost, and the spell's own
+            # slot is withheld (CR 601.2a) — the card's own reminder text.
+            x_value=resolved_x_value,
+            spell_graveyard_slot=spell_graveyard_slot,
         )
+        if unpayable is None and self.alternative_takes_named_graveyard_slots(
+            cast_costs, chosen_alternative, optional_paid,
+        ):
+            # …and the cards the caster named out of the graveyard for it, on
+            # the channel the additional cost's exile answers on, whole or
+            # refused (CR 601.2h) — the same check, asked of this cost.
+            unpayable = self._named_graveyard_cost_refusal(
+                caster_index, card, (chosen_alternative,),
+                cost_graveyard_indices,
+                x_value=resolved_x_value,
+                spell_graveyard_slot=spell_graveyard_slot,
+            )
         if unpayable is not None:
             self.log.append(unpayable)
             return SimulationResult(card.name, False, classification.effect_kind, unpayable)

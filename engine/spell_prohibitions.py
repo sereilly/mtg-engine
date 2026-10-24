@@ -142,6 +142,40 @@ def clear_turn_spell_prohibitions(game: "Game") -> None:
     game.spell_types_forbidden_this_turn = {}
     game.nonmana_activations_forbidden_this_turn = set()
     game.permanent_activations_forbidden_this_turn = set()
+    game.zones_forbidden_this_turn = {}
+
+
+def forbid_zone_plays_this_turn(game: "Game", seat: int, zone: str) -> None:
+    """*seat* can't play lands or cast spells from its own *zone* this turn
+    ("Other players can't play lands or cast spells from their graveyards this
+    turn", Shaman's Trance).
+
+    Accumulating, for :func:`forbid_casting_this_turn`'s reason: a second ban
+    on another zone must not lift the first.
+    """
+    existing = set(game.zones_forbidden_this_turn.get(int(seat), ()))
+    existing.add(str(zone))
+    game.zones_forbidden_this_turn[int(seat)] = tuple(sorted(existing))
+
+
+def zone_play_forbidden_this_turn(
+    game: "Game", seat: int, card, from_zone: str
+) -> bool:
+    """Whether *seat* may not play or cast *card* out of *from_zone* — the one
+    reader of :func:`forbid_zone_plays_this_turn`'s record, asked by the
+    ``cast_prohibitions`` row that binds both a cast and a land drop.
+
+    "**Their** graveyards": the seat's *own* pile, by identity. A card it is
+    casting out of somebody else's graveyard (under the same Shaman's Trance an
+    opponent resolved, say) is not one this sentence names.
+    """
+    if from_zone not in game.zones_forbidden_this_turn.get(int(seat), ()):
+        return False
+    if not 0 <= int(seat) < len(game.players):
+        return False
+    return any(
+        held is card for held in getattr(game.players[int(seat)], from_zone, ())
+    )
 
 
 __all__ = [
@@ -151,6 +185,8 @@ __all__ = [
     "forbid_casting_this_turn",
     "forbid_nonmana_activations_this_turn",
     "forbid_permanent_activations_this_turn",
+    "forbid_zone_plays_this_turn",
     "nonmana_activations_forbidden",
     "permanent_activations_forbidden",
+    "zone_play_forbidden_this_turn",
 ]

@@ -401,6 +401,24 @@ def _spell_is_one_of(card, card_types) -> bool:
     return any(card_has_type(card, wanted) for wanted in card_types)
 
 
+def stack_item_cast_from_ok(item, wanted: "str | None") -> bool:
+    """Whether stack object *item* was cast from zone *wanted* — "Counter
+    target spell **cast from a graveyard**" (Laquatus's Disdain).
+
+    The one reader of the question, for the counter handler and the stack
+    enumeration (the picker and CR 608.2b) alike. ``StackItem.cast_from_zone``
+    is CR 601.2a's zone, stamped as the spell was cast, so a flashback cast and
+    any other graveyard cast answer the same (ruling 2004-10-04). A **copy**
+    answers no: it was never cast (CR 707.10), so it was cast from nowhere,
+    whatever the original it copies left. No *wanted* is no narrowing.
+    """
+    if not wanted:
+        return True
+    if getattr(item, "is_copy", False):
+        return False
+    return getattr(item, "cast_from_zone", None) == wanted
+
+
 def _spell_is_one_of_classes(card, classes) -> bool:
     """Whether a spell on the stack is any of *classes* — "instant **or Aura**
     spell" (Avoid Fate, Ring of Immortals).
@@ -770,6 +788,17 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
                 "cannot counter"
             )
             return True, "resolved"
+        # "Counter target spell **cast from a graveyard**." (Laquatus's
+        # Disdain.) The picker and CR 608.2b ask it through the stack
+        # enumeration first; this is the handler's own reading for a path that
+        # reaches it without that gate, as every narrowing above has one.
+        cast_from = instruction.payload.get("cast_from_zone")
+        if not stack_item_cast_from_ok(target, cast_from):
+            game.log.append(
+                f"{card.name}: {target.card.name} was not cast from a "
+                f"{cast_from}, cannot counter"
+            )
+            return True, "resolved"
         # "…that isn't the target of an ability from another creature named ~"
         # (Goblin Artisans): a guard against two copies aiming at the same
         # spell. Asked of the stack, because the abilities pointing at that
@@ -1002,6 +1031,19 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
             _redirect_countered_card(
                 game, card, countered, str(destination), counterer=context.caster
             )
+            # "…exile it instead of putting it into its owner's graveyard. You
+            # may play it without paying its mana cost for as long as it
+            # remains exiled." (Spelljack.) The card this counter sent to exile,
+            # under the one key every "cards exiled this way" reads
+            # (``_records._PRODUCES_FOR_PAYLOAD_WITHOUT``). Read off the zone
+            # rather than assumed: a flashed-back spell is exiled by its own
+            # keyword (CR 702.34a — ruling 2004-10-04: Spelljack "can be used on
+            # a spell cast using Flashback") and lands in the same place, and a
+            # card something diverted is in no exile and permits nothing.
+            if destination == "exile":
+                owner = game.players[countered.owner_index]
+                exiled = any(held is countered.card for held in owner.exile)
+                context.results["exiled_cards"] = [countered.card] if exiled else []
         else:
             # CR 701.6a: "its **owner's** graveyard" (CR 108.3).
             game._bin_spell_card(

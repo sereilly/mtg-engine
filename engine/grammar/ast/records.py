@@ -407,9 +407,16 @@ class SeatCastSpellThisTurn:
     spell" and "you cast a spell" are one question with two referents and two
     signs, and a node that welded either in would make the other three cards
     nobody can print.
+
+    ``spell`` is the printed noun phrase when it narrows: "…if an opponent
+    cast **a blue spell** this turn" (Seedtime). ``None`` is the bare "a
+    spell", every cast in the record — a different answer from an empty
+    filter only in that nothing was printed to read, which is why the bare
+    phrase keeps its old payload whole.
     """
     who: str
     negated: bool = False
+    spell: "ObjectFilter | None" = None
 
 
 @dataclass(frozen=True)
@@ -564,8 +571,13 @@ class CoinFlipResult:
     A back-reference to a flip made earlier in the same resolution, never a
     board state — which is why lowering refuses one with no ``FlipCoin`` in
     front of it (the rule round 33 wrote down for "that much").
+
+    ``who`` is the printed pronoun: "you", or "they" for the player who
+    flipped in the sentence before ("that player flips a coin. If **they**
+    lose the flip, …", Planar Chaos).
     """
     won: bool = True
+    who: str = "you"
 @dataclass(frozen=True)
 class RevealedCardIs:
     """``if it's a <filter>`` — a *present-tense* test on a card a previous

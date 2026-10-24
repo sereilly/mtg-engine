@@ -593,6 +593,20 @@ class CastPermission:
     #: reads Chandra's, and a second node would be a second lowering for one
     #: sentence shape.
     flashback_cost: str | None = None
+    #: **Whose** copy of :attr:`zone` a blanket grant opens: ``"you"`` (every
+    #: grant before Judgment — "your graveyard") or ``"other_players"`` ("…from
+    #: other players' graveyards", Shaman's Trance). A field rather than a
+    #: value of :attr:`zone`, because the zone is the same CR 404 graveyard and
+    #: only the seats differ.
+    zone_owner: str = "you"
+    #: "…**as though those cards were in your graveyard**." (Shaman's Trance.)
+    #: CR 609.4's "as though" over the cards another seat's pile holds: what a
+    #: card permits of itself *in your graveyard* — flashback (CR 702.34a's
+    #: "from your graveyard") — it now permits from theirs, for the grantee.
+    #: Activated abilities of those cards are not touched (ruling 2004-10-04:
+    #: "This card does not allow you to activate the abilities of cards in
+    #: other people's graveyards").
+    as_though_yours: bool = False
 
 
 @dataclass(frozen=True)

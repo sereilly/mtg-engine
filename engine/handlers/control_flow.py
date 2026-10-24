@@ -554,8 +554,30 @@ def flip_a_coin(game: Game, instruction: OracleInstruction, context: OracleExecu
     A control-flow handler rather than a board one because the flip has no
     effect of its own — it is the randomiser the conditionals branch on, and it
     lives beside ``if_then`` for the same reason ``sequence`` does.
+
+    ``flipper: event_subject_player`` is "**that player** flips a coin"
+    (Planar Chaos): the seat the firing event froze flips, so the win is
+    announced as theirs (CR 705.2). An event that froze no seat names nobody
+    to flip — nothing is flipped and nothing recorded, which the conditionals
+    behind it read as neither a win nor a loss.
     """
-    won = flip_coin_for(game, context.caster, flip=flip_coin)
+    flipper = context.caster
+    if instruction.payload.get("flipper") == "event_subject_player":
+        seat = (context.trigger_context or {}).get("event_subject_player")
+        if not isinstance(seat, int) or not 0 <= seat < len(game.players):
+            game.log.append(
+                f"{context.card.name}: no player to flip the coin"
+            )
+            return True, "resolved"
+        flipper = game.players[seat]
+        won = flip_coin_for(game, flipper, flip=flip_coin)
+        context.results["coin_flip"] = won
+        game.log.append(
+            f"{context.card.name}: {flipper.name} "
+            f"{'won' if won else 'lost'} the coin flip"
+        )
+        return True, "resolved"
+    won = flip_coin_for(game, flipper, flip=flip_coin)
     context.results["coin_flip"] = won
     game.log.append(
         f"{context.card.name}: {'won' if won else 'lost'} the coin flip"

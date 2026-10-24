@@ -58,6 +58,13 @@ def parse_player_ref(stream: TokenStream) -> ast.PlayerRef | None:
     # every recipient table, picker and handler would then have to learn.
     if stream.accept_phrase("each", "other", "player"):
         return ast.PlayerRef("each_opponent")
+    # "**Other players** can't play lands or cast spells from their graveyards
+    # this turn." (Shaman's Trance.) The plural spelling of the alias above,
+    # for its reason: with no teams, every player who is not "you" is an
+    # opponent (CR 102.2/102.3). The plural is required — a bare "other
+    # player" is not a phrase any printing uses.
+    if stream.accept_phrase("other", "players"):
+        return ast.PlayerRef("each_opponent")
     # "**Any player** may sacrifice two lands …" (Worms of the Earth.) CR 101.4:
     # an offer made to "any player" is made to each of them in turn, which is
     # the set "each player" already names and the set `handlers/control_flow`

@@ -560,6 +560,38 @@ def _lower_cant_play_lands(node: ast.CantPlayLands) -> tuple[OracleInstruction, 
     return (OracleInstruction("forbid_land_plays_this_turn", "", payload),)
 
 
+def _lower_cant_play_from_zone(
+    node: "ast.CantPlayFromZone",
+) -> tuple[OracleInstruction, ...]:
+    """"Other players can't play lands or cast spells from their graveyards
+    this turn." (Shaman's Trance, CR 601.3 and CR 305.1.)
+
+    The seats are the effect's controller's opponents ("other players" — no
+    teams here, CR 102.2), named rather than chosen, so nothing is described
+    for a picker. The zone and the window are required for
+    :func:`_lower_cant_play_lands`' reason: a ban that outlived the turn, or
+    reached past the graveyard, is a different card.
+    """
+    if node.duration.kind not in _REST_OF_TURN:
+        raise LoweringError(
+            "a zone ban on a seat lasts the rest of the turn", node=node
+        )
+    if node.player.kind != "each_opponent":
+        raise LoweringError(
+            f"no handler bans {node.player.kind!r} from a zone", node=node
+        )
+    if node.zone != "graveyard":
+        raise LoweringError(
+            f"no gate reads a ban on the {node.zone!r}", node=node
+        )
+    return (
+        OracleInstruction(
+            "forbid_zone_plays_this_turn", "",
+            {"who": "each_opponent", "zone": node.zone},
+        ),
+    )
+
+
 def _lower_cant_cast_spell_types(
     node: "ast.CantCastSpellTypes",
 ) -> tuple[OracleInstruction, ...]:
