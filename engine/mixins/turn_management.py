@@ -826,14 +826,20 @@ class TurnManagementMixin:
         which the summary path below already is — **until a mana ability
         granted to it is in the compiled walk** (Riftstone Portal's "{T}: Add
         {G} or {W}"): then the summary is never read, so its own types count
-        here too, or a Swamp so granted taps for {G} when asked for {B}. Not
-        after a "loses all abilities" (CR 613.1f), which only a newer grant
-        survives. No land prints a mana ability beside a basic land type.
+        here too, or a Swamp so granted taps for {G} when asked for {B}. Only
+        a *granted* one: a land whose own text prints a mana ability beside its
+        type is the walk's already, and counting its type here too sent a
+        restricted "{T}: Add {W}{W}" Plains under a swap down the type's
+        unrestricted road (``test_land_mana_swap_buckets``). Not after a
+        "loses all abilities" (CR 613.1f), which only a newer grant survives.
         """
         from ..land_types import added_land_types
 
         added = set(added_land_types(land))
-        if land.basic_land_types and abilities_lost_at(land) is None:
+        if (
+            land.basic_land_types and abilities_lost_at(land) is None
+            and not TurnManagementMixin._prints_own_mana_ability(land)
+        ):
             free, priced = TurnManagementMixin._land_mana_abilities(land)
             if free is not None or priced:
                 added |= set(land.basic_land_types)
@@ -843,6 +849,24 @@ class TurnManagementMixin:
             symbol
             for land_type, symbol in zip(land.basic_land_types, land.basic_land_mana)
             if land_type in added
+        )
+
+    @staticmethod
+    def _prints_own_mana_ability(land) -> bool:
+        """Whether *land*'s own rules text still gives it a mana ability the
+        walk in :meth:`_land_mana_abilities` would find — never for a land
+        whose type an effect set, which lost that text (CR 305.7). "Own" is
+        ``Permanent.card_through_layer_3``: what it prints, copies (CR 707.2)
+        or was rewritten to say (CR 612), before any layer-6 grant."""
+        from ..land_types import lost_abilities_to_type_change
+        from ..mana_payment import is_mana_ability
+
+        if lost_abilities_to_type_change(land):
+            return False
+        return any(
+            ability.supported and ability.instruction is not None
+            and (is_mana_ability(ability) or ability.instruction.kind == "if_then")
+            for ability in compile_card_oracle(land.card_through_layer_3).activated_abilities
         )
 
     def _default_tap_symbols(self, land, mana_ability) -> tuple[str, ...]:

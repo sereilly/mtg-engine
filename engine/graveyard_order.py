@@ -144,16 +144,37 @@ def positions_named(graveyard: list, spec: dict) -> list[int]:
 # ---------------------------------------------------------------------------
 
 
+def _stamped(card: Any) -> bool:
+    """Whether *card*'s arrival is recorded at all: only a card with a static
+    ability that functions from a graveyard (CR 113.6b) has a reader for the
+    stamp (``graveyard_statics.graveyard_static_sources``).
+
+    **Scoped to its reader, and that is load-bearing.** The record is a field
+    of ``PlayerState``, and every reader that compares a seat's fields before
+    and after a cast — the AI rehearsal's "did this move anything"
+    (``ai_rehearsal._PLAYER_BOOKKEEPING``), the mode census's board picker
+    (``tests/ai/test_ai_mode_chooser_census.signature``) — saw a stamp written
+    for the spell's own trip to the graveyard as a change the spell made.
+    Stamping every arrival made Hydroblast's "destroy target permanent if it's
+    red" read as doing something to a white creature, so the census built its
+    board around the wrong bait. A card no static reads is never stamped, and
+    a game with no such card leaves the record empty, exactly as it was.
+    """
+    from .graveyard_statics import graveyard_static_instructions
+
+    return bool(graveyard_static_instructions(card))
+
+
 def _held_arrivals(player: Any, pile: list) -> list:
     """``player.graveyard_arrivals`` held to *pile*: one ``(card, stamp)`` per
-    position, every stamp an ``int``.
+    position of a card :func:`_stamped` records, every stamp an ``int``.
 
     **Removal never reorders** (CR 404.2: the order "normally can't change"),
     and every arrival goes on top (CR 404.1, the funnel's ``append``), so the
-    pile is always a subsequence of the arrival record. The walk matches each
-    card with the earliest record *of that object* after the last one it
-    matched; a record nothing matches is a card that has left since, and is
-    dropped.
+    stamped cards of the pile are always a subsequence of the arrival record.
+    The walk matches each card with the earliest record *of that object* after
+    the last one it matched; a record nothing matches is a card that has left
+    since, and is dropped.
 
     A card with no record was put there by writing the list directly (a test,
     the Debug Menu's state injection) rather than through
@@ -174,6 +195,8 @@ def _held_arrivals(player: Any, pile: list) -> list:
     held: list = []
     cursor = 0
     for card in pile:
+        if not _stamped(card):
+            continue
         found = next(
             (
                 position for position in range(cursor, len(records))
@@ -189,9 +212,17 @@ def _held_arrivals(player: Any, pile: list) -> list:
     return held
 
 
-def record_graveyard_arrival(player: Any, card: Any) -> int:
+def _keep(player: Any, held: list) -> None:
+    """Write *held* back only when it differs, so a read that changed nothing
+    leaves the field exactly as it was."""
+    if held != list(getattr(player, "graveyard_arrivals", None) or ()):
+        player.graveyard_arrivals = held
+
+
+def record_graveyard_arrival(player: Any, card: Any) -> "int | None":
     """Stamp *card*, just put on top of *player*'s graveyard (CR 613.7d), and
-    return the stamp.
+    return the stamp — or None, touching nothing, for a card no graveyard
+    static reads (:func:`_stamped`).
 
     Called by ``Game.put_card_into_graveyard`` after its append — the one road
     every arrival takes. The record is held to the pile **below** the new card
@@ -200,21 +231,25 @@ def record_graveyard_arrival(player: Any, card: Any) -> int:
     """
     from .continuous import next_timestamp
 
+    if not _stamped(card):
+        return None
     held = _held_arrivals(player, player.graveyard[:-1])
     stamp = next_timestamp()
     held.append((card, stamp))
-    player.graveyard_arrivals = held
+    _keep(player, held)
     return stamp
 
 
-def graveyard_arrival_stamps(player: Any) -> list[int]:
+def graveyard_arrival_stamps(player: Any) -> "list[int | None]":
     """Each position of *player*'s graveyard with its CR 613.7d timestamp, in
-    pile order (bottom first).
+    pile order (bottom first) — None at a position whose card no graveyard
+    static reads (:func:`_stamped`).
 
     Asked by the recompute (``LordBuffsMixin._recalculate_lord_buffs``) for the
     statics that function from a graveyard; it keeps the record in step with
-    the pile as it reads, which is why it writes it back.
+    the pile as it reads, which is why it may write it back.
     """
     held = _held_arrivals(player, player.graveyard)
-    player.graveyard_arrivals = held
-    return [int(stamp) for _card, stamp in held]
+    _keep(player, held)
+    stamps = iter(int(stamp) for _card, stamp in held)
+    return [next(stamps) if _stamped(card) else None for card in player.graveyard]
