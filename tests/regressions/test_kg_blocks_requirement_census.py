@@ -17,7 +17,7 @@ declaration that disobeys none and pays no cost. The engine must accept exactly
 those, refuse every other one, and its AI must propose one of them.
 
 Backwards: on the tree before this round (``c42aec75``) the gate is wrong on
-fifteen of the thirty-two boards and the AI on fourteen. Three ways: no legal
+seventeen of the thirty-five boards and the AI on sixteen. Three ways: no legal
 declaration at all (three Watchdogs under Caverns of Despair — none of the
 eight accepted — and a Lured Stalking Tiger, Invasion Plans beside a lone Okk);
 a declaration under the maximum accepted (CR 509.1c's own example, the menace
@@ -76,6 +76,9 @@ class Scenario:
     auras: list = field(default_factory=list)
     #: (blocker slot, key, value); a callable value is handed the game.
     marks: list = field(default_factory=list)
+    #: Cards in P1's graveyard — seven is threshold (Stone-Tongue Basilisk,
+    #: Seton's Desire), whose Lure is granted only while it holds.
+    graveyard: int = 0
     #: The requirements CR 509.1c counts on this board, with multiplicity:
     #: (blocker slot or None, attacker slot or None).
     requirements: list = field(default_factory=list)
@@ -175,6 +178,24 @@ def _scenarios() -> list[Scenario]:
             [_card("Elvish Bard")], [_bear("Bear A"), _bear("Bear B"), _bear("Bear C")],
             [caverns],
             requirements=[(0, 0), (1, 0), (2, 0)], trade_off=True,
+        ),
+        Scenario(
+            "Stone-Tongue Basilisk at threshold under Caverns of Despair",
+            [_card("Stone-Tongue Basilisk")],
+            [_bear("Bear A"), _bear("Bear B"), _bear("Bear C")], [caverns],
+            graveyard=7,
+            requirements=[(0, 0), (1, 0), (2, 0)], trade_off=True,
+        ),
+        Scenario(
+            "Stone-Tongue Basilisk short of threshold compels nobody",
+            [_card("Stone-Tongue Basilisk")], [_bear("Bear A"), _bear("Bear B")],
+            graveyard=6,
+        ),
+        Scenario(
+            "Seton's Desire at threshold on Stalking Tiger",
+            [_card("Stalking Tiger")], [_bear("Bear A"), _bear("Bear B")],
+            auras=[(_card("Seton's Desire"), 0)], graveyard=7,
+            requirements=[(0, 0), (1, 0)], trade_off=True,
         ),
         Scenario(
             "Talruum Piper compels only the flier",
@@ -288,7 +309,8 @@ def _board(scenario: Scenario) -> Game:
     blockers = [_nosick(Permanent(card=card)) for card in scenario.blockers]
     auras = [(Permanent(card=card), slot) for card, slot in scenario.auras]
     p1 = PlayerState(
-        name="P1", battlefield=[*attackers, *(aura for aura, _ in auras)]
+        name="P1", battlefield=[*attackers, *(aura for aura, _ in auras)],
+        graveyard=[_bear(f"Spent {i}", 1, 1) for i in range(scenario.graveyard)],
     )
     p2 = PlayerState(name="P2", battlefield=blockers)
     game = Game(players=[p1, p2])
@@ -423,7 +445,7 @@ SCENARIOS = _scenarios()
 def test_the_census_examines_enough_to_mean_something():
     """The floors: how much the census below looks at. A sweep that examined
     nothing would pass as one that found nothing."""
-    assert len(SCENARIOS) >= 30
+    assert len(SCENARIOS) >= 35
     trade_offs = [s for s in SCENARIOS if s.trade_off]
     assert len(trade_offs) >= 15
     examined = 0
