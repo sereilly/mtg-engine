@@ -57,8 +57,8 @@ from ._common import (_filter_payload, _is_created_token, _is_source,
                       _restrictions_beyond)
 from ._deaths import BOUND_CARD_EVENTS
 from ._delays import _BOUND_OBJECT_DELAYED_EVENTS
-from ._events import (_RECORDED_PERMANENTS, CREATED_TOKEN, CREATED_TOKENS,
-                      damage_trigger_names_damaged_end)
+from ._events import (_RECORDED_PERMANENTS, CHOSEN_PERMANENT, CREATED_TOKEN,
+                      CREATED_TOKENS, damage_trigger_names_damaged_end)
 
 
 def _entering_counter_payload(
@@ -263,6 +263,39 @@ def lower_pronoun_exile(
     # it at the beginning of the next end step" reading as its own source:
     # nothing in that effect records a permanent, so the branch declines and
     # the source reading below stands.
+    # "…an opponent chooses a permanent you control other than this creature
+    # **and exiles it**." (Wormfang Crab.) The branch below with a pick as the
+    # step in front: the pronoun's antecedent is the permanent the
+    # ``choose_permanent`` prompt recorded, so it lowers onto the kind that
+    # acts on that record (Cannibalize's), which also links the card to the
+    # ability's source for "return the exiled card" to find (CR 610.3).
+    # ``produced`` is the whole gate, as it is for every branch here, and a
+    # second recorded set beside the pick makes the pronoun ambiguous.
+    #
+    # Ahead of the branch below, which would otherwise take the pick's record
+    # (it is one of ``_RECORDED_PERMANENTS``) and lower onto
+    # ``exile_bound_permanent`` — a *delayed* ability's kind, which reads the
+    # id its creation froze into the trigger's context and so finds nothing
+    # in an immediate "and exiles it".
+    if (
+        _is_source(subject)
+        and isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "it"
+        and CHOSEN_PERMANENT in produced
+    ):
+        if node.duration.kind is not None or node.counters:
+            raise LoweringError(
+                "an exile of a chosen permanent carries no duration or counters",
+                node=node,
+            )
+        if (produced & _RECORDED_PERMANENTS) - {CHOSEN_PERMANENT}:
+            raise LoweringError(
+                "a pick and another recorded set both precede \"it\"; which one "
+                "it names is ambiguous", node=node,
+            )
+        return (OracleInstruction(
+            "exile_recorded_permanent", "", {"permanents_from": CHOSEN_PERMANENT},
+        ),)
     if (
         _is_source(subject)
         and isinstance(subject, ast.TargetSpec)

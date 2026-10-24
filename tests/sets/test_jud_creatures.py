@@ -278,6 +278,51 @@ def test_w1g4_wormfang_drake_killed_in_response_exiles_the_price_for_good(set_po
     ]
     assert _w1g4_names(game, 0) == []
 
+
+# --- Wormfang Crab: "an opponent chooses a permanent you control other than
+# this creature and exiles it" ----------------------------------------------
+
+
+def test_w1g4_wormfang_crab_s_opponent_picks_from_the_crab_controller_s_board(set_pool):
+    game = _w1g4_game(set_pool, hand=["Wormfang Crab"], interactive=(1,))
+    _w1g4_put(game, set_pool, 0, "Plains")
+    bears = _w1g4_put(game, set_pool, 0, "Grizzly Bears")
+    _w1g4_put(game, set_pool, 1, "Forest")
+    game.queue_from_hand(0, "Wormfang Crab")
+    game.resolve_top_of_stack()
+    game.resolve_top_of_stack()
+
+    choice = game.waiting_prompt()
+    assert choice is not None and choice.kind == "permanent_choice"
+    # The *opponent* is asked, about the Crab controller's permanents other
+    # than the Crab — never their own Forest.
+    assert choice.player_index == 1
+    assert {p.card.name for p in game.live_permanent_choices(choice)} == {
+        "Plains", "Grizzly Bears",
+    }
+    assert game.confirm_permanent_choice(1, bears.permanent_id)
+    _w1g4_drain(game)
+
+    assert [c.name for c in game.players[0].exile] == ["Grizzly Bears"]
+    crab = _w1g4_named(game, 0, "Wormfang Crab")
+    assert [e["card"].name for e in _w1g4_linked_entries(crab)] == ["Grizzly Bears"]
+
+    _w1g4_swords(game, set_pool, crab)
+
+    assert _w1g4_names(game, 0) == ["Grizzly Bears", "Plains"]
+    assert [c.name for c in game.players[0].exile] == ["Wormfang Crab"]
+
+
+def test_w1g4_wormfang_crab_alone_exiles_nothing(set_pool):
+    game = _w1g4_game(set_pool, hand=["Wormfang Crab"])
+    _w1g4_put(game, set_pool, 1, "Forest")
+    game.cast_from_hand(0, "Wormfang Crab")
+    _w1g4_drain(game)
+
+    assert _w1g4_names(game, 0) == ["Wormfang Crab"]
+    assert _w1g4_names(game, 1) == ["Forest"]
+    assert game.players[0].exile == [] and game.players[1].exile == []
+
 # ==== end W1G4 ======================================================
 
 
