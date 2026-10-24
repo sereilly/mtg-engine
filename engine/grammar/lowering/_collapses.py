@@ -331,6 +331,40 @@ def offered_seat_performs(node: ast.May) -> ast.May:
     )
 
 
+#: The actors the firing event named whose offer the handler makes **performed
+#: by** the seat it is put to — ``handlers/control_flow._EVENT_ACTORS``, which
+#: rebinds ``caster`` for them whenever the offer carries an action (Pillar
+#: Tombs of Aku, Apathy). Spelled as the two strings rather than imported, for
+#: the reason ``_SELF_PERFORMING_SEAT_SETS`` above is: the constants live a
+#: family over.
+_PERFORMING_EVENT_ACTORS = frozenset({"event_subject_player", "event_subject_controller"})
+
+
+def event_seat_performs(node: ast.May, actor: str) -> ast.May:
+    """*node* with "their graveyard" read as the performer's own pile, where
+    the offer's resolved *actor* is a seat the firing event froze.
+
+    "At the beginning of combat on each opponent's turn, **that player may
+    exile a card from their graveyard**." (Web of Inertia.) The noun parser
+    spells "their" as the owner's; under an offer to "that player" there was no
+    reading of it, and the line refused. The handler makes the event's seat the
+    performer of an offer with an action — so the seat taking it is the
+    resolution's "you" while it acts, and the pile is rewritten to that, exactly
+    as :func:`offered_seat_performs` rewrites it for an offer to every seat
+    (Carrion Rats). The pick then comes out of the graveyard of the seat that
+    said yes, and out of nobody else's.
+
+    Every other actor, and every other action, is left alone.
+    """
+    if (
+        actor in _PERFORMING_EVENT_ACTORS
+        and isinstance(node.action, ast.Exile)
+        and _is_their_own_graveyard_card(node.action.subject)
+    ):
+        return _with_exiled_pile_of(node, ast.PlayerRef("you"))
+    return node
+
+
 def without_restated_target(
     action: "tuple[OracleInstruction, ...]", announced: "dict | None",
 ) -> "tuple[OracleInstruction, ...]":

@@ -158,6 +158,122 @@ def test_w1g5_lost_in_thought_needs_priority(set_pool):
 
     assert "does not have priority" in _w1g5_refusal(game, 1, aura, _W1G5_IGNORE)
 
+
+# --- Web of Inertia ----------------------------------------------------------
+# "At the beginning of combat on each opponent's turn, that player may exile a
+# card from their graveyard. If the player doesn't, creatures they control
+# can't attack you this turn." An offer to the seat whose combat it is
+# (``event_subject_player``), performed out of their own graveyard, and a
+# turn-scoped can't-attack entry scoped to that seat's creatures and to attacks
+# on the Web's controller alone.
+
+def _w1g5_web(set_pool, *, graveyard=2, seats=2, interactive=(0, 1)):
+    """Seat 0's Web of Inertia at the beginning of seat 1's combat, the
+    trigger on the stack; seat 1 holds a Hill Giant and *graveyard* Forests."""
+    game = _w1g5.table(set_pool, hands=[[] for _ in range(seats)], interactive=interactive)
+    game.players[1].graveyard.extend([_w1g5.card(set_pool, "Forest")] * graveyard)
+    _w1g5.put(game, set_pool, 0, "Web of Inertia")
+    _w1g5.put(game, set_pool, 0, "Grizzly Bears")
+    giant = _w1g5.put(game, set_pool, 1, "Hill Giant")
+    game.start_turn(1)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    assert game.current_step == "beginning_of_combat"
+    assert [item.card.name for item in game.stack] == ["Web of Inertia"]
+    return game, giant
+
+
+def _w1g5_attackers(game, seat):
+    return sorted(
+        list(game.controlled_by(seat))[index].card.name
+        for index in game.legal_attacker_indices(seat)
+    )
+
+
+def test_w1g5_web_of_inertia_declined_keeps_that_players_creatures_home(set_pool):
+    game, giant = _w1g5_web(set_pool)
+    game.resolve_top_of_stack(pause_for_choices=True)
+
+    assert _w1g5.owed(game) == [1], "the seat whose combat it is is asked"
+    assert game.confirm_optional_pay(1, accept=False)
+    _w1g5.settle(game)
+    game.advance_combat_phase()
+
+    assert game.current_step == "declare_attackers"
+    assert _w1g5_attackers(game, 1) == []
+    assert len(game.players[1].graveyard) == 2
+
+    # CR 514.2: "this turn" ends at cleanup.
+    game.resolve_cleanup_step(1)
+    assert game.can_attack(giant, 0)
+
+
+def test_w1g5_web_of_inertia_taken_exiles_one_of_their_own_cards(set_pool):
+    """The pick is out of the *offered* seat's graveyard, made by that seat;
+    the Web's controller's graveyard is not touched."""
+    game, giant = _w1g5_web(set_pool)
+    game.players[0].graveyard.append(_w1g5.card(set_pool, "Island"))
+    game.resolve_top_of_stack(pause_for_choices=True)
+
+    assert game.confirm_optional_pay(1, accept=True)
+    assert _w1g5.owed(game, "graveyard_exile_pick") == [1]
+    _w1g5.settle(game)
+    game.advance_combat_phase()
+
+    assert _w1g5.pile(game, 1, "exile") == ["Forest"] and len(game.players[1].graveyard) == 1
+    assert _w1g5.pile(game, 0) == ["Island"]
+    assert _w1g5_attackers(game, 1) == ["Hill Giant"]
+
+
+def test_w1g5_web_of_inertia_with_an_empty_graveyard_cannot_be_bought_off(set_pool):
+    """CR 608.2d: an option that is impossible is not offered — with nothing
+    to exile, the restriction simply applies."""
+    game, giant = _w1g5_web(set_pool, graveyard=0)
+    game.resolve_top_of_stack(pause_for_choices=True)
+
+    assert _w1g5.owed(game) == []
+    _w1g5.settle(game)
+    assert not game.can_attack(giant, 0)
+
+
+def test_w1g5_web_of_inertia_is_silent_on_its_controllers_own_turn(set_pool):
+    game = _w1g5.table(set_pool, hands=([], []))
+    _w1g5.put(game, set_pool, 0, "Web of Inertia")
+    _w1g5.put(game, set_pool, 0, "Grizzly Bears")
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+
+    assert game.stack == [] and game.attack_restrictions_until_eot == []
+
+
+def test_w1g5_web_of_inertia_forbids_attacking_you_and_nobody_else(set_pool):
+    """"Can't attack **you**": at a three-seat table the held-back creatures
+    may still attack the other opponent, and a planeswalker the Web's
+    controller controls (ruling 2014-02-01: "a creature that can't attack you
+    can still attack a planeswalker you control")."""
+    game, giant = _w1g5_web(set_pool, seats=3)
+    game.resolve_top_of_stack(pause_for_choices=True)
+    assert game.confirm_optional_pay(1, accept=False)
+    _w1g5.settle(game)
+
+    assert not game.can_attack(giant, 0)
+    assert game.can_attack(giant, 2)
+    assert game.can_attack(giant, 0, attacking_planeswalker=True)
+
+
+def test_w1g5_web_of_inertia_restricts_that_players_creatures_only(set_pool):
+    """The entry is scoped to the seat the event froze: the Web's own
+    controller's creatures are not "creatures they control"."""
+    game, giant = _w1g5_web(set_pool, seats=3)
+    game.resolve_top_of_stack(pause_for_choices=True)
+    assert game.confirm_optional_pay(1, accept=False)
+    _w1g5.settle(game)
+    bears = next(p for p in game.controlled_by(0) if p.card.name == "Grizzly Bears")
+
+    assert game.can_attack(bears, 1)
+    assert [entry.get("controller_seat") for entry in game.attack_restrictions_until_eot] == [1]
+
 # ==== end W1G5 ======================================================
 
 

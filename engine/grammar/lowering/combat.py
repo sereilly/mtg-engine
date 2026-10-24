@@ -22,6 +22,7 @@ from ._events import (
     _TAPPED_PERMANENTS,
     _UNTAPPED_PERMANENTS,
 )
+from ._frozen_seats import _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER
 
 
 
@@ -102,6 +103,7 @@ def lower_block_count_grant(node: "ast.BlockCountGrant") -> tuple[OracleInstruct
 def _lower_combat_restriction(
     node: ast.CombatRestriction, event: str | None = None,
     produced: frozenset[str] = frozenset(),
+    *, seat_event: str | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """``can't attack unless …`` / ``can't block creatures with power N …``.
 
@@ -112,6 +114,10 @@ def _lower_combat_restriction(
 
     *event* is the trigger kind when the restriction is a trigger's effect —
     what "that creature" is allowed to refer back to.
+
+    *seat_event* is the firing event however deeply the restriction is nested,
+    for the one word that reads it there: "that player" in the subject, which
+    names the event's seat wherever in the sentence it is printed.
     """
     # "That creature can't attack during its controller's next turn." (Wall of
     # Dust.) A one-shot stamp on the creature the trigger blocked, resolved by
@@ -190,6 +196,18 @@ def _lower_combat_restriction(
         return tuple(emitted)
     if node.kind == "cant_attack_until_eot":
         payload = dict(node.payload)
+        # "…can't attack **you** this turn" (Web of Inertia). Which attacks the
+        # restriction reaches — only those aimed at the ability's controller
+        # (CR 109.5) — carried to the turn-scoped entry the blanket arms, the one
+        # shape below that has a gate reading it. Every other shape refuses it
+        # by name rather than dropping the word, which would forbid attacking
+        # anybody at all.
+        defender = payload.pop("defender", None)
+        if defender not in (None, "you"):
+            raise LoweringError(
+                f"no attack restriction is scoped to {defender!r} as defender",
+                node=node,
+            )
         # "**Target creature** can't attack this turn." (Change of Heart.) The
         # exact mirror of the blanket can't-block's targeted branch below, and
         # its own kind for that branch's reason: the blanket arms a board-wide
@@ -214,6 +232,11 @@ def _lower_combat_restriction(
                     "nothing to sweep it",
                     node=node,
                 )
+            if defender is not None:
+                raise LoweringError(
+                    "the targeted can't-attack mark has no defender to scope",
+                    node=node,
+                )
             targeted_attack: dict[str, object] = {}
             _describe_targets(targeted_attack, node.subject)
             return (
@@ -228,6 +251,24 @@ def _lower_combat_restriction(
                 "the blanket can't-attack reads a plural subject", node=node
             )
         described = _filter_payload(node.subject.filter)
+        # "…creatures **they** control can't attack you this turn" (Web of
+        # Inertia). "That player" names the seat the firing event froze, and
+        # the attack gate tests the entry with no observer and no event — so
+        # left in the filter the word matched nothing (``subject_matches``
+        # refuses an unsupplied "that player") and the restriction grounded
+        # nobody. The seat is read off the record instead, as the handler arms
+        # the entry, onto the ``controller_seat`` key the gate already scopes by
+        # (Fight or Flight); under any other event the word names a seat nobody
+        # recorded, and refuses.
+        controller_record = None
+        if described.get("controller") == "that_player":
+            if (seat_event or event) not in _EVENT_SUBJECT_PLAYERS:
+                raise LoweringError(
+                    "\"that player\" names a seat this event did not record",
+                    node=node,
+                )
+            described.pop("controller")
+            controller_record = EVENT_SUBJECT_PLAYER
         untestable = untestable_filter_keys(described)
         if untestable:
             raise LoweringError(
@@ -236,6 +277,15 @@ def _lower_combat_restriction(
                 node=node,
             )
         duration = payload.get("duration")
+        if (defender is not None or controller_record is not None) and (
+            duration is None or duration == THAT_PLAYERS_NEXT_TURN
+        ):
+            # The static table's rows and the next-turn window have no reader
+            # for either key; refused rather than armed without them.
+            raise LoweringError(
+                "only a this-turn blanket can't-attack is scoped to a seat",
+                node=node,
+            )
         # No duration at all: "Creatures without flying can't attack." (Moat.)
         # A **static** ability of the permanent printing it, which is a
         # different rule from the one-shot above — it is re-derived from the
@@ -306,6 +356,10 @@ def _lower_combat_restriction(
         armed: dict[str, object] = {"filter": described}
         if turns != 1:
             armed["remaining_turns"] = turns
+        if controller_record is not None:
+            armed["controller_seat_record"] = controller_record
+        if defender is not None:
+            armed["defender"] = defender
         return (
             OracleInstruction("cant_attack_until_eot", "", armed),
         )
