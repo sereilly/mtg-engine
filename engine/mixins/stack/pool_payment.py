@@ -677,7 +677,7 @@ class PoolPaymentMixin:
         self, *, card, caster, caster_index, classification, cost_reduction,
         extra_generic_tax, extra_pip_tax, mode_index, target_permanent_ids,
         target_permanent_index, target_player_index, target_stack_item,
-        x_value,
+        x_value, chosen_alternative=None,
     ):
         """The X this cast is for (CR 107.3, CR 601.2b), before any cost is
         paid.
@@ -740,6 +740,20 @@ class PoolPaymentMixin:
                 card, target_player_index, target_permanent_index, target_stack_item,
                 target_permanent_ids,
             )
+        if (
+            resolved_x_value is None
+            and chosen_alternative is not None
+            and chosen_alternative.announces_x
+            and "{X}" not in (chosen_alternative.mana or "").upper()
+        ):
+            # "Flashback—{1}{U}, Exile X blue cards from your graveyard."
+            # (Flash of Insight.) The X this cast pays is counted in cards or
+            # lands, not mana, so the pool says nothing about it: inferred from
+            # the mana cost's {X} below, a caster with mana floating would have
+            # announced — and been charged — an X they never named. Unannounced,
+            # it is the 0 an unmade CR 107.3a announcement reads as everywhere
+            # else in this engine.
+            resolved_x_value = 0
         if resolved_x_value is None and "{X}" in card.mana_cost.upper():
             resolved_x_value = self._infer_x_value(
                 caster, card.mana_cost, extra_generic_tax, x_colors=x_colors,

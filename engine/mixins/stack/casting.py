@@ -1023,6 +1023,7 @@ class SpellCastingMixin:
         # CR 107.3, 601.2b: the X this cast is for.
         x_settled = self._resolved_cast_x(
             card=card, caster=caster, caster_index=caster_index,
+            chosen_alternative=chosen_alternative,
             classification=classification, cost_reduction=cost_reduction,
             extra_generic_tax=extra_generic_tax, extra_pip_tax=extra_pip_tax,
             mode_index=mode_index, target_permanent_ids=target_permanent_ids,

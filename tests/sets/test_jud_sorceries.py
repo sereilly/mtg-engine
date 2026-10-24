@@ -240,6 +240,21 @@ def test_w1g8_firecat_blitz_cannot_sacrifice_more_mountains_than_it_has(set_pool
     assert _w1g8_names(game.players[0].graveyard) == ["Firecat Blitz"]
 
 
+def test_w1g8_firecat_blitz_flashed_back_with_no_x_announced_sacrifices_nothing(set_pool):
+    """The flashback's X is paid in Mountains, not mana, so mana floating says
+    nothing about it: with {R}{R}{R}{R} in the pool and no X announced, the cast
+    is X = 0 — no Mountain is sacrificed and no cat made — rather than an X
+    inferred from the pool and charged in lands nobody named."""
+    game, _lands = _w1g8_blitz_board(set_pool, 3)
+    game.players[0].mana_pool["R"] = 4
+    cast = game.cast_from_hand(0, "Firecat Blitz", from_zone="graveyard")
+    assert cast.supported, cast.details
+    _w1g8_resolve_stack(game)
+    assert _w1g8_board_names(game, 0) == ["Forest", "Mountain", "Mountain", "Mountain"]
+    assert game.players[0].mana_pool["R"] == 2
+    assert _w1g8_names(game.players[0].exile) == ["Firecat Blitz"]
+
+
 def test_w1g8_firecat_blitz_from_hand_makes_x_cats_and_sacrifices_nothing(set_pool):
     """Cast from a hand for {X}{R}{R}: X cats, no Mountain sacrificed."""
     game, _lands = _w1g8_blitz_board(set_pool, 2)
