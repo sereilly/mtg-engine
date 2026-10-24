@@ -968,3 +968,64 @@ def test_grave_consequences_asks_the_second_seat_only_after_the_first(set_pool):
     assert _act(sid, seat=1, action="graveyard_exile_confirm", graveyard_indices=[]).status_code == 200
     assert [card.name for card in game.players[0].exile] == ["Lightning Bolt"]
     assert game.players[0].life == 19 and game.players[1].life == 19
+
+
+# ---------------------------------------------------------------------------
+# Glory's colour choice from the graveyard: a gesture nothing offered
+# ---------------------------------------------------------------------------
+
+def _graveyard_ability_board(set_pool, graveyard: list[str], mine=("Plains", "Plains", "Plains")):
+    from engine.models import Permanent
+
+    sid, _session_, game = _session(6079)
+    pool = {**set_pool("LEA"), **set_pool("ICE"), **set_pool("TMP"), **set_pool("JUD")}
+    for name in mine:
+        permanent = Permanent(card=pool[name])
+        game._put_permanent_onto_battlefield(0, permanent, None)
+        permanent.metadata.pop("summoning_sickness_turn", None)
+    game.players[0].graveyard = [pool[name] for name in graveyard]
+    game.start_priority_window(0)
+    return sid, game
+
+
+@needs_node
+def test_glory_is_activated_from_the_graveyard_and_asks_its_colour(set_pool):
+    """``Game.activate_from_graveyard`` has existed since Ashen Ghoul, and no
+    browser gesture reached it — "Glory's color_choice from the graveyard" was
+    a prompt nobody could get to. The state lists each graveyard ability; the
+    button sends ``activate_graveyard`` with the auto-tap a cast uses."""
+    sid, game = _graveyard_ability_board(
+        set_pool, ["Glory", "Ashen Ghoul", "Carrionette"],
+        mine=("Plains", "Plains", "Plains", "Grizzly Bears"),
+    )
+    entries = {e["name"]: e for e in _state(sid)["graveyard_abilities"]}
+    assert set(entries) == {"Glory", "Ashen Ghoul", "Carrionette"}
+    glory = entries["Glory"]
+    assert (glory["graveyard_index"], glory["ability_index"]) == (0, 0)
+    assert glory["payable"] is True and glory["targets"] is False
+
+    out = run_app_js(
+        ["graveyardAbilityRefusal", "graveyardAbilityBody"],
+        "return INPUT.entries.map((e) => ({ refusal: graveyardAbilityRefusal(e), "
+        "body: graveyardAbilityBody(e) }));",
+        {"entries": [entries["Glory"], entries["Ashen Ghoul"], entries["Carrionette"]]},
+        prelude="const seat = 0;",
+    )
+    assert out[0]["refusal"] is None
+    assert "upkeep" in out[1]["refusal"], "Ashen Ghoul outside its upkeep says why"
+    assert "target" in out[2]["refusal"], (
+        "Carrionette names a target no button chooses: disabled, not defaulted"
+    )
+    body = {**out[0]["body"], "auto_tap": True}
+    assert body["action"] == "activate_graveyard"
+
+    sent = _post(sid, body)
+    assert sent.status_code == 200, sent.json()
+    for seat in (0, 1):
+        _act(sid, seat=seat, action="pass_priority")
+    assert _state(sid)["color_choice"]["card_name"] == "Glory"
+    chosen = _act(sid, seat=0, action="color_choice_confirm", mana_color="R")
+    assert chosen.status_code == 200, chosen.json()
+    bears = next(c for c in _state(sid)["players"][0]["battlefield"] if c["name"] == "Grizzly Bears")
+    assert "Protection from red" in bears["keywords"]
+    assert [card.name for card in game.players[0].graveyard][0] == "Glory", "it stays where it works from"

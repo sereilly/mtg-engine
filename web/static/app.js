@@ -15291,6 +15291,10 @@ function confirmPermanentCost() {
   if (!pending.announcesX && !pending.anyNumber && picked.length !== pending.count) return;
   pendingPermanentCost = null;
   renderActivationPrompt();
+  if (pending.graveyardAbility) {
+    sendGraveyardAbility(pending.graveyardAbility, { cost_permanent_id: picked[0] });
+    return;
+  }
   if (pending.zoneCast) {
     // The price is announced (CR 601.2b) and rides `pendingCastCost` into the
     // cast body; "X Mountains" / "X blue cards" announce X by how many.
@@ -21804,6 +21808,7 @@ function renderBoard(state) {
   q("undoBtn").disabled = sessionId === null;
   renderSpecialActions(state, hasPriority);
   renderHandAbilities(state, hasPriority);
+  renderGraveyardAbilities(state, hasPriority);
   selfHeader?.classList.toggle("turn-zone-self", isSelfTurn);
   // Per-seat, not just "not my turn": in FFA the active player might be one
   // of the corner seats instead of the classic header's seat.
@@ -24042,6 +24047,91 @@ function renderHandAbilities(state, hasPriority) {
         }
         updateActionHint(e.message, true);
       });
+    });
+    host.appendChild(button);
+  }
+}
+
+// CR 113.6b — an activated ability of a card in the viewer's **graveyard**
+// ("Activate only if this card is in your graveyard", Glory; "Return this card
+// from your graveyard to the battlefield", Ashen Ghoul, Necrosavant). The
+// engine has taken these since Ashen Ghoul and no gesture reached them: a
+// graveyard card's click is a cast or nothing. One button per entry of
+// `state.graveyard_abilities`, the hand abilities' shape, offered while the
+// viewer has priority. An ability that names a target is shown disabled — no
+// picker here chooses it yet, and a bare activation would be answered with
+// the engine's first legal target, which is not the player's choice.
+function graveyardAbilityRefusal(entry) {
+  if (!entry) return "Not available.";
+  if (typeof entry.prohibited === "string" && entry.prohibited) return entry.prohibited;
+  if (entry.targets) return "This ability names a target, which can't be chosen from a graveyard button yet.";
+  return null;
+}
+
+function graveyardAbilityBody(entry, fields = {}) {
+  return {
+    seat,
+    action: "activate_graveyard",
+    card_name: entry.name,
+    graveyard_index: entry.graveyard_index,
+    ability_index: entry.ability_index,
+    ...fields,
+  };
+}
+
+function sendGraveyardAbility(entry, fields = {}) {
+  const actionBody = graveyardAbilityBody(entry, fields);
+  return sendAction(actionBody).catch((e) => {
+    // The mana is on the board: the auto-tap dialog a cast opens.
+    if (isManaRefusal(e.message)) {
+      pendingAutoTap = {
+        card: { name: entry.name, mana_cost: "" },
+        cardName: `${entry.name} (${entry.cost_text || "ability"})`,
+        cost: entry.cost_text || "",
+        actionBody,
+      };
+      renderActivationPrompt();
+      return;
+    }
+    updateActionHint(e.message, true);
+  });
+}
+
+function renderGraveyardAbilities(state, hasPriority) {
+  const host = q("graveyardAbilities");
+  if (!host) return;
+  const entries = hasPriority ? (state?.graveyard_abilities || []) : [];
+  host.innerHTML = "";
+  host.classList.toggle("hidden", entries.length === 0);
+  for (const entry of entries) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "secondary-btn";
+    button.textContent = `${entry.cost_text || "Activate"}: ${entry.name} (graveyard)`;
+    button.title = entry.text || "An ability activated from your graveyard (CR 113.6).";
+    const refusal = graveyardAbilityRefusal(entry);
+    button.disabled = !!refusal || entry.payable === false;
+    if (refusal) {
+      button.classList.add("is-prohibited");
+      button.textContent = `⛔ ${button.textContent}`;
+      button.title = refusal;
+      button.dataset.prohibited = refusal;
+    }
+    button.addEventListener("click", () => {
+      // "Sacrifice a creature" (Necrosavant): which one is the player's, on
+      // the set picker every other cost uses; its Confirm sends the action.
+      if (Array.isArray(entry.sacrifice_choices)) {
+        pendingPermanentCost = {
+          card: null, cardName: entry.name, verb: "sacrifice", noun: "permanent", count: 1,
+          anyNumber: false, announcesX: false, picked: [], remaining: [], chosen: [],
+          options: entry.sacrifice_choices.map((c) => ({ id: c.permanent_id, name: c.name })),
+          purpose: "activate", graveyardAbility: entry,
+        };
+        renderActivationPrompt();
+        updateActionHint(`Choose what ${entry.name} will sacrifice to pay its cost.`);
+        return;
+      }
+      sendGraveyardAbility(entry);
     });
     host.appendChild(button);
   }

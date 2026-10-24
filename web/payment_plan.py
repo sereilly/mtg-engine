@@ -77,7 +77,7 @@ from engine.restricted_mana import CAST
 
 #: The action kinds whose handler pays mana and reads ``auto_tap``.
 PAYING_ACTIONS: frozenset[str] = frozenset(
-    {"cast", "activate", "activate_hand", "activate_emblem"}
+    {"cast", "activate", "activate_hand", "activate_graveyard", "activate_emblem"}
 )
 
 #: Where a preview collects what ``pay_from_board`` did on its copy.

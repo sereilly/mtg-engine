@@ -709,6 +709,43 @@ def _action_activate_hand(session, req, seat_type):
     session.game.note_priority_action_taken(req.seat)
 
 
+@action_handler("activate_graveyard", human_only=HUMAN_ONLY)
+def _action_activate_graveyard(session, req, seat_type):
+    """CR 113.6b — activate an ability of a card in the seat's own
+    **graveyard** (Glory's protection, Ashen Ghoul's return).
+
+    ``graveyard_index`` says which card (two copies in a pile are one
+    definition), ``ability_index`` which of its abilities — the program's
+    index, the one ``state.graveyard_abilities`` lists and
+    ``Game.activate_from_graveyard`` reads. A sacrifice the cost names rides
+    ``cost_permanent_id`` as on every other activation. ``auto_tap`` pays from
+    the board first, as for a hand ability.
+    """
+    pile = session.game.players[req.seat].graveyard
+    index = req.graveyard_index
+    if index is None or not 0 <= index < len(pile):
+        raise HTTPException(status_code=400, detail="card not in graveyard")
+    if not session.game.has_priority(req.seat):
+        raise HTTPException(status_code=400, detail="you do not currently have priority")
+    card_name = pile[index].name
+
+    def announce(game):
+        return game.activate_from_graveyard(
+            req.seat,
+            card_name,
+            ability_index=req.ability_index if req.ability_index is not None else 0,
+            graveyard_index=index,
+            cost_permanent_id=req.cost_permanent_id,
+        )
+
+    if req.auto_tap:
+        pay_from_board(session.game, req.seat, announce)
+    result = announce(session.game)
+    if not result.supported:
+        raise HTTPException(status_code=400, detail=result.details)
+    session.game.note_priority_action_taken(req.seat)
+
+
 @action_handler("activate_emblem")
 def _action_activate_emblem(session, req, seat_type):
     if not session.game.has_priority(req.seat):
