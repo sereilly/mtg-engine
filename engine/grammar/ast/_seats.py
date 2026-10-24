@@ -111,6 +111,16 @@ class PlayerComparison:
     margin: int = 1
     than: str = "you"
     is_opponent: bool = False
+    #: "…than you do **as you activate this ability**" (the Exodus Keepers).
+    #: The printed words bound *when* the clause is asked: as the target is
+    #: chosen (CR 602.2b) and not again — the cards' 2009-10-01 rulings: "It is
+    #: only necessary that the condition be true as you activate the ability.
+    #: The ability will still resolve normally even if the condition is no
+    #: longer true at that time." So CR 608.2b's re-check asks the target what
+    #: it asks any "target opponent", without the comparison
+    #: (``player_comparisons.comparison_at_resolution``). An Oath's clause
+    #: prints no such words and stays a restriction at both moments.
+    as_announced: bool = False
 
 
 @dataclass(frozen=True)

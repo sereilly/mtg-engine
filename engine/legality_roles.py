@@ -388,9 +388,14 @@ class RoleTargetsMixin:
         announcement that named nothing for any role — a bare headless cast,
         which is the standing convention rather than a target gone illegal.
         """
+        from .player_comparisons import comparison_at_resolution
         from .stack_targets import announcement_targets
 
-        roles = spec_roles(spec)
+        # Each role as CR 608.2b re-asks it: a seat comparison the card bounds
+        # to the announcement ("…as you activate this ability", Keeper of the
+        # Dead) is not asked again (``comparison_at_resolution``).
+        roles = [comparison_at_resolution(role) for role in spec_roles(spec)]
+        spec = {**spec, "roles": roles} if roles else spec
         named = {
             target.position: target
             for target in announcement_targets(self, item, spec, holder)

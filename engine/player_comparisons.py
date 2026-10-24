@@ -80,6 +80,35 @@ def player_comparison_holds(
     return difference >= margin
 
 
+def comparison_at_resolution(described: "dict | None") -> "dict | None":
+    """*described* — a seat spec or a player role — as CR 608.2b re-asks it:
+    without a comparison its card bounds to the announcement, unchanged
+    otherwise.
+
+    "Choose target opponent who has more life than you do **as you activate
+    this ability**." The printed words say *when* the clause is asked, and the
+    five Keepers' rulings (2009-10-01) say the other half: "It is only
+    necessary that the condition be true as you activate the ability. The
+    ability will still resolve normally even if the condition is no longer true
+    at that time." So the target is re-checked as the plain "target opponent"
+    it is — shroud, a player who left the game — and the comparison is not.
+    An Oath's "…who controls more creatures than they do" prints no such words
+    and is a restriction at both moments.
+
+    One function for the three resolution-time readers — the lone-seat gate
+    (``legality_resolution.stale_comparison_refusal``), the roles walk's
+    whole-object check (``legality_roles._role_target_legality``) and its
+    per-target half (``handlers/_targets._role_seat_is_still_a_target``) — so
+    a Keeper reads one way whether it announces one target or two.
+    """
+    if not isinstance(described, dict):
+        return described
+    compared = described.get("compared")
+    if not isinstance(compared, dict) or not compared.get("as_announced"):
+        return described
+    return {key: value for key, value in described.items() if key != "compared"}
+
+
 def seat_answers_comparison(
     game: "Game",
     seat: int,

@@ -115,6 +115,34 @@ def recorded_role_seats(holder) -> "list | None":
     return list(seats) if isinstance(seats, (list, tuple)) else None
 
 
+#: The role relation "controlled by the player the earlier role **is** or
+#: **controls**" — Sorrow's Path's "controlled by the same opponent" when the
+#: earlier role is a creature, Keeper of the Dead's "target nonblack creature
+#: **that player** controls" when it is a seat. One relation, because the
+#: question is one: whose board is the candidate on? (:func:`role_seat_of`.)
+SAME_CONTROLLER_ROLE = "same_controller_role"
+
+
+def role_seat_of(earlier, game) -> int | None:
+    """The seat an earlier role's chosen object **names**, for a relation that
+    asks "whose?" of it: a player role's own seat, a permanent's controller
+    (CR 613 layer 2, through the control seam), or None.
+
+    By identity for a seat, because a game holds exactly one live
+    ``PlayerState`` per seat (``legality_roles._role_object_key``'s reason) —
+    and a player compares by value, so ``players.index`` could answer with an
+    equal stranger.
+    """
+    if game is None or earlier is None:
+        return None
+    for seat, player in enumerate(getattr(game, "players", ()) or ()):
+        if player is earlier:
+            return seat
+    if hasattr(earlier, "permanent_id"):
+        return game.controller_index_of(earlier)
+    return None
+
+
 def role_seat_positions(roles) -> list[int]:
     """Which slots of *roles* — a spec's or a payload's ordered list — are
     seats."""
@@ -173,10 +201,13 @@ ROLE_RELATION_TESTS = {
     # ``candidate.seat`` rather than the card's owner: a graveyard is a zone
     # belonging to a player (CR 404.1), and a card sitting in it is in *that*
     # player's graveyard however it got there.
+    #
+    # The earlier role may be a **seat** as well — "target cards from **target
+    # player's** graveyard" — whose pile is its own (:func:`role_seat_of`).
     "in_graveyard_of_role": lambda earlier, candidate, game: (
         game is not None
         and getattr(candidate, "seat", None) is not None
-        and game.controller_index_of(earlier) == candidate.seat
+        and role_seat_of(earlier, game) == candidate.seat
     ),
     # "Return **two target cards from an opponent's graveyard** to their hand."
     # (Nullmage Advocate.) Several printed cards of one slot, each its own role
@@ -205,10 +236,14 @@ ROLE_RELATION_TESTS = {
         and game.graveyard_index_of(candidate) is not None
         and game.graveyard_index_of(candidate) > game.graveyard_index_of(earlier)
     ),
-    "same_controller_role": lambda earlier, candidate, game: (
+    #
+    # …and "Choose target opponent … Destroy target nonblack creature **that
+    # player** controls" (Keeper of the Dead), where the earlier role is the
+    # seat itself (:data:`SAME_CONTROLLER_ROLE`, :func:`role_seat_of`).
+    SAME_CONTROLLER_ROLE: lambda earlier, candidate, game: (
         game is not None
-        and game.controller_index_of(earlier) is not None
-        and game.controller_index_of(earlier) == game.controller_index_of(candidate)
+        and role_seat_of(earlier, game) is not None
+        and role_seat_of(earlier, game) == game.controller_index_of(candidate)
     ),
 }
 

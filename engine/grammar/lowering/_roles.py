@@ -187,20 +187,57 @@ def describe_independent_target_roles(
 #: The ``controller`` values ``subject_matches`` answers **only from a seat its
 #: caller supplies**, and which a roles walk therefore cannot enumerate against.
 #:
-#: "Destroy target nonblack creature **that player** controls" (Keeper of the
-#: Dead) names the seat the sentence in front of it chose. The matcher has the
-#: branch — it refuses rather than widening to "any opponent", which is the
-#: whole reason these four are spelled out there — but nothing hands
-#: ``legality_enumeration._enumerate_targets`` a seat, so a role narrowed by one offers
-#: nothing and the announcement is refused with a message about targets rather
-#: than about the missing seat. Declining the conversion leaves such a card's
-#: program exactly where it was, which is honest about what is not built: the
-#: picker needs the *earlier role's* seat pushed into the enumeration, which is
-#: a relation between two roles and a round of its own (SET_PLAYBOOK, Known
-#: gaps).
+#: The matcher has the branch — it refuses rather than widening to "any
+#: opponent", which is the whole reason these four are spelled out there — but
+#: nothing hands ``legality_enumeration._enumerate_targets`` a seat, so a role
+#: narrowed by one offers nothing and the announcement would be refused with a
+#: message about targets rather than about the missing seat. A slot narrowed by
+#: one of them is therefore handed back rather than made a role — **except** the
+#: one shape :func:`_seat_bound_narrowing` rewrites first, where the seat is the
+#: earlier role's own.
 _UNENUMERABLE_CONTROLLERS = frozenset({
     "that_player", "defending_player", "target_player", "target_opponent",
 })
+
+
+def _seat_bound_narrowing(
+    narrowing: dict, earlier_roles: list,
+) -> "tuple[dict, dict]":
+    """*narrowing* with a "**that player** controls" bound to the seat role in
+    front of it, and the role relation that now carries it — or both unchanged.
+
+    "Choose target opponent … **Destroy target nonblack creature that player
+    controls.**" (Keeper of the Dead.) "That player" is the seat the sentence in
+    front of it announced, and CR 602.2b announces both targets together — so
+    the pronoun is not a seat the matcher can be handed (a resolution's frozen
+    event, a mode's chooser) but **the earlier role's own answer**. That is a
+    relation between two roles, which is what a role relation is
+    (``target_roles.ROLE_RELATION_TESTS``): the walk enumerates the creature
+    slot with the player slot settled and keeps the creatures that seat
+    controls, the gate re-asks the same walk over what the activator named, and
+    the resolution re-asks it once more (CR 608.2b) — one answer to "which
+    board?", where the handler used to scan the chosen seat's board for its own
+    first match.
+
+    Only for the controller word itself and only after a **seat** role: a
+    "that player" with no seat in front of it names a player some other record
+    supplies, which is the hand-back the table above keeps.
+    """
+    from ...target_roles import SAME_CONTROLLER_ROLE, SEAT_ROLE_KINDS
+
+    if narrowing.get("controller") != "that_player":
+        return narrowing, {}
+    antecedent = next(
+        (
+            role["role"] for role in reversed(earlier_roles)
+            if role.get("kind") in SEAT_ROLE_KINDS
+        ),
+        None,
+    )
+    if antecedent is None:
+        return narrowing, {}
+    unbound = {key: value for key, value in narrowing.items() if key != "controller"}
+    return unbound, {SAME_CONTROLLER_ROLE: antecedent}
 
 
 #: The keys of a step's ``targets`` description that describe the *sentence*
@@ -621,7 +658,9 @@ def describe_sequence_target_roles(
     names: set = set()
     for _position, described in announced:
         name = _sequence_role_name(described, names)
-        narrowing = described.get("filter") or {}
+        narrowing, relation = _seat_bound_narrowing(
+            described.get("filter") or {}, roles,
+        )
         if (
             name is None
             or untestable_filter_keys(narrowing)
@@ -655,6 +694,7 @@ def describe_sequence_target_roles(
         if described["kind"] == "object":
             role["count"] = 1
             role["filter"] = narrowing
+        role.update(relation)
         roles.append(role)
     by_position = {
         position: role

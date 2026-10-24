@@ -703,6 +703,8 @@ def _role_seat_is_still_a_target(
     True where the resolving object's controller cannot be found: a context
     with no seat to ask from is not evidence that a target went illegal.
     """
+    from ..player_comparisons import comparison_at_resolution
+
     caster = next(
         (index for index, player in enumerate(game.players) if player is context.caster),
         None,
@@ -710,6 +712,10 @@ def _role_seat_is_still_a_target(
     if caster is None:
         return True
     source = context.source_permanent
+    # …without a comparison the card bounds to the announcement ("…as you
+    # activate this ability", Keeper of the Dead's rulings): see
+    # ``player_comparisons.comparison_at_resolution``.
+    role = comparison_at_resolution(role)
     return any(
         entry.get("kind") == "player" and entry.get("seat") == seat
         for entry in game._enumerate_targets(

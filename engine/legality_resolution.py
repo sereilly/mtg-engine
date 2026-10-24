@@ -633,16 +633,21 @@ class ResolutionTargetsMixin:
         """CR 608.2b for **a printed comparison between two seats**, and for
         nothing else.
 
-        "Choose target opponent **who has more life than you do** as you
-        activate this ability" (the Exodus Keepers); "that player chooses target
-        player **who controls more creatures than they do and is their
-        opponent**" (the Oaths). ``legality``'s seat loop enforces the clause at
-        announcement, which is where a restriction on who may be chosen has to
-        be enforced or it does nothing — and until this, that was the *only*
-        moment it was asked. A Keeper of the Light activated while an opponent
-        was ahead on life gained its 3 life anyway if that life total dropped in
-        response, and the ability the rules would have countered instead
-        resolved in full.
+        "…that player chooses target player **who controls more creatures
+        than they do and is their opponent**" (the Oaths). ``legality``'s seat
+        loop enforces the clause at announcement, which is where a restriction
+        on who may be chosen has to be enforced or it does nothing — and CR
+        608.2b asks it again here, as the object resolves.
+
+        **Not the Exodus Keepers'.** "Choose target opponent who has more life
+        than you do **as you activate this ability**" bounds the clause to the
+        announcement in its own words, and the five cards' rulings (2009-10-01)
+        say so outright: "The ability will still resolve normally even if the
+        condition is no longer true at that time." This gate countered a Keeper
+        of the Light whose opponent fell behind in response, which is the
+        ruling's own example turned round; such a clause is now read through
+        ``player_comparisons.comparison_at_resolution``, which drops it, and
+        the seat is left to the ordinary target re-checks.
 
         **This is deliberately not "608.2b widened to abilities."** That is its
         own round, blocked on a different bug, and ``ROADMAP.md`` records the
@@ -677,7 +682,9 @@ class ResolutionTargetsMixin:
             return None
         if not 0 <= seat < len(self.players):
             return None
-        spec = derive_instruction_spec([instruction])
+        from .player_comparisons import comparison_at_resolution
+
+        spec = comparison_at_resolution(derive_instruction_spec([instruction]))
         compared = (spec or {}).get("compared")
         if not compared:
             return None
