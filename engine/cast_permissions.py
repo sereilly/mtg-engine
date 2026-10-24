@@ -234,15 +234,23 @@ def _covers(
             return False
         if not any(entry is card for entry in _zone_cards(game, permission)):
             return False
-    elif permission.zone_player_index is not None and not any(
+    elif permission.zone != "hand" and not any(
         entry is card for entry in _zone_cards(game, permission)
     ):
-        # A blanket grant over **another seat's** pile (Shaman's Trance) covers
-        # what is in that pile and nothing else. Every blanket grant before it
-        # opened the grantee's own zone, which the cast path's seat walk
-        # already scopes; this one, asked about a card in the grantee's own
-        # graveyard, would otherwise answer first and shadow the card's own
-        # flashback with a grant for the wrong pile.
+        # A blanket grant covers what is in **its** pile and nothing else —
+        # the grantee's own ("cast spells from your graveyard", Yawgmoth's
+        # Will) or another seat's (Shaman's Trance). Every reader takes
+        # ``permission_for``'s first answer and then asks whether it is for the
+        # pile the card is in (``zone_seat``), so a grant that answered for a
+        # card in the wrong pile **shadowed** the one that covers it: the
+        # Will's grant, asked about a card in an opponent's graveyard, answered
+        # first and the Trance's was never reached — so a seat holding both
+        # could cast nothing out of that graveyard (measured at the Judgment
+        # integration chain, ``tests/ai/test_ai_opened_cast_worth.py``), and
+        # the Trance's own, asked about a card in the grantee's graveyard,
+        # shadowed that card's flashback. The hand is the one zone left out:
+        # its grants are waivers asked of a spell already moved to the stack
+        # (CR 601.2a, ``pool_payment``'s hand waiver).
         return False
     return True
 
