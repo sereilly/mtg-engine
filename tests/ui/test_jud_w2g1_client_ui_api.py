@@ -375,12 +375,16 @@ _ROLES_FUNCTIONS = [
     "handlePlayerTargetClick", "rolePermanentPicks", "restartRoleWalkForRequirement",
     "targetRequirementOf", "targetRequirementMet", "startCastChosenSourceStage",
     "sendCastWithChosenSource", "roleGraveyardOrderNote",
+    # The walk's start and its step read which tree to walk and whether the
+    # walk may end before an optional role (kg/slots).
+    "roleWalkOf", "rolesMayEndAt", "finishRoleWalkEarly",
 ]
 
 _ROLES_PRELUDE = r'''
 let seat = INPUT.seat;
 let currentState = INPUT.state;
 let pendingCastTarget = null;
+let pendingChosenAbilityWord = null;
 let _currentStack = [];
 const EMPTY_TARGET_SPEC = { kind: "none", requires_target: false, valid_targets: [] };
 const sent = [];

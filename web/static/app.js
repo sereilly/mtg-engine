@@ -18172,7 +18172,7 @@ function resolvePendingCastX(xValue) {
   // see `confirmRoleTargets`); X is the one thing it lacked.
   if (pending.rolesBody) {
     updateActionHint(`Casting ${pending.cardName} with X = ${selectedX}...`);
-    sendAction({ ...pending.rolesBody, x_value: selectedX })
+    sendAction({ ...pending.rolesBody, seat, x_value: selectedX })
       .then(() => updateActionHint(`Cast ${pending.cardName} with X = ${selectedX}.`))
       .catch((e) => updateActionHint(e.message, true))
       .finally(() => clearPendingHandCast());
