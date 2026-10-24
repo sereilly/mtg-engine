@@ -227,8 +227,10 @@ class SimulationReport:
 #
 # Every kind registered ``suspends`` has to appear here, and that is a stronger
 # requirement than "otherwise its prompt sits unanswered": a suspending prompt
-# holds ``game.effect_suspended``, so leaving one owed would stop the *next*
-# resumable loop anywhere in the game after one step. ``effect_order`` is the
+# holds the rest of its resolution on ``game.resume_stack``, so leaving one
+# owed would leave that resolution unfinished for the rest of the game (and,
+# before Judgment's W2G2, stopped the *next* resumable loop anywhere in the
+# game after one step). ``effect_order`` is the
 # one exception and does not need draining — a non-interactive seat is answered
 # with the default before it is ever queued (engine/replacements/). Held by
 # tests/ai/test_ai_simulator.py.

@@ -99,8 +99,9 @@ def _each_player_optional_pay_mana(
     for its two reasons. Zero is already a legal answer to "any amount", so the
     "may" adds no answer the payment prompt does not have; and the sentence
     behind it ("… equal to the amount of mana **they paid this way**") has to
-    run after every seat has answered, which a prompt does and an ordinary
-    ``optional_pay`` offer — whose spec does not suspend — does not.
+    run after every seat has answered. (An ordinary ``optional_pay`` offer
+    suspends its resolution too since Judgment's W2G2, so that half of the
+    reason is now shared; the first half is why the collapse stays.)
 
     Deliberately narrow, exactly as the discard's collapse is: an offer with a
     cost, an if-you-do or an otherwise is a second decision this prompt cannot

@@ -750,23 +750,35 @@ def test_an_offered_ante_comes_off_the_accepting_players_own_library(set_pool):
     tops = [p.library[0].name for p in game.players]
 
     assert game.cast_from_hand(0, "Rebirth").supported
+    # The seats are asked one at a time in turn order (CR 101.4), so the two
+    # in front of seat 2 answer first.
+    assert game.confirm_optional_pay(0, accept=False)
+    assert game.confirm_optional_pay(1, accept=False)
     assert game.confirm_optional_pay(2, accept=True)
 
     assert [c.name for c in game.players[2].ante] == [tops[2]]
     assert game.players[0].ante == [] and game.players[1].ante == []
 
 
-@pytest.mark.cr("101.4")
+@pytest.mark.cr("101.4", "101.4b")
 def test_each_player_is_offered_the_ante_in_turn_order(set_pool):
     """APNAP: the active player answers first, then each other seat in turn
-    order. The queue is drained in the order it was armed, so the order the
-    prompts are armed in *is* the order the decisions are made in."""
+    order — and each knows the answers given before it (CR 101.4b), because a
+    seat is not asked until the one in front of it has answered. The offer
+    suspends the resolution it is a step of (JUD W2G2), so the next seat's
+    prompt is armed by the previous answer rather than all of them at once."""
     game = _r32_rebirth(set_pool)
     game.active_player_index = 1
 
     assert game.cast_from_hand(0, "Rebirth").supported
 
-    assert [e["player_index"] for e in game.pending_optional_pays] == [1, 2, 0]
+    asked = []
+    while game.pending_optional_pays:
+        owed = game.pending_optional_pays
+        assert len(owed) == 1, "one seat is asked at a time"
+        asked.append(owed[0]["player_index"])
+        assert game.confirm_optional_pay(asked[-1], accept=False)
+    assert asked == [1, 2, 0]
 
 
 # ---------------------------------------------------------------------------

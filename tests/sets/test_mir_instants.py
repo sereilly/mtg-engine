@@ -1889,8 +1889,12 @@ def test_flash_sacrifices_the_creature_it_put_down_when_the_cost_is_declined(set
     assert game.confirm_optional_pay(0, accept=False)
 
     assert [p.card.name for p in game.players[0].battlefield] == [], game.log
+    # The sacrifice is a step of Flash's own resolution and CR 608.2n puts the
+    # spell into the graveyard as the *last* step, so the Dragon gets there
+    # first. It used to be the other way round: the offer did not suspend the
+    # resolution, so Flash finished before its decline branch ran (JUD W2G2).
     assert [c.name for c in game.players[0].graveyard] == [
-        "Flash", "Volcanic Dragon",
+        "Volcanic Dragon", "Flash",
     ], game.log
     assert game.players[0].mana_pool["R"] == 2, game.log
 

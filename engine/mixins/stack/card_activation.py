@@ -141,7 +141,41 @@ def _graveyard_cost_refusal(cost) -> str | None:
 
 
 class CardActivationMixin:
-    def activate_from_hand(
+    def activate_from_hand(self, *args, **kwargs) -> SimulationResult:
+        """Activate an ability of a card in hand (``_activate_from_hand``) —
+        one announcement, with the battlefield path's two rules around it.
+
+        CR 602.2b routes activation through CR 601.2b–i, so the triggers its
+        cost fires wait for the announcement to finish and go on the stack
+        *above* the ability (``deferring_triggers``): Megrim's ping off a
+        cycled card's discard resolves first. And the cost is a state change
+        with no resolution behind it, after which CR 117.3c hands priority
+        straight back — so CR 704.3's check is made here, as
+        ``queue_permanent_ability`` and ``queue_from_hand`` make it: a Maro
+        cycled down to no cards is 0/0 and dies before anybody acts. Neither
+        was here, and the playbook's audit of non-resolution state changes had
+        never reached a cost paid from a hand.
+        """
+        with self.deferring_triggers():
+            result = self._activate_from_hand(*args, **kwargs)
+        if result.supported:
+            self.check_state_based_actions()
+        return result
+
+    def activate_from_graveyard(self, *args, **kwargs) -> SimulationResult:
+        """Activate an ability of a card in a graveyard
+        (``_activate_from_graveyard``), wrapped as :meth:`activate_from_hand`
+        is and for its two reasons: Havoc Jester's ping off Necrosavant's
+        sacrificed creature goes above the ability, and the Wild Growth on the
+        snow land Whiteout sacrificed is put into its owner's graveyard
+        (CR 704.5m) before priority returns."""
+        with self.deferring_triggers():
+            result = self._activate_from_graveyard(*args, **kwargs)
+        if result.supported:
+            self.check_state_based_actions()
+        return result
+
+    def _activate_from_hand(
         self,
         controller_index: int,
         card_name: str,
@@ -309,7 +343,7 @@ class CardActivationMixin:
         self.log.append(f"{card.name} ability added to stack")
         return SimulationResult(card.name, True, ability.effect_kind, "queued")
 
-    def activate_from_graveyard(
+    def _activate_from_graveyard(
         self,
         controller_index: int,
         card_name: str,

@@ -1416,6 +1416,14 @@ def test_a_spell_can_exile_itself_as_it_resolves(set_pool):
     game.cast_from_hand(0, "Experimental Overload")
     game._settle()
 
+    # "Then you may return …" is still owed, and the exile is written behind
+    # it: CR 608.2c follows the instructions in order, so the spell has not
+    # exiled itself before its caster has answered (it used to — the offer did
+    # not suspend the steps behind it; JUD W2G2).
+    assert [c.kind for c in game.pending_choices] == ["optional_pay"]
+    assert p1.exile == []
+    game.auto_resolve_pending_choices()
+
     assert [c.name for c in p1.exile] == ["Experimental Overload"]
     assert "Experimental Overload" not in [c.name for c in p1.graveyard]
 

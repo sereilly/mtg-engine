@@ -520,6 +520,17 @@ class OracleExecutionContext:
     # site (CR 603.3d), which is its own seam and still leaves some of them
     # unannounced (``_UNANNOUNCED_TRIGGER_TARGETS``).
     announced: bool = False
+    # **The seat "you" names** (CR 109.5) where ``caster`` no longer does. An
+    # offer the firing event's seat takes and carries out moves ``caster`` onto
+    # that seat for the whole of its branches (``handlers/control_flow.
+    # _offer_to_seat``'s rebind) — "that player may exile a card from their
+    # graveyard" is that player's to perform — and the ability's own
+    # controller went with it. CR 603.3a makes that controller the seat that
+    # controlled the source **as the ability triggered**, which is what
+    # ``caster`` held until the rebind (the stack item's ``caster_index``), so
+    # the rebind records it here. None everywhere nothing has moved
+    # ``caster``; read it as ``ability_controller or caster``.
+    ability_controller: PlayerState | None = None
 
 
 def chosen_damage_source(

@@ -27,6 +27,16 @@ unwinds the stack, so a suspension three loops deep resumes the divided damage,
 then the sequence, then whatever held that — in that order, because the
 innermost loop is the one whose next step comes soonest.
 
+**A loop stops for what its own step asked**, not for whatever else is owed.
+Each step is run against a snapshot of the decisions already owed, and the
+loop stops only if one beyond them is (``PendingChoicesMixin.suspended_beyond``)
+— the step asked, or a loop nested inside it did. A loop that merely *runs
+while* some other resolution waits on an answer is not part of that
+resolution: a mana ability tapped to pay an offer (CR 605.3a), the next object
+on a stack nothing holds for an answer. Answering still unwinds only once
+nothing at all is owed (``effect_suspended``), because the work recorded may
+be waiting on more than one seat.
+
 **A loop using this must be the last thing its function does.** Work written
 after it does not run when a step suspends, and nothing records it — put it in
 the loop's own final step, or in a continuation, rather than after the call.
@@ -82,11 +92,16 @@ def run_resumable(game, items: Iterable[Any], step: Callable[[Any], None]) -> No
         for position in range(index, len(items)):
             rest = _RestOfLoop(lambda position=position: run_from(position + 1))
             game.resume_stack.append(rest)
+            # What was already owed before this step ran. A loop stops for a
+            # decision *its own step* asked for (or a loop nested in it did),
+            # never for one some other resolution is waiting on — see
+            # ``PendingChoicesMixin.suspended_beyond``.
+            owed = game.owed_suspensions()
             try:
                 step(items[position])
             finally:
                 rest.live = False
-            if game.effect_suspended:
+            if game.suspended_beyond(owed):
                 # Leave the continuation: it is the rest of this loop, and
                 # answering the prompt is what will come back for it.
                 return

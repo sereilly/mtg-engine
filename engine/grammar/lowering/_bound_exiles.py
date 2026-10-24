@@ -313,6 +313,26 @@ def lower_pronoun_exile(
                 "several earlier steps recorded permanents; which one \"it\" names is ambiguous",
                 node=node,
             )
+        # ``exile_bound_permanent`` is a **delayed** ability's kind: its handler
+        # reads the id the creating effect froze into the delayed trigger's
+        # context (``binds_recorded``, CR 603.7c), which only
+        # ``delayed._lower_create_delayed_trigger`` arranges — and that lowers
+        # the delayed effect under the delay's own event. Anywhere else the
+        # same words are an *immediate* "exile it" ("Return target creature
+        # card from your graveyard to the battlefield. Exile it."), and the
+        # kind finds nothing to exile: compiled, supported, and a no-op. No
+        # card prints that today; refused by name until one does (its reading
+        # would be ``exile_recorded_permanent`` over the record, Cannibalize's
+        # kind).
+        from ...delayed_triggers import DELAYED_EVENTS
+
+        if event not in DELAYED_EVENTS:
+            raise LoweringError(
+                "an immediate \"exile it\" naming a permanent an earlier step "
+                "recorded has no reading: exile_bound_permanent only finds the "
+                "one a delayed ability froze",
+                node=node,
+            )
         return (OracleInstruction("exile_bound_permanent", "", {}),)
     # "Create a 4/4 white Angel creature token with flying. **Exile it** at the
     # beginning of the next end step." (Angelic Favor.) The branch above's

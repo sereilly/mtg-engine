@@ -111,9 +111,44 @@ class PendingChoicesMixin:
         resolver: the choice stays *queued* while its answer is applied — the
         stack object it holds is still resolving (CR 608.2), and a resolver may
         still read its payload — but it no longer suspends, because applying the
-        answer is exactly the work the suspension was waiting for."""
+        answer is exactly the work the suspension was waiting for.
+
+        The question about the whole queue: whether *anything* is owed. A loop
+        deciding whether its own step stopped asks :meth:`suspended_beyond`
+        instead."""
         return any(
             spec_for(choice.kind).suspends and not choice.data.get("_answered")
+            for choice in self.pending_choices
+        )
+
+    def owed_suspensions(self) -> tuple:
+        """The suspending choices owed right now, as a snapshot a loop takes
+        before running one of its steps (``engine/resumption.run_resumable``)."""
+        return tuple(
+            choice for choice in self.pending_choices
+            if spec_for(choice.kind).suspends and not choice.data.get("_answered")
+        )
+
+    def suspended_beyond(self, owed: tuple) -> bool:
+        """Whether a suspending choice is owed that was **not** in *owed* — a
+        decision the step just run asked for, which is what stops its loop.
+
+        Not :attr:`effect_suspended`, which is every decision owed anywhere. A
+        loop that starts while some *other* resolution is waiting on an answer
+        is not a step of that resolution: a mana ability tapped to pay an
+        offer resolves immediately (CR 605.3a), and on a table nothing holds a
+        resolution for (``_settle`` with no seat to wait for) the next object
+        on the stack resolves while the last one's prompt is still queued. Read
+        through the whole queue, either one stopped after its first step and
+        left the rest of itself to run whenever the *other* prompt was answered
+        — a painland's damage dealt after the offer it paid for, and Tranquil
+        Path's "Draw a card." and trip to the graveyard waiting on Ice Cave's
+        offer about it. Identity, not equality: two seats can owe look-alike
+        choices."""
+        return any(
+            spec_for(choice.kind).suspends
+            and not choice.data.get("_answered")
+            and not any(choice is earlier for earlier in owed)
             for choice in self.pending_choices
         )
 

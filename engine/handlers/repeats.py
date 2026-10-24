@@ -275,11 +275,14 @@ def request_process_repeat(game: Game, instruction: OracleInstruction, context: 
     that *runs* the next round, rather than a flag some loop reads afterwards.
 
     That is the shape ``repeat_optional_process`` and ``coin_flip_stakes_loop``
-    already have, and here it is forced rather than chosen: an ``optional_pay``
-    does not suspend the resolution that armed it, so by the time the seat has
-    answered, the round — and every loop around it — has returned. A record
-    read between rounds would be read before the payment existed, and Crooked
-    Scales would flip exactly once however much its controller paid.
+    already have, and here it was forced rather than chosen: an
+    ``optional_pay`` did not suspend the resolution that armed it, so by the
+    time the seat had answered, the round — and every loop around it — had
+    returned. A record read between rounds would be read before the payment
+    existed, and Crooked Scales would flip exactly once however much its
+    controller paid. (The offer suspends since Judgment's W2G2; the round
+    still hands itself down, which is right either way — the next round is
+    what the payment bought.)
 
     So the round hands its own instruction down the scratchpad
     (:data:`REPEAT_PROCESS`) and this step runs it again. The dispatch is

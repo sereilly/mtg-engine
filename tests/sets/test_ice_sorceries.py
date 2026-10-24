@@ -630,8 +630,15 @@ def test_stench_of_evil_offers_the_land_controller_one_choice_per_land(set_pool)
     game.cast_from_hand(0, "Stench of Evil")
     game._settle()
 
-    assert len(game.pending_choices_of("optional_pay", 1)) == 2
-    assert not game.pending_choices_of("optional_pay", 0), "the caster owes nothing"
+    # One land's offer at a time: the offer suspends the loop over the
+    # destroyed lands (CR 608.2c), and answering it makes the next one.
+    offers = 0
+    while game.pending_choices_of("optional_pay", 1):
+        assert len(game.pending_choices_of("optional_pay", 1)) == 1
+        assert not game.pending_choices_of("optional_pay", 0), "the caster owes nothing"
+        offers += 1
+        assert game.confirm_optional_pay(1, accept=False)
+    assert offers == 2
 
 
 def test_stench_of_evil_deals_one_damage_per_declined_offer(set_pool):

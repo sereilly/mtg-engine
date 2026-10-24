@@ -182,6 +182,7 @@ def apply_damage_to_creature(
     asks: bool = False,
     unpreventable: bool = False,
     cant_be_prevented: bool = False,
+    source_seat: int | None = None,
 ) -> int:
     """Mark non-combat damage on a single creature and fire its "dealt damage"
     triggers.
@@ -196,7 +197,10 @@ def apply_damage_to_creature(
     further the caller would do with it. Both run *inside* the damage event, not
     after it: the event can stop to ask the affected player which effect applies
     first (CR 616.1e), and while it waits there is nothing to report. Returns
-    the amount dealt, which is 0 while suspended."""
+    the amount dealt, which is 0 while suspended.
+
+    ``source_seat`` is who the damage belongs to where the caller knows better
+    than the event can derive (``Game._mark_damage_on_permanent``)."""
 
     def finish(dealt: int) -> None:
         if log_message is not None:
@@ -216,4 +220,5 @@ def apply_damage_to_creature(
     return game._mark_damage_on_permanent(
         perm, amount, source=source, then=finish, asks=asks,
         unpreventable=unpreventable, cant_be_prevented=cant_be_prevented,
+        source_seat=source_seat,
     )

@@ -474,6 +474,13 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
         # one step stronger: the next sentence's *count* is this answer, and a
         # step that ran before it would draw nothing.
         "exile_hand_pile_choice",
+        # "Counter target spell unless its controller exiles all cards from
+        # their graveyard. **Draw a card.**" (Grip of Amnesia.) Every offer —
+        # "you may …", "… unless …" — is an instruction of the resolution that
+        # makes it, and CR 608.2c follows them in the order written: the draw
+        # waited for nothing and came before the counter was decided. Judgment's
+        # W2G2; the census is tests/regressions/test_jud_w2g2_offer_tail_census.py.
+        "optional_pay",
         # "…and you decide whether to flip again." (Game of Chaos.) The answer
         # is whether the rest of the resolution happens at all, and the round it
         # starts arms the next offer.

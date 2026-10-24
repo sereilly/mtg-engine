@@ -838,12 +838,16 @@ def test_lim_duls_hex_asks_every_player_in_turn(set_pool):
     game.active_player_index = 0
 
     game.resolve_upkeep(0)
+    # One offer per seat, made in turn: the offer suspends the loop over the
+    # seats (CR 608.2c), so the second is made once the first is answered.
     owed = [c for c in game.pending_choices if c.kind == "optional_pay"]
-    assert [c.player_index for c in owed] == [0, 1], "one offer per seat"
+    assert [c.player_index for c in owed] == [0]
     assert owed[0].data["cost"] == {"B": 1}
     assert owed[0].data["cost_alternatives"] == [{"generic": 3}]
 
     assert game.confirm_optional_pay(0, accept=True)
+    owed = [c for c in game.pending_choices if c.kind == "optional_pay"]
+    assert [c.player_index for c in owed] == [1]
     assert game.confirm_optional_pay(1, accept=True)
     game._settle()
 

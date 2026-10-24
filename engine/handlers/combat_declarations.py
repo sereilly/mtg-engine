@@ -1062,23 +1062,24 @@ def cant_attack_until_eot(game: Game, instruction: OracleInstruction, context: O
         entry["controller_seat"] = seat
     # "…can't attack **you** …" — the ability's controller (CR 109.5). CR
     # 113.8 / 603.3a make that the seat that controlled the source when the
-    # ability triggered; it is read here as the source's controller now (or
-    # as it last existed, if it has left), which is the same seat unless
-    # control of the source changed while the trigger waited on the stack —
-    # a gap recorded rather than closed, because nothing on the context
-    # carries the trigger-time controller once an offer has moved ``caster``.
-    # And ``caster`` is not the answer: an offer made to the event's seat
-    # moves it onto that seat for the whole entry
-    # (``handlers/control_flow._EVENT_ACTORS``), so under Web of Inertia's "if
-    # the player doesn't" the caster *is* the attacker. A spell, with no
-    # permanent, is its caster's.
+    # ability triggered, which is the stack item's controller and so the
+    # context's ``caster`` — unless an offer made to the event's seat moved
+    # ``caster`` onto that seat for its branches
+    # (``handlers/control_flow._EVENT_ACTORS``): under Web of Inertia's "if the
+    # player doesn't", the caster *is* the attacker. The rebind keeps the seat
+    # it moved off as ``ability_controller``, and that is read first. It used
+    # to be the source's controller *now*, which parts from the rule exactly
+    # when the Web changes hands while its trigger waits on the stack: the
+    # new controller's own creatures were told not to attack their own
+    # controller, and the player the trigger was protecting was protected by
+    # nothing. A spell, with no permanent, is its caster's.
     if payload.get("defender") == "you":
-        source = context.source_permanent
-        defender = (
-            game.controller_or_last_known(source) if source is not None else None
+        you = context.ability_controller or context.caster
+        defender = next(
+            (seat for seat, player in enumerate(game.players) if player is you), None,
         )
-        if defender is None and context.caster in game.players:
-            defender = game.players.index(context.caster)
+        if defender is None and context.source_permanent is not None:
+            defender = game.controller_or_last_known(context.source_permanent)
         if defender is None:
             game.log.append(f"{context.card.name}: no player to protect, nothing restricted")
             return True, "resolved"

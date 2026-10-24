@@ -320,10 +320,12 @@ def _instructions_within(instruction: OracleInstruction):
             pending.extend(value)
 
 
-#: The kinds that ask a seat something **without stopping the steps behind
-#: them** (an ``optional_pay`` does not suspend; see
-#: ``handlers/control_flow._offer_to_seat``). A round may end in one — its
+#: The kinds that ask a seat something through an ``optional_pay``
+#: (``handlers/control_flow._offer_to_seat``). A round may end in one — its
 #: branches are where the round ends — but may not hold one anywhere else.
+#: Written while an offer did not stop the steps behind it; it does since
+#: Judgment's W2G2 (CR 608.2c), so the refusal is now stricter than it needs
+#: to be, never looser.
 _UNSUSPENDED_OFFERS = frozenset({"may", "unless_player_pays"})
 
 #: The step that is the end of one round: see ``_with_round_end``.

@@ -521,9 +521,17 @@ class OptionalPayChoicesMixin:
         )
         if choice is None:
             return False
+        # Through the registered answer path (``_apply_choice_answer``) rather
+        # than straight to the resolver: the kind ``suspends``, and that path is
+        # what lifts the suspension before the answer is applied and carries on
+        # with the steps behind the offer afterwards (``engine/resumption.py``).
+        # Called directly, the answer was applied and the rest of the
+        # resolution was never run.
         return self._answer_pending_choice(
             choice,
-            lambda: self._resolve_optional_pay(choice, accept, option, asked=True),
+            lambda: self._apply_choice_answer(
+                choice, {"accept": accept, "option": option}
+            ),
         )
 
     def _resolve_optional_pay(
@@ -584,13 +592,15 @@ class OptionalPayChoicesMixin:
         else:
             self.discard_pending_choice(choice)
             self._apply_optional_pay_decline(player_index, entry)
-        # The trigger ability that raised this prompt was held on the stack (human
-        # priority path). Whether it now leaves is `_release_stack_item`'s answer,
-        # not this one: accepting can arm the *next* prompt of the same
-        # resolution — "you may search your library …" (Sanctum of All) offers
-        # the search here — and the ability is still resolving until that is
-        # answered too.
-        self._release_stack_item(entry.get("_stack_item"))
+        # The object that raised this prompt is held on the stack (CR 608.2), and
+        # it is **not released here**. The offer suspends, so the steps written
+        # behind it run only once this returns (``_apply_choice_answer`` resumes
+        # them) — a release here took Grip of Amnesia off the stack before its
+        # "Draw a card." and its own move to the graveyard. Every answer path
+        # goes through ``_answer_pending_choice``, which releases the object
+        # after the resumed steps, and only if none of them armed the next
+        # prompt of the same resolution ("you may search your library …",
+        # Sanctum of All).
         return True
 
     def _optional_action_still_takeable(self, player_index: int, entry: dict) -> bool:
@@ -914,7 +924,9 @@ class OptionalPayChoicesMixin:
             # non-interactive seat — Transmute Artifact's found card simply
             # vanished instead of going to a graveyard.
             self._apply_optional_pay_decline(choice.player_index, entry)
-        self._release_stack_item(entry.get("_stack_item"))
+        # Not released here, for ``_resolve_optional_pay``'s reason: the steps
+        # behind the offer have not run yet, and ``take_choice_default``'s
+        # ``_answer_pending_choice`` releases the object after they have.
 
     def auto_resolve_pending_optional_pays(self, only_player_index: int | None = None) -> None:
         """Pay every pending optional "pay {N}" trigger when able — the

@@ -168,11 +168,12 @@ def _fold_into_offer(
     returns, so the sequence would carry on to the loop with nothing chosen and
     then report itself resolved.
 
-    Folding is what keeps the order right without making every optional cost in
-    the game suspend the resolution it is part of. The alternative — a
-    ``suspends`` flag on the offer's prompt — stops loops that have no such
-    dependency at all, which is a change to every "you may" in the pool made on
-    the strength of one card.
+    Folding was written to keep the order right without making every optional
+    cost suspend the resolution it is part of. Every offer does suspend it now
+    (Judgment's W2G2: CR 608.2c, and Grip of Amnesia's draw came before its
+    counter was decided), so the order no longer depends on this — but the
+    *branch* still does: the folded step runs only if the offer is taken,
+    which is what "if you do, …" means.
     """
     offer = instructions[offer_index]
     # *branch* is "then" for a step reading what the offer's action recorded and

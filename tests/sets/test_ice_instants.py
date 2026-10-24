@@ -1662,10 +1662,13 @@ def test_winters_chill_binds_each_outcome_to_its_own_creature(set_pool):
         pool, attackers=("Balduvian Bears", "Balduvian Barbarians"),
     )
     assert _cast_chill(game, [0, 1], 2).supported
-    assert len(game.pending_choices_of("optional_pay", 0)) == 2
+    # One creature's offer at a time: the offer suspends the loop over the
+    # chosen creatures (CR 608.2c), and answering it makes the next one.
+    assert len(game.pending_choices_of("optional_pay", 0)) == 1
 
     game.confirm_optional_pay(0, accept=False)           # the Bears' controller
     game._settle()
+    assert len(game.pending_choices_of("optional_pay", 0)) == 1
     game.confirm_optional_pay(0, accept=True, option=0)  # the Barbarians'
     game._settle()
     _finish_combat(game)
