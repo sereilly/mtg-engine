@@ -199,8 +199,11 @@ documents the working harness.
 `run_ai_simulation` deals each seat a random *limited* deck from the pool it is
 given (CR 100.2b: 40 cards, 17 lands; basics from the set or, if it prints none,
 the manifest), seeded from the run's seed so a seed reproduces a run exactly.
-`required=` pins a card into every deck, for a regression test whose subject
-must be in play.
+`required_cards=` pins a card into every deck, for a regression test whose
+subject must be in play. Each seat is also dealt a **sideboard** — the rest of
+the pool its deck was built from (CR 100.4b), by name and with no randomness,
+so the decks are byte-identical with or without it — which is what a Wish or
+Ring of Ma'rûf brings in from outside the game.
 
 **It plays the engine's turn, never a copy of it.** Every piece the loop once
 open-coded went missing silently — untap/upkeep/draw, the main phase, combat,
@@ -214,8 +217,10 @@ count** in `SimulationReport` (`interaction_count`, `lands_played`,
 `steps_left_owing`, `extra_turns_taken`, `modal_casts`, `casts_from_zones`,
 `casts_in_response`, `casts_in_combat`, `casts_on_opponents_turn`,
 `activations_at_instant_speed`, `refused_casts`, `refused_attacks`,
-`rehearsals_raised`, the combat counts). A run that cast nothing exits 1. A
-new piece of the turn arrives with its count.
+`rehearsals_raised`, `special_actions_taken`, `refused_special_actions`,
+`cards_from_outside_game`, the combat counts). A run that cast nothing exits
+1. A new piece of the turn arrives with its count. CR 116 special actions are
+weighed in `engine/ai_special_actions.py`, before the first combat.
 
 - **Casting**: every cast site goes through `ai_actions.cast_announcement` (an
   AST test fails a site that spells a cast keyword itself); the mode chooser
@@ -452,6 +457,12 @@ entries, not editing dispatch**.
 
 **Zones, draws, discards, mana**
 
+- **Outside the game is not a zone** (CR 400.11): it is `PlayerState.sideboard`,
+  read through `Game._outside_game_choices` (CR 407.3's ante bar, CR 903.11a's
+  Commander bar) and moved by `Game.bring_card_from_outside_game`. A printed
+  "card you own from outside the game" is `ObjectFilter.outside_the_game`,
+  refused by name by every lowering not written for it (the Wishes, Ring of
+  Ma'rûf).
 - **Drawing is one seam.** `Game._draw_with_replacements`
   (`mixins/draws_and_discards.py`) is where a draw becomes
   a CR 614 event; `PlayerState.draw` underneath is banned outside it by
@@ -664,6 +675,15 @@ entries, not editing dispatch**.
 
 **Layers, control and the board**
 
+- `engine/graveyard_statics.py` — **a static that functions from a graveyard**
+  (CR 113.6b: the Incarnations, Riftstone Portal). A graveyard card whose
+  static is stamped `functions_from: "graveyard"` is a source the lord
+  recompute gathers beside the battlefield's, with the CR 613.7d timestamp of
+  its arrival there (`engine/graveyard_order.py`, recorded only for such cards).
+  **A new `PlayerState` or `Game` field is read by every `vars()` walker** — the
+  rehearsal's `seat_standing` and the AI censuses' board signatures: a field
+  that moves on every resolution reads as a lasting change unless it is
+  listed as bookkeeping (`ai_rehearsal._PLAYER_BOOKKEEPING`).
 - `engine/continuous.py` + `engine/layer_bridge.py` — the CR 613 layer system.
   Characteristics are **computed**: `has_type`, `is_creature`,
   `effective_power`, `has_keyword`, the colour accessors and
