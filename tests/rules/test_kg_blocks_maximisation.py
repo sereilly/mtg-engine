@@ -300,3 +300,31 @@ def test_the_ai_declares_the_maximum_and_keeps_its_own_choice_where_it_can():
     assert all(
         game.players[1].battlefield[slot].card.name == "Watchdog" for slot in declared
     ), declared
+
+
+@pytest.mark.cr("509.1c", "509.1d")
+def test_war_cadence_at_x_zero_is_still_a_cost_a_watchdog_need_not_pay():
+    """"You can choose X=0. This doesn't have an effect most of the time, but it
+    does mean that creatures can't block unless the controller chooses to pay
+    the cost (a cost of zero is not automatically paid). You can use this to
+    make your creatures unable to block an attacker." (War Cadence ruling,
+    2004-10-04.) So a Watchdog under an X=0 toll owes a cost to block, and
+    CR 509.1c does not require its controller to pay it: declaring nothing is
+    legal. Paying the {0} is legal too. The toll used to be read by its total,
+    which at X=0 is nothing, so the Watchdog was compelled."""
+    def make():
+        game = _game(
+            [Permanent(card=_mk_creature_card("Raider", 2, 2)),
+             Permanent(card=_card("War Cadence"))],
+            [Permanent(card=_card("Watchdog"))],
+        )
+        result = game.activate_permanent_ability(0, "War Cadence", x_value=0)
+        assert result.supported, result.details
+        resolve_stack(game)
+        _to_blockers(game, [0])
+        return game
+
+    game = make()
+    assert game.blocking_restrictions_until_eot, "the toll is filed"
+    assert game.declare_blockers(1, {})[0], game.log
+    assert _accepted(make, {0: [0]})

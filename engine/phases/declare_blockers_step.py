@@ -527,19 +527,38 @@ class DeclareBlockersStepMixin:
 
         The one question CR 509.1c's last clause asks — "if a creature can't
         block unless a player pays a cost, that player is not required to pay
-        that cost" — and so the one reader the five requirement checks in
-        ``declare_blockers`` ask. They asked ``_block_mana_costs_of`` alone,
-        which is every cost this step charges *in mana per pair* and none of
-        the others: a Heat-Waved creature (life), one under War Cadence (a
+        that cost" — and so the one reader the CR 509.1c maximisation
+        (``block_requirements.py``) asks of every pair it considers. The
+        requirement checks once asked ``_block_mana_costs_of`` alone, which is
+        every cost this step charges *in mana per pair* and none of the
+        others: a Heat-Waved creature (life), one under War Cadence (a
         per-blocker toll) and Hollow Warrior (a tap) were each compelled by
         Lure to block and pay. Every currency the step charges is here.
+
+        A War Cadence toll is asked by whether it **names** the creature, not by
+        what it costs: "You can choose X=0 … it does mean that creatures can't
+        block unless the controller chooses to pay the cost (a cost of zero is
+        not automatically paid). You can use this to make your creatures unable
+        to block an attacker." (War Cadence ruling, 2004-10-04.) An X=0 toll
+        totals ``{}``, and read by its total it compelled every creature it
+        names.
         """
         return bool(
             self._block_mana_costs_of(blocker, attacker)
-            or self._block_toll_of(blocker)
+            or self._block_tolls_naming(blocker)
             or self._block_life_cost_of(blocker, attacker)
             or declaration_tap_costs(blocker, "block")
         )
+
+    def _block_tolls_naming(self, blocker: Permanent) -> list[dict]:
+        """Every turn-scoped toll on blocking (War Cadence) whose noun phrase
+        names *blocker*, whatever it costs — :meth:`_block_toll_of` sums what
+        these charge."""
+        return [
+            entry for entry in self.blocking_restrictions_until_eot
+            if entry.get("toll")
+            and subject_matches(self, blocker, dict(entry.get("filter") or {}))
+        ]
 
     def _block_toll_of(self, blocker: Permanent) -> dict[str, int]:
         """The mana *blocker*'s controller owes **once** for blocking with it.
@@ -570,13 +589,8 @@ class DeclareBlockersStepMixin:
         permanent, so there is no seat whose "you" the noun phrase could mean.
         """
         total: dict[str, int] = {}
-        for entry in self.blocking_restrictions_until_eot:
-            if not entry.get("toll"):
-                continue
-            cost = entry.get("mana") or {}
-            if not subject_matches(self, blocker, dict(entry.get("filter") or {})):
-                continue
-            for symbol, amount in cost.items():
+        for entry in self._block_tolls_naming(blocker):
+            for symbol, amount in (entry.get("mana") or {}).items():
                 total[symbol] = total.get(symbol, 0) + int(amount)
         return total
 
