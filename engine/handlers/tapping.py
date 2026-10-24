@@ -1038,8 +1038,16 @@ def tap_or_untap_target(game: Game, instruction: OracleInstruction, context: Ora
     if perm is None:
         game.log.append("No valid permanent to tap or untap")
         return True, "resolved"
-    perm.tapped = not perm.tapped
+    # Through the two seams every other tap and untap goes through (CR
+    # 701.26a/b), never a write to ``perm.tapped``: "becomes tapped" and
+    # "becomes untapped" are announced there and nowhere else. The toggle was a
+    # bare write, so Lifetap never saw a Forest Twiddle tapped and Ghostly
+    # Pilferer never saw a Twiddle untap — thirteen cards print this verb, and
+    # every one of them tapped and untapped in silence. Found driving Judgment's
+    # Telekinetic Bonds.
     if perm.tapped:
+        game.become_untapped(perm)
+    elif game.become_tapped(perm):
         game._turn_face_up(perm)
     game.log.append(f"{'Tapped' if perm.tapped else 'Untapped'} {perm.card.name}")
     return True, "resolved"
