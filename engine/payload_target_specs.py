@@ -646,11 +646,15 @@ def _whole_prevention_shield_spec(payload: dict) -> dict | None:
     """Pentagram of the Ages’ shield, and the one printing that chooses nothing.
 
     "The next time **a source of your choice** would deal damage to you this
-    turn, prevent that damage" runs the prompt its four siblings above run — a
-    permanent on any battlefield or a spell on the stack, matched by identity,
-    so no filter narrows it. CR 609.7a is what makes them one prompt rather than
-    four: the phrase names *a source of damage*, and the set a player may choose
-    from is the rule’s, not the card’s.
+    turn, prevent that damage" runs the prompt Dark Sphere’s and Eye for an
+    Eye’s flat rows run — a permanent on any battlefield or a spell on the
+    stack, matched by identity, so no filter narrows it. CR 609.7a is what makes
+    them one prompt: the phrase names *a source of damage*, and the set a player
+    may choose from is the rule’s, not the card’s. The same is true of the
+    sentence with CR 615.5’s rider after it (Reverse Damage, Bone Mask,
+    Shadowbane, Honorable Passage), which is this kind with a ``rider`` key —
+    nothing here reads it, because what the shield does after absorbing is not
+    a question the picker asks.
 
     ``from_source`` is the other printing — "The next time **this creature**
     would deal damage to you this turn" (Mercenaries) — where the source is
@@ -1293,11 +1297,6 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     # target** this turn by a source of your choice" (Shieldmage Advocate), the
     # target first and ``requires_source`` for the second stage.
     "grant_chosen_source_blanket_shield": _whole_prevention_shield_spec,
-    # Honorable Passage names its protected object the way Circle of
-    # Despair does — "would deal damage to **any target**" — and its
-    # chosen source the way every CR 615.8 shield does. Same two
-    # prompts, same reader, one rider later.
-    "grant_reflecting_prevention_shield": _whole_prevention_shield_spec,
     "set_base_pt_target_until_eot": _set_base_pt_spec,
     "grant_cast_permission": _cast_permission_spec,
     "look_top_pick_to_hand": _look_top_pick_spec,

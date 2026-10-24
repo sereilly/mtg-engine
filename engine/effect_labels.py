@@ -501,6 +501,10 @@ ACTIVATED_LABELS: dict[str, str] = {
     # fallback would label it `activated_damage`, which is the one thing this
     # ability never does.
     "redirect_source_damage_to_target_until_eot": "activated_prevention",
+    # Pentagram of the Ages, and with a CR 615.5 rider as payload Cho-Arrim
+    # Alchemist's life (Reverse Damage's sentence, one activation over) and
+    # Bone Mask's exile — one bucket, because what each ability is for is the
+    # prevention, and the sentence after it is what that prevention pays.
     "grant_whole_prevention_shield": "activated_prevention",
     "grant_chosen_source_blanket_shield": "activated_prevention",
     # --- Invasion, at its promotion ---------------------------------------
@@ -510,7 +514,6 @@ ACTIVATED_LABELS: dict[str, str] = {
     # card to *activate* it, and it takes the bucket every other activated
     # shield in this block has.
     "prevent_damage_to_target_until_eot": "activated_prevention",
-    "grant_exile_prevention_shield": "activated_prevention",
     # --- Fallen Empires' activated abilities, added at its promotion --------
     # Same rule as M21's block above: the bucket the *ability* belongs to, not
     # the one its instruction kind reads like — and where the kind is a
@@ -691,9 +694,8 @@ ACTIVATED_LABELS: dict[str, str] = {
     #
     # Cho-Arrim Alchemist's shield is Reverse Damage's, one activation over: a
     # source of your choice, the whole of its damage, and life for what was
-    # prevented. It goes beside `grant_whole_prevention_shield`, the shield it
-    # is a variant of.
-    "grant_reverse_damage_shield": "activated_prevention",
+    # prevented. Its own row here until the round that folded the riders into
+    # `grant_whole_prevention_shield`'s payload; it takes that row's bucket now.
     # General's Regalia moves damage from a chosen source onto a creature. The
     # redirect family is split across two spellings of one bucket name and this
     # one takes `activated_prevent`, beside

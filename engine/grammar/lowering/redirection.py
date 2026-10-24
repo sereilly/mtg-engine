@@ -76,7 +76,7 @@ def _lower_redirect_damage(node: ast.RedirectDamage) -> tuple[OracleInstruction,
     the axis ``engine/targeting.py``'s kind→spec table keys on — one picker runs
     over the battlefield's attackers and the other over every source including
     the stack — so it cannot be payload under one kind, exactly as
-    ``prevent_damage_by_target_until_eot`` and ``grant_reverse_damage_shield``
+    ``prevent_damage_by_target_until_eot`` and ``grant_whole_prevention_shield``
     are two kinds for the two ways a shield names its source.
 
     Everything else *is* payload, and every refusal below is a way this sentence

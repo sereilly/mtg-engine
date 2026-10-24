@@ -795,7 +795,7 @@ def test_an_uncoloured_source_shield_keeps_the_sentence_after_it():
         "The next time a source of your choice would deal damage to you this turn, "
         "prevent that damage. You gain life equal to the damage prevented this way.",
         "Reverse Damage",
-    ) == [("grant_reverse_damage_shield", {})]
+    ) == [("grant_whole_prevention_shield", {"rider": "gain_life"})]
 
 
 def test_a_narrowed_source_shield_refuses_the_sentence_after_it():
