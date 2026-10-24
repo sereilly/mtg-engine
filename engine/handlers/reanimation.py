@@ -17,7 +17,8 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
-from ..aura_attachment import PUT_ONTO_BATTLEFIELD_BY
+from ..aura_attachment import (PUT_ONTO_BATTLEFIELD_BY, is_aura_card,
+                               returning_aura_hosts)
 from ..keywords import grant_keyword
 from ..models import Permanent
 from ..replacements.zone_changes import EXILE_ON_LEAVING_BATTLEFIELD
@@ -978,9 +979,9 @@ def return_all_cards_from_graveyard(game: Game, instruction: OracleInstruction, 
         if destination == "battlefield":
             for index in list(taken):
                 card = player.graveyard[index]
-                if not _is_aura_card(card):
+                if not is_aura_card(card):
                     continue
-                legal = _legal_returning_aura_hosts(game, seat, card, already_there)
+                legal = returning_aura_hosts(game, seat, card, already_there)
                 if not legal:
                     # CR 303.4g: nothing it could enchant, so it stays where it
                     # is rather than entering attached to nothing for CR 704.5m
@@ -1122,48 +1123,6 @@ def _return_planned_cards(
             returned += 1
     if not returned:
         game.log.append(f"{card_name}: no cards to return")
-
-
-def _is_aura_card(card) -> bool:
-    """Whether *card*, in a graveyard, is an Aura with an enchant ability —
-    the test the Aura spell's own resolution asks before CR 303.4g bins it
-    (``resolution``'s "had no legal target"), off the printed card because a
-    card in a graveyard has nothing else (CR 613.1)."""
-    from ..auras import aura_enchant_clause
-
-    return "Aura" in (card.type_line or "") and aura_enchant_clause(
-        card.oracle_text or ""
-    ) is not None
-
-
-def _legal_returning_aura_hosts(game, seat: int, card, already_there) -> list:
-    """The permanents an Aura card a mass return puts onto the battlefield
-    under *seat*'s control could enchant — empty when it can enchant nothing
-    (CR 303.4g: it stays in the graveyard).
-
-    CR 303.4f: an Aura put onto the battlefield by an effect that names no
-    host is attached to an object its controller chooses, as it enters, and
-    "doing this does not target the permanent" (Replenish's and Cleansing
-    Meditation's ruling, 2004-10-04) — so shroud and hexproof are no bar. The
-    enchant ability and protection (CR 702.16c, "can't be enchanted by Auras
-    that have the stated quality") are ``enchant_card_refusal``, the one
-    predicate every host chooser asks. Only a permanent that was on the
-    battlefield before the return (*already_there*), in board order.
-
-    **Who chooses.** An interactive seat with more than one legal host is
-    asked (``permanent_choice``, armed by the handler, the candidates this
-    list). Every other seat takes ``ai_targets.choose_returning_aura_host`` —
-    an Aura whose text works against its host goes on an opponent's
-    permanent, any other on its controller's — which is also that prompt's
-    default (``default_prefers: "returning_aura_host"``).
-    """
-    from ..aura_attachment import enchant_card_refusal
-
-    return [
-        host for host in already_there
-        if game.is_on_battlefield(host)
-        and enchant_card_refusal(game, card, seat, host) is None
-    ]
 
 
 def _destroyed_this_way_slots(player, taken, context) -> list[int]:

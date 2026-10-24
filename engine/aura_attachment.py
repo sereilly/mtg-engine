@@ -331,6 +331,59 @@ def _enchant_clause_refusal(game, card, controller_seat, host, *, aura=None) -> 
     return None
 
 
+def is_aura_card(card) -> bool:
+    """Whether *card*, off the battlefield, is an Aura with an enchant ability —
+    the test the Aura spell's own resolution asks before CR 303.4g bins it
+    (``resolution``'s "had no legal target"), off the printed card because a
+    card in a graveyard or in exile has nothing else (CR 613.1).
+
+    Moved here from ``handlers/reanimation.py`` (Replenish's return) when
+    Judgment's Worldgorger Dragon became the second effect putting Aura cards
+    onto the battlefield with no host named — out of exile, by its linked
+    leaves-the-battlefield ability. Two handler families, one question.
+    """
+    from .auras import aura_enchant_clause
+
+    return "Aura" in (card.type_line or "") and aura_enchant_clause(
+        card.oracle_text or ""
+    ) is not None
+
+
+def returning_aura_hosts(game, seat: int, card, already_there) -> list:
+    """The permanents an Aura card put onto the battlefield under *seat*'s
+    control by an effect that names no host could enchant — empty when it can
+    enchant nothing (CR 303.4g: it stays where it was).
+
+    CR 303.4f: an Aura put onto the battlefield by an effect that names no
+    host is attached to an object its controller chooses, as it enters, and
+    "doing this does not target the permanent" (Replenish's and Cleansing
+    Meditation's ruling, 2004-10-04) — so shroud and hexproof are no bar. The
+    enchant ability and protection (CR 702.16c, "can't be enchanted by Auras
+    that have the stated quality") are ``enchant_card_refusal``, the one
+    predicate every host chooser asks. Only a permanent that was on the
+    battlefield before the return (*already_there*), in board order —
+    Worldgorger Dragon's ruling says it of exile exactly as Replenish's says it
+    of a graveyard: "It can't enter the battlefield enchanting a permanent that
+    enters the battlefield at the same time" (2022-12-08).
+
+    Two callers: a mass return from a graveyard
+    (``handlers/reanimation.return_all_cards_from_graveyard``) and a linked
+    pile returned from exile (``handlers/linked_exile.put_exiled_with_source``).
+
+    **Who chooses.** An interactive seat with more than one legal host is
+    asked (``permanent_choice``, armed by the handler, the candidates this
+    list). Every other seat takes ``ai_targets.choose_returning_aura_host`` —
+    an Aura whose text works against its host goes on an opponent's
+    permanent, any other on its controller's — which is also that prompt's
+    default (``default_prefers: "returning_aura_host"``).
+    """
+    return [
+        host for host in already_there
+        if game.is_on_battlefield(host)
+        and enchant_card_refusal(game, card, seat, host) is None
+    ]
+
+
 def attach_aura(aura, target) -> None:
     """Attach *aura* to *target*, recording it as an owned continuous effect.
 

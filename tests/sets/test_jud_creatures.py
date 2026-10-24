@@ -323,6 +323,115 @@ def test_w1g4_wormfang_crab_alone_exiles_nothing(set_pool):
     assert _w1g4_names(game, 1) == ["Forest"]
     assert game.players[0].exile == [] and game.players[1].exile == []
 
+
+# --- Worldgorger Dragon: "exile all other permanents you control" ----------
+
+
+def _w1g4_gorger_board(set_pool, *, opp_creatures=(), interactive=()):
+    from engine.aura_attachment import attach_aura
+
+    game = _w1g4_game(set_pool, hand=["Worldgorger Dragon"], interactive=interactive)
+    _w1g4_put(game, set_pool, 0, "Plains")
+    bears = _w1g4_put(game, set_pool, 0, "Grizzly Bears")
+    aura = _w1g4_put(game, set_pool, 0, "Holy Strength")
+    attach_aura(aura, bears)
+    for name in opp_creatures:
+        _w1g4_put(game, set_pool, 1, name)
+    _w1g4_put(game, set_pool, 1, "Forest")
+    return game
+
+
+def _w1g4_aura_host(game, name):
+    aura = next(p for p in game.all_permanents() if p.card.name == name)
+    host = aura.metadata.get("attached_to")
+    return None if host is None else host.card.name
+
+
+def test_w1g4_worldgorger_dragon_exiles_only_its_controller_s_other_permanents(set_pool):
+    game = _w1g4_gorger_board(set_pool, opp_creatures=["Hill Giant"])
+    game.cast_from_hand(0, "Worldgorger Dragon")
+    _w1g4_drain(game)
+
+    assert _w1g4_names(game, 0) == ["Worldgorger Dragon"]
+    assert _w1g4_names(game, 1) == ["Forest", "Hill Giant"]
+    dragon = _w1g4_named(game, 0, "Worldgorger Dragon")
+    assert sorted(e["card"].name for e in _w1g4_linked_entries(dragon)) == [
+        "Grizzly Bears", "Holy Strength", "Plains",
+    ]
+
+    _w1g4_swords(game, set_pool, dragon)
+
+    assert _w1g4_names(game, 0) == ["Grizzly Bears", "Holy Strength", "Plains"]
+    # The Aura may not enchant the Bears, which enter at the same time; the
+    # Hill Giant was already there and is the one legal host — an opponent's
+    # permanent, which the ruling allows (2022-12-08).
+    assert _w1g4_aura_host(game, "Holy Strength") == "Hill Giant"
+    assert game.players[0].exile == [game.players[0].exile[0]]
+    assert game.players[0].exile[0].name == "Worldgorger Dragon"
+
+
+def test_w1g4_worldgorger_dragon_leaves_an_aura_with_no_host_in_exile(set_pool):
+    game = _w1g4_gorger_board(set_pool)
+    game.cast_from_hand(0, "Worldgorger Dragon")
+    _w1g4_drain(game)
+    _w1g4_swords(game, set_pool, _w1g4_named(game, 0, "Worldgorger Dragon"))
+
+    # "If the Aura can't legally be attached to anything, it stays exiled."
+    assert _w1g4_names(game, 0) == ["Grizzly Bears", "Plains"]
+    assert sorted(c.name for c in game.players[0].exile) == [
+        "Holy Strength", "Worldgorger Dragon",
+    ]
+    # Not binned by CR 704.5m as an unattached Aura: it never entered.
+    assert [c.name for c in game.players[0].graveyard] == ["Swords to Plowshares"]
+
+
+def test_w1g4_worldgorger_dragon_asks_where_a_returning_aura_goes(set_pool):
+    game = _w1g4_gorger_board(
+        set_pool, opp_creatures=["Hill Giant", "Gray Ogre"], interactive=(0,),
+    )
+    game.cast_from_hand(0, "Worldgorger Dragon")
+    _w1g4_drain(game)
+    dragon = _w1g4_named(game, 0, "Worldgorger Dragon")
+    game.players[0].hand.append(set_pool("LEA")["Swords to Plowshares"])
+    game.queue_from_hand(
+        0, "Swords to Plowshares", target_player_index=0,
+        target_permanent_ids=[dragon.permanent_id],
+    )
+    game.resolve_top_of_stack()  # Swords; the leave trigger goes on the stack
+    game.resolve_top_of_stack()  # the leave trigger, which stops to ask
+
+    choice = game.waiting_prompt()
+    assert choice is not None and choice.kind == "permanent_choice"
+    assert {p.card.name for p in game.live_permanent_choices(choice)} == {
+        "Hill Giant", "Gray Ogre",
+    }
+    # Nothing has returned while the question is owed: the cards enter together.
+    assert _w1g4_names(game, 0) == []
+    ogre = _w1g4_named(game, 1, "Gray Ogre")
+    assert game.confirm_permanent_choice(0, ogre.permanent_id)
+    _w1g4_drain(game)
+
+    assert _w1g4_names(game, 0) == ["Grizzly Bears", "Holy Strength", "Plains"]
+    assert _w1g4_aura_host(game, "Holy Strength") == "Gray Ogre"
+
+
+def test_w1g4_worldgorger_dragon_killed_in_response_exiles_for_good(set_pool):
+    game = _w1g4_gorger_board(set_pool, opp_creatures=["Hill Giant"])
+    game.queue_from_hand(0, "Worldgorger Dragon")
+    game.resolve_top_of_stack()
+    dragon = _w1g4_named(game, 0, "Worldgorger Dragon")
+    assert game.stack
+
+    _w1g4_swords(game, set_pool, dragon)
+
+    # "It won't return anything. Then the enters-the-battlefield ability will
+    # exile all other permanents you control indefinitely." (2022-12-08.)
+    assert _w1g4_names(game, 0) == []
+    assert sorted(c.name for c in game.players[0].exile) == [
+        "Grizzly Bears", "Holy Strength", "Plains", "Worldgorger Dragon",
+    ]
+    assert _w1g4_names(game, 1) == ["Forest", "Hill Giant"]
+
 # ==== end W1G4 ======================================================
 
 

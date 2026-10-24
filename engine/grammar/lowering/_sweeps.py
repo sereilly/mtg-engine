@@ -595,7 +595,22 @@ def lower_exile_sweep(
     # permanent, so "you control" and "another" have nothing to be relative
     # to and would be dropped where they are tested.
     narrowings = _filter_payload(rest)
-    unusable = sorted(set(narrowings) - OBJECT_ONLY_FILTER_KEYS)
+    # "When this creature enters, exile **all other** permanents **you
+    # control**." (Worldgorger Dragon.) The comment above was true when it was
+    # written and stopped being true at Wall of Nets: the handler now reads the
+    # whole payload through ``subject_matches`` with the resolving controller
+    # as the observer and ``context.source_permanent`` as the source — so the
+    # two relations those supply are answered, not dropped, and are admitted
+    # here by name. "Another" (``exclude_self``) is the source's identity; a
+    # spell has none and excludes nothing, which is what "other" on a spell
+    # would mean. The controller is admitted only as the two words an
+    # observer alone can answer: "you" and "an opponent" (CR 109.5). Every
+    # other seat word ("that player", "target opponent") needs a seat the
+    # sweep handler is never handed, and keeps its refusal.
+    observer_answers = {"exclude_self"}
+    if narrowings.get("controller") in ("you", "opponent"):
+        observer_answers.add("controller")
+    unusable = sorted(set(narrowings) - OBJECT_ONLY_FILTER_KEYS - observer_answers)
     # ``blocked_by_source`` is named here rather than in
     # ``_PAYLOAD_HONOURED_FILTER_FIELDS``, which is the idiom
     # ``lowering/_filters.py`` states for a relation only some lowerings can
