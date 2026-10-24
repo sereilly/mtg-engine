@@ -160,6 +160,15 @@ def _parse_search_other_library(stream: TokenStream) -> ast.Statement:
             )
     elif stream.accept_phrase("and", "exile", "them"):
         to = ast.Zone("exile")
+    elif stream.accept_phrase(
+        "and", "put", "them", "into", "that", "player", "'s", "graveyard"
+    ):
+        # "Search target player's library for up to three cards with flashback
+        # **and put them into that player's graveyard**." (Quiet Speculation.)
+        # The searched player's own graveyard — CR 404.1's owner, which is the
+        # player whose library the cards came out of — so the possessive is
+        # read as the seat this sentence opened, and checked by the lowering.
+        to = ast.Zone("graveyard", ast.PlayerRef("that_player"))
     elif isinstance(count, ast.Fixed) and count.value == 1 and stream.accept_phrase(
         "and", "exile", "it"
     ):

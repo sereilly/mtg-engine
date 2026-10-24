@@ -500,4 +500,76 @@ def test_w1g10_morality_shift_puts_the_library_into_the_graveyard_from_the_libra
         "Forest", "Gaea's Blessing", "Hill Giant", "Island", "Morality Shift",
     ]
 
+
+_W1G10_SPECULATION_LIBRARY = [
+    "Island", "Firebolt", "Lightning Bolt", "Deep Analysis", "Moment's Peace",
+    "Ray of Revelation",
+]
+
+
+def _w1g10_speculation_table(set_pool, *, interactive=(0,)):
+    pool = {**set_pool("LEA"), **set_pool("ODY"), **set_pool("TOR"), **set_pool("JUD")}
+    game = _W1G10Game(players=[
+        _W1G10PlayerState(
+            name="P0", life=20, library=[pool["Island"]] * 5,
+            hand=[pool["Quiet Speculation"]],
+        ),
+        _W1G10PlayerState(
+            name="P1", life=20,
+            library=[pool[name] for name in _W1G10_SPECULATION_LIBRARY],
+        ),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game.start_turn(0)
+    return game
+
+
+def test_w1g10_quiet_speculation_bins_up_to_three_flashback_cards(set_pool):
+    """"Search target player's library for up to three cards with flashback
+    and put them into that player's graveyard. Then the player shuffles." The
+    target is chosen as the spell is cast (CR 601.2c); a card without
+    flashback is no find; two of the four flashback cards are a legal answer
+    ("up to"); they land in the **searched** player's graveyard (CR 404.1), and
+    the rest of that library is still there."""
+    game = _w1g10_speculation_table(set_pool)
+    cast = game.queue_from_hand(0, "Quiet Speculation", target_player_index=1)
+    assert cast.supported, cast.details
+    game.resolve_top_of_stack()
+
+    prompt = game.pending_search_library
+    assert prompt["zone_seat"] == 1 and prompt["count"] == 3 and prompt["up_to"]
+    assert not game.confirm_search_library_picks(
+        0, [{"zone": "library", "index": 0}]
+    ), "an Island has no flashback"
+    assert not game.confirm_search_library_picks(
+        0, [{"zone": "library", "index": 2}]
+    ), "nor does Lightning Bolt"
+    assert game.confirm_search_library_picks(
+        0, [{"zone": "library", "index": 1}, {"zone": "library", "index": 5}]
+    )
+    _w1g10_resolve_stack(game)
+
+    assert _w1g10_names(game.players[1].graveyard) == ["Firebolt", "Ray of Revelation"]
+    assert _w1g10_names(game.players[1].library) == [
+        "Deep Analysis", "Island", "Lightning Bolt", "Moment's Peace",
+    ]
+    assert _w1g10_names(game.players[0].graveyard) == ["Quiet Speculation"]
+    assert game.pending_choices == []
+
+
+def test_w1g10_quiet_speculation_headless_takes_three_flashback_cards(set_pool):
+    """A seat nobody asks answers through the AI's search policy, which reads
+    the same predicate: three finds, every one a card with flashback."""
+    game = _w1g10_speculation_table(set_pool, interactive=())
+    assert game.queue_from_hand(0, "Quiet Speculation", target_player_index=1).supported
+    _w1g10_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+
+    binned = _w1g10_names(game.players[1].graveyard)
+    assert len(binned) == 3
+    assert set(binned) <= {"Firebolt", "Deep Analysis", "Moment's Peace", "Ray of Revelation"}
+    assert "Island" in _w1g10_names(game.players[1].library)
+    assert "Lightning Bolt" in _w1g10_names(game.players[1].library)
+
 # ==== end W1G10 ======================================================

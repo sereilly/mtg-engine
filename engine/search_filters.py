@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import re
 
+from .flashback import FLASHBACK, has_flashback
+
 # The ``ObjectFilter`` fields ``search_matches`` understands, and the
 # comparisons it can apply. ``_lower_search_library`` builds its honoured-field
 # set from the first and validates against the second, so a field added here
@@ -259,6 +261,21 @@ def search_matches(card, data: dict, *, game=None, owner=None) -> bool:
     if mana_value is not None:
         compare = _COMPARE.get(mana_value["op"])
         if compare is None or not compare(card.cmc, mana_value["value"]):
+            return False
+    # "…for up to three cards **with flashback**" (Quiet Speculation). The one
+    # keyword a card outside the battlefield is asked about, because it is the
+    # one that functions there (CR 702.34a) — Tombfire's sweep carries it under
+    # the same key. Through ``flashback.has_flashback``, the one answer to the
+    # question: the printed keyword line, and a grant (Recoup) where the card
+    # sits in a graveyard — asked of the seat whose zones are searched, which
+    # is whose graveyard a grant would be over, not of the chooser. Any other
+    # keyword never reaches this key; the lowering refuses it.
+    keyword = restrictions.get("with_keyword")
+    if keyword is not None:
+        if keyword != FLASHBACK or not has_flashback(
+            card, game=game,
+            owner_seat=None if owner is None else searched_seat(data, owner),
+        ):
             return False
     # "a land card **of each basic land type**" (Gaea's Balance); "a creature
     # card, a land card, and a noncreature, nonland card" (Guided Passage). One

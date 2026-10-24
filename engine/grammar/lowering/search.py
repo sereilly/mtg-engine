@@ -20,6 +20,9 @@ leave the player choosing from their entire library while the card still
 reported supported.
 """
 
+import dataclasses
+
+from ...flashback import FLASHBACK
 from ...oracle_types import (COUNTERED_SPELL_CONTROLLER, COUNTERED_SPELL_NAME,
                              EXILED_THIS_WAY_OBJECTS,
                              LAST_TARGET_CONTROLLER, LAST_TARGET_NAME,
@@ -469,7 +472,7 @@ _SEARCH_DESTINATIONS = {
 #: under your control" — which is the first printing here whose find does not
 #: stay with the player whose library was opened. It is admitted only with a
 #: printed controller, at the branch below.
-_OTHER_SEARCH_DESTINATIONS = frozenset({"exile", "hand", "battlefield"})
+_OTHER_SEARCH_DESTINATIONS = frozenset({"exile", "hand", "battlefield", "graveyard"})
 
 #: The player references whose seat the search flow can name. "You" is
 #: deliberately absent: that sentence is `_lower_search_library`'s, and reaching
@@ -503,7 +506,7 @@ def _lower_search_player_library(
         raise LoweringError(
             f"the search flow has no destination {node.to.name!r}", node=node
         )
-    if node.to.name == "hand" and (
+    if node.to.name in ("hand", "graveyard") and (
         node.to.owner is None or node.to.owner.kind not in _OTHER_SEARCH_PLAYERS
     ):
         # "…puts those cards into **their** hand" is the searched player's, which
@@ -529,13 +532,23 @@ def _lower_search_player_library(
             "this search puts its find onto the battlefield under your control",
             node=node,
         )
-    leftover = _restrictions_beyond(node.filter, _SEARCH_HONOURED_FILTER_FIELDS)
+    # "…for up to three cards **with flashback**" (Quiet Speculation). The one
+    # keyword a card outside the battlefield is asked about (CR 702.34a), lifted
+    # off the filter and carried as the restriction ``search_matches`` answers
+    # through ``flashback.has_flashback`` — Tombfire's sweep makes the same
+    # split. Any other keyword stays on the filter and refuses below: a library
+    # card "with flying" is a question nothing here answers.
+    filt = node.filter
+    with_flashback = filt.with_keywords == (FLASHBACK,)
+    if with_flashback:
+        filt = dataclasses.replace(filt, with_keywords=())
+    leftover = _restrictions_beyond(filt, _SEARCH_HONOURED_FILTER_FIELDS)
     if leftover:
         raise LoweringError(
             "the search picker cannot test this restriction: " + ", ".join(leftover),
             node=node,
         )
-    if len(node.filter.card_types) > 1:
+    if len(filt.card_types) > 1:
         raise LoweringError("the search picker tests one card type", node=node)
     payload: dict[str, object] = {
         "card_type": node.filter.card_types[0] if node.filter.card_types else "any",
@@ -567,6 +580,8 @@ def _lower_search_player_library(
         payload["count"] = amount
     if node.up_to:
         payload["up_to"] = True
+    if with_flashback:
+        payload["restrictions"] = {"with_keyword": FLASHBACK}
     if node.player.kind != "that_player":
         # "target player's library" is a cast-time choice the picker must offer;
         # "that player's" names one an earlier sentence of the same effect
