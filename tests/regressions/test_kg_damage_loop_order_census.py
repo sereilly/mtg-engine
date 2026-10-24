@@ -289,16 +289,21 @@ def _simulacrum(game, card, instruction):
 
 def _bite_back(game, card, instruction):
     """"That creature deals damage equal to its power to this creature": the
-    ability's source is the recipient that asks."""
+    ability's source is the recipient that asks. The record is a sequence by
+    its channel's definition (``_targets.recorded_permanent_ids``) and the
+    pool's sentences put one biter in it; two make the loop observable — the
+    second bite must wait for the first one's answer."""
     source = _put(game, 0, card.name)
     _arm_two(source)
     if instruction.payload.get("cards_from") is not None:
-        exiled = _POOL["Grizzly Bears"]
-        game.players[1].exile.append(exiled)
-        results = {instruction.payload["cards_from"]: [exiled]}
+        exiled = [_POOL["Grizzly Bears"], _POOL["Scryb Sprites"]]
+        game.players[1].exile.extend(exiled)
+        results = {instruction.payload["cards_from"]: exiled}
     else:
-        biter = _put(game, 1, "Grizzly Bears")
-        results = {instruction.payload["permanents_from"]: [biter.permanent_id]}
+        biters = [_put(game, 1, "Grizzly Bears"), _put(game, 1, "Scryb Sprites")]
+        results = {
+            instruction.payload["permanents_from"]: [b.permanent_id for b in biters],
+        }
     return [source], 0, lambda: _execute(
         game, card, instruction, caster=game.players[0], source_permanent=source,
         results=results,
@@ -306,34 +311,35 @@ def _bite_back(game, card, instruction):
 
 
 def _bite_player(game, card, instruction):
-    """"That creature deals damage equal to its power to its controller"."""
-    biter = _put(game, 0, "Grizzly Bears")
+    """"That creature deals damage equal to its power to its controller", with
+    two recorded biters for ``_bite_back``'s reason."""
+    biters = [_put(game, 0, "Grizzly Bears"), _put(game, 0, "Scryb Sprites")]
     _arm_two(game.players[0])
     key = instruction.payload["permanents_from"]
     return [game.players[0]], 0, lambda: _execute(
-        game, card, instruction, results={key: [biter.permanent_id]},
+        game, card, instruction, results={key: [b.permanent_id for b in biters]},
     )
 
 
 def _two_target_fight(game, card, instruction):
-    """Seat 0's creature fights seat 1's: the first half is dealt to seat 1's,
-    the second — the one that asks — to seat 0's."""
-    fighter = _put(game, 0, "Grizzly Bears")
-    opponent = _put(game, 1, "Grizzly Bears")
-    _arm_two(fighter)
-    return [opponent, fighter], 1, lambda: _execute(
-        game, card, instruction, caster=game.players[0], target=game.players[1],
+    """Seat 1's creature fights seat 0's: the first half — the one that asks —
+    is dealt to seat 0's, and the second, to seat 1's, must wait for it."""
+    fighter = _put(game, 1, "Grizzly Bears")
+    opponent = _put(game, 0, "Grizzly Bears")
+    _arm_two(opponent)
+    return [opponent, fighter], 0, lambda: _execute(
+        game, card, instruction, caster=game.players[1], target=game.players[0],
         x_value=0,
         target_permanent_id=[fighter.permanent_id, opponent.permanent_id],
     )
 
 
 def _source_fight(game, card, instruction):
-    fighter = _put(game, 0, card.name)
-    opponent = _put(game, 1, "Grizzly Bears")
-    _arm_two(fighter)
-    return [opponent, fighter], 1, lambda: _execute(
-        game, card, instruction, caster=game.players[0], target=game.players[1],
+    fighter = _put(game, 1, card.name)
+    opponent = _put(game, 0, "Grizzly Bears")
+    _arm_two(opponent)
+    return [opponent, fighter], 0, lambda: _execute(
+        game, card, instruction, caster=game.players[1], target=game.players[0],
         source_permanent=fighter, target_permanent_id=opponent.permanent_id,
     )
 
@@ -463,6 +469,11 @@ def test_every_damage_loop_asks_and_resumes_at_the_recipient_that_asked():
             if now != expected:
                 early.append(f"{label} ({card.name}): {now} != {expected}")
                 break
+            if len(asked) != 1:
+                # The event behind the one that asked ran too, and asked its
+                # own question before the first was answered.
+                early.append(f"{label} ({card.name}): {len(asked)} questions at once")
+                break
             _answer_all(game, 0)
             _settle(game)
             after = [_snap(game, r) for r in recipients]
@@ -494,17 +505,19 @@ def test_every_damage_loop_asks_and_resumes_at_the_recipient_that_asked():
             unreached.append(label)
 
     assert examined >= len(_CASES) + len(_SYNTHETIC)
-    assert not unreached, f"no card carrying these reached the recipient: {unreached}"
-    assert not unasked, (
-        "damage was dealt to a recipient with two applicable prevention effects "
-        f"without asking its controller (CR 616.1e): {unasked}"
-    )
-    assert not early, (
+    # One assertion over every finding, so a red run names each defect at once.
+    findings = {
+        "no card carrying these reached the recipient": unreached,
+        "dealt to a recipient with two applicable effects without asking its "
+        "controller (CR 616.1e)": unasked,
         "the recipients behind the one that asked were dealt to before the "
-        f"answer, or the ones in front of it were not: {early}"
+        "answer, or the ones in front of it were not": early,
+        "the loop did not finish after the answer": unfinished,
+        "the second option was not honoured": unhonoured,
+    }
+    assert not any(findings.values()), "\n".join(
+        f"{what}: {rows}" for what, rows in findings.items() if rows
     )
-    assert not unfinished, f"the loop did not finish after the answer: {unfinished}"
-    assert not unhonoured, f"the second option was not honoured: {unhonoured}"
 
 
 # ---------------------------------------------------------------------------
