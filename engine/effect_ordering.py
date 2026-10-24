@@ -69,7 +69,8 @@ class Candidate:
                      about effects that may then not be chosen.
     apply         -- ``(game, event) -> outcome``. Runs only once chosen, and
                      may assume ``applies`` just returned True.
-    label         -- human-readable, for the log and any future prompt
+    label         -- the option the ``effect_order`` prompt shows and the log
+                     names: one short line (:func:`option_label`)
     """
 
     key: str
@@ -118,6 +119,32 @@ class Candidate:
 #: ``Candidate.amount_role`` values. See :func:`choose_effect`.
 CAP = "cap"
 MULTIPLIER = "multiplier"
+
+#: The longest ``Candidate.label`` a registration may give: one line of an
+#: ``effect_order`` prompt's option list.
+OPTION_LABEL_LIMIT = 80
+
+
+def option_label(label: str, *, key: str) -> str:
+    """*label* as the option CR 616.1e's ``effect_order`` prompt shows the
+    affected player, or ``ValueError`` at registration if it cannot be one.
+
+    The option a person picks between two effects in contention, so it is one
+    short line saying what the effect does — never the registration's
+    docstring, which both registries used to cut at its first colon: three
+    candidates showed a paragraph (the plain "prevent the next N damage" pool
+    among them, so most real contentions did), and one showed its function
+    name. Raised at import, like a duplicate order, so a label that cannot be
+    shown is found at startup rather than in front of a player.
+    """
+    text = (label or "").strip()
+    if not text or "\n" in text or len(text) > OPTION_LABEL_LIMIT or text == key:
+        raise ValueError(
+            f"{key}: an effect_order option label is one line of at most "
+            f"{OPTION_LABEL_LIMIT} characters saying what the effect does, "
+            f"not {label!r}"
+        )
+    return text
 
 
 @dataclass

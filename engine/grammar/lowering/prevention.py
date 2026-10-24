@@ -429,8 +429,8 @@ def _lower_prevent_damage(
                     # printed on a shield its caster hangs on *themselves*.
                     # No card prints it, and the reflecting interceptor is
                     # armed by the any-target branch above; refusing names the
-                    # gap rather than arming a rider whose interceptor answers
-                    # a recipient this branch never names.
+                    # gap rather than admitting a third rider on a branch no
+                    # printed card has driven it through.
                     raise LoweringError(
                         "no shield on its own controller carries this rider",
                         node=node,

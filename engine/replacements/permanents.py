@@ -816,6 +816,7 @@ def _applies_land_mana_substitution(game, payload: dict) -> bool:
 @replacement_effect(
     "land_mana_produced", LAND_MANA_SUBSTITUTION,
     applies=_applies_land_mana_substitution,
+    label="The land produces the named type of mana instead",
 )
 def _substitute_land_mana(game, payload: dict) -> ReplacementOutcome | None:
     """"If a land is tapped for mana, it produces {B} instead of any other

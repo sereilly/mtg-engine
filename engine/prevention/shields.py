@@ -747,7 +747,10 @@ def _applies_protection(game, event: dict) -> bool:
     )
 
 
-@prevention_effect(PROTECTION, applies=_applies_protection)
+@prevention_effect(
+    PROTECTION, applies=_applies_protection,
+    label="Protection prevents the damage",
+)
 def _protection_prevents_damage(game, event: dict) -> PreventionOutcome | None:
     """Protection: "Any damage that would be dealt by sources that have the
     stated quality to a permanent or player with protection is prevented."
@@ -770,7 +773,10 @@ def _source_label(source) -> str:
     return getattr(card, "name", None) or "that source"
 
 
-@prevention_effect(COMBAT_BLANKET, applies=_applies_all_combat)
+@prevention_effect(
+    COMBAT_BLANKET, applies=_applies_all_combat,
+    label="Prevent all combat damage this turn",
+)
 def _prevent_all_combat_damage(game, event: dict) -> PreventionOutcome | None:
     """Fog / Holy Day: "Prevent all combat damage that would be dealt this
     turn." A turn-wide flag rather than a shield, so it is never used up — and
@@ -778,7 +784,10 @@ def _prevent_all_combat_damage(game, event: dict) -> PreventionOutcome | None:
     return PreventionOutcome(prevented=event["amount"])
 
 
-@prevention_effect(COMBAT_BLANKET_SCOPED, applies=_applies_scoped_combat)
+@prevention_effect(
+    COMBAT_BLANKET_SCOPED, applies=_applies_scoped_combat,
+    label="Prevent combat damage to the described creatures this turn",
+)
 def _prevent_scoped_combat_damage(game, event: dict) -> PreventionOutcome | None:
     """Pack Leader: "Prevent all combat damage that would be dealt this turn to
     Dogs you control." A turn-wide record like the blanket above rather than a
@@ -787,7 +796,10 @@ def _prevent_scoped_combat_damage(game, event: dict) -> PreventionOutcome | None
     return PreventionOutcome(prevented=event["amount"])
 
 
-@prevention_effect(COMBAT_BLANKET_EXCEPT, applies=_applies_all_combat_except)
+@prevention_effect(
+    COMBAT_BLANKET_EXCEPT, applies=_applies_all_combat_except,
+    label="Prevent combat damage this turn, except from the excluded sources",
+)
 def _prevent_all_combat_damage_except_from(game, event: dict) -> PreventionOutcome | None:
     """Undergrowth, cost paid: "Prevent all combat damage that would be dealt
     this turn… this effect doesn't affect combat damage that would be dealt by
@@ -800,7 +812,10 @@ def _prevent_all_combat_damage_except_from(game, event: dict) -> PreventionOutco
     return PreventionOutcome(prevented=event["amount"])
 
 
-@prevention_effect(COMBAT_SHIELD, applies=_applies_combat_to_and_by)
+@prevention_effect(
+    COMBAT_SHIELD, applies=_applies_combat_to_and_by,
+    label="Prevent combat damage dealt to and by one creature this turn",
+)
 def _prevent_combat_damage_to_and_by(game, event: dict) -> PreventionOutcome | None:
     """Ebony Horse, Maze of Ith: "Prevent all combat damage that would be dealt
     to and dealt by that creature this turn." Both directions are one check here
@@ -808,7 +823,10 @@ def _prevent_combat_damage_to_and_by(game, event: dict) -> PreventionOutcome | N
     return PreventionOutcome(prevented=event["amount"])
 
 
-@prevention_effect(SOURCE_CAP, applies=_arms(PREVENT_ALL_BUT, chosen=True))
+@prevention_effect(
+    SOURCE_CAP, applies=_arms(PREVENT_ALL_BUT, chosen=True),
+    label="Prevent all but 1 of the chosen attacker's combat damage",
+)
 def _forcefield_chosen_attacker(game, event: dict) -> PreventionOutcome | None:
     """Forcefield: "The next time an unblocked creature of your choice would
     deal combat damage to you this turn, prevent all but 1 of that damage."
@@ -823,7 +841,10 @@ def _forcefield_chosen_attacker(game, event: dict) -> PreventionOutcome | None:
     return _spend(game, event, PREVENT_ALL_BUT, chosen=True)
 
 
-@prevention_effect(GENERIC_CAP, applies=_arms(PREVENT_ALL_BUT, chosen=False))
+@prevention_effect(
+    GENERIC_CAP, applies=_arms(PREVENT_ALL_BUT, chosen=False),
+    label="Prevent all but 1 of the next combat damage (no attacker chosen)",
+)
 def _forcefield_generic(game, event: dict) -> PreventionOutcome | None:
     """Forcefield activated without recording a chosen attacker (AI / headless):
     the next damage event from any source is capped to 1."""
@@ -838,7 +859,10 @@ def _gain_prevented_life(game, event: dict, used: list[Shield], prevented: int) 
     game._gain_life(recipient, prevented, source_name="Reverse Damage")
 
 
-@prevention_effect(SOURCE_HALF, applies=_arms(PREVENT_HALF, chosen=True, player_only=True))
+@prevention_effect(
+    SOURCE_HALF, applies=_arms(PREVENT_HALF, chosen=True, player_only=True),
+    label="Prevent half the next damage from the chosen source",
+)
 def _half_prevention_chosen_source(game, event: dict) -> PreventionOutcome | None:
     """Dark Sphere: "The next time a source of your choice would deal damage to
     you this turn, prevent half that damage, rounded down."
@@ -851,7 +875,10 @@ def _half_prevention_chosen_source(game, event: dict) -> PreventionOutcome | Non
     return _spend(game, event, PREVENT_HALF, chosen=True)
 
 
-@prevention_effect(GENERIC_HALF, applies=_arms(PREVENT_HALF, chosen=False, player_only=True))
+@prevention_effect(
+    GENERIC_HALF, applies=_arms(PREVENT_HALF, chosen=False, player_only=True),
+    label="Prevent half the next damage (no source chosen)",
+)
 def _half_prevention_generic(game, event: dict) -> PreventionOutcome | None:
     """Dark Sphere sacrificed without recording a chosen source (AI / headless):
     the next damage event from any source is halved."""
@@ -859,7 +886,8 @@ def _half_prevention_generic(game, event: dict) -> PreventionOutcome | None:
 
 
 @prevention_effect(
-    SOURCE_SHIELD, applies=_arms(PREVENT_AND_GAIN_LIFE, chosen=True, player_only=True)
+    SOURCE_SHIELD, applies=_arms(PREVENT_AND_GAIN_LIFE, chosen=True, player_only=True),
+    label="Prevent the next damage from the chosen source and gain that much life",
 )
 def _reverse_damage_chosen_source(game, event: dict) -> PreventionOutcome | None:
     """Reverse Damage: "The next time a source of your choice would deal damage
@@ -870,7 +898,8 @@ def _reverse_damage_chosen_source(game, event: dict) -> PreventionOutcome | None
 
 
 @prevention_effect(
-    GENERIC_SHIELD, applies=_arms(PREVENT_AND_GAIN_LIFE, chosen=False, player_only=True)
+    GENERIC_SHIELD, applies=_arms(PREVENT_AND_GAIN_LIFE, chosen=False, player_only=True),
+    label="Prevent the next damage and gain that much life (no source chosen)",
 )
 def _reverse_damage_generic(game, event: dict) -> PreventionOutcome | None:
     """Reverse Damage cast without recording a chosen source (AI / headless):
@@ -902,7 +931,8 @@ def _exile_for_prevented(game, event: dict, used: list[Shield], prevented: int) 
 
 
 @prevention_effect(
-    SOURCE_EXILE_SHIELD, applies=_arms(PREVENT_AND_EXILE, chosen=True, player_only=True)
+    SOURCE_EXILE_SHIELD, applies=_arms(PREVENT_AND_EXILE, chosen=True, player_only=True),
+    label="Prevent the next damage from the chosen source and exile that many cards",
 )
 def _exile_prevention_chosen_source(game, event: dict) -> PreventionOutcome | None:
     """Bone Mask: the whole instance from the chosen source, and then the
@@ -913,6 +943,7 @@ def _exile_prevention_chosen_source(game, event: dict) -> PreventionOutcome | No
 @prevention_effect(
     GENERIC_EXILE_SHIELD,
     applies=_arms(PREVENT_AND_EXILE, chosen=False, player_only=True),
+    label="Prevent the next damage and exile that many cards (no source chosen)",
 )
 def _exile_prevention_generic(game, event: dict) -> PreventionOutcome | None:
     """The same shield armed without recording a chosen source (AI / headless):
@@ -957,7 +988,8 @@ def _gain_life_if_rider_colour(
 
 
 @prevention_effect(
-    SOURCE_TEAM_SHIELD, applies=_arms(PREVENT_TEAM, chosen=True)
+    SOURCE_TEAM_SHIELD, applies=_arms(PREVENT_TEAM, chosen=True),
+    label="Prevent the next damage from the chosen source to you or your creatures",
 )
 def _team_prevention_chosen_source(game, event: dict) -> PreventionOutcome | None:
     """Shadowbane: the whole instance from the chosen source, wherever on this
@@ -968,7 +1000,8 @@ def _team_prevention_chosen_source(game, event: dict) -> PreventionOutcome | Non
 
 
 @prevention_effect(
-    GENERIC_TEAM_SHIELD, applies=_arms(PREVENT_TEAM, chosen=False)
+    GENERIC_TEAM_SHIELD, applies=_arms(PREVENT_TEAM, chosen=False),
+    label="Prevent the next damage to you or your creatures (no source chosen)",
 )
 def _team_prevention_generic(game, event: dict) -> PreventionOutcome | None:
     """The same shield cast without recording a chosen source (AI / headless):
@@ -1035,7 +1068,8 @@ def _damage_the_source_controller(
 
 
 @prevention_effect(
-    SOURCE_REFLECT_SHIELD, applies=_arms(PREVENT_AND_DAMAGE_SOURCE, chosen=True)
+    SOURCE_REFLECT_SHIELD, applies=_arms(PREVENT_AND_DAMAGE_SOURCE, chosen=True),
+    label="Prevent the next damage from the chosen source and send it back",
 )
 def _reflect_prevention_chosen_source(game, event: dict) -> PreventionOutcome | None:
     """Honorable Passage: the whole instance from the chosen source, wherever
@@ -1047,7 +1081,8 @@ def _reflect_prevention_chosen_source(game, event: dict) -> PreventionOutcome | 
 
 
 @prevention_effect(
-    GENERIC_REFLECT_SHIELD, applies=_arms(PREVENT_AND_DAMAGE_SOURCE, chosen=False)
+    GENERIC_REFLECT_SHIELD, applies=_arms(PREVENT_AND_DAMAGE_SOURCE, chosen=False),
+    label="Prevent the next damage and send it back (no source chosen)",
 )
 def _reflect_prevention_generic(game, event: dict) -> PreventionOutcome | None:
     """The same shield cast without recording a chosen source (AI / headless):
@@ -1076,7 +1111,10 @@ def recipient_label(recipient) -> str:
     return getattr(recipient, "name", None) or recipient.card.name
 
 
-@prevention_effect(SOURCE_WHOLE, applies=_arms(PREVENT_WHOLE, chosen=True))
+@prevention_effect(
+    SOURCE_WHOLE, applies=_arms(PREVENT_WHOLE, chosen=True),
+    label="Prevent the next damage from the chosen source",
+)
 def _whole_prevention_chosen_source(game, event: dict) -> PreventionOutcome | None:
     """Pentagram of the Ages: "The next time a source of your choice would deal
     damage to you this turn, prevent that damage."
@@ -1094,7 +1132,10 @@ def _whole_prevention_chosen_source(game, event: dict) -> PreventionOutcome | No
 # printed "…would deal damage to **any target**". A flag that says which cards
 # exist rather than which the rule allows is one this engine removes when a card
 # disagrees with it.
-@prevention_effect(GENERIC_WHOLE, applies=_arms(PREVENT_WHOLE, chosen=False))
+@prevention_effect(
+    GENERIC_WHOLE, applies=_arms(PREVENT_WHOLE, chosen=False),
+    label="Prevent the next damage (no source chosen)",
+)
 def _whole_prevention_generic(game, event: dict) -> PreventionOutcome | None:
     """The same shield activated without recording a chosen source (AI /
     headless): the next damage event from any source is prevented."""
@@ -1144,7 +1185,8 @@ def _chosen_source_blanket_rider(
 
 
 @prevention_effect(
-    CHOSEN_SOURCE_BLANKET, applies=_arms(PREVENT_ALL_FROM_CHOSEN_SOURCE)
+    CHOSEN_SOURCE_BLANKET, applies=_arms(PREVENT_ALL_FROM_CHOSEN_SOURCE),
+    label="Prevent all damage from the chosen source this turn",
 )
 def _prevent_all_from_chosen_source(game, event: dict) -> PreventionOutcome | None:
     """Samite Ministration: "Prevent all damage that would be dealt to you this
@@ -1179,7 +1221,10 @@ def _log_color_prevention(game, event: dict, used: list[Shield], prevented: int)
     )
 
 
-@prevention_effect(COLOR_SHIELD, applies=_arms(PREVENT_FROM_COLOR, player_only=True))
+@prevention_effect(
+    COLOR_SHIELD, applies=_arms(PREVENT_FROM_COLOR, player_only=True),
+    label="Prevent the next damage from a source of the shield's color",
+)
 def _circle_of_protection(game, event: dict) -> PreventionOutcome | None:
     """Circle of Protection: "The next time a <color> source of your choice
     would deal damage to you this turn, prevent that damage." One shield per
@@ -1197,7 +1242,10 @@ def _log_subject_prevention(game, event: dict, used: list[Shield], prevented: in
     )
 
 
-@prevention_effect(SUBJECT_BLANKET, applies=_arms(PREVENT_FROM_SUBJECT))
+@prevention_effect(
+    SUBJECT_BLANKET, applies=_arms(PREVENT_FROM_SUBJECT),
+    label="Prevent all damage this turn from the described sources",
+)
 def _prevent_from_subject(game, event: dict) -> PreventionOutcome | None:
     """Al-abara's Carpet: "Prevent all damage that would be dealt to you this
     turn by attacking creatures without flying."
@@ -1212,7 +1260,8 @@ def _prevent_from_subject(game, event: dict) -> PreventionOutcome | None:
 
 
 @prevention_effect(
-    TARGETING_BLANKET, applies=_arms(PREVENT_FROM_TARGETING_SOURCE)
+    TARGETING_BLANKET, applies=_arms(PREVENT_FROM_TARGETING_SOURCE),
+    label="Prevent damage from a spell or ability that targets the creature",
 )
 def _prevent_from_targeting_source(game, event: dict) -> PreventionOutcome | None:
     """Silhouette: "If a spell or ability that targets that creature would cause
@@ -1227,7 +1276,10 @@ def _prevent_from_targeting_source(game, event: dict) -> PreventionOutcome | Non
     return _spend(game, event, PREVENT_FROM_TARGETING_SOURCE)
 
 
-@prevention_effect(SPELL_BLANKET, applies=_arms(PREVENT_BY_RESOLVING_OBJECT))
+@prevention_effect(
+    SPELL_BLANKET, applies=_arms(PREVENT_BY_RESOLVING_OBJECT),
+    label="Prevent all damage the targeted spell would deal this turn",
+)
 def _prevent_by_resolving_object(game, event: dict) -> PreventionOutcome | None:
     """Hidden Retreat: "Prevent all damage that would be dealt by target instant
     or sorcery spell this turn."
@@ -1248,7 +1300,8 @@ def _log_pool_prevention(game, event: dict, used: list[Shield], prevented: int) 
 
 
 @prevention_effect(
-    POOL_WITH_COUNTERS, applies=_arms(PREVENT_NEXT_N_AND_COUNTERS)
+    POOL_WITH_COUNTERS, applies=_arms(PREVENT_NEXT_N_AND_COUNTERS),
+    label="Prevent the next N damage and put that many counters on the creature",
 )
 def _prevention_pool_with_counters(game, event: dict) -> PreventionOutcome | None:
     """Temper: "Prevent the next X damage that would be dealt to target creature
@@ -1298,7 +1351,10 @@ def _prevention_pool_with_counters(game, event: dict) -> PreventionOutcome | Non
     return _spend(game, event, PREVENT_NEXT_N_AND_COUNTERS, rider=place)
 
 
-@prevention_effect(POOL, applies=_arms(PREVENT_NEXT_N))
+@prevention_effect(
+    POOL, applies=_arms(PREVENT_NEXT_N),
+    label="Prevent the next N damage",
+)
 def _prevention_pool(game, event: dict) -> PreventionOutcome | None:
     """"Prevent the next N damage that would be dealt to <recipient> this turn"
     (Healing Salve's prevention mode, Samite Healer, Rock Hydra, …). Each point

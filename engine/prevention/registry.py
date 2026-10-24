@@ -20,7 +20,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
-from ..effect_ordering import Candidate
+from ..effect_ordering import Candidate, option_label
 
 
 # Order bands. Protection runs first of all: it is the widest free shield on the
@@ -224,7 +224,7 @@ PREVENTION_EFFECTS: list[Candidate] = []
 
 
 def prevention_effect(
-    order: int, *, applies: Applicability,
+    order: int, *, applies: Applicability, label: str,
     unpreventable: "Callable[[Any, dict], None] | None" = None,
 ) -> Callable[[Preventer], Preventer]:
     """Register a prevention interceptor at *order* (ascending).
@@ -233,6 +233,15 @@ def prevention_effect(
     event?" — and it is **required**, because CR 616.1 has to count the effects
     in contention before running any of them. It must be pure: a predicate that
     consumed a charge would spend shields the player never chose.
+
+    ``label`` is **required** too: the option CR 616.1e's prompt shows the
+    affected player when this shield contends with another — one short line
+    saying what it does (``effect_ordering.option_label``, which raises here on
+    anything else). It was cut from the docstring at its first colon until the
+    kg round, which showed a paragraph for the plain "prevent the next N"
+    pool and for two sourceless charges, and a function name for one static.
+    It names the effect rather than an exemplar card, because the same entry
+    answers for every card that prints the sentence.
 
     ``unpreventable`` is CR 615.12's half: the effect's *additional* effect
     alone, run when the damage can't be prevented (Flaring Pain, Lightning
@@ -256,7 +265,7 @@ def prevention_effect(
                 )
         PREVENTION_EFFECTS.append(
             Candidate(key=fn.__name__, order=order, applies=applies, apply=fn,
-                      label=(fn.__doc__ or fn.__name__).split(":")[0].strip(),
+                      label=option_label(label, key=fn.__name__),
                       unpreventable_apply=unpreventable)
         )
         PREVENTION_EFFECTS.sort(key=lambda candidate: candidate.order)

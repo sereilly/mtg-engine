@@ -21,11 +21,13 @@ from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
 from ..effect_ordering import (
+    OPTION_LABEL_LIMIT,
     SUSPENDED,
     Candidate,
     affected_seat,
     apply_in_order,
     choose_effect,
+    option_label,
 )
 
 
@@ -372,10 +374,23 @@ SHUFFLE_INSTEAD_OF_GRAVEYARD = 20  # Legacy Weapon
 REPLACED = "_replaced"
 
 
+def _docstring_label(fn) -> str:
+    """The option label a registration that names none takes: its docstring up
+    to the first colon — refused at import unless that is one short line."""
+    text = (fn.__doc__ or fn.__name__).split(":")[0].strip()
+    if "\n" in text or len(text) > OPTION_LABEL_LIMIT:
+        raise ValueError(
+            f"{fn.__name__}: its docstring does not open with a one-line "
+            "effect_order label; pass label= to @replacement_effect"
+        )
+    return text
+
+
 def replacement_effect(
     kind: str, order: int, *, applies: Applicability, redirects: bool = False,
     prevents: bool = False,
     amount_role: str = "",
+    label: str | None = None,
 ) -> Callable[[Interceptor], Interceptor]:
     """Register an interceptor for an event kind.
 
@@ -383,6 +398,14 @@ def replacement_effect(
     **required**: CR 616.1 has to count the effects in contention before running
     any of them, which an interceptor that answers by applying itself makes
     impossible. It must be pure.
+
+    ``label`` is the option CR 616.1e's ``effect_order`` prompt shows — one
+    short line (``effect_ordering.option_label``). Left out, it is still read
+    off the docstring up to its first colon, the way every label here was until
+    the kg round; but a docstring whose text there is not one short line now
+    raises at import instead of putting a paragraph in front of a player
+    (Infernal Darkness' substitution did), so that registration names its own.
+    ``engine/prevention`` requires the argument outright.
 
     A duplicate order within a kind raises at import, matching ``@parse_rule``
     and ``@prevention_effect``: with the default choice being the lowest order,
@@ -399,7 +422,10 @@ def replacement_effect(
                 )
         registered.append(
             Candidate(key=fn.__name__, order=order, applies=applies, apply=fn,
-                      label=(fn.__doc__ or fn.__name__).split(":")[0].strip(),
+                      label=(
+                          option_label(label, key=fn.__name__) if label is not None
+                          else _docstring_label(fn)
+                      ),
                       # CR 614.9: this one *moves* the damage rather than
                       # changing it, which is the half of Whippoorwill's clause
                       # a replacement can be. Declared here so a new redirect
