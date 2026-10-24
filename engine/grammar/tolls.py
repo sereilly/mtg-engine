@@ -357,6 +357,8 @@ def _accept_price_action(
     if stream.at_word("exiles", "exile"):
         exiled = accept_graveyard_exile_price(stream, payer)
         if exiled is None:
+            exiled = accept_controlled_exile_price(stream, payer)
+        if exiled is None:
             stream.reset(mark)
         return exiled
     # "…unless you **remove a +1/+1 counter from it**" (Junk Golem). The
@@ -447,6 +449,46 @@ def accept_graveyard_exile_price(
         stream.reset(mark)
         return None
     return ast.Exile(chosen)
+
+
+def accept_controlled_exile_price(
+    stream: TokenStream, payer: ast.PlayerRef
+) -> "ast.Exile | None":
+    """``exile a <permanent> you control`` as a **price** — or None with the
+    cursor unmoved.
+
+    "When this creature enters, sacrifice it **unless you exile a creature you
+    control other than this creature**." (Wormfang Drake.) The graveyard price
+    above one zone over: one permanent off the payer's own battlefield,
+    decomposed into the same :class:`ast.May` every printed currency here
+    reaches, so the offer, the penalty and the "you control nothing to give"
+    case come from machinery that works — the last through the pick's own
+    entry in ``offers._action_is_takeable``.
+
+    **One chosen permanent the payer controls, and nothing else.** A *target*
+    is not a price (CR 601.2b's cost against CR 601.2c's target), a count has
+    no reading in the lowering, and a permanent somebody else controls is not a
+    resource the payer gives up. Only "you" is read: "unless that player exiles
+    a creature they control" would need the pick asked of that seat, which the
+    lowering behind this has no word for yet — refused rather than asked of
+    the wrong player.
+    """
+    mark = stream.mark()
+    if payer.kind != "you" or not stream.accept_word("exiles", "exile"):
+        stream.reset(mark)
+        return None
+    try:
+        spec = parse_target_spec(stream)
+    except GrammarError:
+        spec = None
+    if (
+        spec is None or spec.targeted or spec.quantifier not in ("a", "an")
+        or spec.count != 1 or spec.filter.zone != "battlefield"
+        or spec.filter.is_card or spec.filter.controller != "you"
+    ):
+        stream.reset(mark)
+        return None
+    return ast.Exile(spec)
 
 
 def _payers_own_graveyard_cards(
