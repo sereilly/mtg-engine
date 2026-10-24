@@ -29,7 +29,7 @@ clause's only caller. This module is no longer read by either.
 from __future__ import annotations
 
 from . import ast
-from .lexer import PT
+from .lexer import PT, SELF
 from .readers import accept_counter_kind, accept_source_reference
 from .stream import TokenStream
 from .vocabulary import CARD_TYPES, NUMBER_WORDS
@@ -48,8 +48,32 @@ def _parse_self_in_graveyard_above(
     "Above" is CR 404.3's order — a graveyard is an ordered zone and a card put
     there later sits on top — so the count and the "directly" are both about
     *positions*, which is why they are separate fields rather than one number.
+
+    The subject is the ability's own source however the card spells it: "this
+    card", or the noun Oracle's self-reference templating puts in its place —
+    "At the beginning of your upkeep, if **this creature** is in your
+    graveyard, …" (Genesis). Read as a description "this creature" would mean
+    a permanent (CR 109.2), which a card in a graveyard is not; but the words
+    are a reference to the object the ability is printed on, which is what
+    :func:`accept_source_reference` reads everywhere else. Never the bare
+    pronoun "it", which after a trigger naming an object means that object
+    (``rebinding.rebind_pronoun_to_event_subject``).
     """
-    if not stream.accept_phrase("this", "card", "is", "in", "your", "graveyard"):
+    mark = stream.mark()
+    # The noun is required, not merely allowed: ``accept_source_reference``
+    # also takes a bare "this", and "this is in your graveyard" would let the
+    # word "card" be dropped from Pyre Zombie's clause and the line still read
+    # (the parse-coverage deletion probe's finding, the first time this ran).
+    named = stream.at_kind(SELF) or (
+        stream.at_word("this")
+        and (stream.peek_word(1) == "card" or stream.peek_word(1) in CARD_TYPES)
+    )
+    if not (
+        named
+        and accept_source_reference(stream)
+        and stream.accept_phrase("is", "in", "your", "graveyard")
+    ):
+        stream.reset(mark)
         return None
     if not stream.accept_word("with"):
         # "…if **this card is in your graveyard**, you may pay {1}{B}{B}."

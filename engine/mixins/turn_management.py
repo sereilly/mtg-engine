@@ -823,11 +823,20 @@ class TurnManagementMixin:
         gained type gives it is CR 305.6's intrinsic "{T}: Add [symbol]",
         which is no text at all. Empty for every other land, a land whose type
         an effect *set* included — that one has only the intrinsic ability,
-        which the summary path below already is.
+        which the summary path below already is — **until a mana ability
+        granted to it is in the compiled walk** (Riftstone Portal's "{T}: Add
+        {G} or {W}"): then the summary is never read, so its own types count
+        here too, or a Swamp so granted taps for {G} when asked for {B}. Not
+        after a "loses all abilities" (CR 613.1f), which only a newer grant
+        survives. No land prints a mana ability beside a basic land type.
         """
         from ..land_types import added_land_types
 
         added = set(added_land_types(land))
+        if land.basic_land_types and abilities_lost_at(land) is None:
+            free, priced = TurnManagementMixin._land_mana_abilities(land)
+            if free is not None or priced:
+                added |= set(land.basic_land_types)
         if not added:
             return ()
         return tuple(

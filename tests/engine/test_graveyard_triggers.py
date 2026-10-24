@@ -72,6 +72,16 @@ def _destination(instruction) -> str:
     payload = instruction.payload or {}
     if instruction.kind == "return_self_from_graveyard":
         return str(payload.get("to") or "battlefield")
+    # "…you may pay {2}{G}. If you do, return **target creature card** from
+    # your graveyard to your hand." (Genesis, JUD.) The first graveyard
+    # trigger here whose effect moves a *target* rather than its own source —
+    # it says where it functions in its intervening-if (CR 113.6b), as Death
+    # Spark does. On this guard's board the card is the only creature card in
+    # its graveyard, so the target the trigger names as it goes on the stack
+    # (CR 603.3d, the picker's first entry for a seat nobody asks) is itself,
+    # and it lands in the hand the kind names.
+    if instruction.kind == "return_creature_from_graveyard_to_hand":
+        return "hand"
     for key in ("steps", "action", "then", "effect", "otherwise"):
         for step in payload.get(key) or ():
             found = _destination(step)
@@ -187,6 +197,12 @@ def test_every_graveyard_functioning_trigger_reaches_its_zone():
         _arm_offered_price(game, 0, card, trig.instruction, pool)
 
         _run_step(game, 0, trig.condition.kind, card)
+        # A trigger that prints a target names it as it goes on the stack
+        # (CR 603.3d), and this seat is interactive, so it is asked (Genesis's
+        # "return target creature card from your graveyard"). Answered by the
+        # prompt's own default — which card it names is not this guard's
+        # question, and on this board the only candidate is the card itself.
+        game.auto_resolve_pending_choices(kinds=("trigger_target",))
         game._settle()
         # Take every offer the trigger made. "You may" is the card's own word on
         # all three subjects, so an unanswered prompt is the ability suspended

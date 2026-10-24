@@ -22,6 +22,8 @@ from ..aura_attachment import auras_attached_to
 from ..aura_grants import conditional_ability_lines_for
 from ..named_counters import counters_on
 from ..granted_abilities import bind_granter
+from ..graveyard_statics import (GraveyardSource, graveyard_static_sources,
+                                 static_source_seat)
 from ..keywords import (add_derived_ability_line, add_derived_grant,
                         add_derived_removal, clear_derived_grants)
 from ..land_animation import LAND_ANIMATIONS_REACHING
@@ -116,7 +118,10 @@ class LordBuffsMixin:
             # Aura the word is measured from the creature it enchants - the
             # Aura is no creature, so there is nothing else for it to mean -
             # and the host was taking its own Aura's penalty.
-            or target_perm is attached_host(self, source_perm, last_known=False)
+            or (
+                not isinstance(source_perm, GraveyardSource)
+                and target_perm is attached_host(self, source_perm, last_known=False)
+            )
         ):
             return False
         # "Creatures **you control**" / "creatures your opponents control".
@@ -134,7 +139,10 @@ class LordBuffsMixin:
         # this lord reach this permanent?", so it is answered here, once —
         # which is this method's whole reason for being a method.
         if filt.controller in ("you", "opponent"):
-            source_seat = self.controller_index_of(source_perm)
+            # The source's seat through ``static_source_seat``: a permanent's
+            # controller, or — for a static that functions from a graveyard
+            # (Anger's "creatures you control") — the card's owner, CR 108.4a.
+            source_seat = static_source_seat(self, source_perm)
             target_seat = self.controller_index_of(target_perm)
             if source_seat is None or target_seat is None:
                 return False
@@ -242,7 +250,7 @@ class LordBuffsMixin:
         # handed in is the source's (CR 109.5), and is not what the clause reads:
         # "that player" is the *recipient's* controller.
         if condition_is_per_recipient(buff.condition):
-            source_seat = self.controller_index_of(source_perm)
+            source_seat = static_source_seat(self, source_perm)
             if source_seat is None or not self._lord_buff_condition(
                 source_seat, source_perm, buff.condition, recipient=target_perm
             ):
@@ -342,34 +350,49 @@ class LordBuffsMixin:
         # dependency loop, and it gets 613.8b's answer: pass 2a reads layer 6 as
         # it stood when the recompute began, which is timestamp order.
         gathered: list[tuple] = []
+
+        def _gather(ctrl_seat, source_perm, instr) -> None:
+            if instr.kind != LORD_BUFF_KIND:
+                return
+            buff = lord_buff_from_payload(instr.payload)
+            if buff.condition and not self._lord_buff_condition(
+                ctrl_seat, source_perm, buff.condition
+            ):
+                return
+            if buff.per_counter:
+                # "All creatures get +1/+0 **for each time counter on this
+                # artifact**." (Infinite Hourglass.) The delta is read off the
+                # *source* at every recompute, which is what CR 613.4b asks of
+                # a value that keeps changing — and why the counter word
+                # travels on the buff rather than the size being frozen when
+                # the sentence compiled. Zero counters is no contribution at
+                # all, not a zero one: the buff carries only a P/T delta
+                # (``lord_buffs.LordBuff.per_counter`` refuses the combination
+                # with anything else), so there is nothing else it could still
+                # be giving.
+                scale = counters_on(source_perm, buff.per_counter)
+                if scale <= 0:
+                    return
+                buff = replace(
+                    buff, power=buff.power * scale, toughness=buff.toughness * scale
+                )
+            gathered.append((source_perm, buff))
+
         for ctrl_seat, source_perm in self.permanents_with_controller():
-            program = compile_card_oracle(_eff_card(source_perm))
-            for instr in program.instructions:
-                if instr.kind != LORD_BUFF_KIND:
-                    continue
-                buff = lord_buff_from_payload(instr.payload)
-                if buff.condition and not self._lord_buff_condition(
-                    ctrl_seat, source_perm, buff.condition
-                ):
-                    continue
-                if buff.per_counter:
-                    # "All creatures get +1/+0 **for each time counter on this
-                    # artifact**." (Infinite Hourglass.) The delta is read off
-                    # the *source* at every recompute, which is what CR 613.4b
-                    # asks of a value that keeps changing — and why the counter
-                    # word travels on the buff rather than the size being
-                    # frozen when the sentence compiled. Zero counters is no
-                    # contribution at all, not a zero one: the buff carries only
-                    # a P/T delta (``lord_buffs.LordBuff.per_counter`` refuses
-                    # the combination with anything else), so there is nothing
-                    # else it could still be giving.
-                    scale = counters_on(source_perm, buff.per_counter)
-                    if scale <= 0:
-                        continue
-                    buff = replace(
-                        buff, power=buff.power * scale, toughness=buff.toughness * scale
-                    )
-                gathered.append((source_perm, buff))
+            for instr in compile_card_oracle(_eff_card(source_perm)).instructions:
+                _gather(ctrl_seat, source_perm, instr)
+        # …and **every graveyard** (CR 113.6b, CR 611.3b): "As long as this
+        # card is in your graveyard and you control a Mountain, creatures you
+        # control have haste." (Anger.) The anthem states the zone it
+        # functions from, so it is gathered from there — one source per card
+        # in the pile, with the timestamp the card got as it arrived
+        # (CR 613.7d, ``engine/graveyard_statics.py``) and its owner's seat
+        # (CR 108.4a). The condition is asked here exactly as a battlefield
+        # lord's is, and its "this card is in your graveyard" clause answers
+        # no for a permanent, so an Incarnation on the battlefield is gathered
+        # above and contributes nothing.
+        for source, instr in graveyard_static_sources(self):
+            _gather(source.seat, source, instr)
 
         def _reached_by(source_perm, buff):
             # Every permanent on every battlefield, because "creatures you
@@ -413,7 +436,7 @@ class LordBuffsMixin:
         # Pass 2b — layer 7c (CR 613.4c), over a board whose layer 6 is
         # complete.
         for source_perm, buff in gathered:
-            observer = self.controller_index_of(source_perm)
+            observer = static_source_seat(self, source_perm)
             for target_perm in _reached_by(source_perm, buff):
                 if buff.per_shared_creature_type:
                     # "Each creature gets +1/+1 **for each other creature on

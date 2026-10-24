@@ -73,6 +73,7 @@ from .madness import unread_madness_line
 from .line_normalization import (_PARENTHETICAL_RE, _normalize_text,
                                  normalize_creature_line)
 from .self_reference import _restriction_line
+from .static_line_support import _grammar_static_creature_instructions
 from .keyword_lines import UNSUPPORTED_KEYWORDS, _is_supported_keyword_line
 from .front_ends import _grammar_static_coeffects
 from .ability_lines import _modal_at_least, _modal_chooser, _modal_options
@@ -120,6 +121,10 @@ __all__ = [
 # already refuses itself, naming what it could not read; that is the refusal
 # this table is not needed for.
 UNSUPPORTED_PATTERNS: tuple[str, ...] = ()
+
+#: A quoted span of a printed line ('…have "{T}: Add {G} or {W}."'), dropped
+#: before a land's static loop asks whether the line is an activated ability.
+_QUOTED_SPAN_RE = re.compile(r'"[^"]*"')
 
 
 class OracleLexer:
@@ -557,9 +562,30 @@ def _compile_card_oracle(
         land_static_lines: list[str] = []
         for raw_line in (oracle_text or "").splitlines():
             line = _PARENTHETICAL_RE.sub("", raw_line).strip()
-            if not line or ":" in line:
+            # An activated ability is a line whose *own* cost has a colon
+            # (CR 602.1a). A colon inside a quoted grant belongs to the granted
+            # ability — 'lands you control have "{T}: Add {G} or {W}."'
+            # (Riftstone Portal) is a static line, and skipping it here left
+            # the land supported by the gate and carrying nothing.
+            if not line or ":" in _QUOTED_SPAN_RE.sub("", line):
                 continue
             normalized = normalize_creature_line(line)
+            # **The grammar first, as the gate asks it first.** The gate above
+            # (`_unread_land_text` through `_is_supported_static_creature_line`)
+            # admits a line the grammar lowers to a static contribution, and
+            # this loop read only the two text tables — so a land whose static
+            # only the grammar reads was admitted and carried nothing: supported
+            # and hollow. Riftstone Portal is the first ('As long as this card
+            # is in your graveyard, lands you control have "{T}: Add {G} or
+            # {W}."', an anthem the grammar lowers and the table cannot). The
+            # creature path's step 4 asks the same function in the same order,
+            # so a land and a creature printing one sentence get one program.
+            # No shipped land had a line the grammar lowers here, so none moves.
+            grammar_static = _grammar_static_creature_instructions(line, name)
+            if grammar_static:
+                land_statics.extend(grammar_static)
+                land_static_lines.append(normalized)
+                continue
             lord = lord_buff_for(normalized)
             if lord is not None:
                 land_statics.append(

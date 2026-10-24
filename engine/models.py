@@ -998,6 +998,14 @@ class PlayerState:
     library: list[CardDefinition] = field(default_factory=list)
     battlefield: list[Permanent] = field(default_factory=list)
     graveyard: list[CardDefinition] = field(default_factory=list)
+    # When each card in ``graveyard`` got there (CR 613.7d: "an object
+    # receives a timestamp at the time it enters a zone"), as ``(card, stamp)``
+    # in arrival order. Read and kept in step with the pile by
+    # ``engine/graveyard_order.py`` alone — a static that functions from a
+    # graveyard (CR 113.6b, the Incarnations) has its effect stamped with it
+    # (CR 613.7a), which is what orders "creatures you control have haste"
+    # against a "loses all abilities" (Anger's ruling, 2004-10-04).
+    graveyard_arrivals: list = field(default_factory=list)
     exile: list[CardDefinition] = field(default_factory=list)
     # Cards owned from outside the game (CR 100.4 / 400.11): the player's
     # sideboard. Not a game zone — nothing moves here during play; effects such

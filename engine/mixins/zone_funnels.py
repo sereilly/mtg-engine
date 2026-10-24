@@ -32,6 +32,7 @@ from ..exiled_records import (forget_record, newest_record_for,
                               record_exiled_card)
 from ..events import emit
 from ..faces import whole_card
+from ..graveyard_order import record_graveyard_arrival
 from ..models import Permanent, PlayerState, next_permanent_id
 from ..oracle_types import EVENT_SUBJECT_LAST_KNOWN, EXILED_BY_SEAT
 from ..replacements import apply_replacements
@@ -342,6 +343,13 @@ class ZoneFunnelsMixin:
         if consumed:
             return False
         self.players[seat].graveyard.append(card)
+        # CR 613.7d: the card gets its timestamp as it enters the zone, which
+        # is the timestamp a static ability functioning from here carries
+        # (CR 613.7a; Anger's ruling, 2004-10-04: "set at the time that this
+        # card goes to your graveyard"). Recorded on the one road every
+        # arrival takes, by the module that keeps the record in step with the
+        # pile.
+        record_graveyard_arrival(self.players[seat], card)
         # "…**that were put there from the battlefield this turn**" (No Rest
         # for the Wicked). Recorded on the one seam every arrival passes
         # through, keyed by the pile it landed in (CR 400.3's owner) — the same
