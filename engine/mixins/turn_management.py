@@ -823,23 +823,12 @@ class TurnManagementMixin:
         gained type gives it is CR 305.6's intrinsic "{T}: Add [symbol]",
         which is no text at all. Empty for every other land, a land whose type
         an effect *set* included — that one has only the intrinsic ability,
-        which the summary path below already is.
-
-        **…and the land's own types, once a granted mana ability is in the
-        compiled walk.** 'As long as this card is in your graveyard, lands you
-        control have "{T}: Add {G} or {W}."' (Riftstone Portal.) A Swamp so
-        granted has two mana abilities, and the second is again in a different
-        place: the grant compiles, the Swamp's own "{T}: Add {B}" (CR 305.6) is
-        no text. While the walk finds nothing the summary path is the type's
-        ability, as for every basic; the moment the grant is found it is the
-        walk's answer and the summary is never read, so the Swamp tapped for
-        {G} when asked for {B} and the planner counted it as no {B} at all.
-        The same two places as Blanket of Night's, read through the same
-        symbols. Not after a "loses all abilities" (CR 613.1f): what survives
-        one is a grant newer than it (``_land_mana_abilities`` walks the
-        effective card), and the type's ability is not that. No land in the
-        pool prints a mana ability of its own beside a basic land type, so
-        this reaches exactly the lands a mana ability was granted to.
+        which the summary path below already is — **until a mana ability
+        granted to it is in the compiled walk** (Riftstone Portal's "{T}: Add
+        {G} or {W}"): then the summary is never read, so its own types count
+        here too, or a Swamp so granted taps for {G} when asked for {B}. Not
+        after a "loses all abilities" (CR 613.1f), which only a newer grant
+        survives. No land prints a mana ability beside a basic land type.
         """
         from ..land_types import added_land_types
 
