@@ -303,10 +303,17 @@ def test_the_offer_prompt_runs_before_the_target_cascade():
     assert APP_JS.count("startCastOfferPrompt(card))") == 3
     for entry in (
         "if (startCastOfferPrompt(card)) {\n          return;\n        }",
-        "if (startCastOfferPrompt(card)) return;\n    if (startCastCostPrompt(card)) return;",
         "if (card && startCastOfferPrompt(card)) { return; }",
     ):
         assert entry in APP_JS, entry
+    # The zone-cast site: the offer first, then — since Judgment — the chosen
+    # way's own cost picker (a flashback cost that taps, sacrifices or exiles,
+    # `startZoneWayCostPrompt`), then the cast's cost prompt. Held as an order,
+    # not as adjacent lines, so a step added between the two keeps the rule.
+    offer = APP_JS.index("if (startCastOfferPrompt(card)) return;")
+    way = APP_JS.index("if (startZoneWayCostPrompt(card, chosenWay)) return;", offer)
+    cost = APP_JS.index("if (startCastCostPrompt(card)) return;", way)
+    assert offer < way < cost
 
 
 def test_the_offer_prompt_is_rendered_before_the_priority_prompt_takes_the_panel():
