@@ -481,6 +481,15 @@ class UnlessPlayerPays:
     #: currency on the same chain: ``cost`` is then empty, because a toll
     #: prints one price and a cost of one kind is not payable out of the other.
     life: int = 0
+    #: "**Any player may have Browbeat deal 5 damage to them.** If no one
+    #: does, …" / "…unless **a player has this creature deal 4 damage to
+    #: them**" (Barbarian Bully). The price as a *deed* the asked seat takes
+    #: rather than a payment it makes — CR 118.12a's "[a player] may [do
+    #: something else]" over a set of seats, the first acceptance ending the
+    #: chain exactly as the first payment does. ``cost`` is then empty, for
+    #: ``life``'s reason. Its player word is ``that_player``: the seat being
+    #: asked, whichever one that is when the chain reaches it.
+    action: "Statement | None" = None
 
 
 @dataclass(frozen=True)

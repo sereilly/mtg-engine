@@ -23,6 +23,7 @@ from __future__ import annotations
 import re
 
 from .aura_attachment import auras_attached_to
+from .special_actions import IGNORE_ATTACHED_STATIC_OFFER, ignore_offer_price
 from .aura_vocabulary import (
     _NOUN,
     _ATTACHED,
@@ -45,14 +46,14 @@ from .aura_vocabulary import (
 IGNORED_RESTRICTIONS = "ignored_restrictions_until_eot"
 
 #: "That creature's controller may sacrifice a permanent of their choice for
-#: that player to ignore this effect until end of turn." (Volrath's Curse.)
-#: CR 116.2d, and the sentence in front of it is what "this effect" names —
-#: which is why the pattern reads the noun: the offer is about the restriction
-#: line above it, on the permanent that line is about.
-_IGNORE_STATIC_OFFER = re.compile(
-    r"^that (?P<noun>[a-z]+)'s controller may sacrifice a permanent of their "
-    r"choice for that player to ignore this effect until end of turn$"
-)
+#: that player to ignore this effect until end of turn." (Volrath's Curse;
+#: Lost in Thought's "Its controller may exile three cards from their
+#: graveyard …".) CR 116.2d, and the sentence in front of it is what "this
+#: effect" names — the offer is about the restriction line above it, on the
+#: permanent that line is about. The pattern is ``special_actions``' own, the
+#: one the sentence table claims the line with, so the line read and the
+#: offer made cannot come apart.
+_IGNORE_STATIC_OFFER = IGNORE_ATTACHED_STATIC_OFFER
 
 
 def aura_ignore_offer(oracle_text: str) -> frozenset[str] | None:
@@ -77,12 +78,26 @@ def aura_ignore_offer(oracle_text: str) -> frozenset[str] | None:
     return None
 
 
+def _aura_ignore_offer_price(oracle_text: str) -> "dict[str, object] | None":
+    """What the CR 116.2d offer sentence of *oracle_text* charges
+    (``special_actions.ignore_offer_price``), or None."""
+    for raw_line in (oracle_text or "").splitlines():
+        for sentence in _line_text(raw_line).split("."):
+            price = ignore_offer_price(sentence.strip())
+            if price is not None:
+                return price
+    return None
+
+
 def _ignore_static_offer(game, aura):
     """What *aura* is offering its host's controller (CR 116.2d), or None."""
     from .special_actions import SpecialActionOffer
 
     restrictions = aura_ignore_offer(aura.effective_card.oracle_text)
     if not restrictions:
+        return None
+    price = _aura_ignore_offer_price(aura.effective_card.oracle_text)
+    if price is None:
         return None
     host = aura.metadata.get("attached_to")
     if host is None or not game.is_on_battlefield(host):
@@ -94,10 +109,10 @@ def _ignore_static_offer(game, aura):
     seat = game.controller_index_of(host)
     if seat is None:
         return None
-    # "…**a permanent** of their choice", which is CR 110.1's whole noun: an
-    # empty filter is every permanent, and a narrower phrase on a later card is
-    # the same field with data in it.
-    return SpecialActionOffer(seat=seat, sacrifice={})
+    # The price the sentence prints: "…**a permanent** of their choice"
+    # (Volrath's Curse — CR 110.1's whole noun, an empty filter) or "…exile
+    # **three cards** from their graveyard" (Lost in Thought).
+    return SpecialActionOffer(seat=seat, **price)
 
 
 def _take_ignore_static_offer(game, seat: int, aura) -> None:

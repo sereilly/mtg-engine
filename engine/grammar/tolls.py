@@ -37,8 +37,9 @@ from .phrases import (_accept_life_alternative, _parse_mana_payment,
 from .readers import accept_source_reference_spec
 from .sacrifices import _parse_counted_sacrifice
 from .effects import (_parse_counted_graveyard_cards, _parse_damage,
-                      _parse_discard, _parse_mill, _parse_put_counter,
-                      _parse_put_hand_cards_on_library, _parse_remove_counter)
+                      _parse_discard, _parse_mill, _parse_player_exiles_pile,
+                      _parse_put_counter, _parse_put_hand_cards_on_library,
+                      _parse_remove_counter)
 
 
 def _parse_unless_player_pays(stream: TokenStream, parse_body) -> "ast.UnlessPlayerPays | None":
@@ -353,11 +354,19 @@ def _accept_price_action(
             stream.reset(mark)
             return None
     # "…unless you **exile a card from your graveyard**" (Rotting Giant). The
-    # sixth currency, see :func:`accept_graveyard_exile_price`.
+    # sixth currency, see :func:`accept_graveyard_exile_price`. "…unless its
+    # controller **exiles all cards from their graveyard**" (Grip of Amnesia)
+    # is the same currency spent whole, see
+    # :func:`accept_whole_graveyard_exile_price`; "…unless you **exile a
+    # creature you control other than this creature**" (Wormfang Drake) is one
+    # zone over, see :func:`accept_controlled_exile_price`. The three shapes
+    # are disjoint and each reader refuses with the cursor unmoved.
     if stream.at_word("exiles", "exile"):
         exiled = accept_graveyard_exile_price(stream, payer)
         if exiled is None:
             exiled = accept_controlled_exile_price(stream, payer)
+        if exiled is None:
+            exiled = accept_whole_graveyard_exile_price(stream, payer)
         if exiled is None:
             stream.reset(mark)
         return exiled
@@ -489,6 +498,59 @@ def accept_controlled_exile_price(
         stream.reset(mark)
         return None
     return ast.Exile(spec)
+
+
+def accept_whole_graveyard_exile_price(
+    stream: TokenStream, payer: ast.PlayerRef
+) -> "ast.ExileGraveyard | None":
+    """``exile[s] all cards from <the payer's own> graveyard`` as a **price**
+    — or None with the cursor unmoved.
+
+    "Counter target spell **unless its controller exiles all cards from their
+    graveyard**." (Grip of Amnesia.) The graveyard currency above spent whole:
+    the payer gives up the pile, not a card chosen out of it. Read by the
+    reader every printed-subject graveyard sweep already goes through
+    (``effects._parse_player_exiles_pile`` — Living Death's "each player
+    exiles all creature cards from their graveyard"), so the phrase means one
+    thing whether it is an effect or a price.
+
+    It becomes :class:`ast.ExileGraveyard` over ``that_player`` — the zone
+    sweep Tormod's Crypt already lowers to — because "all cards from their
+    graveyard" with no narrowing *is* the zone, and the seat whose zone it is
+    is the one the offer is made to. ``that_player`` rather than the printed
+    payer, because the offer lowering aims the action at the seat it asks and
+    a back-reference is what reads that; the printed "its controller" read
+    again inside the action would be a second lookup of the same seat.
+
+    **The whole pile, out of the payer's own graveyard, and nothing else.** A
+    narrowed noun ("all creature cards") is a different price a card could
+    print and is refused rather than read as this; so is a pile that is not
+    the payer's.
+
+    No takeability arm, and that is the card's ruling rather than an omission:
+    "You can choose to exile all cards from your graveyard even if it has no
+    cards in it." (Grip of Amnesia, 2004-10-04.) An empty graveyard pays the
+    whole price, so a "can you?" check would withdraw an offer the card makes.
+    """
+    mark = stream.mark()
+    swept = _parse_player_exiles_pile(stream, payer)
+    if not isinstance(swept, ast.Exile) or swept.actor is None:
+        stream.reset(mark)
+        return None
+    spec = swept.subject
+    filt = spec.filter
+    owner = filt.zone_owner
+    whole_pile = dataclasses.replace(
+        filt, is_card=True, zone="graveyard", zone_owner=owner,
+    ) == ast.ObjectFilter(is_card=True, zone="graveyard", zone_owner=owner)
+    own_pile = owner is not None and owner.kind in ("owner", payer.kind)
+    if (
+        not whole_pile or not own_pile or swept.face_down
+        or spec.quantifier != "all" or swept.actor != payer
+    ):
+        stream.reset(mark)
+        return None
+    return ast.ExileGraveyard(ast.PlayerRef("that_player"))
 
 
 def _payers_own_graveyard_cards(
@@ -659,6 +721,55 @@ def accept_damage_price(
     return dataclasses.replace(damage, recipients=(payer,))
 
 
+def chain_damage_price(
+    action: "ast.Statement | None", payer: ast.PlayerRef
+) -> "ast.DealDamage | None":
+    """*action* as the price an offer to a **set** of seats charges, or None.
+
+    "**Any player may have Browbeat deal 5 damage to them.** If no one does,
+    target player draws three cards." / "This creature gets +2/+2 until end of
+    turn **unless a player has this creature deal 4 damage to them**."
+    (Barbarian Bully.) CR 118.12a makes the two spellings one sentence, and
+    over a set of seats it is the :class:`ast.UnlessPlayerPays` chain the mana
+    and life tolls already are — every seat asked in turn (CR 101.4), the
+    first acceptance ending it, the effect on the branch nobody bought off.
+    What differs is the currency: a deed the asked seat takes rather than a
+    payment it makes.
+
+    **Only damage, and only the shape** :func:`accept_damage_price` **reads**:
+    the ability's own source dealing a printed amount to the seat that takes
+    the offer, with no rider. The chain's handler aims its accept branch at
+    the asked seat and leaves the performer where it was, which is right for
+    damage the source deals (CR 120.7 — the spell or creature deals it, and
+    CR 109.5 keeps its controller "you") and wrong for a deed the seat
+    *performs*: a sacrifice or a discard behind this chain would come out of
+    the caster's board. Those refuse until the handler can make the asked seat
+    the performer.
+
+    The recipient comes back as ``that_player`` whatever was printed: the
+    payer reference itself ("each player") read as a recipient would burn the
+    whole table, and the seat it means is the one the chain is asking now.
+    """
+    if not isinstance(action, ast.DealDamage):
+        return None
+    source = action.source
+    if (
+        not isinstance(source, ast.TargetSpec)
+        or source.targeted
+        or not source.filter.is_source
+    ):
+        return None
+    if (
+        action.recipients not in ((ast.PlayerRef("that_player"),), (payer,))
+        or action.riders != ast.DamageRiders()
+        or action.chooser is not None
+        or action.per_each is not None
+        or not isinstance(action.amount, ast.Fixed)
+    ):
+        return None
+    return dataclasses.replace(action, recipients=(ast.PlayerRef("that_player"),))
+
+
 def _accept_repeat_request(stream: TokenStream) -> "ast.RepeatProcessRequest | None":
     """``… and repeat this process`` — what a toll buys besides its penalty.
 
@@ -814,6 +925,17 @@ def _accept_trailing_toll(
     if not stream.accept_word("unless"):
         return None
     payer = parse_player_ref(stream)
+    if payer is None and stream.accept_phrase("a", "player"):
+        # "…unless **a player** has this creature deal 4 damage to them."
+        # (Barbarian Bully.) CR 118.12a's own spelling of the clause — "[do
+        # something] unless [a player does something else]" — and in it the
+        # bare article names any seat at all, which is the set "any player"
+        # already reaches as. Read here and not in ``parse_player_ref``:
+        # everywhere else "a player" opens an *event* ("whenever a player
+        # casts …") and names nobody until the event does, and the reference
+        # reader answering it would hand every one of those sentences a set of
+        # seats it never meant.
+        payer = ast.PlayerRef("each_player")
     if payer is None:
         stream.reset(mark)
         return None
@@ -828,12 +950,19 @@ def _accept_trailing_toll(
         )
     action = _accept_price_action(stream, payer)
     if action is not None:
-        # Not offered to an enumerated payer: `ast.May` is one offer to one
-        # seat, and "each player" would be a chain — which only the mana
-        # spelling below has a node for.
+        # Not offered to an enumerated payer as a `May`: that is one offer to
+        # one seat, and "each player" is a chain. The chain carries one deed
+        # (:func:`chain_damage_price` — Barbarian Bully's "unless a player has
+        # this creature deal 4 damage to them"); every other deed refuses.
         if payer.kind in _ENUMERATED_PAYERS:
-            stream.reset(mark)
-            return None
+            priced = chain_damage_price(action, payer)
+            if priced is None:
+                stream.reset(mark)
+                return None
+            return _under_a_leading_condition(
+                body,
+                ast.UnlessPlayerPays(payer, ast.ManaCost(), body, action=priced),
+            )
         return _under_a_leading_condition(body, ast.May(
             actor=payer,
             action=_accept_price_alternatives(stream, payer, action, price_at),

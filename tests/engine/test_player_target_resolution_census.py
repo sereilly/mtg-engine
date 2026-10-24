@@ -93,6 +93,22 @@ def test_h1_a_cast_naming_nobody_never_resolves_on_a_seat_its_picker_does_not_of
         result = game.cast_from_hand(0, card.name, **keywords)
         game.auto_resolve_pending_choices()
         if result.supported and _face_state(game, 1) != before:
+            # …unless the masked seat changes exactly as much when the spell
+            # is aimed, by name, at the one seat the picker does offer. "Any
+            # player may have Browbeat deal 5 damage to them. If no one does,
+            # target player draws three cards": behind the Mask the bare cast
+            # correctly draws for its caster, and the masked opponent still
+            # *chooses* to take the five — an offer to every seat, which no
+            # target is involved in (CR 118.12a) and shroud does not stop. A
+            # spell that resolved on the masked seat would leave it untouched
+            # when aimed at the caster, so this arm cannot hide the defect.
+            aimed = table("opponent_shroud", card)
+            aimed_result = aimed.cast_from_hand(
+                0, card.name, **dict(keywords, target_player_index=0)
+            )
+            aimed.auto_resolve_pending_choices()
+            if aimed_result.supported and _face_state(aimed, 1) == _face_state(game, 1):
+                continue
             resolved_on_the_mask.append(card.name if mode is None else f"{card.name} #{mode}")
 
     assert examined >= _MIN_EXAMINED, examined

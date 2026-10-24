@@ -229,6 +229,57 @@ def available_special_actions(game: "Game", seat: int) -> list[dict]:
 # queue is a decision somebody **owes**, and this is a decision that simply
 # stands, for as long as the effect does, and may never be taken at all.
 
+#: CR 116.2d's offer an Aura makes **to its host's controller**, and the one
+#: reading of it: the table below claims the sentence with it and
+#: ``aura_restrictions`` builds the offer from it, so what the support gate
+#: says it read and what the offer charges are one pattern — there were two
+#: copies of the Volrath's Curse spelling before Lost in Thought needed a
+#: second price.
+#:
+#: Two printed ways to name the seat — "**That creature's** controller"
+#: (Volrath's Curse) and "**Its** controller" (Lost in Thought), the
+#: possessive pointing back at the enchanted creature the sentence before it
+#: restricted — and two prices:
+#:
+#: * ``sacrifice`` — "sacrifice a permanent of their choice" (Volrath's Curse);
+#: * ``exile`` — "exile three cards from their graveyard" (Lost in Thought), a
+#:   count of cards out of the taker's own graveyard, of their choice.
+#:
+#: Anything else — another price, another seat, another duration — matches
+#: neither and leaves its card unsupported naming the sentence.
+IGNORE_ATTACHED_STATIC_OFFER = re.compile(
+    r"^(?:that (?P<noun>[a-z]+)'s|its) controller may "
+    r"(?:(?P<sacrifice>sacrifice a permanent of their choice)"
+    r"|exile (?P<exile>[a-z]+|\d+) cards from their graveyard) "
+    r"for that player to ignore this effect until end of turn$"
+)
+
+
+def ignore_offer_price(sentence: str) -> "dict[str, object] | None":
+    """What one CR 116.2d Aura offer charges, as :class:`SpecialActionOffer`
+    keyword arguments — or None when *sentence* is not one.
+
+    The count is a printed number word read through the grammar's vocabulary
+    (``NUMBER_WORDS``), so "three" means here what it means in any sentence;
+    a word that is not a number is no offer at all rather than an offer of
+    nothing.
+    """
+    match = IGNORE_ATTACHED_STATIC_OFFER.match(_normalize(sentence).rstrip("."))
+    if match is None:
+        return None
+    if match.group("sacrifice"):
+        # "…**a permanent** of their choice", which is CR 110.1's whole noun:
+        # an empty filter is every permanent.
+        return {"sacrifice": {}}
+    from .grammar.vocabulary import NUMBER_WORDS
+
+    printed = match.group("exile")
+    count = int(printed) if printed.isdigit() else NUMBER_WORDS.get(printed)
+    if not isinstance(count, int) or count <= 0:
+        return None
+    return {"exile_from_graveyard": count}
+
+
 #: The sentence a permanent prints to make one of these offers, and the kind of
 #: offer it is. Matched against a whole **sentence** rather than a whole line,
 #: because a Licid prints its offer as the third sentence of an activated
@@ -240,18 +291,12 @@ _PERMANENT_ACTION_SENTENCES: tuple[tuple[re.Pattern[str], str], ...] = (
     ),
     # CR 116.2d. "That creature's controller may sacrifice a permanent of their
     # choice for that player to ignore this effect until end of turn."
-    # (Volrath's Curse.) The offer is made to somebody who is *not* the
-    # permanent's controller and its price is not mana, which is why the two
-    # rows above and below this comment need a richer answer than a cost: see
-    # :class:`SpecialActionOffer`.
-    (
-        re.compile(
-            r"^that (?P<noun>[a-z]+)'s controller may sacrifice a permanent of "
-            r"their choice for that player to ignore this effect until end of "
-            r"turn$"
-        ),
-        "ignore_attached_static_until_eot",
-    ),
+    # (Volrath's Curse; Lost in Thought's "Its controller may exile three cards
+    # from their graveyard …" is the same offer at another price.) The offer is
+    # made to somebody who is *not* the permanent's controller and its price is
+    # not mana, which is why the two rows above and below this comment need a
+    # richer answer than a cost: see :class:`SpecialActionOffer`.
+    (IGNORE_ATTACHED_STATIC_OFFER, "ignore_attached_static_until_eot"),
     # CR 116.2d again, with the offer made to a player the sentence in front of
     # it *described* rather than to the controller of a permanent it named:
     # "A player who controls more permanents than each other player can't play
@@ -284,16 +329,19 @@ class SpecialActionOffer:
     creature's** controller may sacrifice a permanent" is an offer an Aura makes
     to the player it is punishing.
 
-    ``mana`` and ``sacrifice`` are the two prices this pool prints — a mana cost
-    (CR 116.2c, the Licids) and one permanent of the taker's choice described by
-    a subject filter (CR 116.2d, Volrath's Curse). Both are paid by the seam
-    below rather than by the offer's own ``take``, because a cost is a cost
-    wherever it appears: paying it is not part of what the action *does*.
+    ``mana``, ``sacrifice`` and ``exile_from_graveyard`` are the three prices
+    this pool prints — a mana cost (CR 116.2c, the Licids), one permanent of
+    the taker's choice described by a subject filter (CR 116.2d, Volrath's
+    Curse), and a number of cards of the taker's choice out of their own
+    graveyard (CR 116.2d, Lost in Thought). All are paid by the seam below
+    rather than by the offer's own ``take``, because a cost is a cost wherever
+    it appears: paying it is not part of what the action *does*.
     """
 
     seat: int
     mana: "dict[str, int] | None" = None
     sacrifice: "dict[str, object] | None" = None
+    exile_from_graveyard: int = 0
 
 
 @dataclass(frozen=True)
@@ -471,6 +519,14 @@ def permanent_special_action_refusal(
         return f"{game.players[seat].name} can't pay for it"
     if offer.sacrifice is not None and not _sacrificeable(game, seat, offer):
         return f"{game.players[seat].name} has nothing to sacrifice for it"
+    if len(game.players[seat].graveyard) < offer.exile_from_graveyard:
+        # "…may exile **three** cards from their graveyard" (Lost in Thought).
+        # CR 116.2d's action is the whole price or none of it: with two cards
+        # there is no way to exile three, so the offer cannot be taken.
+        return (
+            f"{game.players[seat].name} has fewer than "
+            f"{offer.exile_from_graveyard} cards in their graveyard"
+        )
     return None
 
 
@@ -490,9 +546,46 @@ def _sacrificeable(game: "Game", seat: int, offer: "SpecialActionOffer") -> list
     ]
 
 
+def _graveyard_slots_paying(
+    game: "Game", seat: int, offer: "SpecialActionOffer",
+    named: "list[int] | None",
+) -> "list[int] | str":
+    """The slots of *seat*'s graveyard that pay *offer*'s exile price, or a
+    refusal.
+
+    "…exile three cards from their graveyard" is a choice of the taker's
+    (CR 116.2d's action, CR 601.2b's "of their choice" in spirit), so a slot
+    list the taker names is that choice and is held to it: the printed count
+    exactly, each slot a card that is there, no slot twice. A caller naming
+    none gets the stated order every other graveyard price in this engine is
+    paid in (``ai_prompt_readers.graveyard_price_order``), so a seat nobody
+    asks gives up the cards its own valuation misses least.
+
+    By slot because a card in a graveyard has no id, and two copies of one
+    card in one pile are one ``CardDefinition`` — the same reason the
+    activation path's ``cost_graveyard_indices`` is a slot list.
+    """
+    wanted = offer.exile_from_graveyard
+    pile = game.players[seat].graveyard
+    if named is None:
+        from .ai_prompt_readers import graveyard_price_order
+
+        return list(graveyard_price_order(game, seat, list(range(len(pile)))))[:wanted]
+    slots = list(named)
+    if len(slots) != wanted:
+        return f"{len(slots)} cards named for a price of {wanted}"
+    if len(set(slots)) != len(slots):
+        return f"graveyard position {slots} names one card more than once"
+    for slot in slots:
+        if not (isinstance(slot, int) and not isinstance(slot, bool) and 0 <= slot < len(pile)):
+            return f"no card at graveyard position {slot}"
+    return slots
+
+
 def take_permanent_special_action(
     game: "Game", seat: int, permanent: "Permanent", kind: str,
     sacrificed: "Permanent | None" = None,
+    exiled_slots: "list[int] | None" = None,
 ) -> str | None:
     """Perform *kind* with *permanent* for *seat*; a refusal, or None on success.
 
@@ -507,6 +600,11 @@ def take_permanent_special_action(
     not satisfy the offer is a refusal rather than a silent substitution, for
     the reason every targeted effect here refuses: a cost paid with something
     the player did not choose is the quiet wrongness this repo does not ship.
+
+    *exiled_slots* is the same choice for a price paid out of the taker's own
+    graveyard ("…may exile three cards from their graveyard", Lost in
+    Thought): graveyard positions, held to the printed count
+    (:func:`_graveyard_slots_paying`).
     """
     refusal = permanent_special_action_refusal(game, seat, permanent, kind)
     if refusal is not None:
@@ -514,6 +612,12 @@ def take_permanent_special_action(
     spec = PERMANENT_SPECIAL_ACTIONS[kind]
     offer = spec.offer(game, permanent)
     assert offer is not None  # the refusal above already asked
+    exiled: list = []
+    if offer.exile_from_graveyard:
+        slots = _graveyard_slots_paying(game, seat, offer, exiled_slots)
+        if isinstance(slots, str):
+            return slots
+        exiled = slots
     victim = None
     if offer.sacrifice is not None:
         candidates = _sacrificeable(game, seat, offer)
@@ -536,6 +640,21 @@ def take_permanent_special_action(
         game.log.append(
             f"{game.players[seat].name} sacrificed {victim.card.name} "
             f"({permanent.card.name}, CR 116.2d)"
+        )
+    if exiled:
+        # Out of the taker's own pile into their own exile (CR 404.1, 406.1):
+        # the move ``activation_charges._pay_exile_cost`` makes for the same
+        # printed price on an activated ability — highest slot first, because
+        # every pop renumbers the slots behind it.
+        taker = game.players[seat]
+        cards = [taker.graveyard[slot] for slot in exiled]
+        for slot in sorted(exiled, reverse=True):
+            taker.graveyard.pop(slot)
+        taker.exile.extend(cards)
+        game.log.append(
+            f"{taker.name} exiled "
+            + ", ".join(card.name for card in cards)
+            + f" from their graveyard ({permanent.card.name}, CR 116.2d)"
         )
     spec.take(game, seat, permanent)
     _priority_returns(game)
@@ -562,11 +681,19 @@ def available_permanent_special_actions(game: "Game", seat: int) -> list[dict]:
     for permanent in game.all_permanents():
         for kind in PERMANENT_SPECIAL_ACTIONS:
             if permanent_special_action_refusal(game, seat, permanent, kind) is None:
-                entries.append({
+                entry = {
                     "permanent_id": permanent.permanent_id,
                     "name": permanent.card.name,
                     "kind": kind,
-                })
+                }
+                # How many graveyard cards the price takes, so a client can ask
+                # which ones before it sends the action (Lost in Thought's
+                # three). Only on an offer that charges one: every other
+                # entry's shape is unchanged.
+                offer = PERMANENT_SPECIAL_ACTIONS[kind].offer(game, permanent)
+                if offer is not None and offer.exile_from_graveyard:
+                    entry["exile_from_graveyard"] = offer.exile_from_graveyard
+                entries.append(entry)
     return entries
 
 

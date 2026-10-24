@@ -29,6 +29,7 @@ runner, is needed by ``_offer_to_seat`` alone, and that stayed.
 
 from __future__ import annotations
 
+import dataclasses
 from typing import TYPE_CHECKING
 
 from ..exiled_records import source_object
@@ -1054,6 +1055,25 @@ def unless_player_pays(game: Game, instruction: OracleInstruction, context: Orac
     # asked and cannot say yes, and its answer is the decline that moves the
     # chain on.
     life_price = int(payload.get("life") or 0)
+    # "**Any player may have Browbeat deal 5 damage to them.** If no one does,
+    # …" The price as a *deed* (``lowering/control_flow._lower_chain_deed``):
+    # the damage the source deals to the seat being asked, whose "them"
+    # reaches here as ``target_player``. So the deed runs against a context
+    # **aimed** at that seat — ``target`` moved, ``caster`` not, for
+    # ``control_flow._NAMED_SEAT_ACTORS``' reason: the spell deals the damage
+    # and its controller is still who "you" names (CR 109.5, CR 120.7). The
+    # aimed context is the entry's ``_context``, so the takeability gate and
+    # the AI's pricing of the deed (``_offer_self_recipients``) see the damage
+    # land on the seat they are asking about.
+    #
+    # The rest of the chain is **not** aimed: the next link and, after the
+    # last one, the unpaid branch run against the resolution's own context
+    # (``_chain_context``) — Browbeat's "target player draws three cards"
+    # reads the target the spell chose, not the last seat that declined.
+    deed = tuple(payload.get("action") or ())
+    aimed = (
+        dataclasses.replace(context, target=game.players[seat]) if deed else context
+    )
     game.arm_pending_choice(
         "optional_pay", seat,
         card_name=context.card.name if context.card is not None else "",
@@ -1065,8 +1085,9 @@ def unless_player_pays(game: Game, instruction: OracleInstruction, context: Orac
         # payment itself buys runs (nothing, for every toll but the reversed
         # one). ``_on_paid`` rather than ``_on_accept``, because the latter is
         # the *payer's* action and is gated on what the payer can do — and
-        # Rhystic Scrying's discard is its controller's, whoever paid.
-        _on_accept=(),
+        # Rhystic Scrying's discard is its controller's, whoever paid. A deed
+        # *is* the payer's action, so it rides ``_on_accept``.
+        _on_accept=deed,
         _on_paid=paid,
         _on_decline=(
             OracleInstruction(
@@ -1074,13 +1095,19 @@ def unless_player_pays(game: Game, instruction: OracleInstruction, context: Orac
             ),
         ),
         _on_reflexive=(),
-        _context=context,
+        _context=aimed,
+        **({"_chain_context": context} if deed else {}),
         # The spell a derived price was read off. An answer that arrives after
         # it has left the stack buys nothing, so it must charge nothing: the
         # offer is then one no player may take (``_optional_action_still_
         # takeable``), and its decline moves the chain on to find that out.
         **({"_priced_spell": priced_spell} if priced_spell is not None else {}),
-        prompt=(
+        # A deed has no price to print, so the entry carries no ``prompt`` of
+        # its own and the web reads the card's printed offer sentence instead
+        # (``web/prompt_values.offer_wording``) — "Any player may have Browbeat
+        # deal 5 damage to them.", or Barbarian Bully's two halves of
+        # "…unless …". A "Pay?" here would ask a question the card never did.
+        **({} if deed else {"prompt": (
             # The derived price names the spell it was read off, so the seat
             # being asked can see what the payment is for — and a spell that
             # costs {0} is still a question ("Pay {0}?"), not a blank one.
@@ -1088,7 +1115,7 @@ def unless_player_pays(game: Game, instruction: OracleInstruction, context: Orac
             if priced_spell is not None
             else f"Pay {mana_cost_label(cost)}?" if cost
             else f"Pay {life_price} life?" if life_price else "Pay?"
-        ),
+        )}),
     )
     return True, "resolved"
 

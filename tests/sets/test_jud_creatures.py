@@ -2031,6 +2031,70 @@ def test_w1g4_anurid_brushhopper_needs_two_cards_to_discard(set_pool):
 
 # ==== W1G5 ==========================================================
 # W1G5's tests go between this line and the "end W1G5" line.
+#
+# Barbarian Bully: "Discard a card at random: This creature gets +2/+2 until
+# end of turn unless a player has this creature deal 4 damage to them.
+# Activate only once each turn." CR 118.12a's "unless [a player does
+# something else]" over every seat — the deed-priced ``unless_player_pays``
+# chain Browbeat's sentence also reaches, with the creature as the source.
+
+from tests.sets import jud_w1g5_helpers as _w1g5  # noqa: E402
+
+
+def _w1g5_bully(set_pool, hand=("Lightning Bolt",)):
+    game = _w1g5.table(set_pool, hands=(list(hand), []), interactive=(0, 1))
+    game.start_turn(0)
+    bully = _w1g5.put(game, set_pool, 0, "Barbarian Bully")
+    return game, bully
+
+
+def test_w1g5_barbarian_bully_pumps_when_nobody_takes_the_four(set_pool):
+    game, bully = _w1g5_bully(set_pool)
+
+    activated = game.activate_permanent_ability(0, "Barbarian Bully")
+    assert activated.supported, activated.details
+    # The random discard is the *cost*: paid before the ability is on the stack.
+    assert _w1g5.pile(game, 0) == ["Lightning Bolt"] and game.players[0].hand == []
+    game.resolve_top_of_stack(pause_for_choices=True)
+    assert _w1g5.answer_offers(game, {}) == [0, 1]
+    _w1g5.settle(game)
+
+    assert (bully.effective_power, bully.effective_toughness) == (4, 4)
+    assert [player.life for player in game.players] == [20, 20]
+
+
+def test_w1g5_barbarian_bully_taken_deals_four_to_the_taker_and_no_pump(set_pool):
+    game, bully = _w1g5_bully(set_pool)
+
+    game.activate_permanent_ability(0, "Barbarian Bully")
+    game.resolve_top_of_stack(pause_for_choices=True)
+    assert _w1g5.answer_offers(game, {1: True}) == [0, 1]
+    _w1g5.settle(game)
+
+    assert (bully.effective_power, bully.effective_toughness) == (2, 2)
+    assert [player.life for player in game.players] == [20, 16]
+    assert "Barbarian Bully dealt 4 damage to P2" in game.log
+
+
+def test_w1g5_barbarian_bully_activates_only_once_each_turn(set_pool):
+    game, _ = _w1g5_bully(set_pool, hand=("Lightning Bolt", "Giant Growth"))
+
+    assert game.activate_permanent_ability(0, "Barbarian Bully").supported
+    _w1g5.settle(game)
+    again = game.activate_permanent_ability(0, "Barbarian Bully")
+
+    assert not again.supported
+    assert len(game.players[0].hand) == 1, "the refused activation paid nothing"
+
+
+def test_w1g5_barbarian_bully_with_an_empty_hand_cannot_pay_its_discard(set_pool):
+    game, bully = _w1g5_bully(set_pool, hand=())
+
+    refused = game.activate_permanent_ability(0, "Barbarian Bully")
+
+    assert not refused.supported
+    assert game.stack == [] and _w1g5.owed(game) == []
+    assert (bully.effective_power, bully.effective_toughness) == (2, 2)
 
 # ==== end W1G5 ======================================================
 

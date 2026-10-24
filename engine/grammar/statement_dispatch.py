@@ -497,7 +497,15 @@ def lower_statement(
         return named
 
     if isinstance(statement, ast.CombatRestriction):
-        return _lower_combat_restriction(statement, dispatch_event, produced)
+        # The raw event beside the filtered one, for the reason the
+        # ``_BY_NODE_TYPE_WITH_EVENT`` table above takes it: "creatures **they**
+        # control can't attack you this turn" (Web of Inertia) is a seat pronoun
+        # inside an offer's decline branch, which is not the ability's whole
+        # effect. Read only for that pronoun; every other shape keeps the
+        # filtered event it has always been handed.
+        return _lower_combat_restriction(
+            statement, dispatch_event, produced, seat_event=event,
+        )
 
     if isinstance(statement, ast.CantBe):
         # The **unfiltered** event, for the reason `_lower_destroy` above takes

@@ -106,6 +106,27 @@ def _parse_cant_attack_or_block(
                     ast.CombatRestriction(subject, "cant_block_until_eot", window),
                 ))
             stream.reset(both_mark)
+        # "…creatures they control **can't attack you this turn**." (Web of
+        # Inertia.) The blanket below with a *defender*: "you" is the seat
+        # whose ability this is (CR 109.5), and an attack aimed anywhere else —
+        # another opponent, a planeswalker that seat controls (the card's
+        # 2014-02-01 ruling) — is not one the sentence forbids. Payload rather
+        # than a kind, because the turn-scoped entry, its sweep and its gate
+        # are the blanket's own and only which attacks it reaches differs.
+        #
+        # The duration is **required**: "Black creatures can't attack you"
+        # with none is Elephant Grass's static, which
+        # ``combat_restriction_table`` derives, and claiming it here would take
+        # that line from the table.
+        you_mark = stream.mark()
+        if stream.accept_word("you"):
+            duration = _parse_duration(stream)
+            if duration.kind is not None:
+                return ast.CombatRestriction(
+                    subject, "cant_attack_until_eot",
+                    (("duration", duration.kind), ("defender", "you")),
+                )
+            stream.reset(you_mark)
         # "Creatures can't attack this turn." (Festival.) The attack twin of
         # the blanket can't-block below: no "unless", just a duration — the
         # restriction is a blanket over the *subject* for the rest of the turn

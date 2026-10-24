@@ -44,7 +44,8 @@ from ...oracle_types import (EVENT_SPELL_MANA_COST, OracleInstruction,
 from .. import ast
 from ..errors import LoweringError
 from ._amounts import count_spec
-from ._collapses import (offered_seat_performs, without_restated_target,
+from ._collapses import (event_seat_performs, offered_seat_performs,
+                         without_restated_target,
                          _each_player_optional_discard,
                          _each_player_optional_draw,
                          _each_player_optional_pay_mana,
@@ -234,6 +235,11 @@ def _lower_unless_player_pays(
         # The parser builds a life price only over a set of seats; one seat's
         # is the ``May`` whose *action* is the payment.
         raise LoweringError("a life-priced chain needs a set of payers", node=node)
+    if payer is None and node.action is not None:
+        # The same for a deed (Barbarian Bully's damage): one seat's is the
+        # ``May`` the toll reader builds, and the ``May`` below would be built
+        # without it — the clause bought off for nothing.
+        raise LoweringError("a deed-priced chain needs a set of payers", node=node)
     if payer is None:
         # "…**unless you pay {R}**, …" (Goblin Flotilla); "**Unless target
         # player pays {3}**, that player loses 5 life …" (Rhystic Syphon). An
@@ -267,6 +273,9 @@ def _lower_unless_player_pays(
     paid = branch(node.paid)
     if not (unpaid or paid):
         raise LoweringError("an unpaid clause with no consequence", node=node)
+    if node.action is not None:
+        return _lower_chain_deed(node, payer, unpaid, paid, produced, event_subject,
+                                 lower_statement=lower_statement)
     payload: dict[str, object] = {
         "payer": payer,
         # ``{X}`` stays variable ("…unless any player pays {X}", Soul Strings):
@@ -295,6 +304,62 @@ def _lower_unless_player_pays(
     if paid:
         payload["paid"] = paid
     return (OracleInstruction("unless_player_pays", "", payload),)
+
+
+def _lower_chain_deed(
+    node: ast.UnlessPlayerPays, payer: str, unpaid, paid,
+    produced: frozenset[str], event_subject: object | None,
+    *, lower_statement,
+) -> tuple[OracleInstruction, ...]:
+    """The chain whose price is a **deed** — "Any player may have Browbeat
+    deal 5 damage to them. If no one does, …" (``ast.UnlessPlayerPays.action``).
+
+    The deed rides the payload as ``action``, beside ``unpaid`` and never
+    instead of a ``cost``: the handler asks each seat in turn exactly as it
+    asks for a mana toll, and what an acceptance runs is the deed aimed at the
+    seat that accepted. Lowered with no firing event, for the reason
+    ``_lower_may`` clears one under a set of seats: "them" is the seat being
+    asked, not a seat an event froze — so it reaches the handler as
+    ``target_player``, which the handler binds to that seat link by link.
+
+    Three refusals, each a sentence this could otherwise mean more than it
+    says: a deed beside a printed mana or life price (no card prints both, and
+    the prompt could not say which the payer took), what paying *buys*
+    (``paid`` reads the resolution's own seat, and nothing has told it which
+    seat paid), and a deed whose steps are anything but damage to the asked
+    seat — the one deed ``tolls.chain_damage_price`` admits, and the one whose
+    performer does not have to move.
+    """
+    if node.life or (isinstance(node.cost, ast.ManaCost) and node.cost.pips):
+        raise LoweringError(
+            "a chain is priced in mana, life or a deed, not two of them",
+            node=node,
+        )
+    if paid:
+        raise LoweringError(
+            "nothing names which seat took a deed-priced chain for what it buys",
+            node=node,
+        )
+    deed = lower_statement(
+        node.action, produced, event=None, event_subject=event_subject,
+        whole_effect=False,
+    )
+    if not deed or any(
+        step.kind != "deal_damage"
+        or step.payload.get("recipient") != "target_player"
+        or not isinstance(step.payload.get("amount"), int)
+        or set(step.payload) - {"amount", "recipient"}
+        for step in deed
+    ):
+        raise LoweringError(
+            "a chain's deed is damage its source deals to the seat asked",
+            node=node,
+        )
+    return (OracleInstruction("unless_player_pays", "", {
+        "payer": payer,
+        "action": tuple(deed),
+        "unpaid": unpaid,
+    }),)
 
 
 #: The actors whose offered seat is **not** the one the resolution already
@@ -533,6 +598,87 @@ def _offered_target_change(
     )
 
 
+def _resolved_offer_actor(
+    node: ast.May, produced: frozenset[str], event: str | None,
+    event_subject: object | None,
+) -> str:
+    """The seat an offer is made to, as the actor ``_offered_seats`` reads —
+    the printed reference resolved against what bound it: a loop, the firing
+    event, an Aura's trigger subject, a spell the sentence chose.
+
+    One function, asked once by :func:`_lower_may` before the offer's action
+    is lowered, because the action can depend on the answer: an offer the
+    handler makes *performed by* the event's seat names its pile with "their"
+    (Web of Inertia's "that player may exile a card from their graveyard"),
+    and which pile that is depends on which actor this returns
+    (``_collapses.event_seat_performs``). Asked after the action instead, the
+    two would be two copies of one chain.
+    """
+    actor = node.actor.kind
+    if actor == "that_player" and LOOP_BOUND_OBJECT in produced:
+        # "For each creature, its controller sacrifices a permanent of their
+        # choice unless **they** pay {1}." (Fade Away.) Inside a loop over
+        # objects the pronoun names the seat the *sentence* already named —
+        # the iteration's own object's controller — and not a seat the firing
+        # event froze. Read before the event tables below because the loop is
+        # the pronoun's **innermost** binder, which is the same order the
+        # damage recipient one module over takes for the seat loop's marker.
+        #
+        # It becomes the ``controller`` actor rather than a new one:
+        # ``_offered_seats`` resolves that through ``bound_permanent``, whose
+        # whole contract is "the innermost binding wins", so the offer goes to
+        # a seat this engine already knows how to find.
+        actor = "controller"
+    elif actor == "that_player" and event in _EVENT_SUBJECT_PLAYERS:
+        # "…**you may draw a card unless that player pays {4}**" (Mystic
+        # Remora). Under an event whose subject *is* a player, "that player" is
+        # the seat the fire site froze — the opponent who cast the spell — and
+        # not the resolution's target. Left as ``that_player`` the offer reached
+        # ``_offered_seats``' fallback, which reads ``context.target``: right in
+        # a duel by coincidence, and in a three-seat game the toll was offered
+        # to a player who had cast nothing.
+        #
+        # The same mapping the damage recipient one module over already makes
+        # for these five events, applied to the seat an *offer* is made to.
+        actor = EVENT_SUBJECT_PLAYER
+    elif actor == "that_player" and frozen_seat_record("that_player", event) == "damaged_player":
+        # "…unless **they** pay {2} before that step" (Sabertooth Cobra). Under
+        # an event that froze the *damaged* player, "they" is that seat and not
+        # the resolution's target — a delayed ability created by a damage
+        # trigger has no target at all, so left as ``that_player`` the offer
+        # reached ``_offered_seats``' fallback and asked ``context.target``,
+        # which is None. Read through the one table that already says which
+        # record a printed player word names under which event, so the offer
+        # and the counter behind it cannot name different seats.
+        actor = "damaged_player"
+    elif actor == "that_player" and event in _EVENT_SUBJECT_CONTROLLERS:
+        # "…unless **the player** puts a -1/-1 counter on a creature they
+        # control" (Thelon's Chant, Tourach's Chant). Under an event whose
+        # subject is an *object*, "that player" is that object's controller —
+        # the seat the fire site froze, exactly as the damage recipient one
+        # module over reads it. Left as ``that_player`` the offer would go to
+        # ``context.target``, which for a permanent-entering trigger is a seat
+        # nothing chose.
+        actor = EVENT_SUBJECT_CONTROLLER
+    if actor == "controller" and getattr(event_subject, "is_enchanted", False):
+        # "its" is the trigger's own subject here, not a target this sentence
+        # chose — see ``attached_controller`` in ``OFFERABLE_ACTORS``.
+        actor = "attached_controller"
+    if actor in ("controller", "that_player") and _counters_a_chosen_spell(
+        node.otherwise
+    ):
+        # "Counter target instant or sorcery spell unless **its controller**
+        # has Molten Influence deal 4 damage to them." The possessive names
+        # the *spell* the sentence chose, and a spell is not a permanent:
+        # ``controller`` is read off the control seam through
+        # ``bound_permanent``, which finds nothing on the stack, so the offer
+        # went to nobody and the counter with it — a card that compiled and
+        # did nothing at all. Its own actor, read off the stack object the
+        # announcement named (``STACK_TARGET_CONTROLLER``).
+        actor = STACK_TARGET_CONTROLLER
+    return actor
+
+
 def _lower_may(
     node: ast.May, produced: frozenset[str], event: str | None = None,
     event_subject: object | None = None,
@@ -613,6 +759,14 @@ def _lower_may(
     # for anything around this node, which is why it is a local rather than a
     # rewrite of the argument.
     inner_event = None if node.actor.kind in _SEAT_SET_ACTORS else event
+    resolved_actor = _resolved_offer_actor(node, produced, event, event_subject)
+    # "At the beginning of combat on each opponent's turn, **that player may
+    # exile a card from their graveyard**." (Web of Inertia.) An offer to the
+    # event's seat whose action that seat performs: the handler makes it the
+    # performer (``handlers/control_flow._EVENT_ACTORS``), so "their" pile is
+    # the performer's own — the rewrite an offer to a set of seats already
+    # takes (``offered_seat_performs``).
+    node = event_seat_performs(node, resolved_actor)
     action = lower_statement(node.action, produced, event=inner_event, event_subject=event_subject, whole_effect=False) if node.action else ()
     action = tuple(_offered(step) for step in action)
     # "If you do" is the rest of *this* resolution, so it can read what the
@@ -678,68 +832,7 @@ def _lower_may(
         )
     if isinstance(node.action, ast.ChangeEventTargets):
         return _offered_target_change(node, action)
-    actor = node.actor.kind
-    if actor == "that_player" and LOOP_BOUND_OBJECT in produced:
-        # "For each creature, its controller sacrifices a permanent of their
-        # choice unless **they** pay {1}." (Fade Away.) Inside a loop over
-        # objects the pronoun names the seat the *sentence* already named —
-        # the iteration's own object's controller — and not a seat the firing
-        # event froze. Read before the event tables below because the loop is
-        # the pronoun's **innermost** binder, which is the same order the
-        # damage recipient one module over takes for the seat loop's marker.
-        #
-        # It becomes the ``controller`` actor rather than a new one:
-        # ``_offered_seats`` resolves that through ``bound_permanent``, whose
-        # whole contract is "the innermost binding wins", so the offer goes to
-        # a seat this engine already knows how to find.
-        actor = "controller"
-    elif actor == "that_player" and event in _EVENT_SUBJECT_PLAYERS:
-        # "…**you may draw a card unless that player pays {4}**" (Mystic
-        # Remora). Under an event whose subject *is* a player, "that player" is
-        # the seat the fire site froze — the opponent who cast the spell — and
-        # not the resolution's target. Left as ``that_player`` the offer reached
-        # ``_offered_seats``' fallback, which reads ``context.target``: right in
-        # a duel by coincidence, and in a three-seat game the toll was offered
-        # to a player who had cast nothing.
-        #
-        # The same mapping the damage recipient one module over already makes
-        # for these five events, applied to the seat an *offer* is made to.
-        actor = EVENT_SUBJECT_PLAYER
-    elif actor == "that_player" and frozen_seat_record("that_player", event) == "damaged_player":
-        # "…unless **they** pay {2} before that step" (Sabertooth Cobra). Under
-        # an event that froze the *damaged* player, "they" is that seat and not
-        # the resolution's target — a delayed ability created by a damage
-        # trigger has no target at all, so left as ``that_player`` the offer
-        # reached ``_offered_seats``' fallback and asked ``context.target``,
-        # which is None. Read through the one table that already says which
-        # record a printed player word names under which event, so the offer
-        # and the counter behind it cannot name different seats.
-        actor = "damaged_player"
-    elif actor == "that_player" and event in _EVENT_SUBJECT_CONTROLLERS:
-        # "…unless **the player** puts a -1/-1 counter on a creature they
-        # control" (Thelon's Chant, Tourach's Chant). Under an event whose
-        # subject is an *object*, "that player" is that object's controller —
-        # the seat the fire site froze, exactly as the damage recipient one
-        # module over reads it. Left as ``that_player`` the offer would go to
-        # ``context.target``, which for a permanent-entering trigger is a seat
-        # nothing chose.
-        actor = EVENT_SUBJECT_CONTROLLER
-    if actor == "controller" and getattr(event_subject, "is_enchanted", False):
-        # "its" is the trigger's own subject here, not a target this sentence
-        # chose — see ``attached_controller`` in ``OFFERABLE_ACTORS``.
-        actor = "attached_controller"
-    if actor in ("controller", "that_player") and _counters_a_chosen_spell(
-        node.otherwise
-    ):
-        # "Counter target instant or sorcery spell unless **its controller**
-        # has Molten Influence deal 4 damage to them." The possessive names
-        # the *spell* the sentence chose, and a spell is not a permanent:
-        # ``controller`` is read off the control seam through
-        # ``bound_permanent``, which finds nothing on the stack, so the offer
-        # went to nobody and the counter with it — a card that compiled and
-        # did nothing at all. Its own actor, read off the stack object the
-        # announcement named (``STACK_TARGET_CONTROLLER``).
-        actor = STACK_TARGET_CONTROLLER
+    actor = resolved_actor
     payload: dict[str, object] = {"actor": actor}
     if node.actor.kind == "target_opponent":
         # "**Target opponent** may ante the top card of their library."

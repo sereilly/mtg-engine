@@ -789,8 +789,13 @@ def _action_special_action(session, req, seat_type):
             if req.cost_permanent_id is not None
             else None
         )
+        # "…may **exile three cards from their graveyard**" (Lost in Thought):
+        # the taker's own pile, by slot, on the channel an activation's
+        # graveyard price already travels on (``cost_graveyard_indices``). None
+        # leaves the engine's stated order, as a sacrifice named by nobody does.
         refusal = take_permanent_special_action(
-            session.game, req.seat, permanent, kind, sacrificed=sacrificed
+            session.game, req.seat, permanent, kind, sacrificed=sacrificed,
+            exiled_slots=req.cost_graveyard_indices,
         )
         if refusal is not None:
             raise HTTPException(status_code=400, detail=refusal)

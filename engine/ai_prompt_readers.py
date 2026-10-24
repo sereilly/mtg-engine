@@ -486,11 +486,16 @@ class TollLoss:
     permanents: tuple = ()
     #: Whether the branch taps the source permanent (a turn's use, not a card).
     taps_source: bool = False
+    #: Cards the seat exiles out of its own graveyard as the price (Rotting
+    #: Giant's "unless you exile a card from your graveyard", Web of
+    #: Inertia's offer) — a pile threshold, flashback and the rest still read.
+    exiled_from_graveyard: int = 0
 
     def plus_life(self, amount: int) -> "TollLoss":
         return TollLoss(
             life=self.life + amount, cards=self.cards, milled=self.milled,
             permanents=self.permanents, taps_source=self.taps_source,
+            exiled_from_graveyard=self.exiled_from_graveyard,
         )
 
 
@@ -547,6 +552,7 @@ def toll_branch_loss(
     milled = 0
     permanents: list = []
     taps_source = False
+    exiled_from_graveyard = 0
     for step in steps:
         kind = getattr(step, "kind", None)
         payload = getattr(step, "payload", None) or {}
@@ -628,18 +634,74 @@ def toll_branch_loss(
             cards += min(amount, len(player.hand))
         elif kind == "ante_top_card":
             cards += 1
+        elif kind == "mill_target_player" and payload.get("recipient") is None:
+            # "…target player mills six cards" (Book Burning's unpaid branch).
+            # The announced player, who is this seat exactly when the
+            # resolution's target is (``target_player`` among *recipients*);
+            # another seat's library is no loss of this seat's.
+            amount = payload.get("amount")
+            if not isinstance(amount, int) or not payload.get("targets"):
+                return None
+            if "target_player" in recipients:
+                milled += amount
         elif kind == "mill_target_player":
             amount = payload.get("amount")
             if not isinstance(amount, int) or payload.get("recipient") not in recipients:
                 return None
             milled += amount
+        elif kind == "destroy_all_creatures":
+            # "…destroy all creatures. Creatures destroyed this way can't be
+            # regenerated." (Breaking Point's unpaid branch.) This seat's share
+            # of the sweep — its own creatures the destruction would take, read
+            # the way ``destroy_sweeps._sweep_by_type`` reads them: through
+            # layer 4 (``is_creature``), sparing what is indestructible and,
+            # unless the card forbids it, what has a regeneration shield up.
+            regenerates = not payload.get("bypass_regeneration")
+            permanents.extend(
+                permanent for permanent in game.controlled_by(player_index)
+                if permanent.is_creature
+                and not game._has_keyword(permanent, "indestructible")
+                and not (regenerates and permanent.regeneration_shield > 0)
+            )
         elif kind == "tap_self":
             taps_source = True
+        elif (
+            kind == "exile_cards_from_graveyard"
+            and payload.get("graveyard_owner") == "you"
+            and not payload.get("targets")
+        ):
+            # "…unless you exile a card from your graveyard" (Rotting Giant);
+            # "that player may exile a card from their graveyard" (Web of
+            # Inertia). One pick out of the performer's own pile — "you" is
+            # whoever performs it, the offered seat itself when ``caster`` is
+            # among *recipients* — and only as many as the pile holds.
+            count = payload.get("count")
+            if not isinstance(count, int) or "caster" not in recipients:
+                return None
+            exiled_from_graveyard += min(count, len(player.graveyard))
+        elif kind == "cant_attack_until_eot" and payload.get("controller_seat_record"):
+            # "…creatures they control can't attack you this turn" (Web of
+            # Inertia's decline). Whether an attack is worth anything is not
+            # derivable here — but having no creature that could make one is:
+            # then the restriction takes nothing, and refusing the offer is
+            # free. Anything else stays unpriceable. "Could attack" is the
+            # declaration's own reader (untapped, not summoning sick, every
+            # restriction already standing), asked against the seat the entry
+            # will protect — the source's controller, as the handler reads it.
+            defender = (
+                game.controller_or_last_known(source_permanent)
+                if source_permanent is not None else None
+            )
+            if defender is None or game.legal_attacker_indices(
+                player_index, against=defender
+            ):
+                return None
         else:
             return None
     return TollLoss(
         life=life, cards=cards, milled=milled,
         permanents=tuple(permanents), taps_source=taps_source,
+        exiled_from_graveyard=exiled_from_graveyard,
     )
 
 

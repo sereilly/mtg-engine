@@ -1048,6 +1048,41 @@ def cant_attack_until_eot(game: Game, instruction: OracleInstruction, context: O
                 game, context, {"subject_from": excepted}
             )
         ]
+    # "…creatures **they** control can't attack you this turn." (Web of
+    # Inertia.) The seat the firing event froze, read now and stored as the
+    # seat the entry is scoped to (``controller_seat`` — Fight or Flight's key,
+    # which the attack gate already reads). No record is a sentence that named
+    # nobody, and it restricts nobody rather than everybody.
+    seat_record = payload.get("controller_seat_record")
+    if seat_record is not None:
+        seat = (context.trigger_context or {}).get(seat_record)
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            game.log.append(f"{context.card.name}: no recorded player, nothing restricted")
+            return True, "resolved"
+        entry["controller_seat"] = seat
+    # "…can't attack **you** …" — the ability's controller (CR 109.5). CR
+    # 113.8 / 603.3a make that the seat that controlled the source when the
+    # ability triggered; it is read here as the source's controller now (or
+    # as it last existed, if it has left), which is the same seat unless
+    # control of the source changed while the trigger waited on the stack —
+    # a gap recorded rather than closed, because nothing on the context
+    # carries the trigger-time controller once an offer has moved ``caster``.
+    # And ``caster`` is not the answer: an offer made to the event's seat
+    # moves it onto that seat for the whole entry
+    # (``handlers/control_flow._EVENT_ACTORS``), so under Web of Inertia's "if
+    # the player doesn't" the caster *is* the attacker. A spell, with no
+    # permanent, is its caster's.
+    if payload.get("defender") == "you":
+        source = context.source_permanent
+        defender = (
+            game.controller_or_last_known(source) if source is not None else None
+        )
+        if defender is None and context.caster in game.players:
+            defender = game.players.index(context.caster)
+        if defender is None:
+            game.log.append(f"{context.card.name}: no player to protect, nothing restricted")
+            return True, "resolved"
+        entry["defender_seat"] = defender
     game.attack_restrictions_until_eot.append(entry)
     game.log.append(f"{context.card.name}: the named creatures can't attack")
     return True, "resolved"

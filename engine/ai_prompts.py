@@ -381,6 +381,11 @@ _TOLL_MILL_PRICE = 0.25
 _TOLL_PERMANENT_FLOOR = 2.5
 #: Tapping the source: a turn's use of it, not the card.
 _TOLL_TAP_PRICE = 1.0
+#: A card exiled out of the seat's own graveyard: the mill's weight, since it
+#: is the same card one zone further on — and not nothing, because threshold
+#: (CR 207.2c), flashback and every "for each card in your graveyard" read
+#: the pile.
+_TOLL_GRAVEYARD_CARD_PRICE = _TOLL_MILL_PRICE
 
 
 def _toll_loss_price(game: Game, player_index: int, loss) -> float:
@@ -391,6 +396,7 @@ def _toll_loss_price(game: Game, player_index: int, loss) -> float:
     price = float(loss.life)
     price += loss.cards * _TOLL_CARD_PRICE
     price += loss.milled * _TOLL_MILL_PRICE
+    price += loss.exiled_from_graveyard * _TOLL_GRAVEYARD_CARD_PRICE
     for permanent in loss.permanents:
         price += _TOLL_PERMANENT_FLOOR + _permanent_value(permanent)
     if loss.taps_source:
@@ -398,8 +404,37 @@ def _toll_loss_price(game: Game, player_index: int, loss) -> float:
     return price
 
 
+def _deed_chain_decline(entry: dict, chain_recipients):
+    """``(steps, recipients, context)`` a seat's decline of one link of a
+    **deed-priced** chain costs it, or None for any other entry.
+
+    "Any player may have Breaking Point deal 6 damage to them. If no one does,
+    destroy all creatures." A link's decline is printed as the *next link*
+    (``handlers/offers.unless_player_pays``), which no reader can price — so
+    the standing policy paid every time, and a seat with no creatures took 6
+    to save a board of nothing. What declining risks is the unpaid branch:
+    a later seat may still pay, but nothing lets this one count on it. It is
+    priced against the resolution's own context (``_chain_context``), whose
+    target is the spell's, with the player references resolved against that
+    context (*chain_recipients*).
+    """
+    context = entry.get("_chain_context")
+    links = tuple(entry.get("_on_decline") or ())
+    if (
+        context is None or len(links) != 1
+        or getattr(links[0], "kind", None) != "unless_player_pays"
+    ):
+        return None
+    return (
+        tuple(links[0].payload.get("unpaid") or ()),
+        frozenset(chain_recipients or ()),
+        context,
+    )
+
+
 def toll_decline_is_smaller_loss(
-    game: Game, player_index: int, entry: dict, self_recipients=()
+    game: Game, player_index: int, entry: dict, self_recipients=(),
+    chain_recipients=(),
 ) -> bool:
     """Whether taking this toll's printed penalty loses less than paying its
     price — the valuation behind **take gifts, pay tolls, make no trades**'
@@ -421,9 +456,16 @@ def toll_decline_is_smaller_loss(
 
     *entry* is the armed `optional_pay` data and *self_recipients* the printed
     player references that resolve to the offered seat, both supplied by the
-    resolution because only it knows them.
+    resolution because only it knows them. *chain_recipients* are the same
+    references resolved against a deed-priced chain's own context, for the
+    decline :func:`_deed_chain_decline` prices.
     """
     penalty_steps = tuple(entry.get("_on_decline") or ())
+    decline_recipients = self_recipients
+    decline_context = entry.get("_context")
+    deed_decline = _deed_chain_decline(entry, chain_recipients)
+    if deed_decline is not None:
+        penalty_steps, decline_recipients, decline_context = deed_decline
     legacy_damage = int(entry.get("damage", 0) or 0)
     if not penalty_steps and not legacy_damage:
         return False  # not a toll; the unpriced-trade policy owns free offers
@@ -445,7 +487,8 @@ def toll_decline_is_smaller_loss(
     if life_cost:
         paying = paying.plus_life(life_cost)
     declining = toll_branch_loss(
-        game, player_index, penalty_steps, self_recipients, source, context
+        game, player_index, penalty_steps, decline_recipients, source,
+        decline_context,
     )
     if declining is None:
         # **A price that kills is never paid for a penalty nobody can price.**
@@ -668,6 +711,14 @@ def chained_toll_declined(game: Game, player_index: int, entry: dict) -> bool:
         return False
     controller = game.players.index(caster)
     unpaid = tuple(links[0].payload.get("unpaid") or ())
+    if entry.get("_chain_context") is not None and player_index != controller:
+        # A **deed-priced** link ("any player may have Breaking Point deal 6
+        # damage to them"). The rule below assumes the unpaid branch hurts its
+        # controller or helps them and nobody else; a sweep hurts every seat,
+        # so another seat is not told to decline because the caster would
+        # lose creatures too. It weighs its own loss against the deed instead
+        # (``toll_decline_is_smaller_loss`` / ``_deed_chain_decline``).
+        return False
     if not unpaid:
         if chain_payment_counters_the_event_spell(entry):
             # What paying buys is the *payer's*: somebody else's spell

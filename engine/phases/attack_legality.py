@@ -447,6 +447,17 @@ class AttackLegalityMixin:
             scoped_seat = entry.get("controller_seat")
             if scoped_seat is not None and self.controller_index_of(attacker) != scoped_seat:
                 continue
+            # "…can't attack **you** this turn." (Web of Inertia.) Only an
+            # attack on that one player: a creature it holds back may still
+            # attack another opponent, or a planeswalker that player controls
+            # — "a creature that can't attack you can still attack a
+            # planeswalker you control" (ruling, 2014-02-01; CR 508.5's
+            # distinction, which is what *attacking_planeswalker* carries).
+            protected = entry.get("defender_seat")
+            if protected is not None and (
+                attacking_planeswalker or defending_player_index != protected
+            ):
+                continue
             if subject_matches(self, attacker, dict(entry.get("filter") or {})):
                 return False
 
