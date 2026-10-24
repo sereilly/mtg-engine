@@ -1353,6 +1353,26 @@ TRIGGERED_LABELS: dict[str, str] = {
     # stack after the cast, the hand is exiled, and handed back when Hypnox
     # leaves.
     "exile_hand_pile": "triggered_discard",
+    # --- Judgment, at its promotion rehearsal -------------------------------
+    # Wormfang Manta: "When this creature enters, you skip your next turn." and
+    # "When this creature leaves the battlefield, you take an extra turn after
+    # this one." Each is what the ability does to the order of turns, beside
+    # `skip_next_phase`'s `triggered_turn` above: whether a turn is taken away
+    # or added, and that it is a turn rather than a phase, is payload. Not only
+    # a report bucket: under `spell_pattern` both reached the client as
+    # `is_triggered: False`, Hypnox's finding above again.
+    "skip_next_turn": "triggered_turn",
+    "grant_extra_turn": "triggered_turn",
+    # Scalpelexis: "...that player exiles the top four cards of their library.
+    # If two or more of those cards have the same name, repeat this process."
+    # A **wrapper** (its payload carries the exile it repeats), so the label
+    # names the shape, as `activated_repeated` does for Grindstone on the
+    # other side, never the leaf's bucket. Here rather than in
+    # TRIGGERED_LABELS_BY_CONDITION, where the other triggered wrappers are,
+    # because Scalpelexis is the kind's only triggered printing, and an entry
+    # there needs a second label for the kind to disambiguate
+    # (`test_the_by_condition_table_only_holds_genuine_ambiguities`).
+    "repeat_process_while": "triggered_repeated",
 }
 
 # The one instruction kind whose label depends on what triggered it: `may` wraps
@@ -1507,6 +1527,14 @@ TRIGGERED_LABELS_BY_CONDITION: dict[tuple[str, str], str] = {
     # permanent that opponent controls." The moment is a destruction, and so
     # is the answer.
     ("permanent_destroyed", "may"): "triggered_destruction",
+    # --- Judgment, at its promotion rehearsal -------------------------------
+    # Web of Inertia: "At the beginning of combat on each opponent's turn, that
+    # player may exile a card from their graveyard. If the player doesn't,
+    # creatures they control can't attack you this turn." `may` says nothing,
+    # so the row names the moment, beside ("combat", "may") and
+    # ("combat_your_turn", "may") above: whose turn the combat is in is the
+    # condition's narrowing, not another kind of ability.
+    ("combat_opponent_turn", "may"): "triggered_combat",
 }
 
 
