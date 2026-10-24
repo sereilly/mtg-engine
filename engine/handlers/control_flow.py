@@ -917,10 +917,17 @@ def _offer_to_seat(
         # target at all and are untouched.
         from ..targeting import announces_a_target
 
+        # "You" stays the ability's controller (CR 109.5, 603.3a) whoever
+        # performs the branch, so the seat leaving ``caster`` is kept.
+        controller = context.ability_controller or context.caster
         if announces_a_target(_steps(instruction, "action"), described_only=True):
-            context = dataclasses.replace(context, caster=player)
+            context = dataclasses.replace(
+                context, caster=player, ability_controller=controller,
+            )
         else:
-            context = dataclasses.replace(context, target=player, caster=player)
+            context = dataclasses.replace(
+                context, target=player, caster=player, ability_controller=controller,
+            )
     # The whole printed cost, symbol by symbol — "you may pay {1}{B}" (Liliana's
     # Devotee) is a dict, not the number 2, because a payment that counted to a
     # number could only ever collect generic mana.
