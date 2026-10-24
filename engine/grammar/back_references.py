@@ -248,6 +248,17 @@ def parse_bound_subject(stream: TokenStream) -> "ast.TargetSpec | None":
             _accept_chooser_relative(stream) or ordinal or "that",
             ast.ObjectFilter(),
         )
+    # "Exile target creature card from a graveyard. **That card** deals damage
+    # equal to its power to this creature." (Selfless Exorcist.) The object the
+    # sentence in front bound is a *card* — it was in a graveyard when it was
+    # chosen and is in exile now (CR 400.7 makes it no permanent anywhere) — so
+    # the noun is the one word that names it, and the spec says so with
+    # ``is_card`` rather than with a card type the bound object may not keep.
+    # Refused by every lowering that does not ask for a bound card, which is
+    # the whole of what makes reading it safe (see the paragraph above).
+    if noun == "card":
+        stream.advance()
+        return ast.TargetSpec(ordinal or "that", ast.ObjectFilter(is_card=True))
     if noun in CARD_TYPES:
         stream.advance()
         # "…destroy the creature **you chose**" — read after the noun, where

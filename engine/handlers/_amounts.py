@@ -1095,19 +1095,37 @@ def evaluate_count(
         )
     ]
     if aggregate == "greatest_power":
-        # The *printed* power, because a card outside the battlefield has no
-        # computed characteristics at all (CR 613 applies to permanents). A
-        # creature card with a characteristic-defining power has none here
-        # either, which is CR 604.3's own answer: its P/T is 0 in every zone but
-        # the battlefield.
+        # "…the greatest power among creature cards in your graveyard" (Carrion
+        # Grub). A card outside the battlefield has no layers applied to it, so
+        # its power is the printed number — **unless a characteristic-defining
+        # ability defines it**, because a CDA functions in every zone (CR 604.3,
+        # 113.6a). This read 0 for every "*" card on the claim that CR 604.3
+        # made it so, which is the rule backwards: a Lhurgoyf in the Grub's
+        # graveyard counted as 0, not as the creature cards in all graveyards.
+        # ``Game.card_power_outside_battlefield`` asks the battlefield's own CDA
+        # counter, with the pile's player as the card's "you" (CR 109.5).
         return _scaled(
-            max((_printed_power(card) for card in matched_cards), default=0), spec
+            max(
+                (
+                    game.card_power_outside_battlefield(card, _pile_seat(game, card, owner, spec))
+                    for card in matched_cards
+                ),
+                default=0,
+            ),
+            spec,
         )
     return _scaled(len(matched_cards), spec)
 
 
-def _printed_power(card) -> int:
-    try:
-        return int(card.power)
-    except (TypeError, ValueError):
-        return 0
+def _pile_seat(game, card, owner, spec) -> "int | None":
+    """The seat whose pile *card* was counted out of: *owner*'s, or — for a
+    scope over every pile ("all graveyards") — the one that holds it."""
+    if spec.get("owner") == "all":
+        return next(
+            (
+                seat for seat, player in enumerate(game.players)
+                if any(held is card for held in getattr(player, spec.get("zone") or "graveyard", ()) or ())
+            ),
+            None,
+        )
+    return game.players.index(owner) if owner in game.players else None

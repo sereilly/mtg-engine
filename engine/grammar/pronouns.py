@@ -44,7 +44,7 @@ from __future__ import annotations
 import dataclasses
 from dataclasses import replace
 
-from ..oracle_types import LAST_TARGET_CONTROLLER
+from ..oracle_types import LAST_TARGET_CONTROLLER, LAST_TARGET_OWNER
 from . import ast
 from .errors import GrammarError
 from .lexer import PT, QUOTE
@@ -771,11 +771,24 @@ def _parse_its_controller_creates_rider(
     gone by the time the token arrives — so the token rides the controller that
     step recorded, and the lowering demands that producer. Parsed as its own
     sentence, either phrase would name nobody at all.
+
+    ``Its **owner** creates a <token>.`` (Funeral Pyre, behind "Exile target
+    card from a graveyard") is the same rider about the other seat. A card in a
+    graveyard has an owner and no controller (CR 108.3, 108.4a), so the word is
+    not a spelling of the controller's: it reads its own record
+    (``oracle_types.LAST_TARGET_OWNER``, Path of Peace's), and the lowering
+    demands a step that wrote *that* — an exile of a permanent records only the
+    controller, so "Exile target creature. Its owner creates …" refuses rather
+    than hand a stolen creature's token to the thief.
     """
     if not steps or _statement_bound_target(steps[-1]) is None:
         return None
     mark = stream.mark()
-    if not _accept_removed_permanents_controller(stream):
+    if _accept_removed_permanents_controller(stream):
+        recipient = LAST_TARGET_CONTROLLER
+    elif stream.accept_phrase("its", "owner"):
+        recipient = LAST_TARGET_OWNER
+    else:
         return None
     if not stream.at_word("creates"):
         stream.reset(mark)
@@ -786,7 +799,7 @@ def _parse_its_controller_creates_rider(
         stream.reset(mark)
         return None
     assert isinstance(token, ast.CreateToken)
-    return replace(token, recipient=LAST_TARGET_CONTROLLER)
+    return replace(token, recipient=recipient)
 
 
 def _parse_that_controller_reveals_rider(

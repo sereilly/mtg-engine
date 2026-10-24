@@ -307,6 +307,11 @@ class AbilityTargetsMixin:
                 ability_instruction=ability_instruction,
                 ability_source=source_permanent,
             )
+            # …and CR 609.7a's chosen source beside the roles (Shieldmage
+            # Advocate's "by a source of your choice"): the client's roles walk
+            # runs the source stage after its last role when the spec says
+            # ``requires_source``, and the stage needs the list to offer.
+            self._attach_chosen_source_targets(controller_index, card, spec)
             if _ability_picker_is_a_target(spec_ability):
                 narrow_offer(self, controller_index, spec)
             return spec

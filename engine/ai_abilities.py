@@ -803,13 +803,27 @@ def _choose_activation_role_targets(
         """The first chain from *level* on whose every role is on the board
         its step wants. Backtracks, because a side makes a first pick able to
         strand a later role the unfiltered walk had an answer for."""
-        wanted = (sides[position] if position < len(sides) else None) or side
+        own = sides[position] if position < len(sides) else None
+        wanted = own or side
+        # A role whose **own** step gives it a side and that a player can
+        # answer — CR 115.4's "any target" (Shieldmage Advocate's shield) —
+        # holds its seat options to that side too: the first option is the
+        # first seat in order, so an activator sitting second shielded its
+        # opponent. Only on the role's own side, never the chain's fallback,
+        # because a seat role ("target opponent") has none of its own and its
+        # options are already the seats the role admits.
+        seats_sided = own in ("you", "opponent")
         if wanted in ("you", "opponent") and any(
-            option.get("kind") == "permanent" for option in level
+            option.get("kind") == "permanent"
+            or (seats_sided and option.get("kind") == "player")
+            for option in level
         ):
             level = [
                 option for option in level
-                if option.get("kind") != "permanent"
+                if not (
+                    option.get("kind") == "permanent"
+                    or (seats_sided and option.get("kind") == "player")
+                )
                 or (option.get("seat") == player_index) == (wanted == "you")
             ]
         for pick in level:

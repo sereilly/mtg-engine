@@ -70,6 +70,16 @@ _PRINTED_SIDES = {
     "Planeswalker's Scorn": (None, "opponent"),
     "Soldevi Heretic": ("you", None),
     "Triangle of War": ("you", "opponent"),
+    # Judgment's Advocates (W1G3): one role per card out of an opponent's
+    # graveyard — a graveyard role names no permanent, so its side is the
+    # pile scope the role itself carries — then the second target as printed.
+    "Forcemage Advocate": (None, "you"),
+    "Nullmage Advocate": (None, None, "opponent"),
+    "Pulsemage Advocate": (None, None, None, None),
+    "Spurnmage Advocate": (None, None, "opponent"),
+    # "…Prevent all damage that would be dealt to any target …": a shield,
+    # so a permanent it names is one of the activator's own.
+    "Shieldmage Advocate": (None, "you"),
 }
 
 

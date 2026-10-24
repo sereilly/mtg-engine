@@ -37,6 +37,13 @@ if TYPE_CHECKING:
     from ..oracle import OracleInstruction
 
 
+def _names_several_cards(instruction: OracleInstruction) -> bool:
+    """Whether the return's ``targets`` description is a printed plural —
+    "two target cards" — rather than one card."""
+    count = (instruction.payload.get("targets") or {}).get("count")
+    return isinstance(count, int) and not isinstance(count, bool) and count > 1
+
+
 def _return_graveyard_card_to_owners_hand(
     game: Game, instruction: OracleInstruction, context: OracleExecutionContext
 ) -> tuple[bool, str]:
@@ -61,7 +68,36 @@ def _return_graveyard_card_to_owners_hand(
         return graveyard_card_matches(instruction.payload, card)
 
     named = context.target if context.target in game.players else None
+    # "…from **an opponent's** graveyard to their hand" (the Advocates). The
+    # printed pile scope, re-asked here for the reason the picker asks it
+    # (``payload_target_specs._graveyard_return_spec``): an announcement that
+    # reached this naming the activator's own pile names no card the sentence
+    # can return, and a scan would hand the activator their own card.
+    opponents_only = bool(instruction.payload.get("opponent_graveyard_only"))
+    if opponents_only and named is caster:
+        named = None
     index = context.target_permanent_index
+    # "Return **two** target cards from an opponent's graveyard to their hand."
+    # Several slots of the one named pile, resolved together by the shared
+    # slot reader — each to its card before any card moves, highest first
+    # (``_resolve_graveyard_slots``) — and each slot that no longer answers
+    # is dropped (CR 608.2b) while the rest still return. No pile named, or
+    # nothing named in it, is an announcement that named nothing: no scan.
+    if isinstance(index, list) or _names_several_cards(instruction):
+        if named is None:
+            game.log.append(f"{context.card.name}: no card was returned from a graveyard")
+            return True, "resolved"
+        count = int((instruction.payload.get("targets") or {}).get("count") or 1)
+        picked = _resolve_graveyard_slots(named, context, count, _eligible)
+        for chosen in picked:
+            game.put_card_into_hand(named, chosen)
+            game.log.append(
+                f"{context.card.name}: returned {chosen.name} from {named.name}'s "
+                f"graveyard to {named.name}'s hand"
+            )
+        if not picked:
+            game.log.append(f"{context.card.name}: no card was returned from a graveyard")
+        return True, "resolved"
     found = None
     if isinstance(index, int):
         if (
@@ -76,6 +112,7 @@ def _return_graveyard_card_to_owners_hand(
                 (player, slot)
                 for player in (named, caster, *game.players)
                 if player is not None
+                and not (opponents_only and player is caster)
                 for slot, card in enumerate(player.graveyard)
                 if _eligible(card)
             ),

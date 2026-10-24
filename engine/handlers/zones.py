@@ -313,8 +313,24 @@ def put_source_card_on_library_top(game: Game, instruction: OracleInstruction, c
 def put_graveyard_card_on_library_bottom(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Put target card from your graveyard on the bottom of your library."
     (Epitaph Golem.) Honours the chosen graveyard index, else takes the first
-    card — the stale-choice fallback every other graveyard reader uses."""
+    card — the stale-choice fallback every other graveyard reader uses.
+
+    "…target card **from a graveyard** on the bottom of **its owner's**
+    library" (Nantuko Tracer, ``any_graveyard``) reads the pile the
+    announcement named instead — the seat a graveyard target's stamp settles
+    (``resolution._run_stack_item_resolution``) — and puts the card under that
+    same player's library, its owner's (CR 404.1, 400.3). With no seat named
+    nothing is bottomed: the caster's pile is not the one a card chosen "from a
+    graveyard" was necessarily in, and the fallback below would then be
+    choosing for the player."""
     caster = context.caster
+    if instruction.payload.get("any_graveyard"):
+        named = context.target if context.target in game.players else None
+        idx = context.target_permanent_index
+        if named is None or not (isinstance(idx, int) and 0 <= idx < len(named.graveyard)):
+            game.log.append(f"{context.card.name}: no chosen card to bottom")
+            return True, "resolved"
+        caster = named
     if not caster.graveyard:
         game.log.append(f"{context.card.name}: no card in the graveyard to bottom")
         return True, "resolved"

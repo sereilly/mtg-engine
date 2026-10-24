@@ -108,6 +108,34 @@ def _agreeing_possessive(
         "their",
     )
 
+def _pile_owners_possessive(subject: "ast.Recipient") -> str | None:
+    """"their" when *subject*'s cards are in **an opponent's** graveyard, so
+    the destination's "their hand" names that pile's player — the cards'
+    owner (CR 404.1) — else None.
+
+    "Return two target cards from an opponent's graveyard **to their hand**."
+    (Nullmage, Spurnmage, Pulsemage Advocate.) Not the agreement
+    :func:`_agreeing_possessive` reads: there the pronoun is the *performer*
+    and the pile is re-read as theirs; here the performer is the activator and
+    the pronoun points the other way, back at the opponent the pile was
+    printed with. The seat the cards came from is the hand they go to, which is
+    what ``owner`` says to every reader of a destination.
+
+    Only "an opponent's", the possessive that is printed. "Target player's" and
+    "target opponent's" are seats a sentence *chooses*, and a pronoun agreeing
+    with one is a different referent the lowering would have to carry.
+    """
+    filt = getattr(subject, "filter", None)
+    if (
+        filt is not None
+        and filt.zone == "graveyard"
+        and filt.zone_owner is not None
+        and filt.zone_owner.kind == "opponent"
+    ):
+        return "their"
+    return None
+
+
 def _parse_return(
     stream: TokenStream, actor: "ast.PlayerRef | None" = None
 ) -> ast.Statement:
@@ -301,7 +329,10 @@ def _parse_return(
         subject, self_possessive = _agreeing_possessive(
             subject, printed=stream.peek_word(),
         )
-        destination = _parse_zone(stream, self_possessive=self_possessive)
+        destination = _parse_zone(
+            stream, self_possessive=self_possessive,
+            owner_possessive=_pile_owners_possessive(subject),
+        )
 
     # "...to the battlefield **tapped**." (Silversmote Ghoul.) CR 110.5b: a
     # permanent enters untapped unless a spell or ability says otherwise, and

@@ -231,11 +231,9 @@ _KIND_TO_SPEC: dict[str, dict] = {
     },
     # Samite Ministration and Protective Sphere print the phrase behind a
     # blanket — "Prevent all damage … this turn by a source of your choice" —
-    # and so run the same prompt. How long the shield then lasts is the
-    # interceptor's business, not the picker's.
-    "grant_chosen_source_blanket_shield": {
-        "kind": "permanent", "source_of_choice": True, "also_stack": True,
-    },
+    # and run the same prompt; Shieldmage Advocate prints it around **any
+    # target**, which is a payload question, so the kind's row is
+    # ``payload_target_specs._KIND_TO_SPEC_FROM_PAYLOAD``'s.
     "arm_mirror_damage": {
         "kind": "permanent", "source_of_choice": True, "also_stack": True,
     },

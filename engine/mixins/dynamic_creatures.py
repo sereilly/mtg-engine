@@ -469,6 +469,83 @@ class DynamicCreaturesMixin:
                 continue
             _add_static_pt(target, power, toughness)
 
+    def _characteristic_defined_count(
+        self, player: PlayerState, permanent: Permanent, dynamic_pt
+    ) -> int:
+        """The number a ``dynamic_pt_count`` instruction counts for
+        *permanent*, whose "you" is *player* (CR 604.3, layer 7a).
+
+        A CDA counting *cards in a zone* asks the shared evaluator, not the
+        battlefield tally: a card in a graveyard has no computed
+        characteristics (CR 613.1), so it is a different question of a
+        different matcher — and the same evaluator the computed 7c bonus in
+        :meth:`_refresh_dynamic_creatures` uses, so one phrase means one number
+        wherever it is printed.
+
+        The permanent *is* the source of its own characteristic-defining
+        ability, and it is handed over for the reason the computed 7c bonus
+        hands it over: a spec may name a relation to it ("other Rats on the
+        battlefield", "Auras attached to it") rather than only a set of
+        characteristics, and an evaluator with no source answers such a spec by
+        counting all of the set or none of it. Both are silent, and a CDA is
+        recomputed continuously (CR 604.3), so either would be wrong every time
+        anything read the creature.
+
+        One function for the two places that count it — the battlefield refresh
+        and :meth:`card_power_outside_battlefield` — so the two cannot disagree
+        about what a card's ability says.
+        """
+        spec = dynamic_pt.payload.get("count_spec")
+        if spec is not None:
+            return evaluate_count(
+                self, player, spec, source=permanent, exclude=permanent
+            )
+        return _count_dynamic_pt(self, player, permanent, dynamic_pt.payload)
+
+    def card_power_outside_battlefield(self, card, owner_seat: int) -> int:
+        """The power of *card* in a zone other than the battlefield — a graveyard,
+        exile — whose owner is *owner_seat*.
+
+        "That card deals damage equal to its power to this creature." (Selfless
+        Exorcist.) A card off the battlefield has no layers applied to it
+        (CR 613.1 is about objects, and nothing but the card's own text reaches
+        it there), so its power is the printed number — **unless a
+        characteristic-defining ability defines it**, because CDAs function in
+        every zone (CR 604.3, 113.6a). The Exorcist's 2013-04-15 ruling says so
+        of exactly this question: "Abilities that define a creature's power (and
+        toughness) apply in every zone." Lhurgoyf in exile counts the creature
+        cards in all graveyards; Nightmare counts the Swamps its owner controls,
+        CR 109.5's "you" for an object with no controller.
+
+        Counted through :meth:`_characteristic_defined_count`, the battlefield
+        refresh's own counter, over a stand-in ``Permanent`` that is on no
+        battlefield: an ability that reads a record the card would have made as
+        it entered (Shapeshifter's chosen number, Wood Elemental's sacrifice)
+        finds none and counts 0, which is the answer the rules give a CDA that
+        cannot be applied off the battlefield.
+
+        Only the power half: every CDA in the pool that defines power defines it
+        as the counted value, and one that defines toughness alone leaves a
+        printed power the first line answers.
+        """
+        printed = card.base_power
+        if printed is not None:
+            return printed
+        if not (isinstance(owner_seat, int) and 0 <= owner_seat < len(self.players)):
+            return 0
+        dynamic_pt = next(
+            (
+                instruction for instruction in compile_card_oracle(card).instructions
+                if instruction.kind == "dynamic_pt_count"
+            ),
+            None,
+        )
+        if dynamic_pt is None or dynamic_pt.payload.get("defines") == "toughness":
+            return 0
+        return self._characteristic_defined_count(
+            self.players[owner_seat], Permanent(card=card), dynamic_pt
+        )
+
     def _refresh_dynamic_creatures(self) -> None:
         all_permanents = list(self.all_permanents())
         # **Layer 1 before everything else** (CR 613.1a): a permanent whose
@@ -538,29 +615,8 @@ class DynamicCreaturesMixin:
             # where the count it was last given used to stand for ever.
             clear_cda_pt(permanent)
             if dynamic_pt is not None:
-                spec = dynamic_pt.payload.get("count_spec")
-                # A CDA counting *cards in a zone* asks the shared evaluator, not
-                # the battlefield tally: a card in a graveyard has no computed
-                # characteristics (CR 613.1), so it is a different question of a
-                # different matcher — and the same evaluator the computed 7c
-                # bonus below uses, so one phrase means one number wherever it
-                # is printed.
-                # The permanent being refreshed *is* the source of its own
-                # characteristic-defining ability, and it is handed over here
-                # for the reason the computed 7c bonus below hands it over: a
-                # spec may name a relation to it ("other Rats on the
-                # battlefield", "Auras attached to it") rather than only a set
-                # of characteristics, and an evaluator with no source answers
-                # such a spec by counting all of the set or none of it. Both
-                # are silent, and a CDA is recomputed continuously (CR 604.3),
-                # so either would be wrong every time anything read the
-                # creature.
-                value = (
-                    evaluate_count(
-                        self, player, spec, source=permanent, exclude=permanent
-                    )
-                    if spec is not None
-                    else _count_dynamic_pt(self, player, permanent, dynamic_pt.payload)
+                value = self._characteristic_defined_count(
+                    player, permanent, dynamic_pt
                 )
                 # "…**power** is equal to" leaves the printed toughness alone
                 # (Kinetic Augur is */4). ``set_cda_pt`` takes None for "leave

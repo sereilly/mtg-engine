@@ -470,7 +470,10 @@ def _accept_self_reference(stream: TokenStream) -> bool:
     return False
 
 
-def _parse_zone(stream: TokenStream, *, self_possessive: str | None = None) -> ast.Zone:
+def _parse_zone(
+    stream: TokenStream, *, self_possessive: str | None = None,
+    owner_possessive: str | None = None,
+) -> ast.Zone:
     """A zone destination: ``your hand``, ``the battlefield``, ``its owner's hand``.
 
     The possessive is part of the zone, not decoration: Unsummon returns a
@@ -491,6 +494,14 @@ def _parse_zone(stream: TokenStream, *, self_possessive: str | None = None) -> a
 
     Tested **after** the two-word possessives, so "their owner's hand" and
     "their owners' hands" keep their own reading when a caller passes "their".
+
+    *owner_possessive* is the other thing a bare "their" can mean, and it is
+    likewise the caller's to say: "Return two target cards **from an
+    opponent's graveyard to their hand**" (Nullmage Advocate). The pronoun
+    agrees with the player whose pile the objects were in, and a card in a
+    graveyard is in its owner's (CR 404.1), so the hand is the objects' owner's
+    — :class:`ast.PlayerRef` ``owner``, exactly what "its owner's hand" reads
+    as. Only a caller that has read such a pile passes it.
     """
     owner: ast.PlayerRef | None = None
     if stream.accept_phrase("its", "owner", "'s") or stream.accept_phrase(
@@ -509,6 +520,8 @@ def _parse_zone(stream: TokenStream, *, self_possessive: str | None = None) -> a
         owner = ast.PlayerRef("you")
     elif self_possessive is not None and stream.accept_word(self_possessive):
         owner = ast.PlayerRef("you")
+    elif owner_possessive is not None and stream.accept_word(owner_possessive):
+        owner = ast.PlayerRef("owner")
     else:
         stream.accept_word("a", "an", "the")
     name = stream.peek_word()

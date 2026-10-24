@@ -80,6 +80,13 @@ _PICKED_AT_RESOLUTION_BEFORE = {
     ("Rapid Decay", "cast"),
 }
 
+#: …and the lines that joined the pool after the fix and print "a single
+#: graveyard" too: Judgment's Rats' Feast ("Exile X target cards from a single
+#: graveyard"), which the old derivation would have left to the resolution
+#: prompt exactly as it left the five — so the backwards census names it beside
+#: them, and the forward one holds it to the same announcement.
+_SINGLE_GRAVEYARD_SINCE = {("Rats' Feast", "cast")}
+
 #: A sweep that examined nothing looks exactly like one that found nothing.
 _LINES_FLOOR = 7_500
 _COUNTED_LINES_FLOOR = 20
@@ -130,10 +137,25 @@ def _counted_lines(pool):
     return rows, examined
 
 
+def _announces_graveyard_cards(spec) -> bool:
+    """Whether *spec* announces cards in a graveyard: a graveyard picker, or a
+    roles announcement with a graveyard role among its roles — "Return two
+    target cards from an opponent's graveyard to their hand. Destroy target
+    artifact or enchantment." (Nullmage Advocate) names its cards beside a
+    permanent, one role per card (``lowering/_roles.describe_graveyard_card_roles``)."""
+    if spec is None:
+        return False
+    if spec.get("kind") == GRAVEYARD_TARGET_KIND:
+        return True
+    return spec.get("kind") == "roles" and any(
+        role.get("kind") == GRAVEYARD_TARGET_KIND for role in spec.get("roles") or ()
+    )
+
+
 def _unannounced(rows) -> set:
     return {
         (unit.name, where) for unit, where, _text, spec in rows
-        if spec is None or spec.get("kind") != GRAVEYARD_TARGET_KIND
+        if not _announces_graveyard_cards(spec)
     }
 
 
@@ -160,7 +182,7 @@ def test_every_line_naming_several_graveyard_targets_announces_them(pool):
         (unit.name, where) for unit, where, _text, spec in rows
         if spec.get(SINGLE_GRAVEYARD)
     }
-    assert printed == flagged == _PICKED_AT_RESOLUTION_BEFORE
+    assert printed == flagged == _PICKED_AT_RESOLUTION_BEFORE | _SINGLE_GRAVEYARD_SINCE
 
 
 def test_the_census_sees_the_old_derivation(pool, monkeypatch):
@@ -182,7 +204,7 @@ def test_the_census_sees_the_old_derivation(pool, monkeypatch):
 
     rows, _examined = _counted_lines(pool)
 
-    assert _unannounced(rows) == _PICKED_AT_RESOLUTION_BEFORE
+    assert _unannounced(rows) == _PICKED_AT_RESOLUTION_BEFORE | _SINGLE_GRAVEYARD_SINCE
 
 
 # ---------------------------------------------------------------------------

@@ -522,6 +522,43 @@ def _lower_return_to_zone(
                 "return_creature_from_graveyard_to_hand", "", several_cards
             ),
         )
+    # "Return two target cards **from an opponent's graveyard to their hand**."
+    # (Nullmage, Spurnmage, Pulsemage and Forcemage Advocate.) Endbringer's
+    # Revel's any-graveyard return — the pile is the announced seat's and the
+    # hand is the same player's, because a card in a graveyard is in its
+    # owner's (CR 404.1) — with the printed possessive carried as the
+    # narrowing it is: ``opponent_graveyard_only``, the key Misinformation's
+    # picker already reads, so the activator's own pile is never offered and
+    # the handler refuses it at resolution too. One card or several; the
+    # several are described for the cast-time picker as every targeted plural
+    # here is, and "an opponent's" is **one** opponent — the cards are in one
+    # graveyard, which is what an announcement naming one seat's pile already
+    # is (``Game.graveyard_target_seat``).
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and subject.targeted
+        and (_names_several_targets(subject) or _is_target(subject))
+        and node.from_zone is not None
+        and node.from_zone.name == "graveyard"
+        and node.from_zone.owner is not None
+        and node.from_zone.owner.kind == "opponent"
+        and node.to.name == "hand"
+        and node.to.owner is not None
+        and node.to.owner.kind == "owner"
+        and subject.filter.is_card
+        and not node.exile_on_leave
+        and node.attached_to is None
+    ):
+        if _reads_no_return_restriction(subject.filter):
+            raise LoweringError("no return handler honours this restriction", node=node)
+        theirs = _graveyard_to_hand_payload(subject.filter)
+        theirs["any_graveyard"] = True
+        theirs["opponent_graveyard_only"] = True
+        if _names_several_targets(subject):
+            _describe_several_card_targets(theirs, subject)
+        return (
+            OracleInstruction("return_creature_from_graveyard_to_hand", "", theirs),
+        )
     # Every reading that needs no target is the floors'. `_bound_returns`
     # takes the ones that name their object by reference — the event recorded
     # it, or it is the ability's own source — and hands the rest down to

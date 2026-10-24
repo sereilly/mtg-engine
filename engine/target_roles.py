@@ -178,6 +178,33 @@ ROLE_RELATION_TESTS = {
         and getattr(candidate, "seat", None) is not None
         and game.controller_index_of(earlier) == candidate.seat
     ),
+    # "Return **two target cards from an opponent's graveyard** to their hand."
+    # (Nullmage Advocate.) Several printed cards of one slot, each its own role
+    # (``lowering/_roles.describe_graveyard_card_roles``), and both sides are
+    # :class:`GraveyardTarget` stamps. Two questions in one relation, both
+    # about the pair:
+    #
+    # * **the same pile** — "an opponent's graveyard" is one opponent's, so a
+    #   three-seat announcement may not take one card from each (the card's
+    #   2004-10-04 ruling: "unless a single opponent has at least two cards in
+    #   their graveyard to target");
+    # * **a later card in it** — CR 115.3 forbids naming one card for two of
+    #   the slots, and asking for the next one *after* the earlier choice is
+    #   that rule with a canonical order on top: the same set of cards is then
+    #   one announcement rather than one per ordering, which is what keeps the
+    #   walk the browser is handed (``legality_roles._role_target_walk``) the
+    #   size of the choice and not of its permutations.
+    #
+    # The order is the pile's (CR 404.2), read through ``graveyard_index_of``
+    # so two copies of one card are told apart by which copy each stamp is.
+    "later_in_same_graveyard_role": lambda earlier, candidate, game: (
+        game is not None
+        and getattr(candidate, "seat", None) is not None
+        and getattr(earlier, "seat", None) == candidate.seat
+        and game.graveyard_index_of(earlier) is not None
+        and game.graveyard_index_of(candidate) is not None
+        and game.graveyard_index_of(candidate) > game.graveyard_index_of(earlier)
+    ),
     "same_controller_role": lambda earlier, candidate, game: (
         game is not None
         and game.controller_index_of(earlier) is not None

@@ -332,6 +332,13 @@ def _graveyard_return_spec(payload: dict) -> dict:
     # the same key one destination over.
     if payload.get("any_graveyard"):
         del spec["own_graveyard_only"]
+        # "…from **an opponent's** graveyard to their hand" (the Advocates).
+        # The same pile scope Misinformation's picker reads one kind over
+        # (:func:`_graveyard_to_library_spec`), for its reason: left off, the
+        # activator could return cards from their own graveyard to their own
+        # hand, a strictly better card than the one printed.
+        if payload.get("opponent_graveyard_only"):
+            spec["opponent_graveyard_only"] = True
     # "Up to two target creature cards" (Sanguine Indulgence). This kind settles
     # its own spec, so the generic `targets` reading in `_from_instruction` never
     # runs for it - the maximum has to be lifted here, or the picker collects one
@@ -1272,6 +1279,12 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     "exile_cards_from_graveyard": _graveyard_exile_pile_spec,
     "grant_prevention_shield": _prevention_shield_spec,
     "grant_whole_prevention_shield": _whole_prevention_shield_spec,
+    # The blanket around one chosen source is the same two answers: the flat
+    # source prompt Samite Ministration and Protective Sphere have always run,
+    # and — announcing a recipient as Circle of Despair does — "…dealt to **any
+    # target** this turn by a source of your choice" (Shieldmage Advocate), the
+    # target first and ``requires_source`` for the second stage.
+    "grant_chosen_source_blanket_shield": _whole_prevention_shield_spec,
     # Honorable Passage names its protected object the way Circle of
     # Despair does — "would deal damage to **any target**" — and its
     # chosen source the way every CR 615.8 shield does. Same two

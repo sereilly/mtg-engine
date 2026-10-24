@@ -397,7 +397,15 @@ def roles_spec(targets: dict) -> dict | None:
         # flattening it keeps the two shapes from both being able to mean the
         # same spell.
         return None
-    return {"kind": ROLES_TARGET_KIND, "roles": roles}
+    spec: dict = {"kind": ROLES_TARGET_KIND, "roles": roles}
+    if targets.get("requires_source"):
+        # "…to **any target** this turn by **a source of your choice**"
+        # (Shieldmage Advocate): CR 609.7a's chosen source beside the roles, a
+        # choice and not a target, so it is not a role — it is the second
+        # stage Jade Monolith's flag already asks the client for, carried on
+        # the announcement the roles belong to.
+        spec["requires_source"] = True
+    return spec
 
 
 

@@ -479,6 +479,20 @@ def _read(game: "Game", item: "StackItem", announcement: _Announcement) -> list[
                     "graveyard", stamp=stamps[position],
                     channel="role", position=position, mode=mode,
                 ))
+            elif (
+                role.get("kind") == "any" and role_seats is not None
+                and position < len(role_seats)
+                and isinstance(role_seats[position], int)
+                and not isinstance(role_seats[position], bool)
+                and 0 <= role_seats[position] < len(game.players)
+            ):
+                # CR 115.4's "any target" as a role, answered by a **player**
+                # (Shieldmage Advocate's shield around a seat): no id and no
+                # stamp, so the seat this slot recorded is the target.
+                found.append(ChosenTarget(
+                    "player", seat=role_seats[position], channel="role",
+                    position=position, mode=mode,
+                ))
         return found
 
     if kind == GRAVEYARD_TARGET_KIND:
@@ -880,8 +894,16 @@ def names_several_targets(item: "StackItem") -> bool:
 
     if recorded_role_seats(item) is not None:
         return True
+    # …or a permanent **beside a card in a graveyard** ("Return two target
+    # cards from an opponent's graveyard to their hand. Destroy target
+    # attacking creature.", Spurnmage Advocate): one id, but the stamps are
+    # targets too, so the permanent given shroud in response is one illegal
+    # target of an object that still resolves. Counted on the item alone, the
+    # one holder that carries stamps.
+    stamped = sum(1 for stamp in _stamps(item) if stamp is not None)
     return any(
-        sum(1 for permanent_id in _ids(holder) if isinstance(permanent_id, int)) > 1
+        sum(1 for permanent_id in _ids(holder) if isinstance(permanent_id, int))
+        + (stamped if holder is item else 0) > 1
         for holder in (item, *modes)
     )
 
