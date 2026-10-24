@@ -29,6 +29,25 @@ class PromptContext:
     viewer_seat: int | None
     serialize_card: Callable[[Any], dict]
     seat_type: Callable[[int], str]
+    #: A **permanent** described as it is (``serialization
+    #: ._serialize_permanent_summary``): its type line, text, colours and
+    #: mana cost through the layers (CR 613). Injected for ``serialize_card``'s
+    #: reason — the renderer modules sit below ``serialization`` in
+    #: ``web.LAYERS`` — and needed because a permanent handed to
+    #: ``serialize_card`` is described as printed: a Kormus Bell'd Swamp drawn
+    #: as "Basic Land — Swamp" in a list of creatures. Read through
+    #: :meth:`describe_permanent`.
+    serialize_permanent: Callable[[Any], dict] | None = None
+
+    def describe_permanent(self, permanent) -> dict:
+        """*permanent* for a prompt that lists permanents.
+
+        A context built without :attr:`serialize_permanent` (a test's) falls
+        back to the permanent's effective card — layers 1 and 3 and the
+        granted abilities, the nearest the card renderer can come."""
+        if self.serialize_permanent is not None:
+            return self.serialize_permanent(permanent)
+        return self.serialize_card(permanent.effective_card)
 
 
 Renderer = Callable[[PromptContext, list], "dict | None"]

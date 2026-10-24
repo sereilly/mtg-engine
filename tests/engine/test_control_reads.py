@@ -358,7 +358,8 @@ POSITIONAL_BASELINE: dict[str, int] = {
     # permanent choice answers by id. The 3 split with the module (one
     # `choices.py` became the `choices/` package): Balance's two removals went
     # to `sacrifice.py`, Phantasmal Terrain's slot fallback to `values.py`.
-    "engine/mixins/stack/choices/sacrifice.py": 2,
+    # Balance's two left at round kg: an answer's slots are looked up in the
+    # round's own candidate list (`balance_candidates`), not subscripted.
     "engine/mixins/stack/choices/values.py": 1,
     # One read moved between these two in LEG round 32, and nothing else about
     # them changed: "whenever this creature attacks and isn't blocked" fires
@@ -380,9 +381,9 @@ POSITIONAL_BASELINE: dict[str, int] = {
     "web/action_turn.py": 2,
     "web/combat_prompts.py": 3,
     "web/debug_actions.py": 3,
-    # Cuombajj Witches' "any target" list, which went with its renderer when
-    # `web/prompts.py` was split by kind of answer.
-    "web/prompt_board.py": 1,
+    # (`web/prompt_board.py`'s one, the forced-sacrifice list subscripting its
+    # seat's battlefield by the engine's slot, reads `permanent_at` since
+    # round kg.)
     "web/serialization.py": 1,
     "web/state_view.py": 2,
 }

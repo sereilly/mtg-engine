@@ -17,6 +17,17 @@ from ....oracle_types import (SACRIFICED_CARDS_BY_SEAT, SACRIFICED_COUNT,
 from ....subject_filters import subject_matches
 
 
+#: Balance's rounds, in the order the card and its ruling give them: lands,
+#: then cards in hand, then creatures — each counted as it starts.
+BALANCE_ROUNDS = ("lands", "hand", "creatures")
+
+_BALANCE_ROUND_WORDS = {
+    "lands": "which lands to keep",
+    "hand": "which cards to keep",
+    "creatures": "which creatures to keep",
+}
+
+
 def _record_sacrificed_card(record, player_index: int, perm) -> None:
     """Write one given-up card into a resolution's scratchpad, twice over.
 
@@ -648,64 +659,204 @@ class SacrificeChoicesMixin:
                 self.finish_keep_batch(choice.data["_batch"])
 
     # -- Balance -------------------------------------------------------------
+    #
+    # "Each player chooses a number of lands they control equal to the number
+    # of lands controlled by the player who controls the fewest, then
+    # sacrifices the rest. Players discard cards and sacrifice creatures the
+    # same way."
+    #
+    # **Three rounds, each counted as it starts.** The card's ruling
+    # (2016-06-08): "First the player whose turn it is chooses which lands (if
+    # any) to keep, then each other player in turn order does the same. ... All
+    # of the unchosen lands are then sacrificed simultaneously. Then the
+    # process is repeated for cards in hand ... Lastly, the process is repeated
+    # for creatures" — and "Each type of object is counted during the
+    # corresponding part of the process ... a land creature sacrificed to the
+    # first part of the spell would not be counted when determining how many
+    # creatures are on the battlefield for the last part."
+    #
+    # It was one prompt per seat with all three counts taken up front, so a
+    # Mishra's Factory sacrificed as a land was still owed as a creature, and a
+    # seat whose creatures the *other* seat's land choice had evened up was
+    # still made to sacrifice one. Now each round is a batch of ``balance``
+    # prompts — one per seat that owes, the same prompt with the other two
+    # counts at zero — and nothing moves until the round's last answer is in
+    # (the keep batch's rule above, for the same reason). Then the next round
+    # is counted on the board that one left.
+    #
+    # What each round counts is :meth:`balance_candidates`: layer 4's answer
+    # (CR 613.1d), so a land animated into a creature is a land in the first
+    # round and a creature in the last, and the prompt's lists are this same
+    # function's answer rather than a mirror of it.
+
+    def balance_candidates(self, seat: int, stage: str) -> list:
+        """``(battlefield slot, permanent)`` for each of *seat*'s permanents
+        Balance's *stage* (``"lands"`` / ``"creatures"``) counts — what that
+        round offers and the only permanents its answer may name."""
+        if stage == "lands":
+            def counted(perm):
+                return perm.has_type("land")
+        elif stage == "creatures":
+            def counted(perm):
+                return perm.is_creature
+        else:
+            raise ValueError(f"Balance has no {stage!r} round on the battlefield")
+        return [
+            (slot, perm)
+            for slot, perm in enumerate(self.controlled_by(seat))
+            if counted(perm)
+        ]
+
+    def _balance_count(self, seat: int, stage: str) -> int:
+        if stage == "hand":
+            return len(self.players[seat].hand)
+        return len(self.balance_candidates(seat, stage))
+
+    def begin_balance(self) -> bool:
+        """Open Balance's first round that owes anything (lands, then cards
+        in hand, then creatures). False when no round does."""
+        return self._open_balance_round(0)
+
+    def _open_balance_round(self, start: int) -> bool:
+        """Count each round from *start* on and arm the first that owes."""
+        seats = self.apnap_seats()
+        for stage in BALANCE_ROUNDS[start:]:
+            counts = {seat: self._balance_count(seat, stage) for seat in seats}
+            if not counts:
+                return False
+            fewest = min(counts.values())
+            owed = {seat: count - fewest for seat, count in counts.items() if count > fewest}
+            if not owed:
+                continue
+            batch = {"stage": stage, "answers": [], "armed": False, "applied": False}
+            for seat in seats:
+                if seat not in owed:
+                    continue
+                plan = {"lands": 0, "creatures": 0, "hand": 0}
+                plan[stage] = owed[seat]
+                self.arm_pending_choice(
+                    "balance", seat, plan=plan, stage=stage, _balance=batch,
+                )
+            batch["armed"] = True
+            self.log.append(f"Balance: each player chooses {_BALANCE_ROUND_WORDS[stage]}")
+            self._finish_balance_round(batch)
+            return True
+        return False
+
+    def _finish_balance_round(self, batch: dict) -> None:
+        """Perform a round once none of its prompts is still owed, then count
+        the next one on the board it leaves.
+
+        Read off the queue, as :meth:`finish_keep_batch` is, so a prompt that
+        left the queue unanswered cannot strand the answers that were given.
+        """
+        if not batch.get("armed") or batch.get("applied"):
+            return
+        if any(
+            owed.kind == "balance" and owed.data.get("_balance") is batch
+            for owed in self.pending_choices
+        ):
+            return
+        batch["applied"] = True
+        stage = batch["stage"]
+        if stage == "hand":
+            for choice, chosen in batch["answers"]:
+                player = self.players[choice.player_index]
+                for index, card in chosen:
+                    # By slot, checked by identity — every copy of a card in a
+                    # hand is the same object, so the slot is what keeps the
+                    # hand's order — and through the hand seam if it moved.
+                    if 0 <= index < len(player.hand) and player.hand[index] is card:
+                        player.hand.pop(index)
+                    elif not self.take_card_from_hand(player, card):
+                        continue
+                    # "…Players **discard** cards … the same way." Through the
+                    # discard seam, never straight to the graveyard: it is
+                    # CR 701.9a's event, so "whenever a player discards a
+                    # card" (Megrim) hears it. The cause is the seat that cast
+                    # it, off the prompt.
+                    self._discard_card(
+                        player, card, cause_seat=choice.data.get("_cause_seat"),
+                    )
+                self.log.append(f"{player.name} discarded {len(chosen)} card(s) (Balance)")
+        else:
+            # Every seat's unchosen permanents in one event (CR 701.21a), the
+            # ruling's "sacrificed simultaneously".
+            doomed = [perm for _choice, chosen in batch["answers"] for perm in chosen]
+            self.sacrifice_permanents(doomed)
+            for choice, chosen in batch["answers"]:
+                self.log.append(
+                    f"{self.players[choice.player_index].name} sacrificed "
+                    + (", ".join(perm.card.name for perm in chosen) or "nothing")
+                    + " (Balance)"
+                )
+        self._open_balance_round(BALANCE_ROUNDS.index(stage) + 1)
 
     def _resolve_balance(self, choice: PendingChoice, land_indices, creature_indices, hand_indices) -> bool:
-        player_index = choice.player_index
+        """One seat's answer to one round, validated whole and then *held*
+        until the round's last answer is in."""
+        seat = choice.player_index
         plan = choice.data["plan"]
-        player = self.players[player_index]
-        lands = [i for i in dict.fromkeys(land_indices or [])]
-        creatures = [i for i in dict.fromkeys(creature_indices or [])]
-        hand = [i for i in dict.fromkeys(hand_indices or [])]
+        stage = choice.data.get("stage")
+        lands = list(dict.fromkeys(land_indices or []))
+        creatures = list(dict.fromkeys(creature_indices or []))
+        hand = list(dict.fromkeys(hand_indices or []))
         if len(lands) != plan["lands"] or len(creatures) != plan["creatures"] or len(hand) != plan["hand"]:
             return False
-        # Validate the chosen battlefield indices are the right card type.
-        for i in lands:
-            if not (0 <= i < len(player.battlefield)) or not player.battlefield[i].has_type("land"):
+        player = self.players[seat]
+        if stage == "hand":
+            if not all(isinstance(i, int) and 0 <= i < len(player.hand) for i in hand):
                 return False
-        for i in creatures:
-            if not (0 <= i < len(player.battlefield)) or not player.battlefield[i].is_creature:
+            # Highest slot first, the order the discards are made in.
+            chosen: list = [(i, player.hand[i]) for i in sorted(hand, reverse=True)]
+            said = f"{player.name} chose {len(chosen)} card(s) to discard"
+        elif stage in ("lands", "creatures"):
+            offered = dict(self.balance_candidates(seat, stage))
+            picked = lands if stage == "lands" else creatures
+            if not all(i in offered for i in picked):
                 return False
-        for i in hand:
-            if not (0 <= i < len(player.hand)):
-                return False
-        # Resolve every chosen permanent *before* removing any, then remove
-        # them together. The old loop went highest-index-first so that removing
-        # one could not invalidate the indices behind it — a workaround the
-        # single removal choke point makes unnecessary, since nothing here holds
-        # an index across a removal any more.
-        chosen_perms = [
-            self.permanent_at(player, i)
-            for i in sorted(set(lands) | set(creatures), reverse=True)
-        ]
-        for perm in chosen_perms:
-            self.sacrifice_permanent(perm)
-        for i in sorted(hand, reverse=True):
-            # "…Players **discard** cards … the same way." Through the discard
-            # seam, never straight to the graveyard: it is CR 701.9a's event,
-            # and by the bare move no "whenever a player discards a card" ever
-            # heard of the largest discard the card makes. The cause is the
-            # seat that cast it, off the prompt (the answer arrives after the
-            # resolution has returned).
-            self._discard_card(
-                player, player.hand.pop(i),
-                cause_seat=choice.data.get("_cause_seat"),
+            chosen = [offered[i] for i in picked]
+            said = (
+                f"{player.name} chose "
+                + (", ".join(perm.card.name for perm in chosen) or "nothing")
+                + " to sacrifice"
             )
+        else:
+            return False
+        batch = choice.data["_balance"]
         self.discard_pending_choice(choice)
-        self.log.append(f"{player.name} resolved their Balance sacrifices")
+        # The choice of permanents is public as it is made (the next seat
+        # chooses knowing it); which cards a hand gives up is not, until every
+        # seat has chosen (the ruling: "no cards are revealed until all
+        # players have chosen what to discard").
+        batch["answers"].append((choice, chosen))
+        self.log.append(said + " (Balance)")
+        self._finish_balance_round(batch)
         return True
 
     def _default_balance(self, choice: PendingChoice) -> None:
-        """Keep the lowest-index permanents and cards."""
+        """Keep the lowest-slot permanents and cards: give up the last ones
+        the round counts."""
         plan = choice.data["plan"]
+        stage = choice.data.get("stage")
+        owed = int(plan.get(stage, 0)) if stage else 0
         player = self.players[choice.player_index]
-        land_idx = [i for i, p in enumerate(player.battlefield) if p.has_type("land")][-plan["lands"]:] if plan["lands"] else []
-        creature_idx = [i for i, p in enumerate(player.battlefield) if p.is_creature][-plan["creatures"]:] if plan["creatures"] else []
-        hand_idx = list(range(len(player.hand)))[-plan["hand"]:] if plan["hand"] else []
-        if not self._resolve_balance(choice, land_idx, creature_idx, hand_idx):
+        picks: dict = {"lands": [], "creatures": [], "hand": []}
+        if owed and stage == "hand":
+            picks["hand"] = list(range(len(player.hand)))[-owed:]
+        elif owed and stage in ("lands", "creatures"):
+            slots = [slot for slot, _perm in self.balance_candidates(choice.player_index, stage)]
+            picks[stage] = slots[-owed:]
+        if not self._resolve_balance(choice, picks["lands"], picks["creatures"], picks["hand"]):
             self.discard_pending_choice(choice)
+            # A default that could not be given is still an answer the round
+            # was waiting on.
+            batch = choice.data.get("_balance")
+            if batch is not None:
+                self._finish_balance_round(batch)
 
     def confirm_balance(self, player_index: int, land_indices=None, creature_indices=None, hand_indices=None) -> bool:
-        """Resolve one player's Balance plan with their chosen sacrifices/discards."""
+        """Answer one player's Balance round with their chosen sacrifices or discards."""
         return self.resolve_pending_choice(
             "balance", player_index,
             land_indices=land_indices, creature_indices=creature_indices, hand_indices=hand_indices,

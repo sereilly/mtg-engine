@@ -277,25 +277,40 @@ def _untap_up_to(ctx: PromptContext, choices: list) -> dict:
 
 @prompt_renderer("balance")
 def _balance(ctx: PromptContext, choices: list) -> dict:
+    """One round of Balance's three — lands, then cards in hand, then
+    creatures, each counted as it starts (``Game.begin_balance``).
+
+    The round's permanents are the engine's own list,
+    ``Game.balance_candidates``, which is what the answer is checked against:
+    layer 4's answer (CR 613.1d), so an animated Mishra's Factory is offered
+    with the lands in the first round and with the creatures in the last, an
+    Opalescence enchantment with the creatures, and a Clone that copied a
+    Forest with the lands. Each is described as it is
+    (``describe_permanent``), not as printed. The other round's list is empty:
+    only one round is ever being answered.
+    """
     choice = choices[0]
     seat = choice.player_index
     plan = choice.data["plan"]
+    stage = choice.data.get("stage")
     player = ctx.game.players[seat]
+
+    def offered(round_name: str) -> list:
+        if stage != round_name:
+            return []
+        return [
+            {"index": slot, "id": perm.permanent_id, **ctx.describe_permanent(perm)}
+            for slot, perm in ctx.game.balance_candidates(seat, round_name)
+        ]
+
     return {
         "player_seat": seat,
+        "stage": stage,
         "lands_to_sacrifice": plan["lands"],
         "creatures_to_sacrifice": plan["creatures"],
         "cards_to_discard": plan["hand"],
-        "lands": [
-            {"index": i, **ctx.serialize_card(p.card)}
-            for i, p in enumerate(player.battlefield)
-            if p.card.primary_type == "land"
-        ],
-        "creatures": [
-            {"index": i, **ctx.serialize_card(p.card)}
-            for i, p in enumerate(player.battlefield)
-            if p.card.primary_type == "creature"
-        ],
+        "lands": offered("lands"),
+        "creatures": offered("creatures"),
         "hand": [ctx.serialize_card(card) for card in player.hand],
     }
 
@@ -305,7 +320,6 @@ def _sacrifice(ctx: PromptContext, choices: list) -> dict:
     """Every eligible permanent, so the board can list and highlight them."""
     choice = choices[0]
     state = ctx.game._sacrifice_prompt(choice)
-    player = ctx.game.players[choice.player_index]
     return {
         "player_seat": choice.player_index,
         "count": state["count"],
@@ -315,9 +329,12 @@ def _sacrifice(ctx: PromptContext, choices: list) -> dict:
         # would make the offer a demand.
         "up_to": state["up_to"],
         "reason": state["reason"],
+        # Each described as it is (CR 613): an animated land in a "sacrifice
+        # a creature" list is drawn as the creature it is.
         "permanents": [
-            {"index": i, **ctx.serialize_card(player.battlefield[i].card)}
+            {"index": i, **ctx.describe_permanent(perm)}
             for i in state["valid_indices"]
+            if (perm := ctx.game.permanent_at(choice.player_index, i)) is not None
         ],
     }
 

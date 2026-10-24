@@ -77,6 +77,7 @@ from .serialization import (
     _serialize_card,
     _serialize_card_summary,
     _serialize_modes,
+    _serialize_permanent_summary,
     _serialize_player,
     _serialize_stack_item,
 )
@@ -1165,6 +1166,9 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
             viewer_seat=viewer_seat,
             serialize_card=_serialize_card_summary,
             seat_type=lambda seat: _seat_type(session, seat),
+            serialize_permanent=lambda perm: _serialize_permanent_summary(
+                perm, session.game
+            ),
         )
     )
 
