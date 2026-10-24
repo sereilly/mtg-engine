@@ -656,13 +656,14 @@ def _exchange_shrinks_the_library(
     not counted on either side, because it reaches the graveyard only once
     the exchange is done (CR 608.2n).
     """
-    from .ai_weighed_cast import _effect_steps
+    from .ai_weighed_cast import _effect_steps, _spell_instructions
 
-    program = compile_card_oracle(card)
+    # Through the mode seam (``_spell_instructions``), never the program's
+    # instructions, which for a modal spell are mode 0's.
     exchanges = any(
         step.kind == "exchange_zones"
         and sorted((step.payload or {}).get("zones") or ()) == ["graveyard", "library"]
-        for instruction in program.instructions
+        for instruction in _spell_instructions(card)
         for step in _effect_steps(instruction)
     )
     if not exchanges:
