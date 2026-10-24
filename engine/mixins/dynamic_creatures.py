@@ -123,6 +123,18 @@ def _count_dynamic_pt(
         # characteristics at all (CR 613.1) — the same reason Wood Elemental's
         # tally rides the permanent rather than being recounted here.
         return int(permanent.metadata.get(str(what)) or 0)
+    if what in ("exiled_total_power", "exiled_total_toughness"):
+        # Sutured Ghoul: "…power is equal to the total power of **the exiled
+        # cards** and its toughness is equal to their total toughness." Not
+        # Dracoplasm's frozen sums: the cards are still there to read, in
+        # exile, and a characteristic-defining ability on one of them keeps
+        # applying (CR 604.3; the 2011-09-22 ruling — "if Dungrove Elder is
+        # exiled this way … Sutured Ghoul's power and toughness will change as
+        # the number of Forests you control changes"). So it is recounted every
+        # refresh, over the pile its own entry exile linked to it (CR 607.2b).
+        return _linked_exile_total(
+            game, permanent, half=0 if what == "exiled_total_power" else 1
+        )
     if what == LIFE_PAID_AS_ENTERED:
         # Nameless Race: the life was paid as the creature entered (CR 614.1c)
         # and nothing on a board records it, so it rides the permanent the same
@@ -201,6 +213,95 @@ def _count_dynamic_pt(
     # sentence rather than part of the counting — a card printed "2 plus" is
     # the same template.
     return total + int(payload.get("plus", 0))
+
+
+def _linked_exile_total(game, permanent: Permanent, *, half: int) -> int:
+    """The summed power (*half* 0) or toughness (*half* 1) of the cards exiled
+    with *permanent* that are still in exile (Sutured Ghoul).
+
+    "The exiled cards" are CR 607.2b's: the ones the permanent's own entry
+    exile linked to it (``linked_exile.linked_entries``), and only while each is
+    still in its owner's exile — a card some other effect has taken out of
+    exile since adds nothing. By identity, because two copies of one card are
+    the same ``CardDefinition`` and the record's entries are the only distinct
+    things there are.
+
+    A stand-in permanent (a card read in exile under another Ghoul) has no
+    record and totals 0 — which is the ruling's "In zones other than the
+    battlefield, Sutured Ghoul's power and toughness are each 0".
+    """
+    from ..linked_exile import linked_entries
+
+    total = 0
+    for entry in linked_entries(permanent):
+        card = entry["card"]
+        owner = int(entry.get("owner_index", 0))
+        if not (0 <= owner < len(game.players)):
+            continue
+        if not any(held is card for held in game.players[owner].exile):
+            continue
+        total += _card_pt_off_battlefield(game, card, owner)[half]
+    return max(0, total)
+
+
+def _card_pt_off_battlefield(game, card, owner_seat: int) -> tuple[int, int]:
+    """The power and toughness of *card* in a zone other than the battlefield,
+    whose owner is *owner_seat*: the printed numbers, **unless a
+    characteristic-defining ability defines them**, because CDAs function in
+    every zone (CR 604.3, 113.6a). Sutured Ghoul's 2011-09-22 ruling: "If any
+    of the creature cards you exile has a characteristic-defining ability that
+    defines its power and/or toughness, that ability will apply … If the
+    characteristic-defining ability can't be applied (for instance, it relies
+    on a choice made as the card enters), then use 0." A CDA reading a record
+    the card would have made as it entered finds none on the stand-in below and
+    counts 0, which is that sentence.
+
+    **Duplicates, on purpose and for one merge only**, W1G3's
+    ``Game.card_power_outside_battlefield`` (Judgment wave 1, Selfless
+    Exorcist; not on this branch's base) for the power half, and the CDA
+    payload's P/T mapping in ``_refresh_dynamic_creatures`` for both: the two
+    are to be folded into one reader at the merge. Kept private and beside
+    ``_count_dynamic_pt`` so this branch edits neither the refresh nor that
+    method's region.
+    """
+    power, toughness = card.base_power, card.base_toughness
+    if power is not None and toughness is not None:
+        return power, toughness
+    dynamic_pt = next(
+        (
+            instruction for instruction in compile_card_oracle(card).instructions
+            if instruction.kind == "dynamic_pt_count"
+        ),
+        None,
+    )
+    if dynamic_pt is None or not (0 <= owner_seat < len(game.players)):
+        return power or 0, toughness or 0
+    player = game.players[owner_seat]
+    stand_in = Permanent(card=card)
+    payload = dynamic_pt.payload
+    spec = payload.get("count_spec")
+    value = (
+        evaluate_count(game, player, spec, source=stand_in, exclude=stand_in)
+        if spec is not None
+        else _count_dynamic_pt(game, player, stand_in, payload)
+    )
+    defined_power: int | None = value
+    defined_toughness: int | None = value
+    if payload.get("toughness_count") is not None:
+        defined_toughness = _count_dynamic_pt(
+            game, player, stand_in, {**payload, "count": payload["toughness_count"]}
+        )
+    elif payload.get("complement") is not None:
+        defined_toughness = max(0, int(payload["complement"]) - value)
+    elif payload.get("defines") == "power":
+        bonus = payload.get("toughness_plus")
+        defined_toughness = None if bonus is None else value + int(bonus)
+    elif payload.get("defines") == "toughness":
+        defined_power = None
+    return (
+        power if power is not None else int(defined_power or 0),
+        toughness if toughness is not None else int(defined_toughness or 0),
+    )
 
 
 def _add_static_pt(permanent: Permanent, power: int, toughness: int) -> None:

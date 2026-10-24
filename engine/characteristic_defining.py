@@ -392,6 +392,16 @@ def _sacrificed_on_entry_totals(match: re.Match) -> dict[str, object]:
     }
 
 
+def _linked_exile_totals(match: re.Match) -> dict[str, object]:
+    """Sutured Ghoul. The sums of the cards its entry exile linked to it — one
+    per half, Dracoplasm's two-key shape — but **read live** off the pile in
+    exile rather than frozen as it entered, because a characteristic-defining
+    ability on an exiled card keeps applying (the 2011-09-22 ruling).
+    ``mixins/dynamic_creatures._linked_exile_total`` reads them.
+    """
+    return {"count": "exiled_total_power", "toughness_count": "exiled_total_toughness"}
+
+
 def _attacking_split_land_count(match: re.Match) -> dict[str, object]:
     return {
         "count": "land",
@@ -623,6 +633,19 @@ _PATTERNS: tuple[tuple[re.Pattern[str], object], ...] = (
             r"its toughness becomes their total toughness$"
         ),
         _sacrificed_on_entry_totals,
+    ),
+    (
+        # Sutured Ghoul: "…power is equal to the total power of **the exiled
+        # cards** and its toughness is equal to their total toughness." The
+        # CR 607.2b pile its "As this creature enters, exile any number of
+        # creature cards from your graveyard" linked to it — a separate printed
+        # line (``enter_effects.EXILE_ANY_NUMBER_ON_ENTER``), so this row reads
+        # the sentence alone, where Dracoplasm's two halves share one line.
+        re.compile(
+            rf"^{_SUBJECT} power is equal to the total power of the exiled cards "
+            r"and its toughness is equal to their total toughness$"
+        ),
+        _linked_exile_totals,
     ),
     (
         # Nameless Race: "…are each equal to **the life paid as it entered**".

@@ -38,6 +38,7 @@ import re
 
 from ..enter_effects import (ENTERED_BATTLEFIELD_TURN,
                              entry_exile_requirement,
+                             exile_any_number_on_enter,
                              entry_sacrifice_requirement,
                              sacrifice_any_number_on_enter,
                              sacrifice_all_on_enter, discards_hand_on_enter,
@@ -767,6 +768,41 @@ class PermanentStateMixin:
                 filter=dict(required["filter"]),
                 counters=list(required["counters"]),
             )
+
+        # "As this creature enters, exile **any number of** creature cards from
+        # your graveyard." (Sutured Ghoul.) The entry exile above with nothing
+        # owed: the same ``entry_exile`` prompt with no count to meet and no
+        # counters to place, and every pick **linked to the entering
+        # permanent** (CR 607.2b) — "the exiled cards" its characteristic-
+        # defining ability sums are those, and no others. Zero is a legal
+        # answer; a graveyard holding nothing the phrase names arms nothing,
+        # because an offer with no candidates is a prompt the client cannot
+        # answer. The card entering is not in the graveyard by now, which is
+        # the ruling's "You can't have Sutured Ghoul exile itself, even if it's
+        # entering from your graveyard" (2011-09-22).
+        for raw_line in entry_lines:
+            described = exile_any_number_on_enter(
+                raw_line, permanent.effective_card.name
+            )
+            if described is None:
+                continue
+            from ..handlers._filters import _card_matches_filter
+
+            if any(
+                _card_matches_filter(card, described)
+                for card in self.players[caster_index].graveyard
+            ):
+                self.arm_pending_choice(
+                    "entry_exile", caster_index,
+                    card_name=permanent.card.name, permanent=permanent,
+                    _entering_permanent=permanent,
+                    count=0,
+                    any_number=True,
+                    link_to_entering=True,
+                    filter=dict(described),
+                    counters=[],
+                )
+            break
 
         # "If this land would enter, sacrifice an untapped Mountain instead. If
         # you do, put this land onto the battlefield." (Balduvian Trading Post

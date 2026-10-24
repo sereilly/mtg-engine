@@ -55,7 +55,7 @@ from tests.helpers import resolve_stack as _w1g4_resolve_stack
 
 
 def _w1g4_card(set_pool, name):
-    for code in ("JUD", "LEA", "ODY", "TOR"):
+    for code in ("JUD", "LEA", "ODY", "TOR", "ICE"):
         pool = set_pool(code)
         if name in pool:
             return pool[name]
@@ -514,6 +514,128 @@ def test_w1g4_a_returned_soulgorger_orgg_is_a_new_object_with_no_note(set_pool):
     assert p0.life == 10
     _w1g4_terror(game, set_pool, first)
     assert p0.life == 29
+
+
+# --- Sutured Ghoul: "As this creature enters, exile any number of creature
+# cards from your graveyard. / …power is equal to the total power of the
+# exiled cards …" (CR 614.1c, 604.3, 607.2b) --------------------------------
+
+
+def _w1g4_ghoul_game(set_pool, graveyard, *, interactive=(), opp_graveyard=()):
+    game = _w1g4_game(set_pool, hand=["Sutured Ghoul"], interactive=interactive)
+    game.players[0].graveyard = [_w1g4_card(set_pool, n) for n in graveyard]
+    game.players[1].graveyard = [_w1g4_card(set_pool, n) for n in opp_graveyard]
+    return game
+
+
+def _w1g4_pt(perm):
+    return (perm.effective_power, perm.effective_toughness)
+
+
+def test_w1g4_sutured_ghoul_is_the_sum_of_the_creature_cards_it_exiles(set_pool):
+    game = _w1g4_ghoul_game(
+        set_pool, ["Grizzly Bears", "Lightning Bolt", "Hill Giant"],
+    )
+    game.cast_from_hand(0, "Sutured Ghoul")
+    _w1g4_drain(game)
+
+    p0 = game.players[0]
+    ghoul = _w1g4_named(game, 0, "Sutured Ghoul")
+    # A seat nobody asks exiles every creature card, and only creature cards.
+    assert sorted(c.name for c in p0.exile) == ["Grizzly Bears", "Hill Giant"]
+    assert [c.name for c in p0.graveyard] == ["Lightning Bolt"]
+    assert _w1g4_pt(ghoul) == (5, 5)
+    assert sorted(e["card"].name for e in _w1g4_linked_entries(ghoul)) == [
+        "Grizzly Bears", "Hill Giant",
+    ]
+
+
+def test_w1g4_sutured_ghoul_asks_which_cards_and_any_number_includes_some(set_pool):
+    game = _w1g4_ghoul_game(
+        set_pool, ["Grizzly Bears", "Hill Giant", "Lightning Bolt"], interactive=(0,),
+    )
+    game.queue_from_hand(0, "Sutured Ghoul")
+    game.resolve_top_of_stack()
+
+    choice = game.waiting_prompt()
+    assert choice is not None and choice.kind == "entry_exile"
+    # The creature cards only: slot 0 and slot 1, never the Bolt.
+    assert game._entry_exile_candidates(choice) == [0, 1]
+    # More picks than there are candidates is refused, and the prompt stays.
+    assert not game.resolve_pending_choice(
+        "entry_exile", 0,
+        picks=[{"index": 0, "counter": None}, {"index": 1, "counter": None},
+               {"index": 2, "counter": None}],
+    )
+    assert game.resolve_pending_choice(
+        "entry_exile", 0, picks=[{"index": 1, "counter": None}],
+    )
+    _w1g4_drain(game)
+
+    ghoul = _w1g4_named(game, 0, "Sutured Ghoul")
+    assert [c.name for c in game.players[0].exile] == ["Hill Giant"]
+    assert _w1g4_pt(ghoul) == (3, 3)
+
+
+def test_w1g4_sutured_ghoul_exiling_nothing_is_a_0_0_that_dies(set_pool):
+    game = _w1g4_ghoul_game(set_pool, ["Grizzly Bears"], interactive=(0,))
+    game.queue_from_hand(0, "Sutured Ghoul")
+    game.resolve_top_of_stack()
+    assert game.resolve_pending_choice("entry_exile", 0, picks=[])
+    _w1g4_drain(game)
+    game.check_state_based_actions()
+
+    p0 = game.players[0]
+    assert _w1g4_names(game, 0) == []
+    assert sorted(c.name for c in p0.graveyard) == ["Grizzly Bears", "Sutured Ghoul"]
+
+
+def test_w1g4_sutured_ghoul_with_an_empty_graveyard_asks_nothing(set_pool):
+    game = _w1g4_ghoul_game(set_pool, ["Lightning Bolt"], interactive=(0,))
+    game.queue_from_hand(0, "Sutured Ghoul")
+    game.resolve_top_of_stack()
+
+    assert not game.pending_choices
+    game.check_state_based_actions()
+    assert [c.name for c in game.players[0].graveyard] == [
+        "Lightning Bolt", "Sutured Ghoul",
+    ]
+
+
+def test_w1g4_sutured_ghoul_counts_an_exiled_cards_cda_as_it_changes(set_pool):
+    # "If Dungrove Elder is exiled this way, its power and toughness while it's
+    # in exile are equal to the number of Forests you control, and Sutured
+    # Ghoul's power and toughness will change as [that] number … changes."
+    # (2011-09-22.) Lhurgoyf in exile counts the creature cards in all
+    # graveyards: one in the opponent's at first.
+    game = _w1g4_ghoul_game(
+        set_pool, ["Grizzly Bears", "Lhurgoyf"], opp_graveyard=["Hill Giant"],
+    )
+    game.cast_from_hand(0, "Sutured Ghoul")
+    _w1g4_drain(game)
+    ghoul = _w1g4_named(game, 0, "Sutured Ghoul")
+    # Bears 2/2 + Lhurgoyf 1/2 (one creature card in a graveyard).
+    assert _w1g4_pt(ghoul) == (3, 4)
+
+    game.players[1].graveyard.append(_w1g4_card(set_pool, "Gray Ogre"))
+    game._recompute_continuous_effects()
+    assert _w1g4_pt(ghoul) == (4, 5)
+
+
+def test_w1g4_sutured_ghoul_leaving_leaves_its_cards_in_exile(set_pool):
+    game = _w1g4_ghoul_game(set_pool, ["Grizzly Bears", "Hill Giant"])
+    game.cast_from_hand(0, "Sutured Ghoul")
+    _w1g4_drain(game)
+    p0 = game.players[0]
+    life_before = p0.life
+    _w1g4_swords(game, set_pool, _w1g4_named(game, 0, "Sutured Ghoul"))
+
+    # Nothing prints a return: the cards stay exiled beside it. Swords reads
+    # the Ghoul's power as it left (5), last-known information.
+    assert sorted(c.name for c in p0.exile) == [
+        "Grizzly Bears", "Hill Giant", "Sutured Ghoul",
+    ]
+    assert p0.life == life_before + 5
 
 # ==== end W1G4 ======================================================
 
