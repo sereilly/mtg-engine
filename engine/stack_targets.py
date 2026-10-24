@@ -880,8 +880,16 @@ def names_several_targets(item: "StackItem") -> bool:
 
     if recorded_role_seats(item) is not None:
         return True
+    # …or a permanent **beside a card in a graveyard** ("Return two target
+    # cards from an opponent's graveyard to their hand. Destroy target
+    # attacking creature.", Spurnmage Advocate): one id, but the stamps are
+    # targets too, so the permanent given shroud in response is one illegal
+    # target of an object that still resolves. Counted on the item alone, the
+    # one holder that carries stamps.
+    stamped = sum(1 for stamp in _stamps(item) if stamp is not None)
     return any(
-        sum(1 for permanent_id in _ids(holder) if isinstance(permanent_id, int)) > 1
+        sum(1 for permanent_id in _ids(holder) if isinstance(permanent_id, int))
+        + (stamped if holder is item else 0) > 1
         for holder in (item, *modes)
     )
 

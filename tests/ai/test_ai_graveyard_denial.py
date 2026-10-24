@@ -256,6 +256,13 @@ _ONE_TARGET_WRONG_BEFORE = {
 _SINGLE_PILE_WRONG_BEFORE = {
     "Carrion Beetles", "Decompose", "Famished Ghoul", "Gravegouger", "Rapid Decay",
 }
+#: …and Judgment's two, which joined the sweep the round they became supported
+#: (W1G3): Funeral Pyre's "Exile target card from a graveyard" and Selfless
+#: Exorcist's "{T}: Exile target creature card from a graveyard" are the seven's
+#: one-target shape, so with the old defaults restored the bare announcement's
+#: seat-order scan sends them to chair 0's own pile exactly as it sent Coffin
+#: Purge — and the backwards check demands them for the seven's reason.
+_ONE_TARGET_WRONG_SINCE = {"Funeral Pyre", "Selfless Exorcist"}
 
 
 def test_the_sweep_names_the_defect_with_the_old_defaults_restored(monkeypatch):
@@ -291,8 +298,9 @@ def test_the_sweep_names_the_defect_with_the_old_defaults_restored(monkeypatch):
     old = census()
 
     wrong = {r["card"] for r in old if "AI" in r["from"] and r["seat"] == 0}
-    assert _ONE_TARGET_WRONG_BEFORE <= wrong, sorted(_ONE_TARGET_WRONG_BEFORE - wrong)
-    assert wrong <= (_ONE_TARGET_WRONG_BEFORE | _SINGLE_PILE_WRONG_BEFORE), sorted(wrong)
+    one_target = _ONE_TARGET_WRONG_BEFORE | _ONE_TARGET_WRONG_SINCE
+    assert one_target <= wrong, sorted(one_target - wrong)
+    assert wrong <= (one_target | _SINGLE_PILE_WRONG_BEFORE), sorted(wrong)
     assert [r["card"] for r in old if "AI" in r["from"] and r["seat"] == 1] == []
 
 

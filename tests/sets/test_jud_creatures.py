@@ -244,6 +244,272 @@ def test_w1g3_selfless_exorcist_whose_card_left_in_response_does_nothing(set_poo
     assert victim.exile == [] and exorcist.damage_marked == 0
     assert game.is_on_battlefield(exorcist)
 
+
+# The Advocates: "{T}: Return N target cards from an opponent's graveyard to
+# their hand. <a second targeted sentence>." One announcement (CR 602.2b
+# through 601.2c): a roles walk with one graveyard role per printed card — all
+# out of one opponent's pile, each after the one before it — and the second
+# target's role.
+
+from engine.keywords import grant_keyword as _w1g3_grant_keyword
+
+_W1G3_THEIRS = ("Swamp", "Hill Giant", "Terror", "Craw Wurm")
+
+
+def _w1g3_advocate_game(set_pool, name, *, mine=("Grizzly Bears",),
+                        theirs=_W1G3_THEIRS, their_board=(), third=None):
+    jud, lea = set_pool("JUD"), set_pool("LEA")
+    seats = [
+        _w1g3_PlayerState(
+            name="P0", graveyard=[lea[n] for n in mine], library=[lea["Plains"]] * 5,
+        ),
+        _w1g3_PlayerState(
+            name="P1", graveyard=[lea[n] for n in theirs], library=[lea["Island"]] * 5,
+        ),
+    ]
+    if third is not None:
+        seats.append(_w1g3_PlayerState(
+            name="P2", graveyard=[lea[n] for n in third], library=[lea["Island"]] * 5,
+        ))
+    game = _w1g3_Game(players=seats)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.active_player_index = 0
+    game._set_phase_and_step("precombat_main", "precombat_main")
+    advocate = _w1g3_Permanent(card=jud[name])
+    game._put_permanent_onto_battlefield(0, advocate, None)
+    advocate.tapped = False
+    advocate.metadata["summoning_sickness_turn"] = -99
+    board = []
+    for other in their_board:
+        permanent = _w1g3_Permanent(card=lea[other])
+        game._put_permanent_onto_battlefield(1, permanent, None)
+        permanent.metadata["summoning_sickness_turn"] = -99
+        board.append(permanent)
+    _w1g3_resolve(game)
+    return game, advocate, board
+
+
+def _w1g3_announcements(tree, prefix=()):
+    """Every complete announcement the roles walk offers, as tuples of
+    ``(kind, seat, index)``."""
+    for node in tree:
+        here = prefix + ((node["kind"], node["seat"], node["index"]),)
+        if node.get("next"):
+            yield from _w1g3_announcements(node["next"], here)
+        else:
+            yield here
+
+
+def _w1g3_refs(*picks):
+    """The wire's ``target_role_refs``: ``(seat, index)`` for a card in a
+    graveyard, a ``Permanent`` for a permanent."""
+    return [
+        {"permanent_id": pick.permanent_id} if isinstance(pick, _w1g3_Permanent)
+        else {"graveyard_seat": pick[0], "graveyard_index": pick[1]}
+        for pick in picks
+    ]
+
+
+def _w1g3_names(cards):
+    return [card.name for card in cards]
+
+
+def test_w1g3_nullmage_advocate_announces_two_cards_of_one_opponents_pile_and_a_permanent(set_pool):
+    game, _advocate, (icy,) = _w1g3_advocate_game(
+        set_pool, "Nullmage Advocate", their_board=("Icy Manipulator",),
+    )
+    spec = game.activation_target_spec(0, 0)
+    assert spec["kind"] == "roles"
+    assert [role["role"] for role in spec["roles"]] == [
+        "first card", "second card", "artifact_or_enchantment",
+    ]
+    offered = set(_w1g3_announcements(spec["valid_targets"]))
+    # Every pair of P1's four cards once (CR 115.3; the walk takes them in pile
+    # order), never a card of the activator's own, and the Icy as the third.
+    icy_slot = ("permanent", 1, game.battlefield_index_of(icy))
+    assert offered == {
+        (("graveyard", 1, a), ("graveyard", 1, b), icy_slot)
+        for a in range(4) for b in range(a + 1, 4)
+    }
+
+    result = game.activate_permanent_ability(
+        0, "Nullmage Advocate", target_role_refs=_w1g3_refs((1, 1), (1, 3), icy),
+    )
+    assert result.supported, result.details
+    _w1g3_resolve(game)
+
+    victim = game.players[1]
+    assert sorted(_w1g3_names(victim.hand)) == ["Craw Wurm", "Hill Giant"]
+    assert _w1g3_names(victim.graveyard) == ["Swamp", "Terror", "Icy Manipulator"]
+    assert not game.is_on_battlefield(icy)
+    assert _w1g3_names(game.players[0].hand) == []
+
+
+def test_w1g3_nullmage_advocate_needs_two_cards_in_a_single_opponents_graveyard(set_pool):
+    """The 2004-10-04 ruling: "You can't activate this ability unless a single
+    opponent has at least two cards in their graveyard to target." One card
+    each in two opponents' piles is not two cards in one."""
+    lone, advocate, _ = _w1g3_advocate_game(
+        set_pool, "Nullmage Advocate", theirs=("Swamp",), third=("Island",),
+        their_board=("Icy Manipulator",),
+    )
+    assert lone.activation_target_spec(0, 0)["valid_targets"] == []
+    refused = lone.activate_permanent_ability(
+        0, "Nullmage Advocate",
+        target_role_refs=_w1g3_refs((1, 0), (2, 0), lone.permanent_by_id(
+            next(p.permanent_id for p in lone.controlled_by(1))
+        )),
+    )
+    assert not refused.supported
+    assert not advocate.tapped and lone.stack == []
+
+    # Two in the third seat's pile: only that pile is offered.
+    two, _advocate, _ = _w1g3_advocate_game(
+        set_pool, "Nullmage Advocate", theirs=("Swamp",), third=("Island", "Plains"),
+        their_board=("Icy Manipulator",),
+    )
+    offered = set(_w1g3_announcements(two.activation_target_spec(0, 0)["valid_targets"]))
+    assert {(path[0][1], path[1][1]) for path in offered} == {(2, 2)}
+
+
+def test_w1g3_forcemage_advocate_returns_one_card_and_counters_a_creature(set_pool):
+    game, advocate, _ = _w1g3_advocate_game(set_pool, "Forcemage Advocate")
+    spec = game.activation_target_spec(0, 0)
+    assert [role["role"] for role in spec["roles"]] == ["card", "creature"]
+    # Its own Grizzly Bears card is not an opponent's.
+    assert all(path[0][1] == 1 for path in _w1g3_announcements(spec["valid_targets"]))
+
+    result = game.activate_permanent_ability(
+        0, "Forcemage Advocate", target_role_refs=_w1g3_refs((1, 2), advocate),
+    )
+    assert result.supported, result.details
+    _w1g3_resolve(game)
+
+    assert _w1g3_names(game.players[1].hand) == ["Terror"]
+    assert (advocate.effective_power, advocate.effective_toughness) == (3, 2)
+
+
+def test_w1g3_pulsemage_advocate_returns_three_and_reanimates_your_creature_card(set_pool):
+    game, _advocate, _ = _w1g3_advocate_game(set_pool, "Pulsemage Advocate")
+    spec = game.activation_target_spec(0, 0)
+    assert [role["role"] for role in spec["roles"]] == [
+        "first card", "second card", "third card", "creature card",
+    ]
+    assert len(list(_w1g3_announcements(spec["valid_targets"]))) == 4   # C(4, 3) × 1
+
+    result = game.activate_permanent_ability(
+        0, "Pulsemage Advocate",
+        target_role_refs=_w1g3_refs((1, 0), (1, 2), (1, 3), (0, 0)),
+    )
+    assert result.supported, result.details
+    _w1g3_resolve(game)
+
+    assert sorted(_w1g3_names(game.players[1].hand)) == ["Craw Wurm", "Swamp", "Terror"]
+    assert _w1g3_names(game.players[1].graveyard) == ["Hill Giant"]
+    assert [p.card.name for p in game.controlled_by(0)] == [
+        "Pulsemage Advocate", "Grizzly Bears",
+    ]
+
+
+def test_w1g3_pulsemage_advocate_needs_a_creature_card_of_your_own(set_pool):
+    """The 2004-10-04 ruling: "…and you have a creature card in your graveyard
+    to target." Three of the opponent's cards are not enough alone."""
+    game, advocate, _ = _w1g3_advocate_game(
+        set_pool, "Pulsemage Advocate", mine=("Forest",),
+    )
+    assert game.activation_target_spec(0, 0)["valid_targets"] == []
+    assert not game.activate_permanent_ability(
+        0, "Pulsemage Advocate",
+        target_role_refs=_w1g3_refs((1, 0), (1, 1), (1, 2), (0, 0)),
+    ).supported
+    assert not advocate.tapped
+
+
+def _w1g3_spurnmage_in_combat(set_pool):
+    """P1 attacks with a Grizzly Bears into P0's Spurnmage Advocate."""
+    game, advocate, (bears,) = _w1g3_advocate_game(
+        set_pool, "Spurnmage Advocate", their_board=("Grizzly Bears",),
+    )
+    declare_attack = __import__("tests.helpers", fromlist=["declare_attack"]).declare_attack
+    declare_attack(game, 1)
+    assert bears.attacking
+    return game, advocate, bears
+
+
+def test_w1g3_spurnmage_advocate_destroys_the_attacker_and_returns_two_cards(set_pool):
+    game, _advocate, bears = _w1g3_spurnmage_in_combat(set_pool)
+    result = game.activate_permanent_ability(
+        0, "Spurnmage Advocate", target_role_refs=_w1g3_refs((1, 0), (1, 1), bears),
+    )
+    assert result.supported, result.details
+    _w1g3_resolve(game)
+
+    assert sorted(_w1g3_names(game.players[1].hand)) == ["Hill Giant", "Swamp"]
+    assert not game.is_on_battlefield(bears)
+
+
+def test_w1g3_spurnmage_advocate_still_destroys_with_both_cards_gone(set_pool):
+    """The 2004-10-04 ruling: "The ability is not countered if both cards are
+    missing from the graveyard on resolution and the creature target is
+    there." CR 608.2b removes it only when *every* target is illegal."""
+    game, _advocate, bears = _w1g3_spurnmage_in_combat(set_pool)
+    assert game.queue_permanent_ability(
+        0, "Spurnmage Advocate", target_role_refs=_w1g3_refs((1, 0), (1, 1), bears),
+    ).supported
+    victim = game.players[1]
+    victim.exile.extend([victim.graveyard.pop(1), victim.graveyard.pop(0)])
+    _w1g3_resolve(game)
+
+    assert not game.is_on_battlefield(bears)
+    assert victim.hand == []
+    assert _w1g3_names(victim.graveyard) == ["Terror", "Craw Wurm", "Grizzly Bears"]
+
+
+def test_w1g3_spurnmage_advocate_spares_a_creature_given_shroud_but_returns_the_cards(set_pool):
+    """CR 608.2b's last sentence: the illegal target is not affected and the
+    rest of the ability still happens."""
+    game, _advocate, bears = _w1g3_spurnmage_in_combat(set_pool)
+    assert game.queue_permanent_ability(
+        0, "Spurnmage Advocate", target_role_refs=_w1g3_refs((1, 2), (1, 3), bears),
+    ).supported
+    _w1g3_grant_keyword(bears, "shroud")
+    _w1g3_resolve(game)
+
+    assert game.is_on_battlefield(bears)
+    assert sorted(_w1g3_names(game.players[1].hand)) == ["Craw Wurm", "Terror"]
+
+
+def test_w1g3_spurnmage_advocate_with_every_target_gone_does_nothing(set_pool):
+    game, _advocate, bears = _w1g3_spurnmage_in_combat(set_pool)
+    assert game.queue_permanent_ability(
+        0, "Spurnmage Advocate", target_role_refs=_w1g3_refs((1, 0), (1, 1), bears),
+    ).supported
+    victim = game.players[1]
+    victim.exile.extend([victim.graveyard.pop(1), victim.graveyard.pop(0)])
+    _w1g3_grant_keyword(bears, "shroud")
+    _w1g3_resolve(game)
+
+    assert any("every target is illegal" in line for line in game.log), game.log[-4:]
+    assert game.is_on_battlefield(bears) and victim.hand == []
+
+
+def test_w1g3_an_advocate_card_that_left_its_pile_is_not_replaced(set_pool):
+    """One card of two gone in response: the other still returns, and the
+    card that slid into the departed card's slot is not taken in its place."""
+    game, _advocate, (icy,) = _w1g3_advocate_game(
+        set_pool, "Nullmage Advocate", their_board=("Icy Manipulator",),
+    )
+    assert game.queue_permanent_ability(
+        0, "Nullmage Advocate", target_role_refs=_w1g3_refs((1, 1), (1, 2), icy),
+    ).supported
+    victim = game.players[1]
+    victim.exile.append(victim.graveyard.pop(1))          # Hill Giant, in response
+    _w1g3_resolve(game)
+
+    assert _w1g3_names(victim.hand) == ["Terror"]
+    assert _w1g3_names(victim.graveyard) == ["Swamp", "Craw Wurm", "Icy Manipulator"]
+
 # ==== end W1G3 ======================================================
 
 

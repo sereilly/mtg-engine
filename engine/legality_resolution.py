@@ -919,11 +919,12 @@ class ResolutionTargetsMixin:
           it resolves, so "every target" is not something the stack object
           records — :meth:`stale_comparison_refusal` leaves the same card alone
           for the same reason;
-        * a **roles** announcement with a role that is not a permanent (Goblin
-          Welder's graveyard card), for the reason the spell side gives of a
-          player role. A roles announcement of permanents is judged the way a
-          roles *spell* is — still there and still targetable; each role's
-          description and relation is ``handlers/_targets.roles_still_legal``'s.
+        * a **roles** announcement with a role that is a seat or a spell, for
+          the reason the spell side gives of a player role. A roles
+          announcement of permanents and **graveyard cards** (Goblin Welder,
+          the Advocates) is judged the way a roles *spell* is — still there
+          and still targetable; each role's description and relation is
+          ``handlers/_targets.roles_still_legal``'s.
 
         A **graveyard** target is legal while any copy of the chosen card is
         left in that pile, the deliberately ambiguous case
@@ -955,7 +956,17 @@ class ResolutionTargetsMixin:
                 continue
             spec = announcement.spec
             if spec.get("kind") == ROLES_TARGET_KIND:
-                if any(target.kind != "permanent" for target in targets):
+                # A **graveyard** role is judged as a graveyard target is one
+                # branch down — still in its pile and still targetable there
+                # (``graveyard_target_is_legal``) — so an announcement mixing
+                # cards and permanents ("Return two target cards from an
+                # opponent's graveyard to their hand. Destroy target attacking
+                # creature.", Spurnmage Advocate) has an answer for every target:
+                # the permanent given shroud in response is blanked while the
+                # cards still return, and the cards gone with the creature still
+                # there is a legal resolution (the card's 2004-10-04 ruling).
+                # A seat or a spell role is still declined, for the reason above.
+                if any(target.kind not in ("permanent", "graveyard") for target in targets):
                     return None
                 # The card the announcement was enumerated for: an activation
                 # reads its permanent's **effective** card (a Clone's abilities
@@ -967,6 +978,11 @@ class ResolutionTargetsMixin:
                     card = getattr(source, "effective_card", None) or item.card
                 role_specs = spec_roles(spec)
                 for target in targets:
+                    if target.kind == "graveyard":
+                        verdicts.append(
+                            (target, self.graveyard_target_is_legal(target.stamp))
+                        )
+                        continue
                     permanent = self.permanent_by_id(target.permanent_id)
                     role = (
                         role_specs[target.position]
