@@ -16,6 +16,8 @@ import pytest
 
 from engine import Game, PlayerState
 from engine.ai_abilities import _abilities_weighed, choose_activation_action
+from engine.ai_combat import run_ai_combat_phase
+from engine.ai_declarations import legal_attackers
 from engine.ai_policy import holds_an_ability_it_could_activate
 from engine.ai_simulator import SimulationReport, _play_activations, run_ai_simulation
 from engine.card_loader import manifest_set_path
@@ -25,7 +27,7 @@ ME, OPP = 0, 1
 
 
 def _card(set_pool, name):
-    for code in ("JUD", "LEA", "ICE", "ARN", "USG"):
+    for code in ("JUD", "LEA", "ICE", "ARN", "USG", "ATQ"):
         if name in set_pool(code):
             return set_pool(code)[name]
     raise KeyError(name)
@@ -44,6 +46,7 @@ def _board(set_pool, lands, *, library=("Forest", "Plains", "Island") * 4, hand=
         permanent = Permanent(card=_card(set_pool, name))
         game._put_permanent_onto_battlefield(ME, permanent, None)
         permanent.tapped = False
+        permanent.metadata["summoning_sickness_turn"] = -99
         placed.append(permanent)
     game.start_turn(ME)
     return game, placed
@@ -71,6 +74,36 @@ def test_krosan_verge_searches_for_its_two_lands(set_pool):
     names = sorted(p.card.name for p in game.controlled_by(ME))
     assert names == ["Forest", "Island", "Plains", "Swamp"]
     assert [card.name for card in game.players[ME].graveyard] == ["Krosan Verge"]
+
+
+def test_a_manland_is_animated_for_the_fight_and_attacks(set_pool):
+    """"{1}: This land becomes a 2/2 Assembly-Worker artifact creature until
+    end of turn." Gone by the end of the turn, so read again through the
+    fight (as a precombat pump is): against an empty board the Factory's
+    attack is two damage, the animation is proposed — paid with a Mountain,
+    not the Factory's own mana — and the animated land attacks.
+
+    The attack is CR 613 layer 4's half: the attack chooser read the
+    **printed** type line (``card.primary_type == "creature"``), so an
+    animated land was never a legal attacker in an AI's hands and the
+    rehearsal of the animation read it as worth nothing."""
+    game, (_one, _two, factory) = _board(
+        set_pool, ["Mountain", "Mountain", "Mishra's Factory"],
+    )
+    action = choose_activation_action(game, ME)
+    assert action is not None and action.permanent_name == "Mishra's Factory"
+    assert action.ability_index == 1
+    assert all(
+        game.permanent_at(ME, slot) is not factory for slot in action.land_tap_indices
+    )
+    report = SimulationReport(games_requested=1, games_completed=0, interaction_count=0)
+    _play_activations(game, ME, report, 1, 1)
+    assert not report.refused_activations, report.refused_activations
+    assert factory.is_creature and not factory.tapped
+    slot = next(i for i, p in enumerate(game.players[ME].battlefield) if p is factory)
+    assert slot in legal_attackers(game, ME)
+    run_ai_combat_phase(game, ME)
+    assert game.players[OPP].life == 18
 
 
 def test_bazaar_of_baghdad_is_not_tapped_to_lose_a_card(set_pool):

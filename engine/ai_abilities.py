@@ -179,7 +179,10 @@ def _abilities_weighed(game: Game, permanent) -> list:
     from .mana_payment import is_mana_ability as is_cr_mana_ability
 
     usable = game.usable_abilities_of(permanent)
-    if permanent.card.primary_type != "land":
+    # A land now (CR 613 layer 4), as every other reader of a permanent's
+    # type here asks: a Mishra's Factory animated is still a land, and a
+    # land is what the payment planner taps for mana.
+    if not permanent.has_type("land"):
         first = next(iter(usable), None)
         return [] if first is None else [(None, first)]
     return [

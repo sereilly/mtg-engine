@@ -36,10 +36,16 @@ def legal_attackers(game: Game, attacking_player_index: int, against: int | None
     legal against ANY living opponent."""
     player = game.players[attacking_player_index]
     opponents = [against] if against is not None else game.opponents_of(attacking_player_index)
+    # **A creature now, not a creature card** (CR 613 layer 4, through
+    # ``Permanent.is_creature``). This read the printed type line, so a land
+    # or an artifact an effect had made a creature never attacked in an AI's
+    # hands — a Mishra's Factory animated for the fight stayed home, and a
+    # rehearsal of the animation read it as worth nothing — while a creature
+    # card that had stopped being one (a Licid become an Aura) was proposed.
     return [
         idx
         for idx, perm in enumerate(player.battlefield)
-        if perm.card.primary_type == "creature"
+        if perm.is_creature
         and not perm.tapped
         and not game._is_summoning_sick(perm)
         and any(game.can_attack(perm, opp) for opp in opponents)
@@ -215,7 +221,8 @@ def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
     opponent_blockers = [
         perm
         for perm in game.controlled_by(opponent)
-        if perm.card.primary_type == "creature" and not perm.tapped
+        # What can block is what is a creature now (CR 509.1a, CR 613 layer 4).
+        if perm.is_creature and not perm.tapped
     ]
     if not opponent_blockers:
         return _legal_declaration(
@@ -483,7 +490,9 @@ def choose_combat_blockers(
     available_blockers = [
         idx
         for idx, blocker in enumerate(defender.battlefield)
-        if blocker.card.primary_type == "creature" and not blocker.tapped
+        # A creature now (CR 509.1a through CR 613 layer 4): an animated land
+        # blocks, an Aura that was a creature card does not.
+        if blocker.is_creature and not blocker.tapped
     ]
     if not available_blockers:
         return {}
