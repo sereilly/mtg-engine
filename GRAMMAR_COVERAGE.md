@@ -50,7 +50,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ODY | 335 | 507 | 89.7% | 89.7% | 69.6% | 295 |
 | TOR | 143 | 261 | 86.2% | 86.2% | 68.2% | 138 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| JUD *(measured)* | 143 | 241 | 76.3% | 73.0% | 49.4% | 106 |
+| JUD *(measured)* | 143 | 241 | 78.4% | 76.3% | 52.3% | 107 |
 | **All (shipped)** | **7884** | **11645** | **90.6%** | **90.0%** | **62.3%** | **6139** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -63,9 +63,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 661 | 340 | expected a subject |  |
+| 660 | 339 | expected a subject |  |
 | 167 | 86 | unrecognized effect verb |  |
-| 136 | 75 | unconsumed text |  |
+| 135 | 74 | unconsumed text |  |
 | 65 | 46 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
 | 29 | 7 | expected what this creature can't block, or a duration |  |
@@ -80,14 +80,14 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4 | 1 | expected 'that' |  |
 | 4 | 1 | expected a destination zone after 'return' |  |
 | 4 | 4 | an Aura's continuous grant is derived by engine/auras.py |  |
-| 4 | 4 | expected 'card' |  |
 | 3 | 1 | expected 'of' |  |
 | 3 | 3 | unrecognized "can't be" restriction |  |
 | 3 | 1 | expected 'top' |  |
-| 3 | 3 | expected a keyword ability |  |
+| 3 | 3 | expected 'card' |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
+| 1 | 1 | expected what to gain control of |  |
 
 ## Cards executing through the grammar
 
@@ -9687,6 +9687,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Bird creatures get +1/+1 for each feather counter on this enchantment.`
 - **Souldrinker**
   - `Pay 3 life: Put a +1/+1 counter on this creature.`
+- **Soulgorger Orgg**
+  - `When this creature enters, you lose all but 1 life.`
+  - `When this creature leaves the battlefield, you gain life equal to the life you lost when it entered.`
 - **Soulshriek**
   - `Target creature you control gets +X/+0 until end of turn, where X is the number of creature cards in your graveyard. Sacrifice that creature at the beginning of the next end step.`
 - **Southern Paladin**
@@ -11872,6 +11875,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Workhorse**
   - `Remove a +1/+1 counter from this creature: Add {C}.`
 - **Worldgorger Dragon**
+  - `When this creature enters, exile all other permanents you control.`
   - `When this creature leaves the battlefield, return the exiled cards to the battlefield under their owners' control.`
 - **Worldly Counsel**
   - `Domain — Look at the top X cards of your library, where X is the number of basic land types among lands you control. Put one of those cards into your hand and the rest on the bottom of your library in any order.`
@@ -11882,15 +11886,19 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature enters, exile all cards from your hand.`
   - `When this creature leaves the battlefield, return the exiled cards to their owner's hand.`
 - **Wormfang Crab**
+  - `When this creature enters, an opponent chooses a permanent you control other than this creature and exiles it.`
   - `When this creature leaves the battlefield, return the exiled card to the battlefield under its owner's control.`
 - **Wormfang Drake**
+  - `When this creature enters, sacrifice it unless you exile a creature you control other than this creature.`
   - `When this creature leaves the battlefield, return the exiled card to the battlefield under its owner's control.`
 - **Wormfang Manta**
   - `When this creature enters, you skip your next turn.`
   - `When this creature leaves the battlefield, you take an extra turn after this one.`
 - **Wormfang Newt**
+  - `When this creature enters, exile a land you control.`
   - `When this creature leaves the battlefield, return the exiled card to the battlefield under its owner's control.`
 - **Wormfang Turtle**
+  - `When this creature enters, exile a land you control.`
   - `When this creature leaves the battlefield, return the exiled card to the battlefield under its owner's control.`
 - **Worms of the Earth**
   - `At the beginning of each upkeep, any player may sacrifice two lands of their choice or have this enchantment deal 5 damage to that player. If a player does either, destroy this enchantment.`
