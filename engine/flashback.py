@@ -304,9 +304,16 @@ def flashback_x_unannounced(card) -> str | None:
     charge X as 0: a spell cast for less than it prints. The support gate
     refuses that card naming the line, as it refused every {X} before the
     reader above learned the symbol.
+
+    **An X outside the mana counts too** (``AlternativeCost.announces_x``).
+    "Flashback—{1}{U}, Exile X blue cards from your graveyard" over {X}{1}{U}
+    (Flash of Insight) and "Flashback—{R}{R}, Sacrifice X Mountains" over
+    {X}{R}{R} (Firecat Blitz) announce X off the mana cost's {X} and pay it in
+    cards and lands; the same clause over a mana cost with no {X} would be an
+    X nobody is asked for.
     """
     cost = printed_flashback_cost(card)
-    if cost is None or "{X}" not in (cost.mana or "").upper():
+    if cost is None or not cost.announces_x:
         return None
     if "{X}" in (getattr(card, "mana_cost", "") or "").upper():
         return None

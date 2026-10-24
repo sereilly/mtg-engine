@@ -243,7 +243,7 @@ class AlternativeCastCostsMixin:
 
     @staticmethod
     def alternative_cost_permanent_payment(
-        cost: "AlternativeCost | None",
+        cost: "AlternativeCost | None", x_value: "int | None" = None,
     ) -> "tuple[str, int] | None":
         """The one battlefield payment *cost* names, as ``(verb, count)``.
 
@@ -257,6 +257,10 @@ class AlternativeCastCostsMixin:
         say which permanent pays which verb, so such a cost offers no choice
         and takes the deterministic pick, which is what every one of these
         costs did before the choice existed.
+
+        *x_value* is the announced X, for a count that is one ("Sacrifice X
+        Mountains", Firecat Blitz's flashback): the number of permanents the
+        caster names is the number the announcement says (CR 107.3a).
         """
         if cost is None:
             return None
@@ -264,7 +268,7 @@ class AlternativeCastCostsMixin:
             (verb, count)
             for verb, present, count in (
                 ("sacrifice", cost.sacrifice_filter is not None,
-                 max(1, cost.sacrifice_count)),
+                 cost.sacrificed_count(x_value)),
                 ("return", cost.return_filter is not None,
                  max(1, cost.return_count)),
                 ("tap", bool(cost.tap_count), cost.tap_count),
@@ -279,6 +283,7 @@ class AlternativeCastCostsMixin:
         card: CardDefinition,
         cost: "AlternativeCost | None",
         named_ids: "list[int] | None",
+        x_value: "int | None" = None,
     ) -> "tuple[list[Permanent], str | None]":
         """CR 601.2b: which permanents the caster named to pay *cost*.
 
@@ -304,7 +309,7 @@ class AlternativeCastCostsMixin:
         """
         if not named_ids:
             return [], None
-        payment = self.alternative_cost_permanent_payment(cost)
+        payment = self.alternative_cost_permanent_payment(cost, x_value)
         if payment is None:
             return [], (
                 f"{card.name} can't be cast that way: its alternative cost "
@@ -454,8 +459,19 @@ class AlternativeCastCostsMixin:
         cost: "AlternativeCost | None",
         *,
         spell_hand_index: int | None,
+        x_value: "int | None" = None,
+        spell_graveyard_slot: "int | None" = None,
     ) -> str | None:
         """Why the announced alternative cost can't be paid, or None.
+
+        *x_value* is CR 107.3a's announcement, for a cost that counts by it
+        ("Sacrifice X Mountains", "Exile X blue cards from your graveyard"):
+        None is the 0 an unmade announcement reads as, which every caller that
+        prices a card rather than a cast passes — X of 0 is always payable.
+        *spell_graveyard_slot* is where the spell itself sits in the caster's
+        graveyard when it is being cast from there: CR 601.2a puts it on the
+        stack first, so it cannot be one of the cards a graveyard exile takes
+        ("You can't exile Flash of Insight to pay for its own flashback cost").
 
         CR 601.2h: "Unpayable costs can't be paid", and CR 601.2e makes the
         whole casting a rewind — so the answer is that the spell is not cast,
@@ -471,6 +487,13 @@ class AlternativeCastCostsMixin:
         if cost is None:
             return None
         caster = self.players[caster_index]
+        # Which cost the refusal names: a flashback cost is the price of a
+        # keyword (CR 702.34a) and the player is told so; a printed
+        # alternative cost keeps the wording it always had.
+        its_cost = (
+            f"its {cost.keyword} cost" if cost.keyword
+            else "its alternative cost"
+        )
         # CR 119.4: a player may pay life only down to 0.
         if cost.pay_life and caster.life < cost.pay_life:
             return (
@@ -484,8 +507,8 @@ class AlternativeCastCostsMixin:
             caster_index, cost, spell_hand_index=spell_hand_index, spell=card,
         ):
             return (
-                f"{card.name} can't be cast: no card in hand answers its "
-                f"alternative cost, {cost.describe()} (CR 601.2h)"
+                f"{card.name} can't be cast: no card in hand answers "
+                f"{its_cost}, {cost.describe()} (CR 601.2h)"
             )
         # "…discard an Island card **and another card**" (Foil). The Island
         # alone is no more a payment than none: the gate counts the cards left
@@ -499,7 +522,7 @@ class AlternativeCastCostsMixin:
         ) < cost.discard_others:
             return (
                 f"{card.name} can't be cast: not enough other cards in hand "
-                f"for its alternative cost, {cost.describe()} (CR 601.2h)"
+                f"for {its_cost}, {cost.describe()} (CR 601.2h)"
             )
         # "You may **sacrifice two Mountains** rather than pay this spell's
         # mana cost." (Fireblast.) The *count* is what makes this unpayable:
@@ -509,15 +532,34 @@ class AlternativeCastCostsMixin:
         # been skipped. The same question ``_unpayable_additional_cost`` asks
         # of the identically printed additional cost, through the same
         # candidate enumeration.
+        # "Sacrifice **X** Mountains" (Firecat Blitz): the count is the
+        # announcement (``sacrificed_count``), so three Mountains is no payment
+        # for an X of four, and an X of 0 asks for none.
         if cost.sacrifice_filter is not None:
             available = self._additional_cost_candidates(caster_index, cost)
-            wanted = max(1, cost.sacrifice_count)
+            wanted = cost.sacrificed_count(x_value)
             if len(available) < wanted:
                 noun = filter_head_noun(cost.sacrifice_filter)
                 shortfall = f"no {noun}" if wanted == 1 else f"not enough {noun}s"
                 return (
                     f"{card.name} can't be cast: {shortfall} to sacrifice for "
-                    f"its alternative cost (CR 601.2h)"
+                    f"{its_cost} (CR 601.2h)"
+                )
+        # "…, **exile X blue cards from your graveyard**." (Flash of Insight.)
+        # The chosen graveyard exile, counted through the enumeration the
+        # payment takes from (``_graveyard_exile_candidates``, the additional
+        # cost's own) with the spell's slot withheld: CR 118.3, a pile of two
+        # blue cards is no payment for an X of three.
+        if cost.exile_graveyard_filter is not None:
+            wanted = cost.exiled_from_graveyard(x_value)
+            available = self._graveyard_exile_candidates(
+                caster_index, cost, spell_slot=spell_graveyard_slot,
+            )
+            if len(available) < wanted:
+                return (
+                    f"{card.name} can't be cast: {caster.name}'s graveyard "
+                    f"holds {len(available)} card(s) {its_cost} can "
+                    f"take and it exiles {wanted} (CR 601.2h)"
                 )
         # "You may **return two Islands you control to their owner's hand**
         # rather than pay this spell's mana cost." (Gush, Thwart, Tidal Bore.)
@@ -542,8 +584,8 @@ class AlternativeCastCostsMixin:
                 noun = board_noun(cost.return_filter)
                 shortfall = f"no {noun}" if wanted == 1 else f"not enough {noun}s"
                 return (
-                    f"{card.name} can't be cast: {shortfall} to return for its "
-                    f"alternative cost (CR 601.2h)"
+                    f"{card.name} can't be cast: {shortfall} to return for "
+                    f"{its_cost} (CR 601.2h)"
                 )
         # "You may **tap an untapped creature you control** rather than pay this
         # spell's mana cost." (Orim's Cure, Ramosian Rally.) The same count
@@ -562,8 +604,8 @@ class AlternativeCastCostsMixin:
                     else f"not enough untapped {noun}s"
                 )
                 return (
-                    f"{card.name} can't be cast: {shortfall} to tap for its "
-                    f"alternative cost (CR 601.2h)"
+                    f"{card.name} can't be cast: {shortfall} to tap for "
+                    f"{its_cost} (CR 601.2h)"
                 )
         # "…you may **have an opponent gain 3 life** rather than pay this
         # spell's mana cost." (Invigorate.) CR 119.7's last sentence, in as many
@@ -581,8 +623,8 @@ class AlternativeCastCostsMixin:
             caster_index
         ) is None:
             return (
-                f"{card.name} can't be cast: no opponent may gain life, so its "
-                f"alternative cost cannot be paid (CR 119.7)"
+                f"{card.name} can't be cast: no opponent may gain life, so "
+                f"{its_cost} cannot be paid (CR 119.7)"
             )
         # "…you may **have each other player gain 6 life**." (Reverent
         # Silence.) The same CR 119.7 sentence asked the other way round: every
@@ -601,7 +643,7 @@ class AlternativeCastCostsMixin:
             if banned:
                 return (
                     f"{card.name} can't be cast: {', '.join(banned)} can't gain "
-                    f"life, so its alternative cost cannot be paid (CR 119.7)"
+                    f"life, so {its_cost} cannot be paid (CR 119.7)"
                 )
         # "You may **exile the top three black cards of your graveyard** rather
         # than pay this spell's mana cost." (Spinning Darkness.) The *count*
@@ -622,10 +664,38 @@ class AlternativeCastCostsMixin:
             ):
                 return (
                     f"{card.name} can't be cast: {caster.name}'s graveyard "
-                    f"cannot pay its alternative cost, {cost.describe()} "
+                    f"cannot pay {its_cost}, {cost.describe()} "
                     f"(CR 601.2h)"
                 )
         return None
+
+    def alternative_cost_x_ceiling(
+        self,
+        caster_index: int,
+        cost: "AlternativeCost | None",
+        *,
+        spell_graveyard_slot: "int | None" = None,
+    ) -> "int | None":
+        """The largest X *cost*'s counted clauses leave payable, or None when
+        it counts nothing by X.
+
+        "Flashback—{R}{R}, Sacrifice X Mountains" is bounded by the Mountains
+        the caster controls and "Flashback—{1}{U}, Exile X blue cards from your
+        graveyard" by the blue cards in their pile less the spell itself
+        (CR 601.2a) — through the two enumerations the CR 601.2h gate above
+        counts, so the picker and the AI announce exactly what the cast will
+        accept. The minimum, because one cast pays every clause.
+        """
+        if cost is None:
+            return None
+        bounds: list[int] = []
+        if cost.sacrifice_count_x and cost.sacrifice_filter is not None:
+            bounds.append(len(self._additional_cost_candidates(caster_index, cost)))
+        if cost.exile_graveyard_count_x and cost.exile_graveyard_filter is not None:
+            bounds.append(len(self._graveyard_exile_candidates(
+                caster_index, cost, spell_slot=spell_graveyard_slot,
+            )))
+        return min(bounds) if bounds else None
 
     def alternative_cost_mana(
         self,
@@ -742,6 +812,63 @@ class AlternativeCastCostsMixin:
             key=lambda seat: ((seat - active) % count, seat),
         )
 
+    def _pay_alternative_graveyard_exile(
+        self,
+        caster_index: int,
+        card: CardDefinition,
+        cost: "AlternativeCost",
+        x_value: "int | None",
+        named_slots: "list[int] | None",
+    ) -> None:
+        """Exile the cards "exile X blue cards from your graveyard" takes
+        (Flash of Insight's flashback cost, CR 601.2h).
+
+        The additional cost's payment (``_pay_additional_costs``' Haunting
+        Misery arm) over the same enumeration: the slots the caster named,
+        each once and only where this cost could take a card, resolved to
+        cards before the first one leaves and removed highest slot first; the
+        rest by the deterministic pick — least valuable first where the spell
+        does not read what its cost exiled (``ai_prompt_readers``). The spell
+        is already on the stack (CR 601.2a), so it is not in the pile to be
+        taken.
+        """
+        from ...ai_prompt_readers import (graveyard_price_order,
+                                          reads_what_its_cost_exiled)
+        from ...oracle import compile_card_oracle
+
+        caster = self.players[caster_index]
+        owed = cost.exiled_from_graveyard(x_value)
+        if named_slots is not None:
+            payable = self._graveyard_exile_candidates(caster_index, cost)
+            named = [
+                slot for slot in dict.fromkeys(named_slots) if slot in payable
+            ][:owed]
+            cards_by_slot = {slot: caster.graveyard[slot] for slot in named}
+            for slot in sorted(named, reverse=True):
+                caster.graveyard.pop(slot)
+            for slot in named:
+                caster.exile.append(cards_by_slot[slot])
+                self.log.append(
+                    f"{caster.name} exiled {cards_by_slot[slot].name} from "
+                    f"their graveyard to cast {card.name}"
+                )
+            owed -= len(named)
+        for _ in range(max(0, owed)):
+            candidates = self._graveyard_exile_candidates(caster_index, cost)
+            if not candidates:
+                break  # gated above; a pile that changed since is a no-op
+            index = candidates[-1]
+            if not reads_what_its_cost_exiled(compile_card_oracle(card).instructions):
+                index = graveyard_price_order(
+                    self, caster_index, list(reversed(candidates)),
+                )[0]
+            paid = caster.graveyard.pop(index)
+            caster.exile.append(paid)
+            self.log.append(
+                f"{caster.name} exiled {paid.name} from their graveyard to "
+                f"cast {card.name}"
+            )
+
     def _pay_alternative_cost(
         self,
         caster_index: int,
@@ -751,8 +878,16 @@ class AlternativeCastCostsMixin:
         *,
         named_permanents: "list[Permanent] | None" = None,
         other_cards: "list[CardDefinition] | None" = None,
+        x_value: "int | None" = None,
+        graveyard_slots: "list[int] | None" = None,
     ) -> None:
         """Perform the announced alternative cost (CR 601.2h).
+
+        *x_value* is the announced X a counted clause pays ("Sacrifice X
+        Mountains", "Exile X blue cards from your graveyard"); *graveyard_slots*
+        the cards the caster named for that exile, as positions in the pile the
+        spell has already left (the caller re-counts them), held whole by the
+        CR 601.2h check before anything was spent.
 
         *other_cards* is what ``_resolve_alternative_cost_others`` settled at
         the announcement for "and another card" (Foil), discarded after the
@@ -810,7 +945,11 @@ class AlternativeCastCostsMixin:
             # *parameter*, the card in hand the announcement picked to pay an
             # exile half, and rebinding it here would hand a ``Permanent`` to
             # the exile below on any card that ever prints both.
-            for _ in range(max(1, cost.sacrifice_count)):
+            #
+            # How many is ``sacrificed_count``: the printed count, or the
+            # announced X ("Sacrifice X Mountains", Firecat Blitz) — the one
+            # reader the gate above counted against.
+            for _ in range(cost.sacrificed_count(x_value)):
                 candidates = self._additional_cost_candidates(caster_index, cost)
                 if not candidates:
                     break  # gated above; a board that changed since is a no-op
@@ -924,6 +1063,10 @@ class AlternativeCastCostsMixin:
                     + ", ".join(held.name for held in paid)
                     + f" from their graveyard to cast {card.name}"
                 )
+        if cost.exile_graveyard_filter is not None:
+            self._pay_alternative_graveyard_exile(
+                caster_index, card, cost, x_value, graveyard_slots,
+            )
         if cost.discard_from_hand is not None:
             # "…its controller may **discard** a card…" (Dream Halls.) The
             # hand's other destination, and the one card leaves through

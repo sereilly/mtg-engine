@@ -812,6 +812,9 @@ class SpellCastingMixin:
                 self._resolve_alternative_cost_permanents(
                     caster_index, card, chosen_alternative,
                     alternative_cost_permanent_ids,
+                    # "Sacrifice X Mountains" (Firecat Blitz): how many to
+                    # name is the X announced with the cast (CR 601.2b).
+                    x_value=x_value,
                 )
             )
         alternative_others: "list[CardDefinition]" = []
@@ -1096,10 +1099,32 @@ class SpellCastingMixin:
         # the battlefield before the spell is on the stack.
         # CR 118.9d keeps the additional costs in force alongside an
         # alternative one, so both are paid, in the order CR 601.2h leaves free.
+        # The graveyard slots the caster named, re-counted for a spell that has
+        # just left the same pile (every slot above it slid down one) — the
+        # arrangement the additional costs' exile below makes.
+        renumbered_slots = (
+            cost_graveyard_indices
+            if cost_graveyard_indices is None or spell_graveyard_slot is None
+            else [
+                slot - 1 if slot > spell_graveyard_slot else slot
+                for slot in cost_graveyard_indices
+            ]
+        )
         self._pay_alternative_cost(
             caster_index, card, chosen_alternative, alternative_card,
             named_permanents=alternative_permanents,
             other_cards=alternative_others,
+            # "Flashback—{1}{U}, Exile X blue cards from your graveyard" / "…,
+            # Sacrifice X Mountains": the X the cast announced, and the cards
+            # named for the exile when no additional cost has the channel.
+            x_value=resolved_x_value,
+            graveyard_slots=(
+                renumbered_slots
+                if self.alternative_takes_named_graveyard_slots(
+                    cast_costs, chosen_alternative, optional_paid,
+                )
+                else None
+            ),
         )
         # CR 601.2f's increases, in life. Gated far above, where the targets
         # settle what they come to, and paid here with every other cost —
@@ -1121,14 +1146,7 @@ class SpellCastingMixin:
             # Re-counted for a spell that has just left the same pile: the
             # gate above refused the spell's own slot, and every slot above it
             # slid down one when it went to the stack.
-            cost_graveyard_indices=(
-                cost_graveyard_indices
-                if cost_graveyard_indices is None or spell_graveyard_slot is None
-                else [
-                    slot - 1 if slot > spell_graveyard_slot else slot
-                    for slot in cost_graveyard_indices
-                ]
-            ),
+            cost_graveyard_indices=renumbered_slots,
         )
         sacrificed_for_cost = cost_spoils["sacrificed_for_cost"]
         exiled_for_cost = cost_spoils["exiled_for_cost"]

@@ -174,6 +174,84 @@ def test_w1g8_cabal_therapy_without_a_creature_cannot_be_flashed_back(set_pool):
     assert _w1g8_names(game.players[0].graveyard) == ["Cabal Therapy"]
     assert len(game.players[1].hand) == 4
 
+
+# --- Firecat Blitz --------------------------------------------------------
+
+def _w1g8_blitz_board(set_pool, mountains: int) -> "tuple[_w1g8_Game, list]":
+    """Seat 0: Firecat Blitz in its graveyard, *mountains* Mountains and a
+    Forest on the battlefield, exactly {R}{R} floating — costs enforced."""
+    lea = set_pool("LEA")
+    game = _w1g8_duel()
+    game.enforce_mana_costs = True
+    player = game.players[0]
+    player.graveyard.append(set_pool("JUD")["Firecat Blitz"])
+    lands = [_w1g8_nosick(_w1g8_Permanent(card=lea["Mountain"])) for _ in range(mountains)]
+    player.battlefield.extend(lands + [_w1g8_nosick(_w1g8_Permanent(card=lea["Forest"]))])
+    player.mana_pool["R"] = 2
+    return game, lands
+
+
+def _w1g8_board_names(game, seat: int) -> list[str]:
+    return sorted(p.card.name for p in game.controlled_by(seat))
+
+
+def test_w1g8_firecat_blitz_flashes_back_sacrificing_x_mountains(set_pool):
+    """"Flashback—{R}{R}, Sacrifice X Mountains." The X announced with the cast
+    sizes the sacrifice and the tokens alike (CR 107.3a): the two Mountains the
+    caster named go, the third stays, and two hasty 1/1 Elemental Cats are
+    exiled at the beginning of the next end step."""
+    game, lands = _w1g8_blitz_board(set_pool, 3)
+    spec = game.cast_target_spec(0, set_pool("JUD")["Firecat Blitz"], from_zone="graveyard")
+    assert spec["announces_x"] and spec["max_x"] == 3
+    named = [lands[0].permanent_id, lands[2].permanent_id]
+    cast = game.cast_from_hand(
+        0, "Firecat Blitz", from_zone="graveyard", x_value=2,
+        alternative_cost_permanent_ids=named,
+    )
+    assert cast.supported, cast.details
+    _w1g8_resolve_stack(game)
+    assert any(p is lands[1] for p in game.controlled_by(0))
+    assert _w1g8_board_names(game, 0) == [
+        "Elemental Cat Token", "Elemental Cat Token", "Forest", "Mountain",
+    ]
+    cats = [p for p in game.controlled_by(0) if p.card.name == "Elemental Cat Token"]
+    assert all(game._has_keyword(cat, "haste") for cat in cats)
+    assert _w1g8_names(game.players[0].graveyard) == ["Mountain", "Mountain"]
+    assert _w1g8_names(game.players[0].exile) == ["Firecat Blitz"]
+    game.resolve_end_step(0)
+    _w1g8_resolve_stack(game)
+    assert _w1g8_board_names(game, 0) == ["Forest", "Mountain"]
+
+
+def test_w1g8_firecat_blitz_cannot_sacrifice_more_mountains_than_it_has(set_pool):
+    """CR 601.2h: three Mountains are no payment for an X of four, and naming
+    one Mountain for an X of two is a partial payment — both refused with
+    nothing spent and the card still in the graveyard."""
+    game, lands = _w1g8_blitz_board(set_pool, 3)
+    refused = game.cast_from_hand(0, "Firecat Blitz", from_zone="graveyard", x_value=4)
+    assert not refused.supported and "flashback cost" in refused.details
+    refused = game.cast_from_hand(
+        0, "Firecat Blitz", from_zone="graveyard", x_value=2,
+        alternative_cost_permanent_ids=[lands[0].permanent_id],
+    )
+    assert not refused.supported
+    assert _w1g8_board_names(game, 0) == ["Forest", "Mountain", "Mountain", "Mountain"]
+    assert game.players[0].mana_pool["R"] == 2
+    assert _w1g8_names(game.players[0].graveyard) == ["Firecat Blitz"]
+
+
+def test_w1g8_firecat_blitz_from_hand_makes_x_cats_and_sacrifices_nothing(set_pool):
+    """Cast from a hand for {X}{R}{R}: X cats, no Mountain sacrificed."""
+    game, _lands = _w1g8_blitz_board(set_pool, 2)
+    game.enforce_mana_costs = False
+    blitz = game.players[0].graveyard.pop()
+    game.players[0].hand.append(blitz)
+    assert game.cast_from_hand(0, "Firecat Blitz", x_value=3).supported
+    _w1g8_resolve_stack(game)
+    assert _w1g8_board_names(game, 0).count("Elemental Cat Token") == 3
+    assert _w1g8_board_names(game, 0).count("Mountain") == 2
+    assert _w1g8_names(game.players[0].graveyard) == ["Firecat Blitz"]
+
 # ==== end W1G8 ======================================================
 
 

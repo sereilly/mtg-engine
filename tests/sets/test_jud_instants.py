@@ -212,6 +212,101 @@ def test_w1g8_laquatuss_disdain_cannot_be_cast_at_a_spell_cast_from_a_hand(set_p
     _w1g8_resolve_stack(game)
     assert game.players[1].life == 17
 
+
+# --- Flash of Insight -----------------------------------------------------
+
+def _w1g8_insight_board(set_pool, *, blue_in_graveyard: int) -> "_w1g8_Game":
+    """Seat 0: Flash of Insight on the bottom of its graveyard, *blue_in_graveyard*
+    Counterspells and a Lightning Bolt above it, five lands in its library, and
+    exactly {1}{U} floating — mana costs enforced."""
+    jud, lea = set_pool("JUD"), set_pool("LEA")
+    game = _w1g8_duel()
+    game.enforce_mana_costs = True
+    player = game.players[0]
+    player.graveyard.append(jud["Flash of Insight"])
+    player.graveyard.extend([lea["Counterspell"]] * blue_in_graveyard)
+    player.graveyard.append(lea["Lightning Bolt"])
+    player.library.extend([lea[name] for name in (
+        "Island", "Forest", "Mountain", "Swamp", "Plains",
+    )])
+    player.mana_pool.update({"U": 1, "C": 1})
+    return game
+
+
+def test_w1g8_flash_of_insight_flashes_back_exiling_x_blue_cards(set_pool):
+    """"Flashback—{1}{U}, Exile X blue cards from your graveyard." X is the
+    caster's announcement (CR 107.3a) and both the price and the effect read
+    it: two blue cards leave the graveyard, the top two cards are looked at,
+    one goes to hand and the other to the bottom (CR 702.34a: the spell is
+    exiled afterwards). The Lightning Bolt is not blue and stays."""
+    game = _w1g8_insight_board(set_pool, blue_in_graveyard=3)
+    player = game.players[0]
+    spec = game.cast_target_spec(0, set_pool("JUD")["Flash of Insight"], from_zone="graveyard")
+    assert spec["announces_x"] and spec["max_x"] == 3     # the spell itself is not one
+    # The caster names which blue cards pay (CR 601.2b) — slots in the pile as
+    # it stands, the spell still at the bottom of it.
+    cast = game.cast_from_hand(
+        0, "Flash of Insight", from_zone="graveyard", x_value=2,
+        cost_graveyard_indices=[1, 3],
+    )
+    assert cast.supported, cast.details
+    _w1g8_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    _w1g8_resolve_stack(game)
+    assert not any(player.mana_pool.values())
+    assert _w1g8_zone_names(player.exile) == ["Counterspell", "Counterspell", "Flash of Insight"]
+    assert _w1g8_zone_names(player.graveyard) == ["Counterspell", "Lightning Bolt"]
+    assert len(player.hand) == 1 and player.hand[0].name in ("Island", "Forest")
+    assert [card.name for card in player.library][:3] == ["Mountain", "Swamp", "Plains"]
+    assert len(player.library) == 4
+    assert "P1 is looking at the top 2 cards of their library" in game.log
+
+
+def test_w1g8_flash_of_insight_cannot_exile_itself_to_pay_for_its_flashback(set_pool):
+    """"You can't exile Flash of Insight to pay for its own flashback cost." CR
+    601.2a moves it to the stack before any cost is paid, so with two other
+    blue cards an X of three is unpayable (CR 601.2h): refused with nothing
+    spent and the card still in the graveyard. An X of two is fine."""
+    game = _w1g8_insight_board(set_pool, blue_in_graveyard=2)
+    player = game.players[0]
+    refused = game.cast_from_hand(0, "Flash of Insight", from_zone="graveyard", x_value=3)
+    assert not refused.supported
+    assert "flashback cost" in refused.details and "601.2h" in refused.details
+    assert player.mana_pool["U"] == 1 and player.exile == []
+    assert "Flash of Insight" in _w1g8_zone_names(player.graveyard)
+    assert game.cast_from_hand(0, "Flash of Insight", from_zone="graveyard", x_value=2).supported
+
+
+def test_w1g8_flash_of_insight_holds_a_named_set_of_cards_to_the_announced_x(set_pool):
+    """CR 601.2h: "Partial payments are not allowed." Naming one blue card for
+    an X of two, or naming the Lightning Bolt, or the spell's own slot, is
+    refused before anything is spent."""
+    for named in ([1], [1, 4], [0, 1]):
+        game = _w1g8_insight_board(set_pool, blue_in_graveyard=3)
+        refused = game.cast_from_hand(
+            0, "Flash of Insight", from_zone="graveyard", x_value=2,
+            cost_graveyard_indices=named,
+        )
+        assert not refused.supported, named
+        assert game.players[0].exile == [] and len(game.players[0].graveyard) == 5
+
+
+def test_w1g8_flash_of_insight_from_hand_looks_at_x(set_pool):
+    """Cast from a hand for {X}{1}{U}, it exiles nothing and looks at X."""
+    lea = set_pool("LEA")
+    game = _w1g8_duel()
+    player = game.players[0]
+    player.hand.append(set_pool("JUD")["Flash of Insight"])
+    player.graveyard.append(lea["Counterspell"])
+    player.library.extend([lea["Island"], lea["Forest"], lea["Mountain"]])
+    assert game.cast_from_hand(0, "Flash of Insight", x_value=3).supported
+    _w1g8_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    _w1g8_resolve_stack(game)
+    assert _w1g8_zone_names(player.graveyard) == ["Counterspell", "Flash of Insight"]
+    assert len(player.hand) == 1 and len(player.library) == 2
+    assert "P1 is looking at the top 3 cards of their library" in game.log
+
 # ==== end W1G8 ======================================================
 
 

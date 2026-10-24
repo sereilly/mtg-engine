@@ -838,14 +838,15 @@ class PoolPaymentMixin:
             # `card.mana_cost`, so the taxes above, the commander tax and every
             # "with mana value X" reader still see the printed cost.
             alternative_mana = chosen_alternative.mana
-            if "{X}" in card.mana_cost.upper() and "{X}" not in (
-                alternative_mana or ""
-            ).upper():
+            if "{X}" in card.mana_cost.upper() and not chosen_alternative.announces_x:
                 # CR 107.3b: X is 0 when neither the mana cost nor an
-                # alternative cost that includes X is paid. The one alternative
-                # cost that *does* include it is a granted flashback "equal to
-                # its mana cost" (Recoup) over an X spell, whose X is then the
-                # one the caster announced.
+                # alternative cost that includes X is paid. One that *does*
+                # include it is a granted flashback "equal to its mana cost"
+                # (Recoup) over an X spell, or a printed one with an X in its
+                # mana (Flaming Gambit) — or **outside** its mana: "Flashback—
+                # {1}{U}, Exile X blue cards from your graveyard" (Flash of
+                # Insight) includes X as surely, and its X is the one the
+                # caster announced and the exile was sized by.
                 resolved_x_value = 0
             if self.enforce_mana_costs:
                 # **An alternative cost paid in mana** (CR 702.34a: flashback's
