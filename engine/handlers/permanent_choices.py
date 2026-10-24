@@ -44,6 +44,7 @@ here from ``board_misc.py`` at the 2,000-line cap's split round.
 from __future__ import annotations
 
 import dataclasses
+import random
 from typing import TYPE_CHECKING
 
 from ..oracle_types import CHOSEN_TARGET_PERMANENTS
@@ -662,6 +663,17 @@ def choose_permanent(
     card_name = getattr(context.card, "name", "")
     if not candidates:
         game.log.append(f"{card_name}: there is no permanent it could choose")
+        return True, "resolved"
+    if payload.get("at_random"):
+        # "Choose a creature **at random** this Aura can enchant." (Infectious
+        # Rage.) Nobody is asked: the pick is drawn from the very list a prompt
+        # would have offered, through the module RNG the simulator seeds
+        # (``random.choice``, the draw ``linked_exile``'s random pick makes), so
+        # a seed reproduces it. Recorded under the same key a prompt's answer
+        # is, so the sentence behind it cannot tell the two apart.
+        chosen = random.choice(candidates)
+        context.results[result_key] = chosen.permanent_id
+        game.log.append(f"{card_name} chose {chosen.card.name} at random")
         return True, "resolved"
     if payload.get("only_on_tie") and len(candidates) == 1:
         # "**If two or more** permanents a player controls are tied for

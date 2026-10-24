@@ -260,6 +260,55 @@ def _accept_and_exiles_it(stream: TokenStream) -> bool:
     return False
 
 
+def parse_choose_host_at_random(stream: TokenStream) -> "ast.ChoosePermanent | None":
+    """``Choose a <noun phrase> at random [that] this Aura can enchant.``
+
+    "When enchanted creature dies, **choose a creature at random this Aura can
+    enchant**. Return this card to the battlefield attached to that creature."
+    (Infectious Rage.) Takklemaggot's sentence below with two words changed:
+    nobody picks — the choice is "at random" (CR 608.2d gives the controller
+    the choice only where the effect leaves one) — and the imperative has no
+    printed subject, so the seat whose choice it would have been is the
+    ability's controller (CR 608.2c). The relative clause is the same CR 303.4j
+    legality and is read here for the reason that production gives; "can" and
+    a dropped "that" are how this card prints it.
+
+    Gated hard, because the random pick and the enchant clause are both
+    load-bearing: a phrase with no "at random" is somebody else's sentence, and
+    one with no enchant clause has no consumer this production knows about —
+    "choose" alone performs nothing (``grammar/choices.py``'s rule). The clause
+    must end its sentence. Returns None with the cursor untouched otherwise.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("choose"):
+        return None
+    spec = parse_target_spec(stream)
+    if (
+        spec is None
+        or spec.targeted
+        or spec.quantifier != "a"
+        or spec.count != 1
+        or spec.filter.zone != "battlefield"
+        or spec.filter.is_card
+        or not stream.accept_phrase("at", "random")
+    ):
+        stream.reset(mark)
+        return None
+    stream.accept_word("that")
+    if not (
+        stream.accept_word("this")
+        and stream.accept_word("aura", "card")
+        and stream.accept_word("can", "could")
+        and stream.accept_word("enchant")
+        and (stream.exhausted or stream.at_punct(".", ";"))
+    ):
+        stream.reset(mark)
+        return None
+    return ast.ChoosePermanent(
+        ast.PlayerRef("you"), spec, host_for_source=True, at_random=True,
+    )
+
+
 def parse_player_chooses_permanent(
     stream: TokenStream, chooser: "ast.PlayerRef"
 ) -> "ast.ChoosePermanent | ast.Conjunction | None":

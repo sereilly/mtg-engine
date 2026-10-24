@@ -2055,6 +2055,176 @@ def test_w1g4_anurid_brushhopper_needs_two_cards_to_discard(set_pool):
 
 # ==== W1G9 ==========================================================
 # W1G9's tests go between this line and the "end W1G9" line.
+#
+# Protection statics and an Aura from a graveyard: Masked Gorgon's colour-union
+# anthem and its threshold protection, Cephalid Inkshrouder's discard-for-
+# shroud-and-unblockable, Nomad Mythmaker's Aura put onto a creature chosen as
+# the ability resolves. Each is driven through the step that reads it — the
+# block declaration, combat damage, a cast's target, the activation and the
+# prompt — because protection nothing asks about is a card that does nothing.
+
+from engine import Game as _W1G9Game, PlayerState as _W1G9PlayerState
+from engine.models import Permanent as _W1G9Permanent
+from tests.helpers import declare_attack as _w1g9_declare_attack
+from tests.helpers import resolve_stack as _w1g9_resolve_stack
+
+
+def _w1g9_table(set_pool, *, interactive=()):
+    island = set_pool("LEA")["Island"]
+    game = _W1G9Game(players=[
+        _W1G9PlayerState(name=f"P{seat}", life=20, library=[island] * 10)
+        for seat in range(2)
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game.start_turn(0)
+    return game
+
+
+def _w1g9_put(game, card, seat):
+    permanent = _W1G9Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    return permanent
+
+
+def test_w1g9_masked_gorgon_gives_green_and_white_creatures_protection_from_gorgons(set_pool):
+    """"Green creatures and white creatures have protection from Gorgons." One
+    set, "green or white" (CR 105.2), whoever controls it: the Gorgon may not
+    block a green Bears or a white Lions but may block a red Hill Giant
+    (CR 702.16e), and its combat damage to the white blocker is prevented
+    (CR 702.16d) while the Lions' damage to it is not."""
+    jud, lea = set_pool("JUD"), set_pool("LEA")
+    game = _w1g9_table(set_pool)
+    gorgon = _w1g9_put(game, jud["Masked Gorgon"], 0)
+    bears = _w1g9_put(game, lea["Grizzly Bears"], 1)
+    lions = _w1g9_put(game, lea["Savannah Lions"], 1)
+    giant = _w1g9_put(game, lea["Hill Giant"], 1)
+    game._settle()
+
+    assert not game._can_block_attacker(gorgon, bears)
+    assert not game._can_block_attacker(gorgon, lions)
+    assert game._can_block_attacker(gorgon, giant)
+    assert game._can_block_attacker(lions, gorgon), "no threshold yet"
+
+    _w1g9_declare_attack(game, 0, blocks={1: 0})  # Lions blocks the Gorgon
+    game.advance_combat_phase()
+    assert game.is_on_battlefield(lions) and lions.damage_marked == 0
+    assert gorgon.damage_marked == 2
+
+
+def test_w1g9_masked_gorgon_threshold_protects_it_from_green_and_white(set_pool):
+    """"Threshold — This creature has protection from green and from white as
+    long as there are seven or more cards in your graveyard." Six cards: the
+    green Bears may block it. Seven: neither the Bears nor the white Lions may,
+    and the red Hill Giant still can. Back to six: the Bears may again."""
+    jud, lea = set_pool("JUD"), set_pool("LEA")
+    game = _w1g9_table(set_pool)
+    gorgon = _w1g9_put(game, jud["Masked Gorgon"], 0)
+    bears = _w1g9_put(game, lea["Grizzly Bears"], 1)
+    lions = _w1g9_put(game, lea["Savannah Lions"], 1)
+    giant = _w1g9_put(game, lea["Hill Giant"], 1)
+    for _ in range(6):
+        assert game.put_card_into_graveyard(0, lea["Island"])
+    game._settle()
+    assert game._can_block_attacker(bears, gorgon)
+
+    assert game.put_card_into_graveyard(0, lea["Island"])
+    game._settle()
+    assert not game._can_block_attacker(bears, gorgon)
+    assert not game._can_block_attacker(lions, gorgon)
+    assert game._can_block_attacker(giant, gorgon)
+
+    game.players[0].graveyard.pop()
+    game._settle()
+    assert game._can_block_attacker(bears, gorgon)
+
+
+def test_w1g9_cephalid_inkshrouder_discards_for_shroud_and_unblockable(set_pool):
+    """"Discard a card: This creature gains shroud until end of turn and can't
+    be blocked this turn." The cost is a card from the hand (none, no
+    activation); then a Lightning Bolt cannot target it (CR 702.18a), no
+    creature may block it (CR 509.1b), and both end at cleanup (CR 514.2)."""
+    jud, lea = set_pool("JUD"), set_pool("LEA")
+    game = _w1g9_table(set_pool)
+    ink = _w1g9_put(game, jud["Cephalid Inkshrouder"], 0)
+    blocker = _w1g9_put(game, lea["Grizzly Bears"], 1)
+    assert not game.activate_permanent_ability(0, "Cephalid Inkshrouder").supported
+
+    game.players[0].hand.append(lea["Island"])
+    result = game.activate_permanent_ability(0, "Cephalid Inkshrouder")
+    assert result.supported, result.details
+    _w1g9_resolve_stack(game)
+    assert game.players[0].hand == []
+    assert [card.name for card in game.players[0].graveyard] == ["Island"]
+    assert ink.has_keyword("shroud")
+    assert not game._can_block_attacker(blocker, ink)
+    game.players[1].hand.append(lea["Lightning Bolt"])
+    assert not game.queue_from_hand(
+        1, "Lightning Bolt", target_permanent_ids=[ink.permanent_id]
+    ).supported
+
+    game.resolve_cleanup_step(0)
+    assert not ink.has_keyword("shroud")
+    assert game._can_block_attacker(blocker, ink)
+
+
+def _w1g9_mythmaker(game, *, seat=1, slot=0, drain=True):
+    result = game.activate_permanent_ability(
+        0, "Nomad Mythmaker", target_player_index=seat, target_permanent_index=slot,
+    )
+    assert result.supported, result.details
+    if drain:
+        _w1g9_resolve_stack(game)
+        game._settle()
+
+
+def test_w1g9_nomad_mythmaker_puts_an_opponents_aura_on_a_creature_you_control(set_pool):
+    """"…target Aura card from a graveyard onto the battlefield under your
+    control attached to a creature you control." The rulings: any graveyard
+    (2007-07-15), and the host is chosen as the ability resolves (2004-10-04).
+    An interactive seat with two creatures is asked, offered only its own, and
+    the Aura it picked arrives under its control on that creature."""
+    jud, lea = set_pool("JUD"), set_pool("LEA")
+    game = _w1g9_table(set_pool, interactive=(0,))
+    myth = _w1g9_put(game, jud["Nomad Mythmaker"], 0)
+    bears = _w1g9_put(game, lea["Grizzly Bears"], 0)
+    theirs = _w1g9_put(game, lea["Hill Giant"], 1)
+    game.players[1].graveyard.append(jud["Cagemail"])
+
+    _w1g9_mythmaker(game, drain=False)
+    assert not game.resolve_top_of_stack(), "CR 608.2: held for the host choice"
+    (choice,) = [c for c in game.pending_choices if c.kind == "permanent_choice"]
+    offered = game.live_permanent_choices(choice)
+    assert [id(p) for p in offered] == [id(myth), id(bears)]
+    assert not any(p is theirs for p in offered)
+    assert game.confirm_permanent_choice(0, bears.permanent_id)
+    _w1g9_resolve_stack(game)
+    game._settle()
+
+    (cagemail,) = [p for p in game.all_permanents() if p.card.name == "Cagemail"]
+    assert cagemail.metadata.get("attached_to") is bears
+    assert game.controller_index_of(cagemail) == 0
+    assert game.players[1].graveyard == []
+    assert (bears.effective_power, bears.effective_toughness) == (4, 4)
+    assert not game.can_attack(bears, 1)
+    assert myth.tapped
+
+
+def test_w1g9_nomad_mythmaker_leaves_an_aura_it_cannot_attach_in_the_graveyard(set_pool):
+    """"If you don't control any creatures that the Aura can enchant, it
+    remains in the graveyard." (2004-10-04; CR 303.4g.) Wild Growth enchants a
+    land, so no creature you control can carry it: the ability resolves and
+    the card stays where it was."""
+    jud, lea = set_pool("JUD"), set_pool("LEA")
+    game = _w1g9_table(set_pool)
+    _w1g9_put(game, jud["Nomad Mythmaker"], 0)
+    _w1g9_put(game, lea["Forest"], 0)
+    game.players[0].graveyard.append(lea["Wild Growth"])
+
+    _w1g9_mythmaker(game, seat=0)
+    assert [card.name for card in game.players[0].graveyard] == ["Wild Growth"]
+    assert not [p for p in game.all_permanents() if p.card.name == "Wild Growth"]
 
 # ==== end W1G9 ======================================================
 

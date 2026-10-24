@@ -270,14 +270,28 @@ def _lower_lord_effects(
             node=node,
         )
     # A *union* is a separate question from a missing field, and the round trip
-    # above cannot answer it: the table's own text parser reads one colour and
-    # one subtype, so a grammar-only union would be a payload no printed card
-    # produces and no test covers. Whether "white or blue creatures" means an
-    # OR is decided when a card needs it.
-    if len(lord_filter.colors) > 1 or len(lord_filter.subtypes) > 1:
+    # above cannot answer it.
+    #
+    # **Colours are decided, because a card needed it.** "Green creatures and
+    # white creatures have protection from Gorgons." (Masked Gorgon.) The noun
+    # parser reads the long spelling into one filter with two colours
+    # (``nouns.py``'s Magistrate's Veto union) — one set, "green or white" —
+    # and ``mixins/lords._lord_buff_matches`` has always answered a colour list
+    # as an OR (``set(filt.colors) & _effective_colors(...)``), the reading
+    # ``search_filters`` and ``_payloads`` give the same field. So a two-colour
+    # anthem reaches exactly the creatures CR 105.2 says are either colour, and
+    # a creature that is both is one member of the set, buffed once
+    # (CR 611.3a).
+    #
+    # **Subtypes are not.** ``_lord_buff_matches`` tests every listed subtype
+    # (an AND), so "Goblins and Elves" would buff only a Goblin Elf — a payload
+    # meaning the opposite of the sentence. That shape is
+    # :func:`_lower_lord_union`'s (one buff per subject, made disjoint), and a
+    # filter carrying two subtypes keeps the refusal.
+    if len(lord_filter.subtypes) > 1:
         raise LoweringError(
-            "engine/lord_buffs.py derives one colour and one subtype; a union "
-            "has no matching rule behind it",
+            "engine/lord_buffs.py derives one subtype; a subtype union has no "
+            "matching rule behind it",
             node=node,
         )
     # "Creatures **with <word>** get +1/+1." The round trip above only proves the

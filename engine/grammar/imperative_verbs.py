@@ -55,6 +55,7 @@ from .references import _parse_further_subjects
 from .readers import _parse_entering_counters
 from .effects import (
     parse_bin_revealed_card,
+    parse_choose_host_at_random,
     _parse_force_chosen_creature_to_attack,
     _parse_add_mana,
     _parse_ante,
@@ -676,6 +677,13 @@ def parse_imperative_verb(
         random_linked = _parse_random_exiled_with_source(stream)
         if random_linked is not None:
             return random_linked
+        # "Choose a creature at random this Aura can enchant." (Infectious
+        # Rage.) A permanent picked by nobody, beside the linked-pile pick above
+        # and for its reason: non-consuming on refusal, so the naming
+        # productions below keep their say.
+        random_host = parse_choose_host_at_random(stream)
+        if random_host is not None:
+            return random_host
         # Demonic Consultation's naming paragraph. Tried before the two below
         # it because all three open with the same four words and this one is
         # the only one whose fifth token is a full stop followed by "exile" —

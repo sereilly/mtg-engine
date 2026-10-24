@@ -119,6 +119,7 @@ from .destruction import (
 from .attachments import (
     _parse_attach,
     _parse_pronoun_attach_rider,
+    parse_choose_host_at_random,
     parse_excess_choice_paragraph,
     parse_player_chooses_permanent,
 )
@@ -355,6 +356,7 @@ __all__ = [
     "_parse_bid_life_for_control",
     "_parse_gain_control",
     "parse_mutual_control_of_sets",
+    "parse_choose_host_at_random",
     "parse_excess_choice_paragraph",
     "parse_player_chooses_permanent",
     "_parse_return",

@@ -506,6 +506,18 @@ def _lower_put_onto_battlefield(
             "only the from-hand pick puts a card onto the battlefield tapped",
             node=node,
         )
+    if node.attached_to_chosen is not None and not (
+        filt.zone == "graveyard" and _is_target(target) and filt.is_card
+        and (node.actor is None or node.actor.kind == "you")
+    ):
+        # "…attached to **a creature you control**." (Nomad Mythmaker.) Only
+        # the targeted reanimation below carries a described host to its
+        # resolver; every other branch would put the Aura in attached to
+        # nothing, for CR 704.5m to bin.
+        raise LoweringError(
+            "only the targeted reanimation enters attached to a chosen host",
+            node=node,
+        )
     if target.quantifier == "that" and filt.is_card:
         # "Put **that card** onto the battlefield under your control." (Seraph,
         # Krovikan Vampire.) The bound object, not a choice: the firing event
@@ -770,6 +782,25 @@ def _lower_put_onto_battlefield(
             # 303.4f, which is the rule for an effect that names **no** host and
             # leaves the choice to the player; both of these name one.)
             payload["attach_to"] = "source"
+        if node.attached_to_chosen is not None:
+            # "…onto the battlefield under your control **attached to a
+            # creature you control**." (Nomad Mythmaker.) The host is chosen as
+            # the ability resolves among the permanents the phrase describes
+            # that the returned Aura can legally enchant (its ruling,
+            # 2004-10-04), so it travels as a description the resolver tests
+            # through ``subject_matches`` with the caster as observer — never
+            # a key nothing can answer, which would widen the choice to every
+            # creature on the table.
+            if node.attached_to_source:
+                raise LoweringError(
+                    "an Aura enters attached to one host", node=node
+                )
+            payload["attach_to"] = "chosen"
+            payload["attach_filter"] = refuse_untestable(
+                _filter_payload(node.attached_to_chosen.filter),
+                refusal="the chosen host cannot be tested for",
+                node=node,
+            )
         # "That creature is black and is a Nightmare …" (Chainer): what the
         # permanent enters as, written by the resolver before the entry.
         # Emitted only when printed, so older payloads stay byte-identical.

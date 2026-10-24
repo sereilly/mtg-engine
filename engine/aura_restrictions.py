@@ -269,7 +269,14 @@ _RESTRICTIONS: tuple[tuple[re.Pattern[str], str], ...] = (
         # many words that a card printing only "can't attack" is a different
         # card; this is that card, and without the row its line was unclaimed
         # and the Aura reported unsupported.
-        re.compile(rf"^enchanted {_NOUN} can't attack$"),
+        #
+        # The optional P/T prefix is the blocking row's below, for its reason:
+        # "Enchanted creature gets +2/+2 **and** can't attack." (Cagemail) is
+        # one line carrying two effects in two channels — the numbers read by
+        # `aura_static_pt_grant`, which searches rather than anchors, and the
+        # restriction read here. Without the prefix the line matched nothing,
+        # and the Aura reported unsupported with both halves already working.
+        re.compile(rf"^enchanted {_NOUN}(?: gets [+-]\d+/[+-]\d+ and)? can't attack$"),
         "cant_attack",
     ),
     (
