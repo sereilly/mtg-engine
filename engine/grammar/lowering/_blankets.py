@@ -37,9 +37,11 @@ from ._common import (
     _is_you,
     _restrictions_beyond,
     refuse_untestable,
+    split_color_choice,
     testable_filter_payload,
 )
 from ._events import _RECORDED_PERMANENTS
+from ._targets import _names_several_targets
 
 
 def _lower_prevent_from_subject(
@@ -103,6 +105,8 @@ def _lower_prevent_from_subject(
         raise LoweringError(
             "the source-class shield lasts exactly this turn", node=node
         )
+    if spec.filter.color_of_your_choice:
+        return _lower_chosen_color_source_class(node, spec, any_recipient)
     described = testable_filter_payload(
         spec.filter,
         refusal="the source-class shield cannot test this noun phrase",
@@ -116,6 +120,60 @@ def _lower_prevent_from_subject(
     if node.combat_only:
         payload["combat_only"] = True
     return (
+        OracleInstruction("grant_source_class_prevention_shield", "", payload),
+    )
+
+
+def _lower_chosen_color_source_class(
+    node: ast.PreventDamage, spec: ast.TargetSpec, any_recipient: bool,
+) -> tuple[OracleInstruction, ...]:
+    """"Prevent all damage that sources of the color of your choice would deal
+    this turn." (Prismatic Strands.)
+
+    :func:`_lower_prevent_from_subject`'s blanket with its one narrowing a
+    colour the caster names **as the spell resolves** (CR 608.2d) — Wash Out's
+    "of the color of your choice", so the choosing step goes in front
+    (``split_color_choice``) and the shield's arming reads it out of the
+    scratchpad, arming nothing when nothing was chosen.
+
+    The colour rides as the shield's own ``colors``, the property a Circle of
+    Protection records and CR 615.9 rechecks through ``damage_source_colors``
+    — the one reader that answers for a **spell** as well as a permanent. That
+    is what "sources" needs: a red Lightning Bolt is a red source, and a noun
+    phrase tested through ``subject_matches`` answers only for permanents. So
+    the bare "sources" (``also_spell``, recorded by the parse) carries no noun
+    filter at all, and any other head noun ("permanents of the color …",
+    "creatures of the color …") keeps its filter and stays a permanents-only
+    shield. A narrowing past the colour on "sources" refuses: it could be
+    tested only on a permanent, and would drop every spell the colour names.
+    """
+    any_source = spec.filter.also_spell
+    prelude, rest, chosen = split_color_choice(_filter_payload(
+        spec.filter, carried_separately=frozenset({"also_spell"}),
+    ))
+    if not prelude:  # pragma: no cover - the parse only sets the key this way
+        raise LoweringError(
+            "nothing chooses the colour this shield names", node=node
+        )
+    payload: dict[str, object] = dict(chosen)
+    if any_source:
+        if rest:
+            raise LoweringError(
+                "a source narrowed past its colour is testable only on a "
+                "permanent: " + ", ".join(sorted(rest)),
+                node=node,
+            )
+    else:
+        payload["filter"] = refuse_untestable(
+            rest,
+            refusal="the source-class shield cannot test this noun phrase",
+            node=node,
+        )
+    if any_recipient:
+        payload["any_recipient"] = True
+    if node.combat_only:
+        payload["combat_only"] = True
+    return prelude + (
         OracleInstruction("grant_source_class_prevention_shield", "", payload),
     )
 
@@ -385,9 +443,23 @@ def _lower_prevent_all(
         bound_pronoun = (
             isinstance(spec, ast.TargetSpec) and spec.quantifier == "it"
         )
+        # "Prevent all combat damage **X target creatures** would deal this
+        # turn." (Serene Sunset.) A *list* of chosen sources — the same shield
+        # armed once per creature the caster named, which is the arrangement
+        # the recipient half below already has for Redeem's "up to two target
+        # creatures". Opted into with the several-target description, so the
+        # picker collects the list and the handler resolves one
+        # (`names_a_target_list`), instead of a one-target picker in front of
+        # a sentence that names X of them.
+        several = (
+            isinstance(spec, ast.TargetSpec)
+            and spec.targeted
+            and _names_several_targets(spec)
+        )
         if not isinstance(spec, ast.TargetSpec) or (
             not source_scoped
             and not bound_pronoun
+            and not several
             and spec.quantifier not in ("target", "that")
         ):
             raise LoweringError(
@@ -516,7 +588,30 @@ def _lower_prevent_all(
                     {"card_types": list(spec.filter.card_types)},
                 ),
             )
-        if spec.quantifier == "target":
+        if several:
+            if node.dealt_by_others:
+                # Feint's "and each creature blocking it" is read relative to
+                # *one* chosen creature; over a list it names nothing the
+                # handler could find.
+                raise LoweringError(
+                    "the blockers of several chosen sources are not one set",
+                    node=node,
+                )
+            if spec.filter.card_types != ("creature",):
+                # The handler resolves the list as creatures; a list of any
+                # other type would be armed on nothing or on the wrong object.
+                raise LoweringError(
+                    "the several-source shield is armed on target creatures",
+                    node=node,
+                )
+            if _restrictions_beyond(spec.filter, frozenset({"card_types"})):
+                refuse_untestable(
+                    _filter_payload(spec.filter),
+                    refusal="the shield's target picker cannot test",
+                    node=node,
+                )
+            _describe_several_targets(payload, spec)
+        elif spec.quantifier == "target":
             _describe_targets(payload, spec)
         # "…dealt by **that creature** this turn" (Telekinesis): the object the
         # sentence in front of it already targeted, not a second choice — so no

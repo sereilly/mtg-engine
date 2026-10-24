@@ -119,6 +119,7 @@ from .prevention import (
     _lower_prevent_damage,
     _lower_prevent_half,
     _lower_damage_cant_be_prevented,
+    _lower_all_damage_cant_be_prevented,
     _lower_choose_damage_source,
     _lower_chosen_source_next_damage,
 )
@@ -506,6 +507,7 @@ __all__ = [
     "_lower_flip_coins_until_loss",
     "_lower_damage_this_game_history",
     "_lower_damage_cant_be_prevented",
+    "_lower_all_damage_cant_be_prevented",
     "_lower_damage_becomes_counter_removal",
     "_lower_prevent_damage",
     "_lower_choose_damage_source",

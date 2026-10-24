@@ -24,6 +24,8 @@ production two of them read is CR 615.5's rider, and it sits a level up in
 ``grammar/prevented_riders.py`` rather than in either family.
 """
 
+import dataclasses
+
 from .. import ast
 from ..amounts import parse_amount
 from ..references import parse_recipient
@@ -294,6 +296,15 @@ def _accept_active_voice_shield(
     this cannot finish keeps the refusal it has.
     """
     mark = stream.mark()
+    # "Prevent all damage **that** sources of the color of your choice would
+    # deal this turn." (Prismatic Strands.) The relative pronoun the older
+    # printings leave out ("…combat damage target creature would deal") — the
+    # same clause with its "that" printed, so it is read here rather than by a
+    # second production racing this one on the same words. Only in front of a
+    # subject: "that would be dealt" is the passive branch's, which has already
+    # refused by the time this runs.
+    stream.accept_word("that")
+    subject_start = stream.mark()
     # "Prevent all damage **a source of your choice** would deal this turn."
     # (Rith's Charm.) CR 609.7a's chosen source in the subject position, where
     # the passive spelling prints it behind a "by" (Samite Ministration) — read
@@ -308,6 +319,7 @@ def _accept_active_voice_shield(
     dealt_by = None if chosen_source else (
         parse_recipient(stream) or parse_bound_subject(stream)
     )
+    subject_end = stream.mark()
     if not (chosen_source or dealt_by is not None) or not stream.accept_phrase(
         "would", "deal"
     ):
@@ -324,6 +336,25 @@ def _accept_active_voice_shield(
         return ast.PreventDamage(
             ast.AllOf(), to=recipient, duration=duration,
             combat_only=combat_only, from_filter=ast.ObjectFilter(),
+        )
+    # "…damage that **sources** of the color of your choice would deal": the
+    # generic noun, which unlike "permanents" names a spell as readily as a
+    # permanent (CR 609.7a — a source of damage is an object, and a red
+    # Lightning Bolt is a red source). The noun reader gives the two the same
+    # filter, so the head word is looked for among the subject's own words and
+    # recorded as the cross-zone union the filter already has a field for.
+    names_sources = any(
+        token.text in ("source", "sources")
+        for token in stream.tokens[subject_start:subject_end]
+    )
+    if (
+        names_sources
+        and isinstance(dealt_by, ast.TargetSpec)
+        and dealt_by.quantifier in ("all", "each")
+        and not dealt_by.targeted
+    ):
+        dealt_by = dataclasses.replace(
+            dealt_by, filter=dataclasses.replace(dealt_by.filter, also_spell=True),
         )
     return ast.PreventDamage(
         ast.AllOf(), to=recipient, duration=duration, combat_only=combat_only,

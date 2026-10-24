@@ -831,6 +831,27 @@ def _lower_damage_cant_be_prevented(
     return (OracleInstruction("lock_damage_to_target", "", {}),)
 
 
+def _lower_all_damage_cant_be_prevented(
+    node: ast.DamageCantBePrevented,
+) -> tuple[OracleInstruction, ...]:
+    """"Damage can't be prevented this turn." (Flaring Pain.)
+
+    ``forbid_damage_prevention`` arms one turn-long record on the caster's
+    seat (``engine/turn_replacements.py``'s ``DAMAGE_PREVENTION``), and
+    ``damage_events.deal_damage`` marks every damage event it covers with the
+    same lock Urza's Rage's "and the damage can't be prevented" puts on one —
+    so a turn-wide sentence and a one-spell sentence ask one question.
+
+    The duration must be this turn, because that is what the cleanup sweep
+    gives the record.
+    """
+    if node.duration.kind not in _REST_OF_TURN:
+        raise LoweringError(
+            "the turn-wide prevention lock lasts exactly this turn", node=node
+        )
+    return (OracleInstruction("forbid_damage_prevention", "", {}),)
+
+
 #: Which instruction each printed tail of "the next time <that source> would
 #: deal damage this turn, …" becomes (Desperate Gambit). A table rather than a
 #: branch, for ``shields.Shield.kind``'s reason: the word the card printed names

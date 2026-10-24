@@ -1169,9 +1169,32 @@ def grant_source_class_prevention_shield(game: Game, instruction: OracleInstruct
     resolves is covered and one that gains flying in the meantime is not.
     """
     caster = context.caster
-    described = dict(instruction.payload.get("filter") or {})
+    printed = instruction.payload.get("filter")
     seat = game.players.index(caster)
     source_name = context.card.name if context.card else None
+    # "Prevent all damage that sources of **the color of your choice** would
+    # deal this turn." (Prismatic Strands.) The colour the step in front of
+    # this one asked for (CR 608.2d), read out of the scratchpad as every
+    # other "of the color of your choice" sweep reads it — and **no colour
+    # means no shield**: an unanswered choice read as "no narrowing" would
+    # prevent every source's damage. With no noun filter printed ("sources"),
+    # the colour is the whole narrowing and answers for spells too.
+    colors: tuple[str, ...] = ()
+    color_key = instruction.payload.get("color_filter_from")
+    if color_key is not None:
+        chosen_color = context.results.get(str(color_key))
+        if not chosen_color:
+            game.log.append(
+                f"{source_name}: no colour was chosen, so nothing is prevented"
+            )
+            return True, "resolved"
+        colors = (str(chosen_color),)
+    described = None if printed is None else dict(printed)
+    if described is None and not colors:
+        # Every lowering of this kind writes one or the other; a payload with
+        # neither would be a shield against every source on the table.
+        game.log.append(f"{source_name}: the shield names no sources")
+        return True, "resolved"
     # "Prevent all combat damage that would be dealt **by unblocked creatures**
     # this turn." (Snag.) The same shield with no recipient printed: it still
     # hangs off the caster's seat, which is where the cleanup sweep finds it,
@@ -1181,10 +1204,21 @@ def grant_source_class_prevention_shield(game: Game, instruction: OracleInstruct
     combat_only = bool(instruction.payload.get("combat_only"))
     add_shield(caster, make_subject_shield(
         described, seat, source_name,
-        any_recipient=any_recipient, combat_only=combat_only,
+        any_recipient=any_recipient, combat_only=combat_only, colors=colors,
     ))
     damage = "combat damage" if combat_only else "damage"
-    if any_recipient:
+    if colors and described is None:
+        from ..grammar.vocabulary import COLOR_WORDS
+
+        word = next(
+            (w for w, symbol in COLOR_WORDS.items() if symbol == colors[0]),
+            colors[0],
+        )
+        game.log.append(
+            f"{source_name}: all {damage} {word} sources would deal this turn "
+            "is prevented"
+        )
+    elif any_recipient:
         game.log.append(
             f"{source_name}: all {damage} that would be dealt by matching "
             "sources this turn is prevented"
@@ -1387,6 +1421,31 @@ def lock_damage_to_target(game: Game, instruction: OracleInstruction, context: O
     return True, "resolved"
 
 
+@effect_handler("forbid_damage_prevention")
+def forbid_damage_prevention(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Damage can't be prevented this turn." (Flaring Pain.)
+
+    One turn-long record on the caster's seat (CR 109.5), which the cleanup
+    sweep ends with every other turn record — no ``Game`` field and no clearing
+    line. ``damage_events.deal_damage`` reads it on every event and marks the
+    event unpreventable, so protection, a Fog, a Circle and a Phantom's shield
+    all stop preventing while a CR 614.9 redirect still moves the damage (the
+    sentence names prevention and nothing else). A prevention effect with an
+    additional effect still has that effect (CR 615.12).
+    """
+    from ..turn_replacements import (DAMAGE_PREVENTION, TurnReplacement,
+                                     arm_turn_replacement)
+
+    seat = game.players.index(context.caster)
+    source_name = context.card.name if context.card else None
+    arm_turn_replacement(
+        game,
+        TurnReplacement(seat=seat, event=DAMAGE_PREVENTION, source_name=source_name),
+    )
+    game.log.append(f"{source_name}: damage can't be prevented this turn")
+    return True, "resolved"
+
+
 @effect_handler("prevent_damage_by_target_spell_until_eot")
 def prevent_damage_by_target_spell_until_eot(
     game: Game, instruction: OracleInstruction, context: OracleExecutionContext
@@ -1454,6 +1513,26 @@ def prevent_damage_by_target_until_eot(game: Game, instruction: OracleInstructio
     from ..prevention.shields import COMBAT_SHIELD_BY, add_directional_shield
 
     combat_only = bool(instruction.payload.get("combat_only"))
+    if names_a_target_list(instruction):
+        # "Prevent all combat damage **X target creatures** would deal this
+        # turn." (Serene Sunset.) The same shield armed once per chosen
+        # source — the recipient half's Redeem branch on this end of the
+        # event, and resolved the same strict way: each creature the caster
+        # named that is still a legal target (CR 608.2b), never a fallback
+        # scan, and an empty list (X = 0) is a legal outcome rather than an
+        # error.
+        chosen = resolve_target_permanents(
+            game, context, predicate=lambda p: p.is_creature,
+        )
+        for creature in chosen:
+            add_directional_shield(creature, COMBAT_SHIELD_BY, combat_only=combat_only)
+            game.log.append(
+                f"all {'combat ' if combat_only else ''}damage {creature.card.name} "
+                f"would deal this turn is prevented ({context.card.name})"
+            )
+        if not chosen:
+            game.log.append(f"{context.card.name}: no creature to silence")
+        return True, "resolved"
     # Through the innermost binding, exactly as the recipient half above does
     # and for its reason: "**For each attacking red creature,** prevent all
     # combat damage that would be dealt by **that creature** this turn"

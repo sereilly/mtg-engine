@@ -51,6 +51,7 @@ from ._core import (
     TargetSpec,
 )
 from .damage import (
+    DamageCantBePrevented,
     DamageCantBePreventedOrRedirected,
     DamageRedirectOffer,
     DamageReducedByPaidMana,
@@ -355,7 +356,8 @@ Effect = Union[
     AddManaForTappedLand, NoteManaSpent, ProducesManaInstead, SpendManaAsThough, AddedManaBecomes, GrantManaSpending, PreventDamage,
     RedirectDamage, DamageBecomesCounterRemoval,
     RedirectDamage, TurnDamageReplacement, TurnDrawReplacement, ChooseDamageSource, ChosenSourceNextDamage,
-    DamageCantBePreventedOrRedirected, DamageReducedByPaidMana,
+    DamageCantBePreventedOrRedirected, DamageCantBePrevented,
+    DamageReducedByPaidMana,
     UpkeepCounterToll,
     UpkeepDamageUnlessCost,
     ExileBoundCard, ExileGraveyardArrivalsThisTurn,

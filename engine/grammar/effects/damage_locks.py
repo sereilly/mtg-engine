@@ -33,7 +33,7 @@ from ..phrases import parse_bound_subject
 
 def _parse_damage_cant_be_prevented(
     stream: TokenStream,
-) -> "ast.DamageCantBePreventedOrRedirected | None":
+) -> "ast.DamageCantBePreventedOrRedirected | ast.DamageCantBePrevented | None":
     """``Damage that would be dealt to <subject> <duration> can't be prevented
     or dealt instead to another permanent or player.`` (Whippoorwill.)
 
@@ -44,10 +44,19 @@ def _parse_damage_cant_be_prevented(
     alone is a different, weaker card, and a reader that stopped there would
     leave every redirection working while reporting the line claimed — the
     dropped-rider bug class, in the direction that lets the damage walk away.
+
+    The subject-less sentence is the exception that proves it: "Damage can't
+    be prevented this turn." (Flaring Pain) prints the half alone, about every
+    damage event, and reads as its own node.
     """
     mark = stream.mark()
     if not stream.accept_word("damage"):
         return None
+    if stream.at_word("can't"):
+        whole = _accept_all_damage_unpreventable(stream)
+        if whole is None:
+            stream.reset(mark)
+        return whole
     if not stream.accept_phrase("that", "would", "be", "dealt", "to"):
         stream.reset(mark)
         return None
@@ -60,6 +69,26 @@ def _parse_damage_cant_be_prevented(
         stream.reset(mark)
         return None
     return ast.DamageCantBePreventedOrRedirected(subject, duration)
+
+
+def _accept_all_damage_unpreventable(
+    stream: TokenStream,
+) -> "ast.DamageCantBePrevented | None":
+    """``can't be prevented <duration>``, after a bare "Damage" (Flaring Pain).
+
+    The duration is required: the sentence with none is a standing rule of
+    the game printed on a permanent (Leyline of Punishment's "Damage can't be
+    prevented."), which is a static ability and not what a resolving spell
+    does — so it refuses rather than being read as "this turn". The "or dealt instead …" half is deliberately not read: printed, it
+    is Whippoorwill's clause about every event, which nothing here implements,
+    and the unread words refuse the line.
+    """
+    if not stream.accept_phrase("can't", "be", "prevented"):
+        return None
+    duration = _parse_duration(stream)
+    if duration.kind is None:
+        return None
+    return ast.DamageCantBePrevented(duration)
 
 
 def accept_cant_be_prevented_tail(stream: TokenStream) -> bool:

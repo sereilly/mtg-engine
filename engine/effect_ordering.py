@@ -99,6 +99,20 @@ class Candidate:
     #: Declared at registration for ``prevents_or_redirects``' reason: read off
     #: an order range instead, it would go stale the day a new one is added.
     amount_role: str = ""
+    #: CR 615.12: what applying this **prevention** effect to damage that can't
+    #: be prevented does. "Any applicable prevention effects are still applied
+    #: to it. Those effects won't prevent any damage, but any additional effects
+    #: they have will take place." So a ``prevents`` contender is not simply
+    #: dropped by a lock when it carries an additional effect that does not
+    #: depend on the amount prevented — Nine Lives' incarnation counter, a
+    #: Phantom's +1/+1 counter, Rock Hydra's counter per point — and this is
+    #: that effect alone, run in place of ``apply``. None for every effect whose
+    #: additional effect is sized by the damage prevented (Reverse Damage gains
+    #: life equal to 0) or that has none: dropping those is what 615.12 already
+    #: means for them, and 615.12's last sentence keeps their shields unspent.
+    #: Applied at most once per event (615.12a), which the loop below gives
+    #: every candidate.
+    unpreventable_apply: Callable[[Any, dict], Any] | None = None
 
 
 #: ``Candidate.amount_role`` values. See :func:`choose_effect`.

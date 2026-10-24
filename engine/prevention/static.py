@@ -32,7 +32,8 @@ from ..next_damage import DAMAGE_PREVENTED_NEXT, armed_for_event, spend_for_even
 from ..pt import remove_plus1_counters
 from .registry import (
     CHOSEN_SOURCE_ONE_SHOT, CONTROLLER_BLANKET, MATCHING_BLANKET,
-    PER_POINT_COUNTER_SHIELD, SHARED_COLOR_BLANKET, SMALL_EVENT_BLANKET,
+    PER_POINT_COUNTER_SHIELD, SELF_WHOLE_EVENT_COUNTER, SHARED_COLOR_BLANKET,
+    SMALL_EVENT_BLANKET,
     SOURCE_TYPE_BLANKET, SPELL_CLASS_BLANKET, STATIC_POINTS, STATIC_WHOLE_EVENT,
     PreventionOutcome, prevention_effect, source_has_type,
 )
@@ -601,7 +602,27 @@ def _applies_static_whole_event(game, event: dict) -> bool:
     return _static_prevention_source(game, event) is not None
 
 
-@prevention_effect(STATIC_WHOLE_EVENT, applies=_applies_static_whole_event)
+def _place_counter_unpreventable(game, event: dict) -> None:
+    """CR 615.12 for Nine Lives: "If damage that a source would deal to you
+    can't be prevented, you still put an incarnation counter on Nine Lives."
+    (Nine Lives, 2020-06-23.) The prevention prevents nothing; the counter goes
+    on all the same."""
+    found = _static_prevention_source(game, event)
+    if found is None:
+        return
+    permanent, counter = found
+    total = add_counters(permanent, counter, 1)
+    game.log.append(
+        f"{event['amount']} damage to {event['recipient'].name} can't be "
+        f"prevented; {permanent.card.name} still gets a {counter} counter "
+        f"({total} {counter} counter(s))"
+    )
+
+
+@prevention_effect(
+    STATIC_WHOLE_EVENT, applies=_applies_static_whole_event,
+    unpreventable=_place_counter_unpreventable,
+)
 def _prevent_and_place_counter(game, event: dict) -> PreventionOutcome | None:
     """Nine Lives: "If a source would deal damage to you, prevent that damage
     and put an incarnation counter on this enchantment."
@@ -611,6 +632,13 @@ def _prevent_and_place_counter(game, event: dict) -> PreventionOutcome | None:
     "additional effect", which happens *after* the prevention and refers to the
     event, not to the damage's size. Nine damage and one damage each cost the
     same counter, which is what makes the card a nine-*event* shield.
+
+    Once per **source**, too: "If more than one source deals damage to you at
+    once, prevent the damage from each of them and put that many incarnation
+    counters on Nine Lives" (2020-06-23) — the sentence opens "If a source
+    would deal damage", and the engine's one event per source is that reading.
+    The Phantoms below print "If damage would be dealt" and are ruled the other
+    way.
     """
     found = _static_prevention_source(game, event)
     if found is None:
@@ -622,6 +650,170 @@ def _prevent_and_place_counter(game, event: dict) -> PreventionOutcome | None:
         f"{event['recipient'].name} ({total} {counter} counter(s))"
     )
     return PreventionOutcome(prevented=event["amount"])
+
+
+#: "If damage would be dealt to this creature, prevent that damage. Remove a
+#: +1/+1 counter from this creature." (Phantom Centaur, Phantom Flock, Phantom
+#: Nantuko, Phantom Nishoba, Phantom Nomad, Phantom Tiger.) Nine Lives' shape
+#: with the permanent as its own recipient and the counter going *off* rather
+#: than on — CR 615.5's additional effect, after the prevention, once per event.
+#:
+#: The later templating ("If this creature would be dealt damage, prevent that
+#: damage and remove a +1/+1 counter from it.") is the same effect in one
+#: sentence and is read here too; the counter's word is payload, as Nine Lives'
+#: and Rock Hydra's are.
+_PREVENT_THEN_REMOVE_COUNTER_RE = re.compile(
+    r"^(?:if damage would be dealt to this "
+    r"(?:artifact|creature|enchantment|land|permanent)"
+    r"|if this (?:artifact|creature|enchantment|land|permanent) would be dealt "
+    r"damage), prevent that damage(?:\. | and )"
+    r"remove an? (?P<counter>\S+) counter from "
+    r"(?:this (?:artifact|creature|enchantment|land|permanent)|it)$"
+)
+
+
+def prevent_then_remove_counter_kind(
+    line: str, card_name: str | None = None
+) -> str | None:
+    """The counter *line* removes from its own permanent each time it prevents,
+    or None if it is not that line. One matcher for the interceptor and both
+    claim readers, so what is implemented and what is claimed cannot drift.
+
+    *card_name* collapses CR 201.5's self-reference the way
+    :func:`prevent_small_event_threshold` does, for a printing that names the
+    creature ("If Unbreathing Horde would be dealt damage, …").
+    """
+    normalized = " ".join((line or "").strip().lower().rstrip(".").split())
+    if card_name:
+        from ..self_reference import _collapse_self_references
+
+        normalized = _collapse_self_references(
+            normalized, card_name, "this creature"
+        )
+    match = _PREVENT_THEN_REMOVE_COUNTER_RE.match(normalized)
+    return match.group("counter") if match else None
+
+
+def _self_counter_shield(game, event: dict) -> str | None:
+    """The counter the damaged permanent's own text removes when it prevents
+    this event, or None. Pure.
+
+    The recipient's own text only — "dealt to **this** creature" — read off the
+    effective card, so a creature that lost its abilities (CR 613 layer 6) has
+    no shield and a copy of a Phantom has one.
+    """
+    recipient = event["recipient"]
+    if isinstance(recipient, PlayerState) or recipient is None:
+        return None
+    if event["amount"] <= 0:
+        return None
+    card = getattr(recipient, "effective_card", None) or recipient.card
+    for line in (card.oracle_text or "").splitlines():
+        counter = prevent_then_remove_counter_kind(line, card.name)
+        if counter is not None:
+            return counter
+    return None
+
+
+def _applies_self_counter_shield(game, event: dict) -> bool:
+    return _self_counter_shield(game, event) is not None
+
+
+#: "If this creature would be dealt damage from multiple sources at the same
+#: time (say, because it's blocked by multiple creatures), all of the damage is
+#: prevented and only one +1/+1 counter is removed." (Phantom Centaur et al.,
+#: 2022-12-08.) The engine deals one event per source, and CR 510.2's combat
+#: damage is the simultaneous dealing that splits into several of them — so the
+#: permanent remembers, for the rest of the combat damage step, that its
+#: counter has been paid for this damage. The step's tail ends the record
+#: (:func:`end_simultaneous_damage`), as it ends the defending player's
+#: announcement beside it; a first-strike step and the regular one are two
+#: dealings and cost two counters.
+#:
+#: Combat damage only. Every non-combat event in this pool is one source's
+#: damage at one moment, and is its own event.
+SIMULTANEOUS_RIDER_SPENT = "prevention_rider_spent_this_combat_damage_step"
+
+
+def end_simultaneous_damage(game) -> None:
+    """The combat damage step's tail: its simultaneous dealing is over, so every
+    rider it paid for is paid for (CR 510.2)."""
+    for permanent in game.all_permanents():
+        permanent.metadata.pop(SIMULTANEOUS_RIDER_SPENT, None)
+
+
+def _remove_rider_counter(game, event: dict, counter: str) -> int | None:
+    """CR 615.5's additional effect for the Phantoms: one *counter* counter
+    off the damaged permanent, once per damage event — or None when this
+    simultaneous dealing has already paid for it.
+
+    Not conditional on a counter being there: "If this creature has no +1/+1
+    counters on it …, damage that would be dealt to it is still prevented"
+    (2022-12-08). The prevention is the effect; the counter is what follows it.
+    """
+    permanent = event["recipient"]
+    if event.get("combat"):
+        if permanent.metadata.get(SIMULTANEOUS_RIDER_SPENT):
+            return None
+        permanent.metadata[SIMULTANEOUS_RIDER_SPENT] = True
+    if counter == "+1/+1":
+        return remove_plus1_counters(permanent, 1)
+    removed = min(1, counters_on(permanent, counter))
+    if removed:
+        remove_counters(permanent, counter, removed)
+    return removed
+
+
+def _counter_word(counter: str, removed: int | None) -> str:
+    if removed is None:
+        return "(its counter already paid for this damage)"
+    if removed <= 0:
+        return f"(no {counter} counter to remove)"
+    return f"(removed a {counter} counter)"
+
+
+def _remove_counter_unpreventable(game, event: dict) -> None:
+    """CR 615.12 for the Phantoms: "If damage that would be dealt to this
+    creature can't be prevented, the damage is dealt and a +1/+1 counter is
+    removed from this creature." (2022-12-08.)"""
+    counter = _self_counter_shield(game, event)
+    if counter is None:
+        return
+    removed = _remove_rider_counter(game, event, counter)
+    game.log.append(
+        f"{event['amount']} damage to {event['recipient'].card.name} can't be "
+        f"prevented {_counter_word(counter, removed)}"
+    )
+
+
+@prevention_effect(
+    SELF_WHOLE_EVENT_COUNTER, applies=_applies_self_counter_shield,
+    unpreventable=_remove_counter_unpreventable,
+)
+def _prevent_and_remove_own_counter(game, event: dict) -> PreventionOutcome | None:
+    """Prevent the damage and remove a counter from the creature: "If damage
+    would be dealt to this creature, prevent that damage. Remove a +1/+1
+    counter from this creature." (The Phantoms.)
+
+    The words before the colon are the option CR 616.1e's prompt shows, so they
+    say what the effect does rather than which card printed it (Urza's Armor's
+    reason, above).
+
+    The whole event, however large, from every source; then one counter off,
+    once per event and once per simultaneous combat dealing. Nothing is
+    recorded beyond that — the next event reads the text again (CR 611.2).
+    """
+    counter = _self_counter_shield(game, event)
+    if counter is None:  # pragma: no cover - the predicate just said otherwise
+        return None
+    permanent = event["recipient"]
+    amount = event["amount"]
+    removed = _remove_rider_counter(game, event, counter)
+    game.log.append(
+        f"{permanent.card.name} prevented {amount} damage "
+        f"{_counter_word(counter, removed)}"
+    )
+    return PreventionOutcome(prevented=amount)
 
 
 #: "For each 1 damage that would be dealt to this creature, if it has a +1/+1
@@ -674,7 +866,36 @@ def _applies_per_damage_counter(game, event: dict) -> bool:
     return counter is not None and _counters_available(event["recipient"], counter) > 0
 
 
-@prevention_effect(PER_POINT_COUNTER_SHIELD, applies=_applies_per_damage_counter)
+def _remove_counters_per_damage(game, event: dict, counter: str) -> int:
+    """Rock Hydra's counters for this event: one per point, as far as they go."""
+    permanent = event["recipient"]
+    if counter == "+1/+1":
+        return remove_plus1_counters(permanent, event["amount"])
+    removed = min(event["amount"], counters_on(permanent, counter))
+    if removed > 0:
+        remove_counters(permanent, counter, removed)
+    return removed
+
+
+def _remove_counters_per_damage_unpreventable(game, event: dict) -> None:
+    """CR 615.12 for Rock Hydra: "If damage that would be dealt to Rock Hydra
+    can't be prevented, you still remove a +1/+1 counter from it for each 1
+    damage dealt." (Rock Hydra, 2008-08-01.)"""
+    counter = _per_damage_counter_shield(game, event)
+    if counter is None:
+        return
+    removed = _remove_counters_per_damage(game, event, counter)
+    if removed > 0:
+        game.log.append(
+            f"{event['amount']} damage to {event['recipient'].card.name} can't "
+            f"be prevented; it still removed {removed} {counter} counter(s)"
+        )
+
+
+@prevention_effect(
+    PER_POINT_COUNTER_SHIELD, applies=_applies_per_damage_counter,
+    unpreventable=_remove_counters_per_damage_unpreventable,
+)
 def _remove_counter_per_damage(game, event: dict) -> PreventionOutcome | None:
     """Rock Hydra's automatic half: one counter per point, only as far as the
     counters go (CR 615.7's partial prevention) — three counters against five
@@ -689,13 +910,7 @@ def _remove_counter_per_damage(game, event: dict) -> PreventionOutcome | None:
     if counter is None:
         return None
     permanent = event["recipient"]
-    if counter == "+1/+1":
-        removed = remove_plus1_counters(permanent, event["amount"])
-    else:
-        have = counters_on(permanent, counter)
-        removed = min(event["amount"], have)
-        if removed > 0:
-            remove_counters(permanent, counter, removed)
+    removed = _remove_counters_per_damage(game, event, counter)
     if removed <= 0:
         return None
     game.log.append(
@@ -1372,6 +1587,7 @@ def prevention_claims_line(line: str, card_name: str | None = None) -> bool:
     """
     return (
         prevent_and_count_kind(line) is not None
+        or prevent_then_remove_counter_kind(line, card_name) is not None
         or prevent_n_of_damage(line) is not None
         or per_damage_counter_kind(line) is not None
         or prevent_all_from_source_type(line) is not None

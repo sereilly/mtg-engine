@@ -194,6 +194,15 @@ POOL = 600  # "Prevent the next N damage" (CR 615.7)
 # is only ever spent on damage nothing else stopped. CR 616.1e permits any
 # order; this is the default a non-interactive seat takes.
 STATIC_WHOLE_EVENT = 650
+#: "If damage would be dealt to this creature, prevent that damage. Remove a
+#: +1/+1 counter from this creature." (The Phantoms.) Nine Lives' shape on the
+#: creature itself: the whole event prevented, a counter charged for it — and
+#: the counter is the creature's own toughness, so applying this is as dear as
+#: Nine Lives' and belongs beside it, behind every consumable. That is also the
+#: order the 2004-10-04 Phantom Centaur ruling describes: protection from black
+#: (order 0) may be applied first, "so you don't have to remove a counter".
+#: CR 616.1e lets the controller choose any order; this is the default.
+SELF_WHOLE_EVENT_COUNTER = 655
 #: A permanent's own per-point counter shield (Rock Hydra's automatic half).
 #: After the whole-event static: it spends a resource per point, so anything
 #: that prevents outright should be offered first.
@@ -214,13 +223,23 @@ Applicability = Callable[[Any, dict], bool]
 PREVENTION_EFFECTS: list[Candidate] = []
 
 
-def prevention_effect(order: int, *, applies: Applicability) -> Callable[[Preventer], Preventer]:
+def prevention_effect(
+    order: int, *, applies: Applicability,
+    unpreventable: "Callable[[Any, dict], None] | None" = None,
+) -> Callable[[Preventer], Preventer]:
     """Register a prevention interceptor at *order* (ascending).
 
     ``applies`` is the shield's guard — "would this shield apply to this
     event?" — and it is **required**, because CR 616.1 has to count the effects
     in contention before running any of them. It must be pure: a predicate that
     consumed a charge would spend shields the player never chose.
+
+    ``unpreventable`` is CR 615.12's half: the effect's *additional* effect
+    alone, run when the damage can't be prevented (Flaring Pain, Lightning
+    Surge's threshold, Whippoorwill) — the prevention prevents nothing and the
+    rest of the effect still takes place. Only a shield whose additional effect
+    does not depend on how much it prevented declares one; see
+    ``effect_ordering.Candidate.unpreventable_apply``.
 
     A duplicate order raises at import time, matching ``@parse_rule``: with the
     default choice being the lowest order, a collision is a real ambiguity about
@@ -237,7 +256,8 @@ def prevention_effect(order: int, *, applies: Applicability) -> Callable[[Preven
                 )
         PREVENTION_EFFECTS.append(
             Candidate(key=fn.__name__, order=order, applies=applies, apply=fn,
-                      label=(fn.__doc__ or fn.__name__).split(":")[0].strip())
+                      label=(fn.__doc__ or fn.__name__).split(":")[0].strip(),
+                      unpreventable_apply=unpreventable)
         )
         PREVENTION_EFFECTS.sort(key=lambda candidate: candidate.order)
         return fn
@@ -275,6 +295,9 @@ def shield_candidates() -> list[Candidate]:
             # which is what "can't be prevented" (Whippoorwill) switches off.
             prevents_or_redirects=True,
             prevents=True,
+            # CR 615.12's rider, unwrapped: it prevents nothing, so there is no
+            # amount bookkeeping to wire in.
+            unpreventable_apply=c.unpreventable_apply,
         )
         for c in PREVENTION_EFFECTS
     ]
