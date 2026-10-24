@@ -34,6 +34,7 @@ import re
 
 from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_paths
+from engine.faces import compilation_units
 from engine.graveyard_statics import (GRAVEYARD_STATIC_KINDS,
                                       functions_from_graveyard)
 from engine.lord_buffs import grantable_keywords
@@ -54,9 +55,11 @@ def _pool() -> dict:
 
 
 def _printed_population():
-    """Supported cards printing a line that states it works from a graveyard."""
+    """Supported cards printing a line that states it works from a graveyard —
+    over compilation units (``faces.compilation_units``), so a split card's
+    halves are read rather than its empty whole."""
     return [
-        card for card in _pool().values()
+        card for card in compilation_units(_pool().values())
         if compile_card_oracle(card).supported
         and any(
             _PRINTED.match(line.strip())
@@ -94,7 +97,7 @@ def test_every_instruction_stamped_for_a_graveyard_has_a_reader_there():
     anything else must be a kind the recompute gathers from a graveyard."""
     examined = 0
     stray: list[str] = []
-    for card in _pool().values():
+    for card in compilation_units(_pool().values()):
         program = compile_card_oracle(card)
         if not program.supported:
             continue

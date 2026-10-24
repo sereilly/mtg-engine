@@ -29,7 +29,7 @@ clause's only caller. This module is no longer read by either.
 from __future__ import annotations
 
 from . import ast
-from .lexer import PT
+from .lexer import PT, SELF
 from .readers import accept_counter_kind, accept_source_reference
 from .stream import TokenStream
 from .vocabulary import CARD_TYPES, NUMBER_WORDS
@@ -60,8 +60,17 @@ def _parse_self_in_graveyard_above(
     (``rebinding.rebind_pronoun_to_event_subject``).
     """
     mark = stream.mark()
-    if stream.at_word("it") or not (
-        accept_source_reference(stream)
+    # The noun is required, not merely allowed: ``accept_source_reference``
+    # also takes a bare "this", and "this is in your graveyard" would let the
+    # word "card" be dropped from Pyre Zombie's clause and the line still read
+    # (the parse-coverage deletion probe's finding, the first time this ran).
+    named = stream.at_kind(SELF) or (
+        stream.at_word("this")
+        and (stream.peek_word(1) == "card" or stream.peek_word(1) in CARD_TYPES)
+    )
+    if not (
+        named
+        and accept_source_reference(stream)
         and stream.accept_phrase("is", "in", "your", "graveyard")
     ):
         stream.reset(mark)
