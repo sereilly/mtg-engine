@@ -461,3 +461,43 @@ def put_self_into_zone(game: Game, instruction: OracleInstruction, context: Orac
     game.put_card_into_graveyard(owner, source.card)
     game.log.append(f"{source.card.name} was put into {owner.name}'s graveyard from exile")
     return True, "resolved"
+
+
+@effect_handler("exchange_zones")
+def exchange_zones(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Exchange your graveyard and library." (Morality Shift.)
+
+    CR 701.12f: the two zones trade their contents, and they are exchanged
+    even when one of them is empty (the card's ruling, 2004-10-04). **Both
+    piles are taken before a card moves**, which is the whole difference from
+    a mill of the library followed by a shuffle of the graveyard: moved in
+    order, the second step would carry back the cards the first had just put
+    there.
+
+    Every card arrives through its zone's seam — ``put_card_into_library`` for
+    the old graveyard (CR 903.9b's command zone diverts a commander), and
+    ``put_card_into_graveyard`` with ``from_zone="library"`` for the old
+    library, so a CR 614 "would be put into a graveyard" replacement and a
+    "put into your graveyard from your library" trigger each see every card.
+    The old graveyard goes to the bottom in its own order; the card's next
+    sentence shuffles. The old library reaches the graveyard top card first —
+    the ruling lets its owner choose that order, and this is the default an
+    unasked seat keeps.
+    """
+    zones = tuple(instruction.payload.get("zones") or ())
+    if sorted(zones) != ["graveyard", "library"]:  # pragma: no cover - lowering refuses
+        return False, f"no exchange between {zones!r}"
+    player = context.caster
+    from_graveyard = list(player.graveyard)
+    from_library = list(player.library)
+    del player.graveyard[:]
+    del player.library[:]
+    for card in from_graveyard:
+        game.put_card_into_library(player, card)
+    for card in from_library:
+        game.put_card_into_graveyard(player, card, from_zone="library")
+    game.log.append(
+        f"{player.name} exchanged their graveyard ({len(from_graveyard)} "
+        f"card(s)) and library ({len(from_library)} card(s))"
+    )
+    return True, "resolved"

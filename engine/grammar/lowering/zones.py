@@ -896,6 +896,31 @@ def _lower_exile_graveyard_position(
     return (OracleInstruction("exile_graveyard_position", "", payload),)
 
 
+def _lower_exchange_zones(
+    node: ast.ExchangeZones,
+) -> tuple[OracleInstruction, ...]:
+    """"Exchange your graveyard and library." (Morality Shift.)
+
+    One instruction carrying the printed pair: the handler takes both piles
+    before moving a card, which is what makes it an exchange (CR 701.12f)
+    rather than a mill followed by a shuffle-in. Only the controller's own
+    zones — the one seat the parse admits — and only the pair the handler moves
+    between; anything else refuses by name.
+    """
+    if node.player.kind != "you":
+        raise LoweringError(
+            f"no exchange moves {node.player.kind!r}'s zones", node=node
+        )
+    if sorted(node.zones) != ["graveyard", "library"]:
+        raise LoweringError(
+            f"no exchange between {node.zones[0]!r} and {node.zones[1]!r}",
+            node=node,
+        )
+    return (
+        OracleInstruction("exchange_zones", "", {"zones": tuple(node.zones)}),
+    )
+
+
 #: The role dependency "…in **that player's** graveyard", where *that player*
 #: is the seat an earlier role's own noun phrase bound ("target artifact **a
 #: player controls**").

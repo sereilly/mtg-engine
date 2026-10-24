@@ -133,6 +133,24 @@ class Mill:
 
 
 @dataclass(frozen=True)
+class ExchangeZones:
+    """``Exchange your graveyard and library.`` (Morality Shift.)
+
+    CR 701.12d/f: one player's two zones trade their contents, and the
+    exchange happens even when one of them is empty — the card's own ruling
+    (2004-10-04, "This spell works even if your graveyard or library is
+    empty"). One node rather than a mill of the whole library and a shuffle of
+    the whole graveyard in a :class:`Sequence`, because those are two moves in
+    order: the second would take the cards the first had just put there.
+
+    *zones* is the printed pair, in the printed order; which two zones is the
+    whole of what distinguishes one exchange from another.
+    """
+    player: PlayerRef
+    zones: tuple[str, str]
+
+
+@dataclass(frozen=True)
 class MillUntil:
     """``Target opponent mills a card, then repeats this process until a
     creature card or X cards have been put into their graveyard this way,

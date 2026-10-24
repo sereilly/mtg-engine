@@ -123,6 +123,7 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_keep_chosen_discar
                        _lower_random_reveal_ownership_exchange,
                        _lower_exile_top_of_library,
                        _lower_exile_graveyard_position,
+                       _lower_exchange_zones,
                        _lower_sacrifice_and_return_targets,
                        _lower_random_graveyard_card_fate,
                        _lower_look_top_exile_random, _lower_search_and_exile,
@@ -329,6 +330,8 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.SeparateLibraryTopIntoPiles: _lower_separate_library_top_into_piles,
     ast.ExileTopOfLibrary: _lower_exile_top_of_library,
     ast.ExileGraveyardPosition: _lower_exile_graveyard_position,
+    # "Exchange your graveyard and library." (Morality Shift.)
+    ast.ExchangeZones: _lower_exchange_zones,
     ast.SacrificeAndReturnTargets: _lower_sacrifice_and_return_targets,
     ast.RandomGraveyardCardFate: _lower_random_graveyard_card_fate,
     ast.LookTopExileRandom: _lower_look_top_exile_random,

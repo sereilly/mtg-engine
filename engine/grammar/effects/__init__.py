@@ -235,6 +235,7 @@ from .zones import (
     _parse_put_iterated_card_on_library,
     parse_put_library_top_into_hand,
     parse_graveyard_top_to_library,
+    parse_exchange_zones,
 )
 from .search import _parse_search_library
 from .retargeting import _parse_change_event_targets, _parse_change_target
@@ -371,6 +372,7 @@ __all__ = [
     "_parse_attach",
     "_parse_pronoun_attach_rider",
     "_parse_exchange_control",
+    "parse_exchange_zones",
     "_parse_draw",
     "_parse_choose_cards_in_hand",
     "_parse_put_iterated_card_on_library",

@@ -405,4 +405,99 @@ def test_w1g5_the_offer_holds_the_spell_on_the_stack_until_it_is_answered(set_po
 # ==== W1G10 ==========================================================
 # W1G10's tests go between this line and the "end W1G10" line.
 
+import pytest as _w1g10_pytest
+
+from engine import Game as _W1G10Game, PlayerState as _W1G10PlayerState
+from tests.helpers import resolve_stack as _w1g10_resolve_stack
+
+
+def _w1g10_table(set_pool, *, library, graveyard=(), hand=(), interactive=()):
+    """Seat 0 on its first main phase with the named cards in each zone."""
+    pool = {**set_pool("LEA"), **set_pool("WTH"), **set_pool("JUD")}
+    game = _W1G10Game(players=[
+        _W1G10PlayerState(
+            name="P0", life=20,
+            library=[pool[name] for name in library],
+            graveyard=[pool[name] for name in graveyard],
+            hand=[pool[name] for name in hand],
+        ),
+        _W1G10PlayerState(name="P1", life=20, library=[pool["Island"]] * 5),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game.start_turn(0)
+    return game
+
+
+def _w1g10_names(cards):
+    return sorted(card.name for card in cards)
+
+
+def test_w1g10_morality_shift_exchanges_graveyard_and_library(set_pool):
+    """"Exchange your graveyard and library. Then shuffle your library." The
+    old graveyard is the new library and the old library the new graveyard —
+    both piles taken before a card moves (CR 701.12f), so nothing comes back
+    the way it went. The spell itself reaches the graveyard afterwards, as a
+    resolved sorcery does (CR 608.2n)."""
+    game = _w1g10_table(
+        set_pool,
+        library=["Island", "Forest", "Grizzly Bears"],
+        graveyard=["Lightning Bolt", "Hill Giant"],
+        hand=["Morality Shift"],
+    )
+    assert game.queue_from_hand(0, "Morality Shift").supported
+    _w1g10_resolve_stack(game)
+
+    assert _w1g10_names(game.players[0].library) == ["Hill Giant", "Lightning Bolt"]
+    assert _w1g10_names(game.players[0].graveyard) == [
+        "Forest", "Grizzly Bears", "Island", "Morality Shift",
+    ]
+    assert game.players[0].graveyard[-1].name == "Morality Shift"
+    assert any("exchanged their graveyard (2 card(s))" in line for line in game.log)
+    assert any("shuffled their library" in line for line in game.log)
+
+
+@_w1g10_pytest.mark.parametrize(
+    "library,graveyard",
+    [(["Island", "Forest"], []), ([], ["Hill Giant", "Lightning Bolt"])],
+    ids=["empty graveyard", "empty library"],
+)
+def test_w1g10_morality_shift_works_with_an_empty_zone(set_pool, library, graveyard):
+    """The ruling (2004-10-04): "This spell works even if your graveyard or
+    library is empty." CR 701.12f — the zones are still exchanged."""
+    game = _w1g10_table(
+        set_pool, library=library, graveyard=graveyard, hand=["Morality Shift"],
+    )
+    assert game.queue_from_hand(0, "Morality Shift").supported
+    _w1g10_resolve_stack(game)
+
+    assert _w1g10_names(game.players[0].library) == sorted(graveyard)
+    assert _w1g10_names(game.players[0].graveyard) == sorted(
+        library + ["Morality Shift"]
+    )
+
+
+def test_w1g10_morality_shift_puts_the_library_into_the_graveyard_from_the_library(set_pool):
+    """Each old library card goes to the graveyard **from the library**, so a
+    card that watches for exactly that move sees it: Gaea's Blessing ("When
+    this card is put into your graveyard from your library, shuffle your
+    graveyard into your library") triggers and shuffles the old library back
+    in. The trigger goes on the stack only once Morality Shift has finished
+    resolving and is in the graveyard itself (CR 608.2n, 603.3), so the spell
+    is shuffled in with the rest and the graveyard ends empty."""
+    game = _w1g10_table(
+        set_pool,
+        library=["Island", "Gaea's Blessing", "Forest"],
+        graveyard=["Hill Giant"],
+        hand=["Morality Shift"],
+    )
+    assert game.queue_from_hand(0, "Morality Shift").supported
+    _w1g10_resolve_stack(game)
+
+    assert any("Gaea's Blessing" in line for line in game.log)
+    assert _w1g10_names(game.players[0].graveyard) == []
+    assert _w1g10_names(game.players[0].library) == [
+        "Forest", "Gaea's Blessing", "Hill Giant", "Island", "Morality Shift",
+    ]
+
 # ==== end W1G10 ======================================================

@@ -68,6 +68,9 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     "choose_card_name": "zones",
     "graveyard_top_to_library": "zones",
     "shuffle_graveyard_into_library": "zones",
+    # "Exchange your graveyard and library." (Morality Shift.) Two zones'
+    # contents traded (CR 701.12f) — a zone change, both ways at once.
+    "exchange_zones": "zones",
     "shuffle_hand_into_library": "zones",
     "shuffle_hand_cards_into_library": "zones",
     # CR 701.24 with nothing moving into the library (Prophecy's third

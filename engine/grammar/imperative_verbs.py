@@ -77,6 +77,7 @@ from .effects import (
     _parse_enchant,
     _parse_end_the_turn,
     _parse_exchange_control,
+    parse_exchange_zones,
     _parse_exile_graveyard,
     _parse_exile_graveyard_position,
     _parse_exile_entire_library,
@@ -190,6 +191,13 @@ def parse_imperative_verb(
         # it acts on.
         if stream.peek_word(1) == "life":
             return _parse_exchange_life_totals(stream)
+        # "Exchange **your graveyard and library**." (Morality Shift.) A
+        # player's own two zones (CR 701.12f) — the third thing the verb
+        # takes, read by the `zones` family, which moves piles between zones.
+        # Non-consuming on refusal, so control keeps its reading.
+        zones = parse_exchange_zones(stream)
+        if zones is not None:
+            return zones
         return _parse_exchange_control(stream)
     # "Distribute X +1/+1 counters among any number of target creatures."
     # (Spoils of War.) Its own bare imperative, beside "put" rather than inside
