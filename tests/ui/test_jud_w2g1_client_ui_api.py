@@ -1005,17 +1005,18 @@ def test_glory_is_activated_from_the_graveyard_and_asks_its_colour(set_pool):
     assert glory["payable"] is True and glory["targets"] is False
 
     out = run_app_js(
-        ["graveyardAbilityRefusal", "graveyardAbilityBody"],
+        ["graveyardAbilityRefusal", "graveyardAbilityTargetKind", "graveyardAbilityBody"],
         "return INPUT.entries.map((e) => ({ refusal: graveyardAbilityRefusal(e), "
-        "body: graveyardAbilityBody(e) }));",
+        "kind: graveyardAbilityTargetKind(e), body: graveyardAbilityBody(e) }));",
         {"entries": [entries["Glory"], entries["Ashen Ghoul"], entries["Carrionette"]]},
         prelude="const seat = 0;",
     )
     assert out[0]["refusal"] is None
     assert "upkeep" in out[1]["refusal"], "Ashen Ghoul outside its upkeep says why"
-    assert "target" in out[2]["refusal"], (
-        "Carrionette names a target no button chooses: disabled, not defaulted"
-    )
+    # Carrionette names a target, and since kg/client the button picks it: the
+    # entry carries the engine's spec and the click opens the creature picker
+    # (``tests/ui/test_kg_client_graveyard_targets.py`` drives it end to end).
+    assert out[2]["refusal"] is None and out[2]["kind"] == "creature"
     body = {**out[0]["body"], "auto_tap": True}
     assert body["action"] == "activate_graveyard"
 

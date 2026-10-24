@@ -720,13 +720,31 @@ def _action_activate_graveyard(session, req, seat_type):
     ``Game.activate_from_graveyard`` reads. A sacrifice the cost names rides
     ``cost_permanent_id`` as on every other activation. ``auto_tap`` pays from
     the board first, as for a hand ability.
+
+    **The target rides the fields every activation's does** (CR 602.2b: it is
+    chosen as the ability is activated) — ``target_permanent_id``, resolved by
+    the preamble into the slot and the seat it is on, or a bare
+    ``target_seat`` for a player — and the engine judges it against the list
+    ``state.graveyard_abilities[…].target_spec`` offered (Carrionette's
+    "target creature"). Until this forwarded them the engine never saw one:
+    every graveyard activation was a bare announcement, defaulted to the first
+    legal target. The engine's graveyard door takes one target by permanent or
+    player; a request naming roles, a division or a spell is refused rather
+    than sent on without the part it cannot carry.
     """
+    if req.graveyard_index is None:
+        raise HTTPException(status_code=400, detail="graveyard_index is required")
     pile = session.game.players[req.seat].graveyard
     index = req.graveyard_index
-    if index is None or not 0 <= index < len(pile):
+    if not 0 <= index < len(pile):
         raise HTTPException(status_code=400, detail="card not in graveyard")
     if not session.game.has_priority(req.seat):
         raise HTTPException(status_code=400, detail="you do not currently have priority")
+    if req.target_role_refs or req.divided_targets or req.target_stack_index is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="a graveyard ability names one target, a permanent or a player",
+        )
     card_name = pile[index].name
 
     def announce(game):
@@ -736,6 +754,9 @@ def _action_activate_graveyard(session, req, seat_type):
             ability_index=req.ability_index if req.ability_index is not None else 0,
             graveyard_index=index,
             cost_permanent_id=req.cost_permanent_id,
+            target_player_index=req.target_seat,
+            target_permanent_index=req.target_permanent_index,
+            target_permanent_ids=req.target_permanent_ids,
         )
 
     if req.auto_tap:

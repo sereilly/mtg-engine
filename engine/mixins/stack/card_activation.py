@@ -27,7 +27,9 @@ from ...mana_payment import is_mana_ability
 from ...game_types import (OracleExecutionContext, OracleStateMachine,
                            SimulationResult, StackItem)
 from ...oracle import compile_card_oracle
+from ...stack_targets import names_a_target
 from ...subject_filters import filter_head_noun, subject_matches
+from ...target_requirements import narrow_offer
 
 
 def hand_activation_cost(game, controller_index: int, card, ability):
@@ -174,6 +176,27 @@ class CardActivationMixin:
         if result.supported:
             self.check_state_based_actions()
         return result
+
+    def graveyard_activation_target_spec(self, controller_index: int, card, ability) -> dict:
+        """What activating *ability* of *card* in a graveyard targets, as a
+        picker is handed it: ``activation_offer`` — the very list
+        ``activation_target_refusal`` judges a named target by, here and in
+        :meth:`_activate_from_graveyard` — with ``requires_target`` and the
+        announcement requirements in force (an opponent's Flagbearer,
+        ``narrow_offer``), as ``activation_target_spec`` dresses a
+        permanent's.
+
+        Its own method because that one addresses its source by a
+        battlefield slot, and a card in a graveyard has none (CR 113.6m:
+        Carrionette's "Exile this card and target creature …" functions only
+        from there). The browser's graveyard-ability button reads this, so the
+        targets it offers and the targets the activation accepts are one list.
+        """
+        spec = self.activation_offer(controller_index, card, ability)
+        spec["requires_target"] = spec.get("kind", "none") != "none"
+        if names_a_target(getattr(ability, "source_line", None)):
+            narrow_offer(self, controller_index, spec)
+        return spec
 
     def _activate_from_hand(
         self,
@@ -467,6 +490,23 @@ class CardActivationMixin:
             target_permanent_ids = (
                 named.get("target_permanent_ids") or target_permanent_ids
             )
+        # …and CR 602.2b under a requirement an opponent's permanent prints
+        # about the announcement ("…must choose at least one Flagbearer on the
+        # battlefield if able", Standard Bearer), asked of the whole
+        # announcement once the default above has named what it would, and
+        # before any cost is paid — the permanent path's gate
+        # (``activation_checks``), which this door never asked: with it off, a
+        # Carrionette naming a Hill Giant past an opposing bearer was accepted
+        # and paid for (``tests/ui/test_kg_client_graveyard_targets.py``).
+        required_refusal = self.activation_target_requirement_refusal(
+            controller_index, card, ability,
+            target_player_index=target_player_index,
+            target_permanent_index=target_permanent_index,
+            target_permanent_ids=target_permanent_ids,
+        )
+        if required_refusal is not None:
+            self.log.append(required_refusal)
+            return SimulationResult(card.name, False, "unsupported", required_refusal)
 
         cost = ability.cost
         unchargeable = _graveyard_cost_refusal(cost)
