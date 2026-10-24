@@ -17,8 +17,9 @@ out of ``engine/targeting.py`` at the 2,000-line cap.
 
 from __future__ import annotations
 
-from .target_descriptions import (GRAVEYARD_TARGET_KIND, SINGLE_GRAVEYARD,
-                                  _from_targets_payload, _narrowing_flags)
+from .target_descriptions import (GRAVEYARD_TARGET_KIND, PILE_OWNER_TARGET,
+                                  SINGLE_GRAVEYARD, _from_targets_payload,
+                                  _narrowing_flags)
 
 
 #: The payload key a computed amount's count spec is stamped under. Spelled here
@@ -1013,6 +1014,13 @@ def _graveyard_to_library_spec(payload: dict) -> dict:
     # and the mirror of the mistake `own_graveyard_only` above exists to stop.
     elif payload.get("graveyard_owner") == "an_opponent":
         spec["opponent_graveyard_only"] = True
+    # "…from **target player's** graveyard" (Drafna's Restoration), "**Target
+    # player** shuffles … target cards from their graveyard" (Gaea's
+    # Blessing): the pile's owner is a target too, and the spec carries the
+    # description it is chosen by (``target_descriptions.PILE_OWNER_TARGET``).
+    pile_owner = player_pronoun_spec(payload.get("graveyard_owner"))
+    if pile_owner is not None:
+        spec[PILE_OWNER_TARGET] = pile_owner
     described = payload.get("targets") or {}
     if described.get("unbounded"):
         spec["unbounded_targets"] = True

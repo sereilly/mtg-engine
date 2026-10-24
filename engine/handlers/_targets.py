@@ -716,6 +716,39 @@ def announced_role_seat(
     return resolve_role_player(game, announced_context(context), payload, role)
 
 
+def pile_owner_still_a_target(
+    game: Game, context: OracleExecutionContext, payload: dict,
+) -> bool:
+    """CR 608.2b for a graveyard effect whose pile's **owner is a target**:
+    whether ``context.target`` is still one its announcement could name.
+
+    "Put any number of target artifact cards from **target player's**
+    graveyard on top of their library" (Drafna's Restoration); "**Target
+    player** shuffles up to three target cards from their graveyard into their
+    library" (Gaea's Blessing). The cards and the player are separate targets,
+    so the spell resolves while any of them is legal — and where the player is
+    the one that is not, "if part of the effect requires information about an
+    illegal target, it fails to determine any such information" (CR 608.2b):
+    whose library is that player's to say, so the move does not happen. The
+    whole-object half is ``legality_resolution._announcement_target_legality``.
+
+    True for a payload whose pile names no targeted seat (``graveyard_owner``
+    "you", "an_opponent", …) — nothing to re-ask.
+    """
+    from ..payload_target_specs import player_pronoun_spec
+
+    described = player_pronoun_spec((payload or {}).get("graveyard_owner"))
+    if described is None:
+        return True
+    seat = next(
+        (index for index, player in enumerate(game.players) if player is context.target),
+        None,
+    )
+    return seat is not None and _role_seat_is_still_a_target(
+        game, context, described, seat,
+    )
+
+
 def _role_seat_is_still_a_target(
     game: Game, context: OracleExecutionContext, role: dict, seat: int,
 ) -> bool:

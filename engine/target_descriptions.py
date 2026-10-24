@@ -896,3 +896,16 @@ GRAVEYARD_TARGET_KIND = "graveyard_creature"
 #: is all in one of them. The client reads it to keep a selection inside the
 #: pile its first card came from.
 SINGLE_GRAVEYARD = "single_graveyard"
+
+#: "…target cards from **target player's** graveyard" (Drafna's Restoration;
+#: "Target player shuffles up to three target cards from their graveyard",
+#: Gaea's Blessing, Dwell on the Past, Krosan Reclamation). The pile's owner
+#: is a **target** of the same announcement (CR 601.2c: every instance of the
+#: word), and the spec says so with the seat description it answers — a
+#: ``{"kind": "player", …}`` spec of its own, read by every reader of a
+#: target player: the graveyard enumerator offers cards only out of a pile
+#: whose owner that description admits (shroud, a player who left the game),
+#: the cast gate holds the named seat to it even when no card is named, and
+#: CR 608.2b re-asks it at resolution. The seat travels on the field a
+#: graveyard spec's pile always has, ``target_player_index``.
+PILE_OWNER_TARGET = "pile_owner_target"

@@ -974,6 +974,31 @@ class TargetEnumerationMixin:
             if index != spell_index and card_matches_any(held, alternatives)
         ]
 
+    def _pile_owner_seats(
+        self, caster_index: int, card, spec: dict | None,
+    ) -> "set[int] | None":
+        """The seats a graveyard spec's **targeted pile owner** may be
+        (``target_descriptions.PILE_OWNER_TARGET``), or None for a spec whose
+        pile owner is no target.
+
+        Enumerated as the seat loop enumerates every "target player", with the
+        owner's own description as the spec. Not as a cast's probe
+        (``for_cast=False``): the probe asks the whole announcement's gate one
+        slot at a time, and a seat is half of this one.
+        """
+        from .target_descriptions import PILE_OWNER_TARGET
+
+        pile = (spec or {}).get(PILE_OWNER_TARGET)
+        if not isinstance(pile, dict):
+            return None
+        return {
+            entry["seat"]
+            for entry in self._enumerate_targets(
+                caster_index, card, dict(pile), for_cast=False,
+            )
+            if entry.get("kind") == "player"
+        }
+
     def _enumerate_graveyard_creatures(
         self, caster_index: int, spec: dict, *, source_card=None
     ) -> list[dict]:
@@ -1012,7 +1037,17 @@ class TargetEnumerationMixin:
                     return False
             return graveyard_card_matches(spec, card)
 
+        # "…target cards from **target player's** graveyard" (Drafna's
+        # Restoration, Gaea's Blessing): the pile's owner is a target of the same
+        # announcement, so a pile is offered only where its owner is one the
+        # player description admits — the seat loop's own answer (a player with
+        # shroud, CR 702.18a, or one who has left the game, CR 800.4a, is not),
+        # through the list the cast gate holds the named seat to
+        # (``target_descriptions.PILE_OWNER_TARGET``).
+        pile_owners = self._pile_owner_seats(caster_index, source_card, spec)
         for seat, player in enumerate(self.players):
+            if pile_owners is not None and seat not in pile_owners:
+                continue
             if spec.get("own_graveyard_only") and seat != caster_index:
                 continue
             # "from **an opponent's** graveyard" (Misinformation) — CR 102.2/102.3's

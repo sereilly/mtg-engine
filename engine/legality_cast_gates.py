@@ -455,6 +455,31 @@ class CastTargetGatesMixin:
             # comparison and an unnamed one is legal on any pile the
             # enumeration offers. Ids are not read here: a card in a graveyard
             # is not a permanent (CR 115.2) and has no ``permanent_id``.
+            #
+            # **The pile's owner first, where the pile's owner is a target**
+            # ("…target cards from target player's graveyard", Drafna's
+            # Restoration; "Target player shuffles up to three target cards
+            # from their graveyard", Gaea's Blessing). Asked whatever the
+            # count of cards: "up to three" and "any number of" may name none,
+            # and the player is still announced (CR 601.2c) — the seat a cast
+            # names, else the one it resolves at (``_spell_default_seat``),
+            # which is a target like any other.
+            pile_owners = self._pile_owner_seats(caster_index, card, spec)
+            if pile_owners is not None:
+                seat = (
+                    target_player_index if isinstance(target_player_index, int)
+                    else self._spell_default_seat(caster_index)
+                )
+                if seat not in pile_owners:
+                    who = (
+                        self.players[seat].name
+                        if isinstance(seat, int) and 0 <= seat < len(self.players)
+                        else f"seat {seat}"
+                    )
+                    return (
+                        f"{card.name}: {who} can't be chosen as its target "
+                        "player (CR 601.2c)"
+                    )
             if not indices:
                 # CR 601.2c gates what was *named*. A cast that owed a card
                 # and named none has had the picker's first one named for it
