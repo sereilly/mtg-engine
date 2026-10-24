@@ -526,6 +526,15 @@ def describe_sequence_target_roles(
     from ...subject_filters import untestable_filter_keys
     from ...target_roles import SEAT_ROLE_KINDS
 
+    # A line whose first step announces **cards in a graveyard** and whose
+    # second announces something else (the Advocates) is two targets by the
+    # same argument as a spell beside a permanent: a back-reference never
+    # changes zone. Asked first, because a one-card graveyard step carries no
+    # ``targets`` description for the slot count below to see.
+    graveyard_roles = describe_graveyard_card_roles(instructions)
+    if graveyard_roles is not None:
+        return graveyard_roles
+
     carried = _announced_slots(instructions)
     slots = list(enumerate(described for described, _carrier in carried))
     announced = [
@@ -652,6 +661,198 @@ def describe_sequence_target_roles(
         for (position, _described), role in zip(announced, roles)
     }
     return _stamp_slot_roles(tuple(instructions), roles, by_position, [])
+
+
+#: The role dependency "…and the **next** of the same printed cards, out of the
+#: **same** graveyard". Spelled with the ``_role`` suffix every dependency in a
+#: roles description carries (``target_roles.role_dependency`` finds it by
+#: that); the answer is one row of ``target_roles.ROLE_RELATION_TESTS``.
+LATER_IN_SAME_GRAVEYARD_ROLE = "later_in_same_graveyard_role"
+
+#: What the picker calls each of several printed cards of one graveyard slot,
+#: in order. The client shows a graveyard role by its name ("Choose the second
+#: card for Nullmage Advocate (2 of 3)", ``roleTargetNoun``), and a roles walk
+#: turns a name back into a slot, so the names are the words a person reads
+#: and must differ.
+_CARD_ORDINALS = ("first", "second", "third", "fourth", "fifth")
+
+#: The spec keys a graveyard step's derived picker may carry beside the
+#: narrowings a graveyard role takes (``target_descriptions._GRAVEYARD_ROLE_KEYS``):
+#: the count and its two CR 601.2c/115.3 flags, which the roles become. Any
+#: other key is a narrowing no role carries, and the line refuses rather than
+#: dropping it.
+_GRAVEYARD_COUNT_KEYS = frozenset({
+    "kind", "max_targets", "exact_targets", "distinct_targets",
+})
+
+
+def _graveyard_step_roles(spec: dict, *, names: tuple) -> list[dict]:
+    """The graveyard-card roles one step's derived *spec* is, one per card.
+
+    Every role carries the same narrowing — the spec's own keys, in the names
+    ``graveyard_card_matches`` reads, so the picker, the activation gate and
+    the resolution ask one predicate — and every role after the first depends
+    on the one before it through :data:`LATER_IN_SAME_GRAVEYARD_ROLE`: **the
+    same pile**, which is what "N target cards from **an** opponent's
+    graveyard" says (one opponent; the cards' 2004-10-04 rulings: "unless a
+    single opponent has at least two cards in their graveyard to target"), and
+    a later slot in it, which is CR 115.3's distinctness and makes one
+    announcement one walk rather than N! orderings of the same cards.
+    """
+    from ...target_descriptions import _GRAVEYARD_ROLE_KEYS
+
+    unsaid = sorted(
+        key for key in spec
+        if key not in _GRAVEYARD_COUNT_KEYS and key not in _GRAVEYARD_ROLE_KEYS
+    )
+    if unsaid:
+        raise LoweringError(
+            "a graveyard step announced beside another target is narrowed by "
+            "more than a graveyard role can say: " + ", ".join(unsaid)
+        )
+    narrowing = {key: spec[key] for key in _GRAVEYARD_ROLE_KEYS if key in spec}
+    roles: list[dict] = []
+    for position, name in enumerate(names):
+        role: dict = {
+            "role": name, "kind": "graveyard_card", "count": 1, **narrowing,
+        }
+        if position:
+            role[LATER_IN_SAME_GRAVEYARD_ROLE] = names[position - 1]
+        roles.append(role)
+    return roles
+
+
+def _graveyard_card_noun(spec: dict) -> str:
+    """The printed noun of a one-card graveyard slot: "card" for any card,
+    "creature card" for Raise Dead's, "artifact card" for Reconstruction's."""
+    if spec.get("any_card"):
+        return "card"
+    card_types = spec.get("card_types")
+    if card_types:
+        return " or ".join(str(word) for word in card_types) + " card"
+    return f"{spec.get('card_type') or 'creature'} card"
+
+
+def describe_graveyard_card_roles(instructions) -> "tuple | None":
+    """A line announcing **cards in a graveyard** beside another target, as
+    ordered roles — or None for every other line.
+
+    "{T}: Return two target cards from an opponent's graveyard to their hand.
+    Destroy target artifact or enchantment." (Nullmage Advocate; Forcemage,
+    Pulsemage and Spurnmage print the shape with one or three cards and
+    another second target.) Two sentences, two instances of the word
+    "target", one announcement (CR 601.2c through CR 602.2b) — and a picker
+    reading the first description alone (``instruction_targets._from_instructions``)
+    asked for the cards and never for the permanent, which the second step
+    then found by scanning.
+
+    **Provably two targets**, by :func:`describe_sequence_target_roles`' own
+    argument one zone over: a back-reference names an object in the zone its
+    antecedent is in, and a card in a graveyard and a permanent on the
+    battlefield are in different zones — as are a card in *an opponent's*
+    graveyard and one in *your* graveyard (Pulsemage), which no one card can
+    be at once (CR 404.1). So the line is never handed back to be read off
+    its first description: a shape this cannot build refuses.
+
+    The shape, exactly: two top-level steps; the first derives a graveyard
+    picker (one card, or a printed count announced in full — "up to" would
+    need an optional role, which a roles walk cannot say); the second derives
+    either a plain "target" object description or a graveyard picker of its
+    own. Each card of the first is a role (:func:`_graveyard_step_roles`), and
+    the first step **spends them all** — it carries their names under
+    ``role_group`` beside its own ``role``, which
+    ``handlers/control_flow._role_scoped`` reads to hand the step every card
+    it was announced with.
+    """
+    from ...subject_filters import untestable_filter_keys
+    from ...targeting import GRAVEYARD_TARGET_KIND, derive_instruction_spec
+
+    steps = tuple(instructions)
+    if len(steps) != 2:
+        return None
+    cards_step, other_step = steps
+    if (cards_step.payload or {}).get("targets", {}).get("kind") == "roles":
+        return None
+    cards_spec = derive_instruction_spec((cards_step,)) or {}
+    if cards_spec.get("kind") != GRAVEYARD_TARGET_KIND:
+        return None
+    other_spec = derive_instruction_spec((other_step,)) or {}
+    other_described = (other_step.payload or {}).get("targets")
+    other_is_object = (
+        isinstance(other_described, dict)
+        and other_described.get("kind") == "object"
+        and other_described.get("quantifier") == "target"
+    )
+    if other_spec.get("kind") != GRAVEYARD_TARGET_KIND and not other_is_object:
+        if not other_spec or other_spec.get("kind") == "none":
+            # The second step targets nothing (a draw, a life gain): one
+            # announcement, already described by the first step alone.
+            return None
+        raise LoweringError(
+            "a line announcing cards in a graveyard beside another target "
+            "announces both (CR 601.2c), and no roles walk enumerates "
+            f"a {other_spec.get('kind')!r} slot beside them"
+        )
+    count = cards_spec.get("max_targets") or 1
+    if count > 1 and not cards_spec.get("exact_targets"):
+        raise LoweringError(
+            '"up to" cards in a graveyard beside another target need an '
+            "optional role, which a roles walk cannot say"
+        )
+    if count > len(_CARD_ORDINALS):
+        raise LoweringError("more graveyard cards than the roles walk names")
+    noun = _graveyard_card_noun(cards_spec)
+    names = (
+        (noun,) if count == 1
+        else tuple(f"{_CARD_ORDINALS[position]} {noun}" for position in range(count))
+    )
+    roles = _graveyard_step_roles(cards_spec, names=names)
+    if other_is_object:
+        narrowing = other_described.get("filter") or {}
+        other_name = _sequence_role_name(other_described, set(names))
+        if (
+            other_name is None
+            or untestable_filter_keys(narrowing)
+            or narrowing.get("controller") in _UNENUMERABLE_CONTROLLERS
+        ):
+            raise LoweringError(
+                "a line announcing cards in a graveyard beside another target "
+                "announces both (CR 601.2c), and the roles walk cannot "
+                "enumerate the other slot"
+            )
+        other_role = {
+            key: value for key, value in other_described.items()
+            if key not in _ROLE_STRUCTURAL_KEYS
+        }
+        other_role.update({"role": other_name, "count": 1, "filter": narrowing})
+    else:
+        if other_spec.get("max_targets") not in (None, 1):
+            raise LoweringError(
+                "several graveyard cards in a line's second slot are a walk "
+                "this builder does not order"
+            )
+        other_name = _graveyard_card_noun(other_spec)
+        if other_name in names:
+            other_name = f"other {other_name}"
+        (other_role,) = _graveyard_step_roles(other_spec, names=(other_name,))
+    roles.append(other_role)
+    cards_targets = {
+        **(cards_step.payload.get("targets") or {"quantifier": "target"}),
+        "kind": "roles", "roles": roles, "role": names[0],
+        "role_group": list(names),
+    }
+    other_targets = {
+        **(other_described if isinstance(other_described, dict) else {"quantifier": "target"}),
+        "kind": "roles", "roles": roles, "role": other_name,
+    }
+    return (
+        dataclasses.replace(
+            cards_step, payload={**cards_step.payload, "targets": cards_targets},
+        ),
+        dataclasses.replace(
+            other_step, payload={**other_step.payload, "targets": other_targets},
+        ),
+    )
 
 
 #: The branch keys a wrapper's nested steps sit under, for the *other-target*

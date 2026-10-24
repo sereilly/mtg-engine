@@ -259,6 +259,19 @@ def _role_scoped(
             context, target_permanent_index=None, target_permanent_id=None,
             announced_targets=remembered,
         )
+    if entry.get("kind") == "graveyard_card":
+        # "Return two target cards from an opponent's graveyard to their hand.
+        # Destroy target artifact or enchantment." (Nullmage Advocate.) A role
+        # whose object is a **card in a graveyard**, in the channels a
+        # one-target graveyard effect reads: the pile's seat, the card's slot
+        # in it *now*, and the stamp that names it — and nothing of the
+        # neighbour's permanent. A step that spends several such roles (the
+        # printed "two target cards", ``role_group``) is handed every one of
+        # its cards still there, as the list a several-card graveyard effect
+        # reads; the cards are in one pile by the announcement's own relation.
+        return _graveyard_role_scoped(
+            game, context, announced, payload, role, remembered, wrapper=wrapper,
+        )
     if role_is_seat(entry):
         seat = resolve_role_player(game, announced, payload, role)
         if seat is None or game.players[seat].lost:
@@ -302,6 +315,44 @@ def _role_scoped(
         target=game.players[seat] if seat is not None else context.target,
         target_permanent_index=game.battlefield_index_of(permanent),
         target_permanent_id=game.permanent_id_of(permanent),
+        announced_targets=remembered,
+    )
+
+
+def _graveyard_role_scoped(
+    game: Game, context: OracleExecutionContext,
+    announced: OracleExecutionContext, payload: dict, role: str,
+    remembered: tuple, *, wrapper: bool,
+):
+    """:func:`_role_scoped` for a role whose object is a card in a graveyard.
+
+    Each card is the :class:`GraveyardTarget` the announcement stamped
+    (``_targets.resolve_role_graveyard_card``), re-located now: a card no
+    longer in its pile — or no longer targetable there (Ground Seal) — is
+    CR 608.2b's illegal target, and its slot is simply not handed on. With
+    none of them left the step is skipped, as a departed permanent's is.
+    """
+    from ._targets import resolve_role_graveyard_card
+
+    targets = payload.get("targets") or {}
+    group = targets.get("role_group")
+    names = list(group) if isinstance(group, (list, tuple)) and group else [role]
+    stamps = []
+    for name in names:
+        stamp = resolve_role_graveyard_card(game, announced, payload, name)
+        if stamp is not None and game.graveyard_target_is_legal(stamp):
+            stamps.append(stamp)
+    if not stamps:
+        return context if wrapper else None
+    seat = stamps[0].seat
+    indices = [game.graveyard_index_of(stamp) for stamp in stamps]
+    several = len(names) > 1
+    return dataclasses.replace(
+        context,
+        target=game.players[seat],
+        target_permanent_index=indices if several else indices[0],
+        target_permanent_id=None,
+        target_graveyard_card=stamps if several else stamps[0],
         announced_targets=remembered,
     )
 

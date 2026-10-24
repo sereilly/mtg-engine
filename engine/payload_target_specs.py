@@ -332,6 +332,13 @@ def _graveyard_return_spec(payload: dict) -> dict:
     # the same key one destination over.
     if payload.get("any_graveyard"):
         del spec["own_graveyard_only"]
+        # "…from **an opponent's** graveyard to their hand" (the Advocates).
+        # The same pile scope Misinformation's picker reads one kind over
+        # (:func:`_graveyard_to_library_spec`), for its reason: left off, the
+        # activator could return cards from their own graveyard to their own
+        # hand, a strictly better card than the one printed.
+        if payload.get("opponent_graveyard_only"):
+            spec["opponent_graveyard_only"] = True
     # "Up to two target creature cards" (Sanguine Indulgence). This kind settles
     # its own spec, so the generic `targets` reading in `_from_instruction` never
     # runs for it - the maximum has to be lifted here, or the picker collects one
