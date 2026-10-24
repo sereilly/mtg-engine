@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**7 unclaimed sentence(s) across 6 supported card(s).**
+**5 unclaimed sentence(s) across 4 supported card(s).**
 
 - **Aven Warcraft**
   - `creatures you control also gain protection from the chosen color until end of turn`
@@ -34,12 +34,8 @@ anything anyone did, and every ingest would arrive red.
   - `then each player loses 1 life for each card in their graveyard`
 - **Krosan Verge**
   - `{2}, {t}, sacrifice this land: search your library for a forest card and a plains card, put them onto the battlefield tapped, then shuffle`
-- **Laquatus's Disdain**
-  - `counter target spell cast from a graveyard`
 - **Mirari's Wake**
   - `whenever you tap a land for mana, add one mana of any type that land produced`
-- **Planar Chaos**
-  - `whenever a player casts a spell, that player flips a coin. if they lose the flip, counter that spell`
 
 ## Acknowledged simplifications
 

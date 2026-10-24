@@ -50,7 +50,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ODY | 335 | 507 | 89.7% | 89.7% | 69.6% | 295 |
 | TOR | 143 | 261 | 86.2% | 86.2% | 68.2% | 138 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| JUD *(measured)* | 143 | 241 | 80.9% | 78.8% | 54.8% | 112 |
+| JUD *(measured)* | 143 | 241 | 83.8% | 81.7% | 57.3% | 116 |
 | **All (shipped)** | **7884** | **11645** | **90.6%** | **90.0%** | **62.3%** | **6139** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -63,9 +63,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 656 | 335 | expected a subject |  |
-| 167 | 86 | unrecognized effect verb |  |
-| 134 | 73 | unconsumed text |  |
+| 653 | 332 | expected a subject |  |
+| 166 | 85 | unrecognized effect verb |  |
+| 132 | 71 | unconsumed text |  |
 | 65 | 46 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
 | 29 | 7 | expected what this creature can't block, or a duration |  |
@@ -83,10 +83,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 3 | 1 | expected 'of' |  |
 | 3 | 3 | unrecognized "can't be" restriction |  |
 | 3 | 1 | expected 'top' |  |
-| 3 | 3 | expected 'card' |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
+| 2 | 2 | expected 'card' |  |
 | 1 | 1 | expected what to gain control of |  |
 
 ## Cards executing through the grammar
@@ -1352,6 +1352,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever a player casts a spell, that player discards X cards, where X is the number of cards in all graveyards with the same name as that spell.`
 - **Cabal Surgeon**
   - `{2}{B}{B}, {T}, Exile two cards from your graveyard: Return target creature card from your graveyard to your hand.`
+- **Cabal Therapy**
+  - `Choose a nonland card name. Target player reveals their hand and discards all cards with that name.`
 - **Cabal Torturer**
   - `{B}, {T}: Target creature gets -1/-1 until end of turn.`
   - `Threshold — {3}{B}{B}, {T}: Target creature gets -2/-2 until end of turn. Activate only if there are seven or more cards in your graveyard.`
@@ -5667,6 +5669,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Laquatus's Creativity**
   - `Target player draws cards equal to the number of cards in their hand, then discards that many cards.`
 - **Laquatus's Disdain**
+  - `Counter target spell cast from a graveyard.`
   - `Draw a card.`
 - **Larceny**
   - `Whenever a creature you control deals combat damage to a player, that player discards a card.`
@@ -7590,6 +7593,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Return all basic land cards from all graveyards to the battlefield tapped under their owners' control.`
 - **Planar Chaos**
   - `At the beginning of your upkeep, flip a coin. If you lose the flip, sacrifice this enchantment.`
+  - `Whenever a player casts a spell, that player flips a coin. If they lose the flip, counter that spell.`
 - **Planar Collapse**
   - `At the beginning of your upkeep, if there are four or more creatures on the battlefield, sacrifice this enchantment and destroy all creatures. They can't be regenerated.`
 - **Planar Despair**
@@ -9029,6 +9033,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `• Target creature gains trample until end of turn.`
 - **Seeds of Innocence**
   - `Destroy all artifacts. They can't be regenerated. The controller of each of those artifacts gains life equal to its mana value.`
+- **Seedtime**
+  - `Take an extra turn after this one if an opponent cast a blue spell this turn.`
 - **Seeker of Skybreak**
   - `{T}: Untap target creature.`
   - `{T}: Untap target creature.`
@@ -9172,6 +9178,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Shaman en-Kor**
   - `{0}: The next 1 damage that would be dealt to this creature this turn is dealt to target creature you control instead.`
   - `{1}{W}: The next time a source of your choice would deal damage to target creature this turn, that damage is dealt to this creature instead.`
+- **Shaman's Trance**
+  - `Other players can't play lands or cast spells from their graveyards this turn. You may play lands and cast spells from other players' graveyards this turn as though those cards were in your graveyard.`
 - **Shambling Strider**
   - `{R}{G}: This creature gets +1/-1 until end of turn.`
 - **Shambling Swarm**
@@ -9745,6 +9753,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature leaves the battlefield, draw a card.`
 - **Spellgorger Weird**
   - `Whenever you cast a noncreature spell, put a +1/+1 counter on this creature.`
+- **Spelljack**
+  - `Counter target spell. If that spell is countered this way, exile it instead of putting it into its owner's graveyard. You may play it without paying its mana cost for as long as it remains exiled. (If it has X in its mana cost, X is 0.)`
 - **Spellshock**
   - `Whenever a player casts a spell, this enchantment deals 2 damage to that player.`
 - **Spidersilk Armor**
