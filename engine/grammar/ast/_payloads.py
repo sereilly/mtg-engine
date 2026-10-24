@@ -262,6 +262,8 @@ def object_filter_payload(self: "ObjectFilter") -> dict[str, object]:
         payload["cast_by_you_this_turn"] = True
     if self.played_by:
         payload["played_by"] = self.played_by
+    if self.cast_from_zone:
+        payload["cast_from_zone"] = self.cast_from_zone
     if self.controlled_since_turn_start is True:
         payload["controlled_since_turn_start"] = True
     if self.token_only:

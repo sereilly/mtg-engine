@@ -131,12 +131,46 @@ def _accept_seat_cast_record(stream: TokenStream) -> "ast.Condition | None":
     if negated and not stream.accept_word("cast"):
         stream.reset(mark)
         return None
-    if not stream.accept_phrase("a", "spell", "this", "turn"):
+    if stream.accept_phrase("a", "spell", "this", "turn"):
+        return ast.SeatCastSpellThisTurn(referent, negated)
+    # "…if an opponent cast **a blue spell** this turn." (Seedtime.) The same
+    # record asked about the casts a noun phrase names, read by the grammar's
+    # own noun parser so "a blue spell" means here what it means after
+    # "counter target". Only a *spell* phrase (the parser's stack zone): "a
+    # creature card" is not a cast, and reading it as one would answer a
+    # question the sentence does not ask.
+    spell = _accept_cast_spell_phrase(stream)
+    if spell is None or not stream.accept_phrase("this", "turn"):
         # The seat is read and the record is not: some other sentence about the
         # same player, left whole for the branch that can read it.
         stream.reset(mark)
         return None
-    return ast.SeatCastSpellThisTurn(referent, negated)
+    return ast.SeatCastSpellThisTurn(referent, negated, spell)
+
+
+def _accept_cast_spell_phrase(stream: TokenStream) -> "ast.ObjectFilter | None":
+    """``a[n] <qualities> spell`` after "cast", as the filter it names — or
+    None, consuming nothing.
+
+    The article is required ("a", "an"): "no blue spell" and "two blue
+    spells" are a negation and a threshold, and reading either as presence
+    would be a record answered on a turn the card does not name.
+    """
+    from .errors import GrammarError
+    from .nouns import parse_object_filter
+
+    mark = stream.mark()
+    if not (stream.accept_word("a") or stream.accept_word("an")):
+        return None
+    try:
+        described = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if described.zone != "stack":
+        stream.reset(mark)
+        return None
+    return described
 
 
 def _accept_seat_land_record(stream: TokenStream) -> "ast.Condition | None":

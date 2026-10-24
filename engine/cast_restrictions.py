@@ -226,6 +226,17 @@ def _during_your_end_step(game: "Game", caster_index: int) -> bool:
     )
 
 
+def _during_your_turn(game: "Game", caster_index: int) -> bool:
+    """Seedtime: legal only while it is the caster's own turn.
+
+    The seat test alone — the whole turn, every step of it — which is
+    :func:`_during_an_opponents_turn` with the comparison turned round, and
+    the same window ``activation_restrictions`` reads for "Activate only during
+    your turn" one rule over (CR 602.5b).
+    """
+    return game.active_player_index == caster_index
+
+
 def _during_an_opponents_upkeep(game: "Game", caster_index: int) -> bool:
     # Festival: legal only while an opponent's upkeep step is the current step.
     # Both halves are asked — the seat *and* the step — because either alone is
@@ -329,6 +340,15 @@ CAST_RESTRICTIONS: tuple[CastRestriction, ...] = (
         _during_an_opponents_turn,
         "can only be cast during an opponent's turn",
         names_seat="active",
+    ),
+    # "Cast this spell only during your turn." (Seedtime.) A prefix of no row
+    # above and extended by none, so its place in the table changes no message;
+    # it names no seat (the window is the caster's own, and nothing printed
+    # after it says "that player").
+    CastRestriction(
+        "cast this spell only during your turn",
+        _during_your_turn,
+        "can only be cast during your turn",
     ),
 )
 

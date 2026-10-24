@@ -425,6 +425,13 @@ class ObjectFilter:
     #: means "cast that card as a spell", so this is the cast stamp read for a
     #: seat other than the observer's and with no turn window.
     played_by: str | None = None
+    #: "Counter target spell **cast from a graveyard**." (Laquatus's
+    #: Disdain.) Where a *spell* was cast from (CR 601.2a's zone, stamped on
+    #: the stack object as ``StackItem.cast_from_zone``) — a fact about the
+    #: cast, which no card characteristic records and which a flashback cast
+    #: and any other graveyard cast answer alike (ruling 2004-10-04). Only
+    #: ever set behind a spell phrase; ``None`` is "from anywhere".
+    cast_from_zone: str | None = None
     # "…**except for creatures the player hasn't controlled continuously since
     # the beginning of the turn**" (Total War). CR 302.6's condition, printed as
     # an exception and therefore *narrowing to* the creatures that have been

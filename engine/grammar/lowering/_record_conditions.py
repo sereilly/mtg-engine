@@ -831,11 +831,27 @@ def lower_record_condition(
         # conditions above do: "that player didn't cast a spell" and "you cast a
         # spell" are one question with two referents and two signs, and a kind
         # per combination is four kinds for one record.
-        return {
+        payload = {
             "kind": "seat_cast_spell_this_turn",
             "who": condition.who,
             "negated": bool(condition.negated),
         }
+        if condition.spell is not None:
+            # "…if an opponent cast **a blue spell** this turn." (Seedtime.)
+            # The record holds printed cards (CR 613.1 gives a spell no
+            # computed characteristics once it has left the stack), so the
+            # phrase is put to the card matcher's key set; a narrowing only a
+            # permanent could answer refuses rather than being dropped — a
+            # dropped one is a record answered by casts the card does not name.
+            described = card_only_filter(condition.spell.to_payload())
+            if described is None:
+                raise LoweringError(
+                    "a cast record narrowed by a phrase no card filter can "
+                    "test"
+                )
+            if described:
+                payload["spell_filter"] = described
+        return payload
     if isinstance(condition, ast.SeatPlayedLandThisTurn):
         # The cast record's twin one special action over, and the same two
         # payload keys for the same reason: one question, two referents, two

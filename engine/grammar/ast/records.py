@@ -407,9 +407,16 @@ class SeatCastSpellThisTurn:
     spell" and "you cast a spell" are one question with two referents and two
     signs, and a node that welded either in would make the other three cards
     nobody can print.
+
+    ``spell`` is the printed noun phrase when it narrows: "…if an opponent
+    cast **a blue spell** this turn" (Seedtime). ``None`` is the bare "a
+    spell", every cast in the record — a different answer from an empty
+    filter only in that nothing was printed to read, which is why the bare
+    phrase keeps its old payload whole.
     """
     who: str
     negated: bool = False
+    spell: "ObjectFilter | None" = None
 
 
 @dataclass(frozen=True)
