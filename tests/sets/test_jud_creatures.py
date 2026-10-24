@@ -2126,4 +2126,82 @@ def test_w1g5_barbarian_bully_with_an_empty_hand_cannot_pay_its_discard(set_pool
 # ==== W1G10 ==========================================================
 # W1G10's tests go between this line and the "end W1G10" line.
 
+from engine import Game as _W1G10Game, PlayerState as _W1G10PlayerState
+from engine.models import Permanent as _W1G10Permanent
+from tests.helpers import resolve_stack as _w1g10_resolve_stack
+
+
+def _w1g10_table(set_pool, *, interactive=(), libraries=None):
+    """Two seats on seat 0's first main phase, mana costs not enforced."""
+    island = set_pool("LEA")["Island"]
+    libraries = libraries or ([island] * 10, [island] * 10)
+    game = _W1G10Game(players=[
+        _W1G10PlayerState(name=f"P{seat}", life=20, library=list(libraries[seat]))
+        for seat in range(2)
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game.start_turn(0)
+    return game
+
+
+def _w1g10_put(game, card, seat):
+    """*card* onto *seat*'s battlefield through the entry seam, not sick."""
+    permanent = _W1G10Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    return permanent
+
+
+def test_w1g10_balthor_returns_every_black_and_every_red_creature_card(set_pool):
+    """"{B}{B}{B}, Exile Balthor: Each player returns all black and all red
+    creature cards from their graveyard to the battlefield." The printed union
+    is one set — a card that is black *or* red — so each player's black and red
+    creature cards come back under their own control, while a green creature
+    card and a black instant stay where they are. The cost exiles Balthor
+    itself (CR 113.6m ruling, 2013-07-01: it can only be activated from the
+    battlefield), so Balthor is not among the black creature cards returned."""
+    jud, lea = set_pool("JUD"), set_pool("LEA")
+    game = _w1g10_table(set_pool)
+    balthor = _w1g10_put(game, jud["Balthor the Defiled"], 0)
+    game.players[0].graveyard.extend(
+        [lea["Black Knight"], lea["Hill Giant"], lea["Grizzly Bears"], lea["Dark Ritual"]]
+    )
+    game.players[1].graveyard.extend([lea["Scathe Zombies"], lea["Llanowar Elves"]])
+
+    result = game.activate_permanent_ability(0, "Balthor the Defiled")
+    assert result.supported, result.details
+    # The cost is paid as the ability is activated: Balthor is in exile before
+    # the ability resolves.
+    assert not game.is_on_battlefield(balthor)
+    assert "Balthor the Defiled" in [card.name for card in game.players[0].exile]
+    _w1g10_resolve_stack(game)
+
+    def names(seat):
+        return sorted(perm.card.name for perm in game.controlled_by(seat))
+
+    assert names(0) == ["Black Knight", "Hill Giant"]
+    assert names(1) == ["Scathe Zombies"]
+    assert sorted(card.name for card in game.players[0].graveyard) == [
+        "Dark Ritual", "Grizzly Bears",
+    ]
+    assert [card.name for card in game.players[1].graveyard] == ["Llanowar Elves"]
+
+
+def test_w1g10_balthor_pumps_every_minion_on_the_table(set_pool):
+    """"Minion creatures get +1/+1." — every Minion, whoever controls it, and
+    not Balthor (a Zombie Dwarf) or a creature of another type."""
+    jud, lea = set_pool("JUD"), set_pool("LEA")
+    game = _w1g10_table(set_pool)
+    balthor = _w1g10_put(game, jud["Balthor the Defiled"], 0)
+    mine = _w1g10_put(game, jud["Cabal Trainee"], 0)
+    theirs = _w1g10_put(game, jud["Cabal Trainee"], 1)
+    bears = _w1g10_put(game, lea["Grizzly Bears"], 1)
+    game._settle()
+
+    assert (mine.effective_power, mine.effective_toughness) == (2, 2)
+    assert (theirs.effective_power, theirs.effective_toughness) == (2, 2)
+    assert (bears.effective_power, bears.effective_toughness) == (2, 2)
+    assert (balthor.effective_power, balthor.effective_toughness) == (2, 2)
+
 # ==== end W1G10 ======================================================
