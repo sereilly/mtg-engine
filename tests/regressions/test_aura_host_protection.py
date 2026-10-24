@@ -212,8 +212,17 @@ _CALLERS = {
     ("engine/handlers/reanimation.py", "reanimate_creature"),
     # Hakim, Loreweaver
     ("engine/handlers/reanimation.py", "reanimate_aura_onto_source"),
-    # Takklemaggot's return attached
+    # Takklemaggot's return attached — and, since Judgment's Infectious Rage,
+    # asked once more *before* the card moves (CR 303.4g: an Aura with no
+    # legal host remains in its current zone), in the nested check
     ("engine/handlers/reanimation.py", "return_source_card_to_battlefield"),
+    ("engine/handlers/reanimation.py", "stays_where_it_is"),
+    # Nomad Mythmaker (Judgment): "attached to a creature you control", the
+    # hosts offered as the ability resolves and asked once more as the Aura
+    # enters — nested helpers found under their own names too
+    ("engine/handlers/reanimation.py", "_reanimate_onto_chosen_host"),
+    ("engine/handlers/reanimation.py", "finish"),
+    ("engine/handlers/reanimation.py", "only_that_card"),
     # Academy Researchers
     ("engine/handlers/hand.py", "put_from_hand_candidates"),
     # Replenish, Cleansing Meditation: the hosts offered, and asked once more

@@ -27,8 +27,9 @@ from . import ast
 from .errors import GrammarError
 from .stream import TokenStream
 from .effects import (_parse_attacks_this_turn_if_able, _parse_becomes,
-                      _parse_damage, _parse_doesnt_untap_next_step,
-                      _parse_gains, _parse_gets, _parse_loses)
+                      _parse_cant_be, _parse_damage,
+                      _parse_doesnt_untap_next_step, _parse_gains,
+                      _parse_gets, _parse_loses)
 
 
 def _with_damage_conjunct(
@@ -144,6 +145,53 @@ def _with_attack_conjunct(
         return statement
     joined = _parse_attacks_this_turn_if_able(stream, source)
     if joined is None:
+        stream.reset(mark)
+        return statement
+    return ast.Conjunction((statement, joined))
+
+
+def _with_cant_be_conjunct(
+    stream: TokenStream,
+    statement: ast.Statement,
+    source: "ast.TargetSpec | None",
+) -> ast.Statement:
+    """``… and can't be blocked this turn`` trailing a clause whose subject is
+    a permanent.
+
+    "Discard a card: This creature gains shroud until end of turn **and can't
+    be blocked this turn**." (Cephalid Inkshrouder.) The shape of the three
+    joiners above — one noun phrase printed once, two things said about it —
+    across two effect families that may not import each other:
+    ``effects/characteristics.py`` and ``effects/combat.py``, where
+    ``_parse_cant_be`` reads "can't be blocked/regenerated" with its duration.
+
+    **Only a durationed prohibition joins.** "Enchanted creature gets +1/+1
+    and can't be blocked except by creatures with flying" (Treetop Bracers)
+    and "…can't be blocked by Walls" (a static, Juggernaut's words) are
+    continuous effects the Aura family and ``engine/combat_restrictions.py``
+    already read, and a joiner that took them here would turn a line that
+    *fails to parse* — which is what routes it to those tables — into one that
+    parses and then refuses at lowering, which routes it nowhere. So the clause
+    is read tentatively and rewound, "and" with it, unless it printed a
+    window; the duration is the whole difference between the one-shot grant
+    and the static ability (the same gate ``_parse_cant_be`` keeps for its
+    "except by" clause).
+    """
+    if source is None:
+        return statement
+    mark = stream.mark()
+    if not stream.accept_word("and"):
+        stream.reset(mark)
+        return statement
+    if not (stream.at_word("can't", "cannot") and stream.peek_word(1) == "be"):
+        stream.reset(mark)
+        return statement
+    try:
+        joined = _parse_cant_be(stream, source)
+    except GrammarError:
+        stream.reset(mark)
+        return statement
+    if not isinstance(joined, ast.CantBe) or joined.duration.kind is None:
         stream.reset(mark)
         return statement
     return ast.Conjunction((statement, joined))

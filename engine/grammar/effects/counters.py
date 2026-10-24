@@ -22,7 +22,7 @@ from ..records import (_parse_for_each_history, _parse_for_each_this_way,
 from ..errors import GrammarError
 from ..lexer import PT
 from ..readers import accept_source_reference
-from ..references import parse_recipient
+from ..references import parse_recipient, parse_target_spec
 from ..stream import TokenStream
 from ..vocabulary import CARD_TYPES, COLOR_WORDS
 from ..nouns import parse_object_filter
@@ -263,12 +263,30 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
             # and refused on the last four words, which reads as a missing
             # production rather than as a rider that could not be reached.
             attached = False
+            chosen_host = None
             host = stream.mark()
             if stream.accept_phrase("attached", "to"):
                 if accept_source_reference(stream):
                     attached = True
                 else:
-                    stream.reset(host)
+                    # "…attached to **a creature you control**." (Nomad
+                    # Mythmaker.) A described host picked as the entry happens
+                    # (CR 303.4f), read through the shared noun phrase so "a
+                    # creature you control" means what it means everywhere;
+                    # one untargeted permanent and nothing else, or the words
+                    # go back and the line refuses on them.
+                    described = parse_target_spec(stream)
+                    if (
+                        described is not None
+                        and not described.targeted
+                        and described.quantifier == "a"
+                        and described.count == 1
+                        and described.filter.zone == "battlefield"
+                        and not described.filter.is_card
+                    ):
+                        chosen_host = described
+                    else:
+                        stream.reset(host)
             # "…put an artifact or enchantment card onto the battlefield
             # **from their hand**." (Charmed Griffin.) The source zone printed
             # *after* the destination instead of inside the noun phrase — the
@@ -305,6 +323,7 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
             return ast.PutOntoBattlefield(
                 moved, under_your_control=under, under_owners_control=owners,
                 attached_to_source=attached, tapped=tapped,
+                attached_to_chosen=chosen_host,
             )
     stream.reset(move_mark)
     up_to = stream.accept_phrase("up", "to")

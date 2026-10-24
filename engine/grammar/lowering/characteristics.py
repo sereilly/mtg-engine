@@ -128,6 +128,27 @@ def _lower_pump(
                     "x_from_count": _x_definition_spec(node.x_definition, node),
                 }),
             )
+        # "**Enchanted creature** gets +X/+X, where X is the number of creature
+        # cards in all graveyards." (Exoskeletal Armor.) The source branch above
+        # printed by an Aura about its host — the same split Vampirism's "for
+        # each" spelling makes in ``_counted_pumps``, onto the same kind with
+        # the same ``subject: "attached"`` key, so the P/T refresh rebuilds it
+        # on the creature the Aura is attached to. The card's ruling says the
+        # count is live ("The value of X changes as the number of creatures
+        # cards in graveyards changes", 2004-10-04), which is what a layer-7c
+        # contribution recounted on every recompute is; a number frozen at the
+        # attach would be the one-shot this branch exists not to be.
+        if node.x_definition is not None and _is_enchanted(node.subject):
+            return (
+                OracleInstruction("dynamic_pt_bonus", "", {
+                    "power": _static_x_amount(node.power, node.power_negative, node),
+                    "toughness": _static_x_amount(
+                        node.toughness, node.toughness_negative, node
+                    ),
+                    "x_from_count": _x_definition_spec(node.x_definition, node),
+                    "subject": "attached",
+                }),
+            )
         # "{1}{R}: This creature gets +2/+0 …" (Goblin Ski Patrol) — a
         # *resolved* ability's modification with no duration printed, which
         # CR 611.2a makes one that lasts indefinitely. It is not the continuous

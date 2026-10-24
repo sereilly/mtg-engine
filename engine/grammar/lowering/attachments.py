@@ -581,6 +581,18 @@ def _lower_choose_permanent(
         # predicate the attach itself re-asks, so an illegal host is never
         # offered and never accepted.
         payload["legal_host_for_source"] = True
+    if node.at_random:
+        # "Choose a creature **at random** this Aura can enchant." (Infectious
+        # Rage.) The handler draws from the candidate list rather than asking,
+        # so nothing about a decline or a prompt applies: refused together with
+        # them rather than carried as a pair the handler would have to rank.
+        if node.optional or "targets" in scoped or scoped.get("announced_target"):
+            raise LoweringError(
+                "a random pick asks nobody, so it has no decline and no "
+                "announced seat",
+                node=node,
+            )
+        payload["at_random"] = True
     return (OracleInstruction("choose_permanent", "", payload),)
 
 

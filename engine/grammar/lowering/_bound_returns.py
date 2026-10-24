@@ -893,12 +893,19 @@ def lower_untargeted_return(
             raise LoweringError(
                 f"the self-return does not honour {leftovers[0]!r}", node=node
             )
-        # Two seats the sentence may name, and it must name one: CR 110.2's
-        # default is the ability's controller, so a phrase consumed into nothing
-        # is a permanent whose controller the card stated and the engine
-        # guessed. "Its owner" (Ivory Gargoyle) is not the same seat as "you"
-        # for a creature that changed hands before it died.
-        control = getattr(node.under_control_of, "kind", None)
+        # Two seats the sentence may name. "Its owner" (Ivory Gargoyle) is not
+        # the same seat as "you" for a creature that changed hands before it
+        # died, so a printed one is read and never guessed.
+        #
+        # **An unspoken seat is CR 110.2a's**, the reading the bound-card
+        # return above already gives Angelic Renewal: "If an effect instructs a
+        # player to put an object onto the battlefield, that object enters the
+        # battlefield under that player's control unless the effect states
+        # otherwise", and an imperative instructs the ability's controller
+        # (CR 608.2c). "Return this card to the battlefield attached to that
+        # creature." (Infectious Rage) prints no seat and means "you"; refusing
+        # it was refusing a card for saying nothing.
+        control = getattr(node.under_control_of, "kind", None) or "you"
         if control not in ("you", "owner"):
             raise LoweringError(
                 "this card returns to the battlefield under its own "

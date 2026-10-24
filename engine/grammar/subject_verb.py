@@ -34,8 +34,8 @@ one fall-through chain and their order is the production.
 import dataclasses
 from . import ast
 from .lexer import SELF, WORD
-from .conjuncts import (_with_attack_conjunct, _with_damage_conjunct,
-                        _with_gained_type_conjunct,
+from .conjuncts import (_with_attack_conjunct, _with_cant_be_conjunct,
+                        _with_damage_conjunct, _with_gained_type_conjunct,
                         _with_keyword_loss_conjunct, _with_predicate_list,
                         _with_untap_conjunct)
 from .imperatives import parse_imperative
@@ -302,12 +302,19 @@ def parse_subject_verb(
             # reason the "deals" branch above gives: a sentence prints one of
             # them, and nesting would make the order they are tried a fact
             # about which card was written first.
-            return _with_predicate_list(stream, _with_gained_type_conjunct(
-                stream,
-                _with_untap_conjunct(stream, _with_damage_conjunct(
-                    stream, _parse_gets(stream, source_spec), source_target
-                ), source_target),
-                source_target,
+            # "…gets +1/+0 until end of turn **and can't be blocked this
+            # turn**." The fifth tail, read outside the others for the reason
+            # above; durationed only (see `_with_cant_be_conjunct`), so the
+            # static "gets +1/+1 and can't be blocked except by …" keeps the
+            # parse failure that routes it to the Aura tables.
+            return _with_cant_be_conjunct(stream, _with_predicate_list(
+                stream, _with_gained_type_conjunct(
+                    stream,
+                    _with_untap_conjunct(stream, _with_damage_conjunct(
+                        stream, _parse_gets(stream, source_spec), source_target
+                    ), source_target),
+                    source_target,
+                ), source_target,
             ), source_target)
         if token.text in ("gains", "gain"):
             # "**You** gain control of that land until end of turn."
@@ -327,12 +334,17 @@ def parse_subject_verb(
             # turn**." (Disciple of Kangee.) The tail the pump verb above
             # already carries, on the second verb that prints it: one target
             # (CR 601.2c), a keyword and a colour, one window.
-            return _with_predicate_list(stream, _with_gained_type_conjunct(
-                stream,
-                _with_untap_conjunct(stream, _with_damage_conjunct(
-                    stream, _parse_gains(stream, source_spec), source_target
-                ), source_target),
-                source_target,
+            # "This creature gains shroud until end of turn **and can't be
+            # blocked this turn**." (Cephalid Inkshrouder.) The prohibition
+            # tail the pump verb above carries too.
+            return _with_cant_be_conjunct(stream, _with_predicate_list(
+                stream, _with_gained_type_conjunct(
+                    stream,
+                    _with_untap_conjunct(stream, _with_damage_conjunct(
+                        stream, _parse_gains(stream, source_spec), source_target
+                    ), source_target),
+                    source_target,
+                ), source_target,
             ), source_target)
         if token.text in ("loses", "lose"):
             # "…**that player loses all unspent mana**" (Drain Power, Mana

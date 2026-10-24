@@ -455,6 +455,14 @@ class ChoosePermanent:
     #: and what makes a host legal is a question about a *pair* of permanents,
     #: which the filter matcher answers about one.
     host_for_source: bool = False
+    #: "Choose a creature **at random** this Aura can enchant." (Infectious
+    #: Rage.) Nobody picks: the chooser names whose decision it would have been
+    #: and nothing else, and the handler draws from the candidate list with the
+    #: module RNG the simulator seeds (CLAUDE.md "Determinism") — the draw
+    #: every other "at random" in the engine makes. A rider the lowering must
+    #: carry, because a random choice dropped is a choice the controller makes,
+    #: which is a strictly better card than the one printed.
+    at_random: bool = False
 
 
 @dataclass(frozen=True)
@@ -625,6 +633,14 @@ class PutOntoBattlefield:
     #: here is the ability's own source. A card naming somebody else's creature
     #: would want the referent, and would say so.
     attached_to_source: bool = False
+    #: "…onto the battlefield under your control **attached to a creature you
+    #: control**." (Nomad Mythmaker.) The referent the note above said a card
+    #: would ask for, and Judgment's is the card: a *described* host, chosen as
+    #: the ability resolves (its ruling, 2004-10-04: "You don't choose which
+    #: creature the Aura will enter attached to until the ability resolves") —
+    #: CR 303.4f's choice, narrowed by the noun phrase. Not targeted, so the
+    #: phrase carries no "target" and the spec's ``targeted`` is False.
+    attached_to_chosen: "TargetSpec | None" = None
     #: "…onto the battlefield under your control. **That creature is black and
     #: is a Nightmare in addition to its other creature types.**" (Chainer,
     #: Dementia Master.) What the permanent *enters as*, folded onto the entry

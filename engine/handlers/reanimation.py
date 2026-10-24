@@ -267,6 +267,162 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
             # other reanimation, and the reason the seat alone would not have
             # been enough here.
             source_player, idx = found
+    if instruction.payload.get("attach_to") == "chosen":
+        return _reanimate_onto_chosen_host(
+            game, instruction, context, caster, source_player, idx,
+            card_filter, card_type,
+        )
+    return _complete_reanimation(
+        game, instruction, context, caster, source_player, idx,
+        card_filter, card_type, attach_host,
+    )
+
+
+#: The scratchpad key the host a reanimated Aura is attached to is recorded
+#: under when its controller is asked (Nomad Mythmaker).
+_REANIMATED_AURA_HOST = "reanimated_aura_host"
+
+
+def _reanimate_onto_chosen_host(
+    game, instruction, context, caster, source_player, idx, card_filter,
+    card_type,
+) -> tuple[bool, str]:
+    """"Put target Aura card from a graveyard onto the battlefield under your
+    control **attached to a creature you control**." (Nomad Mythmaker.)
+
+    The host is chosen as the ability resolves — the card's ruling
+    (2004-10-04): "You don't choose which creature the Aura will enter attached
+    to until the ability resolves. You must choose a creature the Aura can
+    legally enchant … If you don't control any creatures that the Aura can
+    enchant, it remains in the graveyard." So the targeted card is settled
+    first, then the candidates are the permanents the printed phrase describes
+    (``subject_matches``, the caster as observer) that it can legally enchant
+    (``aura_attachment.enchant_card_refusal``, the one predicate every host
+    chooser asks — Replenish's and Worldgorger's included). None is CR 303.4g:
+    the card stays where it is. One is no question. Several are the caster's
+    pick: an interactive seat is asked with the ``permanent_choice`` prompt
+    ``return_all_cards_from_graveyard`` arms for the same CR 303.4f question,
+    and every other seat takes ``ai_targets.choose_returning_aura_host``.
+    Nothing is targeted, so a creature with shroud is a legal host (CR 303.4f's
+    choice is not a target).
+    """
+    from ..aura_attachment import enchant_card_refusal
+    from ..subject_filters import subject_matches
+
+    seat = game.seat_index(caster)
+    card = None
+    if (
+        isinstance(idx, int) and 0 <= idx < len(source_player.graveyard)
+        and _holds_a_reanimable_card(source_player, idx, card_filter, card_type)
+    ):
+        card = source_player.graveyard[idx]
+    else:
+        # The fallback ``_reanimate_creature_to_battlefield`` takes for a
+        # caller that named no slot: the caster's own pile.
+        slot = next(_reanimable_slot(caster, card_filter, card_type), None)
+        if slot is not None:
+            source_player, card = caster, caster.graveyard[slot]
+    name = getattr(context.card, "name", "") or "Effect"
+    if card is None:
+        game.log.append(f"No {card_type} to reanimate")
+        context.results[REANIMATED_PERMANENTS] = ()
+        context.results["its_mana_value"] = 0
+        return True, "resolved"
+    described = dict(instruction.payload.get("attach_filter") or {})
+    # The printed narrowing first, then W1G4's CR 303.4f host list over what
+    # it leaves — the same list Replenish's and Worldgorger's returns offer, so
+    # "what may this Aura card enter attached to" has one answer.
+    hosts = returning_aura_hosts(game, seat, card, [
+        perm for perm in game.all_permanents()
+        if subject_matches(
+            game, perm, described, observer=seat, source=context.source_permanent,
+        )
+    ])
+
+    def stays() -> None:
+        game.log.append(
+            f"{card.name} has nothing it could enchant and stays in "
+            f"{source_player.name}'s graveyard"
+        )
+        context.results[REANIMATED_PERMANENTS] = ()
+        context.results["its_mana_value"] = 0
+
+    def finish(host) -> None:
+        if host is None:
+            stays()
+            return
+        position = next(
+            (i for i, held in enumerate(source_player.graveyard) if held is card),
+            None,
+        )
+
+        def only_that_card(candidate, _host=host):
+            # The announced card and no other, and still a legal Aura for the
+            # host as it enters (CR 303.4f's "must choose a legal object" is
+            # about the moment of entry, the re-check ``_return_planned_cards``
+            # makes for the same reason).
+            return candidate is card and (
+                enchant_card_refusal(game, candidate, seat, _host) is None
+            )
+
+        _complete_reanimation(
+            game, instruction, context, caster, source_player, position,
+            only_that_card, card_type, host,
+        )
+        if context.results.get(REANIMATED_PERMANENTS):
+            game.log.append(
+                f"{card.name} entered the battlefield attached to {host.card.name}"
+            )
+
+    if not hosts:
+        stays()
+        return True, "resolved"
+    if len(hosts) == 1 or seat not in game.interactive_seats:
+        from ..ai_targets import choose_returning_aura_host
+
+        finish(
+            hosts[0] if len(hosts) == 1
+            else choose_returning_aura_host(game, seat, card, hosts)
+        )
+        return True, "resolved"
+
+    def step(ask) -> None:
+        if ask:
+            game.arm_permanent_choice(
+                seat,
+                card_name=name,
+                prompt=(
+                    f"Choose what {card.name} enchants as it enters the "
+                    "battlefield."
+                ),
+                result_key=_REANIMATED_AURA_HOST,
+                payload={
+                    "filter": described,
+                    "legal_host_for_card": card,
+                    "host_controller": seat,
+                    "default_prefers": "returning_aura_host",
+                },
+                context=context,
+                candidates=hosts,
+            )
+            return
+        chosen = context.results.get(_REANIMATED_AURA_HOST)
+        finish(game.permanent_by_id(chosen) if isinstance(chosen, int) else None)
+
+    # One question, then the move — and the loop is the last thing this does,
+    # which is ``engine/resumption.py``'s rule.
+    run_resumable(game, [True, None], step)
+    return True, "resolved"
+
+
+def _complete_reanimation(
+    game, instruction, context, caster, source_player, idx, card_filter,
+    card_type, attach_host,
+) -> tuple[bool, str]:
+    """The move itself and every rider behind it, once the card (and, for an
+    Aura, its host) is settled — split out of :func:`reanimate_creature` so a
+    host chosen at resolution (:func:`_reanimate_onto_chosen_host`) finishes
+    through the very same lines a named host does."""
     reanimated = game._reanimate_creature_to_battlefield(
         caster, source_player, idx, card_filter=card_filter, card_type=card_type,
         entering_as=_entering_characteristics(instruction.payload, context),
@@ -570,6 +726,38 @@ def return_source_card_to_battlefield(game: Game, instruction: OracleInstruction
         owner = base_controller(source)
         if isinstance(owner, int):
             seat = owner
+    host_key = instruction.payload.get("attached_to")
+
+    def stays_where_it_is(entering_seat) -> bool:
+        """CR 303.4g, asked **before** the card moves: "If an Aura is entering
+        the battlefield and there is no legal object or player for it to
+        enchant, the Aura remains in its current zone." A host nobody could
+        choose (Infectious Rage with no creature it can enchant — "You can't
+        return this card to the battlefield onto something it can't enchant",
+        2004-10-04), or one that stopped being legal while this resolution ran,
+        leaves the card where it is. Moving it first and refusing the attach
+        afterwards put it onto the battlefield attached to nothing for
+        CR 704.5m to bin, which is a second zone change the rules never make.
+        The card-shaped half of the one enchant predicate, under the seat it
+        would enter under — what ``legal_host_for_source`` asked when the host
+        was picked."""
+        from ..aura_attachment import enchant_card_refusal
+
+        if not host_key:
+            return False
+        host = game.permanent_by_id(context.results.get(host_key))
+        refusal = (
+            "nothing was chosen for it to enchant" if host is None
+            else enchant_card_refusal(game, card, entering_seat, host)
+        )
+        if refusal is None:
+            return False
+        game.log.append(
+            f"{card.name} has nothing it could enchant and stays where it is "
+            f"({refusal})"
+        )
+        return True
+
     if instruction.payload.get("from") == "exile":
         # "Exile this creature. Return it to the battlefield under its owner's
         # control at the beginning of the next end step." (Anurid
@@ -583,30 +771,39 @@ def return_source_card_to_battlefield(game: Game, instruction: OracleInstruction
         owner_seat = base_controller(source) if source is not None else None
         if not isinstance(owner_seat, int):
             owner_seat = seat
+        if stays_where_it_is(owner_seat if owners_control else seat):
+            return True, "resolved"
         if not game.take_card_from_exile(owner_seat, card):
             game.log.append(f"{card.name} was no longer in exile")
             return True, "resolved"
         if owners_control:
             seat = owner_seat
     elif source is not None and game.is_on_battlefield(source):
+        if stays_where_it_is(seat):
+            return True, "resolved"
         game.remove_from_battlefield(source)
     else:
-        for player in game.players:
-            for index, held in enumerate(player.graveyard):
-                if held is card:
-                    player.graveyard.pop(index)
-                    if owners_control:
-                        seat = game.seat_index(player)
-                    break
-            else:
-                continue
-            break
-        else:
+        found = next(
+            (
+                (player, index)
+                for player in game.players
+                for index, held in enumerate(player.graveyard)
+                if held is card
+            ),
+            None,
+        )
+        if found is None:
             # CR 603.6: the ability looks for the object in the zone it moves it
             # out of. Gone means the ability does nothing, rather than making a
             # second copy of the card.
             game.log.append(f"{card.name} was no longer in a graveyard")
             return True, "resolved"
+        player, index = found
+        if owners_control:
+            seat = game.seat_index(player)
+        if stays_where_it_is(seat):
+            return True, "resolved"
+        player.graveyard.pop(index)
 
     payload = instruction.payload
     permanent = Permanent(card=card)
