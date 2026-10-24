@@ -1230,6 +1230,16 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     # inside a noun phrase, which is the only thing that separates this row
     # from the two sweeps above it.
     "draw_controller_cards": _counted_scope_spec,
+    # "…you may add X mana of any one color, where X is the number of Islands
+    # **target opponent** controls." (Carpet of Flowers.) The row above one
+    # verb over: the seat is inside the counted amount and is the ability's
+    # only target, so it is what CR 603.3d chooses as the trigger is put on
+    # the stack (the card's 2004-10-04 rulings: "You can target a different
+    # opponent each turn"; "The ability is not a mana ability"). Without the
+    # row the trigger derived no picker and the count fell to the first
+    # opponent at three seats. Every other printing of this kind counts
+    # nobody's board or the caster's, and the reader answers None for them.
+    "add_mana_from_text": _counted_scope_spec,
     "grant_target_ability_text": _ability_text_grant_spec,
     "give_control_of_source_to_player": _control_gift_spec,
     "choose_permanents": _chosen_from_target_player_spec,

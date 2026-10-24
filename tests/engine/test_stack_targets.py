@@ -759,13 +759,17 @@ _UNANNOUNCED_TRIGGER_TARGETS = frozenset({
     "Cephalid Constable#0",
     # no picker derived
     "The Abyss#0", "Rysorian Badger#0", "Goblin Grenadiers#0",
-    "Carpet of Flowers#0", "Erithizon#0", "Ley Line#0", "Tolarian Kraken#0",
+    "Erithizon#0", "Ley Line#0", "Tolarian Kraken#0",
     # Gravegouger ("When this creature enters, exile **up to two target cards
     # from a single graveyard**") stood here from Torment's first wave, its
     # pile and cards picked as the ability resolved. They are announced as it
     # is put on the stack since the second (W2G2): the trigger-target prompt
     # names several cards in one pile (``single_graveyard``), and the default
     # names the ones the resolution used to take.
+    # Carpet of Flowers sat here until round kg: "…where X is the number of
+    # Islands **target opponent** controls" is the trigger's one target, inside
+    # its counted amount, and ``add_mana_from_text`` had no payload row to say
+    # so (``payload_target_specs._counted_scope_spec`` reads it now).
     # Honorable Scout sat here from Planeshift's ingest to its first wave: "you
     # gain 2 life for each black and/or red creature *target opponent*
     # controls" puts the target inside the count's noun phrase
