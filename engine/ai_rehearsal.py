@@ -361,6 +361,12 @@ class Rehearsal:
         once the cast had resolved, the caster's turn still had a combat
         phase to come (:func:`_combat_ahead`) — the one a precombat cast is
         made before, or one the cast itself added;
+    ``creature_ahead``
+        once the cast had resolved, the caster controlled a creature
+        (:func:`has_a_creature_to_fight_with`) — something that fight could
+        be fought with, the cast's own doing included: "Until end of turn,
+        target land becomes a 3/3 creature" (Animate Land) on a board of
+        lands is a fight that only the cast makes possible;
     ``opened_a_cast``
         once it had resolved, the caster could cast something from outside
         its hand it could not before (CR 601.3: "you may play cards from your
@@ -380,6 +386,7 @@ class Rehearsal:
     through_combat: bool = False
     combat_ahead: bool = False
     opened_a_cast: bool = False
+    creature_ahead: bool = False
 
     @property
     def swing(self) -> float:
@@ -1319,6 +1326,9 @@ def _rehearse(
         # Whether a fight is still to come once the cast has resolved — read
         # off the copy, because a cast can be what adds one.
         combat_ahead = clone.active_player_index == seat and _combat_ahead(clone)
+        # …and whether there is anything to fight it with, read off the same
+        # copy: a cast can be what makes the creature (Animate Land).
+        creature_ahead = has_a_creature_to_fight_with(clone, seat)
         made_mana = any(
             int(amount or 0) > int(was.get(symbol, 0) or 0)
             for was, player in zip(pools, clone.players)
@@ -1378,6 +1388,7 @@ def _rehearse(
             accepted=True, changed=changed, now=now, lasting=lasting,
             fleeting=fleeting, made_mana=made_mana, through_combat=through_combat,
             combat_ahead=combat_ahead, opened_a_cast=opened_a_cast,
+            creature_ahead=creature_ahead,
         )
     except Exception as raised:
         _note_raised(label or spell_name, raised)

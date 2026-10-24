@@ -249,6 +249,28 @@ def test_the_lone_blocker_is_tapped_before_the_attack(pool):
     assert game.players[OPP].life == 17
 
 
+# --- A creature the cast makes ---------------------------------------------------
+
+
+def test_a_land_animated_for_the_turn_is_cast_and_attacks(pool):
+    """"Until end of turn, target land becomes a 3/3 creature that's still a
+    land." (Animate Land.) On a board of lands there is nothing to attack with
+    *before* the cast, and the fight was read only for a seat that already had
+    a creature — so the 3/3 the cast makes was weighed without the attack it
+    makes, as a body gone by the end of the turn, and held. Asked of the board
+    the cast leaves (``Rehearsal.creature_ahead``), it is three damage, and it
+    is cast; with no combat still to come it is still nothing."""
+    game = _table(pool, ["Animate Land"], mine=[pool["Forest"], pool["Plains"]])
+    action = choose_cast_action(game, ME)
+    assert action is not None and action.card_name == "Animate Land"
+    _cast_and_fight(game, action)
+    assert game.players[OPP].life == 17
+
+    after = _table(pool, ["Animate Land"], mine=[pool["Forest"], pool["Plains"]])
+    after._set_phase_and_step("postcombat_main", "postcombat_main")
+    assert choose_cast_action(after, ME) is None
+
+
 # --- Hatred ---------------------------------------------------------------------
 
 

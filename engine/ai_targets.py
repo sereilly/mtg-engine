@@ -39,7 +39,7 @@ from .ai_target_sides import (
     spell_denies_its_own_target,
     spell_target_side,
 )
-from .ai_rehearsal import has_a_creature_to_fight_with, permanent_worth
+from .ai_rehearsal import permanent_worth
 from .ai_prompt_readers import (
     exiles_a_graveyard_target,
     graveyard_denial_order,
@@ -1016,10 +1016,7 @@ def _better_than_the_seat(
     if (
         at_the_seat.accepted and at_the_seat.fleeting
         and game.current_turn_phase != "combat"
-        and not (
-            at_the_seat.combat_ahead
-            and has_a_creature_to_fight_with(game, caster_index)
-        )
+        and not (at_the_seat.combat_ahead and at_the_seat.creature_ahead)
     ):
         # Aimed at the player it is over with the turn, and with no combat
         # still to come this reading has no damage in it for it to stop or to

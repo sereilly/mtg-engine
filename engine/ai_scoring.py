@@ -44,7 +44,6 @@ from .ai_rehearsal import (
     CARD_WORTH,
     Rehearsal,
     deliberating,
-    has_a_creature_to_fight_with,
     priced_by_the_fight,
     rehearse,
     rehearsing,
@@ -464,8 +463,15 @@ def _weighed_through_the_fight(
         # creature until end of turn … add two mana" (Traitorous Greed) — is
         # the creature it attacks with, and is read with the fight.
         return rehearsal
-    if not has_a_creature_to_fight_with(game, seat):
-        # Nothing to attack with: the fight is the turn as already read.
+    if not rehearsal.creature_ahead:
+        # Nothing to attack with once the cast has resolved: the fight is the
+        # turn as already read. Asked of the board the cast **leaves**
+        # (``Rehearsal.creature_ahead``), not the one it was made on: this read
+        # the seat's creatures before the cast, so "Until end of turn, target
+        # land becomes a 3/3 creature" (Animate Land) on a board of lands was
+        # read without the attack it makes, and held. That was harmless only
+        # while the attack chooser read printed types and the animated land
+        # could not attack anyway (CR 613 layer 4, JUD wave 2).
         return rehearsal
     fought = _rehearse_announcement(
         game, seat, card, announcement, planned=planned, through_combat=True,
