@@ -637,6 +637,70 @@ def test_w1g4_sutured_ghoul_leaving_leaves_its_cards_in_exile(set_pool):
     ]
     assert p0.life == life_before + 5
 
+
+# --- The drive list: supported on arrival, given a game --------------------
+
+
+def _w1g4_next_actives(game, count):
+    seats = []
+    for _ in range(count):
+        seats.append(game.start_next_turn())
+        _w1g4_drain(game)
+    return seats
+
+
+def test_w1g4_wormfang_manta_that_stays_skips_its_controller_s_next_turn(set_pool):
+    game = _w1g4_game(set_pool, hand=["Wormfang Manta"])
+    game.start_turn(0)
+    game.cast_from_hand(0, "Wormfang Manta")
+    _w1g4_drain(game)
+
+    assert _w1g4_next_actives(game, 4) == [1, 1, 0, 1]
+
+
+def test_w1g4_wormfang_manta_gone_the_same_turn_skips_the_extra_turn(set_pool):
+    # CR 614.10: "skip your next turn" replaces the next turn its player would
+    # take, and CR 500.7 puts the extra turn directly after this one — so the
+    # skip eats the extra turn and the opponent plays next. It used to take the
+    # extra turn at once and skip the controller's next *normal* turn: the same
+    # count of turns, one of them moved ahead of the opponent's.
+    game = _w1g4_game(set_pool, hand=["Wormfang Manta"])
+    game.start_turn(0)
+    game.cast_from_hand(0, "Wormfang Manta")
+    _w1g4_drain(game)
+    _w1g4_swords(game, set_pool, _w1g4_named(game, 0, "Wormfang Manta"))
+
+    assert _w1g4_next_actives(game, 4) == [1, 0, 1, 0]
+    assert "P0 skips the extra turn (CR 614.10)" in game.log
+
+
+def test_w1g4_wormfang_manta_gone_after_the_skip_gives_an_extra_turn(set_pool):
+    game = _w1g4_game(set_pool, hand=["Wormfang Manta"])
+    game.start_turn(0)
+    game.cast_from_hand(0, "Wormfang Manta")
+    _w1g4_drain(game)
+    assert _w1g4_next_actives(game, 2) == [1, 1]  # P0's turn was skipped
+
+    # During the opponent's turn: "you take an extra turn after this one".
+    _w1g4_swords(game, set_pool, _w1g4_named(game, 0, "Wormfang Manta"))
+    assert _w1g4_next_actives(game, 3) == [0, 0, 1]
+
+
+def test_w1g4_wormfang_behemoth_holds_its_controller_s_hand_until_it_leaves(set_pool):
+    game = _w1g4_game(
+        set_pool, hand=["Wormfang Behemoth", "Grizzly Bears", "Lightning Bolt"],
+    )
+    game.cast_from_hand(0, "Wormfang Behemoth")
+    _w1g4_drain(game)
+    p0 = game.players[0]
+    assert p0.hand == []
+    assert sorted(c.name for c in p0.exile) == ["Grizzly Bears", "Lightning Bolt"]
+
+    _w1g4_swords(game, set_pool, _w1g4_named(game, 0, "Wormfang Behemoth"))
+
+    assert sorted(c.name for c in p0.hand) == ["Grizzly Bears", "Lightning Bolt"]
+    assert [c.name for c in p0.exile] == ["Wormfang Behemoth"]
+
 # ==== end W1G4 ======================================================
 
 
