@@ -423,7 +423,9 @@ def deal_damage(game, event: dict, *, restart: Callable[[], Any] | None = None) 
     attackers and its own completion flags. ``engine/resumption.py`` is what
     records that, and the callers that pass ``asks=True`` (or their own
     ``restart``, as the combat step's player-damage loop does) are the ones
-    running inside it. Every damage path now asks.
+    running inside it. Every damage call in ``engine/handlers`` asks, and so
+    does the combat damage step; the paths that still do not are named in
+    ``engine/effect_ordering.py``'s docstring.
     """
     if event["amount"] <= 0:
         return DamageOutcome(consumed=False, dealt=0, result=0)
