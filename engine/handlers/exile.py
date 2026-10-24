@@ -1212,6 +1212,25 @@ def exile_top_of_library(game: Game, instruction: OracleInstruction, context: Or
     ``linked_exile.face_down_exiled_cards`` reads both.
     """
     caster = context.caster
+    # "**That player** exiles the top four cards of their library."
+    # (Scalpelexis.) Whose library rides ``recipient``, under the two record
+    # keys the mill reads for the same two words: the seat a damage event
+    # froze, or the seat whose step it is. A seat nobody froze exiles nothing
+    # rather than falling back to the resolving player's library.
+    recipient = instruction.payload.get("recipient")
+    if recipient is not None:
+        frozen = context.trigger_context or {}
+        seat = frozen.get(
+            "defending_player_index" if recipient == "damaged_player"
+            else "event_subject_player"
+        )
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            context.results["exiled_cards"] = []
+            game.log.append(
+                f"{context.card.name}: no player was named to exile from"
+            )
+            return True, "resolved"
+        caster = game.players[seat]
     amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
     face_down = bool(instruction.payload.get("face_down"))
     source = context.source_permanent

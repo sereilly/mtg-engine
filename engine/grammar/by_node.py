@@ -328,7 +328,6 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.LookAtLibraryTop: _lower_look_at_library_top,
     ast.LookTopCycleForLife: _lower_look_top_cycle_for_life,
     ast.SeparateLibraryTopIntoPiles: _lower_separate_library_top_into_piles,
-    ast.ExileTopOfLibrary: _lower_exile_top_of_library,
     ast.ExileGraveyardPosition: _lower_exile_graveyard_position,
     # "Exchange your graveyard and library." (Morality Shift.)
     ast.ExchangeZones: _lower_exchange_zones,
@@ -427,6 +426,9 @@ _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
     # damage froze, so the bare reveal joins the sentences that name it.
     ast.RevealHand: _lower_reveal_hand,
     ast.ExileEntireLibrary: _lower_exile_entire_library,
+    # "…**that player** exiles the top four cards of their library"
+    # (Scalpelexis): the seat the firing event froze, so the event rides.
+    ast.ExileTopOfLibrary: _lower_exile_top_of_library,
     # "…**that player** exiles a card at random from their hand" (Elkin Lair):
     # the same seat question one zone over, and the same answer.
     ast.ExileRandomFromHand: _lower_exile_random_from_hand,

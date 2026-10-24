@@ -2204,4 +2204,71 @@ def test_w1g10_balthor_pumps_every_minion_on_the_table(set_pool):
     assert (bears.effective_power, bears.effective_toughness) == (2, 2)
     assert (balthor.effective_power, balthor.effective_toughness) == (2, 2)
 
+
+def _w1g10_scalpelexis_hits(set_pool, library):
+    """Scalpelexis attacks unblocked into a seat whose library is *library*
+    (card names); combat damage is dealt and the trigger resolved."""
+    from tests.helpers import declare_attack
+
+    pool = {**set_pool("LEA"), **set_pool("JUD")}
+    game = _w1g10_table(
+        set_pool,
+        libraries=([pool["Island"]] * 5, [pool[name] for name in library]),
+    )
+    game.interactive_seats = set()
+    _w1g10_put(game, pool["Scalpelexis"], 0)
+    declare_attack(game, 0)
+    for _ in range(6):
+        game.advance_combat_phase()
+        _w1g10_resolve_stack(game)
+        if game.players[1].life < 20:
+            break
+    _w1g10_resolve_stack(game)
+    return game
+
+
+def test_w1g10_scalpelexis_repeats_until_four_cards_share_no_name(set_pool):
+    """"…that player exiles the top four cards of their library. If two or more
+    of those cards have the same name, repeat this process." The ruling
+    (2004-10-04): "repeat as often as it takes to not get a matching pair". Two
+    Islands in the first four repeat it; the second four hold one Forest of
+    their own — the first round's Forest is not "those cards" — so it stops
+    there, with two cards left."""
+    game = _w1g10_scalpelexis_hits(set_pool, [
+        "Island", "Island", "Forest", "Mountain",
+        "Plains", "Swamp", "Forest", "Grizzly Bears",
+        "Lightning Bolt", "Hill Giant",
+    ])
+
+    assert game.players[1].life == 19
+    assert [card.name for card in game.players[1].exile] == [
+        "Island", "Island", "Forest", "Mountain",
+        "Plains", "Swamp", "Forest", "Grizzly Bears",
+    ]
+    assert [card.name for card in game.players[1].library] == [
+        "Lightning Bolt", "Hill Giant",
+    ]
+    assert game.players[0].exile == []
+    assert sum("Scalpelexis: repeating" in line for line in game.log) == 1
+
+
+def test_w1g10_scalpelexis_exiles_four_once_without_a_pair(set_pool):
+    game = _w1g10_scalpelexis_hits(set_pool, [
+        "Island", "Forest", "Mountain", "Plains", "Island", "Island",
+    ])
+    assert [card.name for card in game.players[1].exile] == [
+        "Island", "Forest", "Mountain", "Plains",
+    ]
+    assert [card.name for card in game.players[1].library] == ["Island", "Island"]
+
+
+def test_w1g10_scalpelexis_stops_on_an_empty_library(set_pool):
+    """A pair in every round until the library runs out: the round that finds
+    no card exiles nothing, has no pair, and ends the loop."""
+    game = _w1g10_scalpelexis_hits(set_pool, [
+        "Island", "Island", "Forest", "Mountain", "Plains", "Plains",
+    ])
+    assert len(game.players[1].exile) == 6
+    assert game.players[1].library == []
+
 # ==== end W1G10 ======================================================

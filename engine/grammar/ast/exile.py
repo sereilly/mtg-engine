@@ -260,10 +260,15 @@ class ExileEntireLibrary:
 @dataclass(frozen=True)
 class ExileTopOfLibrary:
     """``Exile the top three cards of your library.`` (Chandra, Heart of Fire's
-    +1.) Always the controller's own library — no card prints another player's
-    — and the exiled cards are recorded for a following sentence's "cards
+    +1.) The exiled cards are recorded for a following sentence's "cards
     exiled this way" to read, which is the reason this is not a Mill with a
     different destination.
+
+    *player* is the printed subject when there is one: "**that player** exiles
+    the top four cards of their library" (Scalpelexis) is another seat's
+    library, which the bare imperative never is. ``None`` is the imperative —
+    the controller's own library, which is every printing before Judgment —
+    so the field is absent from every node built before it.
 
     *face_down* is Knowledge Vault's rider (CR 406.3): the cards go to exile
     face down, so no player may look at them. It rides the node rather than
@@ -273,6 +278,7 @@ class ExileTopOfLibrary:
     """
     count: Amount
     face_down: bool = False
+    player: "PlayerRef | None" = None
 
 
 @dataclass(frozen=True)

@@ -83,6 +83,45 @@ def _parse_exile_entire_library(
     return ast.ExileEntireLibrary(player)
 
 
+def parse_player_exiles_top_of_library(
+    stream: TokenStream, player: "ast.PlayerRef"
+) -> "ast.ExileTopOfLibrary | None":
+    """``exiles the top four cards of their library`` (Scalpelexis) — the verb
+    and everything after it, with the subject already read by the caller.
+
+    :func:`_parse_exile_top_of_library` below with a printed subject, so the
+    same node with the subject on it. The possessive must agree with the
+    subject, for :func:`_parse_exile_entire_library`'s reason: "that player
+    exiles the top card of your library" names two libraries in one sentence.
+
+    Returns None with the cursor unmoved for anything else, so the other
+    player-subject exiles keep their own sentences and refusal sites.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("exiles", "exile"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("the", "top"):
+        stream.reset(mark)
+        return None
+    if stream.accept_word("card"):
+        count: ast.Amount = ast.Fixed(1)
+    else:
+        try:
+            count = parse_amount(stream)
+        except GrammarError:
+            stream.reset(mark)
+            return None
+        if not stream.accept_word("cards"):
+            stream.reset(mark)
+            return None
+    possessive = "your" if player.kind == "you" else "their"
+    if not stream.accept_phrase("of", possessive, "library"):
+        stream.reset(mark)
+        return None
+    return ast.ExileTopOfLibrary(count, player=player)
+
+
 def _parse_exile_top_of_library(stream: TokenStream) -> ast.Statement | None:
     """``Exile the top three cards of your library.`` (Chandra, Heart of
     Fire's +1.) Returns None rather than raising when the sentence is an

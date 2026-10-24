@@ -53,6 +53,7 @@ from ._common import (
     chargeable_card_filter,
 )
 from ._events import (EVENT_SUBJECT_PLAYER, EXILED_THIS_WAY_OBJECTS,
+                      _DAMAGED_PLAYER_EVENTS,
                       _EVENT_SUBJECT_OBJECTS, _EVENT_SUBJECT_PLAYERS)
 from ._piles import _SEARCH_EXILE_HONOURED, _linked_exile_filter
 
@@ -91,11 +92,21 @@ def _lower_exile_entire_library(
     )
 
 
-def _lower_exile_top_of_library(node: ast.ExileTopOfLibrary) -> tuple[OracleInstruction, ...]:
+def _lower_exile_top_of_library(
+    node: ast.ExileTopOfLibrary, event: str | None = None
+) -> tuple[OracleInstruction, ...]:
     """"Exile the top three cards of your library." (Chandra, Heart of Fire's
     +1.) The handler records what it exiled under ``exiled_cards``, which is
     what makes a following "you may play cards exiled this way" lowerable —
-    see ``_lower_cast_permission``'s producer check."""
+    see ``_lower_cast_permission``'s producer check.
+
+    "**That player** exiles the top four cards of their library."
+    (Scalpelexis.) A printed subject rides the ``recipient`` key
+    :func:`_lower_exile_entire_library` above already uses, and for its
+    reason: "that player" is the seat the firing event froze (CR 603.10) — the
+    damaged player under a damage trigger, the step's player under a step — so
+    it is admitted only under an event that froze one, and refused otherwise
+    rather than read as the resolving player's own library."""
     amount = _amount_payload(node.count)
     if not isinstance(amount, int) or amount <= 0:
         raise LoweringError(
@@ -104,6 +115,21 @@ def _lower_exile_top_of_library(node: ast.ExileTopOfLibrary) -> tuple[OracleInst
     payload: dict = {"amount": amount}
     if node.face_down:
         payload["face_down"] = True
+    kind = node.player.kind if node.player is not None else "you"
+    if kind == "that_player":
+        if event in _EVENT_SUBJECT_PLAYERS:
+            payload["recipient"] = EVENT_SUBJECT_PLAYER
+        elif event in _DAMAGED_PLAYER_EVENTS:
+            payload["recipient"] = "damaged_player"
+        else:
+            raise LoweringError(
+                "no event named {!r} freezes the seat 'that player' names".format(event),
+                node=node,
+            )
+    elif kind != "you":
+        raise LoweringError(
+            f"no handler exiles the top of {kind!r}'s library", node=node
+        )
     return (OracleInstruction("exile_top_of_library", "", payload),)
 
 
