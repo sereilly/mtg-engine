@@ -27,7 +27,7 @@ from ..aura_restrictions import aura_restriction_active
 from ..aura_attachment import attached_subject_triggers
 from ..damage_events import (EVENT_LOCK, EVENT_PREVENTION_LOCK,
                              damage_source_seat, deal_damage,
-                             lifelink_life_gained)
+                             lifelink_life_gained, source_has_keyword)
 from ..events import emit
 from ..life_prohibitions import life_gain_banned
 from ..cast_bans import most_permanents_land_ban
@@ -555,7 +555,7 @@ class EffectsMixin:
     def _mark_damage_on_permanent(
         self, permanent, amount: int, source=None, combat: bool = False, *, then=None,
         restart=None, asks: bool = False, unpreventable: bool = False,
-        cant_be_prevented: bool = False,
+        cant_be_prevented: bool = False, source_seat: int | None = None,
     ) -> int:
         """Mark *amount* damage on a creature after applying its prevention
         shields. Returns the damage actually marked (0 if fully prevented).
@@ -572,7 +572,13 @@ class EffectsMixin:
 
         ``then`` is what the caller would otherwise do with the returned number
         — see ``_deal_damage_to_player`` for why it is a callback and not a
-        return value."""
+        return value.
+
+        *source_seat* is who the source's damage belongs to, for a caller that
+        knows better than ``damage_events.damage_source_seat`` can: a card in
+        exile has no controller, and CR 108.4a makes its owner the answer to
+        anything that asks — which only the handler that found the card in its
+        owner's exile knows (Selfless Exorcist). Absent, the event derives it."""
         # Illusionary Mask: turn a face-down creature face up when damage would
         # be dealt to it or it would deal damage (before prevention, CR 613/614).
         if amount > 0:
@@ -587,13 +593,15 @@ class EffectsMixin:
                 self._mark_damage_on_permanent(
                     permanent, amount, source=source, combat=combat, then=then,
                     asks=True, unpreventable=unpreventable,
-                    cant_be_prevented=cant_be_prevented,
+                    cant_be_prevented=cant_be_prevented, source_seat=source_seat,
                 )
 
         event = {
             "recipient": permanent, "amount": amount, "source": source,
             "combat": combat,
         }
+        if source_seat is not None:
+            event["source_seat"] = source_seat
         if unpreventable:
             event[EVENT_LOCK] = True
         if cant_be_prevented:
@@ -617,20 +625,16 @@ class EffectsMixin:
         # the same call, and running it here too would gain twice for every
         # blocked creature. `combat` is the flag that tells the two apart.
         if not combat:
-            self._apply_lifelink(source, outcome.dealt)
+            self._apply_lifelink(source, outcome.dealt, seat=event.get("source_seat"))
         # CR 702.2b / 704.5h: nonzero damage from a source with deathtouch marks
         # the victim for destruction at the next state-based check — any damage,
         # not only combat damage. Lifelink directly above is the precedent: the
         # rule lives on the one path every creature-damage caller runs through,
-        # so a ping ability destroys exactly as a blocker does. The getattr
-        # mirrors lifelink_life_gained's guard — a spell or bare card has no
-        # keyword to read.
-        if (
-            outcome.dealt > 0
-            and source is not None
-            and getattr(source, "has_keyword", None) is not None
-            and self._has_keyword(source, "deathtouch")
-        ):
+        # so a ping ability destroys exactly as a blocker does. Asked of the
+        # source whatever it is (``source_has_keyword``): a spell or a card in
+        # exile prints its keywords, and reading only a permanent's left an
+        # exiled deathtouch creature card destroying nothing.
+        if outcome.dealt > 0 and source_has_keyword(source, "deathtouch"):
             permanent.metadata["received_deathtouch"] = True
         # The dealt-damage record (Sengir Vampire, Brine Hag) lives on this
         # same path and for the same reason as the two rules above: any damage
@@ -643,8 +647,15 @@ class EffectsMixin:
             then(outcome.dealt)
         return outcome.dealt
 
-    def _apply_lifelink(self, source, dealt: int) -> None:
+    def _apply_lifelink(self, source, dealt: int, seat: int | None = None) -> None:
         """CR 702.15b for damage dealt outside the combat damage step.
+
+        *seat* is the damage event's ``source_seat``, which is the answer for a
+        source that is not a permanent: CR 702.15b gives the life to "that
+        source's controller, or its owner if it has no controller" — a spell's
+        controller is the seat resolving it, and a card in exile has only an
+        owner (CR 108.4a). ``controller_index_of`` answers None for both, so a
+        spell's or an exiled card's lifelink gained nobody anything.
 
         The seat is the source's controller *now*, falling back to the seat it
         entered under when it is no longer on a battlefield — a creature can
@@ -670,11 +681,10 @@ class EffectsMixin:
         # deals 4 damage to its controller" is dealt by a creature the same
         # resolution has just destroyed, and a *stolen* one's lifelink is the
         # thief's — the seat it entered under gained instead.
-        seat = (
-            self.controller_or_last_known(source)
-            if isinstance(source, Permanent)
-            else self.controller_index_of(source)
-        )
+        if isinstance(source, Permanent):
+            seat = self.controller_or_last_known(source)
+        elif seat is None:
+            seat = self.controller_index_of(source)
         if seat is None or not (0 <= seat < len(self.players)):
             return
         self._gain_life(self.players[seat], gained, source_name="lifelink")
@@ -994,7 +1004,7 @@ class EffectsMixin:
             # this method (it applies prevention where the event is recorded, so
             # routing back would double-prevent), and this call always passes
             # combat=False.
-            self._apply_lifelink(source, outcome.dealt)
+            self._apply_lifelink(source, outcome.dealt, seat=event.get("source_seat"))
         if then is not None:
             then(outcome.dealt)
         return outcome.dealt

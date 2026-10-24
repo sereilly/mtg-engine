@@ -121,10 +121,33 @@ def lifelink_life_gained(source, dealt: int) -> int:
     """
     if dealt <= 0 or source is None:
         return 0
+    return dealt if source_has_keyword(source, LIFELINK) else 0
+
+
+def source_has_keyword(source, keyword: str) -> bool:
+    """Whether a damage *source* has *keyword* — lifelink (CR 702.15b) and
+    deathtouch (CR 702.2b) are asked of **the source**, whatever kind of object
+    it is (CR 120.2: any object can deal damage).
+
+    A permanent answers through CR 613's layer 6 (``Permanent.has_keyword``).
+    Anything else is a spell on the stack or a card in another zone — the
+    exiled creature card Selfless Exorcist makes deal damage, a burn spell —
+    and reaches the damage paths as its bare ``CardDefinition``: no layer has
+    anything on it to fold, so its keywords are the ones it prints (CR 702.15c:
+    and if it has moved on, the last known information is that card). This
+    answered no for every one of them, so an exiled lifelink creature card
+    gained its owner nothing and an exiled deathtouch one destroyed nothing.
+    """
+    if source is None:
+        return False
     has_keyword = getattr(source, "has_keyword", None)
-    if has_keyword is None:
-        return 0  # a spell or a bare card: no permanent to read a keyword from
-    return dealt if has_keyword(LIFELINK) else 0
+    if has_keyword is not None:
+        return bool(has_keyword(keyword))
+    wanted = keyword.lower()
+    return any(
+        str(printed).lower() == wanted
+        for printed in (getattr(source, "keywords", None) or ())
+    )
 
 
 def damage_source_seat(game, source) -> int | None:

@@ -235,6 +235,13 @@ def _exiled_card_bites_source(game, instruction, context, target) -> None:
                 f"{card.name} deals {dealt} damage to {target.card.name}"
             ),
             asks=True,
+            # CR 108.4a: a card in exile has no controller, so whatever asks
+            # who controls the source — "a source an opponent controls",
+            # lifelink's "its owner if it has no controller" (CR 702.15b) — is
+            # answered with its owner. The event alone would say the seat
+            # resolving the Exorcist's ability, which is CR 109.5 for a spell
+            # and wrong for a card.
+            source_seat=owner_seat,
         )
 
 
