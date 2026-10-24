@@ -1751,6 +1751,21 @@ class TurnManagementMixin:
             seat = self.controller_index_of(land)
             if seat is None:
                 seat = tapping_player_index
+        elif recipient == "source_controller":
+            # "Whenever you tap a land for mana, **add** one mana of any type
+            # that land produced." (Mirari's Wake.) The imperative's subject is
+            # the watching permanent's controller (CR 109.5), read through the
+            # control seam. With no permanent to ask there is no "you", and
+            # nothing is added rather than paying whoever tapped.
+            seat = (
+                self.controller_index_of(source) if source is not None else None
+            )
+            if seat is None:
+                self.log.append(
+                    f"{source_name or 'a triggered mana ability'}: no controller "
+                    "to add the mana for"
+                )
+                return
         else:
             seat = tapping_player_index
         player = self.players[seat]

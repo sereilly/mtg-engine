@@ -547,6 +547,11 @@ def _lower_note_mana_spent(
 _TAPPED_LAND_MANA_RECIPIENTS = {
     "that_player": "that_player",   # Mana Flare: "that player"
     "controller": "land_controller",  # Gauntlet of Might: "its controller"
+    # Mirari's Wake: the bare imperative "add …", whose subject is the
+    # ability's own controller (CR 109.5). Its trigger prints "whenever **you**
+    # tap", so this is the tapping seat too, but it is resolved as the seat
+    # that controls the watching permanent rather than assumed to coincide.
+    "you": "source_controller",
 }
 
 

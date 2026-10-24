@@ -611,6 +611,22 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
                 any_type_from_lands=_could_produce_board(stream, lands),
                 could_produce_lands=lands,
             )
+        elif stream.accept_phrase("that", "land", "produced"):
+            # "Whenever you tap a land for mana, **add one mana of any type that
+            # land produced**." (Mirari's Wake.) Mana Flare's clause with its
+            # subject left implied — the imperative names the ability's own
+            # controller, so the node is Mana Flare's with a "you" recipient,
+            # and the trigger binds "that land" exactly as it does there. Past
+            # tense, so it is not Benthic Explorers' "could produce" above: the
+            # type is what the land just made (ruling 2021-06-18: one type
+            # that was produced), never a type it merely could make.
+            amount = count.value if isinstance(count, ast.Fixed) else 0
+            if amount <= 0:
+                raise stream.error("expected a fixed amount of mana")
+            return ast.AddManaForTappedLand(
+                ast.PlayerRef("you"), of_type_produced=amount,
+                additional=additional,
+            )
         else:
             raise stream.error(
                 "the only mana type this reads is one a named land could produce"

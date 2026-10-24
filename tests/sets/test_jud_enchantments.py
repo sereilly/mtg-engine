@@ -324,4 +324,89 @@ def test_w1g5_web_of_inertia_restricts_that_players_creatures_only(set_pool):
 # ==== W1G10 ==========================================================
 # W1G10's tests go between this line and the "end W1G10" line.
 
+from engine import Game as _W1G10Game, PlayerState as _W1G10PlayerState
+from engine.board_payment import board_can_pay as _w1g10_board_can_pay
+from engine.models import Permanent as _W1G10Permanent
+
+
+def _w1g10_table(set_pool):
+    island = set_pool("LEA")["Island"]
+    game = _W1G10Game(players=[
+        _W1G10PlayerState(name=f"P{seat}", life=20, library=[island] * 10)
+        for seat in range(2)
+    ])
+    game.enforce_mana_costs = True
+    game.interactive_seats = set()
+    game.start_turn(0)
+    return game
+
+
+def _w1g10_put(game, card, seat):
+    permanent = _W1G10Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    permanent.tapped = False
+    return permanent
+
+
+def _w1g10_pool(game, seat):
+    return {s: n for s, n in game.players[seat].mana_pool.items() if n}
+
+
+def test_w1g10_mirari_s_wake_doubles_its_controller_s_land_mana(set_pool):
+    """"Whenever you tap a land for mana, add one mana of any type that land
+    produced." A triggered mana ability (CR 605.1b) resolved inside the tap
+    (CR 605.4a): a Forest tapped by the Wake's controller makes {G}{G}, and a
+    Badlands asked for {R} makes {R}{R} — the type it produced, not one of the
+    controller's choosing (ruling 2021-06-18)."""
+    jud, lea = set_pool("JUD"), set_pool("LEA")
+    game = _w1g10_table(set_pool)
+    _w1g10_put(game, jud["Mirari's Wake"], 0)
+    forest = _w1g10_put(game, lea["Forest"], 0)
+    badlands = _w1g10_put(game, lea["Badlands"], 0)
+    game._settle()
+
+    assert game.tap_land_for_mana(0, "Forest", permanent_id=forest.permanent_id)
+    assert _w1g10_pool(game, 0) == {"G": 2}
+    assert game.tap_land_for_mana(
+        0, "Badlands", "R", permanent_id=badlands.permanent_id
+    )
+    assert _w1g10_pool(game, 0) == {"G": 2, "R": 2}
+    assert any("Mirari's Wake: P0 added {R}" in line for line in game.log)
+
+
+def test_w1g10_mirari_s_wake_ignores_an_opponent_s_tap(set_pool):
+    """"Whenever **you** tap" — the opponent's Forest makes its one {G}."""
+    jud, lea = set_pool("JUD"), set_pool("LEA")
+    game = _w1g10_table(set_pool)
+    _w1g10_put(game, jud["Mirari's Wake"], 0)
+    theirs = _w1g10_put(game, lea["Forest"], 1)
+    game._settle()
+
+    assert game.tap_land_for_mana(1, "Forest", permanent_id=theirs.permanent_id)
+    assert _w1g10_pool(game, 1) == {"G": 1}
+    assert _w1g10_pool(game, 0) == {}
+
+
+def test_w1g10_mirari_s_wake_counts_in_what_the_board_can_pay(set_pool):
+    """What the castable highlight and the auto-payment ask beforehand
+    (``board_payment``) is what the tap will make: two Mountains pay {3}{R}
+    under the Wake and not without it. And creatures its controller controls
+    get +1/+1 — the opponent's do not."""
+    jud, lea = set_pool("JUD"), set_pool("LEA")
+    game = _w1g10_table(set_pool)
+    _w1g10_put(game, lea["Mountain"], 0)
+    _w1g10_put(game, lea["Mountain"], 0)
+    game._settle()
+    cost = {"R": 1, "generic": 3}
+    assert not _w1g10_board_can_pay(game, 0, cost)
+
+    _w1g10_put(game, jud["Mirari's Wake"], 0)
+    mine = _w1g10_put(game, lea["Grizzly Bears"], 0)
+    theirs = _w1g10_put(game, lea["Grizzly Bears"], 1)
+    game._settle()
+    assert _w1g10_board_can_pay(game, 0, cost)
+    assert (mine.effective_power, mine.effective_toughness) == (3, 3)
+    assert (theirs.effective_power, theirs.effective_toughness) == (2, 2)
+
 # ==== end W1G10 ======================================================
