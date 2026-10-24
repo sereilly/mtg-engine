@@ -373,6 +373,15 @@ class AlternativeCost:
             )
         if self.tap_count:
             noun = board_noun(self.tap_filter or {})
+            # "Flashback—Tap an untapped **white** creature you control."
+            # (Prismatic Strands; Battle Screech taps three.) The colour the
+            # payment is held to, spelled as the hand half spells its own
+            # (`_a_card_answering`): unspelled, the offer the client showed
+            # read "tap an untapped creature you control" and named a price
+            # the gate then refused for every green one.
+            color = (self.tap_filter or {}).get("color_filter")
+            if isinstance(color, str) and color:
+                noun = f"{_SYMBOL_TO_COLOR_WORD.get(color, color)} {noun}"
             parts.append(
                 f"tap an untapped {noun} you control" if self.tap_count == 1
                 else f"tap {self.tap_count} untapped {noun}s you control"
