@@ -201,7 +201,8 @@ def test_an_opalescence_enchantment_is_counted_among_the_creatures(by_name):
 def test_the_hand_round_discards_every_seats_cards_together(by_name):
     """"…no cards are revealed until all players have chosen what to
     discard, at which point those cards are all discarded simultaneously."
-    The first seat's answer is held while the second still owes one."""
+    The seats are asked in turn order from the active player, and the first
+    seat's answer is held while the second still owes one."""
     game = _game(by_name, seats=3)
     game.players[0].hand = [by_name["Forest"], by_name["Island"], by_name["Plains"]]
     game.players[1].hand = [by_name["Swamp"], by_name["Mountain"]]
@@ -212,15 +213,18 @@ def test_the_hand_round_discards_every_seats_cards_together(by_name):
 
     _cast_balance(game, by_name)
 
-    owed = sorted(
-        (c.player_index, c.data["plan"]["hand"])
-        for c in game.pending_choices_of("balance")
-    )
-    assert owed == [(0, 2), (1, 1)]
+    def owed():
+        return [
+            (c.player_index, c.data["plan"]["hand"])
+            for c in game.pending_choices_of("balance")
+        ]
 
+    # The active player chooses first; the next seat is asked once it has.
+    assert owed() == [(0, 2)]
     assert game.confirm_balance(0, hand_indices=[0, 2])
     assert len(game.players[0].hand) == 3, "held until every seat has chosen"
     assert game.players[0].graveyard == []
+    assert owed() == [(1, 1)]
 
     assert game.confirm_balance(1, hand_indices=[1])
     assert [card.name for card in game.players[0].hand] == ["Island"]

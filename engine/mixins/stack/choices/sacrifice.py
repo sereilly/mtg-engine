@@ -679,10 +679,11 @@ class SacrificeChoicesMixin:
     # Mishra's Factory sacrificed as a land was still owed as a creature, and a
     # seat whose creatures the *other* seat's land choice had evened up was
     # still made to sacrifice one. Now each round is a batch of ``balance``
-    # prompts — one per seat that owes, the same prompt with the other two
-    # counts at zero — and nothing moves until the round's last answer is in
-    # (the keep batch's rule above, for the same reason). Then the next round
-    # is counted on the board that one left.
+    # prompts — one per seat that owes, asked in turn order from the active
+    # player, the same prompt with the other two counts at zero — and nothing
+    # moves until the round's last answer is in (the keep batch's rule above,
+    # for the same reason). Then the next round is counted on the board that
+    # one left.
     #
     # What each round counts is :meth:`balance_candidates`: layer 4's answer
     # (CR 613.1d), so a land animated into a creature is a land in the first
@@ -728,20 +729,33 @@ class SacrificeChoicesMixin:
             owed = {seat: count - fewest for seat, count in counts.items() if count > fewest}
             if not owed:
                 continue
-            batch = {"stage": stage, "answers": [], "armed": False, "applied": False}
-            for seat in seats:
-                if seat not in owed:
-                    continue
-                plan = {"lands": 0, "creatures": 0, "hand": 0}
-                plan[stage] = owed[seat]
-                self.arm_pending_choice(
-                    "balance", seat, plan=plan, stage=stage, _balance=batch,
-                )
-            batch["armed"] = True
+            batch = {
+                "stage": stage, "answers": [], "armed": False, "applied": False,
+                # Who still has to be asked, in turn order from the active
+                # player: "First the player whose turn it is chooses ..., then
+                # each other player in turn order does the same. Each player
+                # will know the choices made by the players who chose before
+                # them." So one seat is asked at a time, and the next only once
+                # the one before has chosen.
+                "waiting": [(seat, owed[seat]) for seat in seats if seat in owed],
+            }
             self.log.append(f"Balance: each player chooses {_BALANCE_ROUND_WORDS[stage]}")
+            self._ask_next_balance_seat(batch)
+            batch["armed"] = True
             self._finish_balance_round(batch)
             return True
         return False
+
+    def _ask_next_balance_seat(self, batch: dict) -> None:
+        """Arm the round's prompt for the next seat in turn order, if any."""
+        if not batch["waiting"]:
+            return
+        seat, count = batch["waiting"].pop(0)
+        plan = {"lands": 0, "creatures": 0, "hand": 0}
+        plan[batch["stage"]] = count
+        self.arm_pending_choice(
+            "balance", seat, plan=plan, stage=batch["stage"], _balance=batch,
+        )
 
     def _finish_balance_round(self, batch: dict) -> None:
         """Perform a round once none of its prompts is still owed, then count
@@ -750,7 +764,7 @@ class SacrificeChoicesMixin:
         Read off the queue, as :meth:`finish_keep_batch` is, so a prompt that
         left the queue unanswered cannot strand the answers that were given.
         """
-        if not batch.get("armed") or batch.get("applied"):
+        if not batch.get("armed") or batch.get("applied") or batch.get("waiting"):
             return
         if any(
             owed.kind == "balance" and owed.data.get("_balance") is batch
@@ -831,6 +845,7 @@ class SacrificeChoicesMixin:
         # players have chosen what to discard").
         batch["answers"].append((choice, chosen))
         self.log.append(said + " (Balance)")
+        self._ask_next_balance_seat(batch)
         self._finish_balance_round(batch)
         return True
 
@@ -853,6 +868,7 @@ class SacrificeChoicesMixin:
             # was waiting on.
             batch = choice.data.get("_balance")
             if batch is not None:
+                self._ask_next_balance_seat(batch)
                 self._finish_balance_round(batch)
 
     def confirm_balance(self, player_index: int, land_indices=None, creature_indices=None, hand_indices=None) -> bool:

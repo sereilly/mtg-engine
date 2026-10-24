@@ -1,0 +1,48 @@
+"""A seeded AI run over Alpha and Antiquities with Balance, Living Lands,
+Mishra's Factory and Soul Net pinned into both decks.
+
+Two things the unit tests drive by hand, reached by the simulator's own turn:
+Balance's rounds (each counted as it starts, through the layers — a Living
+Lands Forest is one of its controller's creatures in the last round), and a
+death that was a creature's only through the layers being seen by "whenever a
+creature dies". A floor of one each: the paths were reached, and nothing the
+run did raised or was reported.
+"""
+
+from __future__ import annotations
+
+import re
+
+import pytest
+
+from engine.ai_simulator import run_ai_simulation
+from engine.card_loader import manifest_set_path
+
+SEED = 11
+
+
+@pytest.mark.slow
+def test_a_seeded_run_plays_balance_by_rounds_and_soul_net_sees_an_animated_forest_die():
+    report = run_ai_simulation(
+        [manifest_set_path("LEA"), manifest_set_path("ATQ")],
+        games=2, seed=SEED, max_turns=14,
+        required_cards=["Balance", "Mishra's Factory", "Living Lands", "Soul Net"],
+    )
+    assert report.games_completed == 2
+    assert not report.issues, report.issues
+    assert not report.rehearsals_raised, report.rehearsals_raised
+
+    lines = report.log_lines
+    rounds = [i for i, line in enumerate(lines)
+              if "Balance: each player chooses which creatures to keep" in line]
+    assert rounds, "no seat cast Balance into a creature round; pick another seed"
+    # The creature round took Forests: Living Lands made them creatures, and
+    # the round counted them as such.
+    forests_taken = [
+        i for i in range(rounds[0], len(lines))
+        if re.search(r"sacrificed .*Forest.* \(Balance\)", lines[i])
+    ]
+    assert forests_taken, lines[rounds[0]:rounds[0] + 12]
+    # …and Soul Net, watching "a creature dies", saw them go.
+    after = lines[forests_taken[0]:forests_taken[0] + 8]
+    assert any("gained 1 life from Soul Net" in line for line in after), after

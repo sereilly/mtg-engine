@@ -11,9 +11,11 @@ meant the permanent and ask ``has_type`` / ``is_creature`` now. One test here
 for the first of each shape — and the shape that was live on an ordinary
 board is the first one.
 
-The six that stay, and the eight in the AI's policy modules nobody has asked yet, are
-in ``tests/engine/test_layer_reads.py``'s ``PRIMARY_TYPE_BASELINE`` with what
-each means.
+The five that stay — each a spell on the stack — are in
+``tests/engine/test_layer_reads.py``'s ``PRIMARY_TYPE_BASELINE`` with what
+each means. The AI's eight and the death seam's one were asked at Judgment and
+round kg (``tests/ai/test_kg_layers_ai_land_reads.py``,
+``tests/regressions/test_kg_layers_what_died.py``).
 """
 
 from __future__ import annotations
