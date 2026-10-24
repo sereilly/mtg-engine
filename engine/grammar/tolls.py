@@ -617,6 +617,55 @@ def accept_damage_price(
     return dataclasses.replace(damage, recipients=(payer,))
 
 
+def chain_damage_price(
+    action: "ast.Statement | None", payer: ast.PlayerRef
+) -> "ast.DealDamage | None":
+    """*action* as the price an offer to a **set** of seats charges, or None.
+
+    "**Any player may have Browbeat deal 5 damage to them.** If no one does,
+    target player draws three cards." / "This creature gets +2/+2 until end of
+    turn **unless a player has this creature deal 4 damage to them**."
+    (Barbarian Bully.) CR 118.12a makes the two spellings one sentence, and
+    over a set of seats it is the :class:`ast.UnlessPlayerPays` chain the mana
+    and life tolls already are — every seat asked in turn (CR 101.4), the
+    first acceptance ending it, the effect on the branch nobody bought off.
+    What differs is the currency: a deed the asked seat takes rather than a
+    payment it makes.
+
+    **Only damage, and only the shape** :func:`accept_damage_price` **reads**:
+    the ability's own source dealing a printed amount to the seat that takes
+    the offer, with no rider. The chain's handler aims its accept branch at
+    the asked seat and leaves the performer where it was, which is right for
+    damage the source deals (CR 120.7 — the spell or creature deals it, and
+    CR 109.5 keeps its controller "you") and wrong for a deed the seat
+    *performs*: a sacrifice or a discard behind this chain would come out of
+    the caster's board. Those refuse until the handler can make the asked seat
+    the performer.
+
+    The recipient comes back as ``that_player`` whatever was printed: the
+    payer reference itself ("each player") read as a recipient would burn the
+    whole table, and the seat it means is the one the chain is asking now.
+    """
+    if not isinstance(action, ast.DealDamage):
+        return None
+    source = action.source
+    if (
+        not isinstance(source, ast.TargetSpec)
+        or source.targeted
+        or not source.filter.is_source
+    ):
+        return None
+    if (
+        action.recipients not in ((ast.PlayerRef("that_player"),), (payer,))
+        or action.riders != ast.DamageRiders()
+        or action.chooser is not None
+        or action.per_each is not None
+        or not isinstance(action.amount, ast.Fixed)
+    ):
+        return None
+    return dataclasses.replace(action, recipients=(ast.PlayerRef("that_player"),))
+
+
 def _accept_repeat_request(stream: TokenStream) -> "ast.RepeatProcessRequest | None":
     """``… and repeat this process`` — what a toll buys besides its penalty.
 
@@ -772,6 +821,17 @@ def _accept_trailing_toll(
     if not stream.accept_word("unless"):
         return None
     payer = parse_player_ref(stream)
+    if payer is None and stream.accept_phrase("a", "player"):
+        # "…unless **a player** has this creature deal 4 damage to them."
+        # (Barbarian Bully.) CR 118.12a's own spelling of the clause — "[do
+        # something] unless [a player does something else]" — and in it the
+        # bare article names any seat at all, which is the set "any player"
+        # already reaches as. Read here and not in ``parse_player_ref``:
+        # everywhere else "a player" opens an *event* ("whenever a player
+        # casts …") and names nobody until the event does, and the reference
+        # reader answering it would hand every one of those sentences a set of
+        # seats it never meant.
+        payer = ast.PlayerRef("each_player")
     if payer is None:
         stream.reset(mark)
         return None
@@ -786,12 +846,19 @@ def _accept_trailing_toll(
         )
     action = _accept_price_action(stream, payer)
     if action is not None:
-        # Not offered to an enumerated payer: `ast.May` is one offer to one
-        # seat, and "each player" would be a chain — which only the mana
-        # spelling below has a node for.
+        # Not offered to an enumerated payer as a `May`: that is one offer to
+        # one seat, and "each player" is a chain. The chain carries one deed
+        # (:func:`chain_damage_price` — Barbarian Bully's "unless a player has
+        # this creature deal 4 damage to them"); every other deed refuses.
         if payer.kind in _ENUMERATED_PAYERS:
-            stream.reset(mark)
-            return None
+            priced = chain_damage_price(action, payer)
+            if priced is None:
+                stream.reset(mark)
+                return None
+            return _under_a_leading_condition(
+                body,
+                ast.UnlessPlayerPays(payer, ast.ManaCost(), body, action=priced),
+            )
         return _under_a_leading_condition(body, ast.May(
             actor=payer,
             action=_accept_price_alternatives(stream, payer, action, price_at),

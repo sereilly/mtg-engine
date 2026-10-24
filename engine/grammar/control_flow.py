@@ -68,6 +68,7 @@ from .sentence_rebinding import (_bind_that_creature_after_enchanted,
                                  rebind_pronoun_to_delay_target)
 from .statements import parse_statement
 from .stream import TokenStream
+from .tolls import chain_damage_price
 
 
 def _attach_otherwise(stream: TokenStream, steps: list[ast.Statement]) -> bool:
@@ -331,16 +332,28 @@ def _attach_if_no_one_does(stream: TokenStream, steps: list[ast.Statement]) -> b
     {1}" builds: one offer the whole table is asked in turn, the first payment
     ending it, the effect on the branch nobody bought off.
 
-    Only over a bare mana offer made to a set of seats — anything carrying a
-    branch, an action or a second price is a sentence this does not describe.
+    Only over a bare offer made to a set of seats — anything carrying a
+    branch or a second price is a sentence this does not describe. The offer
+    is a mana price, or the one deed the chain can carry: "**Any player may
+    have Browbeat deal 5 damage to them.** If no one does, target player draws
+    three cards" (``tolls.chain_damage_price``, which says why it is the only
+    one).
     """
     last = steps[-1] if steps else None
     if not (
         isinstance(last, ast.May)
         and last.actor.kind in _NO_ONE_PAYERS
-        and isinstance(last.cost, ast.ManaCost)
-        and last == ast.May(last.actor, cost=last.cost)
     ):
+        return False
+    priced = None
+    if isinstance(last.cost, ast.ManaCost):
+        if last != ast.May(last.actor, cost=last.cost):
+            return False
+    elif last == ast.May(last.actor, action=last.action):
+        priced = chain_damage_price(last.action, last.actor)
+        if priced is None:
+            return False
+    else:
         return False
     mark = stream.mark()
     if not stream.accept_phrase("if", "no", "one", "does"):
@@ -352,6 +365,11 @@ def _attach_if_no_one_does(stream: TokenStream, steps: list[ast.Statement]) -> b
     except GrammarError:
         stream.reset(mark)
         return False
+    if priced is not None:
+        steps[-1] = ast.UnlessPlayerPays(
+            last.actor, ast.ManaCost(), branch, action=priced
+        )
+        return True
     steps[-1] = ast.UnlessPlayerPays(last.actor, last.cost, branch)
     return True
 

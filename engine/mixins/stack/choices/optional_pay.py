@@ -433,10 +433,19 @@ class OptionalPayChoicesMixin:
                 steps = steps[:start] + (OracleInstruction("if_then", "", {
                     "condition": dict(gate), "then": steps[start:], "else": (),
                 }),)
-        return self._run_optional_steps(entry, steps)
+        # A deed-priced chain link (``handlers/offers.unless_player_pays``):
+        # its ``_context`` is aimed at the seat being asked, which is right for
+        # the deed on ``_on_accept`` and wrong for everything else — the next
+        # link and the unpaid branch it ends in are the resolution's own, and
+        # read the target the spell chose.
+        context = (
+            entry.get("_chain_context") if key != "_on_accept" else None
+        )
+        return self._run_optional_steps(entry, steps, context=context)
 
-    def _run_optional_steps(self, entry: dict, steps) -> bool:
-        """Run *steps* against the entry's frozen resolution context.
+    def _run_optional_steps(self, entry: dict, steps, context=None) -> bool:
+        """Run *steps* against the entry's frozen resolution context — or
+        *context*, where the caller has a different one for these steps.
 
         Split from :meth:`_run_optional_branch` because a graded offer's branch
         is not a fixed payload key — which option was taken is only known once
@@ -445,7 +454,8 @@ class OptionalPayChoicesMixin:
         """
         from ....handlers.control_flow import _role_scoped
 
-        context = entry.get("_context")
+        if context is None:
+            context = entry.get("_context")
         if not steps or context is None:
             return False
 

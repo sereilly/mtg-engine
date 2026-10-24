@@ -234,6 +234,11 @@ def _lower_unless_player_pays(
         # The parser builds a life price only over a set of seats; one seat's
         # is the ``May`` whose *action* is the payment.
         raise LoweringError("a life-priced chain needs a set of payers", node=node)
+    if payer is None and node.action is not None:
+        # The same for a deed (Barbarian Bully's damage): one seat's is the
+        # ``May`` the toll reader builds, and the ``May`` below would be built
+        # without it — the clause bought off for nothing.
+        raise LoweringError("a deed-priced chain needs a set of payers", node=node)
     if payer is None:
         # "…**unless you pay {R}**, …" (Goblin Flotilla); "**Unless target
         # player pays {3}**, that player loses 5 life …" (Rhystic Syphon). An
@@ -267,6 +272,9 @@ def _lower_unless_player_pays(
     paid = branch(node.paid)
     if not (unpaid or paid):
         raise LoweringError("an unpaid clause with no consequence", node=node)
+    if node.action is not None:
+        return _lower_chain_deed(node, payer, unpaid, paid, produced, event_subject,
+                                 lower_statement=lower_statement)
     payload: dict[str, object] = {
         "payer": payer,
         # ``{X}`` stays variable ("…unless any player pays {X}", Soul Strings):
@@ -295,6 +303,62 @@ def _lower_unless_player_pays(
     if paid:
         payload["paid"] = paid
     return (OracleInstruction("unless_player_pays", "", payload),)
+
+
+def _lower_chain_deed(
+    node: ast.UnlessPlayerPays, payer: str, unpaid, paid,
+    produced: frozenset[str], event_subject: object | None,
+    *, lower_statement,
+) -> tuple[OracleInstruction, ...]:
+    """The chain whose price is a **deed** — "Any player may have Browbeat
+    deal 5 damage to them. If no one does, …" (``ast.UnlessPlayerPays.action``).
+
+    The deed rides the payload as ``action``, beside ``unpaid`` and never
+    instead of a ``cost``: the handler asks each seat in turn exactly as it
+    asks for a mana toll, and what an acceptance runs is the deed aimed at the
+    seat that accepted. Lowered with no firing event, for the reason
+    ``_lower_may`` clears one under a set of seats: "them" is the seat being
+    asked, not a seat an event froze — so it reaches the handler as
+    ``target_player``, which the handler binds to that seat link by link.
+
+    Three refusals, each a sentence this could otherwise mean more than it
+    says: a deed beside a printed mana or life price (no card prints both, and
+    the prompt could not say which the payer took), what paying *buys*
+    (``paid`` reads the resolution's own seat, and nothing has told it which
+    seat paid), and a deed whose steps are anything but damage to the asked
+    seat — the one deed ``tolls.chain_damage_price`` admits, and the one whose
+    performer does not have to move.
+    """
+    if node.life or (isinstance(node.cost, ast.ManaCost) and node.cost.pips):
+        raise LoweringError(
+            "a chain is priced in mana, life or a deed, not two of them",
+            node=node,
+        )
+    if paid:
+        raise LoweringError(
+            "nothing names which seat took a deed-priced chain for what it buys",
+            node=node,
+        )
+    deed = lower_statement(
+        node.action, produced, event=None, event_subject=event_subject,
+        whole_effect=False,
+    )
+    if not deed or any(
+        step.kind != "deal_damage"
+        or step.payload.get("recipient") != "target_player"
+        or not isinstance(step.payload.get("amount"), int)
+        or set(step.payload) - {"amount", "recipient"}
+        for step in deed
+    ):
+        raise LoweringError(
+            "a chain's deed is damage its source deals to the seat asked",
+            node=node,
+        )
+    return (OracleInstruction("unless_player_pays", "", {
+        "payer": payer,
+        "action": tuple(deed),
+        "unpaid": unpaid,
+    }),)
 
 
 #: The actors whose offered seat is **not** the one the resolution already
