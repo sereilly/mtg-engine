@@ -39,6 +39,7 @@ from __future__ import annotations
 import pytest
 
 from engine import Game, PlayerState
+from engine.events import FUNCTIONS_FROM, graveyard_trigger_events
 from engine.faces import compilation_units
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
@@ -171,10 +172,43 @@ def _left(before, after) -> list[tuple[str, int]]:
     return gone
 
 
-def _fire(game, card, trigger) -> Permanent:
+def _fire(game, card, trigger) -> "Permanent | None":
     """Put *trigger* on the stack with nothing announced for it: an entry
     trigger by its permanent entering without a cast, any other by the seam
-    every fire site ends at."""
+    every fire site ends at.
+
+    **From the zone it functions in.** "At the beginning of your upkeep, if
+    this creature is in your graveyard, you may pay {2}{G}. If you do, return
+    target creature card from your graveyard to your hand." (Genesis, the
+    first trigger here that says where it works, CR 113.6b.) Fired from a
+    permanent on the battlefield, as this census fired every non-entry trigger,
+    its intervening "if" is false and the push rightly refuses it (CR 603.4,
+    "didn't trigger: its condition wasn't met") — so the census saw "nobody
+    was asked" and "not on the stack" for a card that announces its target
+    from the graveyard (``tests/sets/test_jud_creatures.py``). A trigger
+    stamped ``functions_from: "graveyard"`` is put on top of its controller's
+    pile through the zone seam and fired by the engine's own graveyard scan
+    (``events.graveyard_trigger_events``), the road the upkeep step takes; its
+    source is then one of the cards in the pile it may name, which is why the
+    tests take their "before" reading after firing.
+    """
+    # …and the price of its offer where it prints one ("you may pay {2}{G}.
+    # If you do, …"), floating in the pool, which the default answer always
+    # spends (``_default_optional_pay``). This table holds no lands, and the
+    # question here is which card moves, not whether the seat can afford to
+    # move one: declined for want of mana, Genesis moved nothing at all.
+    price = (trigger.instruction.payload or {}).get("cost") or {}
+    pool = game.players[0].mana_pool
+    for symbol, amount in price.items():
+        key = "C" if symbol == "generic" else symbol
+        pool[key] = pool.get(key, 0) + int(amount)
+    if (trigger.instruction.payload or {}).get(FUNCTIONS_FROM) == "graveyard":
+        assert game.put_card_into_graveyard(0, card)
+        for event in graveyard_trigger_events(game, trigger.condition.kind):
+            if event["card"] is card and event["instruction"] is trigger.instruction:
+                game._enqueue_triggered_ability(**event)
+                break
+        return None
     source = Permanent(card=card)
     game._put_permanent_onto_battlefield(0, source, None)
     if trigger.condition.kind == "enters_battlefield":
@@ -241,8 +275,8 @@ def test_a_seat_that_can_be_asked_is_asked_and_its_answer_is_the_card_that_moves
             continue
         label = f"{card.name} [{trigger.condition.kind}]"
         game = _table(_pool, _mercenaries, interactive={0})
-        before = _yards(game)
         _fire(game, card, trigger)
+        before = _yards(game)
         prompt = _prompt(game, trigger)
         if prompt is None:
             findings.append(f"{label}: nobody was asked")
@@ -294,8 +328,8 @@ def test_a_seat_nobody_asks_takes_the_card_the_resolution_used_to_find(_pool, _m
             continue
         label = f"{card.name} [{trigger.condition.kind}]"
         game = _table(_pool, _mercenaries)
-        before = _yards(game)
         _fire(game, card, trigger)
+        before = _yards(game)
         item = _object(game, trigger)
         if item is None:
             findings.append(f"{label}: not on the stack")
