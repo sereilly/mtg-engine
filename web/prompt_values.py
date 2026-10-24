@@ -165,6 +165,11 @@ _OFFER_WORD = re.compile(r"\b(?:unless|may)\b", re.IGNORECASE)
 #: "At the beginning of your upkeep, " / "When this creature dies, ": the
 #: trigger a sentence opens with, which is not part of either answer.
 _TRIGGER_OPENING = re.compile(r"^(?:at|when|whenever)\b[^,]*,\s*", re.IGNORECASE)
+#: "Discard a card at random: " (Barbarian Bully): an activated ability's cost
+#: — "everything before the colon" (CR 602.1a) — which was paid as the ability
+#: was activated, before the offer was made, and so is not part of either
+#: answer any more than a trigger's opening is.
+_ACTIVATION_COST = re.compile(r"^[^:]*:\s*")
 
 
 def _offer_source_card(data: dict):
@@ -238,7 +243,9 @@ def offer_wording(data: dict) -> dict:
     wording = {"card_text": sentence}
     head, found, tail = sentence.rstrip(".").partition(" unless ")
     if found and head and tail:
-        wording["decline_text"] = _TRIGGER_OPENING.sub("", head, count=1)
+        wording["decline_text"] = _ACTIVATION_COST.sub(
+            "", _TRIGGER_OPENING.sub("", head, count=1), count=1
+        )
         wording["accept_text"] = tail
     return wording
 
