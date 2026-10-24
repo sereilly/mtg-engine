@@ -12,6 +12,39 @@ unclaimed text. Do not edit by hand.
 - With UNCLAIMED text (must fix or acknowledge): **0**
 - With deletion-probe findings (ignored words): **643**
 
+## Measured sets — reported, not gated
+
+Cards in a `measured` set (see `cards/manifest.json`) that the
+compiler calls **supported** while carrying a printed line nothing
+implements. They are the debt behind that set's progress number, and
+`--hollow-lines` sees only the ones that produced an *ability part* —
+a line yielding nothing at all leaves that probe nothing to find.
+
+Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
+`HOOK_RELIANCE.md`'s ceilings exclude the same sets: a ratchet over a
+set nobody has implemented fires on its composition rather than on
+anything anyone did, and every ingest would arrive red.
+
+**9 unclaimed sentence(s) across 8 supported card(s).**
+
+- **Aven Warcraft**
+  - `creatures you control also gain protection from the chosen color until end of turn`
+- **Grave Consequences**
+  - `each player may exile any number of cards from their graveyard`
+  - `then each player loses 1 life for each card in their graveyard`
+- **Grip of Amnesia**
+  - `counter target spell unless its controller exiles all cards from their graveyard`
+- **Krosan Verge**
+  - `{2}, {t}, sacrifice this land: search your library for a forest card and a plains card, put them onto the battlefield tapped, then shuffle`
+- **Laquatus's Disdain**
+  - `counter target spell cast from a graveyard`
+- **Lost in Thought**
+  - `its controller may exile three cards from their graveyard for that player to ignore this effect until end of turn`
+- **Mirari's Wake**
+  - `whenever you tap a land for mana, add one mana of any type that land produced`
+- **Planar Chaos**
+  - `whenever a player casts a spell, that player flips a coin. if they lose the flip, counter that spell`
+
 ## Acknowledged simplifications
 
 | Card | Sentence | Why it is acceptable |
