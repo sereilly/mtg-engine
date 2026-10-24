@@ -52,7 +52,7 @@ from ..errors import GrammarError
 from ..nouns import parse_object_filter
 from ..references import parse_player_ref, parse_target_spec
 from ..stream import TokenStream
-from ..phrases import _accept_number, _parse_zone
+from ..phrases import _accept_number, _parse_zone, accept_article_descriptions
 from ._other_libraries import _parse_search_other_library
 
 
@@ -451,17 +451,27 @@ def _accept_search_one_of_each(
     quality), which is what ``up_to`` records.
     """
     mark = stream.mark()
-    if not stream.accept_word("a", "an"):
+    listed = accept_article_descriptions(stream)
+    if listed is None:
         return None
-    try:
-        described = parse_object_filter(stream)
-    except GrammarError:
-        stream.reset(mark)
-        return None
-    each = accept_one_of_each(stream, described)
-    if each is None:
-        stream.reset(mark)
-        return None
+    if len(listed) > 1:
+        # "…for **a Forest card and a Plains card**, put them onto the
+        # battlefield tapped, then shuffle." (Krosan Verge.) The list "of each"
+        # abbreviates, printed out: one find per description, in the printed
+        # order, each filled by at most one card — so the same field and the
+        # same lowering. What every find shares is only that it is a card,
+        # which is the filter the descriptions are narrowed from; anything
+        # more would be a restriction one of them does not print.
+        each = listed
+        described = ast.ObjectFilter(
+            is_card=all(filt.is_card for filt in listed)
+        )
+    else:
+        described = listed[0]
+        each = accept_one_of_each(stream, described)
+        if each is None:
+            stream.reset(mark)
+            return None
     stream.accept_punct(",")
     stream.expect_word("put")
     if not (stream.accept_word("them") or stream.accept_phrase("those", "cards")):

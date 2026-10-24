@@ -183,4 +183,87 @@ def test_w1g1_riftstone_portal_grants_only_its_owners_lands(set_pool):
 # ==== W1G10 ==========================================================
 # W1G10's tests go between this line and the "end W1G10" line.
 
+from engine import Game as _W1G10Game, PlayerState as _W1G10PlayerState
+from engine.models import Permanent as _W1G10Permanent
+from tests.helpers import resolve_stack as _w1g10_resolve_stack
+
+
+def _w1g10_verge_table(set_pool, library, *, interactive=(0,)):
+    """Seat 0 with an untapped Krosan Verge and *library* (card names)."""
+    pool = {**set_pool("LEA"), **set_pool("JUD")}
+    game = _W1G10Game(players=[
+        _W1G10PlayerState(
+            name="P0", life=20, library=[pool[name] for name in library]
+        ),
+        _W1G10PlayerState(name="P1", life=20, library=[pool["Island"]] * 5),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game.start_turn(0)
+    verge = _W1G10Permanent(card=pool["Krosan Verge"])
+    game._put_permanent_onto_battlefield(0, verge, None)
+    verge.metadata["summoning_sickness_turn"] = -99
+    verge.tapped = False
+    return game, verge
+
+
+_W1G10_VERGE_LIBRARY = ["Island", "Forest", "Grizzly Bears", "Plains", "Savannah", "Forest"]
+
+
+def _w1g10_picks(*indices):
+    return [{"zone": "library", "index": index} for index in indices]
+
+
+def test_w1g10_krosan_verge_finds_a_forest_and_a_plains_tapped(set_pool):
+    """"{2}, {T}, Sacrifice this land: Search your library for a Forest card
+    and a Plains card, put them onto the battlefield tapped, then shuffle."
+    Two finds, one per description: two Forests are no answer, a Savannah (a
+    Forest Plains) answers either description but not both, and the two found
+    enter tapped (CR 110.5b). The Verge itself is sacrificed as the cost."""
+    game, verge = _w1g10_verge_table(set_pool, _W1G10_VERGE_LIBRARY)
+
+    result = game.activate_permanent_ability(0, "Krosan Verge", ability_index=1)
+    assert result.supported, result.details
+    assert not game.is_on_battlefield(verge)
+    assert [card.name for card in game.players[0].graveyard] == ["Krosan Verge"]
+    game.resolve_top_of_stack()
+
+    prompt = game.pending_search_library
+    assert prompt["count"] == 2 and prompt["up_to"]
+    assert prompt["destinations"] == ["battlefield", "battlefield"]
+    assert not game.confirm_search_library_picks(0, _w1g10_picks(1, 5)), "two Forests"
+    assert not game.confirm_search_library_picks(0, _w1g10_picks(1, 2)), "not a land"
+    assert not game.confirm_search_library_picks(0, _w1g10_picks(0, 3)), "an Island"
+    # The Savannah as the Forest, the basic Plains as the Plains.
+    assert game.confirm_search_library_picks(0, _w1g10_picks(4, 3))
+    _w1g10_resolve_stack(game)
+    game._settle()
+
+    found = sorted((perm.card.name, perm.tapped) for perm in game.controlled_by(0))
+    assert found == [("Plains", True), ("Savannah", True)]
+    assert sorted(card.name for card in game.players[0].library) == [
+        "Forest", "Forest", "Grizzly Bears", "Island",
+    ]
+    assert game.pending_choices == []
+
+
+def test_w1g10_krosan_verge_may_find_only_one(set_pool):
+    """CR 701.23b: a search for a card with a stated quality may fail to find
+    it. With no Plains in the library the Forest alone is a legal answer — and
+    a headless seat takes the finds it can."""
+    game, _ = _w1g10_verge_table(
+        set_pool, ["Island", "Forest", "Grizzly Bears"], interactive=(),
+    )
+    assert game.activate_permanent_ability(0, "Krosan Verge", ability_index=1).supported
+    _w1g10_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    game._settle()
+
+    assert [(perm.card.name, perm.tapped) for perm in game.controlled_by(0)] == [
+        ("Forest", True),
+    ]
+    assert sorted(card.name for card in game.players[0].library) == [
+        "Grizzly Bears", "Island",
+    ]
+
 # ==== end W1G10 ======================================================
