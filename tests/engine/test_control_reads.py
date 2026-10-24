@@ -371,7 +371,10 @@ POSITIONAL_BASELINE: dict[str, int] = {
     # one slot resolver (`_resolved_block_pairs`), which went to
     # `block_triggers.py` with the fire sites that read it.
     "engine/phases/block_triggers.py": 3,
-    "engine/phases/declare_blockers_step.py": 12,
+    # 12 -> 10 at round kg: Lure's and Blaze of Glory's requirement loops read
+    # their attackers by slot, and went to `block_requirements.py`, which
+    # resolves every slot through `permanent_at`.
+    "engine/phases/declare_blockers_step.py": 10,
     "engine/phases/untap_step.py": 1,
     "engine/phases/upkeep_step.py": 2,
     # web/actions.py's four sites moved with their handlers when the dispatch

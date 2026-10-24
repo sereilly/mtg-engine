@@ -3,23 +3,21 @@ from __future__ import annotations
 """Declare blockers step (CR 509).
 
 The defending player declares blockers as a turn-based action. This module holds
-the declaration (its CR 509.1c requirements, Lure's among them, checked as it is
-made), what blocking costs (CR 509.1d–f), Camouflage's and Raging River's piles,
-and the records a block leaves: band block propagation (CR 702.22h), a blocker
+the declaration (its restrictions and its requirements checked as it is made),
+what blocking costs (CR 509.1d–f), Camouflage's and Raging River's piles, and
+the records a block leaves: band block propagation (CR 702.22h), a blocker
 removed from combat, the block history. Block legality (``_can_block_attacker``
-and its landwalk helper, the minimum and maximum blockers, what the board
-compels to block) is ``block_legality.py``, and the triggers a declaration sets
-off (Cockatrice, rampage, flanking) are ``block_triggers.py``; both are composed
-onto ``Game`` directly after this.
+and its landwalk helper, the minimum and maximum blockers, the CR 509.1b
+restrictions on a whole declaration) is ``block_legality.py``; the CR 509.1c
+requirements and the maximisation that judges a declaration by them are
+``block_requirements.py``; and the triggers a declaration sets off (Cockatrice,
+rampage, flanking) are ``block_triggers.py``. All three are composed onto
+``Game`` directly after this.
 """
 
 import random
 
-from ..aura_restrictions import (attached_combat_restrictions,
-                                 aura_restriction_active)
-from ..combat_permissions import (MUST_BLOCK_ALL_UNTIL_EOT,
-                                  MUST_BLOCK_ATTACKERS_UNTIL_EOT,
-                                  MUST_BLOCK_UNTIL_EOT)
+from ..aura_restrictions import attached_combat_restrictions
 from ..combat_restrictions import declaration_tap_costs
 from ..mana_payment import mana_cost_label, plan_payment
 from ..subject_filters import subject_matches
@@ -193,245 +191,6 @@ class DeclareBlockersStepMixin:
                 continue
             return False, f"{attacker.card.name} {reason}"
 
-        # Lure enforcement: every creature that can block a Lure attacker (aimed at
-        # this defender) must do so. Skipped for Camouflage resolutions: blocks then
-        # come from random pile assignment, not a declaration, so blocking
-        # requirements don't constrain it.
-        for attacker_idx in (own_attackers if not _camouflage_resolution else ()):
-            if attacker_idx >= len(attacker_controller.battlefield):
-                continue
-            attacker = attacker_controller.battlefield[attacker_idx]
-            # Two sources for one requirement: an Aura granting it (Lure) and
-            # the creature's own printed line (Marble Priest). Read together so
-            # the check is written once — and the printed form may narrow which
-            # creatures it compels ("All **Walls** able to block this creature
-            # do so"), which the Aura form never does.
-            printed = next(
-                (
-                    instr for instr in compile_card_oracle(attacker.effective_card).instructions
-                    if instr.kind == "must_be_blocked_by_all_able"
-                ),
-                None,
-            )
-            if printed is None and not aura_restriction_active(
-                attacker, "must_be_blocked_by_all_able"
-            ):
-                continue
-            # The printed noun, already a subject-filter payload: the table
-            # reads the whole phrase through `_printed_noun` and refuses one it
-            # cannot express, so there is nothing to translate here. It used to
-            # be a `blocker_subtype` word this loop turned into one filter key,
-            # which is a second, smaller vocabulary — a narrowing it failed to
-            # translate would silently compel the whole board, which is Lure
-            # rather than Marble Priest, and "creatures with flying" (Talruum
-            # Piper) had no word for it to carry at all.
-            compelled: dict[str, object] = dict(
-                (printed.payload if printed is not None else {}).get("blocker_filter") or {}
-            )
-            for blocker_idx, blocker in enumerate(defender.battlefield):
-                if not blocker.is_creature or blocker.tapped:
-                    continue
-                if not self._can_block_attacker(blocker, attacker):
-                    continue
-                # CR 509.1c, last clause: "If a creature can't block unless a
-                # player pays a cost, that player is not required to pay that
-                # cost, even if blocking with that creature would increase the
-                # number of requirements being obeyed." So a Hipparion that
-                # *could* pay is still not compelled by Lure. Asked of the one
-                # cost reader rather than of `_can_block_attacker`, which
-                # answers the restriction question (may it?) and must keep
-                # saying yes to a block the defender chooses to pay for.
-                if self._owes_a_cost_to_block(blocker, attacker):
-                    continue
-                # The **attacker's** controller is the observer, because the
-                # sentence is printed on the attacker: CR 109.5's "you" is the
-                # seat whose ability it is, not the seat being asked to block.
-                # No card in the pool prints a relative narrowing here yet —
-                # which is exactly why it was the defender's seat and nothing
-                # noticed — and the phrase is a whole noun phrase now, so one
-                # that does would have been tested against the wrong side.
-                if compelled and not subject_matches(
-                    self, blocker, compelled,
-                    observer=self.controller_index_of(attacker),
-                    source=attacker,
-                ):
-                    continue
-                if blocker_idx not in assignments:
-                    return False, f"{blocker.card.name} must block {attacker.card.name} due to Lure"
-
-        # "This creature must be blocked if able." (Canopy Stalker.) CR 509.1c:
-        # a blocking *requirement*, and the weakest of the three here — **one**
-        # able creature must block it, where Lure above demands every able one
-        # and Blaze of Glory below demands one creature block everything. Folding
-        # it into Lure would forbid the defender keeping a second blocker back,
-        # which is a legal declaration and one this card does not take away.
-        #
-        # Read off the attacker's compiled program, like the power restriction in
-        # `_can_block_attacker`, and off its *effective* card so a copy of it
-        # carries the requirement (CR 707.2).
-        for attacker_idx in (own_attackers if not _camouflage_resolution else ()):
-            attacker = self.permanent_at(attacker_controller, attacker_idx)
-            if attacker is None:
-                continue
-            program = compile_card_oracle(attacker.effective_card)
-            if not any(i.kind == "must_be_blocked" for i in program.instructions):
-                continue
-            if any(attacker_idx in assigned for assigned in assignments.values()):
-                continue
-            able = any(
-                blocker.is_creature
-                and not blocker.tapped
-                and self._can_block_attacker(blocker, attacker)
-                # CR 509.1c: a creature that owes a cost to block is never
-                # compelled by a requirement, whether or not its controller
-                # could pay.
-                and not self._owes_a_cost_to_block(blocker, attacker)
-                and not self._left_right_block_illegal(attacker_idx, blocker_idx, blocker)
-                for blocker_idx, blocker in enumerate(self.controlled_by(defender))
-            )
-            if able:
-                return False, (
-                    f"{attacker.card.name} must be blocked if able"
-                )
-
-        # Blaze of Glory enforcement: the marked creature "blocks each attacking
-        # creature this turn if able" — every attacker (aimed at this defender) it
-        # can legally block must be among its assignments. Also skipped for
-        # Camouflage resolutions.
-        for blocker_idx, blocker in enumerate(defender.battlefield if not _camouflage_resolution else ()):
-            if not blocker.metadata.get(MUST_BLOCK_ALL_UNTIL_EOT):
-                continue
-            if not blocker.is_creature or blocker.tapped:
-                continue
-            assigned = set(assignments.get(blocker_idx, []))
-            for attacker_idx in own_attackers:
-                if attacker_idx >= len(attacker_controller.battlefield):
-                    continue
-                attacker = attacker_controller.battlefield[attacker_idx]
-                if not self._can_block_attacker(blocker, attacker):
-                    continue
-                # CR 509.1c again: a cost to block lifts every requirement,
-                # this one included.
-                if self._owes_a_cost_to_block(blocker, attacker):
-                    continue
-                if self._left_right_block_illegal(attacker_idx, blocker_idx, blocker):
-                    continue
-                if attacker_idx not in assigned:
-                    return False, (
-                        f"{blocker.card.name} must block {attacker.card.name} "
-                        "(Blaze of Glory)"
-                    )
-
-        # "Target creature blocks **this creature** this turn if able."
-        # (Trumpeting Armodon.) CR 509.1c's requirement narrowed to one named
-        # attacker, and the narrowest of the four in this step: Lure names the
-        # attacker and compels everybody, Blaze of Glory names the blocker and
-        # compels every attacker, Watchdog names the blocker and compels
-        # anything at all, and this names both halves of the pair.
-        #
-        # The attackers are held by ``permanent_id`` and resolved here, so a
-        # marked attacker that left combat, left the battlefield, or is aimed at
-        # somebody else compels nothing.
-        for blocker_idx, blocker in enumerate(
-            self.controlled_by(controller_index) if not _camouflage_resolution else ()
-        ):
-            owed = blocker.metadata.get(MUST_BLOCK_ATTACKERS_UNTIL_EOT) or ()
-            if not owed:
-                continue
-            if not blocker.is_creature or blocker.tapped:
-                continue
-            assigned = set(assignments.get(blocker_idx, []))
-            for attacker_idx in own_attackers:
-                attacker = self.permanent_at(attacker_controller, attacker_idx)
-                if attacker is None or attacker.permanent_id not in owed:
-                    continue
-                if attacker_idx in assigned:
-                    continue
-                if not self._can_block_attacker(blocker, attacker):
-                    continue
-                # CR 509.1c, last clause: a cost to block lifts every
-                # requirement, this one included.
-                if self._owes_a_cost_to_block(blocker, attacker):
-                    continue
-                if self._left_right_block_illegal(
-                    attacker_idx, blocker_idx, blocker
-                ):
-                    continue
-                joined = sum(
-                    1
-                    for other in assignments.values()
-                    if attacker_idx in other
-                )
-                if joined + 1 < self._minimum_blockers(attacker):
-                    continue
-                return False, (
-                    f"{blocker.card.name} must block {attacker.card.name} "
-                    "this turn if able"
-                )
-
-        # "This creature blocks each combat if able." (Watchdog.) CR 509.1c's
-        # requirement aimed at the *blocker* rather than at an attacker, and the
-        # weakest one in this step: it compels this creature to block
-        # **something** — any one attacker aimed at this defender that it can
-        # legally block — where Lure compels every able creature onto one
-        # attacker and Blaze of Glory compels one creature onto every attacker.
-        #
-        # Read off the creature's own compiled program and off its *effective*
-        # card, so a copy of it carries the requirement (CR 707.2), beside the
-        # Aura channel every other combat requirement here already asks.
-        for blocker_idx, blocker in enumerate(
-            self.controlled_by(controller_index) if not _camouflage_resolution else ()
-        ):
-            if not blocker.is_creature or blocker.tapped:
-                continue
-            if assignments.get(blocker_idx):
-                continue
-            program = compile_card_oracle(blocker.effective_card)
-            # And the granted half (Provoke): a requirement a spell put on this
-            # one creature for the turn, swept by the cleanup step. Read beside
-            # the three above because all four answer the same question — must
-            # this creature block *something*? — and a reader that knew only
-            # three of them would let the fourth through.
-            if not blocker.metadata.get(MUST_BLOCK_UNTIL_EOT) and not any(
-                i.kind == "must_block_each_combat" for i in program.instructions
-            ) and not aura_restriction_active(
-                blocker, "must_block_each_combat"
-            ) and not self._board_compels_block(blocker):
-                continue
-            able = False
-            for attacker_idx in own_attackers:
-                attacker = self.permanent_at(attacker_controller, attacker_idx)
-                if attacker is None:
-                    continue
-                if not self._can_block_attacker(blocker, attacker):
-                    continue
-                # CR 509.1c, last clause: a creature that can't block unless a
-                # cost is paid is never *compelled* to, whether or not its
-                # controller could pay.
-                if self._owes_a_cost_to_block(blocker, attacker):
-                    continue
-                if self._left_right_block_illegal(
-                    attacker_idx, blocker_idx, blocker
-                ):
-                    continue
-                # CR 509.1c measures the requirement against "the maximum
-                # possible number … **without disobeying any restrictions**".
-                # Menace is a restriction (CR 509.1b), so a lone able creature
-                # joining a menace attacker nobody else blocks would be an
-                # illegal declaration — which means the requirement cannot be
-                # obeyed there and this creature is not "able".
-                joined = sum(
-                    1
-                    for assigned in assignments.values()
-                    if attacker_idx in assigned
-                )
-                if joined + 1 < self._minimum_blockers(attacker):
-                    continue
-                able = True
-                break
-            if able:
-                return False, f"{blocker.card.name} blocks each combat if able"
-
         # CR 509.1b's restrictions on the **declaration as a whole** — the
         # block cap (Caverns of Despair), the company floor (Orcish Conscripts,
         # Mogg Flunkies) and the greater-power comparison (Okk). All three used
@@ -452,6 +211,28 @@ class DeclareBlockersStepMixin:
             )
             if set_refusal is not None:
                 return False, set_refusal[1]
+
+        # CR 509.1c: the requirements — Lure and its printed twins, "must be
+        # blocked if able", Blaze of Glory, Trumpeting Armodon, Watchdog and
+        # the three other spellings of it — counted over the declaration and
+        # compared with the most any declaration could obey without disobeying
+        # a restriction (``block_requirements.py``). After the restrictions,
+        # because a declaration that breaks one is illegal whatever it obeys,
+        # and the player is owed the rule they broke rather than one they
+        # under-obeyed. Five checks used to stand here, each asking whether one
+        # creature could have obeyed one requirement by being *added* to the
+        # declaration; that test cannot see a swap, so three Watchdogs under a
+        # Caverns of Despair had no legal declaration at all.
+        #
+        # Skipped for a Camouflage resolution for the reason menace's floor
+        # above takes it: the piles were matched at random, so there is no
+        # declaration for a requirement to constrain.
+        if not _camouflage_resolution:
+            requirement_refusal = self.block_requirement_refusal(
+                controller_index, assignments
+            )
+            if requirement_refusal is not None:
+                return False, requirement_refusal
 
         # CR 509.1d-f: the total cost to block, locked in and paid before the
         # chosen creatures become blockers. Last of the legality checks and

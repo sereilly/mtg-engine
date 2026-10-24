@@ -472,7 +472,12 @@ def choose_combat_blockers(
         and chooser != defending_player_index
         and chooser in game.opponents_of(defending_player_index)
     ):
-        return {}
+        # "Nothing", as far as CR 509.1c allows. Invasion Plans prints the
+        # substitution beside "All creatures block each combat if able", so on
+        # the card's own board the empty declaration is illegal whenever a
+        # creature can block — and the nearest legal one is the fewest blocks
+        # the requirements force, which is still the chooser's play.
+        return game.obeying_block_declaration(defending_player_index, {})
 
     active_index = game.active_player_index
     # CR 802.4a: this defender may only block attackers aimed at them.
@@ -684,11 +689,26 @@ def choose_combat_blockers(
             assignments[blocker_idx] = attacker_idx
             break
 
-    # CR 509.1b's restrictions on the declaration as a whole, last — the mirror
-    # of `_legal_declaration` at the tail of `choose_attackers`, and last for
-    # its reason: every requirement above may still *add* a blocker, and a set
-    # that was under the cap before one was added is not under it after.
-    return _legal_block_declaration(game, defending_player_index, assignments)
+    # CR 509.1b's restrictions on the declaration as a whole — the mirror of
+    # `_legal_declaration` at the tail of `choose_attackers`, and after the
+    # requirement blocks above for its reason: every one of them may still
+    # *add* a blocker, and a set that was under the cap before one was added is
+    # not under it after.
+    pruned = _legal_block_declaration(game, defending_player_index, assignments)
+    # …and CR 509.1c's maximum, **last**, because the prune just above cannot
+    # see it. A cap is disobeyed by the set, so the prune drops the worst block
+    # — and the worst block may be the compelled one: under a Caverns of
+    # Despair a Watchdog dropped for a Bear the seat liked better leaves a
+    # declaration that obeys fewer requirements than it could, which the gate
+    # refuses whole. Asked of the engine's own maximisation rather than of the
+    # four requirement blocks above, which are the seat's first guess at it:
+    # handed back unchanged when the gate accepts it, otherwise the nearest
+    # declaration that obeys the maximum, with the blocks this seat chose
+    # tried first and the rest ranked by the same `_score_block_pair` that
+    # chose them.
+    return game.obeying_block_declaration(
+        defending_player_index, pruned, rank=_score_block_pair
+    )
 
 
 def _score_block_pair(blocker: Permanent, attacker: Permanent) -> float:

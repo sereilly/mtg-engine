@@ -694,6 +694,39 @@ def cant_be_enchanted_by_own_text(permanent) -> bool:
     return any(self_cant_be_enchanted_line(line) for line in text.splitlines())
 
 
+def _suspended(aura, name: str) -> bool:
+    """Whether *aura* is imposing none of *name* for the rest of the turn.
+
+    CR 116.2d: the host's controller bought a turn off this Aura's restrictions
+    (Volrath's Curse). Asked by both readers below rather than at each of the
+    eight callers of :func:`aura_restriction_active`, because this is the one
+    place "does the restriction apply?" is answered — a suspension wired into
+    the combat step alone would leave the creature's activated abilities still
+    shut off.
+    """
+    return name in (aura.metadata.get(IGNORED_RESTRICTIONS) or ())
+
+
+def auras_imposing(permanent, name: str) -> list:
+    """Every Aura attached to *permanent* whose own text imposes *name* outright.
+
+    :func:`aura_restriction_active` answers whether **any** does; this says
+    which, for the reader that counts them. CR 509.1c compares a *number* of
+    requirements obeyed against a maximum, so two Lures on one attacker are two
+    requirements on each creature able to block it, and a reader that asked
+    only "is there one?" would weigh them as one.
+
+    The unconditional rows only. The colour- and counter-conditioned rows in the
+    predicate below are restrictions (can't block, doesn't untap), never the
+    requirements a count is asked of.
+    """
+    return [
+        aura for aura in auras_attached_to(permanent)
+        if not _suspended(aura, name)
+        and name in aura_restrictions(aura.effective_card.oracle_text or "")
+    ]
+
+
 def aura_restriction_active(
     permanent, name: str, *, game=None, seat: int | None = None
 ) -> bool:
@@ -713,13 +746,7 @@ def aura_restriction_active(
     from .turn_state import attacked_during_seats_last_turn
 
     for aura in auras_attached_to(permanent):
-        # CR 116.2d: the host's controller bought a turn off this Aura's
-        # restrictions, so it is imposing none of them for the rest of the turn
-        # (Volrath's Curse). Asked here rather than at each of the eight readers
-        # of this predicate, because this is the one place "does the restriction
-        # apply?" is answered — a suspension wired into the combat step alone
-        # would leave the creature's activated abilities still shut off.
-        if name in (aura.metadata.get(IGNORED_RESTRICTIONS) or ()):
+        if _suspended(aura, name):
             continue
         text = aura.effective_card.oracle_text
         if name in aura_restrictions(text):
