@@ -242,6 +242,12 @@ _PLAYER_BOOKKEEPING = frozenset({
     # a field it made every such spell a lasting change: Flaring Pain ("Damage
     # can't be prevented this turn") was cast into an empty board, twice.
     "_turn_replacements_armed",
+    # When each graveyard card arrived (``engine/graveyard_order.py``, the
+    # CR 613.7d timestamp of a static that functions from a graveyard). It
+    # moves whenever ``graveyard`` does, which is already bookkeeping here; read
+    # as a field it made every spell that resolves into a graveyard a lasting
+    # change, and Blind Fury and Plagiarize were cast into empty boards again.
+    "graveyard_arrivals",
 })
 #: The same for the game's own fields: the table itself (read separately),
 #: the log, the stack and who has priority, and the per-turn ledgers a cast
