@@ -224,6 +224,12 @@ class SimulationReport:
     #: as clean as it does now. The refusals among them are beside it.
     special_actions_taken: Counter[str] = field(default_factory=Counter)
     refused_special_actions: Counter[str] = field(default_factory=Counter)
+    #: Cards brought into a game from a seat's sideboard (CR 400.11b: a Wish,
+    #: Ring of Ma'rûf), counted off the sideboards at each game's end. **Zero in
+    #: every run before JUD's wave 2**, and necessarily: no seat was dealt a
+    #: sideboard, so the offer was never made and the cast was never proposed.
+    #: A zero over a pool that prints a Wish is that coming back.
+    cards_from_outside_game: int = 0
 
     @property
     def ok(self) -> bool:
@@ -534,6 +540,35 @@ def build_limited_deck(
     return deck
 
 
+def limited_sideboard(
+    cards: dict[str, CardDefinition], deck: Sequence[CardDefinition],
+) -> list[CardDefinition]:
+    """The sideboard of a seat dealt *deck* out of *cards* — CR 100.4b: "In
+    limited play involving individual players, all cards in a player's card
+    pool not included in their deck are in that player's sideboard."
+
+    **The seat's card pool is every card of *cards* but the basic lands**,
+    because that is what :func:`build_limited_deck` built the deck from: it
+    looked at the whole of it (``pool`` there) and chose by colour and cost,
+    so each card it passed over was one it had and did not play. The basics
+    are not part of it — CR 100.2b builds a limited deck from "this product
+    **and basic land cards**", the land station's and nobody's pool, which is
+    why the builder sets them apart too. One copy of each, as the deck's own
+    spells are singletons.
+
+    No randomness: the leftovers of a deck are a function of the deck, so the
+    deal, and every deck dealt before it, is exactly what it was before seats
+    had a sideboard (the run's RNG is not touched). In the order *cards* was
+    loaded in, so a seed reproduces the sideboard positions a Wish picks by.
+    """
+    basics = _basic_land_pool(cards)
+    in_deck = {card.name for card in deck}
+    return [
+        card for name, card in cards.items()
+        if name not in basics and name not in in_deck
+    ]
+
+
 def _zone_counter(game: Game) -> Counter[str]:
     """Every card in the game, by name — the whole board, not one seat's.
 
@@ -555,9 +590,9 @@ def _zone_counter(game: Game) -> Counter[str]:
     400.11a). A Wish or Ring of Ma'rûf brings one of its cards *into* the game
     (CR 400.11b), and counted from the game's zones alone that card read as
     one starting to exist — measured at Judgment with sideboards given to the
-    seats by hand: fourteen false alarms in four games. The deal gives no seat
-    a sideboard today, so nothing this reads has changed for any seeded run;
-    it is the reservoir the invariant has to include the day one does.
+    seats by hand: fourteen false alarms in four games. Every seat is dealt
+    one now (`limited_sideboard`, CR 100.4b), so this is the reservoir the
+    invariant runs over in every game.
     """
     counter: Counter[str] = Counter()
     already: set[int] = set()
@@ -1499,18 +1534,28 @@ def run_ai_simulation(
     raised_seen = Counter(ai_rehearsal.REHEARSALS_RAISED)
 
     for game_index in range(1, games + 1):
+        # Each seat's sideboard is the rest of its card pool (CR 100.4b; see
+        # `limited_sideboard` for what the pool is). Until JUD's wave 2 no
+        # seat had one, so a Wish ("…a card you own from outside the game",
+        # CR 400.11b) and Ring of Ma'rûf had nothing to bring in, the
+        # rehearsal read their casts as moving nothing, and no simulated game
+        # ever cast one. Dealt without touching the run's RNG, so every deck
+        # is the one it was.
+        deck_a = build_limited_deck(
+            cards, rng.randint(1, 1_000_000), required=required_cards
+        )
         p1 = PlayerState(
-            name=f"AI-A-{game_index}",
-            library=build_limited_deck(
-                cards, rng.randint(1, 1_000_000), required=required_cards
-            ),
+            name=f"AI-A-{game_index}", library=deck_a,
+            sideboard=limited_sideboard(cards, deck_a),
+        )
+        deck_b = build_limited_deck(
+            cards, rng.randint(1, 1_000_000), required=required_cards
         )
         p2 = PlayerState(
-            name=f"AI-B-{game_index}",
-            library=build_limited_deck(
-                cards, rng.randint(1, 1_000_000), required=required_cards
-            ),
+            name=f"AI-B-{game_index}", library=deck_b,
+            sideboard=limited_sideboard(cards, deck_b),
         )
+        sideboard_sizes = [len(p1.sideboard), len(p2.sideboard)]
         # CR 601.2f-h and 602.2b: a spell or an ability is paid for. This read
         # `Game(players=[p1, p2])`, and `enforce_mana_costs` defaults to False,
         # so in every simulated game this project ever ran nothing cost
@@ -1706,6 +1751,10 @@ def run_ai_simulation(
             if active_player.life <= 0 or opponent.life <= 0 or active_player.lost or opponent.lost:
                 break
 
+        report.cards_from_outside_game += sum(
+            before - len(player.sideboard)
+            for before, player in zip(sideboard_sizes, game.players)
+        )
         owing = Counter(game._steps_left_owing)
         report.step_changes += owing.pop("_examined", 0)
         report.steps_left_owing.update(owing)

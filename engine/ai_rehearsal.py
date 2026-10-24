@@ -421,6 +421,9 @@ def _every_card(game):
         for zone in (
             player.hand, player.library, player.graveyard, player.exile,
             getattr(player, "command_zone", ()) or (),
+            # Outside the game (CR 400.11a), and the largest pile a seat
+            # holds: a simulated seat's sideboard is the rest of its set.
+            player.sideboard,
         ):
             yield from zone
         for permanent in player.phased_out:
@@ -703,7 +706,15 @@ def position_digest(game) -> dict:
             # arranges the next three draws, has changed something.
             "library": [card.name for card in player.library],
             "fields": {
-                key: repr(value) for key, value in vars(player).items()
+                # The sideboard by name, as a graveyard is — a Wish's pick
+                # leaving it is a change — rather than as the repr of every
+                # card a simulated seat holds there, which is the rest of
+                # its set (`ai_simulator.limited_sideboard`).
+                key: (
+                    repr(sorted(card.name for card in value))
+                    if key == "sideboard" else repr(value)
+                )
+                for key, value in vars(player).items()
                 if key not in _PLAYER_BOOKKEEPING
             },
             "battlefield": sorted(

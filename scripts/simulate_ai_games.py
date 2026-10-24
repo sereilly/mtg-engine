@@ -161,6 +161,12 @@ def main() -> int:
         for reason, count in report.refused_special_actions.most_common(5):
             print(f"  {count}x declined: {reason}")
 
+    # CR 400.11b: cards brought in from a seat's sideboard (a Wish, Ring of
+    # Ma'rûf). No seat had a sideboard before JUD's wave 2, so only a pool
+    # printing such a card can move it, and it is shown when it did.
+    if report.cards_from_outside_game:
+        print(f"Cards brought in from outside the game: {report.cards_from_outside_game}")
+
     if report.refused_attacks:
         total = sum(report.refused_attacks.values())
         print(f"Attack declarations the engine declined: {total} (the AI proposed an illegal set)")
