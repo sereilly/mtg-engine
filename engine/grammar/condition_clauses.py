@@ -48,8 +48,23 @@ def _parse_self_in_graveyard_above(
     "Above" is CR 404.3's order — a graveyard is an ordered zone and a card put
     there later sits on top — so the count and the "directly" are both about
     *positions*, which is why they are separate fields rather than one number.
+
+    The subject is the ability's own source however the card spells it: "this
+    card", or the noun Oracle's self-reference templating puts in its place —
+    "At the beginning of your upkeep, if **this creature** is in your
+    graveyard, …" (Genesis). A creature card in a graveyard is no creature
+    (CR 302.1 names one on the battlefield), but the words are a reference to
+    the object the ability is printed on, which is what
+    :func:`accept_source_reference` reads everywhere else. Never the bare
+    pronoun "it", which after a trigger naming an object means that object
+    (``rebinding.rebind_pronoun_to_event_subject``).
     """
-    if not stream.accept_phrase("this", "card", "is", "in", "your", "graveyard"):
+    mark = stream.mark()
+    if stream.at_word("it") or not (
+        accept_source_reference(stream)
+        and stream.accept_phrase("is", "in", "your", "graveyard")
+    ):
+        stream.reset(mark)
         return None
     if not stream.accept_word("with"):
         # "…if **this card is in your graveyard**, you may pay {1}{B}{B}."

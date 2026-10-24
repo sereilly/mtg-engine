@@ -38,14 +38,36 @@ from .errors import LoweringError
 from .lowering import _is_enchanted, _lower_condition, _lower_pump, _signed
 
 
-def _lower_anthem_condition_payload(payload: dict, node: ast.StaticAbilityNode) -> dict:
+def _lower_anthem_condition_payload(
+    payload: dict, node: ast.StaticAbilityNode, *, graveyard_ok: bool = False
+) -> dict:
     """:func:`_lower_anthem_condition`'s gate, asked of an already-lowered
     payload — which is what a conjunct is.
 
     Split out so a conjunction is checked by the *same* rules as the clause it
     would have been printed as on its own, rather than by a second, laxer copy
     of them.
+
+    *graveyard_ok* is the caller saying it gathers the static from a graveyard
+    when the clause states one (CR 113.6b) — the board-wide anthem, whose
+    recompute does (``engine/graveyard_statics.py``). Every other caller is
+    about one permanent, which a card in a graveyard is not, and refuses the
+    clause.
     """
+    # "As long as **this card is in your graveyard** and you control a
+    # Mountain, …" (the Incarnations). CR 113.6b: the clause says where the
+    # ability functions, and the evaluator answers it of the source itself
+    # (``graveyard_statics.source_in_its_graveyard``). What else may stand
+    # beside it is :func:`_graveyard_anthem_condition`'s question, asked of the
+    # whole condition once it is lowered.
+    if payload.get("kind") == "self_in_graveyard_with_cards_above":
+        if not graveyard_ok:
+            raise LoweringError(
+                "a static about one permanent has no permanent while its card "
+                "is in a graveyard; only an anthem is gathered from there",
+                node=node,
+            )
+        return payload
     # "During your turn" (Vibrating Sphere) and "it's blocking" (Snow Devil)
     # carry no filter and no seat word, so none of the ``controls`` gates below
     # apply to them — asking those of a payload that has no such parts would
@@ -104,7 +126,9 @@ def _lower_anthem_condition_payload(payload: dict, node: ast.StaticAbilityNode) 
         return {
             **payload,
             "conditions": [
-                _lower_anthem_condition_payload(part, node)
+                _lower_anthem_condition_payload(
+                    part, node, graveyard_ok=graveyard_ok
+                )
                 for part in payload.get("conditions") or ()
             ],
         }
@@ -175,7 +199,10 @@ def _lower_anthem_condition_payload(payload: dict, node: ast.StaticAbilityNode) 
     return payload
 
 
-def _lower_anthem_condition(condition: ast.Condition, node: ast.StaticAbilityNode) -> dict:
+def _lower_anthem_condition(
+    condition: ast.Condition, node: ast.StaticAbilityNode, *,
+    graveyard_ok: bool = False,
+) -> dict:
     """The payload form of an "as long as" clause on a lord buff, or a refusal.
 
     Lowered by the one condition lowering (so "an opponent controls a nontoken
@@ -185,7 +212,95 @@ def _lower_anthem_condition(condition: ast.Condition, node: ast.StaticAbilityNod
     relative key the consumer cannot test would make the buff apply on a
     different board than the card prints, silently.
     """
-    return _lower_anthem_condition_payload(_lower_condition(condition), node)
+    return _lower_anthem_condition_payload(
+        _lower_condition(condition), node, graveyard_ok=graveyard_ok
+    )
+
+
+#: The clauses that may stand beside "this card is in your graveyard" on a
+#: static that functions there. Each is about the **board** or the turn, asked
+#: of a seat — CR 108.4a's owner — and none needs a permanent to be the "it"
+#: of: "you control a Mountain" (the Incarnations), whose turn it is, a count
+#: of cards in a zone, the colour census. ``conditional_static_holds`` asks
+#: every clause but the zone one with no source for a card in a graveyard, so
+#: a clause that reads its source ("it's blocking", a counter on "this") would
+#: answer no for ever on a card that reports supported.
+_GRAVEYARD_STATIC_CLAUSES = frozenset(
+    {"controls", "your_turn", "cards_in_zones", "color_is_most_common"}
+)
+
+
+def _graveyard_anthem_condition(
+    condition: dict, buff, node: ast.StaticAbilityNode
+) -> bool:
+    """Whether *condition* — an anthem's lowered criteria — says the anthem
+    functions from a graveyard (CR 113.6b), refusing every part a static
+    gathered from there could not honour.
+
+    True when the zone clause is the whole condition or one conjunct of it;
+    False when it is not there at all, which leaves the anthem the
+    battlefield's.
+
+    What a graveyard source cannot honour, each refused by name:
+
+    * a clause beside the zone one that reads its source
+      (:data:`_GRAVEYARD_STATIC_CLAUSES`), or a ``controls`` clause measured
+      against it — "**another** creature" (``exclude_self``) or "**its**
+      controller";
+    * an anthem whose *set* is measured against its source: "**other**
+      creatures" (the matcher compares the source and its host), "of the
+      chosen type" (the choice is recorded on a permanent as it enters,
+      CR 614.1c, and a card put into a graveyard made none);
+    * a protection grant — the protection reader
+      (``ProtectionMixin._protection_qualities``) gathers lords from the
+      battlefield only, so the shield would be printed and absent;
+    * a size counted off the source (``per_counter``) or per buffed creature.
+    """
+    parts = (
+        list(condition.get("conditions") or ())
+        if condition.get("kind") == "all_of" else [condition]
+    )
+    if not any(
+        part.get("kind") == "self_in_graveyard_with_cards_above" for part in parts
+    ):
+        return False
+    for part in parts:
+        kind = part.get("kind")
+        if kind == "self_in_graveyard_with_cards_above":
+            continue
+        if kind not in _GRAVEYARD_STATIC_CLAUSES:
+            raise LoweringError(
+                f"a card in a graveyard is no permanent for a {kind!r} clause "
+                "to be asked of",
+                node=node,
+            )
+        if kind == "controls" and (
+            part.get("who") == "controller"
+            or (part.get("filter") or {}).get("exclude_self")
+        ):
+            raise LoweringError(
+                "a card in a graveyard is no permanent for 'another' or 'its "
+                "controller' to be measured against",
+                node=node,
+            )
+    filt = buff.filter
+    if filt.other_than_source or filt.chosen_land_type or filt.chosen_creature_type:
+        raise LoweringError(
+            "an anthem gathered from a graveyard has no permanent for 'other' "
+            "or a choice made as it entered",
+            node=node,
+        )
+    if buff.protection_from:
+        raise LoweringError(
+            "the protection reader gathers no source from a graveyard",
+            node=node,
+        )
+    if buff.per_counter or buff.per_shared_creature_type:
+        raise LoweringError(
+            "an anthem gathered from a graveyard carries a fixed size",
+            node=node,
+        )
+    return True
 
 
 def _recipient_seat_condition(

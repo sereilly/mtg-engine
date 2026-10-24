@@ -30,6 +30,7 @@ import re
 import pytest
 
 from engine import Game, PlayerState
+from engine.activation_zones import GRAVEYARD, ability_functions_from
 from engine.aura_attachment import attach_aura
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.mana_payment import is_mana_ability
@@ -147,6 +148,22 @@ def _w3g2_announce(game, card, ability_index, mine):
             if game.queue_from_hand(0, card.name, x_value=1, new_color="R", **shape).supported:
                 return True
         return False
+    # **Where the ability functions** (CR 113.6b), asked of the compiled
+    # ability rather than assumed. "{2}{W}: Choose a color. Creatures you
+    # control gain protection from the chosen color until end of turn.
+    # Activate only if this card is in your graveyard." (Glory.) Put on the
+    # battlefield, it is refused for not functioning there — which is right, and
+    # says nothing about when its colour is asked. So a graveyard ability is
+    # activated from the graveyard, through the engine's own door for one; there
+    # is no colour to announce on that door at all, which is the point.
+    ability = compile_card_oracle(card).activated_abilities[ability_index]
+    if ability_functions_from(ability) == GRAVEYARD:
+        game.players[0].graveyard.append(card)
+        queued = game.activate_from_graveyard(
+            0, card.name, ability_index=ability_index,
+            graveyard_index=len(game.players[0].graveyard) - 1,
+        )
+        return queued.supported
     source = Permanent(card=card)
     source.metadata["summoning_sick"] = False
     game.players[0].battlefield.append(source)

@@ -21,6 +21,7 @@ import re
 from dataclasses import dataclass, field
 from functools import lru_cache
 
+from .graveyard_statics import GraveyardSource, source_in_its_graveyard
 from .oracle_types import _NUMBER_WORDS
 
 # Desert is included alongside the five basics: Arabian Nights prints
@@ -477,6 +478,23 @@ def conditional_static_holds(
             conditional_static_holds(game, seat, source, part, recipient=recipient)
             for part in condition.get("conditions") or ()
         )
+    # "As long as **this card is in your graveyard** and you control a
+    # Mountain, …" (Anger). CR 113.6b's statement of where the ability
+    # functions, answered of the source itself: true of a card gathered from
+    # its owner's graveyard and still at that position, false of a permanent —
+    # so an Incarnation on the battlefield grants nothing. The same payload a
+    # trigger's intervening-if carries (Pyre Zombie), and "above" is read by the
+    # module that owns it (``graveyard_order.satisfies_above``).
+    if kind == "self_in_graveyard_with_cards_above":
+        return source_in_its_graveyard(game, source, condition)
+    # Every other clause about a static that functions from a graveyard is
+    # about the *board* — "you control a Mountain", whose seat is already
+    # *seat* (CR 108.4a, the owner). A card in a graveyard is no permanent for
+    # "another" or "its" to be measured against, so the clauses below are
+    # asked with no source rather than with a stand-in for one; the lowering
+    # refuses the clauses that would need it before this is reached.
+    if isinstance(source, GraveyardSource):
+        source = None
     # "…as long as **it's** blocking / attacking / untapped". A state read off
     # one permanent, and *which* permanent is payload: an Aura's "it" is the
     # creature it enchants (an Aura never blocks), and a creature's own "it" is

@@ -31,7 +31,8 @@ from . import ast
 from .errors import LoweringError
 from .lowering import (_filter_payload, _is_enchanted, _is_source,
                        _lower_pump, _signed)
-from .static_conditions import (_lower_anthem_condition,
+from .static_conditions import (_graveyard_anthem_condition,
+                                _lower_anthem_condition,
                                 _lower_self_conditional_static,
                                 _recipient_seat_condition)
 
@@ -152,7 +153,46 @@ def _lower_lord_effects(
     keywords: list[str] = []
     protection_from: list[str] = []
     lost_keywords: list[str] = []
+    granted_ability: str | None = None
     for effect in effects:
+        if isinstance(effect, ast.GainAbilityText):
+            # 'As long as this card is in your graveyard, lands you control
+            # have "{T}: Add {G} or {W}."' (Riftstone Portal.) A whole printed
+            # ability handed to the set (CR 113.3) — the ``granted_ability``
+            # field the text table fills for Overlaid Terrain's unconditional
+            # spelling, applied by the same pass on the same derived-ability
+            # channel. Reached only from a line some other production made a
+            # static of (a condition in front); the unconditional spelling is
+            # still the table's (`grammar/derived.py`), so no line it reads
+            # changes hands.
+            #
+            # Held to what that channel carries, by the gate the conditional
+            # self-grant asks (``static_conditions._conditional_ability_lines``):
+            # the line compiles, and every part of it is something a reader of
+            # the permanent's effective card finds when the question arises. One
+            # quote, because the field holds one; no duration and no "if it
+            # doesn't have" rider, which a static grant has no reader for.
+            from ..granted_abilities import derived_line_supported
+
+            if (
+                effect.duration.kind is not None or effect.only_if_absent
+                or effect.self_name or granted_ability is not None
+                or len(effect.abilities) != 1
+            ):
+                raise LoweringError(
+                    "engine/lord_buffs.py grants one quoted ability with no "
+                    "duration and no rider",
+                    node=node,
+                )
+            (text,) = effect.abilities
+            if not derived_line_supported(text):
+                raise LoweringError(
+                    "the derived-ability channel cannot carry "
+                    + repr(" ".join(text.split())),
+                    node=node,
+                )
+            granted_ability = text
+            continue
         if isinstance(effect, ast.Pump):
             if effect.per_each is not None:
                 # "…gets +2/+2 for each Aura attached to it." The delta is a
@@ -261,6 +301,7 @@ def _lower_lord_effects(
         toughness,
         tuple(keywords),
         protection_from=tuple(protection_from),
+        granted_ability=granted_ability,
         lost_keywords=tuple(lost_keywords),
     )
 
@@ -382,7 +423,13 @@ def _lower_static_ability(node: ast.StaticAbilityNode) -> tuple[OracleInstructio
         buff = _lower_lord_effects(node, effects)
         condition = _recipient_seat_condition(node.condition, subject, node)
         if condition is None:
-            condition = _lower_anthem_condition(node.condition, node)
+            # ``graveyard_ok``: the anthem is the one static the recompute
+            # gathers from a graveyard as well as from the battlefield
+            # (``engine/graveyard_statics.py``), so "this card is in your
+            # graveyard" is a clause this caller can honour.
+            condition = _lower_anthem_condition(
+                node.condition, node, graveyard_ok=True
+            )
         if condition.get("kind") == "all_share_a_color":
             # "**They**" is the very set this anthem buffs, so the filter is
             # copied from the buff rather than parsed a second time — and it is
@@ -408,13 +455,18 @@ def _lower_static_ability(node: ast.StaticAbilityNode) -> tuple[OracleInstructio
                 "no referent",
                 node=node,
             )
-        return (
-            OracleInstruction(
-                LORD_BUFF_KIND,
-                "",
-                lord_buff_payload(dataclasses.replace(buff, condition=condition)),
-            ),
-        )
+        payload = lord_buff_payload(dataclasses.replace(buff, condition=condition))
+        # CR 113.6b: "As long as **this card is in your graveyard** …" (the
+        # Incarnations, Riftstone Portal) says where the anthem functions, and
+        # the condition is the only place the card says it. Stamped on the
+        # instruction under the key a graveyard trigger and a graveyard
+        # activation already carry (``functions_from``), which is what the
+        # recompute's graveyard gather reads — and only once
+        # :func:`_graveyard_anthem_condition` has refused every part a card
+        # in a graveyard could not honour.
+        if _graveyard_anthem_condition(condition, buff, node):
+            payload["functions_from"] = "graveyard"
+        return (OracleInstruction(LORD_BUFF_KIND, "", payload),)
     # A static ability on the *source itself* whose size is computed (Carrion
     # Grub's "gets +X/+0, where X is the greatest power among creature cards in
     # your graveyard"). Not a lord buff — it buffs nobody else — and not a
