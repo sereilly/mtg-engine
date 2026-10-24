@@ -1449,13 +1449,13 @@ def test_w3g2_a_seat_narrowing_no_reader_enforces_refuses_the_line():
         )
     with _w3g2_pytest.raises(_W3G2GrammarError):
         _w3g2_parse("Each player who ate a sandwich this turn sacrifices a land.")
-    # And the damage recipient takes it only on the seat *sets*: a chosen seat
-    # is answered by a picker, which has no record to read.
-    with _w3g2_pytest.raises(_W3G2GrammarError):
-        _w3g2_parse(
-            "This enchantment deals 2 damage to target player who sacrificed "
-            "a Plains this way."
-        )
+    # On a chosen seat it refuses by name: the picker would enforce it, and
+    # "this way" has no record to read at announcement.
+    refused = _w4g1_compile_line(
+        "This enchantment deals 2 damage to target player who sacrificed "
+        "a Plains this way.", card_name="W3G2 Probe",
+    )
+    assert not refused.instructions and "announcement" in refused.lowering_error
 def test_w3g2_a_this_way_narrowing_the_card_matcher_cannot_test_refuses():
     """"Who sacrificed …" reads a list of cards in a graveyard, which has no
     computed characteristics (CR 613.1) — so a narrowing outside what a printed

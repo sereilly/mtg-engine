@@ -146,7 +146,7 @@ def _parse_damage_recipient(stream: TokenStream) -> ast.Recipient | None:
     # library, so here the seat is the only thing it can be.
     #
     # Before ``parse_recipient`` because that reader would not claim the word
-    # at all; the position is what makes the branch legible next to the two
+    # at all; the position is what makes the branch legible next to the
     # narrowings below, not a precedence.
     if stream.accept_word("them"):
         return ast.PlayerRef("that_player")
@@ -160,45 +160,27 @@ def _parse_damage_recipient(stream: TokenStream) -> ast.Recipient | None:
     if (
         isinstance(recipient, ast.PlayerRef)
         # "…deals 2 damage to **each player who sacrificed a Plains this way**."
-        # (Desolation.) The relative clause the sentence in front of it also
-        # prints, read here beside the two narrowings below and for their exact
-        # reason: this lowering is what carries it to the handler that loops the
-        # seats, so a clause read anywhere else would be one nobody applies —
-        # and unapplied, the card damages every player at the table.
+        # (Desolation.) "…to target player **who attacked this turn**" (Fire
+        # and Brimstone), "…to target opponent **previously dealt damage by
+        # it**" (Diseased Vermin). The relative clause naming which seats the
+        # sentence is about, read here and by one reader for every spelling:
+        # this lowering is what carries it — into the picker's description for
+        # a chosen seat, onto the handler's seat loop for a seat set — so a
+        # clause read anywhere else would be one nobody applies, and unapplied
+        # the card damages every player at the table.
         #
-        # Not restricted to the chosen forms the two below are: "who sacrificed
-        # … this way" is answered by a record rather than by a picker, so the
-        # seat sets are exactly the kinds that can carry it.
-        and recipient.kind in ("each_player", "each_opponent")
+        # Which deed may narrow which seat is the lowering's to say, from the
+        # deed's kind (``handlers/_filters.PLAYER_DEEDS``): a chosen seat takes
+        # only a clause the picker can answer while the target is chosen, and
+        # refuses the rest by name. These four kinds are the seats either
+        # reader serves.
+        and recipient.kind in (
+            "each_player", "each_opponent", "target_player", "target_opponent"
+        )
     ):
         deed = accept_player_deed(stream, parse_object_filter)
         if deed is not None:
             return dataclasses.replace(recipient, did=deed)
-    if (
-        isinstance(recipient, ast.PlayerRef)
-        and recipient.kind in ("target_player", "target_opponent")
-        # "target player **who attacked this turn**" (Fire and Brimstone). Read
-        # here, beside the union above and for the same reason: damage is the
-        # only effect in the pool that prints it, and the narrowing is only
-        # honoured by the picker this lowering feeds. A restriction parsed
-        # somewhere no reader enforces is a card that hits anybody.
-        and stream.accept_phrase("who", "attacked", "this", "turn")
-    ):
-        return dataclasses.replace(recipient, attacked_this_turn=True)
-    if (
-        isinstance(recipient, ast.PlayerRef)
-        and recipient.kind in ("target_player", "target_opponent")
-        # "target opponent **previously dealt damage by it**" (Diseased
-        # Vermin). Beside the attack narrowing above and read the same way: the
-        # restriction is only honoured by the picker this lowering feeds, so a
-        # parse anywhere else would be a clause nobody enforces.
-        #
-        # "By it" is the ability's own source — the only referent the sentence
-        # has — and every word is required: "previously" is the whole window,
-        # and a printing naming another one would be a different record.
-        and stream.accept_phrase("previously", "dealt", "damage", "by", "it")
-    ):
-        return dataclasses.replace(recipient, damaged_by_source=True)
     if recipient is None:
         # "This creature deals 2 damage to **that creature** at end of combat."
         # (Dwarven Sea Clan.) The back-reference every other family already
@@ -264,7 +246,7 @@ def _parse_recipient_list(stream: TokenStream) -> list[ast.Recipient]:
 
     The first recipient goes through `_parse_damage_recipient` rather than
     `parse_recipient`, because only damage prints the "or planeswalker" union
-    and the "who attacked this turn" narrowing.
+    and the seat narrowings ("who attacked this turn").
     """
     recipient = _parse_damage_recipient(stream)
     if recipient is None:

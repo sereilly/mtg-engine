@@ -21,6 +21,9 @@ A floor, split out of ``_common`` at the 2,000-line cap's split round. It reads
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Callable
+
 from ..layer_bridge import printed_shape, printed_supertypes
 from ..oracle_types import SACRIFICED_CARDS_BY_SEAT
 from ..models import Permanent
@@ -1102,6 +1105,110 @@ def seats_controlling(game, seats, described) -> list:
     ]
 
 
+def _seat_attacked_this_turn(game, seat, deed, source, results) -> bool:
+    # "…target player **who attacked this turn**" (Fire and Brimstone). The
+    # record is on the seat, not on its creatures: a player who attacked and
+    # then lost the attacker still attacked, and reading the board would forget
+    # them. Stamped at the declaration (CR 508.1), cleared with the turn.
+    return bool(getattr(game.players[seat], "attacked_this_turn", False))
+
+
+def _seat_dealt_damage_by_source(game, seat, deed, source, results) -> bool:
+    # "…target opponent **previously dealt damage by it**" (Diseased Vermin).
+    # The record is on the *source permanent*, not on the seat — "whom has this
+    # creature hurt" — so this is the one kind that needs the ability's source,
+    # and with none in hand it admits nobody rather than everybody.
+    if source is None:
+        return False
+    from ..damage_events import seats_dealt_damage_by
+
+    return seat in seats_dealt_damage_by(source)
+
+
+def _seat_tapped_land_for_mana(game, seat, deed, source, results) -> bool:
+    # "…each player **who tapped a land for mana this turn**" (Desolation).
+    # The seat's own per-turn record, written at the one tap-for-mana seam
+    # (``mixins/turn_management.tap_land_for_mana``) and cleared with the rest
+    # of the turn histories. Never a read of the board: a land that untapped,
+    # left, or was tapped again for something that is not mana would answer
+    # the wrong question, and CR 106.4's mana is long gone by the end step this
+    # asks in.
+    return bool(getattr(game.players[seat], "tapped_land_for_mana_this_turn", False))
+
+
+def _seat_sacrificed_this_way(game, seat, deed, source, results) -> bool:
+    # "…each player **who sacrificed a Plains this way**" (Desolation). The
+    # seat-keyed record an earlier step of this same resolution wrote
+    # (``SACRIFICED_CARDS_BY_SEAT``). Never a read of a graveyard: the pile
+    # holds whatever else has gone there, and the words say "this way".
+    # Compared against each card's *printed* characteristics, because a card in
+    # a graveyard has no computed ones (CR 613.1) — the same restriction
+    # ``card_only_filter`` puts on the lowering that built this payload.
+    by_seat = (results or {}).get(SACRIFICED_CARDS_BY_SEAT) or {}
+    described = deed.get("filter") or {}
+    return any(
+        _card_matches_filter(card, described) for card in (by_seat.get(seat) or ())
+    )
+
+
+@dataclass(frozen=True)
+class PlayerDeedKind:
+    """How one ``who <did …>`` kind is read, and when it can be.
+
+    *names_objects* is whether the printed clause carries a noun phrase ("who
+    sacrificed **a Plains** this way") — required where it is true and
+    meaningless where it is not, so the lowering refuses either mismatch.
+
+    *at_announcement* is whether a seat can answer the clause **while a target
+    is being chosen** (CR 601.2c). A record of the turn so far, or one on the
+    ability's source, can: it is a fact before the spell is cast as much as
+    after. A record the resolution itself writes cannot — nothing has been
+    sacrificed "this way" until the sentence in front has run — so such a
+    clause on a *chosen* seat has no picker to enforce it, and the lowering
+    refuses it rather than offering every player.
+    """
+    names_objects: bool
+    at_announcement: bool
+    answers: Callable[..., bool]
+
+
+#: Every ``who <did …>`` kind (``ast.PlayerDeed.kind``) the engine can answer,
+#: read by the lowering that admits a clause (``lowering/_common``'s
+#: ``player_deed_payload``) and by :func:`seat_did` that enforces it — one table,
+#: so a kind cannot be admitted by one and unknown to the other. A kind with no
+#: row is one no reader was taught, and the lowering refuses it by name.
+PLAYER_DEEDS: dict[str, PlayerDeedKind] = {
+    "attacked_this_turn": PlayerDeedKind(False, True, _seat_attacked_this_turn),
+    "dealt_damage_by_source": PlayerDeedKind(
+        False, True, _seat_dealt_damage_by_source
+    ),
+    "tapped_land_for_mana_this_turn": PlayerDeedKind(
+        False, True, _seat_tapped_land_for_mana
+    ),
+    "sacrificed_this_way": PlayerDeedKind(True, False, _seat_sacrificed_this_way),
+}
+
+
+def seat_did(game, seat: int, deed: dict, *, source=None, results=None) -> bool:
+    """Whether *seat* answers the ``who <did …>`` clause *deed* describes.
+
+    The one reader of a seat narrowed by what it did, asked by the target
+    picker's seat loop (``legality_enumeration``, whose list the CR 608.2b
+    re-check also reads) with no *results*, and by :func:`seats_matching_deed`
+    inside a resolution with them. *source* is the ability's own source, for
+    the kind whose record is kept on it.
+
+    A kind this cannot answer is **no**, never yes. The lowering refuses an
+    unknown kind, so nothing compiles one — but a narrowing that fails open is
+    a sentence acting on every player at the table, and the direction to fail
+    in is the one where a bug does nothing rather than everything.
+    """
+    row = PLAYER_DEEDS.get((deed or {}).get("kind"))
+    if row is None:
+        return False
+    return row.answers(game, seat, deed, source, results)
+
+
 def seats_matching_deed(game, context, seats, deed) -> list:
     """*seats*, narrowed to the ones a ``who <did …>`` clause names.
 
@@ -1109,45 +1216,16 @@ def seats_matching_deed(game, context, seats, deed) -> list:
     their choice. … deals 2 damage to each player **who sacrificed a Plains
     this way**." (Desolation.) One reader for both sentences, so the two halves
     of that card cannot disagree about which seats "who" introduced — and the
-    same reader the lowering's ``player_deed_payload`` is the parse-side half
-    of.
+    same :func:`seat_did` the target picker asks, so a chosen seat and a loop's
+    seat are narrowed by one meaning of the words.
 
     ``None`` is no clause printed, which leaves the list exactly as it was.
-
-    A kind this cannot answer returns **no seats** rather than all of them. It
-    is not reachable — the lowering refuses an unknown kind, so nothing
-    compiles one — but a narrowing that fails open is a sentence acting on
-    every player at the table, and the direction to fail in is the one where a
-    bug does nothing rather than everything.
     """
     if not deed:
         return list(seats)
-    kind = deed.get("kind")
-    if kind == "tapped_land_for_mana_this_turn":
-        # The seat's own per-turn record, written at the one tap-for-mana seam
-        # (``mixins/turn_management.tap_land_for_mana``) and cleared with the
-        # rest of the turn histories. Never a read of the board: a land that
-        # untapped, left, or was tapped again for something that is not mana
-        # would answer the wrong question, and CR 106.4's mana is long gone by
-        # the end step this asks in.
-        return [
-            seat for seat in seats
-            if getattr(game.players[seat], "tapped_land_for_mana_this_turn", False)
-        ]
-    if kind == "sacrificed_this_way":
-        # The seat-keyed record an earlier step of this same resolution wrote
-        # (``SACRIFICED_CARDS_BY_SEAT``). Never a read of a graveyard: the pile
-        # holds whatever else has gone there, and the words say "this way".
-        # Compared against each card's *printed* characteristics, because a card
-        # in a graveyard has no computed ones (CR 613.1) — the same restriction
-        # ``card_only_filter`` puts on the lowering that built this payload.
-        by_seat = (context.results or {}).get(SACRIFICED_CARDS_BY_SEAT) or {}
-        described = deed.get("filter") or {}
-        return [
-            seat for seat in seats
-            if any(
-                _card_matches_filter(card, described)
-                for card in (by_seat.get(seat) or ())
-            )
-        ]
-    return []
+    source = getattr(context, "source_permanent", None)
+    results = getattr(context, "results", None)
+    return [
+        seat for seat in seats
+        if seat_did(game, seat, deed, source=source, results=results)
+    ]

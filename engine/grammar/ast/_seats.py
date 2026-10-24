@@ -25,32 +25,42 @@ from ._references import ObjectFilter
 class PlayerDeed:
     """A relative clause naming **what a seat did**, not what it is.
 
+    "…to target player **who attacked this turn**" (Fire and Brimstone); "…to
+    target opponent **previously dealt damage by it**" (Diseased Vermin);
     "…each player **who tapped a land for mana this turn** sacrifices a land of
     their choice. … deals 2 damage to each player **who sacrificed a Plains
     this way**." (Desolation.)
 
-    Both halves narrow *which seats* a sentence is about by something they did
-    earlier — one within the turn, one within this very resolution — which is
-    the same shape :class:`PlayerRef`'s ``attacked_this_turn`` flag already
-    carries for "target player who attacked this turn" (Fire and Brimstone).
-    A node rather than a third flag because these two have a *parameter*: the
-    "this way" reading names the printed noun phrase whose sacrifice counts,
-    and a flag has nowhere to put it.
+    Every one narrows *which seats* a sentence is about by something done
+    earlier — within the turn, to the ability's source, or within this very
+    resolution — and this node is the one spelling of all of them: the first
+    two used to be flags on :class:`PlayerRef`, each read by one branch of the
+    target lowering, so a flag on the other kind was dropped and "target
+    opponent who attacked this turn" offered every opponent.
 
     ``kind`` names the record, never the card:
 
+    - ``attacked_this_turn`` — ``PlayerState``'s per-turn record, stamped at
+      the declaration (CR 508.1).
+    - ``dealt_damage_by_source`` — the record the damage seam keeps on the
+      ability's own source ("by **it**").
     - ``tapped_land_for_mana_this_turn`` — ``PlayerState``'s own per-turn
       record, written at the one tap-for-mana seam.
     - ``sacrificed_this_way`` — the seat-keyed sacrifice record an earlier step
       of the *same resolution* wrote, which is why ``filter`` is required for
-      it and meaningless for the other: "this way" without a producer names
+      it and meaningless for the others: "this way" without a producer names
       nothing at all.
+
+    **When a kind can be answered is the kind's**, and it decides where the
+    clause may live (``handlers/_filters.PLAYER_DEEDS``, the one table the
+    lowering and the readers share). The first three are facts before a spell
+    is cast as much as after, so on a *chosen* seat the picker enforces them
+    (CR 601.2c) and the CR 608.2b re-check reads the same list; the fourth has
+    no answer until the resolution has run, so on a chosen seat it refuses.
 
     Read only where a reader enforces it. A narrowing parsed somewhere nothing
     applies it is a sentence that acts on **every** seat — wrong in the
-    caster's favour and silent — which is the reason the attack clause above is
-    read beside the one lowering that honours it rather than by the shared
-    recipient parser.
+    caster's favour and silent.
     """
     kind: str
     #: "…who sacrificed **a Plains** this way". The printed noun phrase the
@@ -70,14 +80,13 @@ class PlayerComparison:
     does**" (Oath of Ghouls).
 
     The board-state twin of :class:`PlayerDeed` beside it, and a separate node
-    rather than a third row in ``_PLAYER_DEEDS`` because of the one property
-    that decides where such a clause may live: **a comparison is answerable at
-    announcement**. A deed is a resolution-time seat record with no cast-time
-    answer, so the picker cannot enforce one and the two kinds in that table
-    are enforced elsewhere; a board, a life total, a hand size and a graveyard
-    can all be counted while CR 601.2c is choosing, which is what lets this
-    clause be enforced where it must be — in ``legality_enumeration``'s seat loop, the one
-    list the picker and the announcement gate both read.
+    rather than another row of ``PLAYER_DEEDS`` because what it holds is a
+    relation between two seats rather than a record of one: a board, a life
+    total, a hand size and a graveyard counted while CR 601.2c is choosing,
+    against a reference seat, in a direction, by a margin. Like the deeds that
+    can be answered at announcement it is enforced in
+    ``legality_enumeration``'s seat loop, the one list the picker and the
+    announcement gate both read.
 
     ``quantity`` is what is counted, and it is a whole printed noun phrase
     (with its zone) rather than a word out of a closed list, so "more lands"
@@ -124,20 +133,6 @@ class PlayerRef:
     # the creature half). Set only by the production that read the union, so a
     # lowering that never sees the phrase never sees the flag.
     or_planeswalker: bool = False
-    # "target player **who attacked this turn**" (Fire and Brimstone). A printed
-    # restriction on which seats may be chosen, not a different kind of player —
-    # so it rides here rather than minting a `target_player_who_attacked`, for
-    # the reason every other narrowing is payload: a card printing the same
-    # clause on "target opponent" needs no new kind.
-    attacked_this_turn: bool = False
-    # "target opponent **previously dealt damage by it**" (Diseased Vermin).
-    # The same shape as the clause above — a printed restriction on which seats
-    # may be chosen, not a kind of player — over a record kept on the ability's
-    # own source rather than on the seat. Which is the whole reason it is a
-    # second flag: "who attacked" is a fact about the player and "whom did *this
-    # permanent* hurt" is a fact about the permanent, and the picker has to be
-    # handed the source to answer the second.
-    damaged_by_source: bool = False
     # "the controller of **the last red instant or sorcery spell that dealt
     # damage to you this turn**" (Suffocation) — the noun phrase that says
     # *which* history entry the seat is read out of, carried whole because a
@@ -150,16 +145,19 @@ class PlayerRef:
     # and the lowering refuses it rather than defaulting to "any source", which
     # would be 4 damage to whoever last pinged you with anything.
     last_damager: "ObjectFilter | None" = None
-    # "each player **who tapped a land for mana this turn**" (Desolation). The
-    # relative-clause narrowing above generalised: `attacked_this_turn` is one
-    # printed clause spelled as a flag, and this is the clause family with its
-    # record and its noun phrase as data. Set only by the productions that read
-    # one, so a `PlayerRef` that never met the words carries None and every
-    # existing lowering is untouched.
+    # "target player **who attacked this turn**" (Fire and Brimstone), "each
+    # player **who tapped a land for mana this turn**" (Desolation). A printed
+    # restriction on which seats the sentence is about, not a kind of player —
+    # so a card printing the same clause on "target opponent" needs no new
+    # kind. Set only by the production that reads the words
+    # (``records.accept_player_deed``), so a `PlayerRef` that never met them
+    # carries None and every lowering that does not read it is untouched.
     #
     # A lowering handed one it cannot carry must **refuse**: an unenforced seat
     # narrowing is a sentence that acts on every player, which is the failure
-    # direction this whole family exists to avoid.
+    # direction this whole family exists to avoid. On a chosen seat that means
+    # the picker's description carries it, which only a deed answerable at
+    # announcement can be (see :class:`PlayerDeed`).
     did: "PlayerDeed | None" = None
     # "each player **who controls a white creature**" (Disorder). The board-state
     # twin of `did` above and the *presence* twin of `compared` below: not what
@@ -184,9 +182,9 @@ class PlayerRef:
     # refuse, because an unenforced seat narrowing is a sentence that acts on
     # every player.
     #
-    # The difference that matters is where it is enforced. `did`'s two kinds
-    # are resolution-time records, so no picker can answer them; every
-    # comparison here is answerable while the target is being chosen, so this
-    # one *is* enforced by the picker — which is why it may ride a `PlayerRef`
-    # a cast or an activation announces at all.
+    # Where it is enforced is the picker: every comparison here is answerable
+    # while the target is being chosen, so this may ride a `PlayerRef` a cast
+    # or an activation announces — exactly as a `did` whose kind is answerable
+    # at announcement may, and one whose record only the resolution writes may
+    # not.
     compared: "PlayerComparison | None" = None

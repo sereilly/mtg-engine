@@ -487,6 +487,121 @@ def _player_comparison_payload(
     return described
 
 
+#: The seats a ``who <did …>`` clause may narrow by being *chosen*: the two
+#: player targets. Every other seat the clause can reach is a set a handler
+#: loops (``recipient_did``, ``who_did``).
+_CHOSEN_SEATS = ("target_player", "target_opponent")
+
+
+def _deed_payload(deed: "ast.PlayerDeed", node) -> dict[str, object]:
+    """The payload one ``who <did …>`` clause lowers to, held to its kind.
+
+    The kind's row in ``handlers/_filters.PLAYER_DEEDS`` is the one table the
+    readers dispatch on, so a kind with no row is one nothing was taught and
+    refuses by name, and the noun phrase is required exactly where the row
+    says the clause names objects.
+
+    The noun phrase is held to ``card_only_filter``: the one record that
+    carries one is a list of cards in a graveyard, which has no computed
+    characteristics at all (CR 613.1), so a narrowing outside what a printed
+    card can answer is refused instead of being handed to a matcher that would
+    ignore it.
+    """
+    from ...handlers._filters import PLAYER_DEEDS
+    from ...subject_filters import card_only_filter
+
+    row = PLAYER_DEEDS.get(deed.kind)
+    if row is None:
+        raise LoweringError(f"no seat record answers {deed.kind!r}", node=node)
+    payload: dict[str, object] = {"kind": deed.kind}
+    if not row.names_objects:
+        if deed.filter is not None:
+            raise LoweringError(
+                f"the {deed.kind!r} narrowing names no objects", node=node
+            )
+        return payload
+    if deed.filter is None:
+        raise LoweringError(
+            f"the {deed.kind!r} narrowing needs the noun phrase it counts",
+            node=node,
+        )
+    described = card_only_filter(_filter_payload(deed.filter))
+    if not described:
+        raise LoweringError("a seat record cannot test this restriction", node=node)
+    payload["filter"] = described
+    return payload
+
+
+def player_deed_payload(player, node) -> "dict[str, object] | None":
+    """The seat narrowing a ``who <did …>`` clause carries onto a **seat set**,
+    or None when the reference prints no such clause.
+
+    One reader for both of Desolation's sentences — the sacrifice its trigger
+    performs and the damage that follows — so what "who" introduces cannot mean
+    two things one line apart.
+
+    **Raises rather than returns None** for a clause it cannot express. A seat
+    narrowing that reaches a handler as nothing is a sentence acting on *every*
+    player, which is silent and in the caster's favour; the whole reason these
+    clauses are parsed only where a reader exists is to keep that impossible,
+    and this is the second half of the same guarantee.
+
+    A **chosen** seat refuses here. Its clause is enforced while the target is
+    chosen or nowhere (CR 601.2c), so it belongs in the picker's description
+    (:func:`_targets_payload`), and a lowering calling this one hands its seat
+    to the kind table, which describes no narrowing — "target player who
+    tapped a land for mana this turn sacrifices a land" would offer every
+    player and then ask the wrong one to sacrifice nothing.
+    """
+    deed = getattr(player, "did", None)
+    if deed is None:
+        return None
+    if getattr(player, "kind", None) in _CHOSEN_SEATS:
+        raise LoweringError(
+            f"a chosen seat's {deed.kind!r} narrowing has no picker "
+            "description to ride here",
+            node=node,
+        )
+    return _deed_payload(deed, node)
+
+
+def _with_player_deed(
+    described: dict[str, object], recipient: "ast.PlayerRef",
+) -> dict[str, object]:
+    """*described* plus the ``who <did …>`` clause a chosen seat carries.
+
+    "target player **who attacked this turn**" (Fire and Brimstone), "target
+    opponent **previously dealt damage by it**" (Diseased Vermin). Carried into
+    the description the picker reads, because the picker is what enforces it
+    (``legality_enumeration``'s seat loop, whose list the CR 608.2b re-check
+    reads too). Both player kinds through this one call — the two flags this
+    replaced were each read on one kind only, so the clause on the other was
+    dropped and the picker offered every seat.
+
+    A clause whose record only the resolution writes ("who sacrificed a Plains
+    **this way**") has no answer while the target is chosen, so it refuses
+    rather than reaching a picker that would have to admit somebody.
+    """
+    deed = recipient.did
+    if deed is None:
+        return described
+    from ...handlers._filters import PLAYER_DEEDS
+
+    payload = _deed_payload(deed, recipient)
+    if not PLAYER_DEEDS[deed.kind].at_announcement:
+        raise LoweringError(
+            f"the {deed.kind!r} narrowing is a record of this resolution, and "
+            "no picker can answer it at announcement (CR 601.2c)",
+            node=recipient,
+        )
+    if recipient.or_planeswalker:
+        raise LoweringError(
+            "a seat narrowing cannot narrow a planeswalker half", node=recipient
+        )
+    described["did"] = payload
+    return described
+
+
 def _with_player_comparison(
     described: dict[str, object], recipient: "ast.PlayerRef",
 ) -> dict[str, object]:
@@ -526,28 +641,17 @@ def _targets_payload(
                 node=recipient,
             )
         if recipient.kind == "target_player":
-            if recipient.attacked_this_turn:
-                # "…**who attacked this turn**" (Fire and Brimstone). Carried
-                # into the description the picker reads, because the picker is
-                # what enforces it (engine/legality_enumeration.py's seat loop). A
-                # restriction the enumerator never sees is a restriction nobody
-                # applies — and unenforced, the card hits any seat at all, which
-                # is wrong in the caster's favour and silent.
-                return _with_player_comparison({
-                    "quantifier": "target", "kind": "player",
-                    "attacked_this_turn": True,
-                }, recipient)
             if recipient.or_planeswalker:
                 # "target player or planeswalker" — one chosen slot answered by
                 # a player face or a planeswalker permanent, the "any target"
                 # resolution shape minus the creature half.
-                return _with_player_comparison(
+                return _with_player_comparison(_with_player_deed(
                     {"quantifier": "target", "kind": "player_or_planeswalker"},
                     recipient,
-                )
-            return _with_player_comparison(
+                ), recipient)
+            return _with_player_comparison(_with_player_deed(
                 {"quantifier": "target", "kind": "player"}, recipient
-            )
+            ), recipient)
         if recipient.kind == "target_opponent":
             # "Target opponent" is a player target the caster's own seat cannot
             # answer (CR 102.2/102.3) — the same flag the phase-out sweep and Word of
@@ -567,13 +671,9 @@ def _targets_payload(
                 ),
                 "opponents_only": True,
             }
-            if recipient.damaged_by_source:
-                # "…**previously dealt damage by it**" (Diseased Vermin), for
-                # the reason the attack narrowing one arm up is carried: the
-                # picker enforces it, and a restriction the enumerator never
-                # sees lets the ability hit any opponent at all.
-                described["damaged_by_source"] = True
-            return _with_player_comparison(described, recipient)
+            return _with_player_comparison(
+                _with_player_deed(described, recipient), recipient
+            )
         return None
     if not isinstance(recipient, ast.TargetSpec):
         return None

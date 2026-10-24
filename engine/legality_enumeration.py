@@ -18,7 +18,8 @@ from __future__ import annotations
 
 from .handlers._filters import (excluded_graveyard_slot,
                                 graveyard_card_matches,
-                                permanent_matches_filter, state_holds)
+                                permanent_matches_filter, seat_did,
+                                state_holds)
 from .models import CardDefinition, Permanent
 from .cast_restrictions import timing_fixed_seat
 from .faces import whole_card
@@ -256,28 +257,17 @@ class TargetEnumerationMixin:
                 if spec.get("opponents_only") and seat == caster_index:
                     continue
                 # "target player **who attacked this turn**" (Fire and
-                # Brimstone). The record is on the seat, not on its creatures:
-                # a player who attacked and then lost the attacker still
-                # attacked, and reading the board would forget them.
-                if (
-                    spec.get("attacked_this_turn")
-                    and not self.players[seat].attacked_this_turn
-                ):
+                # Brimstone), "target opponent **previously dealt damage by
+                # it**" (Diseased Vermin): a seat narrowed by what it did.
+                # One reader for every such clause, the one the handlers' seat
+                # loops ask too (``handlers/_filters.seat_did``), handed the
+                # ability's source for the kind whose record is kept on it.
+                # A clause it cannot answer admits nobody rather than
+                # everybody: an unenforceable restriction offered as satisfied
+                # is the silent direction (CR 601.2c).
+                deed = spec.get("did")
+                if deed and not seat_did(self, seat, deed, source=ability_source):
                     continue
-                # "target opponent **previously dealt damage by it**" (Diseased
-                # Vermin). The record is on the *source permanent*, not on the
-                # seat — "whom has this creature hurt" — so this is the one
-                # player narrowing that needs the ability's source, and with no
-                # source in hand the clause admits nobody rather than everybody:
-                # an unenforceable restriction offered as satisfied is the
-                # silent direction (CR 601.2c).
-                if spec.get("damaged_by_source"):
-                    from .damage_events import seats_dealt_damage_by
-
-                    if ability_source is None:
-                        continue
-                    if seat not in seats_dealt_damage_by(ability_source):
-                        continue
                 # "target opponent **who has more life than you do**" (the
                 # Exodus Keepers), "target player **who controls more creatures
                 # than they do and is their opponent**" (the Oaths). The third
