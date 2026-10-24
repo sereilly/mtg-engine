@@ -54,7 +54,7 @@ def _holds_a_reanimable_card(player, index, card_filter, card_type="creature") -
 
     def eligible(card) -> bool:
         return card_has_type(card, card_type) and (
-            card_filter is None or card_filter(card, player)
+            card_filter is None or card_filter(card, owner=player)
         )
 
     if isinstance(index, int):
@@ -71,7 +71,7 @@ def _reanimable_slot(player, card_filter, card_type="creature"):
     """
     for index, card in enumerate(getattr(player, "graveyard", ())):
         if card_has_type(card, card_type) and (
-            card_filter is None or card_filter(card, player)
+            card_filter is None or card_filter(card, owner=player)
         ):
             yield index
             return
@@ -364,11 +364,12 @@ def _reanimate_onto_chosen_host(
             None,
         )
 
-        def only_that_card(candidate, _host=host):
+        def only_that_card(candidate, owner=None, *, _host=host):
             # The announced card and no other, and still a legal Aura for the
             # host as it enters (CR 303.4f's "must choose a legal object" is
             # about the moment of entry, the re-check ``_return_planned_cards``
-            # makes for the same reason).
+            # makes for the same reason). *owner* is the pile's, which every
+            # card filter is handed (CR 613.1's colour); identity needs none.
             return candidate is card and (
                 enchant_card_refusal(game, candidate, seat, _host) is None
             )

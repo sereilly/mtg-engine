@@ -1216,7 +1216,7 @@ class EffectsMixin:
             # fourth way.
             if not card_has_type(card, card_type):
                 return False
-            return card_filter is None or card_filter(card, owner)
+            return card_filter is None or card_filter(card, owner=owner)
 
         def arrive(card, owner_index: int) -> "Permanent":
             arrival = Permanent(card=card)
