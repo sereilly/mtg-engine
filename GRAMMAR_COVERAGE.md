@@ -19,7 +19,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | LEA | 290 | 388 | 88.9% | 87.4% | 50.3% | 176 |
 | LEB | 292 | 389 | 88.9% | 87.4% | 50.4% | 177 |
 | 2ED | 292 | 389 | 88.9% | 87.4% | 50.4% | 177 |
-| ARN | 78 | 108 | 82.4% | 78.7% | 56.5% | 50 |
+| ARN | 78 | 108 | 83.3% | 79.6% | 57.4% | 51 |
 | ATQ | 85 | 120 | 90.8% | 90.8% | 63.3% | 68 |
 | 3ED | 296 | 389 | 90.5% | 88.4% | 52.2% | 182 |
 | LEG | 310 | 431 | 89.6% | 88.4% | 58.7% | 217 |
@@ -50,8 +50,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ODY | 335 | 507 | 89.7% | 89.7% | 69.6% | 295 |
 | TOR | 143 | 261 | 86.2% | 86.2% | 68.2% | 138 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| JUD *(measured)* | 143 | 241 | 89.2% | 88.8% | 63.5% | 126 |
-| **All (shipped)** | **7884** | **11645** | **90.6%** | **90.0%** | **62.3%** | **6139** |
+| JUD *(measured)* | 143 | 241 | 91.3% | 90.9% | 65.6% | 131 |
+| **All (shipped)** | **7884** | **11645** | **90.6%** | **90.0%** | **62.3%** | **6140** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
 
@@ -63,7 +63,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 653 | 332 | expected a subject |  |
+| 648 | 327 | expected a subject |  |
 | 164 | 83 | unrecognized effect verb |  |
 | 129 | 68 | unconsumed text |  |
 | 65 | 46 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -91,7 +91,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 ## Cards executing through the grammar
 
-6139 cards, 7257 lines.
+6140 cards, 7258 lines.
 
 - **Abandon Hope**
   - `Look at target opponent's hand and choose X cards from it. That player discards those cards.`
@@ -1330,6 +1330,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever a creature dies, that creature's controller sacrifices a land of their choice.`
 - **Burning Shield Askari**
   - `{R}{R}: This creature gains first strike until end of turn.`
+- **Burning Wish**
+  - `You may reveal a sorcery card you own from outside the game and put it into your hand. Exile Burning Wish.`
 - **Burnout**
   - `Counter target instant spell if it's blue.`
   - `Draw a card at the beginning of the next turn's upkeep.`
@@ -2220,6 +2222,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Choose any number of creatures target player controls. Choose the same number of creatures another target player controls. Those players exchange control of those creatures. (This effect lasts indefinitely.)`
 - **Cunning**
   - `When enchanted creature attacks or blocks, sacrifice this Aura at the beginning of the next cleanup step.`
+- **Cunning Wish**
+  - `You may reveal an instant card you own from outside the game and put it into your hand. Exile Cunning Wish.`
 - **Cuombajj Witches**
   - `{T}: This creature deals 1 damage to any target and 1 damage to any target of an opponent's choice.`
 - **Curfew**
@@ -2398,6 +2402,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Regenerate target creature.`
 - **Death Watch**
   - `When enchanted creature dies, its controller loses life equal to its power and you gain life equal to its toughness.`
+- **Death Wish**
+  - `You may put a card you own from outside the game into your hand. You lose half your life, rounded up. Exile Death Wish.`
 - **Death or Glory**
   - `Separate all creature cards in your graveyard into two piles. Exile the pile of an opponent's choice and return the other to the battlefield.`
 - **Death's Duet**
@@ -4302,6 +4308,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Goham Djinn**
   - `{1}{B}: Regenerate this creature.`
   - `This creature gets -2/-2 as long as black is the most common color among all permanents or is tied for most common.`
+- **Golden Wish**
+  - `You may reveal an artifact or enchantment card you own from outside the game and put it into your hand. Exile Golden Wish.`
 - **Golgothian Sylex**
   - `{1}, {T}: Each nontoken permanent with a name originally printed in the Antiquities expansion is sacrificed by its controller.`
 - **Goremand**
@@ -5959,6 +5967,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}: Regenerate this creature.`
   - `{1}: Regenerate this creature.`
   - `{1}: Regenerate this creature.`
+- **Living Wish**
+  - `You may reveal a creature or land card you own from outside the game and put it into your hand. Exile Living Wish.`
 - **Llanowar Behemoth**
   - `Tap an untapped creature you control: This creature gets +1/+1 until end of turn.`
 - **Llanowar Cavalry**
@@ -8482,6 +8492,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}, {T}: Tap target artifact, creature, or land.`
 - **Ring of Immortals**
   - `{3}, {T}: Counter target instant or Aura spell that targets a permanent you control.`
+- **Ring of Ma'rûf**
+  - `{5}, {T}, Exile this artifact: The next time you would draw a card this turn, instead put a card you own from outside the game into your hand.`
 - **Ring of Renewal**
   - `{5}, {T}: Discard a card at random, then draw two cards.`
 - **Riptide**
