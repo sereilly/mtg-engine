@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**419 / 625 tracked rules covered (67%)** — 3177 tests, 0 unannotated.
+**419 / 625 tracked rules covered (67%)** — 3190 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -206,7 +206,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **109.2** If a spell or ability uses a description of an object that includes a card type or subtype, but d... *(4 tests, subrules a)*
 - [ ] **109.3** An object’s characteristics are name, mana cost, color, color indicator, card type, subtype, supe...
 - [x] **109.4** Only objects on the stack or on the battlefield have a controller. Objects that are neither on th... *(4 tests, subrules b)*
-- [x] **109.5** The words “you” and “your” on an object refer to the object’s controller, its would-be controller... *(26 tests)*
+- [x] **109.5** The words “you” and “your” on an object refer to the object’s controller, its would-be controller... *(27 tests)*
 
 ### 110. Permanents
 
@@ -246,7 +246,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **113.3** There are four general categories of abilities: *(4 tests, subrules bc)*
 - [ ] **113.4** Some activated abilities and some triggered abilities are mana abilities. Mana abilities follow s...
 - [ ] **113.5** Some activated abilities are loyalty abilities. Loyalty abilities follow special rules: A player ...
-- [x] **113.6** Abilities of an instant or sorcery spell usually function only while that object is on the stack.... *(20 tests, subrules bgjkm)*
+- [x] **113.6** Abilities of an instant or sorcery spell usually function only while that object is on the stack.... *(22 tests, subrules bgjkm)*
 - [x] **113.7** The source of an ability is the object that generated it. The source of an activated ability on t... *(11 tests, subrules a)*
 - [ ] **113.8** The controller of an activated ability on the stack is the player who activated it. The controlle...
 - [ ] **113.9** Activated and triggered abilities on the stack aren’t spells, and therefore can’t be countered by...
@@ -532,7 +532,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **405.2** The stack keeps track of the order that spells and/or abilities were added to it. Each time an ob... *(2 tests)*
 - [x] **405.3** If an effect puts two or more objects on the stack at the same time, those controlled by the acti... *(3 tests)*
 - [x] **405.4** Each spell has all the characteristics of the card associated with it. Each activated or triggere... *(2 tests)*
-- [x] **405.5** When all players pass in succession, the top (last-added) spell or ability on the stack resolves.... *(3 tests)*
+- [x] **405.5** When all players pass in succession, the top (last-added) spell or ability on the stack resolves.... *(4 tests)*
 - [x] **405.6** Some things that happen during the game don’t use the stack. *(4 tests, subrules ce)*
 
 ### 406. Exile
@@ -687,8 +687,8 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 603. Handling Triggered Abilities
 
 - [x] **603.1** Triggered abilities have a trigger condition and an effect. They are written as “[When/Whenever/A... *(3 tests, subrules b)*
-- [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(35 tests, subrules bcd)*
-- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(106 tests, subrules bcd)*
+- [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(36 tests, subrules bcd)*
+- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(109 tests, subrules bcd)*
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(26 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(10 tests)*
 - [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(16 tests, subrules acd)*
@@ -737,7 +737,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 608. Resolving Spells and Abilities
 
 - [x] **608.1** Each time all players pass in succession, the spell or ability on top of the stack resolves. (See... *(2 tests)*
-- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(175 tests, subrules bcdghmn)*
+- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(176 tests, subrules bcdghmn)*
 - [x] **608.3** If the object that’s resolving is a permanent spell, its resolution may involve several steps. Th... *(3 tests, subrules ab)*
 
 ### 609. Effects
@@ -856,10 +856,10 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **701.2** Activate *(4 tests, subrules a)*
 - [x] **701.3** Attach *(13 tests, subrules abcd)*
 - [x] **701.5** Cast *(4 tests, subrules a)*
-- [x] **701.6** Counter *(15 tests, subrules ab)*
+- [x] **701.6** Counter *(17 tests, subrules ab)*
 - [x] **701.7** Create *(3 tests, subrules a)*
 - [x] **701.8** Destroy *(7 tests, subrules abc)*
-- [x] **701.9** Discard *(7 tests, subrules ac)*
+- [x] **701.9** Discard *(9 tests, subrules ac)*
 - [x] **701.12** Exchange *(11 tests, subrules ab)*
 - [x] **701.13** Exile *(7 tests, subrules a)*
 - [x] **701.14** Fight *(7 tests, subrules abd)*
@@ -901,7 +901,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.26** Phasing *(20 tests, subrules adfgim)*
 - [x] **702.27** Buyback *(15 tests, subrules a)*
 - [x] **702.28** Shadow *(6 tests, subrules abc)*
-- [x] **702.29** Cycling *(15 tests, subrules abef)*
+- [x] **702.29** Cycling *(26 tests, subrules abcef)*
 - [x] **702.30** Echo *(16 tests, subrules ab)*
 - [x] **702.32** Fading *(14 tests, subrules a)*
 - [x] **702.36** Fear *(5 tests, subrules ab)*

@@ -51,7 +51,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | TOR | 143 | 261 | 86.2% | 86.2% | 68.2% | 138 |
 | JUD | 143 | 241 | 91.3% | 90.9% | 65.6% | 131 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| ONS *(measured)* | 335 | 541 | 66.2% | 61.9% | 42.7% | 201 |
+| ONS *(measured)* | 335 | 541 | 68.9% | 64.7% | 45.5% | 207 |
 | **All (shipped)** | **8027** | **11886** | **90.6%** | **90.1%** | **62.4%** | **6271** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -64,7 +64,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 769 | 415 | expected a subject |  |
+| 754 | 400 | expected a subject |  |
 | 189 | 103 | unrecognized effect verb |  |
 | 136 | 74 | unconsumed text |  |
 | 70 | 51 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -633,6 +633,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Create a 3/3 green Elephant creature token.`
 - **Assembly Hall**
   - `{4}, {T}: Reveal a creature card in your hand. Search your library for a card with the same name as that card, reveal it, put it into your hand, then shuffle.`
+- **Astral Slide**
+  - `Whenever a player cycles a card, you may exile target creature. If you do, return that card to the battlefield under its owner's control at the beginning of the next end step.`
 - **Astrolabe**
   - `{1}, {T}, Sacrifice this artifact: Add two mana of any one color. Draw a card at the beginning of the next turn's upkeep.`
 - **Atalya, Samite Master**
@@ -1778,6 +1780,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Destroy target non-Swamp land. If that land was nonbasic, Choking Sands deals 2 damage to the land's controller.`
 - **Choking Tethers**
   - `Tap up to four target creatures.`
+  - `When you cycle this card, you may tap target creature.`
 - **Choking Vines**
   - `X target attacking creatures become blocked. Choking Vines deals 1 damage to each of those creatures. (This spell works on creatures that can't be blocked.)`
 - **Chromatic Armor**
@@ -2037,6 +2040,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, if you control seven or more permanents, return this creature to its owner's hand.`
 - **Complicate**
   - `Counter target spell unless its controller pays {3}.`
+  - `When you cycle this card, you may counter target spell unless its controller pays {1}.`
 - **Compost**
   - `Whenever a black card is put into an opponent's graveyard from anywhere, you may draw a card.`
   - `Whenever a black card is put into an opponent's graveyard from anywhere, you may draw a card.`
@@ -2493,6 +2497,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever a creature is dealt damage, destroy it. It can't be regenerated.`
 - **Death Pulse**
   - `Target creature gets -4/-4 until end of turn.`
+  - `When you cycle this card, you may have target creature get -1/-1 until end of turn.`
 - **Death Spark**
   - `Death Spark deals 1 damage to any target.`
   - `At the beginning of your upkeep, if this card is in your graveyard with a creature card directly above it, you may pay {1}. If you do, return this card to your hand.`
@@ -2738,6 +2743,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of combat on your turn, you may sacrifice another creature. If you do, this creature gets +2/+2 and gains trample until end of turn. (It can deal excess combat damage to the player or planeswalker it's attacking.)`
 - **Dirge of Dread**
   - `All creatures gain fear until end of turn. (They can't be blocked except by artifact creatures and/or black creatures.)`
+  - `When you cycle this card, you may have target creature gain fear until end of turn.`
 - **Dirtcowl Wurm**
   - `Whenever an opponent plays a land, put a +1/+1 counter on this creature.`
 - **Dirtwater Wraith**
@@ -3846,6 +3852,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{B}, Discard a card: This creature gains flying until end of turn.`
 - **Fleetfoot Panther**
   - `When this creature enters, return a green or white creature you control to its owner's hand.`
+- **Fleeting Aven**
+  - `Whenever a player cycles a card, return this creature to its owner's hand.`
 - **Fleeting Image**
   - `{1}{U}: Return this creature to its owner's hand.`
   - `{1}{U}: Return this creature to its owner's hand.`
@@ -5334,6 +5342,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Search your library for three cards and reveal them. Target opponent chooses one. Put that card into your hand and the rest into your graveyard. Then shuffle.`
 - **Invigorate**
   - `Target creature gets +4/+4 until end of turn.`
+- **Invigorating Boon**
+  - `Whenever a player cycles a card, you may put a +1/+1 counter on target creature.`
 - **Invigorating Falls**
   - `You gain life equal to the number of creature cards in all graveyards.`
 - **Invigorating Surge**
@@ -5823,6 +5833,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Krosan Restorer**
   - `{T}: Untap target land.`
   - `Threshold — {T}: Untap up to three target lands. Activate only if there are seven or more cards in your graveyard.`
+- **Krosan Tusker**
+  - `When you cycle this card, you may search your library for a basic land card, reveal that card, put it into your hand, then shuffle. (Do this before you draw.)`
 - **Krosan Verge**
   - `{T}: Add {C}.`
   - `{2}, {T}, Sacrifice this land: Search your library for a Forest card and a Plains card, put them onto the battlefield tapped, then shuffle.`
@@ -6118,6 +6130,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Lightning Dart deals 1 damage to target creature. If that creature is white or blue, Lightning Dart deals 4 damage to it instead.`
 - **Lightning Dragon**
   - `{R}: This creature gets +1/+0 until end of turn.`
+- **Lightning Rift**
+  - `Whenever a player cycles a card, you may pay {1}. If you do, this enchantment deals 2 damage to any target.`
 - **Lightning Surge**
   - `Lightning Surge deals 4 damage to any target.`
 - **Liliana's Devotee**
@@ -8020,6 +8034,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Sacrifice an artifact: Add an amount of {B} equal to the sacrificed artifact's mana value.`
 - **Primal Boost**
   - `Target creature gets +4/+4 until end of turn.`
+  - `When you cycle this card, you may have target creature get +1/+1 until end of turn.`
 - **Primal Growth**
   - `Search your library for a basic land card, put that card onto the battlefield, then shuffle. If this spell was kicked, instead search your library for up to two basic land cards, put them onto the battlefield, then shuffle.`
 - **Primal Might**
@@ -8603,6 +8618,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Draw a card at the beginning of the next turn's upkeep.`
 - **Renewed Faith**
   - `You gain 6 life.`
+  - `When you cycle this card, you may gain 2 life.`
 - **Renounce**
   - `Sacrifice any number of permanents. You gain 2 life for each permanent sacrificed this way.`
 - **Reparations**
@@ -9877,6 +9893,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Change the text of target spell or permanent by replacing all instances of one color word with another. (For example, you may change "target black spell" to "target blue spell." This effect lasts indefinitely.)`
 - **Slice and Dice**
   - `Slice and Dice deals 4 damage to each creature.`
+  - `When you cycle this card, you may have it deal 1 damage to each creature.`
 - **Slimy Kavu**
   - `{T}: Target land becomes a Swamp until end of turn.`
 - **Slingshot Goblin**
@@ -9956,6 +9973,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever a player casts a black spell, you gain 1 life.`
 - **Solar Blast**
   - `Solar Blast deals 3 damage to any target.`
+  - `When you cycle this card, you may have it deal 1 damage to any target.`
 - **Soldevi Adnate**
   - `{T}, Sacrifice a black or artifact creature: Add an amount of {B} equal to the sacrificed creature's mana value.`
 - **Soldevi Digger**
@@ -10570,6 +10588,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Return all lands to their owners' hands.`
 - **Sunfire Balm**
   - `Prevent the next 4 damage that would be dealt to any target this turn.`
+  - `When you cycle this card, you may prevent the next 1 damage that would be dealt to any target this turn.`
 - **Sungrass Egg**
   - `{2}, {T}, Sacrifice this artifact: Add {G}{W}. Draw a card. (Activate only as an instant.)`
 - **Sungrass Prairie**
@@ -12314,6 +12333,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Return target creature to its owner's hand. Then return another target creature to its owner's hand unless its controller pays {1}.`
 - **Withering Boon**
   - `Counter target creature spell.`
+- **Withering Hex**
+  - `Whenever a player cycles a card, put a plague counter on this Aura.`
 - **Withering Wisps**
   - `At the beginning of the end step, if no creatures are on the battlefield, sacrifice this enchantment.`
   - `{B}: This enchantment deals 1 damage to each creature and each player. Activate no more times each turn than the number of snow Swamps you control.`
