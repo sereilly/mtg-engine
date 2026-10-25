@@ -325,7 +325,7 @@ class CardActivationMixin:
                 "activate its ability"
             )
         else:
-            self._discard_card(controller, card)
+            self._discard_card(controller, card, as_cost=True)
             self.log.append(f"{controller.name} discarded {card.name} to activate its ability")
             if is_cycling_ability(card, ability):
                 self._announce_cycle(controller_index, card)

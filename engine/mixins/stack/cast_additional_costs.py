@@ -1120,7 +1120,7 @@ class AdditionalCastCostsMixin:
                 emptied = list(caster.hand)
                 caster.hand = []
                 for cost_card in emptied:
-                    self._discard_card(caster, cost_card)
+                    self._discard_card(caster, cost_card, as_cost=True)
                 self.log.append(
                     f"{caster.name} discarded their hand "
                     f"({len(emptied)} card(s)) to cast {card.name}"
@@ -1186,7 +1186,7 @@ class AdditionalCastCostsMixin:
                             index,
                         )
                     discarded = caster.hand.pop(index)
-                    self._discard_card(caster, discarded)
+                    self._discard_card(caster, discarded, as_cost=True)
                     discarded_cards.append(discarded)
                     self.log.append(
                         f"{caster.name} discarded {discarded.name} to cast {card.name}"

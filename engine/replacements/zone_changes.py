@@ -225,6 +225,12 @@ TOP_OF_LIBRARY_DISCARD_TEXT = (
 
 
 def _applies_leng_discard(game, payload: dict) -> bool:
+    """"If **an effect** causes you to discard a card" — so not a discard paid
+    as a cost (Library of Leng, 2004-10-04: "costs aren't effects"), which the
+    discard seam marks ``as_cost``. Cycling is the one every cycling card in
+    the pool pays."""
+    if payload.get("as_cost"):
+        return False
     return game._player_controls_text(payload["player"], TOP_OF_LIBRARY_DISCARD_TEXT)
 
 
