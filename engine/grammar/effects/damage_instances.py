@@ -286,6 +286,54 @@ def _accept_reflexive_redirect_tail(
     return False
 
 
+def _accept_class_instance_shield(
+    stream: TokenStream,
+) -> "ast.PreventDamage | None":
+    """``a <noun phrase> would deal damage to <recipient> <duration>, prevent
+    that damage`` — with "The next time" already read by the caller. (Circle of
+    Solace: "…a creature **of the chosen type** …".)
+
+    :func:`_accept_spell_class_instance_redirect`'s shape with the prevention
+    tail: the source is a *class* the printed noun phrase describes, so nothing
+    is chosen and the first such source to deal damage spends the shield. The
+    noun phrase goes through the one noun reader and must name a card type —
+    "a source" with no type is the "of your choice" sentence below, which this
+    must not take — and nothing may sit between it and "would deal damage":
+    "a creature **of your choice** with shadow" (Circle of Protection: Shadow)
+    is a different sentence and refuses here with the cursor untouched.
+    """
+    from ..nouns import parse_object_filter
+
+    mark = stream.mark()
+    if not (stream.accept_word("a") or stream.accept_word("an")):
+        return None
+    try:
+        filt = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if (
+        not filt.card_types
+        or filt.is_source
+        or not stream.accept_phrase("would", "deal", "damage", "to")
+    ):
+        stream.reset(mark)
+        return None
+    recipient = parse_recipient(stream)
+    if recipient is None:
+        stream.reset(mark)
+        return None
+    duration = _parse_duration(stream)
+    stream.accept_punct(",")
+    if not stream.accept_phrase("prevent", "that", "damage"):
+        stream.reset(mark)
+        return None
+    return ast.PreventDamage(
+        ast.Fixed(1), to=recipient, from_filter=filt, duration=duration,
+        from_class=True,
+    )
+
+
 def _parse_source_of_choice_effect(
     stream: TokenStream,
 ) -> "ast.PreventDamage | ast.RedirectDamage | None":
@@ -321,6 +369,14 @@ def _parse_source_of_choice_effect(
     spell_class = _accept_spell_class_instance_redirect(stream)
     if spell_class is not None:
         return spell_class
+    # "The next time **a creature of the chosen type** would deal damage to you
+    # this turn, prevent that damage." (Circle of Solace.) The source named as
+    # a class nobody chooses from — read before the article below, which would
+    # take "a creature" for a card-typed source of the player's choice and
+    # then fail the line on the missing "of your choice".
+    described_class = _accept_class_instance_shield(stream)
+    if described_class is not None:
+        return described_class
     colours: list[str] = []
     card_type = None
     if not (stream.accept_word("a") or stream.accept_word("an")):
