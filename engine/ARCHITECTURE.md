@@ -468,6 +468,12 @@ that). And the work *behind* the event must be recorded, which is
 `engine/resumption.py`: a loop registers the rest of itself before each step, so
 answering resumes the divided damage, the sequence, and the spell's graveyard
 move in that order. A loop using it must be the last thing its function does.
+A sentence that asks **each player** something is `resumption.ask_in_turn_order`
+(CR 101.4): the same loop over `Game.apnap_seats()`, one seat's prompt per
+step, so the next seat is asked only once the one before has answered — the
+each-seat discards (`handlers/discards`), the each-seat hand picks and reveals
+(`handlers/hand._ask_each_seat_to_pick_from_hand`), and W1G4's creature-type
+choice.
 
 **Every damage call in `engine/handlers` and the combat damage step satisfy
 both and ask** (held by `tests/engine/test_kg_damage_handler_asks.py`); a
