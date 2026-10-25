@@ -95,6 +95,17 @@ def _w1g3_cycle_and_resolve_trigger(game, name, *, accept=True):
     assert len(game.stack) == 1, "the cycling ability is still waiting to draw"
 
 
+def _w1g3_resolve_cycle_trigger_alone(game):
+    """Resolve the trigger on top of the cycling ability and take its "you
+    may", leaving the draw on the stack."""
+    assert game.resolve_top_of_stack()
+    offer = game.pending_choice_of("optional_pay", 0)
+    if offer is not None:
+        assert game._resolve_optional_pay(offer, True, None)
+    game.auto_resolve_pending_choices()
+    assert len(game.stack) == 1
+
+
 def test_w1g3_renewed_faith_cycled_gains_2_life_before_the_draw(set_pool):
     """"When you cycle this card, you may gain 2 life." — not the spell's 6."""
     game, alice, _bob = _w1g3_table(set_pool, "Renewed Faith")
@@ -154,6 +165,23 @@ def test_w1g3_sunfire_balm_cycled_shields_the_creature_its_controller_names(set_
     assert game.is_on_battlefield(bear)
     assert bear.damage_marked == 1
     assert "Prevented 1 damage to Bear" in game.log
+
+
+def test_w1g3_sunfire_balm_cycled_by_a_seat_nobody_asks_shields_itself(set_pool):
+    """The default a non-interactive seat takes for "any target" is the
+    standing opposing seat — except for a gift, which this is: the AI and a
+    headless seat shield their own face, not the opponent's
+    (`TriggerChoicesMixin._default_trigger_target`)."""
+    game, alice, bob = _w1g3_table(set_pool, "Sunfire Balm", opponent_hand=["Shock"])
+
+    assert game.activate_from_hand(0, "Sunfire Balm").supported
+    assert game.stack[-1].target_player_index == 0
+    _w1g3_resolve_cycle_trigger_alone(game)
+    resolve_stack(game)
+
+    assert game.queue_from_hand(1, "Shock", target_player_index=0).supported
+    resolve_stack(game)
+    assert alice.life == 19, "1 of the Shock's 2 was prevented"
 
 
 def test_w1g3_choking_tethers_cycled_taps_a_creature_before_the_draw(set_pool):

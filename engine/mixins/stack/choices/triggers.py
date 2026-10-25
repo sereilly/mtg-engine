@@ -709,6 +709,20 @@ class TriggerChoicesMixin:
             )
         if item is not None:
             standing = self._default_opposing_seat(choice.player_index)
+            # **A gift is aimed at its own seat.** "When you cycle this card,
+            # you may prevent the next 1 damage that would be dealt to any
+            # target this turn." (Sunfire Balm.) The standing opposing seat is
+            # the right default for everything that hurts its target, and it
+            # put this shield on the opponent. Where the effect's side is the
+            # chooser's own (``_default_trigger_target_side``), the chooser's
+            # face is the standing seat instead. Measured over both manifest
+            # roles at ONS W1G3: of the 72 supported triggers whose announced
+            # target can be a player, Sunfire Balm's is the only one whose
+            # effect wants its own side, so no other trigger's default moves.
+            if self._default_trigger_target_side(item, choice.player_index) == {
+                choice.player_index
+            }:
+                standing = choice.player_index
             # **A seat the trigger's count is taken on** ("…add X mana …, where
             # X is the number of Islands target opponent controls", Carpet of
             # Flowers) is the one exception to the standing seat: the seat

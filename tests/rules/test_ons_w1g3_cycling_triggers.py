@@ -63,9 +63,11 @@ def _self_cycler(name: str = "Cycled Hope") -> CardDefinition:
 
 
 def _targeted_cycler() -> CardDefinition:
-    """CR 702.29c's neighbour in the rules' own example (CR 115, "A sorcery
-    card has the ability 'When you cycle this card, target creature gets
-    -1/-1 until end of turn.'")."""
+    """The rules' own example (CR 115.1a): "A sorcery card has the ability
+    'When you cycle this card, target creature gets -1/-1 until end of
+    turn.' This triggered ability is targeted, but that doesn't make the card
+    it's on targeted."
+    """
     return _card(
         "Cycled Shade", "Sorcery", "Destroy target creature.", _CYCLING,
         "When you cycle this card, target creature gets -1/-1 until end of turn.",
