@@ -802,7 +802,182 @@ def test_w1g7_gangrenous_goliath_taps_three_clerics_from_the_graveyard(set_pool)
 
 # ==== W1G9 ==========================================================
 # W1G9's tests go between this line and the "end W1G9" line.
+from engine import Game as _w1g9_Game, PlayerState as _w1g9_PlayerState
+from engine.models import Permanent as _w1g9_Permanent
+from tests.helpers import resolve_stack as _w1g9_resolve
 
+
+def _w1g9_table(seats=2):
+    """*seats* players, seat 0 active, mana costs off."""
+    w1g9_game = _w1g9_Game(
+        players=[_w1g9_PlayerState(name=f"W1G9-{index}") for index in range(seats)]
+    )
+    w1g9_game.enforce_mana_costs = False
+    w1g9_game.active_player_index = 0
+    return w1g9_game
+
+
+def _w1g9_enter(game, seat, card):
+    """*card* onto *seat*'s battlefield through the entry seam, unsick, with
+    its entry triggers (if any) resolved."""
+    w1g9_entered = _w1g9_Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, w1g9_entered, None)
+    w1g9_entered.metadata["summoning_sickness_turn"] = -99
+    game.check_state_based_actions()
+    _w1g9_resolve(game)
+    return w1g9_entered
+
+
+def _w1g9_attack(game, attackers, *, seat=0, defender=1):
+    game._set_phase_and_step("combat", "declare_attackers")
+    return game.declare_attackers(
+        seat, [game.battlefield_index_of(a) for a in attackers],
+        defending_player_index=defender,
+    )
+
+
+def _w1g9_block(game, blocks, *, seat=1):
+    """``(blocker, [attackers])`` pairs for *seat*; the engine's answer."""
+    game._set_phase_and_step("combat", "declare_blockers")
+    return game.declare_blockers(seat, {
+        game.battlefield_index_of(blocker): [
+            game.battlefield_index_of(a) for a in attackers
+        ]
+        for blocker, attackers in blocks
+    })
+
+
+def _w1g9_settle(game):
+    """Drain the stack, then answer what it left owed with the defaults."""
+    _w1g9_resolve(game)
+    game.auto_resolve_pending_choices()
+    _w1g9_resolve(game)
+
+
+def test_w1g9_gustcloak_savior_rescues_another_creature_you_control(set_pool):
+    """"Whenever a creature you control becomes blocked, you may untap that
+    creature and remove it from combat." The creature the event was about —
+    not the Savior — is untapped and taken out of combat (CR 506.4), so it
+    deals and takes no combat damage.
+    """
+    ons, lea = set_pool("ONS"), set_pool("LEA")
+    game = _w1g9_table()
+    savior = _w1g9_enter(game, 0, ons["Gustcloak Savior"])
+    seeker = _w1g9_enter(game, 0, ons["Glory Seeker"])
+    bears = _w1g9_enter(game, 1, lea["Grizzly Bears"])
+    assert _w1g9_attack(game, [seeker])[0]
+    assert seeker.tapped and seeker.attacking
+    assert _w1g9_block(game, [(bears, [seeker])])[0]
+    assert [item.card.name for item in game.stack] == ["Gustcloak Savior"]
+    _w1g9_settle(game)
+    assert not seeker.tapped
+    assert not seeker.attacking and not seeker.blocked
+    assert game.battlefield_index_of(seeker) not in game.combat_attackers
+    assert not savior.attacking and not savior.tapped
+    assert "Glory Seeker untapped (Gustcloak Savior)" in game.log
+
+    game._set_phase_and_step("combat", "combat_damage")
+    game.resolve_combat_damage(0)
+    assert seeker.damage_marked == 0 and bears.damage_marked == 0
+    assert game.is_on_battlefield(seeker) and game.is_on_battlefield(bears)
+
+
+def test_w1g9_gustcloak_savior_ignores_an_opponents_blocked_creature(set_pool):
+    """"A creature **you control**": the watcher on the defending side has
+    nothing to do when the attacker it would rescue is not its controller's.
+    """
+    ons, lea = set_pool("ONS"), set_pool("LEA")
+    game = _w1g9_table()
+    _w1g9_enter(game, 1, ons["Gustcloak Savior"])
+    seeker = _w1g9_enter(game, 0, ons["Glory Seeker"])
+    bears = _w1g9_enter(game, 1, lea["Grizzly Bears"])
+    assert _w1g9_attack(game, [seeker])[0]
+    assert _w1g9_block(game, [(bears, [seeker])])[0]
+    assert game.stack == []
+    assert seeker.tapped and seeker.attacking and seeker.blocked
+
+
+def test_w1g9_gustcloak_savior_declined_leaves_the_fight(set_pool):
+    """The offer is optional: declined, the creature stays blocked and tapped
+    and the fight happens."""
+    ons, lea = set_pool("ONS"), set_pool("LEA")
+    game = _w1g9_table()
+    game.interactive_seats = {0}
+    _w1g9_enter(game, 0, ons["Gustcloak Savior"])
+    seeker = _w1g9_enter(game, 0, ons["Glory Seeker"])
+    bears = _w1g9_enter(game, 1, lea["Grizzly Bears"])
+    assert _w1g9_attack(game, [seeker])[0]
+    assert _w1g9_block(game, [(bears, [seeker])])[0]
+    game.resolve_top_of_stack()
+    offers = [c for c in game.pending_choices if c.kind == "optional_pay"]
+    assert len(offers) == 1 and offers[0].player_index == 0
+    game._resolve_optional_pay(offers[0], False, None)
+    _w1g9_resolve(game)
+    assert seeker.tapped and seeker.attacking and seeker.blocked
+
+
+def test_w1g9_the_untap_reads_the_event_and_refuses_without_one():
+    """"Untap that creature" is the event's object only under an event that
+    froze one; elsewhere the words name nobody and the line refuses."""
+    from engine.grammar import compile_line
+
+    bound = compile_line(
+        "Whenever a creature you control becomes blocked, untap that creature.",
+        card_name="Probe",
+    )
+    assert [i.kind for i in bound.instructions] == ["untap_event_subject"]
+    unbound = compile_line(
+        "At the beginning of your upkeep, untap that creature.", card_name="Probe",
+    )
+    assert unbound.lowering_error or unbound.parse_error
+    narrowed = compile_line(
+        "Whenever a creature you control becomes blocked, untap that red creature.",
+        card_name="Probe",
+    )
+    assert not narrowed.instructions
+
+
+def test_w1g9_spitfire_handler_cant_block_a_bigger_creature(set_pool):
+    """"This creature can't block creatures with power greater than this
+    creature's power." Both powers are read now, through the layers: a 1/1
+    can't block a 2/2, and pumped to 2/1 it can — the strict "greater than"
+    admits the tie.
+    """
+    ons = set_pool("ONS")
+    game = _w1g9_table()
+    seeker = _w1g9_enter(game, 0, ons["Glory Seeker"])
+    handler = _w1g9_enter(game, 1, ons["Spitfire Handler"])
+    assert _w1g9_attack(game, [seeker])[0]
+    game._set_phase_and_step("combat", "declare_blockers")
+    refused = game.declare_blockers(1, {
+        game.battlefield_index_of(handler): [game.battlefield_index_of(seeker)]
+    })
+    assert not refused[0]
+    assert handler.blocking_attacker_controller is None
+
+    game.activate_permanent_ability(1, "Spitfire Handler")
+    _w1g9_resolve(game)
+    assert (handler.effective_power, handler.effective_toughness) == (2, 1)
+    assert _w1g9_block(game, [(handler, [seeker])])[0]
+    game._set_phase_and_step("combat", "combat_damage")
+    game.resolve_combat_damage(0)
+    assert not game.is_on_battlefield(handler)
+    assert not game.is_on_battlefield(seeker)
+
+
+def test_w1g9_the_ai_never_proposes_the_block_spitfire_handler_forbids(set_pool):
+    """The restriction is asked by the AI's proposal, not only by the gate:
+    a 1/1 Handler facing a lone 2/2 attacker is never offered as its blocker."""
+    from engine.ai_declarations import choose_combat_blockers
+
+    ons = set_pool("ONS")
+    game = _w1g9_table()
+    seeker = _w1g9_enter(game, 0, ons["Glory Seeker"])
+    handler = _w1g9_enter(game, 1, ons["Spitfire Handler"])
+    assert _w1g9_attack(game, [seeker])[0]
+    game._set_phase_and_step("combat", "declare_blockers")
+    assert not game._can_block_attacker(handler, seeker)
+    assert game.battlefield_index_of(handler) not in choose_combat_blockers(game, 1)
 # ==== end W1G9 ======================================================
 
 

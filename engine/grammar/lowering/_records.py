@@ -664,6 +664,11 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # CR 611.2c fixes the set when the effect begins, so a vigilance attacker
     # nobody tapped is still "it".
     "untap_self": "untapped_permanents",
+    # "…you may untap **that creature** and remove **it** from combat."
+    # (Gustcloak Savior.) The same pair with the event's object in place of
+    # the source: the pronoun behind it reads what this step untapped, for
+    # ``untap_self``'s reason directly above.
+    "untap_event_subject": "untapped_permanents",
     # "Remove target attacking creature you control from combat **and untap
     # it**." (Reconnaissance.) The same shape the untap below is in for
     # Disharmony, with the two steps in the other order — see

@@ -229,20 +229,34 @@ def accept_source_relative_comparison(
     The comparison word comes from :data:`_COMPARISON_WORDS`, the same table the
     printed-number form reads — one vocabulary, so "equal to or less than"
     cannot come to mean something different from "2 or less".
+
+    "…creatures with power **greater than this creature's power**" (Spitfire
+    Handler) is the strict form, which carries no "equal to or": its
+    comparison is :data:`_SPELLED_COMPARISONS`' strict pair — the same table
+    "greater than the number of cards in your hand" is read through — so the
+    tie, which the inclusive form admits and this one excludes, is decided by
+    the printed words and not by which reader got there first.
     """
     mark = stream.mark()
-    if not stream.accept_phrase("equal", "to", "or"):
-        stream.reset(mark)
-        return None
-    token = stream.peek()
-    word = token.text if token is not None and token.kind == WORD else None
-    if word not in _COMPARISON_WORDS:
-        stream.reset(mark)
-        return None
-    stream.advance()
-    if not stream.accept_word("than"):
-        stream.reset(mark)
-        return None
+    op = None
+    for words, strict in _SPELLED_COMPARISONS:
+        if strict in ("lt", "gt") and stream.accept_phrase(*words):
+            op = strict
+            break
+    if op is None:
+        if not stream.accept_phrase("equal", "to", "or"):
+            stream.reset(mark)
+            return None
+        token = stream.peek()
+        word = token.text if token is not None and token.kind == WORD else None
+        if word not in _COMPARISON_WORDS:
+            stream.reset(mark)
+            return None
+        stream.advance()
+        if not stream.accept_word("than"):
+            stream.reset(mark)
+            return None
+        op = _COMPARISON_WORDS[word]
     if not any(stream.accept_phrase(*phrase) for phrase in _SOURCE_POSSESSIVES):
         stream.reset(mark)
         return None
@@ -251,9 +265,7 @@ def accept_source_relative_comparison(
         stream.reset(mark)
         return None
     stream.advance()
-    return ast.SourceRelativeComparison(
-        characteristic, _COMPARISON_WORDS[word], str(bound)
-    )
+    return ast.SourceRelativeComparison(characteristic, op, str(bound))
 
 
 
