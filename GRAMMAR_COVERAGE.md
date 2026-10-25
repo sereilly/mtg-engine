@@ -51,7 +51,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | TOR | 143 | 261 | 86.2% | 86.2% | 68.2% | 138 |
 | JUD | 143 | 241 | 91.3% | 90.9% | 65.6% | 131 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| ONS *(measured)* | 335 | 541 | 70.6% | 68.0% | 48.4% | 221 |
+| ONS *(measured)* | 335 | 541 | 71.7% | 69.5% | 49.9% | 229 |
 | **All (shipped)** | **8027** | **11886** | **90.6%** | **90.1%** | **62.4%** | **6271** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -64,9 +64,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 751 | 397 | expected a subject |  |
-| 189 | 103 | unrecognized effect verb |  |
-| 135 | 73 | unconsumed text |  |
+| 750 | 396 | expected a subject |  |
+| 185 | 99 | unrecognized effect verb |  |
+| 134 | 72 | unconsumed text |  |
 | 70 | 51 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 31 | 8 | expected what this creature can't block, or a duration |  |
@@ -992,6 +992,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Binding Grasp**
   - `At the beginning of your upkeep, sacrifice this Aura unless you pay {1}{U}.`
   - `At the beginning of your upkeep, sacrifice this Aura unless you pay {1}{U}.`
+- **Biorhythm**
+  - `Each player's life total becomes the number of creatures they control.`
 - **Birchlore Rangers**
   - `Tap two untapped Elves you control: Add one mana of any color.`
 - **Birds of Paradise**
@@ -2496,6 +2498,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature deals combat damage to a creature, that creature's controller loses 2 life unless they pay {2}.`
 - **Death Grasp**
   - `Death Grasp deals X damage to any target. You gain X life.`
+- **Death Match**
+  - `Whenever a creature enters, that creature's controller may have target creature of their choice get -3/-3 until end of turn.`
 - **Death Mutation**
   - `Destroy target nonblack creature. It can't be regenerated. Create X 1/1 green Saproling creature tokens, where X is that creature's mana value.`
 - **Death Pit Offering**
@@ -3385,6 +3389,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Tap all creatures.`
 - **Entomb**
   - `Search your library for a card, put that card into your graveyard, then shuffle.`
+- **Entrails Feaster**
+  - `At the beginning of your upkeep, you may exile a creature card from a graveyard. If you do, put a +1/+1 counter on this creature. If you don't, tap this creature.`
 - **Entropic Specter**
   - `Whenever this creature deals damage to a player, that player discards a card.`
 - **Envelop**
@@ -5605,6 +5611,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Threshold — Enchanted creature gets +3/+0 as long as there are seven or more cards in your graveyard.`
 - **Kamahl's Sledge**
   - `Kamahl's Sledge deals 4 damage to target creature.`
+- **Kamahl's Summons**
+  - `Each player may reveal any number of creature cards from their hand. Then each player creates a 2/2 green Bear creature token for each card they revealed this way.`
 - **Kamahl, Fist of Krosa**
   - `{G}: Target land becomes a 1/1 creature until end of turn. It's still a land.`
   - `{2}{G}{G}{G}: Creatures you control get +3/+3 and gain trample until end of turn.`
@@ -7512,6 +7520,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Overrun**
   - `Creatures you control get +3/+3 and gain trample until end of turn. (Each of those creatures can deal excess combat damage to the player or planeswalker it's attacking.)`
   - `Creatures you control get +3/+3 and gain trample until end of turn. (Each of those creatures can deal excess combat damage to the player or planeswalker it's attacking.)`
+- **Oversold Cemetery**
+  - `At the beginning of your upkeep, if you have four or more creature cards in your graveyard, you may return target creature card from your graveyard to your hand.`
 - **Overtaker**
   - `{3}{U}, {T}, Discard a card: Untap target creature and gain control of it until end of turn. That creature gains haste until end of turn.`
 - **Overwhelming Instinct**
@@ -10522,6 +10532,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Pay 1 life: Counter target white spell.`
 - **Stromgald Spy**
   - `Whenever this creature attacks and isn't blocked, you may have defending player play with their hand revealed for as long as this creature remains on the battlefield. If you do, this creature assigns no combat damage this turn.`
+- **Strongarm Tactics**
+  - `Each player discards a card. Then each player who didn't discard a creature card this way loses 4 life.`
 - **Strongarm Thug**
   - `When this creature enters, you may return target Mercenary card from your graveyard to your hand.`
 - **Stronghold Assassin**
@@ -10726,6 +10738,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature dies, create seven 1/1 green Insect creature tokens.`
 - **Syncopate**
   - `Counter target spell unless its controller pays {X}. If that spell is countered this way, exile it instead of putting it into its owner's graveyard.`
+- **Syphon Mind**
+  - `Each other player discards a card. You draw a card for each card discarded this way.`
 - **Syphon Soul**
   - `Syphon Soul deals 2 damage to each other player. You gain life equal to the damage dealt this way.`
   - `Syphon Soul deals 2 damage to each other player. You gain life equal to the damage dealt this way.`
@@ -10893,6 +10907,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Untap target creature with power less than the number of cards in your graveyard and gain control of it until end of turn. That creature gains haste until end of turn.`
 - **Tempting Licid**
   - `{G}, {T}: This creature loses this ability and becomes an Aura enchantment with enchant creature. Attach it to target creature. You may pay {G} to end this effect.`
+- **Tempting Wurm**
+  - `When this creature enters, each opponent may put any number of artifact, creature, enchantment, and/or land cards from their hand onto the battlefield.`
 - **Tendrils of Despair**
   - `Target opponent discards two cards.`
 - **Tephraderm**
