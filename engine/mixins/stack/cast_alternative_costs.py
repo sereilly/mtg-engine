@@ -1083,12 +1083,14 @@ class AlternativeCastCostsMixin:
                 return
             self.take_card_from_hand(caster, paying)
             # Through ``_discard_card``, never straight to the graveyard: a
-            # discard is CR 701.9a's event whether it pays a cost or not, so
-            # Library of Leng's replacement (CR 701.9c) still redirects it and
-            # every watcher of "whenever you discard a card" still fires. The
-            # additional cost's discard one file over goes through the same
-            # seam, for the same reason.
-            self._discard_card(caster, paying)
+            # discard is CR 701.9a's event whether it pays a cost or not, so a
+            # discard replacement (madness) still sees it and every watcher of
+            # "whenever you discard a card" still fires. Marked ``as_cost``,
+            # because Library of Leng's "if an effect causes you to discard" is
+            # the one replacement that does not reach a cost ("costs aren't
+            # effects", 2004-10-04). The additional cost's discard one file
+            # over goes through the same seam, for the same reason.
+            self._discard_card(caster, paying, as_cost=True)
             self.log.append(
                 f"{caster.name} discarded {paying.name} to cast {card.name}"
             )
@@ -1100,7 +1102,7 @@ class AlternativeCastCostsMixin:
                 if not any(held is other for held in caster.hand):
                     continue  # gated above; a hand that changed since is a no-op
                 self.take_card_from_hand(caster, other)
-                self._discard_card(caster, other)
+                self._discard_card(caster, other, as_cost=True)
                 self.log.append(
                     f"{caster.name} discarded {other.name} to cast {card.name}"
                 )

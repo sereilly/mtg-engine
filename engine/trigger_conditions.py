@@ -290,6 +290,13 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("self_cast",                   r"when you cast this spell"),
     ("discarded_by_opponent_effect",
      r"when a spell or ability an opponent controls causes you to discard this card"),
+    # "When **you cycle this card**, you may gain 2 life." (Renewed Faith.)
+    # CR 702.29c: "when you discard this card to pay an activation cost of a
+    # cycling ability", triggering from whatever zone the card winds up in.
+    # The card watches itself, so no battlefield scan reaches it: the cycle
+    # announcement carries the card as its subject and
+    # ``events.moved_card_trigger_events`` asks it, wherever it landed.
+    ("self_cycled",                 r"when you cycle this card"),
     # "When you control **no Islands** / **no Forests**, sacrifice this
     # creature." (Sea Serpent, Island Fish Jasconius; Gorilla Pack in Ice Age.)
     # The negative twin of `controls_matching_permanent` below, with the noun

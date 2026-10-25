@@ -498,7 +498,8 @@ class DrawsAndDiscardsMixin:
         return self.resolving_seats[-1] if self.resolving_seats else None
 
     def _discard_card(
-        self, player: PlayerState, card, *, cause_seat: int | None = None
+        self, player: PlayerState, card, *, cause_seat: int | None = None,
+        as_cost: bool = False,
     ) -> None:
         """Move a discarded card to the graveyard, or let a discard replacement
         take it instead (Library of Leng, CR 701.9c; Dodecapod, onto the
@@ -512,11 +513,22 @@ class DrawsAndDiscardsMixin:
         replacement may turn on that and the card itself cannot say: it is the
         seat resolving right now, or *cause_seat* when the caller is finishing
         a discard some earlier resolution armed.
+
+        …and **whether it pays a cost** (*as_cost*), for the same reason: it is
+        still a discard (CR 701.9a — madness, Megrim and "whenever you discard"
+        all see it), but a replacement printed about a discard "an effect
+        causes" does not reach it. Library of Leng, 2004-10-04: "You can't use
+        the Library of Leng ability to place a discarded card on top of your
+        library when you discard a card as a cost, because costs aren't
+        effects." Every site that pays a discard cost passes it
+        (``tests/engine/test_discard_cost_seam.py``); a cycled card went back
+        on top of its library and the cycling ability drew it again.
         """
         cause = self.discard_cause_seat(cause_seat)
         consumed, _ = apply_replacements(
             self, "discard",
-            {"player": player, "card": card, "cause_seat": cause},
+            {"player": player, "card": card, "cause_seat": cause,
+             "as_cost": as_cost},
         )
         if not consumed:
             self.put_card_into_graveyard(player, card)

@@ -202,6 +202,20 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("discards_card",
      r"whenever (?:you discard|(?P<discarder>an opponent|a player) discards) "
      r"a card"),
+    # "Whenever **a player** cycles a card, you may put a +1/+1 counter on
+    # target creature." (Invigorating Boon; Astral Slide, Lightning Rift,
+    # Fleeting Aven and Withering Hex print the same condition.) CR 702.29a:
+    # cycling is an activated ability whose cost discards the card, and the
+    # one seam that pays that cost announces it
+    # (``CardActivationMixin._announce_cycle``) — so a discard by any other
+    # means is not this event, and a cycled card is announced once.
+    #
+    # The seat axis `discards_card` above reads, for its reason: one
+    # announcement, and the printed word decides whose cycling a watcher sees
+    # (`event_filters._cycles_card_filter`). The word is captured rather than
+    # left as the group's absence, because an absent group already means "you".
+    ("cycles_card",
+     r"whenever (?:you cycle|(?P<cycler>an opponent|a player) cycles) a card"),
     # "Whenever a spell or ability an opponent controls causes you to discard
     # **a card**, you gain 2 life and you may draw a card." (Spiritual Focus.)
     # The **second dispatch scope** for the condition the "when" table carries

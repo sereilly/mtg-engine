@@ -873,6 +873,18 @@ def aura_compiled_trigger_claim(normalized_line: str, card_name: str = "") -> st
             "the spell-cast trigger (CR 601.2i) — "
             "mixins/oracle_instructions._apply_spell_cast_any_triggers"
         )
+    if cond == "cycles_card" and kind in EFFECT_HANDLERS:
+        # "Whenever a player cycles a card, put a plague counter on this Aura."
+        # (Withering Hex.) CR 702.29a's cycle, announced through the event bus
+        # from the one seam that pays a cycling ability's discard cost
+        # (``mixins/stack/card_activation._announce_cycle``) — and the bus scans
+        # every permanent whose compiled trigger matches, so an Aura watching
+        # the table is enqueued exactly like Astral Slide. Its own row for the
+        # rows above' reason: each names one condition and the site firing it.
+        return (
+            "the cycle trigger (CR 702.29) — "
+            "mixins/stack/card_activation._announce_cycle"
+        )
     from .phases.upkeep_effects import UPKEEP_EFFECTS
 
     if (cond, kind) in UPKEEP_EFFECTS:

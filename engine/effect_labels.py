@@ -1468,6 +1468,13 @@ TRIGGERED_LABELS_BY_CONDITION: dict[tuple[str, str], str] = {
     # Mana Vortex counters its own spell unless a land is sacrificed. The
     # condition is what makes this a cast trigger; the wrapper is silent.
     ("self_cast", "may"): "triggered_counterspells",
+    # Onslaught's cycling triggers. Every one of the ten "when you cycle this
+    # card" lines and four of the five "whenever a player cycles a card" lines
+    # open "you may", and what they offer ranges over life, a shield, a tap, a
+    # counterspell, a pump, a search, an exile and a ping — so the condition
+    # names the moment, the rule this table has kept since M21.
+    ("self_cycled", "may"): "triggered_cycling",
+    ("cycles_card", "may"): "triggered_cycling",
     # Spitting Slug's first strike, bought or given away. `triggered_combat`
     # rather than `triggered_pump`: both branches happen in combat and only one
     # of them pumps anything of yours.

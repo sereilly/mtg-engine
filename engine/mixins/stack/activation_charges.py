@@ -993,7 +993,7 @@ class ActivationChargesMixin:
         # before this activation rather than the card it draws.
         if discard_cost_card is not None:
             self.take_card_from_hand(controller, discard_cost_card)
-            self._discard_card(controller, discard_cost_card)
+            self._discard_card(controller, discard_cost_card, as_cost=True)
             self.log.append(
                 f"{controller.name} discarded {discard_cost_card.name} "
                 f"(the last card they drew this turn) to activate {permanent.card.name}"
@@ -1004,7 +1004,7 @@ class ActivationChargesMixin:
         # that draws cannot discard what it drew.
         for cost_card in discard_cost_cards:
             self.take_card_from_hand(controller, cost_card)
-            self._discard_card(controller, cost_card)
+            self._discard_card(controller, cost_card, as_cost=True)
             self.log.append(
                 f"{controller.name} discarded {cost_card.name} "
                 f"to activate {permanent.card.name}"
@@ -1049,7 +1049,7 @@ class ActivationChargesMixin:
             emptied = list(controller.hand)
             controller.hand = []
             for cost_card in emptied:
-                self._discard_card(controller, cost_card)
+                self._discard_card(controller, cost_card, as_cost=True)
             self.log.append(
                 f"{controller.name} discarded their hand "
                 f"({len(emptied)} card(s)) to activate {permanent.card.name}"

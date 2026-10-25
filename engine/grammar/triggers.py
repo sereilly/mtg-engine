@@ -174,6 +174,17 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
         # of them sees leaves the other refusing the effect behind it.
         if stream.accept_phrase("you", "cast", "this", "spell"):
             return ast.TriggerEvent("self_cast", "when")
+        # "When **you cycle this card**, you may gain 2 life." (Renewed Faith,
+        # and nine more in Onslaught.) CR 702.29c: it means "when you discard
+        # this card to pay an activation cost of a cycling ability", and it
+        # triggers from whatever zone the card winds up in — so it is a card
+        # watching itself, announced by the one seam that pays a cycling
+        # ability's discard (``CardActivationMixin._announce_cycle``). Read on
+        # this front end too, for the reason every condition around it is: a
+        # condition only one of them sees leaves the other refusing the effect
+        # behind it.
+        if stream.accept_phrase("you", "cycle", "this", "card"):
+            return ast.TriggerEvent("self_cycled", "when")
         # "When **this card is put into your graveyard from your library**"
         # (Gaea's Blessing). CR 113.6k: a trigger condition that cannot trigger
         # from the battlefield functions in every zone it can trigger from, and

@@ -930,6 +930,33 @@ def _draws_card_filter(
     return seat == observer
 
 
+@event_filter("cycles_card")
+def _cycles_card_filter(
+    game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
+) -> bool:
+    """"Whenever **a player** cycles a card" (Astral Slide) — and the two
+    narrower spellings of the same seat axis, "you" and "an opponent".
+
+    :func:`_draws_card_filter`'s reading one event over: one announcement,
+    made where a cycling ability's discard cost is paid, and the printed seat
+    is the trigger's own narrowing. "You" is the permanent's controller
+    (CR 109.5); "an opponent" is any *other* seat. An announcement with no seat
+    fires nothing, the safe direction.
+    """
+    seat = event.payload.get("seat")
+    if seat is None:
+        return False
+    observer = game.controller_index_of(permanent)
+    if observer is None:
+        return False
+    cycler = trig.condition.payload.get("cycler")
+    if cycler == "a player":
+        return True
+    if cycler == "an opponent":
+        return seat != observer
+    return seat == observer
+
+
 # ---------------------------------------------------------------------------
 # A trigger whose subject is a set of objects
 # ---------------------------------------------------------------------------

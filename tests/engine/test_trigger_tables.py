@@ -414,6 +414,17 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
         "when no creatures are on the battlefield",
     ),
     "self_cast": "when you cast this spell",
+    # ONS W1G3: CR 702.29c's "when you cycle this card" (Renewed Faith and nine
+    # more) — the cycled card's own ability, asked from the zone it landed in.
+    "self_cycled": "when you cycle this card",
+    # ...and the permanent watching every seat's cycling (Astral Slide), with
+    # all three printed seats for the reason `draws_card` lists its three: one
+    # pattern names them and the narrowing is payload.
+    "cycles_card": (
+        "whenever a player cycles a card",
+        "whenever you cycle a card",
+        "whenever an opponent cycles a card",
+    ),
     "self_put_into_graveyard_from_library":
         "when this card is put into your graveyard from your library",
     # One kind with **two** printed spellings, and both belong here rather than
