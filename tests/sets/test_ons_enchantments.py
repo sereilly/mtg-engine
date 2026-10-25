@@ -641,6 +641,98 @@ def test_w1g9_aurification_leaving_takes_the_counters_and_the_wall_away(set_pool
     assert _w1g9_counters_on(seeker, "gold") == 0
     assert not seeker.has_type("wall")
     assert not game._has_keyword(seeker, "defender")
+
+
+def test_w1g9_gratuitous_violence_doubles_its_controllers_creatures_in_combat(set_pool):
+    """"If a creature you control would deal damage to a permanent or player,
+    it deals double that damage instead." Combat damage to a player and to a
+    blocker is doubled (CR 614.1a); the opponent's creature's is not."""
+    ons, lea = set_pool("ONS"), set_pool("LEA")
+    game = _w1g9_table()
+    _w1g9_enter(game, 0, ons["Gratuitous Violence"])
+    seeker = _w1g9_enter(game, 0, ons["Glory Seeker"])
+    _w1g9_hit_unblocked(game, seeker)
+    assert game.players[1].life == 16
+    assert "2 damage becomes 4" in game.log
+
+    game = _w1g9_table()
+    _w1g9_enter(game, 0, ons["Gratuitous Violence"])
+    seeker = _w1g9_enter(game, 0, ons["Glory Seeker"])
+    wall = _w1g9_enter(game, 1, lea["Wall of Stone"])
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(0, [game.battlefield_index_of(seeker)],
+                                  defending_player_index=1)[0]
+    game._set_phase_and_step("combat", "declare_blockers")
+    assert game.declare_blockers(1, {
+        game.battlefield_index_of(wall): [game.battlefield_index_of(seeker)]
+    })[0]
+    game._set_phase_and_step("combat", "combat_damage")
+    game.resolve_combat_damage(0)
+    assert wall.damage_marked == 4
+
+    game = _w1g9_table()
+    _w1g9_enter(game, 0, ons["Gratuitous Violence"])
+    giant = _w1g9_enter(game, 1, lea["Hill Giant"])
+    game.active_player_index = 1
+    _w1g9_hit_unblocked(game, giant, seat=1, defender=0)
+    assert game.players[0].life == 17, "the opponent's creature is not 'yours'"
+
+
+def test_w1g9_gratuitous_violence_doubles_a_creatures_ability_not_a_spell(set_pool):
+    """A creature's ability is the creature dealing damage, so Prodigal
+    Sorcerer's ping is doubled; Shock (a spell) and Rod of Ruin (an artifact)
+    are not creatures and deal what they print."""
+    ons, lea = set_pool("ONS"), set_pool("LEA")
+    game = _w1g9_table()
+    _w1g9_enter(game, 0, ons["Gratuitous Violence"])
+    _w1g9_enter(game, 0, lea["Prodigal Sorcerer"])
+    _w1g9_enter(game, 0, lea["Rod of Ruin"])
+    game.players[0].hand.append(ons["Shock"])
+    game._set_phase_and_step("main", "precombat_main")
+    game.cast_from_hand(0, "Shock", target_player_index=1)
+    _w1g9_settle(game)
+    assert game.players[1].life == 18
+    game.activate_permanent_ability(0, "Prodigal Sorcerer", target_player_index=1)
+    _w1g9_settle(game)
+    assert game.players[1].life == 16
+    game.activate_permanent_ability(0, "Rod of Ruin", target_player_index=1)
+    _w1g9_settle(game)
+    assert game.players[1].life == 15
+
+
+def test_w1g9_doublers_stack_and_keep_their_own_scopes(set_pool):
+    """Two Gratuitous Violences and an opponent's Furnace of Rath: a creature's
+    damage is doubled three times (CR 616.1 applies each; the order does not
+    matter to a product), a spell's only by the Furnace."""
+    ons, lea, tmp = set_pool("ONS"), set_pool("LEA"), set_pool("TMP")
+    game = _w1g9_table()
+    _w1g9_enter(game, 0, ons["Gratuitous Violence"])
+    _w1g9_enter(game, 0, ons["Gratuitous Violence"])
+    _w1g9_enter(game, 1, tmp["Furnace of Rath"])
+    _w1g9_enter(game, 0, lea["Prodigal Sorcerer"])
+    game.players[0].hand.append(ons["Shock"])
+    game._set_phase_and_step("main", "precombat_main")
+    game.activate_permanent_ability(0, "Prodigal Sorcerer", target_player_index=1)
+    _w1g9_settle(game)
+    assert game.players[1].life == 20 - 8
+    game.cast_from_hand(0, "Shock", target_player_index=1)
+    _w1g9_settle(game)
+    assert game.players[1].life == 12 - 4
+
+
+def test_w1g9_the_multiplier_reader_takes_the_creature_printing():
+    """The third printing of the one sentence, through the one reader the
+    support gate and the interceptor share."""
+    from engine.replacements.damage import damage_multiplier_line
+
+    assert damage_multiplier_line(
+        "If a creature you control would deal damage to a permanent or player, "
+        "it deals double that damage instead."
+    ) == (2, True)
+    assert damage_multiplier_line(
+        "If a creature you control would deal damage to a permanent, it deals "
+        "double that damage instead."
+    ) is None
 # ==== end W1G9 ======================================================
 
 
