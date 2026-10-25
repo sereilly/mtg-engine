@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**419 / 625 tracked rules covered (67%)** — 3153 tests, 0 unannotated.
+**419 / 625 tracked rules covered (67%)** — 3155 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -285,9 +285,9 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **117.1** Unless a spell or ability is instructing a player to take an action, which player can take action... *(4 tests, subrules a)*
 - [x] **117.2** Other kinds of abilities and actions are automatically generated or performed by the game rules, ... *(1 tests, subrules c)*
-- [x] **117.3** Which player has priority is determined by the following rules: *(27 tests, subrules abcd)*
+- [x] **117.3** Which player has priority is determined by the following rules: *(28 tests, subrules abcd)*
 - [x] **117.4** If all players pass in succession (that is, if all players pass without taking any actions in bet... *(7 tests)*
-- [x] **117.5** Each time a player would get priority, the game first performs all applicable state-based actions... *(3 tests)*
+- [x] **117.5** Each time a player would get priority, the game first performs all applicable state-based actions... *(4 tests)*
 - [x] **117.7** If a player with priority casts a spell or activates an activated ability while another spell or ... *(2 tests)*
 
 ### 118. Costs
@@ -663,7 +663,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **514.1** First, if the active player’s hand contains more cards than their maximum hand size (normally sev... *(8 tests)*
 - [x] **514.2** Second, the following actions happen simultaneously: all damage marked on permanents (including p... *(21 tests)*
-- [x] **514.3** Normally, no player receives priority during the cleanup step, so no spells can be cast and no ab... *(5 tests, subrules a)*
+- [x] **514.3** Normally, no player receives priority during the cleanup step, so no spells can be cast and no ab... *(6 tests, subrules a)*
 
 ### 601. Casting Spells
 
@@ -912,14 +912,14 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **703.1** Turn-based actions are game actions that happen automatically when certain steps or phases begin,... *(8 tests, subrules a)*
 - [x] **703.2** Turn-based actions are not controlled by any player. *(2 tests)*
-- [x] **703.3** Whenever a step or phase begins, if it’s a step or phase that has any turn-based action associate... *(2 tests)*
+- [x] **703.3** Whenever a step or phase begins, if it’s a step or phase that has any turn-based action associate... *(4 tests)*
 - [x] **703.4** The turn-based actions are as follows: *(18 tests, subrules acdijkmnpq)*
 
 ### 704. State-Based Actions
 
 - [x] **704.1** State-based actions are game actions that happen automatically whenever certain conditions (liste... *(1 tests)*
 - [x] **704.2** State-based actions are checked throughout the game and are not controlled by any player. *(1 tests)*
-- [x] **704.3** Whenever a player would get priority (see rule 117, “Timing and Priority”), the game checks for a... *(8 tests)*
+- [x] **704.3** Whenever a player would get priority (see rule 117, “Timing and Priority”), the game checks for a... *(10 tests)*
 - [x] **704.4** Unlike triggered abilities, state-based actions pay no attention to what happens during the resol... *(1 tests)*
 - [x] **704.5** The state-based actions are as follows: *(98 tests, subrules abcdefghijkmnpqrsz)*
 - [x] **704.6** Some variant games include additional state-based actions that aren’t normally applicable: *(3 tests, subrules cd)*
