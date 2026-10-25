@@ -92,7 +92,10 @@ def _chosen_graveyard_cards(
         )
     leftover = _restrictions_beyond(
         filt,
-        frozenset({"card_types", "is_card", "zone", "zone_owner", "supertypes"}),
+        frozenset({
+            "card_types", "is_card", "zone", "zone_owner", "supertypes",
+            "subtypes",
+        }),
     )
     if leftover:
         raise LoweringError(
@@ -105,6 +108,16 @@ def _chosen_graveyard_cards(
             else {"any_card": True}
         ),
         **({"supertypes": list(filt.supertypes)} if filt.supertypes else {}),
+        # "Put target **Zombie** card from your graveyard on top of your
+        # library." (Unholy Grotto, Aphetto Vulture.) A creature type on a card
+        # in a graveyard, off its printed type line (CR 613.1) — the key
+        # ``graveyard_card_matches`` has read for "target Griffin card" (Mtenda
+        # Griffin) since the graveyard-to-hand returns, so the picker, the
+        # cast-time re-check and both handlers that spend this payload (the
+        # library top and the graveyard shuffle) ask the one question. Added
+        # only where printed, so every payload written before it is
+        # byte-identical.
+        **({"graveyard_subtypes": list(filt.subtypes)} if filt.subtypes else {}),
         # "Any number" prints no ceiling, so the only cap is how many legal
         # targets there are — a number the picker knows and this lowering does
         # not. "Up to three" (Reinforcements) prints one, and it rides the same

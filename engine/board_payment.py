@@ -288,9 +288,10 @@ def _under_a_swap(game: "Game", land: "Permanent", found: TapYield) -> TapYield:
     return TapYield(units, one_color=found.one_color and len(units) > 1)
 
 
-def _aura_units(land: "Permanent") -> "tuple[frozenset[str], ...]":
+def _aura_units(game: "Game", land: "Permanent") -> "tuple[frozenset[str], ...]":
     """"Whenever enchanted land is tapped for mana, its controller adds an
-    additional {G}." (Wild Growth, Fertile Ground.) Added by the seam on every
+    additional {G}." (Wild Growth, Fertile Ground; Elvish Guidance's "{G} for
+    each Elf on the battlefield", counted now.) Added by the seam on every
     tap, whatever the land's own ability made."""
     from .auras import AURA_ANY_COLOR_MANA, aura_additional_mana_on_tap
 
@@ -299,7 +300,7 @@ def _aura_units(land: "Permanent") -> "tuple[frozenset[str], ...]":
         return ()
     return tuple(
         frozenset(PIP_SYMBOLS) if extra == AURA_ANY_COLOR_MANA else frozenset({str(extra)})
-        for extra in aura_additional_mana_on_tap(aura.effective_card.oracle_text)
+        for extra in aura_additional_mana_on_tap(game, aura)
     )
 
 
@@ -416,7 +417,7 @@ def land_tap_yields(game: "Game", land: "Permanent", purpose=None) -> list[TapYi
                 continue
             item = _with_triggered_mana(game, land, item, purpose)
             yields.append(
-                TapYield(item.units, item.one_color, item.extra + _aura_units(land))
+                TapYield(item.units, item.one_color, item.extra + _aura_units(game, land))
             )
     # …and the mana ability of a basic land type the land **gained** (Blanket
     # of Night: "…a Swamp in addition to its other land types"), which is no
@@ -444,7 +445,7 @@ def land_tap_yields(game: "Game", land: "Permanent", purpose=None) -> list[TapYi
                 if item.units:
                     item = _with_triggered_mana(game, land, item, purpose)
                     yields.append(TapYield(
-                        item.units, item.one_color, item.extra + _aura_units(land)
+                        item.units, item.one_color, item.extra + _aura_units(game, land)
                     ))
     return yields
 

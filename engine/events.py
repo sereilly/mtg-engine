@@ -435,7 +435,20 @@ def trigger_subject_matches(
     the difference between "whenever this creature blocks" and "…blocks a
     creature" is how often it fires, which is the fire site's business rather
     than this predicate's.
+
+    "Whenever **this creature or** another Rogue you control enters" (Thieves'
+    Guild Enforcer) is a union with the source itself, said by
+    ``<key>_includes_source``: the source answers by identity (CR 201.5: text
+    naming the object it is on means that object, whatever its types now are)
+    and every other object by the phrase, which keeps its "another".
     """
+    if (
+        obj is not None
+        and source is not None
+        and obj is source
+        and trig.condition.payload.get(f"{key}_includes_source")
+    ):
+        return True
     return subject_matches(
         game,
         obj,

@@ -52,6 +52,7 @@ from ..errors import LoweringError
 from ._seats import _player_recipient
 from ._amounts import (count_spec, halved_count_spec, seat_scoped_count_spec,
                        x_offset_amount)
+from ._cost_records import cost_record_spec
 from ._common import (
     _amount_payload,
     _describe_targets,
@@ -398,6 +399,17 @@ def _lower_lose_life(
             "amount": "x",
             X_FROM_COUNT_PER_RECIPIENT: {"seat_record": node.amount.source},
         }
+    elif (paid := cost_record_spec(node.amount, node)) is not None:
+        # "{B}, {T}, Sacrifice a Cleric creature: Target player loses life
+        # equal to **the sacrificed creature's power**." (Starlit Sanctum.)
+        # The number is a record the ability's own cost kept (CR 608.2h's
+        # last-known information for the sacrifice), read through the one
+        # helper every other family spends a cost record with — the pump's X,
+        # the mill, the damage — so the readable characteristics are that
+        # table's and not a third copy. The gain beside this has read the same
+        # record since Life Chisel; the loss fell to ``_amount_payload``, which
+        # knows no cost record, and refused.
+        payload = {"amount": "x", X_FROM_COUNT: paid}
     else:
         payload = (
             dict(_back_reference_payload(node.amount, produced, event))
@@ -490,10 +502,23 @@ def _lower_lose_life(
     # branches below make of the subject. Only "you control": a phrase naming
     # the *losing* seat is the per-recipient reading above, and one naming no
     # seat at all is a count nothing here scopes.
+    #
+    # "{T}: Each player loses 1 life for each Zombie **on the battlefield**."
+    # (Shepherd of Rot.) CR 403.1's one shared zone — the whole board, which
+    # is one number whoever loses, so it is this channel too: ``count_spec``
+    # reads the phrase into ``owner: "all"`` exactly as it does for Wellwisher's
+    # gain. It fell to the graveyard branch below and refused there, because
+    # that branch is the only other reader of a per-each count.
     if (
         isinstance(node.per_each, ast.ObjectFilter)
         and node.per_each.zone == "battlefield"
-        and node.per_each.controller == "you"
+        and (
+            node.per_each.controller == "you"
+            or (
+                node.per_each.on_the_battlefield
+                and node.per_each.controller is None
+            )
+        )
         and isinstance(node.amount, ast.Fixed)
     ):
         payload = {

@@ -281,9 +281,7 @@ class LandTappedForManaMixin:
             # A *run* of symbols, because Overgrowth prints "{G}{G}" where Wild
             # Growth prints "{G}" — the count is data, and adding one symbol for
             # a card that says two is the quiet direction of wrong.
-            for extra in aura_additional_mana_on_tap(
-                attached_aura.effective_card.oracle_text
-            ):
+            for extra in aura_additional_mana_on_tap(self, attached_aura):
                 if extra == AURA_ANY_COLOR_MANA:
                     # "…adds an additional **one mana of any color**" (Fertile
                     # Ground) rather than a printed pip. CR 106.6 leaves the

@@ -1269,11 +1269,11 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # kept beside this one: "whenever a creature enters" is this pattern with an
     # empty narrowing, and it fires now.
     # The same set spelled to make the source's own entry explicit (Thieves'
-    # Guild Enforcer). "This creature" is one of the Rogues you control — its
-    # controller is who "you" means — so the union names exactly what the
-    # pattern below does *plus the source*, and the difference is one word in
-    # the subject: "another" excludes the source, "a" does not. Mapping both
-    # onto one kind keeps one dispatcher; the subject decides the rest.
+    # Guild Enforcer): the pattern below's "another Rogue you control" *plus
+    # the source*, a union the empty ``enterer_includes_source`` group marks
+    # and ``events.trigger_subject_matches`` answers — the source by identity,
+    # whatever its types now are, and every other object by the phrase, which
+    # keeps its "another". Mapping both onto one kind keeps one dispatcher.
     ("matching_permanent_enters",
      r"whenever this creature or (?P<enterer_subject>another [^,]+?) enters"
      r"(?: the battlefield)?(?P<enterer_includes_source>)"),
@@ -1618,6 +1618,18 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # first; and `_match_trigger_patterns` *aborts* on a phrase the noun parser
     # refuses rather than falling through, so a row placed above them would take
     # their cards down with it rather than merely shadowing them.
+    # "Whenever **this creature or another Cleric** dies, create a 2/2 black
+    # Zombie creature token." (Rotlung Reanimator.) The entry row's union one
+    # event over: the source itself, or another permanent the phrase
+    # describes — marked by the same empty ``_includes_source`` group and
+    # answered by the same reader at the death fire site, which also sees the
+    # source's own death on every path (CR 603.10a,
+    # ``Game._death_observers``). After Basri's Lieutenant's explicit-self row,
+    # whose controller-scoped kind it would otherwise claim, and before the
+    # bare row below, which cannot match it ("this" is not an article).
+    ("permanent_dies",
+     r"whenever this creature or (?P<dying_subject>another [^,]+?) dies"
+     r"(?P<dying_includes_source>)"),
     ("permanent_dies",
      r"whenever (?P<dying_subject>an? [^,]+) dies"),
 )
