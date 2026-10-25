@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**419 / 625 tracked rules covered (67%)** — 3144 tests, 0 unannotated.
+**419 / 625 tracked rules covered (67%)** — 3153 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -632,7 +632,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 509. Declare Blockers Step
 
-- [x] **509.1** First, the defending player declares blockers. This turn-based action doesn’t use the stack. To d... *(89 tests, subrules abcdfghi)*
+- [x] **509.1** First, the defending player declares blockers. This turn-based action doesn’t use the stack. To d... *(100 tests, subrules abcdfghi)*
 - [x] **509.2** Second, the active player gets priority. (See rule 117, “Timing and Priority.”) *(4 tests, subrules a)*
 - [x] **509.3** Triggered abilities that trigger on blockers being declared may have different trigger conditions. *(15 tests, subrules acdg)*
 - [x] **509.4** If a creature is put onto the battlefield blocking, its controller chooses which attacking creatu... *(1 tests)*
@@ -906,7 +906,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.32** Fading *(14 tests, subrules a)*
 - [x] **702.36** Fear *(5 tests, subrules ab)*
 - [x] **702.108** Prowess *(3 tests, subrules a)*
-- [x] **702.111** Menace *(4 tests, subrules ab)*
+- [x] **702.111** Menace *(5 tests, subrules ab)*
 
 ### 703. Turn-Based Actions
 
@@ -981,7 +981,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **802.1** Some multiplayer games allow the active player to attack multiple other players. If this option i... *(2 tests)*
 - [x] **802.2** As the combat phase starts, the attacking player doesn’t choose an opponent to become the defendi... *(2 tests)*
 - [x] **802.3** As the attacking player declares each attacking creature, they choose a defending player, a plane... *(3 tests, subrules a)*
-- [x] **802.4** If more than one player is being attacked, controls a planeswalker that’s being attacked, or prot... *(3 tests, subrules ab)*
+- [x] **802.4** If more than one player is being attacked, controls a planeswalker that’s being attacked, or prot... *(4 tests, subrules ab)*
 - [x] **802.5** Combat damage is assigned in APNAP order. Other than that, the combat damage step proceeds just a... *(2 tests)*
 
 ### 806. Free-for-All Variant
