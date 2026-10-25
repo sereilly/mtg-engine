@@ -21,6 +21,8 @@ from ...restricted_mana import ACTIVATE, PaymentPurpose
 from ...bare_announcements import (announced_fields, default_activation_target,
                                    names_an_object)
 from ...cost_modifiers import ability_cost_reduction, ability_cost_tax
+from ...cycling import is_cycling_ability
+from ...events import emit
 from ...activation_zones import GRAVEYARD, HAND, ability_functions_from
 from ...targeting import usable_activated_abilities
 from ...mana_payment import is_mana_ability
@@ -325,6 +327,8 @@ class CardActivationMixin:
         else:
             self._discard_card(controller, card)
             self.log.append(f"{controller.name} discarded {card.name} to activate its ability")
+            if is_cycling_ability(card, ability):
+                self._announce_cycle(controller_index, card)
 
         if is_mana_ability(ability):
             # CR 605.3b: an activated mana ability does not use the stack,
@@ -365,6 +369,44 @@ class CardActivationMixin:
         )
         self.log.append(f"{card.name} ability added to stack")
         return SimulationResult(card.name, True, ability.effect_kind, "queued")
+
+    def _announce_cycle(self, controller_index: int, card) -> None:
+        """CR 702.29: *card* was just cycled by *controller_index* — the one
+        place a cycling ability's discard cost is paid, so the one place a
+        cycle is announced.
+
+        Two conditions ride the one announcement. "Whenever **a player** cycles
+        a card" (Astral Slide) is a permanent watching every seat, collected
+        off the battlefield and narrowed by ``event_filters._cycles_card_filter``.
+        "When **you cycle this card**" (Renewed Faith) is the cycled card's
+        own, and CR 702.29c has it "trigger from whatever zone the card winds
+        up in after it's cycled" — the graveyard, or wherever a discard
+        replacement sent it — so it is asked of *card* itself
+        (``events.moved_card_trigger_events``), never by scanning a zone: a
+        second copy already in the graveyard was not cycled.
+
+        Called inside ``activate_from_hand``'s ``deferring_triggers`` window,
+        so both go on the stack **above** the cycling ability once it is
+        there (CR 602.2b through CR 601.2i), and resolve before its draw — the
+        2022-12-08 rulings on every Onslaught card that prints the trigger.
+
+        A discard by any other means is not a cycle and never reaches here; a
+        cycled card is discarded once, so it is announced once. The discard
+        itself was announced already, by ``_discard_card`` — cycling *is*
+        discarding (CR 702.29a), so Megrim answers a cycled card too.
+        """
+        self.log.append(f"{self.players[controller_index].name} cycled {card.name}")
+        emit(
+            self, "cycles_card",
+            subject=card,
+            # The seat that cycled: the filter's "you" / "an opponent", and
+            # CR 108.4a's controller for the card's own trigger — a card in a
+            # hand is its owner's (CR 400.3), so the two are one seat.
+            seat=controller_index,
+            owner_index=controller_index,
+            event_subject_player=controller_index,
+            cycled_card=card,
+        )
 
     def _activate_from_graveyard(
         self,

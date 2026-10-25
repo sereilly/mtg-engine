@@ -245,6 +245,13 @@ _MOVED_CARD_CONDITIONS: dict[str, frozenset[str]] = {
     "card_put_into_graveyard": frozenset(
         {"self_put_into_graveyard_from_anywhere"}
     ),
+    # "When **you cycle this card**" (Renewed Faith) beside "whenever **a
+    # player** cycles a card" (Astral Slide): one cycle, asked from the card
+    # that was cycled and from every permanent watching. CR 702.29c says the
+    # card's own ability "trigger[s] from whatever zone the card winds up in",
+    # which is this table's question exactly — and riding the one cycle
+    # announcement puts both on the stack in the same batch (CR 603.3b).
+    "cycles_card": frozenset({"self_cycled"}),
 }
 
 

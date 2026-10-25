@@ -150,6 +150,15 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("discarded_by_opponent_effect",
      ("a", "spell", "or", "ability", "an", "opponent", "controls", "causes",
       "you", "to", "discard", "a", "card")),
+    # "Whenever **a player** cycles a card" (Astral Slide, Lightning Rift,
+    # Fleeting Aven, Withering Hex, Invigorating Boon). CR 702.29a's cycling
+    # ability, announced where its discard cost is paid; the printed seat is
+    # payload on ``engine/whenever_triggers.py``'s row, exactly as the discard
+    # rows above carry theirs, so "you" and "an opponent" are the same event
+    # with the narrowing ``event_filters._cycles_card_filter`` enforces.
+    ("cycles_card", ("you", "cycle", "a", "card")),
+    ("cycles_card", ("an", "opponent", "cycles", "a", "card")),
+    ("cycles_card", ("a", "player", "cycles", "a", "card")),
     # "Whenever **equipped** creature dies" (Malefic Scythe) / "When
     # **enchanted** creature dies" (Creature Bond). One condition for both
     # words: an Equipment and an Aura attach the same way here, and the trigger
