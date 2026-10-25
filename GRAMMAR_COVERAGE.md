@@ -51,7 +51,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | TOR | 143 | 261 | 86.2% | 86.2% | 68.2% | 138 |
 | JUD | 143 | 241 | 91.3% | 90.9% | 65.6% | 131 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| ONS *(measured)* | 335 | 541 | 68.9% | 64.7% | 45.5% | 207 |
+| ONS *(measured)* | 335 | 541 | 69.9% | 66.5% | 47.1% | 216 |
 | **All (shipped)** | **8027** | **11886** | **90.6%** | **90.1%** | **62.4%** | **6271** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -64,9 +64,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 754 | 400 | expected a subject |  |
+| 752 | 398 | expected a subject |  |
 | 189 | 103 | unrecognized effect verb |  |
-| 136 | 74 | unconsumed text |  |
+| 135 | 73 | unconsumed text |  |
 | 70 | 51 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 31 | 8 | expected what this creature can't block, or a duration |  |
@@ -86,9 +86,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 3 | 3 | unrecognized "can't be" restriction |  |
 | 3 | 1 | expected 'top' |  |
 | 3 | 3 | an Aura's continuous grant is derived by engine/auras.py |  |
-| 3 | 3 | expected 'card' |  |
 | 3 | 3 | expected an object noun |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
+| 2 | 1 | expected 'the number of' in a where-clause |  |
 
 ## Cards executing through the grammar
 
@@ -483,8 +483,6 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature attacks, it doesn't untap during its controller's next untap step.`
 - **Aphetto Alchemist**
   - `{T}: Untap target artifact or creature.`
-- **Aphetto Dredging**
-  - `Return up to three target creature cards of the creature type of your choice from your graveyard to your hand.`
 - **Aphetto Grifter**
   - `Tap two untapped Wizards you control: Tap target permanent.`
 - **Apocalypse**
@@ -1122,6 +1120,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{R}, Sacrifice enchanted creature: This Aura deals damage equal to the sacrificed creature's power to each creature.`
 - **Bloodfire Kavu**
   - `{R}, Sacrifice this creature: It deals 2 damage to each creature.`
+- **Bloodline Shaman**
+  - `{T}: Choose a creature type. Reveal the top card of your library. If that card is a creature card of the chosen type, put it into your hand. Otherwise, put it into your graveyard.`
 - **Bloodshot Cyclops**
   - `{T}, Sacrifice a creature: This creature deals damage equal to the sacrificed creature's power to any target.`
   - `{T}, Sacrifice a creature: This creature deals damage equal to the sacrificed creature's power to any target.`
@@ -1448,6 +1448,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{2}{G}{G}: Reveal the top card of your library. If it's a creature card, put it onto the battlefield. Otherwise, put it into your graveyard.`
 - **Call to Arms**
   - `White creatures get +1/+1 as long as the chosen color is the most common color among nontoken permanents the chosen player controls but isn't tied for most common.`
+- **Callous Oppressor**
+  - `{T}: Gain control of target creature that isn't of the chosen type for as long as this creature remains tapped.`
 - **Calming Licid**
   - `{W}, {T}: This creature loses this ability and becomes an Aura enchantment with enchant creature. Attach it to target creature. You may pay {W} to end this effect.`
 - **Calming Verse**
@@ -1881,6 +1883,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}: The next time a white source of your choice would deal damage to you this turn, prevent that damage.`
   - `{1}: The next time a white source of your choice would deal damage to you this turn, prevent that damage.`
   - `{1}: The next time a white source of your choice would deal damage to you this turn, prevent that damage.`
+- **Circle of Solace**
+  - `{1}{W}: The next time a creature of the chosen type would deal damage to you this turn, prevent that damage.`
 - **Circling Vultures**
   - `At the beginning of your upkeep, sacrifice this creature unless you exile the top creature card of your graveyard.`
 - **Circular Logic**
@@ -2574,6 +2578,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Remove a fade counter from this creature: Prevent the next 2 damage that would be dealt to any target this turn.`
 - **Defense of the Heart**
   - `At the beginning of your upkeep, if an opponent controls three or more creatures, sacrifice this enchantment, search your library for up to two creature cards, put those cards onto the battlefield, then shuffle.`
+- **Defensive Maneuvers**
+  - `Creatures of the creature type of your choice get +0/+4 until end of turn.`
 - **Defiant Falcon**
   - `{4}, {T}: Search your library for a Rebel permanent card with mana value 3 or less, put it onto the battlefield, then shuffle.`
 - **Defiant Strike**
@@ -4737,6 +4743,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Harrow**
   - `Search your library for up to two basic land cards, put them onto the battlefield, then shuffle.`
   - `Search your library for up to two basic land cards, put them onto the battlefield, then shuffle.`
+- **Harsh Mercy**
+  - `Each player chooses a creature type. Destroy all creatures that aren't of a type chosen this way. They can't be regenerated.`
 - **Harvest Mage**
   - `{G}, {T}, Discard a card: Until end of turn, if you tap a land for mana, it produces one mana of a color of your choice instead of any other type and amount.`
 - **Harvest Wurm**
@@ -7602,6 +7610,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Discard a card: Regenerate this creature. (The next time this creature would be destroyed this turn, instead tap it, remove it from combat, and heal all damage on it.)`
 - **Path of Peace**
   - `Destroy target creature. Its owner gains 4 life.`
+- **Patriarch's Bidding**
+  - `Each player chooses a creature type. Each player returns all creature cards of a type chosen this way from their graveyard to the battlefield.`
 - **Patriarch's Desire**
   - `Threshold — Enchanted creature gets an additional +2/-2 as long as there are seven or more cards in your graveyard.`
 - **Patrol Hound**
@@ -7634,6 +7644,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Peek**
   - `Look at target player's hand.`
   - `Draw a card.`
+- **Peer Pressure**
+  - `Choose a creature type. If you control more creatures of that type than each other player, you gain control of all creatures of that type. (This effect lasts indefinitely.)`
 - **Peer into the Abyss**
   - `Target player draws cards equal to half the number of cards in their library and loses half their life. Round up each time.`
 - **Pegasus Refuge**
@@ -8793,6 +8805,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{5}, {T}: Discard a card at random, then draw two cards.`
 - **Riptide**
   - `Tap all blue creatures.`
+- **Riptide Chronologist**
+  - `{U}, Sacrifice this creature: Untap all creatures of the creature type of your choice.`
 - **Riptide Crab**
   - `When this creature dies, draw a card.`
 - **Riptide Laboratory**
@@ -11411,6 +11425,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `• Return target creature card from your graveyard to the battlefield.`
 - **Tribal Flames**
   - `Domain — Tribal Flames deals X damage to any target, where X is the number of basic land types among lands you control.`
+- **Tribal Unity**
+  - `Creatures of the creature type of your choice get +X/+X until end of turn.`
 - **Trickery Charm**
   - `• Target creature gains flying until end of turn.`
   - `• Look at the top four cards of your library, then put them back in any order.`
@@ -11956,6 +11972,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}{U}, Discard this card: Look at the top two cards of your library. Put one of them into your hand and the other into your graveyard.`
 - **Walking Dead**
   - `{B}: Regenerate this creature.`
+- **Walking Desecration**
+  - `{B}, {T}: Creatures of the creature type of your choice attack this turn if able.`
 - **Walking Sponge**
   - `{T}: Target creature loses your choice of flying, first strike, or trample until end of turn.`
 - **Walking Wall**

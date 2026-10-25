@@ -25,14 +25,12 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**9 unclaimed sentence(s) across 8 supported card(s).**
+**8 unclaimed sentence(s) across 7 supported card(s).**
 
 - **Aurification**
   - `each creature with a gold counter on it is a wall in addition to its other creature types and has defender`
 - **Backslide**
   - `turn target creature with a morph ability face down`
-- **Circle of Solace**
-  - `{1}{w}: the next time a creature of the chosen type would deal damage to you this turn, prevent that damage`
 - **Future Sight**
   - `you may play lands and cast spells from the top of your library`
 - **Risky Move**
