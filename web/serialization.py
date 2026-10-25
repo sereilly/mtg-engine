@@ -20,6 +20,7 @@ from engine.color_changes import spell_color_change
 from engine.cost_modifiers import spell_cost_tax
 from engine.divided_damage import DIVIDED_TARGETS, divided_entry
 from engine.entry_choices import chosen_as_entered
+from engine.face_down import hidden_card_of, is_face_down, morph_cost
 from engine.faces import combined_oracle_text, face_cards, is_face, whole_card
 from engine.legality import activation_target_obligation
 from engine.models import Permanent, PlayerState
@@ -261,6 +262,34 @@ def _card_preview(card) -> dict:
     return preview
 
 
+def hidden_card_view(obj) -> dict | None:
+    """What a face-down permanent or spell is, as the **one** seat CR 708.5
+    lets look at it sees it — its controller: "At any time, you may look at a
+    face-down spell you control on the stack or a face-down permanent you
+    control … You can't look at … face-down spells or permanents controlled
+    by another player."
+
+    The card it hides as a preview (name, text, type, art), its printed power
+    and toughness, and its morph cost when it prints one (what turning it
+    face up would cost, CR 702.37e). None for a face-up object. **Attached
+    only to the controller's own payload** — by ``_serialize_player`` for a
+    permanent and by the state view for a spell — and never by the shared
+    serializers, which emit the face-down 2/2 for every viewer
+    (``tests/ui/test_ons_w1g1_face_down_hidden_census.py``).
+    """
+    real = hidden_card_of(obj)
+    if real is None:
+        return None
+    view = _card_preview(real)
+    view["mana_cost"] = real.mana_cost
+    view["power"] = _printed_stat(real, "power")
+    view["toughness"] = _printed_stat(real, "toughness")
+    printed = morph_cost(real)
+    if printed is not None:
+        view["morph_cost"] = printed
+    return view
+
+
 def _offered_mana(game: Game, perm: Permanent) -> tuple[str, ...]:
     """The symbols the client offers when this permanent is tapped for mana.
 
@@ -474,6 +503,13 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         # naming something else.
         "id": perm.permanent_id,
         "name": perm.card.name,
+        # CR 708: this permanent is face down. Public — every player sees a
+        # face-down card on the table — and the whole of what anyone but its
+        # controller learns: every other field here is the face-down 2/2's
+        # (CR 708.2a), because the permanent's card *is* that blank
+        # (``engine/face_down.py``). The controller's own view adds
+        # ``hidden_card`` (CR 708.5, ``_serialize_player``).
+        "face_down": is_face_down(perm),
         # CR 903.3: this permanent is the designated commander card itself —
         # never a token copy or another same-name card. Drawn as a crown badge
         # and named in the card preview.
@@ -1394,6 +1430,11 @@ def _serialize_player(
     # data rather than parsing the ability text client-side.
     if viewer_seat == seat:
         for idx, (perm, perm_dict) in enumerate(zip(permanents, battlefield)):
+            # CR 708.5: the controller may look at its own face-down
+            # permanents (``hidden_card_view``); nobody else is sent this.
+            hidden = hidden_card_view(perm)
+            if hidden is not None:
+                perm_dict["hidden_card"] = hidden
             perm_dict["target_spec"] = game.activation_target_spec(seat, idx)
             # Multi-ability permanents whose abilities target differently
             # (Pyramids): one spec per usable ability, indexed like the

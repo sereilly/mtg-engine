@@ -312,6 +312,21 @@ def announced_morph_cost(
     return None
 
 
+def cast_announces_morph(game: "Game", seat: int, card, action) -> bool:
+    """Whether a policy's cast *action* of *card* is a morph cast — the
+    question :func:`announced_morph_cost` answers for the cast path, asked
+    the same way (an alternative cost announced from the hand, no permission
+    requiring a cost of its own). The simulator's ``face_down_casts`` honesty
+    count reads it."""
+    if not getattr(action, "alternative_cost", False):
+        return False
+    if getattr(action, "from_zone", "hand") != "hand":
+        return False
+    return announced_morph_cost(
+        game, seat, card, alternative_cost=True, permission=None,
+    ) is not None
+
+
 # ---------------------------------------------------------------------------
 # Turning face up (CR 702.37e, 708.7, 708.8) and face down (CR 708.2a/b)
 # ---------------------------------------------------------------------------
@@ -526,6 +541,7 @@ __all__ = [
     "TURNED_FACE_UP",
     "TURN_FACE_UP",
     "announced_morph_cost",
+    "cast_announces_morph",
     "entered_face_up",
     "face_down_card",
     "hidden_card",
