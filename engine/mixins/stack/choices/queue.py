@@ -6,7 +6,8 @@ is. ``arm_pending_choice`` queues a choice — or, for a seat nobody is asking
 and a ``default_at_arm`` kind, takes its default on the spot — and stamps the
 stack object and the seat whose resolution armed it. ``resolve_pending_choice``
 and ``take_choice_default`` answer it through the kind's one registered
-resolver, resuming the loop it suspended. ``effect_suspended``,
+resolver, take the answered choice off the queue (``_close_answered_choice``)
+and resume the loop it suspended. ``effect_suspended``,
 ``stack_item_is_waiting``, ``iter_pending_prompts`` and ``waiting_prompt`` are
 what the rest of the engine asks about time: whether a loop has to stop, whether
 an object is still resolving, whether anybody may receive priority (CR 608.2,
@@ -343,7 +344,10 @@ class PendingChoicesMixin:
     def _apply_choice_answer(self, choice: PendingChoice, response: dict) -> bool:
         spec = spec_for(choice.kind)
         if not spec.suspends:
-            return bool(spec.resolve(self, choice, response))
+            accepted = bool(spec.resolve(self, choice, response))
+            if accepted:
+                self._close_answered_choice(choice)
+            return accepted
         # This choice stops suspending *before* the answer is applied, never
         # after: applying it can arm the next prompt, and lifting afterwards
         # would resume straight through that one.
@@ -357,9 +361,42 @@ class PendingChoicesMixin:
             # Rejected — the prompt is owed exactly as it was, suspension and all.
             choice.data.pop("_answered", None)
             return False
+        self._close_answered_choice(choice)
         resume_after_answer(self)
         self._settle_resumed_resolution()
         return True
+
+    def _close_answered_choice(self, choice: PendingChoice) -> None:
+        """Take an answered *choice* off the queue, if its resolver did not.
+
+        An answer that was accepted has been applied, so the seat no longer
+        owes it — and a choice left queued says it does. ``waiting_prompt`` and
+        ``blocking_prompt`` read the queue, so the game refused every further
+        action by the seat that had just answered (CR 117.3b), and
+        ``_release_stack_item`` reads it too, so the object the prompt held
+        never left the stack (CR 608.2). ``_resolve_pay_any_amount`` was that
+        resolver (Urza's Destiny); AI and headless play never showed it,
+        because ``auto_resolve_pending_choices`` drops a defaulted choice
+        itself.
+
+        Here, once, rather than trusted to each resolver: every resolver still
+        drops its own choice where its own steps need it gone, and this is the
+        guarantee behind them. It runs after the resolver and **before** the
+        steps behind the answer resume and before the object is released —
+        a discard any later (in ``resolve_pending_choice``, after
+        ``_answer_pending_choice`` returns) comes after the release has already
+        declined to let the object go.
+
+        Only a choice still *open*: Word of Command records its caster's answer
+        and keeps the closed choice queued on purpose (``is_open``), which is
+        what holds its spell on the stack until the ability that finishes it
+        removes it. The CR 614 queue needs nothing here — its answer path
+        (``resolve_replacement_choice``) takes the choice off before applying
+        it. ``tests/regressions/test_kg_prompts_answered_choice_leaves_queue.py``
+        is the census over every kind.
+        """
+        if spec_for(choice.kind).open_for(self, choice):
+            self.discard_pending_choice(choice)
 
     def take_choice_default(self, choice: PendingChoice) -> None:
         """Apply the deterministic answer a non-interactive seat gives."""
@@ -369,6 +406,7 @@ class PendingChoicesMixin:
         spec = spec_for(choice.kind)
         if not spec.suspends:
             spec.default(self, choice)
+            self._close_answered_choice(choice)
             return True
         choice.data["_answered"] = True
         try:
@@ -376,6 +414,7 @@ class PendingChoicesMixin:
         except Exception:
             choice.data.pop("_answered", None)
             raise
+        self._close_answered_choice(choice)
         resume_after_answer(self)
         self._settle_resumed_resolution()
         return True
@@ -422,9 +461,10 @@ class PendingChoicesMixin:
                     if not any(queued is choice for queued in self.pending_choices):
                         continue
                     self.take_choice_default(choice)
-                    # Every default takes its choice off the queue; dropping it
-                    # here as well is what guarantees this loop terminates even
-                    # if one ever forgets.
+                    # The answer funnel has taken the choice off the queue
+                    # (``_close_answered_choice``) unless it is one kept queued
+                    # closed on purpose; dropping it here as well is what
+                    # guarantees this loop terminates whatever a default does.
                     self.discard_pending_choice(choice)
                     progressed = True
             if not progressed:
