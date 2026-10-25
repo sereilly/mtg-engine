@@ -190,7 +190,7 @@ def test_the_id_is_what_makes_it_work_not_the_index():
     # `second` has slid into slot 0, so index 1 is empty: the index the caster
     # chose has no answer at all now, while the id still names `second`.
     assert game.permanent_by_id(second.permanent_id) is second
-    assert game.chosen_permanent(1, 1, second.permanent_id) is second
+    assert game.chosen_permanent(1, 1, [second.permanent_id]) is second
     assert game.chosen_permanent(1, 1, None) is None, (
         "slot 1 is empty now — the index alone has no answer, which is the "
         "whole reason the id is recorded"
@@ -396,7 +396,7 @@ def _leadb_assassin(depart):
         OracleExecutionContext(
             caster=game.players[0], target=game.players[1],
             card=CARDS["Royal Assassin"],
-            target_permanent_index=index, target_permanent_id=chosen_id,
+            target_permanent_index=index, target_permanent_id=[chosen_id],
             source_permanent=assassin,
         ),
     )
