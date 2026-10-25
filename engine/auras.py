@@ -479,7 +479,35 @@ def aura_additional_mana_on_tap_line(normalized_line: str) -> tuple[str, ...]:
     return () if parts is None else parts[0]
 
 
-def aura_additional_mana_on_tap(game, aura) -> tuple[str, ...]:
+def aura_additional_mana_on_tap(oracle_text: str) -> tuple[str, ...]:
+    """The same answer as :func:`aura_additional_mana_on_tap_line` for a whole
+    card — the printed symbols once, whatever a "for each" rate would make of
+    them — for a reader asking a question about the card's text rather than
+    about a tap (which Aura watches a land tapped for mana)."""
+    from .line_normalization import normalize_creature_line
+
+    for raw_line in (oracle_text or "").splitlines():
+        symbols = aura_additional_mana_on_tap_line(normalize_creature_line(raw_line))
+        if symbols:
+            return symbols
+    return ()
+
+
+def aura_additional_mana_rate(oracle_text: str) -> dict | None:
+    """The count spec a card's "…adds an additional {G} **for each Elf on the
+    battlefield**" multiplies its symbols by (Elvish Guidance), or None for a
+    card that prints no rate — what a census stocks the board with before it
+    can see the Aura react."""
+    from .line_normalization import normalize_creature_line
+
+    for raw_line in (oracle_text or "").splitlines():
+        parts = _additional_mana_parts(normalize_creature_line(raw_line))
+        if parts is not None and parts[0]:
+            return parts[1]
+    return None
+
+
+def aura_additional_mana_now(game, aura) -> tuple[str, ...]:
     """What *aura* adds when its land is tapped for mana, now: the printed
     symbols, repeated once per object its "for each …" rate counts (Elvish
     Guidance). For the two dispatchers that hold the Aura — the tap seam and

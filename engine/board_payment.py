@@ -293,14 +293,14 @@ def _aura_units(game: "Game", land: "Permanent") -> "tuple[frozenset[str], ...]"
     additional {G}." (Wild Growth, Fertile Ground; Elvish Guidance's "{G} for
     each Elf on the battlefield", counted now.) Added by the seam on every
     tap, whatever the land's own ability made."""
-    from .auras import AURA_ANY_COLOR_MANA, aura_additional_mana_on_tap
+    from .auras import AURA_ANY_COLOR_MANA, aura_additional_mana_now
 
     aura = land.metadata.get("attached_aura")
     if aura is None:
         return ()
     return tuple(
         frozenset(PIP_SYMBOLS) if extra == AURA_ANY_COLOR_MANA else frozenset({str(extra)})
-        for extra in aura_additional_mana_on_tap(game, aura)
+        for extra in aura_additional_mana_now(game, aura)
     )
 
 

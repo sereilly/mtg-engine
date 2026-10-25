@@ -55,7 +55,7 @@ import re
 from collections import Counter
 
 from engine import Game, PlayerState
-from engine.auras import aura_additional_mana_on_tap
+from engine.auras import aura_additional_mana_on_tap, aura_additional_mana_rate
 from engine.aura_attachment import attach_aura
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units
@@ -66,7 +66,7 @@ from engine.mixins.land_tapped_for_mana import (TAP_TRIGGER_KINDS,
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.targeting import usable_activated_abilities
-from tests.helpers import resolve_stack
+from tests.helpers import _mk_card, resolve_stack
 
 #: One land per kind of mana ability the roads have to agree about.
 SUITE_LANDS = (
@@ -235,6 +235,8 @@ def drive(pool, road, land_card, tapper, active, watcher=None, how=None,
         seen = Permanent(card=watcher)
         game._put_permanent_onto_battlefield(0, seen, None)
         attach_aura(seen, land)
+        for bait in _rate_bait(watcher):
+            _place(game, 0, bait)
     for player in game.players:
         player.mana_pool = {symbol: 0 for symbol in player.mana_pool}
         player.tapped_land_for_mana_this_turn = False
@@ -280,6 +282,25 @@ def drive(pool, road, land_card, tapper, active, watcher=None, how=None,
         "deed": player.tapped_land_for_mana_this_turn,
         "mana": _total_mana(player),
     }
+
+
+def _rate_bait(watcher) -> list:
+    """A creature of each type an Aura's "for each <type> on the battlefield"
+    rate counts (Elvish Guidance's Elves), derived from the rate's own spec:
+    with none on the board the extra mana is zero on every road, which reads
+    as a watcher that never reacted."""
+    rate = aura_additional_mana_rate(watcher.oracle_text or "")
+    if not rate:
+        return []
+    wanted = (rate.get("filter") or {}).get("subtype_filter")
+    subtypes = wanted if isinstance(wanted, (list, tuple)) else (wanted,)
+    return [
+        _mk_card(
+            name=f"Rate {subtype.title()}",
+            type_line=f"Creature - {subtype.title()}", power=1, toughness=1,
+        )
+        for subtype in subtypes if subtype
+    ]
 
 
 def reaction(with_watcher, without):
