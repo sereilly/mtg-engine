@@ -526,7 +526,121 @@ def test_w1g7_elvish_guidance_counts_toward_the_planned_payment(set_pool):
 
 # ==== W1G9 ==========================================================
 # W1G9's tests go between this line and the "end W1G9" line.
+from engine import Game as _w1g9_Game, PlayerState as _w1g9_PlayerState
+from engine.models import Permanent as _w1g9_Permanent
+from engine.named_counters import counters_on as _w1g9_counters_on
+from tests.helpers import resolve_stack as _w1g9_resolve
 
+
+def _w1g9_table(seats=2):
+    """*seats* players, seat 0 active, mana costs off."""
+    w1g9_game = _w1g9_Game(
+        players=[_w1g9_PlayerState(name=f"W1G9-{index}") for index in range(seats)]
+    )
+    w1g9_game.enforce_mana_costs = False
+    w1g9_game.active_player_index = 0
+    return w1g9_game
+
+
+def _w1g9_enter(game, seat, card):
+    """*card* onto *seat*'s battlefield through the entry seam, unsick."""
+    w1g9_entered = _w1g9_Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, w1g9_entered, None)
+    w1g9_entered.metadata["summoning_sickness_turn"] = -99
+    game.check_state_based_actions()
+    _w1g9_resolve(game)
+    return w1g9_entered
+
+
+def _w1g9_settle(game):
+    _w1g9_resolve(game)
+    game.auto_resolve_pending_choices()
+    _w1g9_resolve(game)
+    game._recompute_continuous_effects()
+
+
+def _w1g9_hit_unblocked(game, attacker, *, seat=0, defender=1):
+    """*attacker* attacks *defender*, nobody blocks, combat damage is dealt
+    and what it set off resolves."""
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(
+        seat, [game.battlefield_index_of(attacker)], defending_player_index=defender
+    )[0]
+    game._set_phase_and_step("combat", "declare_blockers")
+    assert game.declare_blockers(defender, {})[0]
+    game._set_phase_and_step("combat", "combat_damage")
+    assert game.resolve_combat_damage(seat)[0]
+    _w1g9_settle(game)
+
+
+def test_w1g9_aurification_makes_the_creature_that_hit_you_a_wall_with_defender(set_pool):
+    """The trigger puts the gold counter on; the static reads it. CR 205.1b
+    (layer 4) adds Wall to the creature's other types, CR 702.3b (layer 6)
+    gives it defender, so the next attack is refused."""
+    ons = set_pool("ONS")
+    game = _w1g9_table()
+    _w1g9_enter(game, 1, ons["Aurification"])
+    seeker = _w1g9_enter(game, 0, ons["Glory Seeker"])
+    assert not seeker.has_type("wall")
+    _w1g9_hit_unblocked(game, seeker)
+    assert game.players[1].life == 18
+    assert _w1g9_counters_on(seeker, "gold") == 1
+    assert seeker.has_type("wall") and seeker.has_type("soldier")
+    assert game._has_keyword(seeker, "defender")
+
+    game.end_combat()
+    game.become_untapped(seeker)
+    game._set_phase_and_step("combat", "declare_attackers")
+    refused = game.declare_attackers(
+        0, [game.battlefield_index_of(seeker)], defending_player_index=1
+    )
+    assert not refused[0]
+    assert not seeker.attacking
+
+
+def test_w1g9_aurification_reaches_only_creatures_bearing_the_counter(set_pool):
+    """A creature that dealt no damage to the enchantment's controller has no
+    counter and is untouched — and a Wall is a Wall to every reader, so Elven
+    Riders' "except by Walls" admits the newly golden blocker."""
+    ons = set_pool("ONS")
+    game = _w1g9_table()
+    _w1g9_enter(game, 0, ons["Aurification"])
+    attacker = _w1g9_enter(game, 1, ons["Glory Seeker"])
+    bystander = _w1g9_enter(game, 1, ons["Elvish Warrior"])
+    riders = _w1g9_enter(game, 0, ons["Elven Riders"])
+    game.active_player_index = 1
+    _w1g9_hit_unblocked(game, attacker, seat=1, defender=0)
+    assert attacker.has_type("wall")
+    assert not bystander.has_type("wall")
+    assert not game._has_keyword(bystander, "defender")
+    game.end_combat()
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(
+        0, [game.battlefield_index_of(riders)], defending_player_index=1
+    )[0]
+    game._set_phase_and_step("combat", "declare_blockers")
+    assert not game._can_block_attacker(bystander, riders)
+    assert game._can_block_attacker(attacker, riders), "a Wall may block Elven Riders"
+
+
+def test_w1g9_aurification_leaving_takes_the_counters_and_the_wall_away(set_pool):
+    """"When this enchantment leaves the battlefield, remove all gold counters
+    from all creatures." The static ends with its source and the counters go
+    with the trigger: the creature is a Soldier again and may attack."""
+    ons = set_pool("ONS")
+    game = _w1g9_table()
+    aurification = _w1g9_enter(game, 1, ons["Aurification"])
+    seeker = _w1g9_enter(game, 0, ons["Glory Seeker"])
+    _w1g9_hit_unblocked(game, seeker)
+    assert seeker.has_type("wall")
+    game.end_combat()
+    game._set_phase_and_step("main", "precombat_main")
+    game.remove_from_battlefield(aurification)
+    _w1g9_settle(game)
+    assert _w1g9_counters_on(seeker, "gold") == 0
+    assert not seeker.has_type("wall")
+    assert not game._has_keyword(seeker, "defender")
 # ==== end W1G9 ======================================================
 
 

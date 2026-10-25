@@ -128,6 +128,13 @@ class GlobalStatic:
     # from the requirement that is half its drawback, which is the bug that
     # comment records being fixed.
     other_than_source: bool = False
+    # "Each creature **with a gold counter on it** …" (Aurification.) A counter
+    # kind (CR 122.1) narrowing the scope, as data beside the type word for
+    # ``colors``' reason: "with a gold counter" and "with a bounty counter" are
+    # one mechanism over different sets. Empty when the scope names none. A
+    # counter is not a characteristic, so no layer moves it and the board-wide
+    # layer-4 pass has no dependency to find through it (CR 613.8a).
+    with_counter: str = ""
 
 
 _TEMPLATES: tuple[tuple[re.Pattern[str], GlobalStatic], ...] = (
@@ -352,6 +359,32 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], GlobalStatic], ...] = (
         GlobalStatic(name="tribe_recoloured_and_retyped", applies_to="creature_type"),
     ),
     (
+        # Aurification: "Each creature with a gold counter on it is a Wall in
+        # addition to its other creature types and has defender." Dralnu's
+        # Crusade's added type (CR 205.1b, layer 4) over a scope a *counter*
+        # draws instead of a tribe, with a keyword (layer 6) where the Crusade
+        # sets a colour. One static for Humility's reason: one sentence, one
+        # timestamp, and a reader must not have the type without the keyword.
+        # Every printed creature, every controller — the sentence names no
+        # seat.
+        #
+        # The counter kind, the added type and the keyword are payload. The
+        # type is held to the creature-type catalog and the keyword to the
+        # engine's implemented set (:func:`_counter_scope_words`, asked by the
+        # scan), so a word the engine cannot honour leaves the line unclaimed
+        # rather than producing a static that changes nothing. The keyword is
+        # granted as the line the creature would print (``grants_ability``),
+        # which is how the permanent's own keyword reader finds it.
+        re.compile(
+            r"^each creature with an? (?P<counter_kind>[a-z]+) counter on it "
+            r"is an? (?P<counter_added>[a-z]+(?:-[a-z]+)?) in addition to its "
+            r"other creature types(?: and has (?P<counter_keyword>[a-z]+))?$"
+        ),
+        GlobalStatic(
+            name="counter_bearers_retyped", applies_to="creature_with_counter",
+        ),
+    ),
+    (
         # Shifting Sky. Darkest Hour's sentence with the colour chosen as the
         # enchantment entered instead of printed, and Celestial Dawn's noun with
         # no controller narrowing: every player's nonland permanents, the Sky
@@ -481,6 +514,18 @@ def global_static_for(oracle_text: str) -> GlobalStatic | None:
             adds_subtypes=(added,),
             sets_colors=(groups["sets"],),
         )
+    if groups.get("counter_kind"):
+        # Aurification. The words checked by the scan already
+        # (:func:`_counter_scope_words`); the keyword, when printed, rides
+        # as the line a creature printing it would carry.
+        added, keyword = _counter_scope_words(groups)
+        return GlobalStatic(
+            name=static.name,
+            applies_to=static.applies_to,
+            with_counter=groups["counter_kind"],
+            adds_subtypes=(added,),
+            grants_ability=keyword.capitalize() if keyword else "",
+        )
     sets = groups.get("sets")
     if sets:
         # "All **creatures** are black" (Darkest Hour) carries its own
@@ -557,6 +602,22 @@ def _tribe_words(groups: dict) -> tuple[str, str] | None:
     return tribe, added
 
 
+def _counter_scope_words(groups: dict) -> tuple[str, str] | None:
+    """Aurification's added type, singularised, and its keyword (empty when
+    none is printed) — or None when the type is not in the creature-type
+    catalog or the keyword is not one the engine implements. Read late for
+    :func:`_tribe_words`' reason."""
+    from .grammar.vocabulary import CREATURE_TYPES, IMPLEMENTED_KEYWORDS, singular
+
+    added = singular(groups["counter_added"])
+    keyword = groups.get("counter_keyword") or ""
+    if added not in CREATURE_TYPES:
+        return None
+    if keyword and keyword not in IMPLEMENTED_KEYWORDS:
+        return None
+    return added, keyword
+
+
 @lru_cache(maxsize=None)
 def _template_match(oracle_text: str) -> tuple[int, tuple] | None:
     """Where in :data:`_TEMPLATES` *oracle_text* first matches, and that
@@ -575,6 +636,8 @@ def _template_match(oracle_text: str) -> tuple[int, tuple] | None:
                 not groups.get("lingers") and groups.get("tribe")
                 and _tribe_words(groups) is None
             ):
+                continue
+            if groups.get("counter_kind") and _counter_scope_words(groups) is None:
                 continue
             return index, tuple(sorted(groups.items()))
     return None
