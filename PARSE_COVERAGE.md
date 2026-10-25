@@ -12,6 +12,57 @@ unclaimed text. Do not edit by hand.
 - With UNCLAIMED text (must fix or acknowledge): **0**
 - With deletion-probe findings (ignored words): **656**
 
+## Measured sets — reported, not gated
+
+Cards in a `measured` set (see `cards/manifest.json`) that the
+compiler calls **supported** while carrying a printed line nothing
+implements. They are the debt behind that set's progress number, and
+`--hollow-lines` sees only the ones that produced an *ability part* —
+a line yielding nothing at all leaves that probe nothing to find.
+
+Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
+`HOOK_RELIANCE.md`'s ceilings exclude the same sets: a ratchet over a
+set nobody has implemented fires on its composition rather than on
+anything anyone did, and every ingest would arrive red.
+
+**18 unclaimed sentence(s) across 17 supported card(s).**
+
+- **Aurification**
+  - `each creature with a gold counter on it is a wall in addition to its other creature types and has defender`
+- **Backslide**
+  - `turn target creature with a morph ability face down`
+- **Choking Tethers**
+  - `when you cycle this card, you may tap target creature`
+- **Circle of Solace**
+  - `{1}{w}: the next time a creature of the chosen type would deal damage to you this turn, prevent that damage`
+- **Complicate**
+  - `when you cycle this card, you may counter target spell unless its controller pays {1}`
+- **Death Pulse**
+  - `when you cycle this card, you may have target creature get -1/-1 until end of turn`
+- **Dirge of Dread**
+  - `when you cycle this card, you may have target creature gain fear until end of turn`
+- **Future Sight**
+  - `you may play lands and cast spells from the top of your library`
+- **Primal Boost**
+  - `when you cycle this card, you may have target creature get +1/+1 until end of turn`
+- **Renewed Faith**
+  - `when you cycle this card, you may gain 2 life`
+- **Risky Move**
+  - `when you gain control of this enchantment from another player, choose a creature you control and an opponent`
+  - `if you lose the flip, that opponent gains control of that creature`
+- **Slice and Dice**
+  - `when you cycle this card, you may have it deal 1 damage to each creature`
+- **Solar Blast**
+  - `when you cycle this card, you may have it deal 1 damage to any target`
+- **Starlit Sanctum**
+  - `{b}, {t}, sacrifice a cleric creature: target player loses life equal to the sacrificed creature's power`
+- **Sunfire Balm**
+  - `when you cycle this card, you may prevent the next 1 damage that would be dealt to any target this turn`
+- **Unholy Grotto**
+  - `{b}, {t}: put target zombie card from your graveyard on top of your library`
+- **Wheel and Deal**
+  - `any number of target opponents each discard their hands, then draw seven cards`
+
 ## Acknowledged simplifications
 
 | Card | Sentence | Why it is acceptable |
