@@ -1444,7 +1444,11 @@ _J6_LOOPED_ENTRY_HANDLERS = {
     # ``_return_planned_cards`` rather than in the handler's own body.
     "_return_planned_cards": "several",
     "put_exiled_this_way": "several",                   # Living Death
-    "put_chosen_hand_cards_onto_battlefield": "several",  # Stronghold Gambit
+    # Stronghold Gambit, Tempting Wurm. The move is its helper's since
+    # Onslaught's W1G13: an Aura among the cards is attached as it enters to a
+    # host its controller chose first (CR 303.4f), so the loop runs in the
+    # continuation ``_put_entrants`` rather than in the handler's own body.
+    "_put_entrants": "several",
     "put_revealed_top_cards_onto_battlefield": "several",  # Game Preserve
     "create_token": "one",              # one seat's tokens per instruction
     "reanimate_graveyard_position": "one",              # Bone Dancer
@@ -1475,7 +1479,10 @@ def test_j6_every_handler_that_can_enter_several_permanents_is_accounted_for():
 
 #: A looped entry that lives in a handler's helper, by the instruction kind
 #: whose handler it is.
-_J6_HELPER_KINDS = {"_return_planned_cards": "return_all_cards_from_graveyard"}
+_J6_HELPER_KINDS = {
+    "_return_planned_cards": "return_all_cards_from_graveyard",
+    "_put_entrants": "put_chosen_hand_cards_onto_battlefield",
+}
 
 
 def _j6_ordered_static_sources():
