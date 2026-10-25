@@ -466,7 +466,7 @@ def revealed_as_it_moves(game: "Game", card, permanent=None):
     return card
 
 
-def entered_face_up(permanent: "Permanent") -> None:
+def forget_face_down_departure(permanent: "Permanent") -> None:
     """Clear a departure's last-known record from a permanent object that is
     entering the battlefield again — it is a new object there (CR 400.7), and
     the face-down values it last had are not its values now."""
@@ -542,7 +542,7 @@ __all__ = [
     "TURN_FACE_UP",
     "announced_morph_cost",
     "cast_announces_morph",
-    "entered_face_up",
+    "forget_face_down_departure",
     "face_down_card",
     "hidden_card",
     "hidden_card_of",

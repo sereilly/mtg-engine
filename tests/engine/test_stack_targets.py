@@ -757,6 +757,14 @@ _UNANNOUNCED_TRIGGER_TARGETS = frozenset({
     # damaged player's permanents are offered, as many as the damage dealt, and
     # the ones named go back to their owner's hand.
     "Cephalid Constable#0",
+    # Onslaught, W1G1 — reached the moment their Morph line was read.
+    # "Whenever this creature deals combat damage to a player, you may have it
+    # deal 2 (Skirk Commando) / 3 (Snapping Thragg) damage to target creature
+    # **that player controls**", "…you may destroy target enchantment **that
+    # player controls**" (Dawning Purist): Spark Mage's shape. Driven through
+    # a real combat damage step each targets the damaged player's permanent
+    # and acts on it (tests/sets/test_ons_creatures.py, W1G1's section).
+    "Dawning Purist#0", "Skirk Commando#0", "Snapping Thragg#0",
     # no picker derived
     "The Abyss#0", "Rysorian Badger#0", "Goblin Grenadiers#0",
     "Erithizon#0", "Ley Line#0", "Tolarian Kraken#0",

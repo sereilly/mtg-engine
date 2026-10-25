@@ -6,7 +6,9 @@ four: the land drop (CR 116.2a), which predates the seam and still lives on the
 play path; CR 116.2e, the only rule in the whole CR that names a card; and the
 two offers a **permanent** makes — 116.2c's "to end a continuous effect"
 (Tempest's Licids) and 116.2d's "to ignore the effect from that ability for a
-duration" (Volrath's Curse).
+duration" (Volrath's Curse). A fifth, CR 116.2b's turning a face-down creature
+face up (Onslaught's morph), rides the same permanent seam and is tested in
+``tests/rules/test_ons_w1g1_morph.py``.
 
 The reason the second one needed a seam at all is the first clause of CR 116.1.
 No stack means no instruction to compile and no handler to dispatch, so a card

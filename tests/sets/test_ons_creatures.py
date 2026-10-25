@@ -382,6 +382,10 @@ _W1G1_COMBAT_FACE_UP = {
     # Trample; "…you may draw a card." — the defender is unchanged but for
     # the damage.
     "Hystrodon": (17, 3, 2),
+    # "…you may have it deal 2 / 3 damage to target creature that player
+    # controls." A Grizzly Bears of the damaged player's dies.
+    "Skirk Commando": (18, 3, 1),
+    "Snapping Thragg": (17, 3, 1),
     # "…that player loses half their life, rounded up." 1 combat damage
     # first (19), then half of 19 rounded up (10) is lost. Lost nobody
     # anything before this round: ``handlers._targets.damaged_end_seat``.
@@ -418,6 +422,33 @@ def test_w1g1_combat_damage_abilities_act_only_face_up(set_pool, name):
             # "Whenever this creature attacks, you lose half your life,
             # rounded up." — 20 → 10.
             assert p1.life == 10
+
+
+def test_w1g1_dawning_purist_destroys_an_enchantment_only_face_up(set_pool):
+    """"Whenever this creature deals combat damage to a player, you may
+    destroy target enchantment that player controls." — the Holy Strength on
+    the defender's Grizzly Bears survives the face-down Purist's hit and not
+    the face-up one's."""
+    from engine.aura_attachment import attach_aura as _w1g1_attach_aura
+
+    purist_card = set_pool("ONS")["Dawning Purist"]
+    for face_up in (False, True):
+        purist = _w1g1_permanent(purist_card, face_down=True)
+        bears = _w1g1_permanent(_W1G1_CATALOG["Grizzly Bears"])
+        aura = _W1G1Permanent(card=_W1G1_CATALOG["Holy Strength"])
+        game, _p1, p2 = _w1g1_game([purist], [bears, aura], enforce=False)
+        _w1g1_attach_aura(aura, bears)
+        bears.tapped = True  # it does not block
+        if face_up:
+            _w1g1_turn_up(game, 0, purist)
+        _w1g1_declare_attack(game, 0)
+        while game.current_turn_phase == "combat":
+            game.advance_combat_phase()
+            _w1g1_resolve_stack(game)
+            game.auto_resolve_pending_choices()
+        _w1g1_resolve_stack(game)
+        assert p2.life == 18
+        assert [c.name for c in p2.graveyard] == (["Holy Strength"] if face_up else [])
 
 
 def test_w1g1_ironfist_crusher_blocks_any_number_only_face_up(set_pool):

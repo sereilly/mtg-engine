@@ -31,7 +31,7 @@ from ..enter_effects import CAST_THIS_TURN_STAMP
 from ..exiled_records import (forget_record, newest_record_for,
                               record_exiled_card)
 from ..events import emit
-from ..face_down import entered_face_up, revealed_as_it_moves
+from ..face_down import forget_face_down_departure, revealed_as_it_moves
 from ..faces import whole_card
 from ..graveyard_order import record_graveyard_arrival
 from ..models import Permanent, PlayerState, next_permanent_id
@@ -714,7 +714,7 @@ class ZoneFunnelsMixin:
         # A permanent object entering again is a new object (CR 400.7): the
         # face-down values it was last seen leaving with (CR 708.9,
         # ``face_down.reveal_departing``) are not what it is now.
-        entered_face_up(permanent)
+        forget_face_down_departure(permanent)
         # CR 614.12, before anything asks how this permanent enters: a land
         # is judged "as it would exist on the battlefield", under the
         # continuous effects already there. With Blood Moon out a nonbasic

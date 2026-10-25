@@ -357,6 +357,9 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     # carried out by two different mechanisms — inline at entry, on the stack at
     # death — so a compiler alias for either one would leave the other silent.
     "enters_or_dies": "when this creature enters or dies",
+    # ONS W1G1: CR 702.37e / 708.8's event, Legions' and Scourge's line
+    # (no Onslaught card prints it). Announced by ``face_down.turn_face_up``.
+    "turned_face_up": "when this creature is turned face up",
     "leaves_battlefield": "when this creature leaves the battlefield",
     # Ertai's Familiar. CR 603.1's one ability with two trigger events, and the
     # example is a *shadowing* check as much as a coverage one: the generic
