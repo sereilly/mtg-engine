@@ -58,6 +58,7 @@ from .cast_costs import additional_costs, cast_announces_x
 from .classifier import classify_card
 from .faces import castable_faces
 from .game import Game
+from .late_modules import LateModules
 from .models import CardDefinition, Permanent, PlayerState
 from .oracle import OracleInstruction, compile_card_oracle
 from .search_filters import search_matches
@@ -81,6 +82,10 @@ from .ai_actions import (
     _cast_spec,
     _announces_any_offer,
 )
+
+# ``ai_targets`` imports this module, so its role chooser is reached late
+# (``engine/late_modules.py``) rather than by an import that would be a cycle.
+_late = LateModules(__package__)
 
 
 def choose_attack_target(game: Game, player_index: int) -> int:
@@ -164,9 +169,11 @@ def _announcement(
     permanent_index: "int | list[int] | None" = None,
     permanent_ids: "list[int] | None" = None,
     x_value: int | None = None,
+    stack_index: int | None = None,
 ) -> dict:
     """What a cast of the candidate being built announces when it names
-    *target* (and the permanent given), in `cast_announcement`'s own shape —
+    *target* (and the permanent given — and the spell, *stack_index*, for a
+    stack role), in `cast_announcement`'s own shape —
     so a rehearsal of a half-built candidate and of the finished `CastAction`
     are one question asked once.
 
@@ -188,6 +195,7 @@ def _announcement(
         hand_index=0,
         target_permanent_index=permanent_index,
         target_permanent_ids=permanent_ids,
+        target_stack_index=stack_index,
         optional_cost_payments=(
             dict(offers) if _announces_any_offer(card, offers) else None
         ),
@@ -545,8 +553,11 @@ def _tutor_score(game: Game, player_index: int, card: CardDefinition) -> float:
     target = _choose_target_for_spell(card, player_index, game, x_value)
     score = _score_cast(game, player_index, card, target, x_value)
 
+    # A land on the battlefield is a permanent, asked through layer 4
+    # (CR 613.1d) — a Clone that copied a Forest is one; a land in hand is a
+    # card, where the printed line is the whole answer.
     lands_available = sum(
-        1 for perm in game.controlled_by(player) if perm.card.primary_type == "land"
+        1 for perm in game.controlled_by(player) if perm.has_type("land")
     ) + sum(
         1 for hand_card in player.hand if hand_card.primary_type == "land"
     )
@@ -565,7 +576,7 @@ def _tutor_score(game: Game, player_index: int, card: CardDefinition) -> float:
                 player.mana_pool.get(symbol, 0) for symbol in _MANA_SYMBOLS
             ) + sum(
                 1 for permanent in game.controlled_by(player)
-                if permanent.card.primary_type == "land" and not permanent.tapped
+                if permanent.has_type("land") and not permanent.tapped
             )
             score -= min(5.0, max(0.0, float(card.cmc) - available))
 
@@ -715,7 +726,9 @@ def _score_spell_target(
     the standing's own units.
 
     A seat-only announcement — the engine picks the object for a spell that
-    names one, as it does for any cast that names none. A cast the engine
+    names one, as it does for any cast that names none — except for a spell
+    that names **roles**, which is announced with the cast path's own chain
+    (below). A cast the engine
     refuses there scores far below any it accepts, and one that changes
     nothing scores nothing.
 
@@ -729,10 +742,33 @@ def _score_spell_target(
         # A permanent: the seat is its own controller's unless an entry
         # trigger says otherwise, which the caller has already read.
         return 1.0 if target_index == caster_index else 0.0
-    rehearsal = _rehearse_announcement(
-        game, caster_index, card,
-        _announcement(card, target=target_index, caster=caster_index, x_value=x_value),
+    announcement = _announcement(
+        card, target=target_index, caster=caster_index, x_value=x_value,
     )
+    # **A roles spell is announced with its roles.** "Target player gains
+    # control of target permanent you control" (Donate), "…target creature
+    # and target land" (Fumarole): the engine fills no role a cast leaves
+    # unnamed (``engine/bare_announcements.py`` refuses a role announcement
+    # rather than default it, CR 601.2c), so the seat-only announcement above
+    # was refused for every one of them and each scored -SWING_CAP wherever it
+    # was weighed in the abstract — a library search, a scry, the top of a
+    # library — whatever it would have done. The chain is the cast path's own
+    # (``ai_targets._choose_role_targets``, the one ``ai_casts`` announces),
+    # so the cast weighed is the cast the seat would make. With no chain on
+    # this board (``()``) the seat-only announcement stands, and is refused
+    # as the cast would be. Not asked inside a rehearsal, where no rehearsal
+    # is run (``_rehearse_announcement``) and the chain would be wasted.
+    roles = (
+        None if rehearsing()
+        else _late.ai_targets._choose_role_targets(game, caster_index, card)
+    )
+    if roles:
+        seat, indices, ids, stack_index = roles
+        announcement = _announcement(
+            card, target=seat, caster=caster_index, permanent_index=indices,
+            permanent_ids=ids, x_value=x_value, stack_index=stack_index,
+        )
+    rehearsal = _rehearse_announcement(game, caster_index, card, announcement)
     if rehearsal is None:
         return 0.0
     if not rehearsal.accepted:
@@ -755,10 +791,12 @@ def _score_cast(
     caster = game.players[caster_index]
 
     if card.primary_type == "land":
+        # *card* is the land being weighed — a card, read as printed; the
+        # caster's untapped lands are permanents, read through layer 4.
         untapped_lands = sum(
             1
             for perm in game.controlled_by(caster)
-            if perm.card.primary_type == "land" and not perm.tapped
+            if perm.has_type("land") and not perm.tapped
         )
         return 1.0 if untapped_lands < 4 else 0.2
 

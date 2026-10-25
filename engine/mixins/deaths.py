@@ -80,7 +80,33 @@ class DeathsMixin:
 
     def _move_permanent_to_graveyard(self, player: PlayerState, permanent: Permanent) -> None:
         """:meth:`_permanent_to_graveyard`'s body."""
-        if "Aura" in permanent.card.type_line:
+        # **What it was as it left** (CR 603.10a): a dies-trigger looks back
+        # in time, so "a creature" / "a land" is asked of the permanent as it
+        # last existed on the battlefield, through the layers (CR 613.1d) —
+        # read once, before anything below moves the card or tears down what
+        # was attached to it, and handed to every reader of the death beneath.
+        #
+        # One reading where there were two spellings of it. The creature-death
+        # record and the "whenever a creature dies" triggers asked the
+        # *printed* word (`card.primary_type == "creature"`), while the death
+        # tallies three lines above them asked `is_creature`: so a Mishra's
+        # Factory, a Living Lands Forest or an Opalescence enchantment that
+        # died was counted by Scavenging Ghoul and seen by no Soul Net,
+        # Sengir Vampire or Krovikan Vampire — and a Clone that had copied a
+        # land (a land, not a creature, CR 707.2) fired every one of them.
+        #
+        # Asked live, and that is last-known information on both kinds of
+        # road: the sweeps move the permanent while it is still listed, and a
+        # permanent already taken off (``sacrifice_permanent``,
+        # ``_destroy_target_permanent``) carries every layer input it had —
+        # nothing recomputes an object off the battlefield. Driven on both by
+        # ``tests/regressions/test_kg_layers_what_died.py``.
+        was_land = permanent.has_type("land")
+        was_creature = permanent.is_creature
+        # An Aura's continuous effects end as it leaves (CR 611.3) — asked of
+        # what it *is*: a Licid that became an Aura is printed "Creature —
+        # Licid" (see ``remove_all_from_battlefield``'s twin of this read).
+        if permanent.has_type("aura"):
             self._remove_aura_effects(permanent)
         # CR 614 would-die replacements (Disintegrate's "exile it instead"):
         # a consumed event never reaches the graveyard, so no dies-triggers fire.
@@ -128,11 +154,11 @@ class DeathsMixin:
         # path forgotten. Asked through `has_type` (CR 613 layer 4), the same
         # reading `is_creature` below takes for the same reason: an animated
         # or type-changed land is still a land when it dies.
-        if permanent.has_type("land"):
+        if was_land:
             self._process_land_dies(self.players.index(player))
         # is_creature (not the printed type) so an animated land (Kormus Bell /
         # Living Lands) dying counts as a creature death (Scavenging Ghoul).
-        if permanent.is_creature:
+        if was_creature:
             self.creatures_died_this_turn = getattr(self, "creatures_died_this_turn", 0) + 1
             if not permanent.metadata.get("is_token", False):
                 self.nontoken_creatures_died_this_turn = (
@@ -298,7 +324,9 @@ class DeathsMixin:
         # above now does. Keeping both would fire the loss twice on every path
         # that reaches both, which is Creature Bond's bug in a different zone.
 
-        if permanent.card.primary_type == "creature":
+        # The same `was_creature` the tallies above read (CR 603.10a), not the
+        # printed word — see the top of this method.
+        if was_creature:
             # "…if a creature dealt damage by this creature this turn **died**"
             # (Krovikan Vampire). The ledger the intervening-if reads, written
             # here rather than at the fire site below it: this is the one place

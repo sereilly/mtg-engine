@@ -33,41 +33,15 @@ if TYPE_CHECKING:
 
 @effect_handler("balance_resources")
 def balance_resources(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    def _count(player, kind):
-        # What each permanent **is** (CR 613 layer 4) — the same two
-        # questions the prompt that takes the answer asks of each slot
-        # (``_resolve_balance``): a Mishra's Factory that is animated is a
-        # land *and* a creature, an Opalescence's enchantment is a creature.
-        return sum(
-            1 for perm in game.controlled_by(player)
-            if (perm.has_type("land") if kind == "land" else perm.is_creature)
-        )
-
-    min_lands = min(_count(p, "land") for p in game.players)
-    min_creatures = min(_count(p, "creature") for p in game.players)
-    min_hand = min(len(p.hand) for p in game.players)
-
-    # Build the per-player reduction plan. Each player chooses which of their own
-    # lands/creatures to sacrifice and which cards to discard down to these counts;
-    # defer to a pending choice (human is prompted, AI/headless auto-resolves).
-    plans: dict[int, dict] = {}
-    for idx, player in enumerate(game.players):
-        plan = {
-            "lands": max(0, _count(player, "land") - min_lands),
-            "creatures": max(0, _count(player, "creature") - min_creatures),
-            "hand": max(0, len(player.hand) - min_hand),
-        }
-        if plan["lands"] or plan["creatures"] or plan["hand"]:
-            plans[idx] = plan
-
-    if not plans:
+    """Balance: lands, then cards in hand, then creatures, each brought down
+    to the fewest any player has — three rounds, each counted as it starts
+    (the card's ruling), so a land creature sacrificed with the lands is not
+    counted again among the creatures. The rounds are
+    ``SacrificeChoicesMixin.begin_balance``'s; each player answers their own
+    (a human is prompted, an AI or headless seat takes the default)."""
+    if not game.begin_balance():
         game.log.append("Balance: nothing to normalize")
         return True, "resolved"
-
-    # Each player owes their own removals, so each gets their own queued choice.
-    for idx, plan in plans.items():
-        game.arm_pending_choice("balance", idx, plan=plan)
-    game.log.append("Balance: each player chooses what to sacrifice and discard")
     return True, "pending_balance"
 
 

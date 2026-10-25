@@ -1140,8 +1140,15 @@ class ControlSeamMixin:
         # left the land a Swamp. Idempotent, because ``_remove_aura_effects``
         # returns at once when nothing is attached, so the graveyard path's own
         # call stays harmless.
+        #
+        # Asked of what the permanent **is** (CR 613.1d), not of its printed
+        # line: a Licid "becomes an Aura enchantment" through its own ability
+        # (layer 4) on a card printed "Creature — Licid", so the printed read
+        # never tore one down — a Gliding Licid destroyed, bounced or exiled
+        # off its host left the host flying, and a Dominating Licid's creature
+        # stayed stolen for the rest of the game.
         for perm in removed:
-            if "Aura" in perm.card.type_line:
+            if perm.has_type("aura"):
                 self._remove_aura_effects(perm)
         for perm in removed:
             self.return_linked_exile(perm, "left the battlefield", LEAVES)

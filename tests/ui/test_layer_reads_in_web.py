@@ -21,11 +21,10 @@ guard was not the move here: ``engine/`` carries 70 such reads and draining them
 is a round of its own (SET_PLAYBOOK.md, Known gaps).
 
 A **ratchet per module**, not a ban, for the reason ``test_control_reads.py``'s
-positional ratchet is one: three reads survive, all in ``web/prompt_board.py``, and
-all three are faithful *mirrors* of engine resolvers that count by the printed
-type. Fixing the mirror alone would make the board offer a permanent the
-resolver then refuses, which is worse than the bug. The numbers may only go
-down.
+positional ratchet is one. The printed-read table is empty since round kg (the
+last reads were Balance's lists, which are the engine's own candidates now);
+two printed-card arguments survive in ``web/serialization.py``, each the
+printed half asked for on purpose. The numbers may only go down.
 """
 
 from __future__ import annotations
@@ -75,20 +74,17 @@ STACK_RECEIVERS = frozenset({"item", "stack_item", "target_item"})
 #: module -> how many printed reads survive in it, and why. A ratchet: it may
 #: only go down.
 PRINTED_READ_BASELINE: dict[str, int] = {
-    # Balance's land/creature lists (2). Both mirror engine resolvers that ask
-    # the same printed question — ``handlers/sacrifices.balance_resources``
-    # counts by ``primary_type``, and ``_resolve_balance`` and
-    # ``_default_balance`` validate by it. Under Living Lands or Kormus Bell
-    # those counts are wrong, and they are wrong in the *engine*: correcting
-    # only the prompt would offer a permanent the resolver rejects. Draining
-    # this entry means the engine's four sites and a rule for what happens when
-    # one permanent is both a land and a creature (Balance sacrifices lands,
-    # then creatures, as two separate steps).
+    # Empty since round kg. The last two were Balance's land and creature
+    # lists, asking ``card.primary_type`` while the engine counted through the
+    # layers — so an animated Mishra's Factory was offered only as a land and
+    # an Opalescence enchantment not at all. The lists are the engine's own
+    # ``Game.balance_candidates`` now, one round at a time (lands, then cards
+    # in hand, then creatures, each counted as it starts — the card's ruling),
+    # which is also what settled "a permanent that is both".
     #
     # It was 3 until Odyssey: the third was Kudzu's own land list, which went
     # with that card's hook — its reattachment is the general permanent choice
     # now, whose candidates are the engine's and read the layers.
-    "prompt_board.py": 2,
 }
 
 # A permanent's printed card handed whole to a card renderer. The same class
@@ -108,18 +104,11 @@ PRINTED_CARD_ARGUMENT_BASELINE: dict[str, int] = {
     # inside ``_serialize_permanent_summary``, which is the function that then
     # overrides every characteristic CR 613 can move.
     "serialization.py": 2,
-    # Balance's two lists and the forced-sacrifice list. The indices come from
-    # the engine (``_sacrifice_prompt``'s ``valid_indices``, which filters
-    # through ``subject_matches``); only the card *shown* for each is the
-    # printed one, so a Clone in a sacrifice list is drawn as a Clone and an
-    # animated land as a land. ``_serialize_permanent_summary`` is the fix and
-    # ``web/prompt_board.py`` cannot reach it: ``prompt_board`` sits *below*
-    # ``serialization`` in ``web/__init__.LAYERS``, which is why
-    # ``PromptContext`` injects a ``serialize_card`` callable at all. Draining
-    # this entry means a second injected callable that takes a permanent —
-    # ``PromptContext``'s own shape, which is another group's surface this
-    # wave.
-    "prompt_board.py": 3,
+    # (``prompt_board.py`` held three until round kg — Balance's two lists and
+    # the forced-sacrifice list, each drawing a permanent as its printed card.
+    # ``PromptContext.serialize_permanent`` is the second injected callable,
+    # ``_serialize_permanent_summary`` behind it, read through
+    # ``PromptContext.describe_permanent``.)
 }
 
 
