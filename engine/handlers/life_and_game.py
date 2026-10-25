@@ -396,7 +396,13 @@ def set_life_total(game: Game, instruction: OracleInstruction, context: OracleEx
         players = [
             p for p in (context.target,) if p in game.players and not p.lost
         ]
+    # "Each player's life total becomes **the number of creatures they
+    # control**." (Biorhythm.) One number per seat, through the channel's one
+    # reader — each seat's own board, counted as its total is set.
+    per_seat = instruction.payload.get(X_FROM_COUNT_PER_RECIPIENT)
     for player in players:
+        if per_seat is not None:
+            total = per_recipient_amount(game, context, per_seat, player)
         before = player.life
         if total > before:
             game._gain_life(player, total - before, context.card.name)

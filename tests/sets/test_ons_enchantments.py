@@ -347,4 +347,88 @@ def test_w1g3_improvised_armor_cycles_from_hand(set_pool):
 # ==== W1G13 ==========================================================
 # W1G13's tests go between this line and the "end W1G13" line.
 
+# --- W1G13: each player, and graveyards --------------------------------------
+from engine import Game as _w1g13_Game
+from engine.models import Permanent as _w1g13_Permanent
+from engine.models import PlayerState as _w1g13_PlayerState
+
+from tests.helpers import _mk_creature_card as _w1g13_creature
+from tests.helpers import resolve_stack as _w1g13_resolve_stack
+
+
+def _w1g13_table(set_pool, hands=None, *, interactive=(), seats=3):
+    ons = set_pool("ONS")
+    hands = hands or {}
+    names = ["Alice", "Bob", "Cara", "Dan"][:seats]
+    players = [
+        _w1g13_PlayerState(
+            name=name,
+            hand=[ons[card] if isinstance(card, str) else card for card in hands.get(seat, ())],
+            library=[ons["Plains"]] * 5,
+        )
+        for seat, name in enumerate(names)
+    ]
+    game = _w1g13_Game(players=players)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game.active_player_index = 0
+    return game
+
+
+def _w1g13_put(game, seat, card):
+    permanent = _w1g13_Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    game._sync_control()
+    return permanent
+
+
+def _w1g13_buried(count):
+    return [_w1g13_creature(f"Buried {n}", 2, 2) for n in range(count)]
+
+
+def test_w1g13_oversold_cemetery_returns_a_creature_card_at_four(set_pool):
+    """"…if you have four or more creature cards in your graveyard, you may
+    return target creature card from your graveyard to your hand." The target
+    is named as the trigger goes on the stack (CR 603.3d) — asked of an
+    interactive seat — and the land in the pile counts for nothing."""
+    game = _w1g13_table(set_pool, interactive={0})
+    alice = game.players[0]
+    _w1g13_put(game, 0, set_pool("ONS")["Oversold Cemetery"])
+    buried = _w1g13_buried(4)
+    alice.graveyard.extend([buried[0], set_pool("ONS")["Plains"], *buried[1:]])
+    game.resolve_upkeep(0)
+    target = game.pending_choice_of("trigger_target", 0)
+    assert target is not None
+    assert [entry["name"] for entry in target.data["targets"]] == [c.name for c in buried]
+    game.auto_resolve_pending_choices(kinds=("trigger_target",))
+    _w1g13_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    assert [c.name for c in alice.hand] == ["Buried 0"]
+    assert "Buried 0" not in [c.name for c in alice.graveyard]
+
+
+def test_w1g13_oversold_cemetery_intervening_if_both_times(set_pool):
+    """CR 603.4, and the 2022-12-08 ruling: three creature cards and a land is
+    no trigger at all; four that drop to three before it resolves is a trigger
+    that does nothing."""
+    game = _w1g13_table(set_pool)
+    alice = game.players[0]
+    _w1g13_put(game, 0, set_pool("ONS")["Oversold Cemetery"])
+    alice.graveyard.extend([*_w1g13_buried(3), set_pool("ONS")["Plains"]])
+    game.resolve_upkeep(0)
+    assert not game.stack and not game.pending_choices
+    assert not any("Oversold Cemetery" in line for line in game.log)
+
+    alice.graveyard.append(_w1g13_creature("Fourth", 2, 2))
+    game.interactive_seats = {0}
+    game.resolve_upkeep(0)
+    game.auto_resolve_pending_choices(kinds=("trigger_target",))
+    assert [item.card.name for item in game.stack] == ["Oversold Cemetery"]
+    alice.graveyard.pop()
+    _w1g13_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    assert alice.hand == []
+    assert any("condition is no longer true" in line for line in game.log)
+
 # ==== end W1G13 ======================================================

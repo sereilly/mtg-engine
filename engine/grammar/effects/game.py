@@ -489,11 +489,23 @@ def _parse_life_total_becomes(stream: TokenStream) -> ast.Statement | None:
     if not stream.accept_word("becomes", "become"):
         stream.reset(mark)
         return None
+    amount_mark = stream.mark()
     try:
         amount = parse_amount(stream)
     except GrammarError:
-        stream.reset(mark)
-        return None
+        stream.reset(amount_mark)
+        # "Each player's life total becomes **the number of creatures they
+        # control**." (Biorhythm.) A count rather than a printed number, read
+        # by the reader "equal to …" hands its definition to — the same words
+        # behind "becomes" as behind "equal to", so one reader answers both and
+        # the two cannot come to mean different counts. Late, for the cycle
+        # ``bounds`` breaks the same way: ``amounts`` reads noun phrases.
+        from ..amounts import _parse_equal_to_body
+
+        amount = _parse_equal_to_body(stream)
+        if amount is None:
+            stream.reset(mark)
+            return None
     return ast.SetLifeTotal(player, amount)
 
 

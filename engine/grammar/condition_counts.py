@@ -289,6 +289,32 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
         comparison = _parse_count_bound(stream)
         if stream.accept_word("life"):
             return ast.PlayerLifeIs(counted, comparison)
+        # "if **you have four or more creature cards in your graveyard**"
+        # (Oversold Cemetery). The pile count the "there are …" and the
+        # subject-position spellings below already read into ``CardsInZones``,
+        # with the seat as the subject and the noun phrase narrowed: one
+        # question in a third word order, so the same node, the same
+        # evaluator and the same CR 603.4 re-check. The noun parser reads the
+        # pile onto the filter ("in your graveyard"), and only the subject's own
+        # pile is admitted — a seat counting somebody else's graveyard is a
+        # different sentence, and the lowering counts the caster's piles alone.
+        # A plain "cards" is the zone count below, which this leaves alone.
+        if counted.kind == "you" and stream.peek_word() not in ("cards", "card"):
+            pile_mark = stream.mark()
+            try:
+                pile_filter = parse_object_filter(stream)
+            except GrammarError:
+                pile_filter = None
+            if (
+                pile_filter is not None
+                and pile_filter.is_card
+                and pile_filter.zone in ("graveyard", "library", "hand")
+                and pile_filter.zone_owner is not None
+                and pile_filter.zone_owner.kind == "you"
+                and isinstance(comparison.value, ast.Fixed)
+            ):
+                return ast.CardsInZones(pile_filter, comparison)
+            stream.reset(pile_mark)
         if stream.accept_word("cards", "card") and stream.accept_word("in"):
             if stream.accept_word("hand"):
                 return ast.ZoneHasCards(counted, "hand", comparison)

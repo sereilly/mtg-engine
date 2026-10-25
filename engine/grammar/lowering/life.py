@@ -718,6 +718,32 @@ def _lower_set_life_total(node: ast.SetLifeTotal) -> tuple[OracleInstruction, ..
     ``_seats``' ante table: that table is the ante handler's vocabulary too, and
     no ante sentence names a chosen seat.
     """
+    if isinstance(node.amount, ast.CountOf):
+        # "**Each player's** life total becomes the number of creatures **they**
+        # control." (Biorhythm.) One number per seat, counted on that seat's
+        # own battlefield: the per-recipient channel the damage sweeps and the
+        # life loss already carry it on, through the floor's one reading of
+        # "they" (``seat_scoped_count_spec``). Only under the seat-set subject
+        # whose handler loops — a count naming no recipient's seat, or a
+        # recipient that is one seat, is a sentence nothing here was taught,
+        # and it refuses rather than counting somebody's board for everybody.
+        per_seat = seat_scoped_count_spec(node.amount.filter, node)
+        if per_seat is None or node.player.kind != "each_player":
+            raise LoweringError(
+                "a life total set to a count is counted per seat over each "
+                "player",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "set_life_total", "",
+                {
+                    "recipient": "each_player",
+                    "amount": "x",
+                    X_FROM_COUNT_PER_RECIPIENT: per_seat,
+                },
+            ),
+        )
     if node.player.kind in ("target_player", "target_opponent"):
         payload: dict[str, object] = {
             "recipient": "target", "amount": _amount_payload(node.amount),

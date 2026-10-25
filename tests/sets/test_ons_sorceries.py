@@ -209,4 +209,71 @@ def test_w1g3_a_plain_cycling_sorcery_pays_its_cost_and_draws(set_pool, name):
 # ==== W1G13 ==========================================================
 # W1G13's tests go between this line and the "end W1G13" line.
 
+# --- W1G13: each player, and graveyards --------------------------------------
+#
+# Driven at three seats wherever "each player" and "each opponent" could read
+# differently from a duel: who is asked, in what order, and what each sees.
+from engine import Game as _w1g13_Game
+from engine.models import Permanent as _w1g13_Permanent
+from engine.models import PlayerState as _w1g13_PlayerState
+
+from tests.helpers import _mk_creature_card as _w1g13_creature
+from tests.helpers import resolve_stack as _w1g13_resolve_stack
+
+
+def _w1g13_table(set_pool, hands=None, *, interactive=(), seats=3):
+    """A *seats*-player table, Alice active, each with a five-Plains library."""
+    ons = set_pool("ONS")
+    hands = hands or {}
+    names = ["Alice", "Bob", "Cara", "Dan"][:seats]
+    players = [
+        _w1g13_PlayerState(
+            name=name,
+            hand=[ons[card] if isinstance(card, str) else card for card in hands.get(seat, ())],
+            library=[ons["Plains"]] * 5,
+        )
+        for seat, name in enumerate(names)
+    ]
+    game = _w1g13_Game(players=players)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game.active_player_index = 0
+    return game
+
+
+def _w1g13_put(game, seat, card):
+    permanent = _w1g13_Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    game._sync_control()
+    return permanent
+
+
+def test_w1g13_biorhythm_sets_each_life_total_to_that_seats_creatures(set_pool):
+    """"Each player's life total becomes the number of creatures they control."
+    Counted per seat on its own board: a loss for the seat above its count, a
+    *gain* (CR 119.5) for the one below it — and the seat with no creatures
+    goes to 0 and loses at the next state check (the 2004-10-04 ruling)."""
+    game = _w1g13_table(set_pool, {0: ["Biorhythm"]})
+    alice, bob, cara = game.players
+    for name in ("A1", "A2"):
+        _w1g13_put(game, 0, _w1g13_creature(name, 2, 2))
+    for name in ("B1", "B2", "B3"):
+        _w1g13_put(game, 1, _w1g13_creature(name, 2, 2))
+    alice.life = 1
+    gained: list = []
+    original = game._gain_life
+
+    def _spy(player, amount, *args, **kwargs):
+        gained.append((player.name, amount))
+        return original(player, amount, *args, **kwargs)
+
+    game._gain_life = _spy
+    assert game.cast_from_hand(0, "Biorhythm").supported
+    _w1g13_resolve_stack(game)
+    assert (alice.life, bob.life, cara.life) == (2, 3, 0)
+    assert gained == [("Alice", 1)], "a total set higher is a life gain"
+    game.check_state_based_actions()
+    assert cara.lost and not alice.lost and not bob.lost
+
 # ==== end W1G13 ======================================================
