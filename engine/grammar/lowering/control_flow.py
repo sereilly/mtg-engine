@@ -51,6 +51,8 @@ from ._collapses import (event_seat_performs, offered_seat_performs,
                          _each_player_optional_graveyard_exile,
                          _each_player_optional_pay_mana,
                          _each_player_optional_tap,
+                         _each_seat_optional_hand_reveal,
+                         _each_seat_optional_put_from_hand,
                          _referent_seat_optional_draw)
 from ._common import _amount_payload, _is_source, variable_mana_payload
 from ._events import (CAST_SPELL_EVENTS, EVENT_SUBJECT_CONTROLLER,
@@ -736,6 +738,8 @@ def _lower_may(
         _each_player_optional_pay_mana,
         _each_player_optional_draw,
         _each_player_optional_graveyard_exile,
+        _each_seat_optional_hand_reveal,
+        _each_seat_optional_put_from_hand,
         _each_player_optional_tap,
         _may_assign_as_unblocked_static,
     ):

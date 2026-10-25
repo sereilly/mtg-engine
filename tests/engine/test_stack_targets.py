@@ -739,6 +739,13 @@ _UNANNOUNCED_TRIGGER_TARGETS = frozenset({
     # controls**" — Caustic Wasps' shape. Driven through a real combat damage
     # step it targets a creature of the damaged player's and kills it.
     "Spark Mage#0",
+    # Onslaught, W1G13. "…that creature's controller may have target creature
+    # **of their choice** get -3/-3" (Death Match) — Pandemonium's chooser on a
+    # permanent slot: the seat that announces is the entering creature's
+    # controller, which only the entry event freezes. Driven through a real
+    # entry (tests/sets/test_ons_enchantments.py, W1G13) that seat is asked as
+    # the ability goes on the stack, and its answer is the target.
+    "Death Match#0",
     # Odyssey, W2G4. "…you may destroy target permanent **that opponent
     # controls**" — the seat is whoever's spell or ability did the destroying,
     # and only the destroy seam's event names it

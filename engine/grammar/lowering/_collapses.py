@@ -28,11 +28,13 @@ from __future__ import annotations
 
 import dataclasses
 
-from ...oracle_types import COUNTERED_SPELL_CONTROLLER, OracleInstruction
-from ...subject_filters import untestable_filter_keys
+from ...oracle_types import (COUNTERED_SPELL_CONTROLLER, REVEALED_BY_SEAT,
+                             REVEALED_HAND_CARDS_BY_SEAT, OracleInstruction)
+from ...subject_filters import card_only_filter, untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
 from ._common import _filter_payload, _restrictions_beyond
+from ._filters import _PAYLOAD_HONOURED_FILTER_FIELDS
 
 
 #: The actors that name a *set* of seats, spelled here as the lowering sees them.
@@ -463,6 +465,176 @@ def _each_player_optional_graveyard_exile(
         # "cards" names any card, said out loud.
         pile["any_card"] = True
     return (OracleInstruction("exile_cards_from_graveyard", "", pile),)
+
+
+#: The scratchpad key the each-seat hand pick records ``{seat: [cards]}``
+#: under for the put behind it — Stronghold Gambit's spelling of the same
+#: per-seat pick, so one record has one name.
+_CHOSEN_HAND_CARDS_BY_SEAT = "chosen_hand_cards_by_seat"
+
+
+def _their_hand_card_filter(filt: "ast.ObjectFilter", node, what: str) -> dict:
+    """The card filter an each-seat pick out of "their hand" tests, or a
+    refusal naming the word it cannot honour.
+
+    ``to_payload`` emits nothing for a relative narrowing, so the printed
+    phrase is held to what a card in a hand can answer before the payload is
+    built — the reveal lowering's own gate, for its reason: a pick offering a
+    wider set than the card prints is a card that cheats."""
+    leftover = _restrictions_beyond(
+        filt, _PAYLOAD_HONOURED_FILTER_FIELDS | {"is_card", "zone", "zone_owner"}
+    )
+    if leftover:
+        raise LoweringError(f"the {what} does not honour {leftover[0]!r}", node=node)
+    payload = filt.to_payload()
+    payload.pop("zone", None)
+    payload.pop("zone_owner", None)
+    described = card_only_filter(payload)
+    if described is None:
+        raise LoweringError(
+            f"the {what} cannot test this restriction on a card in a hand",
+            node=node,
+        )
+    return described
+
+
+def _is_plain_each_seat_offer(node: ast.May) -> bool:
+    """An unconditional offer to a set of seats with nothing beside its action
+    — the shape every collapse in this module reads."""
+    return (
+        node.cost is None
+        and node.then is None
+        and node.otherwise is None
+        and node.reflexive is None
+        and node.starting_with is None
+        and isinstance(node.actor, ast.PlayerRef)
+        and node.actor.kind in _EACH_SEAT_ACTORS
+    )
+
+
+def _each_seat_optional_hand_reveal(
+    node: ast.May,
+) -> tuple[OracleInstruction, ...] | None:
+    """"**Each player may** reveal any number of creature cards from their
+    hand." (Kamahl's Summons.)
+
+    :func:`_each_player_optional_discard`'s shape one verb over, collapsed for
+    its two reasons: "any number" already lets a seat reveal none, so the "may"
+    adds no answer the hand pick does not have; and the sentence behind it
+    ("…for each card **they** revealed this way") has to run after every seat
+    has answered, which the pick waits for (it suspends) and an offer per seat
+    does not. The seats are asked one at a time in APNAP order
+    (``resumption.ask_in_turn_order``) — a reveal is public, so a later seat
+    chooses knowing what an earlier one showed (CR 101.4b) — and each answer is
+    recorded per seat (``REVEALED_BY_SEAT``, ``REVEALED_HAND_CARDS_BY_SEAT``).
+
+    Only "their" hand and only "any number of": a printed count is a second
+    shape the record does not distinguish, and refuses through the ordinary
+    offer.
+    """
+    action = node.action
+    if not (
+        _is_plain_each_seat_offer(node)
+        and isinstance(action, ast.RevealCardsFromHand)
+        and action.count is None
+        and getattr(action.filter.zone_owner, "kind", None) == "owner"
+    ):
+        return None
+    return (
+        OracleInstruction(
+            "reveal_cards_from_hand", "",
+            {
+                "card_filter": _their_hand_card_filter(
+                    action.filter, node, "each-seat reveal"
+                ),
+                "any_number": True,
+                "reveal": True,
+                "result_key": REVEALED_HAND_CARDS_BY_SEAT,
+                "count_key": REVEALED_BY_SEAT,
+                "actor": node.actor.kind,
+            },
+        ),
+    )
+
+
+def _each_seat_optional_put_from_hand(
+    node: ast.May,
+) -> tuple[OracleInstruction, ...] | None:
+    """"When this creature enters, **each opponent may** put any number of
+    artifact, creature, enchantment, and/or land cards from their hand onto
+    the battlefield." (Tempting Wurm.)
+
+    "Any number" already lets a seat put none, so the offer and the pick are
+    one decision — collapsed for :func:`_each_player_optional_discard`'s
+    reason. And the cards enter **together**: each seat chooses in APNAP order
+    (CR 101.4; the picks may stay face down, CR 101.4a) and then the actions
+    happen simultaneously, which is two steps — Stronghold Gambit's per-seat
+    hand pick (``choose_cards_in_hand``, recorded per seat) and its put of the
+    recorded cards (``put_chosen_hand_cards_onto_battlefield``), each card
+    under its owner's control. An Aura among them is attached as it enters to
+    something already on the battlefield (CR 303.4f), or stays in hand.
+
+    Only the bare entry: a printed "tapped", a controller, a gained ability or
+    an attachment is a rider the put does not carry, and the ordinary offer
+    refuses it by name.
+    """
+    action = node.action
+    if not (
+        _is_plain_each_seat_offer(node)
+        and isinstance(action, ast.PutOntoBattlefield)
+        and isinstance(action.target, ast.TargetSpec)
+    ):
+        return None
+    target = action.target
+    filt = target.filter
+    if (
+        target.targeted
+        or target.quantifier != "any_number"
+        or filt.zone != "hand"
+        or not filt.is_card
+        or getattr(filt.zone_owner, "kind", None) != "owner"
+    ):
+        return None
+    if (
+        action.under_your_control
+        or action.under_owners_control
+        or action.gains
+        or action.sacrifice_when_control_lost
+        or action.attached_to_source
+        or action.attached_to_chosen is not None
+        or action.entering_colors
+        or action.entering_subtypes
+        or getattr(action, "tapped", False)
+        or getattr(action, "actor", None) is not None
+    ):
+        raise LoweringError(
+            "the each-seat put from hand carries no entry rider", node=node
+        )
+    described = _their_hand_card_filter(filt, node, "each-seat put from hand")
+    if not filt.card_types:
+        raise LoweringError(
+            "the each-seat put from hand reads printed card types", node=node
+        )
+    return (
+        OracleInstruction("sequence", "", {"steps": (
+            OracleInstruction(
+                "choose_cards_in_hand", "",
+                {
+                    "card_filter": described,
+                    "any_number": True,
+                    "result_key": _CHOSEN_HAND_CARDS_BY_SEAT,
+                    "actor": node.actor.kind,
+                    # CR 101.4a: a card chosen out of a hand may stay face
+                    # down as it is chosen; it is public once it enters.
+                    "hidden": True,
+                },
+            ),
+            OracleInstruction(
+                "put_chosen_hand_cards_onto_battlefield", "",
+                {"cards_from": _CHOSEN_HAND_CARDS_BY_SEAT, "card_filter": described},
+            ),
+        )}),
+    )
 
 
 def _each_player_optional_tap(

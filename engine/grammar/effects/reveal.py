@@ -881,11 +881,16 @@ def parse_reveal_any_number_from_hand(
     except GrammarError:
         stream.reset(mark)
         return None
+    # "**Each player may** reveal any number of creature cards from **their**
+    # hand." (Kamahl's Summons.) The possessive of the seat an offer is made
+    # to, kept on the filter: only the each-seat offer's collapse
+    # (``lowering/_collapses``) reads it, and the plain lowering refuses it
+    # — a bare imperative has nobody for "their" to be.
     if not (
         filt.is_card
         and filt.zone == "hand"
         and filt.zone_owner is not None
-        and filt.zone_owner.kind == "you"
+        and filt.zone_owner.kind in ("you", "owner")
     ):
         stream.reset(mark)
         return None

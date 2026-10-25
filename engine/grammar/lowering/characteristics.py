@@ -46,8 +46,8 @@ from ._amounts import (
 )
 from ._counted_pumps import (_TARGET_PUMP_DURATIONS, lower_counted_pump,
                              _x_definition_spec)
-from ._events import (binds_block_pair, _EVENT_SUBJECT_OBJECTS,
-                      ROLE_NAMES_EVENT_SUBJECT)
+from ._events import (binds_block_pair, _EVENT_SUBJECT_CONTROLLERS,
+                      _EVENT_SUBJECT_OBJECTS, ROLE_NAMES_EVENT_SUBJECT)
 from ._common import (
     _describe_several_targets,
     _describe_targets,
@@ -423,7 +423,39 @@ def _lower_pump(
         assert isinstance(node.subject, ast.TargetSpec)
         payload: dict[str, object] = {"power": power, "toughness": toughness}
         payload["blocking_only"] = bool(node.subject.filter.blocking)
-        _describe_targets(payload, node.subject)
+        if node.subject.filter.their_choice:
+            # "…that creature's controller may have **target creature of their
+            # choice** get -3/-3 until end of turn." (Death Match.) The target
+            # is announced by a seat that is not the ability's controller —
+            # CR 603.3d's "unless the ability's effect states otherwise", and
+            # this sentence states it. The only player "their" can name is the
+            # one the sentence already named, the firing object's controller,
+            # so the chooser is the same frozen seat the damage family's "any
+            # target of their choice" reads (``_bites``, Pandemonium), lifted
+            # off the filter and onto the description the trigger's target
+            # picker asks (``trigger_targets._trigger_chooser_seat``).
+            #
+            # Refused where no event froze that seat, rather than dropped: a
+            # dropped chooser is the ability's controller aiming the -3/-3 —
+            # the opposite of what the words print, and silent.
+            if event not in _EVENT_SUBJECT_CONTROLLERS:
+                raise LoweringError(
+                    "'of their choice' names no player this target can be "
+                    "announced by",
+                    node=node,
+                )
+            _describe_targets(
+                payload, node.subject,
+                carried_separately=frozenset({"their_choice"}),
+            )
+            described = dict(payload["targets"])
+            filt = dict(described.get("filter") or {})
+            filt.pop("their_choice", None)
+            described["filter"] = filt
+            described["chooser"] = "event_subject_controller"
+            payload["targets"] = described
+        else:
+            _describe_targets(payload, node.subject)
         if node.duration.kind == "while_source_tapped":
             # Its own kind rather than a flag on the until-end-of-turn one:
             # that handler writes a delta the cleanup step subtracts, and this

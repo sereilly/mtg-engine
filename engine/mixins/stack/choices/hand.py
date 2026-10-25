@@ -1095,9 +1095,11 @@ class HandChoicesMixin:
         # The card objects, not their hand slots: the step that reads this
         # record moves cards out of the hand, and an index stops naming the
         # same card the moment one leaves.
-        if payload.get("actor") == "each_player":
+        per_seat = payload.get("actor") in ("each_player", "each_opponent")
+        if per_seat:
             # "**Each player** chooses a card in their hand." (Stronghold
-            # Gambit.) One entry per seat, seeded by the handler — a flat list
+            # Gambit.) "**Each opponent** may put any number of …" (Tempting
+            # Wurm.) One entry per seat, seeded by the handler — a flat list
             # would be overwritten by whichever seat answered last.
             context.results.setdefault(key, {})[choice.player_index] = list(cards)
         else:
@@ -1110,7 +1112,13 @@ class HandChoicesMixin:
         # absent key is a back-reference with no producer — a different thing
         # from a reveal that showed nothing.
         count_key = payload.get("count_key")
-        if count_key:
+        if count_key and per_seat:
+            # "…for each card **they** revealed this way" (Kamahl's Summons):
+            # each seat's own number, beside every other seat's.
+            context.results.setdefault(str(count_key), {})[
+                choice.player_index
+            ] = len(cards)
+        elif count_key:
             context.results[str(count_key)] = len(cards)
         # …and the making-public itself (CR 701.20a), through the one feed the
         # web layer reads. Keyed on the printed verb rather than on the count

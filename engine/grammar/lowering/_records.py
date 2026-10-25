@@ -74,7 +74,8 @@ from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                              DISCARDED_INTO_GRAVEYARD, DISCARDED_THIS_WAY,
                              PER_OBJECT_SEAT_RECORDS, PUT_INTO_HAND_THIS_WAY,
                              REVEALED_HAND_CARDS,
-                             REVEALED_THIS_WAY, REVEALED_TOP_CARDS_BY_SEAT,
+                             REVEALED_BY_SEAT, REVEALED_THIS_WAY,
+                             REVEALED_TOP_CARDS_BY_SEAT,
                              SACRIFICED_CARDS_BY_SEAT, SACRIFICED_COUNT,
                              SEARCHED_PERMANENTS, SECRET_NUMBERS_BY_SEAT,
                              TAPPED_THIS_WAY,
@@ -878,6 +879,13 @@ _PRODUCES_FOR_PAYLOAD: dict[str, tuple[str, object, str]] = {
     # cards** onto the battlefield under their owners' control" — a sentence
     # that would compile clean and put nothing.
     "reveal_top_of_library": ("whose", "each_player", REVEALED_TOP_CARDS_BY_SEAT),
+    # "**Each player** may reveal any number of creature cards from their hand.
+    # Then each player creates a 2/2 green Bear creature token **for each card
+    # they revealed this way**." (Kamahl's Summons.) The per-seat count only
+    # the each-seat reveal writes — see ``oracle_types.REVEALED_BY_SEAT``; a
+    # reveal out of the caster's own hand records one number, and declaring
+    # the map flat would admit "for each card they revealed" behind it.
+    "reveal_cards_from_hand": ("actor", "each_player", REVEALED_BY_SEAT),
     # "Counter target spell **or ability** … If a permanent's ability is
     # countered this way, destroy that permanent." (Teferi's Response.) The
     # union counter writes the record ``counter_stack_ability`` writes for

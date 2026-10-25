@@ -23,6 +23,7 @@ import random
 from typing import TYPE_CHECKING
 
 from ..models import Permanent
+from ..resumption import ask_in_turn_order, run_resumable
 from ..oracle_types import (HAND_CARDS_TO_LIBRARY, REVEALED_HAND_CARDS,
                             REVEALED_THIS_WAY)
 from ..search_filters import card_has_type
@@ -410,22 +411,8 @@ def choose_cards_in_hand(game: Game, instruction: OracleInstruction, context: Or
     for the last of them (the kind suspends).
     """
     payload = instruction.payload
-    if payload.get("actor") == "each_player":
-        from .offers import _offered_seats
-
-        result_key = str(payload.get("result_key") or "chosen_hand_cards")
-        by_seat: dict[int, list] = {}
-        context.results[result_key] = by_seat
-        for seat in _offered_seats(game, "each_player", context):
-            player = game.players[seat]
-            by_seat[seat] = []
-            if not chosen_hand_card_candidates(game, payload, player):
-                game.log.append(
-                    f"{context.card.name}: {player.name} has no card to choose"
-                )
-                continue
-            game.arm_choose_cards_in_hand(seat, payload, context)
-        return True, "resolved"
+    if payload.get("actor") in EACH_SEAT_HAND_PICKERS:
+        return _ask_each_seat_to_pick_from_hand(game, payload, context)
     player = context.caster
     seat = game.players.index(player)
     candidates = chosen_hand_card_candidates(game, payload, player)
@@ -437,6 +424,62 @@ def choose_cards_in_hand(game: Game, instruction: OracleInstruction, context: Or
         )
         return True, "resolved"
     game.arm_choose_cards_in_hand(seat, payload, context)
+    return True, "resolved"
+
+
+#: The printed subjects a pick out of a hand is asked of **seat by seat**.
+EACH_SEAT_HAND_PICKERS = ("each_player", "each_opponent")
+
+
+def _ask_each_seat_to_pick_from_hand(
+    game: Game, payload: dict, context: OracleExecutionContext,
+) -> tuple[bool, str]:
+    """"**Each player** chooses a card in their hand." (Stronghold Gambit.)
+    "**Each player** may reveal any number of creature cards from their hand."
+    (Kamahl's Summons.) "**Each opponent** may put any number of … cards from
+    their hand onto the battlefield." (Tempting Wurm.)
+
+    One ``choose_cards_in_hand`` prompt per living seat the subject names, out
+    of that seat's own hand, asked **one seat at a time in APNAP order**
+    (CR 101.4, ``resumption.ask_in_turn_order``): the next seat's prompt is
+    armed once the one before has answered, so a reveal — public the moment it
+    is made — is known to every seat that chooses after it (CR 101.4b), and a
+    face-down pick (CR 101.4a) simply stays face down. Recorded per seat
+    (``{seat: [cards]}``, and ``{seat: count}`` under the count key) because
+    every answer is its own; the resolution waits for the last of them (the
+    kind suspends), and the step behind acts on every seat's at once.
+
+    A seat with nothing eligible is recorded as having chosen nothing and is
+    not asked: "any number" of nothing is no decision, and a printed count of
+    nothing is CR 608.2's "as much as possible".
+    """
+    from .offers import _offered_seats
+
+    result_key = str(payload.get("result_key") or "chosen_hand_cards")
+    count_key = payload.get("count_key")
+    by_seat: dict[int, list] = {}
+    context.results[result_key] = by_seat
+    counts: dict[int, int] | None = None
+    if count_key:
+        counts = {}
+        context.results[str(count_key)] = counts
+    seats = set(_offered_seats(game, str(payload.get("actor")), context))
+
+    def ask(seat: int) -> None:
+        if seat not in seats:
+            return
+        player = game.players[seat]
+        by_seat[seat] = []
+        if counts is not None:
+            counts[seat] = 0
+        if not chosen_hand_card_candidates(game, payload, player):
+            game.log.append(
+                f"{context.card.name}: {player.name} has no card to choose"
+            )
+            return
+        game.arm_choose_cards_in_hand(seat, payload, context)
+
+    ask_in_turn_order(game, ask)
     return True, "resolved"
 
 
@@ -541,7 +584,77 @@ def put_chosen_hand_cards_onto_battlefield(game: Game, instruction: OracleInstru
     if not entrants:
         game.log.append(f"{context.card.name}: no revealed card enters")
         return True, "resolved"
-    for seat, card in entrants:
+    # "…put any number of artifact, creature, **enchantment**, and/or land
+    # cards from their hand onto the battlefield." (Tempting Wurm.) An Aura
+    # put onto the battlefield by an effect that names no host is attached as
+    # it enters to something its controller chooses (CR 303.4f) — only among
+    # what is **already** there, since the cards enter together — and with
+    # nothing it could enchant it stays in the hand (CR 303.4g). The hosts are
+    # settled before anything moves, through the reanimation family's one
+    # host list and its one policy, and an interactive seat with a choice is
+    # asked (``permanent_choice``, suspending) — the arrangement
+    # ``reanimation.return_all_cards_from_graveyard`` keeps for Replenish.
+    from ..aura_attachment import is_aura_card, returning_aura_hosts
+
+    already_there = list(game.all_permanents())
+    hosts: dict[int, object] = {}
+    asks: list[tuple[int, int, object, list]] = []
+    for position, (seat, card) in enumerate(entrants):
+        if not is_aura_card(card):
+            continue
+        legal = returning_aura_hosts(game, seat, card, already_there)
+        if not legal:
+            hosts[position] = None
+            continue
+        if len(legal) > 1 and seat in game.interactive_seats:
+            asks.append((position, seat, card, legal))
+            continue
+        from ..ai_targets import choose_returning_aura_host
+
+        hosts[position] = (
+            legal[0] if len(legal) == 1
+            else choose_returning_aura_host(game, seat, card, legal)
+        )
+
+    def step(ask) -> None:
+        if ask is not None:
+            position, seat, card, legal = ask
+            game.arm_permanent_choice(
+                seat,
+                card_name=context.card.name,
+                prompt=(
+                    f"Choose what {card.name} enchants as it enters the "
+                    "battlefield."
+                ),
+                result_key=f"entering_aura_host:{position}",
+                payload={
+                    "legal_host_for_card": card,
+                    "host_controller": seat,
+                    "default_prefers": "returning_aura_host",
+                },
+                context=context,
+                candidates=legal,
+            )
+            return
+        for position, _seat, _card, _legal in asks:
+            chosen = context.results.get(f"entering_aura_host:{position}")
+            hosts[position] = (
+                game.permanent_by_id(chosen) if isinstance(chosen, int) else None
+            )
+        _put_entrants(game, context, entrants, hosts)
+
+    # One step per question and a last one that moves everything — the loop is
+    # the last thing this handler does (``engine/resumption.py``).
+    run_resumable(game, [*asks, None], step)
+    return True, "resolved"
+
+
+def _put_entrants(game, context, entrants, hosts) -> None:
+    """Put every chosen card onto the battlefield under its owner, each Aura
+    attached to its host (see ``put_chosen_hand_cards_onto_battlefield``)."""
+    from ..aura_attachment import attach_aura, enchant_card_refusal
+
+    for position, (seat, card) in enumerate(entrants):
         owner = game.players[seat]
         if not any(card_has_type(card, kind) for kind in _PERMANENT_CARD_TYPES):
             # CR 400.4a: "If an instant or sorcery card would enter the
@@ -553,13 +666,31 @@ def put_chosen_hand_cards_onto_battlefield(game: Game, instruction: OracleInstru
                 f"{owner.name}'s hand (400.4a)"
             )
             continue
+        host = None
+        if position in hosts:
+            host = hosts[position]
+            if host is None or not game.is_on_battlefield(host) or (
+                enchant_card_refusal(game, card, seat, host) is not None
+            ):
+                game.log.append(
+                    f"{card.name} has nothing it could enchant and stays in "
+                    f"{owner.name}'s hand (303.4g)"
+                )
+                continue
         if not game.take_card_from_hand(owner, card):
             continue
-        game._put_permanent_onto_battlefield(seat, Permanent(card=card), None)
+        permanent = Permanent(card=card)
+        game._put_permanent_onto_battlefield(seat, permanent, None)
+        if host is not None:
+            attach_aura(permanent, host)
+            game.log.append(
+                f"{owner.name} puts {card.name} onto the battlefield attached "
+                f"to {host.card.name} ({context.card.name})"
+            )
+            continue
         game.log.append(
             f"{owner.name} puts {card.name} onto the battlefield ({context.card.name})"
         )
-    return True, "resolved"
 
 
 @effect_handler("reveal_cards_from_hand")
@@ -585,6 +716,12 @@ def reveal_cards_from_hand(game: Game, instruction: OracleInstruction, context: 
     back-reference with no producer — which is a refusal, not a zero.
     """
     payload = instruction.payload
+    if payload.get("actor") in EACH_SEAT_HAND_PICKERS:
+        # "**Each player** may reveal any number of creature cards from their
+        # hand." (Kamahl's Summons.) The same pick asked of every seat in turn
+        # order, each recording its own reveal — see
+        # :func:`_ask_each_seat_to_pick_from_hand`.
+        return _ask_each_seat_to_pick_from_hand(game, payload, context)
     player = context.caster
     seat = game.players.index(player)
     candidates = chosen_hand_card_candidates(game, payload, player)

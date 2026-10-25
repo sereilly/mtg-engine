@@ -231,6 +231,18 @@ REVEALED_HAND_CARDS = "revealed_hand_cards"
 # amount reads an empty record.
 REVEALED_THIS_WAY = "revealed_this_way"
 
+#: "**Each player** may reveal any number of creature cards from their hand.
+#: Then each player creates a 2/2 green Bear creature token **for each card
+#: they revealed this way**." (Kamahl's Summons.) The per-seat twins of
+#: ``REVEALED_THIS_WAY`` and ``REVEALED_HAND_CARDS`` — ``{seat: count}`` and
+#: ``{seat: [cards]}`` — for ``DISCARDED_BY_SEAT``'s reason: a single number is
+#: whichever seat answered last, and the sentence behind asks every seat its
+#: own. Written as each seat's reveal is answered
+#: (``choices/hand._record_chosen_cards_in_hand``), read by the token maker's
+#: ``seat_record`` count.
+REVEALED_BY_SEAT = "revealed_by_seat"
+REVEALED_HAND_CARDS_BY_SEAT = "revealed_hand_cards_by_seat"
+
 # "**Each player reveals the top card of their library.** If all cards revealed
 # this way are creature cards, put those cards onto the battlefield under their
 # owners' control." (Game Preserve.) One card per seat, kept as ``{seat: card}``

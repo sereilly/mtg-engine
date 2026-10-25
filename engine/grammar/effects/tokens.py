@@ -615,6 +615,20 @@ def _finish_create_token(
     # with "counter on that creature" left over — which is unconsumed text and
     # takes the whole line down. This reader declines with the cursor unmoved,
     # so asking it first costs the board reading nothing.
+    # "Then each player creates a 2/2 green Bear creature token **for each card
+    # they revealed this way**." (Kamahl's Summons.) One number per creating
+    # seat off a record an earlier step wrote, which *is* the count rather than
+    # a multiplier over a set — so it replaces the "a" in front, as "a number of
+    # … equal to the amount of mana they paid this way" (Liege of the Hollows)
+    # does, and travels on the same ``seat_record`` count. Only over the bare
+    # "a": "two tokens for each …" is a product no count node carries.
+    from ..records import accept_for_each_card_they_did_this_way
+
+    per_seat = accept_for_each_card_they_did_this_way(stream)
+    if per_seat is not None:
+        if not (isinstance(count, ast.Fixed) and count.value == 1) or counted_after:
+            raise stream.error("a per-seat token count multiplies one token")
+        count = per_seat
     per_counter = _parse_per_each_counters(stream)
     per_each, per_each_beyond_first = (
         (None, False) if per_counter is not None

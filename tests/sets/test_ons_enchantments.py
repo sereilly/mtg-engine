@@ -431,4 +431,61 @@ def test_w1g13_oversold_cemetery_intervening_if_both_times(set_pool):
     assert alice.hand == []
     assert any("condition is no longer true" in line for line in game.log)
 
+
+def _w1g13_quiet_put(game, seat, card):
+    """Onto the battlefield without an entry event, so a watcher already in
+    play does not trigger on the table being set."""
+    permanent = _w1g13_Permanent(card=card)
+    game.players[seat].battlefield.append(permanent)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    game._sync_control()
+    return permanent
+
+
+def test_w1g13_death_match_the_entering_creatures_controller_aims_it(set_pool):
+    """"Whenever a creature enters, that creature's controller may have target
+    creature of their choice get -3/-3 until end of turn." Alice controls the
+    enchantment, Bob's creature enters: Bob is asked for the target (CR 603.3d,
+    "unless the effect states otherwise" — it does) and Bob is the one asked
+    "may?", and the -3/-3 lands on the creature Bob named."""
+    game = _w1g13_table(set_pool, {1: [_w1g13_creature("Bob's Giant", 3, 3)]},
+                        interactive={0, 1})
+    _w1g13_quiet_put(game, 0, set_pool("ONS")["Death Match"])
+    alices = _w1g13_quiet_put(game, 0, _w1g13_creature("Alice's Bear", 3, 3))
+    caras = _w1g13_quiet_put(game, 2, _w1g13_creature("Cara's Bear", 2, 2))
+    game.active_player_index = 1
+    assert game.queue_from_hand(1, "Bob's Giant").supported
+    game.resolve_top_of_stack()
+    assert game.pending_choice_of("trigger_target", 0) is None
+    asked = game.pending_choice_of("trigger_target", 1)
+    assert asked is not None
+    assert {entry["name"] for entry in asked.data["targets"]} == {
+        "Alice's Bear", "Bob's Giant", "Cara's Bear",
+    }
+    assert game.confirm_trigger_target(1, permanent_id=caras.permanent_id)
+    game.resolve_top_of_stack()
+    assert game.pending_choice_of("optional_pay", 0) is None
+    assert game.pending_choice_of("optional_pay", 1) is not None
+    assert game.confirm_optional_pay(1, "Death Match", accept=True)
+    _w1g13_resolve_stack(game)
+    game.check_state_based_actions()
+    assert not game.is_on_battlefield(caras)
+    assert game.is_on_battlefield(alices) and alices.effective_toughness == 3
+
+
+def test_w1g13_death_match_declined_does_nothing(set_pool):
+    """The "may" is the entering creature's controller's to decline."""
+    game = _w1g13_table(set_pool, {1: [_w1g13_creature("Bob's Giant", 3, 3)]},
+                        interactive={1})
+    _w1g13_quiet_put(game, 0, set_pool("ONS")["Death Match"])
+    alices = _w1g13_quiet_put(game, 0, _w1g13_creature("Alice's Bear", 3, 3))
+    game.active_player_index = 1
+    assert game.queue_from_hand(1, "Bob's Giant").supported
+    game.resolve_top_of_stack()
+    assert game.confirm_trigger_target(1, permanent_id=alices.permanent_id)
+    game.resolve_top_of_stack()
+    assert game.confirm_optional_pay(1, "Death Match", accept=False)
+    _w1g13_resolve_stack(game)
+    assert alices.effective_toughness == 3
+
 # ==== end W1G13 ======================================================
