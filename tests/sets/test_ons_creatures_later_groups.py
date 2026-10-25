@@ -848,10 +848,13 @@ def _w1g9_block(game, blocks, *, seat=1):
 
 
 def _w1g9_settle(game):
-    """Drain the stack, then answer what it left owed with the defaults."""
+    """Drain the stack, then answer what it left owed with the defaults, and
+    make the state check the priority loop makes after a resolution
+    (CR 704.3)."""
     _w1g9_resolve(game)
     game.auto_resolve_pending_choices()
     _w1g9_resolve(game)
+    game.check_state_based_actions()
 
 
 def test_w1g9_gustcloak_savior_rescues_another_creature_you_control(set_pool):
@@ -978,6 +981,90 @@ def test_w1g9_the_ai_never_proposes_the_block_spitfire_handler_forbids(set_pool)
     game._set_phase_and_step("combat", "declare_blockers")
     assert not game._can_block_attacker(handler, seeker)
     assert game.battlefield_index_of(handler) not in choose_combat_blockers(game, 1)
+
+
+def test_w1g9_tephraderm_sends_a_spells_damage_to_its_controller(set_pool):
+    """"Whenever a spell deals damage to this creature, this creature deals
+    that much damage to that spell's controller." A Shock aimed at it costs
+    its caster 2 life; only the spell line fires (Shock is no creature)."""
+    ons = set_pool("ONS")
+    game = _w1g9_table()
+    tephraderm = _w1g9_enter(game, 1, ons["Tephraderm"])
+    game.players[0].hand.append(ons["Shock"])
+    game._set_phase_and_step("main", "precombat_main")
+    game.cast_from_hand(
+        0, "Shock", target_player_index=1, target_permanent_ids=[tephraderm.permanent_id]
+    )
+    _w1g9_settle(game)
+    assert tephraderm.damage_marked == 2
+    assert game.players[0].life == 18
+    assert "Tephraderm dealt 2 damage to W1G9-0" in game.log
+
+
+def test_w1g9_tephraderm_answers_lethal_spell_damage_from_the_graveyard(set_pool):
+    """Ruling (2004-10-04): "The second ability triggers even if this card is
+    dealt lethal damage." It deals the damage as it last existed (CR 608.2h)."""
+    ons = set_pool("ONS")
+    game = _w1g9_table()
+    tephraderm = _w1g9_enter(game, 1, ons["Tephraderm"])
+    game.players[0].hand.extend([ons["Shock"], ons["Pinpoint Avalanche"]])
+    game._set_phase_and_step("main", "precombat_main")
+    for name in ("Shock", "Pinpoint Avalanche"):
+        game.cast_from_hand(
+            0, name, target_player_index=1,
+            target_permanent_ids=[tephraderm.permanent_id],
+        )
+        _w1g9_settle(game)
+    assert not game.is_on_battlefield(tephraderm)
+    assert game.players[0].life == 20 - 2 - 4
+
+
+def test_w1g9_tephraderm_hits_back_the_creature_that_hit_it(set_pool):
+    """"Whenever a creature deals damage to this creature, this creature deals
+    that much damage to that creature." Combat damage from a 6/6 it blocks
+    kills Tephraderm and leaves the 6/6 with 4; the trigger deals 6 more. The
+    spell line stays silent: combat damage is a creature's, not a spell's."""
+    ons = set_pool("ONS")
+    game = _w1g9_table()
+    tephraderm = _w1g9_enter(game, 1, ons["Tephraderm"])
+    shaker = _w1g9_enter(game, 0, ons["Krosan Groundshaker"])
+    assert _w1g9_attack(game, [shaker])[0]
+    assert _w1g9_block(game, [(tephraderm, [shaker])])[0]
+    game._set_phase_and_step("combat", "combat_damage")
+    game.resolve_combat_damage(0)
+    assert [item.card.name for item in game.stack] == ["Tephraderm"]
+    assert not game.is_on_battlefield(tephraderm)
+    assert game.is_on_battlefield(shaker) and shaker.damage_marked == 4
+    _w1g9_settle(game)
+    assert not game.is_on_battlefield(shaker)
+    assert game.players[0].life == 20
+
+
+def test_w1g9_tephraderm_tells_a_creatures_ability_from_an_artifacts(set_pool):
+    """A creature's ability is a creature dealing damage (line one); an
+    artifact's ability is neither a creature nor a spell (CR 113.3) and fires
+    nothing."""
+    ons, lea = set_pool("ONS"), set_pool("LEA")
+    game = _w1g9_table()
+    tephraderm = _w1g9_enter(game, 1, ons["Tephraderm"])
+    sorcerer = _w1g9_enter(game, 0, lea["Prodigal Sorcerer"])
+    rod = _w1g9_enter(game, 0, lea["Rod of Ruin"])
+    game._set_phase_and_step("main", "precombat_main")
+    game.activate_permanent_ability(
+        0, "Rod of Ruin", target_player_index=1,
+        target_permanent_ids=[tephraderm.permanent_id],
+    )
+    _w1g9_settle(game)
+    assert tephraderm.damage_marked == 1
+    assert game.is_on_battlefield(rod) and game.players[0].life == 20
+    game.activate_permanent_ability(
+        0, "Prodigal Sorcerer", target_player_index=1,
+        target_permanent_ids=[tephraderm.permanent_id],
+    )
+    _w1g9_settle(game)
+    assert tephraderm.damage_marked == 2
+    assert not game.is_on_battlefield(sorcerer)
+    assert game.players[0].life == 20
 # ==== end W1G9 ======================================================
 
 

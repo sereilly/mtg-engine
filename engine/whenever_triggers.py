@@ -318,6 +318,13 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      # is a description of permanents that would silently exclude every spell
      # the card watches. Above `damager_subject`, whose `[^,]+?` would claim it.
      r"|(?P<damager_any>a source)"
+     # "Whenever **a spell** deals damage to this creature" (Tephraderm). The
+     # damager narrowed to CR 113.3's other half of "source": a spell, never an
+     # ability or a permanent. A marker for `damager_any`'s reason — a spell is
+     # its printed card, which no `ObjectFilter` describes — answered by the
+     # flag the one damage seam freezes (`damage_events._announce`,
+     # ``damager_is_spell``). Above `damager_subject` for the same reason.
+     r"|(?P<damager_spell>a spell)"
      # "…a red creature **or spell** deals damage" (Justice). One object, two
      # nouns: English prints the adjective once and distributes it, so the
      # subject group takes "a red creature" and the marker records that the
