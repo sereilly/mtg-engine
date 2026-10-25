@@ -411,9 +411,9 @@ class PermanentStateMixin:
         # The opponent's default is the type that **protects the most of their
         # own creatures** — "target creature that isn't of the chosen type" is
         # what the Oppressor can take, so the chooser names what they hold the
-        # most of (``value_choices.best_creature_type``, the chooser's own
-        # side) — and, with no creature on their board, the type their own
-        # cards still to be played hold most of, then the catalog's commonest.
+        # most of (``_protecting_creature_type``) — and, with no creature on
+        # their board, the type their own cards still to be played hold most
+        # of, then the catalog's commonest.
         if opponent_chooses_creature_type_on_enter(text):
             chooser = self._next_opponent_in_turn_order(caster_index)
             if chooser is not None:

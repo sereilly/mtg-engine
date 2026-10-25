@@ -297,18 +297,26 @@ class EntryChoicesMixin:
         creatures — "target creature that isn't of the chosen type" (Callous
         Oppressor), chosen by the Oppressor's opponent.
 
-        The type the seat's own creatures have most of, net of everyone
-        else's (``value_choices.best_creature_type``'s ``"you"`` side, through
-        the layers); with none on its board, the type its own cards still to be
-        played have most of (:meth:`_own_creature_type_counts`); with none of
-        those, "human", the catalog's commonest word, for
-        :meth:`_default_chosen_creature_type`'s reason.
+        The type the seat's own creatures on the battlefield have most of,
+        through the layers — **not** net of anyone else's: what the word
+        protects is the chooser's own board, and the Oppressor's controller
+        holding more of the same type changes nothing about which of the
+        chooser's creatures it can take. With none on its board, the type its
+        own cards still to be played have most of
+        (:meth:`_own_creature_type_counts`); with none of those, "human", the
+        catalog's commonest word, for :meth:`_default_chosen_creature_type`'s
+        reason. Ties go to the alphabetically first word.
         """
-        from ..handlers.value_choices import best_creature_type
+        from ..handlers.value_choices import _creature_type_census
 
-        chosen = best_creature_type(self, seat, side="you")
-        if chosen:
-            return chosen
+        mine: dict[str, int] = {}
+        for holder, words in _creature_type_census(self, "battlefield", seat):
+            if holder != seat:
+                continue
+            for word in words:
+                mine[word] = mine.get(word, 0) + 1
+        if mine:
+            return max(sorted(mine), key=lambda word: mine[word])
         own = self._own_creature_type_counts(seat)
         if own:
             return max(sorted(own), key=lambda word: own[word])

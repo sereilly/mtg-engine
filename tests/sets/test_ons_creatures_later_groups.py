@@ -176,9 +176,12 @@ def test_w1g4_callous_oppressor_asks_the_opponent_as_it_enters(set_pool):
 def test_w1g4_callous_oppressor_opponent_default_protects_their_own_type(set_pool):
     """Nobody asked: the opponent names the type their own creatures have the
     most of — the type that keeps the most of them out of the Oppressor's
-    reach — not the type the Oppressor's controller has most of."""
+    reach. Counted over their own board alone: the Oppressor's controller
+    holding three Zombies of its own changes nothing about which of the
+    opponent's creatures it can take, so a net count (which would name the
+    lone Goblin) is the wrong question."""
     game = _w1g4_game(
-        [_w1g4_creature(f"My Elf {n}", "Elf") for n in range(3)],
+        [_w1g4_creature(f"My Zombie {n}", "Zombie") for n in range(3)],
         [_w1g4_creature("Their Zombie A", "Zombie"), _w1g4_creature("Their Zombie B", "Zombie"),
          _w1g4_creature("Their Goblin", "Goblin")],
         hand=[set_pool("ONS")["Callous Oppressor"]],
