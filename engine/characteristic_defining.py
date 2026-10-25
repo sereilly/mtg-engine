@@ -277,18 +277,24 @@ def _counted_noun_phrase(match: re.Match) -> dict[str, object] | None:
     and "2 plus" are one arithmetic with one number changed, and there is no
     second site where a constant could be honoured or forgotten.
     """
-    from .grammar.errors import LoweringError
-    from .grammar.lowering._amounts import count_spec
-    from .grammar.phrases import parse_subject_filter
-
     # "…creature cards in **its controller's** graveyard." (Elephant
     # Resurgence's token.) A CDA's sentence is about its own permanent, so
     # "its" can only be that permanent and its controller is the "you" of this
     # ability (CR 109.5) — the seat "your graveyard" already counts.
     counted = re.sub(r"\bits controller's\b", "your", match.group("counted"))
-    filt = parse_subject_filter(counted, plural=True)
-    if filt is None:
-        return None
+    # "…the number of Zombies on the battlefield **plus the number of** Zombie
+    # cards in all graveyards." (Soulless One.) A sum of two counts, each its
+    # own noun phrase over its own zone, so each is read by the same reader and
+    # the second rides the first as ``plus_count`` — the key ``evaluate_count``
+    # adds, the CR 604.3 twin of Bulwark's resolution-time ``minus_count``. A
+    # half either reader refuses refuses the whole line, and so does a third
+    # term, which no card prints.
+    counted, sum_word, rest = counted.partition(" plus the number of ")
+    addend = None
+    if sum_word:
+        addend = _counted_spec(rest, 0)
+        if addend is None or " plus the number of " in rest:
+            return None
     # The printed constant is optional. "**Maro's** power and toughness are each
     # equal to the number of cards in your hand" is this sentence with no offset
     # at all, and every row above it counts a *battlefield* — so before the
@@ -297,15 +303,33 @@ def _counted_noun_phrase(match: re.Match) -> dict[str, object] | None:
     # absent constant's value, and ``count_spec`` omits a zero offset, so the
     # payload a card with no constant produces is the payload it would have had
     # if this row had never carried one.
-    try:
-        spec = count_spec(filt, None, offset=int(match.group("plus") or 0))
-    except LoweringError:
+    spec = _counted_spec(counted, int(match.group("plus") or 0))
+    if spec is None:
         return None
+    if addend is not None:
+        spec = {**spec, "plus_count": addend}
     payload: dict[str, object] = {"count_spec": spec}
     half = _DEFINED_HALF[match.group("half")]
     if half is not None:
         payload["defines"] = half
     return payload
+
+
+def _counted_spec(counted: str, offset: int) -> dict[str, object] | None:
+    """The count one printed noun phrase names (``lowering/_amounts.count_spec``),
+    with *offset* as its printed constant — or None where the noun parser or the
+    count reader refuses it."""
+    from .grammar.errors import LoweringError
+    from .grammar.lowering._amounts import count_spec
+    from .grammar.phrases import parse_subject_filter
+
+    filt = parse_subject_filter(counted, plural=True)
+    if filt is None:
+        return None
+    try:
+        return count_spec(filt, None, offset=offset)
+    except LoweringError:
+        return None
 
 
 #: "twice"/"three times" in front of a count, as the multiplier ``_scaled``

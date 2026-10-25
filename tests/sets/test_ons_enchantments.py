@@ -441,6 +441,79 @@ def test_w1g4_shared_triumph_pumps_every_creature_of_the_chosen_type(set_pool):
 
 # ==== W1G7 ==========================================================
 # W1G7's tests go between this line and the "end W1G7" line.
+from engine import Game as _w1g7_Game, PlayerState as _w1g7_PlayerState
+from engine.models import Permanent as _w1g7_Permanent
+from engine.type_changes import gain_types as _w1g7_gain_types
+from tests.helpers import _nosick as _w1g7_nosick, resolve_stack as _w1g7_resolve
+
+
+def _w1g7_perm(pool, name):
+    return _w1g7_nosick(_w1g7_Permanent(card=pool[name]))
+
+
+def _w1g7_game(mine=(), theirs=(), *, p1=None, p2=None):
+    one = _w1g7_PlayerState(name="P1", battlefield=list(mine), **(p1 or {}))
+    two = _w1g7_PlayerState(name="P2", battlefield=list(theirs), **(p2 or {}))
+    game = _w1g7_Game(players=[one, two])
+    game.enforce_mana_costs = False
+    game._settle()
+    return game, one, two
+
+from engine.aura_attachment import attach_aura as _w1g7_attach_aura
+
+
+def test_w1g7_elvish_guidance_adds_a_green_per_elf(set_pool):
+    """"Whenever enchanted land is tapped for mana, its controller adds an
+    additional {G} for each Elf on the battlefield." Counted as the land is
+    tapped: both sides' Elves, not a Goblin, and a Goblin that became an Elf."""
+    pool = set_pool("ONS")
+    forest = _w1g7_perm(pool, "Forest")
+    guidance = _w1g7_perm(pool, "Elvish Guidance")
+    goblin = _w1g7_perm(pool, "Skirk Prospector")
+    game, p1, _p2 = _w1g7_game(
+        [forest, guidance, _w1g7_perm(pool, "Wirewood Elf"), goblin],
+        [_w1g7_perm(pool, "Wellwisher")],
+    )
+    _w1g7_attach_aura(guidance, forest)
+    game._settle()
+    assert game.tap_land_for_mana(0, "Forest")
+    assert p1.mana_pool.get("G") == 3
+
+    forest.tapped = False
+    p1.mana_pool.clear()
+    _w1g7_gain_types(goblin, subtypes=("elf",))
+    game._recompute_continuous_effects()
+    assert game.tap_land_for_mana(0, "Forest")
+    assert p1.mana_pool.get("G") == 4
+
+
+def test_w1g7_elvish_guidance_with_no_elf_adds_nothing_extra(set_pool):
+    pool = set_pool("ONS")
+    forest = _w1g7_perm(pool, "Forest")
+    guidance = _w1g7_perm(pool, "Elvish Guidance")
+    game, p1, _p2 = _w1g7_game([forest, guidance])
+    _w1g7_attach_aura(guidance, forest)
+    game._settle()
+    assert game.tap_land_for_mana(0, "Forest")
+    assert p1.mana_pool.get("G") == 1
+
+
+def test_w1g7_elvish_guidance_counts_toward_the_planned_payment(set_pool):
+    """The payment planner reads the same count the tap seam adds: a Forest
+    under the Guidance beside two Elves is three green toward a cost."""
+    from engine.board_payment import land_tap_yields
+
+    pool = set_pool("ONS")
+    forest = _w1g7_perm(pool, "Forest")
+    guidance = _w1g7_perm(pool, "Elvish Guidance")
+    game, _p1, _p2 = _w1g7_game(
+        [forest, guidance, _w1g7_perm(pool, "Wirewood Elf"),
+         _w1g7_perm(pool, "Wellwisher")],
+    )
+    _w1g7_attach_aura(guidance, forest)
+    game._settle()
+    (tap,) = land_tap_yields(game, forest)
+    assert len(tap.units) + len(tap.extra) == 3
 
 # ==== end W1G7 ======================================================
 

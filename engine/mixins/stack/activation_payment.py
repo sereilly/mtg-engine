@@ -460,6 +460,32 @@ class ActivationPaymentMixin:
             if not perm.tapped and subject_matches(self, perm, described)
         ]
 
+    def _choose_tap_cost_permanents(
+        self, cost, candidates: list, cost_permanent_ids,
+    ) -> list:
+        """Which of *candidates* a "Tap N untapped <noun phrase>" cost taps:
+        the ones the payer named by id (CR 601.2b), deduplicated by identity —
+        two references to one permanent do not pay a two-permanent cost — and
+        then the deterministic pick, in board order, for the rest. Too few
+        candidates is the cost gate's refusal, asked before this."""
+        named = [
+            found
+            for found in (
+                self.permanent_by_id(pid) for pid in (cost_permanent_ids or [])
+            )
+            if found is not None and any(c is found for c in candidates)
+        ]
+        chosen: list = []
+        for perm in named:
+            if not any(perm is already for already in chosen):
+                chosen.append(perm)
+        for perm in candidates:
+            if len(chosen) >= cost.tap_count:
+                break
+            if not any(perm is already for already in chosen):
+                chosen.append(perm)
+        return chosen[:cost.tap_count]
+
     def _return_cost_candidates(self, cost, controller_index: int) -> list:
         """What "Return N <noun phrase> you control to their owner's hand" may
         return."""

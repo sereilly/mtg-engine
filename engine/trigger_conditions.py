@@ -681,15 +681,23 @@ def _resolve_subject_groups(payload: dict) -> dict | None:
             return None
         del resolved[key]
         # "Whenever **this creature or** another Rogue you control enters"
-        # (Thieves' Guild Enforcer). The phrase read above says "another", which
-        # the noun parser folds into `exclude_self` — and the words in front of
-        # it put the source back in. An empty named group is how a pattern says
-        # so: it is present in the match's groupdict exactly when that spelling
-        # matched, and it carries no text of its own to be re-read.
+        # (Thieves' Guild Enforcer); "Whenever this creature or another Cleric
+        # dies" (Rotlung Reanimator). A **union**: the source itself, or any
+        # other permanent the phrase describes. An empty named group is how a
+        # pattern says so: it is present in the match's groupdict exactly when
+        # that spelling matched, and it carries no text of its own to be
+        # re-read — so it is turned into the boolean the dispatcher reads
+        # (``events.trigger_subject_matches``), and the phrase keeps the
+        # "another" the noun parser folded into ``exclude_self``.
+        #
+        # This used to *drop* ``exclude_self`` instead, which reads the union
+        # as "a Rogue you control" — the same set only while the source is
+        # itself a Rogue. A Rotlung Reanimator that stopped being a Cleric (a
+        # Mistform's type change, a Conspiracy) is still "this creature", and
+        # dropping the word made its own death trigger nothing.
         stem = key[: -len(suffix)]
         if f"{stem}_includes_source" in payload:
-            described = {k: v for k, v in described.items() if k != "exclude_self"}
-            del resolved[f"{stem}_includes_source"]
+            resolved[f"{stem}_includes_source"] = True
         # "…attacks **you**" (Barbed Foliage). CR 506.2's defending player,
         # the same empty-marker-group idiom one paragraph up: present in the
         # groupdict exactly when that row matched, carrying no text of its own,

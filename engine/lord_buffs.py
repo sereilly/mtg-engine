@@ -779,16 +779,17 @@ def _creature_subtype(word: str) -> str | None:
     """The creature type *word* names, however it was pluralised.
 
     The catalog (``data/vocabulary/creature_types.json``) stores singulars, and
-    some types are their own plural (Merfolk, Djinn), so every candidate stem is
-    tried *against the catalog* rather than a shape being assumed. The "-ves"
-    forms are here because Magic prints several of them — Elves, Dwarves,
-    Wolves — and a trailing-"s" rule alone turns "elves" into "elve".
+    some types are their own plural (Merfolk, Djinn), so the word itself is
+    tried first and then the grammar's one singularizer
+    (``vocabulary.singular``), which holds every stem it rebuilds — "-s",
+    "-es", "-ies", and the "-ves" of Elves, Dwarves and Wolves — to the
+    catalog rather than assuming a shape. This used to carry its own copy of
+    the "-ves" arm, which the grammar's reader lacked: "Other Elves have
+    shroud" compiled here while "Tap two untapped Elves you control" refused.
     """
-    creature_types = _vocabulary().CREATURE_TYPES
-    candidates = [word, word[:-1], word[:-2]]
-    if word.endswith("ves"):
-        candidates += [word[:-3] + "f", word[:-3] + "fe"]
-    for candidate in candidates:
+    vocabulary = _vocabulary()
+    creature_types = vocabulary.CREATURE_TYPES
+    for candidate in (word, vocabulary.singular(word)):
         if candidate and candidate in creature_types:
             return candidate
     return None

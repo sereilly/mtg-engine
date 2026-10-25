@@ -413,10 +413,20 @@ def aura_enchants(oracle_text: str, noun: str) -> bool:
 #: dispatcher, and the support gate deciding whether the line is implemented.
 #: It used to be written out only in the dispatcher, which is why the gate had
 #: to claim the line with a wildcard instead.
+#:
+#: **And a rate.** "…adds an additional {G} **for each Elf on the
+#: battlefield**." (Elvish Guidance.) The printed symbols once per counted
+#: object, the count read through the grammar's one per-each reader
+#: (``grammar.per_each_count_spec_for``) and answered by ``evaluate_count`` at
+#: the moment the land is tapped — a triggered mana ability resolves at once
+#: (CR 605.4a), so the board it counts is the board of the tap. A clause that
+#: reader refuses leaves the whole line unimplemented rather than adding the
+#: mana once.
 _ADDITIONAL_MANA_ON_TAP = re.compile(
     r"^whenever enchanted land is tapped for mana, "
     r"its controller adds an additional "
-    r"(?:(?P<symbols>(?:\{[wubrgc]\})+)|(?P<any>one mana of any color))$"
+    r"(?:(?P<symbols>(?:\{[wubrgc]\})+)|(?P<any>one mana of any color))"
+    r"(?P<per_each> for each .+)?$"
 )
 
 #: The member :func:`aura_additional_mana_on_tap_line` returns for "one mana of
@@ -432,32 +442,99 @@ _ADDITIONAL_MANA_ON_TAP = re.compile(
 AURA_ANY_COLOR_MANA = "any"
 
 
+def _additional_mana_parts(
+    normalized_line: str,
+) -> "tuple[tuple[str, ...], dict | None] | None":
+    """The extra symbols *normalized_line* adds once, and the count spec its
+    "for each …" rate multiplies them by (None when it prints none) — or None
+    for a line this does not implement."""
+    match = _ADDITIONAL_MANA_ON_TAP.match(normalized_line.strip().rstrip("."))
+    if match is None:
+        return None
+    rate = None
+    if match.group("per_each"):
+        from .grammar import per_each_count_spec_for
+
+        rate = per_each_count_spec_for(
+            match.group("per_each"), scopes=("you", "all")
+        )
+        if rate is None:
+            return None
+    if match.group("any"):
+        return (AURA_ANY_COLOR_MANA,), rate
+    return tuple(
+        sym.upper() for sym in re.findall(r"[wubrgc]", match.group("symbols"))
+    ), rate
+
+
 def aura_additional_mana_on_tap_line(normalized_line: str) -> tuple[str, ...]:
-    """The extra mana symbols *normalized_line* adds when its land is tapped.
+    """The extra mana symbols *normalized_line* adds when its land is tapped,
+    once — before any printed "for each" rate.
 
     Empty for a line this does not implement, so a caller may ask it as a
     predicate — one answer for the dispatcher and for the support gate, which
     is why the pattern is not written out at either.
     """
-    match = _ADDITIONAL_MANA_ON_TAP.match(normalized_line.strip().rstrip("."))
-    if match is None:
-        return ()
-    if match.group("any"):
-        return (AURA_ANY_COLOR_MANA,)
-    return tuple(
-        sym.upper() for sym in re.findall(r"[wubrgc]", match.group("symbols"))
-    )
+    parts = _additional_mana_parts(normalized_line)
+    return () if parts is None else parts[0]
 
 
 def aura_additional_mana_on_tap(oracle_text: str) -> tuple[str, ...]:
-    """The same answer for a whole card, for the dispatcher that holds the Aura
-    rather than one of its lines."""
+    """The same answer as :func:`aura_additional_mana_on_tap_line` for a whole
+    card — the printed symbols once, whatever a "for each" rate would make of
+    them — for a reader asking a question about the card's text rather than
+    about a tap (which Aura watches a land tapped for mana)."""
     from .line_normalization import normalize_creature_line
 
     for raw_line in (oracle_text or "").splitlines():
         symbols = aura_additional_mana_on_tap_line(normalize_creature_line(raw_line))
         if symbols:
             return symbols
+    return ()
+
+
+def aura_additional_mana_rate(oracle_text: str) -> dict | None:
+    """The count spec a card's "…adds an additional {G} **for each Elf on the
+    battlefield**" multiplies its symbols by (Elvish Guidance), or None for a
+    card that prints no rate — what a census stocks the board with before it
+    can see the Aura react."""
+    from .line_normalization import normalize_creature_line
+
+    for raw_line in (oracle_text or "").splitlines():
+        parts = _additional_mana_parts(normalize_creature_line(raw_line))
+        if parts is not None and parts[0]:
+            return parts[1]
+    return None
+
+
+def aura_additional_mana_now(game, aura) -> tuple[str, ...]:
+    """What *aura* adds when its land is tapped for mana, now: the printed
+    symbols, repeated once per object its "for each …" rate counts (Elvish
+    Guidance). For the two dispatchers that hold the Aura — the tap seam and
+    the payment planner's count of what a tap makes — so the planner never
+    counts mana the seam will not add.
+
+    The count is "you" relative to the **Aura's** controller (CR 109.5: the
+    controller of the triggered mana ability), with the Aura as its source.
+    """
+    from .line_normalization import normalize_creature_line
+
+    for raw_line in (aura.effective_card.oracle_text or "").splitlines():
+        parts = _additional_mana_parts(normalize_creature_line(raw_line))
+        if parts is None or not parts[0]:
+            continue
+        symbols, rate = parts
+        if rate is None:
+            return symbols
+        from .handlers._amounts import evaluate_count
+
+        seat = game.controller_index_of(aura)
+        if seat is None:
+            return ()
+        times = evaluate_count(
+            game, game.players[seat], rate, source=aura, exclude=aura,
+        )
+        return symbols * max(0, times)
     return ()
 
 

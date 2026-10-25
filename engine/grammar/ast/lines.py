@@ -75,6 +75,12 @@ class TriggerEvent:
     #: comparison is a different object from the one the trigger fires on.
     #: Paired by stem in ``test_a_narrowed_trigger_reads_the_same_subject_on_both_sides``.
     narrowings: tuple[tuple[str, ObjectFilter], ...] = ()
+    #: "Whenever **this creature or** another Cleric dies" (Rotlung
+    #: Reanimator), "…or another Rogue you control enters" (Thieves' Guild
+    #: Enforcer): the subject is a union with the source itself, which the
+    #: subject's own "another" cannot say. The table's ``<stem>_includes_source``
+    #: marker is the dispatching half of the same reading.
+    includes_source: bool = False
 
 
 @dataclass(frozen=True)

@@ -899,6 +899,23 @@ def evaluate_count(
     # the same count taken for every living seat, and this seat's distance
     # from the smallest. Unwrapped first because it is not a count of its own:
     # it is an arithmetic over whichever one follows, asked once per seat.
+    #
+    # "…the number of Zombies on the battlefield **plus the number of** Zombie
+    # cards in all graveyards." (Soulless One.) A second whole count added to
+    # this one, each with its own zone and scope — so a nested spec, taken here
+    # where both the CR 604.3 recompute and a resolution
+    # (``count_from_payload``) reach it, and unwrapped first so every branch
+    # below counts its own half without knowing it is one.
+    addend = spec.get("plus_count")
+    if isinstance(addend, dict):
+        whole = {key: value for key, value in spec.items() if key != "plus_count"}
+        return evaluate_count(
+            game, owner, whole, exclude=exclude, source=source,
+            effect_spell=effect_spell,
+        ) + evaluate_count(
+            game, owner, addend, exclude=exclude, source=source,
+            effect_spell=effect_spell,
+        )
     if spec.get("excess_over_fewest"):
         plain = {key: value for key, value in spec.items() if key != "excess_over_fewest"}
         fewest = min(

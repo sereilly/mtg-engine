@@ -57,7 +57,15 @@ _COUNTABLE_ZONES = ("battlefield", "graveyard", "hand", "exile", "library")
 # behind the count actually answers: a key admitted here and unanswered there is
 # a narrowing dropped on the floor, and a count that ignores its adjective is
 # larger than the card printed.
-_CARD_ZONE_KEYS = frozenset({"type_filter", "named", "color_filter", "named_from"})
+#
+# ``subtype_filter``: "…the number of **Zombie cards** in all graveyards"
+# (Soulless One). A creature type off the printed type line — or off what a
+# Conspiracy makes of it (``_card_matches_filter`` asks
+# ``_zone_card_creature_types`` with the pile's owner) — the key that matcher
+# has answered since Sanctum of Shattered Heights' "Discard a Shrine card".
+_CARD_ZONE_KEYS = frozenset({
+    "type_filter", "named", "color_filter", "named_from", "subtype_filter",
+})
 
 #: The spec's spelling of "…with the same name as **that spell**": a name no
 #: lowering can know, carried as *whose* name it is. ``count_spec_in_resolution``

@@ -1039,6 +1039,11 @@ def _graveyard_to_library_spec(payload: dict) -> dict:
         spec["card_type"] = payload.get("card_type", "artifact")
     if payload.get("supertypes"):
         spec["supertypes"] = list(payload["supertypes"])
+    # "target **Zombie** card" (Unholy Grotto): the creature type the handler
+    # tests, handed to the picker under the same key, or the picker offers the
+    # whole pile and the handler refuses what it was handed.
+    if payload.get("graveyard_subtypes"):
+        spec["graveyard_subtypes"] = list(payload["graveyard_subtypes"])
     # "From **your** graveyard" (Reinforcements) is one pile, and the picker has
     # to say so: the enumerator walks every graveyard by default, so a picker
     # left unscoped would offer the opponent's creature cards for a spell that

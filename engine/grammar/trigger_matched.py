@@ -649,23 +649,27 @@ def _parse_matched_event(
     stream.reset(batch_mark)
     mark = stream.mark()
     # "Whenever **this creature or** another Rogue you control enters"
-    # (Thieves' Guild Enforcer) — the source's own entry spelled out. The
-    # subject that follows is the same noun phrase the bare form reads, and
-    # the difference is exactly the word "another": with the prefix the
-    # source is *included*, so the exclusion the noun parser folds on for
-    # "another" has to be undone here rather than left to narrow a set the
-    # card widened.
+    # (Thieves' Guild Enforcer), "…or another Cleric dies" (Rotlung
+    # Reanimator) — the source's own event spelled out. A **union**: the
+    # source itself, or any other permanent the phrase describes. The phrase
+    # keeps the "another" the noun parser folds on, and the event says the
+    # source is in the set as well (``includes_source``). Undoing the
+    # exclusion instead read the union as "a Rogue you control", which is the
+    # same set only while the source is itself a Rogue.
     explicit_self = bool(stream.accept_phrase("this", "creature", "or"))
     subject = parse_subject_filter_at(stream)
     if subject is not None:
-        if explicit_self:
-            subject = replace(subject, other_than_source=False)
         # "Whenever **a creature** becomes blocked by **a creature with lesser
         # power**" (No Quarter). A second noun phrase after the verb, which the
         # table loop below cannot read — so it is a production, and it is tried
         # first because its verbs are ones that loop has no row for and a
-        # sentence it half-read would fail on the tail.
-        pair = _accept_board_wide_block_event(stream, word, subject)
+        # sentence it half-read would fail on the tail. Not under the
+        # explicit-self prefix: the pair's event carries no union with the
+        # source, and reading one there would drop "this creature" in silence.
+        pair = (
+            None if explicit_self
+            else _accept_board_wide_block_event(stream, word, subject)
+        )
         if pair is not None:
             return pair
         for phrase, kind in _SUBJECT_LED_EVENTS:
@@ -687,7 +691,9 @@ def _parse_matched_event(
                 # Foliage would fire on an attack aimed at somebody else.
                 if kind == "matching_creature_attacks" and stream.accept_word("you"):
                     subject = replace(subject, attacking_you=True)
-                return ast.TriggerEvent(kind, word, subject=subject)
+                return ast.TriggerEvent(
+                    kind, word, subject=subject, includes_source=explicit_self
+                )
     stream.reset(mark)
     return _parse_quantified_tap_event(stream)
 

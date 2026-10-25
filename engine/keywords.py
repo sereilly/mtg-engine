@@ -263,7 +263,8 @@ def protection_quality(word: str) -> tuple[str, str] | None:
     # Lazily for the reason :func:`keyword_ability_name` imports lazily: this
     # module sits underneath the grammar in the import order.
     from .grammar.vocabulary import (CARD_TYPES, CREATURE_TYPES,
-                                     TYPE_LINE_SUPERTYPES)
+                                     TYPE_LINE_SUPERTYPES, singular as
+                                     singular_of)
 
     # "**legendary** creatures" (Tsabo Tavoc). CR 702.16a lets the quality be
     # any characteristic, and a supertype in front of a type noun is two of
@@ -290,7 +291,9 @@ def protection_quality(word: str) -> tuple[str, str] | None:
             return None
         return ("typed", " ".join(sorted(set(words[:-1])) + [noun[1]]))
 
-    singular = word[:-1] if word.endswith("s") else word
+    # The grammar's one singularizer, which rebuilds each stem ("-s", "-es",
+    # "-ies", the "-ves" of Elves and Wolves) only when the catalog knows it.
+    singular = singular_of(word)
     # Card types before creature types, and the two catalogs share no word
     # (asserted by ``tests/engine/test_keyword_registry.py``) — so the order is
     # documentation rather than a tie-break. Both answers reach

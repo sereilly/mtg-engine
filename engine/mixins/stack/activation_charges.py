@@ -393,25 +393,9 @@ class ActivationChargesMixin:
             # excluded. Too few of them is the cost gate's refusal above.
             candidates = self._tap_cost_candidates(ability.cost, controller_index)
             cost_candidates.extend(candidates)
-            named = [
-                found
-                for found in (
-                    self.permanent_by_id(pid) for pid in (cost_permanent_ids or [])
-                )
-                if found is not None and any(c is found for c in candidates)
-            ]
-            # Deduplicated by identity: two references to one permanent do not
-            # pay a two-permanent cost.
-            chosen: list = []
-            for perm in named:
-                if not any(perm is already for already in chosen):
-                    chosen.append(perm)
-            for perm in candidates:
-                if len(chosen) >= ability.cost.tap_count:
-                    break
-                if not any(perm is already for already in chosen):
-                    chosen.append(perm)
-            tap_cost_permanents = chosen[:ability.cost.tap_count]
+            tap_cost_permanents = self._choose_tap_cost_permanents(
+                ability.cost, candidates, cost_permanent_ids,
+            )
 
         # "**Return a Forest you control to its owner's hand**: Untap target
         # creature" (Quirion Ranger); "{U}{U}, **Return two Islands you control

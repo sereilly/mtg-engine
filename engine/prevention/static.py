@@ -478,32 +478,53 @@ def _prevent_all_from_source_type(game, event: dict) -> PreventionOutcome | None
 #: locked in), so a spell answers with its stack colours, a permanent through
 #: layer 5, and a source Ghostly Flame makes colourless *as a source of damage*
 #: is no colour's source at all.
+#:
+#: **And so is the recipient** (Daunting Defender: "If a source would deal
+#: damage to **a Cleric creature you control**, prevent 1 of that damage.").
+#: "You" is the printing permanent's controller; anything else is a printed
+#: noun phrase, read by the grammar's noun parser (``subject_filter_payload``)
+#: and answered at each event by ``subject_matches`` — the reader every other
+#: shield over a described set of permanents asks (the matching blanket below),
+#: so "Cleric creature you control" is one set wherever it is printed and is
+#: read through the layers (a creature that *became* a Cleric is one). A phrase
+#: the parser cannot read in full refuses the line rather than shielding a set
+#: larger than the card names.
 _PREVENT_N_OF_DAMAGE_RE = re.compile(
     r"^if a (?:(?P<color>white|blue|black|red|green) )?source would deal "
-    r"damage to you, prevent (?P<points>\d+) of that damage$"
+    r"damage to (?P<to>.+?), prevent (?P<points>\d+) of that damage$"
 )
 
 
 def static_points_shield(line: str) -> dict | None:
     """What *line* shaves off each event — ``{"points": n, "color": symbol or
-    None}`` — or None if it is not that line.
+    None, "protects": filter or None}`` — or None if it is not that line.
 
     One matcher, asked by the interceptor below and by the claim reader, so
     what is prevented and what is claimed cannot drift. ``color`` is the mana
     symbol of the printed colour word and None for the unnarrowed sentence.
+    ``protects`` is None for "to you" (the controller, a player) and otherwise
+    the filter payload of the permanents the line shields.
     """
     match = _PREVENT_N_OF_DAMAGE_RE.match(
         " ".join(line.strip().lower().rstrip(".").split())
     )
     if match is None:
         return None
+    protects = None
+    if match.group("to") != "you":
+        from ..grammar import subject_filter_payload
+
+        protects = subject_filter_payload(match.group("to"))
+        if not protects:
+            return None
     word = match.group("color")
     if word is None:
-        return {"points": int(match.group("points")), "color": None}
+        return {"points": int(match.group("points")), "color": None,
+                "protects": protects}
     from ..oracle_types import _COLOR_WORD_TO_SYMBOL
 
     return {"points": int(match.group("points")),
-            "color": _COLOR_WORD_TO_SYMBOL[word]}
+            "color": _COLOR_WORD_TO_SYMBOL[word], "protects": protects}
 
 
 def prevent_n_of_damage(line: str) -> int | None:
@@ -527,20 +548,41 @@ def _static_points_prevented(game, event: dict) -> int:
     "To **you**" is the Armor's controller (CR 109.5), which is why the scan is
     over the recipient's own battlefield: an opponent's Armor does nothing for
     the player being burned.
+
+    A **permanent** recipient is asked of every battlefield's lines that name a
+    set of permanents ("a Cleric creature you control", Daunting Defender),
+    each with its own printing permanent as the observer and source, because
+    the noun phrase — not who controls the Defender — says whose creatures it
+    shields. A "to you" line never covers a permanent, and a permanent's line
+    never covers a player.
     """
     recipient = event["recipient"]
     amount = event["amount"]
-    if amount <= 0 or not isinstance(recipient, PlayerState):
+    if amount <= 0 or recipient is None:
         return 0
-    seat = game.players.index(recipient) if recipient in game.players else None
-    if seat is None:
-        return 0
+    if isinstance(recipient, PlayerState):
+        seat = game.players.index(recipient) if recipient in game.players else None
+        if seat is None:
+            return 0
+        printers = [(seat, permanent) for permanent in game.controlled_by(seat)]
+    else:
+        printers = list(game.permanents_with_controller())
+    from ..subject_filters import subject_matches
+
     total = 0
     source_colors: tuple[str, ...] | None = None
-    for permanent in game.controlled_by(seat):
+    for seat, permanent in printers:
         for line in (permanent.effective_card.oracle_text or "").splitlines():
             described = static_points_shield(line)
             if described is None:
+                continue
+            protects = described["protects"]
+            if isinstance(recipient, PlayerState):
+                if protects is not None:
+                    continue
+            elif protects is None or not subject_matches(
+                game, recipient, dict(protects), observer=seat, source=permanent,
+            ):
                 continue
             if described["color"] is not None:
                 # "a **red** source": the source's colour as a source of
@@ -580,7 +622,7 @@ def _prevent_static_points(game, event: dict) -> PreventionOutcome | None:
     """
     prevented = _static_points_prevented(game, event)
     game.log.append(
-        f"{event['recipient'].name} prevented {prevented} of "
+        f"{recipient_label(event['recipient'])} prevented {prevented} of "
         f"{event['amount']} damage (a static prevention)"
     )
     return PreventionOutcome(prevented=prevented)

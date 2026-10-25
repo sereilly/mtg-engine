@@ -305,4 +305,15 @@ def singular(word: str) -> str:
             stem3 = word[:-3] + "y"
             if stem3 in CARD_TYPES or stem3 in ALL_SUBTYPES:
                 return stem3
+        # "Tap two untapped **Elves** you control" (Birchlore Rangers),
+        # Dwarves, Wolves, Werewolves: English's "-f"/"-fe" plural, which no
+        # trim above undoes — "elve" and "elv" are not words. Held to the same
+        # rule as every arm here (the rebuilt stem must be a known type), so
+        # "themselves" and "halves" are left alone. The one other reader that
+        # singularizes a printed type word (``lord_buffs._creature_subtype``)
+        # asks this function rather than carrying a copy of the arm.
+        if word.endswith("ves"):
+            for stem4 in (word[:-3] + "f", word[:-3] + "fe"):
+                if stem4 in CARD_TYPES or stem4 in ALL_SUBTYPES:
+                    return stem4
     return word

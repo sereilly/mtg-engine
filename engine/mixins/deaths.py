@@ -28,7 +28,7 @@ from ..aura_attachment import auras_attached_to
 from ..destruction_events import (RESOLVING, announce_destroyed,
                                   destruction_finished)
 from ..delayed_triggers import fire_delayed_triggers
-from ..events import emit
+from ..events import emit, trigger_subject_matches
 from ..models import Permanent, PlayerState
 from ..oracle import compile_card_oracle
 from ..replacements import apply_replacements
@@ -587,6 +587,34 @@ class DeathsMixin:
         destruction_finished(self)
         return destroyed
 
+    def _death_observers(
+        self, dead_permanent: Permanent, dead_seat: int | None
+    ) -> list[tuple[int, Permanent]]:
+        """Every permanent whose abilities see *dead_permanent*'s death, with
+        its controller — the battlefield, **and the dead permanent itself**.
+
+        CR 603.10a: a leaves-the-battlefield ability "looks back in time", so
+        the game checks the abilities of the permanent that left as it existed
+        immediately before the event — its own "whenever a creature you control
+        dies" (Basri's Lieutenant, Grave Pact on a creature) or "whenever this
+        creature or another Cleric dies" (Rotlung Reanimator) sees its own
+        death. The two board-wide death scans iterated the battlefield alone,
+        and half the paths here take the permanent off it *before* announcing
+        the death (``sacrifice_permanent``, ``_destroy_target_permanent``, the
+        legend and world rules) while the sweeps announce it first — so a
+        Basri's Lieutenant destroyed by a Wrath made its Knight and one
+        destroyed by a Murder did not. Appended here, once and by identity,
+        exactly when the battlefield no longer lists it, under the seat it
+        last had (CR 603.10's last-known information): whichever order the
+        caller removed it in, the scans see one observer set.
+        """
+        observers = list(self.permanents_with_controller())
+        if dead_seat is not None and not any(
+            permanent is dead_permanent for _seat, permanent in observers
+        ):
+            observers.append((dead_seat, dead_permanent))
+        return observers
+
     def _fire_permanent_dies_triggers(
         self, dead_permanent: Permanent, last_known_seat: int | None = None
     ) -> None:
@@ -607,8 +635,6 @@ class DeathsMixin:
         controller of the triggered ability (CR 109.5) rather than the
         controller of the dying permanent.
         """
-        from ..subject_filters import subject_matches
-
         # Who controlled it, for "**its controller** discards a card"
         # (Bereavement). CR 603.10's last known information: by the time the
         # trigger resolves the permanent is a card in a graveyard, which
@@ -625,18 +651,25 @@ class DeathsMixin:
         if dead_seat is None:
             dead_seat = last_known_seat
         events: list[dict] = []
-        for controller_index, observer in self.permanents_with_controller():
+        for controller_index, observer in self._death_observers(
+            dead_permanent, dead_seat
+        ):
             for trig in matching_triggers(
                 observer.effective_card, condition_kinds={"permanent_dies"},
             ):
                 if trig.instruction is None:
                     continue
-                if not subject_matches(
-                    self,
-                    dead_permanent,
-                    trig.condition.payload.get("dying_filter"),
-                    observer=controller_index,
-                    source=observer,
+                # "Whenever **this creature or** another Cleric dies" (Rotlung
+                # Reanimator) is a union with the source, which the shared
+                # trigger reader answers by identity; every other condition
+                # here is the printed phrase alone. "…an artifact **you
+                # control**" is asked of the seat the permanent last had
+                # (CR 603.10a), which the control seam no longer knows for a
+                # permanent its caller already removed.
+                if not trigger_subject_matches(
+                    self, trig, "dying", dead_permanent,
+                    observer=controller_index, source=observer,
+                    subject_seat=dead_seat,
                 ):
                     continue
                 # "…is put into **your** graveyard from the battlefield"
@@ -807,7 +840,9 @@ class DeathsMixin:
             # is the same question asked of a different event.
             "event_subject_controller": dead_seat,
         }
-        for controller_index, observer in self.permanents_with_controller():
+        for controller_index, observer in self._death_observers(
+            dead_permanent, dead_seat
+        ):
             # The **effective** card (CR 613 layers 1, 3 and 6), like the two
             # scans just below: what the observer says now. This compiled the
             # printed card, so a Sengir Vampire under Humility went on taking

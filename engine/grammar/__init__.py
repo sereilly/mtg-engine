@@ -540,7 +540,9 @@ def board_count_spec_for(phrase: str) -> dict | None:
     return spec
 
 
-def per_each_count_spec_for(clause: str) -> dict | None:
+def per_each_count_spec_for(
+    clause: str, *, scopes: tuple[str, ...] = ("you",)
+) -> dict | None:
     """The count spec a printed "**for each** <counted>" *clause* means, or
     None to refuse — "for each basic land type among lands you control"
     (Stratadon, Draco).
@@ -561,6 +563,13 @@ def per_each_count_spec_for(clause: str) -> dict | None:
     wrongly rather than refused. "…beyond the first" refuses too — no cost in
     the pool prints it, and an offset nobody tested is a price nobody checked.
     The whole clause must be consumed.
+
+    *scopes* widens the battlefield scope for a caller that can answer it:
+    "…an additional {G} for each Elf **on the battlefield**" (Elvish
+    Guidance) is CR 403.1's shared zone, ``owner: "all"``, which
+    ``evaluate_count`` counts over every seat with nothing resolved — still a
+    board, still no seat role. The default is the "you" every caller written
+    before it asked for.
     """
     from .lowering._amounts import count_spec
     from .phrases import _parse_per_each_objects
@@ -576,7 +585,7 @@ def per_each_count_spec_for(clause: str) -> dict | None:
         spec = count_spec(counted, None)
     except LoweringError:
         return None
-    if spec.get("zone") != "battlefield" or spec.get("owner") != "you":
+    if spec.get("zone") != "battlefield" or spec.get("owner") not in scopes:
         return None
     return spec
 
