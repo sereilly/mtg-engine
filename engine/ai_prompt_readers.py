@@ -97,6 +97,14 @@ def chosen_creature_type_side(card: CardDefinition) -> str | None:
             )
             if total:
                 sides.add("you" if total > 0 else "opponent")
+            elif payload.get("keywords"):
+                # "Creatures of the chosen type have **fear**." (Cover of
+                # Darkness); "… have **shroud**." (Steely Resolve.) A keyword
+                # granted with no P/T change is a gift to the type, so the
+                # controller's own: aimed at the opponents' type, the
+                # enchantment made *their* creatures unblockable and
+                # untargetable.
+                sides.add("you")
         elif instruction.kind == "create_token":
             sides.add("you")
         elif instruction.kind == "put_chosen_card_from_hand_onto_battlefield" and (
@@ -109,6 +117,20 @@ def chosen_creature_type_side(card: CardDefinition) -> str | None:
             # name.
             payload.get("whose") is None
         ):
+            sides.add("you")
+    # "{3}, {T}, **Sacrifice a creature of the chosen type**: …" (Doom
+    # Cannon.) A cost is paid out of its payer's own permanents (CR 701.21a),
+    # so a type named in one is the controller's own: aimed at the opponents'
+    # type, the artifact could never be activated.
+    for ability in compile_card_oracle(card).activated_abilities:
+        cost = getattr(ability, "cost", None)
+        if cost is not None and _reads_chosen_creature_type([
+            getattr(cost, "sacrifice_filter", None),
+            getattr(cost, "tap_filter", None),
+            getattr(cost, "exile_filter", None),
+            getattr(cost, "return_to_hand_filter", None),
+            list(getattr(cost, "discard_filters", None) or ()),
+        ]):
             sides.add("you")
     text = card.oracle_text or ""
     restriction = untap_restriction_for(text)

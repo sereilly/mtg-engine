@@ -75,6 +75,19 @@ def _reads_no_return_restriction(filt: ast.ObjectFilter) -> bool:
         or filt.mana_value or filt.named or filt.other_than_source
         or filt.is_source or filt.is_enchanted
         or any(state is not None for state in tri_state)
+        # "Return up to three target creature cards **of the creature type of
+        # your choice** from your graveyard to your hand." (Aphetto Dredging.)
+        # A chosen word — announced before the targets (the card's 2004-10-04
+        # ruling), recorded on a source, or written by an earlier step — is a
+        # narrowing like any adjective above, and none of these handlers reads
+        # one: unlisted, the phrase was dropped and the spell returned any three
+        # creature cards.
+        or filt.creature_type_of_your_choice or filt.chosen_creature_type
+        or filt.not_chosen_creature_type or filt.of_a_type_chosen_this_way
+        or filt.not_of_a_type_chosen_this_way or filt.of_bound_type
+        or filt.chosen_color or filt.color_of_your_choice
+        or filt.color_chosen_this_way or filt.chosen_land_type
+        or filt.chosen_keyword
     )
 
 
