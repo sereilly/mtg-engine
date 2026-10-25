@@ -388,6 +388,16 @@ def parse_player_subject_verb(
             stream.exhausted or stream.at_punct(".", ",")
         ):
             return ast.ChooseColor(chooser=source_spec)
+        # "**Each player chooses a creature type.** Destroy all creatures that
+        # aren't of a type chosen this way." (Harsh Mercy.) The colour arm one
+        # characteristic over, read beside it for its reason: the only reading
+        # of the verb whose object is a creature type, matched in full and
+        # non-consuming on refusal. Which seats may be named is the lowering's
+        # question — it has a reading for "each player" alone.
+        if stream.accept_phrase("a", "creature", "type") and (
+            stream.exhausted or stream.at_punct(".", ",")
+        ):
+            return ast.ChooseCreatureType(chooser=source_spec)
         stream.reset(mark_colour)
         # "At the beginning of each player's upkeep, **that player chooses
         # artifact, creature, land, or non-Aura enchantment**." (Teferi's

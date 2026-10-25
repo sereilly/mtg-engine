@@ -577,6 +577,13 @@ def _prevention_shield_spec(payload: dict) -> dict | None:
         # none — which `picker_sweep` cannot see, because it asks whether a
         # picker is *derived*, not whether the line wanted one.
         return None
+    if payload.get("protection_kind") == "source_class":
+        # "The next time **a creature of the chosen type** would deal damage to
+        # you this turn, …" (Circle of Solace.) The source is a class nobody
+        # chooses from and the shield is on the controller, so nothing is
+        # announced — a picker here would ask for a source the shield never
+        # reads.
+        return None
     if payload.get("to_attached"):
         # "…that would be dealt to **enchanted creature**" (Fylgja). The fifth
         # answer, and the docstring above counted four because nothing had

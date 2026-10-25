@@ -35,7 +35,9 @@ payload the evaluator would answer False to forever.
 
 from __future__ import annotations
 
-from ...oracle_types import REVEALED_HAND_CARDS
+import dataclasses
+
+from ...oracle_types import CHOSEN_CREATURE_TYPE_THIS_WAY, REVEALED_HAND_CARDS
 from .. import ast
 from ..errors import LoweringError
 from ._amounts import count_filter_on_frozen_seat, count_spec
@@ -467,10 +469,28 @@ def _lower_condition(
                 "count": 0,
             }
         who = _condition_seat(condition, condition.who, event, "board count")
+        # "Choose a creature type. If you control more creatures **of that
+        # type** than each other player, …" (Peer Pressure.) The word the step
+        # in front recorded (CR 608.2d), lifted off the filter and named by its
+        # record — the evaluator turns it into ``subtype_filter`` before it
+        # counts. ``of_bound_type`` has no ``to_payload`` form at all, so
+        # without this the phrase was dropped and the clause counted *every*
+        # creature; with no step that chose a type the words name nothing, and
+        # the line refuses.
+        counted = condition.filter
+        bound_type: dict[str, object] = {}
+        if counted.of_bound_type:
+            if CHOSEN_CREATURE_TYPE_THIS_WAY not in produced:
+                raise LoweringError(
+                    "'of that type' names a creature type no step of this "
+                    "effect chose", node=condition,
+                )
+            counted = dataclasses.replace(counted, of_bound_type=False)
+            bound_type["subtype_filter_from"] = CHOSEN_CREATURE_TYPE_THIS_WAY
         payload = {
             "kind": "controls",
             "who": who,
-            "filter": condition.filter.to_payload(),
+            "filter": {**counted.to_payload(), **bound_type},
         }
         if condition.comparison is not None and isinstance(condition.comparison.value, ast.Fixed):
             payload["count"] = condition.comparison.value.value

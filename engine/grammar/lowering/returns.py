@@ -179,6 +179,20 @@ def _lower_put_source_into_zone(
     different sentence and refuses.
     """
     zone = node.zone
+    if (
+        zone.name == "hand"
+        and "revealed_card" in produced
+        and (zone.owner is None or zone.owner.kind in ("you", "owner"))
+    ):
+        # "Reveal the top card of your library. If that card is a creature
+        # card of the chosen type, **put it into your hand**." (Bloodline
+        # Shaman.) The graveyard branch below one destination over, and the
+        # same reasoning about the pronoun: a reveal in front of it claims
+        # "it", so this is the revealed card and not the source — moved out of
+        # the library it is still in (CR 701.20) into its owner's hand
+        # (CR 400.3), which for "your library … your hand" is the one pairing
+        # where the printed possessive and the rule agree.
+        return (OracleInstruction("put_revealed_card_into_hand", "", {}),)
     if zone.name != "graveyard":
         raise LoweringError(
             f"no handler puts a source into a {zone.name}", node=node

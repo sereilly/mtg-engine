@@ -197,6 +197,11 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # reason, and resolved into the ordinary subtype key before the pure
     # matcher is asked.
     "chosen_creature_type",
+    # "…target creature **that isn't of the chosen type**" (Callous
+    # Oppressor). The record above spent as an exclusion — the same source,
+    # the same resolver, turned into ``exclude_subtypes`` rather than
+    # ``subtype_filter``, and refused by the pure matcher for the same reason.
+    "not_chosen_creature_type",
     # "Each **land** of the chosen type" (Shimmer). The same recorded choice a
     # third characteristic over — CR 205.3i's land types rather than
     # CR 205.3m's creature types — needing the same source and resolved through

@@ -836,6 +836,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # than a card type, which is what the key it writes says and not what the
     # family does.
     "choose_creature_type": "chosen_colors",
+    # "**Each player** chooses a creature type." (Harsh Mercy, Patriarch's
+    # Bidding.) The row above asked of every seat in APNAP order (CR 101.4):
+    # the same family, a word per seat and no effect of its own.
+    "each_player_chooses_creature_type": "chosen_colors",
     # "…put a +0/+1 counter on that creature for each 1 damage prevented
     # this way." (Sacred Boon.) A counter placement whose number is what an
     # earlier step's shield absorbed, so it sits in the counters family with

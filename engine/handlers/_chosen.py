@@ -103,6 +103,11 @@ def chosen_keyword_as_word(filt: dict, word) -> dict:
 #: twice with a metadata key changed.
 _CHOSEN_SUBTYPE_KEYS = ("chosen_creature_type", "chosen_land_type")
 
+#: "…that isn't of the chosen type" (Callous Oppressor): CR 614.1c's creature
+#: type record on the source, spent as an exclusion by
+#: :func:`_resolve_chosen_subtype`.
+NOT_CHOSEN_CREATURE_TYPE = "not_chosen_creature_type"
+
 
 def _resolve_chosen_subtype(filt: dict, source) -> dict:
     """*filt* with a "of the chosen type" narrowing turned into a subtype key.
@@ -119,6 +124,22 @@ def _resolve_chosen_subtype(filt: dict, source) -> dict:
     ``permanent_matches_filter`` refuses every permanent, which is the safe
     direction: a dropped narrowing would hold the whole board down.
     """
+    if filt.get(NOT_CHOSEN_CREATURE_TYPE):
+        # "…target creature **that isn't of the chosen type**" (Callous
+        # Oppressor). The same record spent the other way: the word joins
+        # ``exclude_subtypes``, which every matcher tests through layer 4. No
+        # record leaves the key, and the matcher then refuses every permanent
+        # — a steal that may take nothing rather than anything.
+        word = (
+            getattr(source, "metadata", {}).get("chosen_creature_type")
+            if source else None
+        )
+        if word:
+            filt = dict(filt)
+            filt.pop(NOT_CHOSEN_CREATURE_TYPE, None)
+            filt["exclude_subtypes"] = [
+                *(filt.get("exclude_subtypes") or ()), str(word),
+            ]
     for key in _CHOSEN_SUBTYPE_KEYS:
         if not filt.get(key):
             continue

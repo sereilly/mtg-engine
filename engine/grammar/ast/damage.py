@@ -528,6 +528,14 @@ class PreventDamage:
     to: Recipient | None = None
     from_filter: ObjectFilter | None = None
     duration: Duration = field(default_factory=Duration)
+    #: "{1}{W}: The next time **a creature of the chosen type** would deal
+    #: damage to you this turn, prevent that damage." (Circle of Solace.) The
+    #: whole-instance shield with its source named as a *class* rather than
+    #: chosen: nothing is chosen, and the next source answering
+    #: ``from_filter`` spends it. Without this flag every ``from_filter`` on
+    #: this production is CR 615.8's "a source of your choice", so the two
+    #: readings cannot be told apart by the filter alone.
+    from_class: bool = False
     # "Prevent all **combat** damage …" (Fog). A narrowing of which damage
     # events the shield sees, not of where it applies, so it is a flag rather
     # than another `from_filter` — the filter describes the *source object*,

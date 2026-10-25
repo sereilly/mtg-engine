@@ -746,7 +746,7 @@ def _creature_type_choice(ctx: PromptContext, choices: list) -> dict:
     none.
     """
     data = choices[0].data
-    return {
+    rendered = {
         "player_index": choices[0].player_index,
         "card_name": data.get("card_name", ""),
         # …less a printed "other than Wall" (Unnatural Selection), through the
@@ -754,6 +754,16 @@ def _creature_type_choice(ctx: PromptContext, choices: list) -> dict:
         "creature_types": sorted(ctx.game.creature_type_choice_options(choices[0])),
         "default_creature_type": data.get("default_creature_type"),
     }
+    if data.get("slot") is not None:
+        # "**Each player** chooses a creature type." (Harsh Mercy.) CR 101.4b:
+        # a player knows the choices made before theirs, so the earlier seats'
+        # words travel with the prompt, in APNAP order — the public record of
+        # the round so far. Absent for a single chooser, whose payload is
+        # unchanged.
+        rendered["chosen_so_far"] = [
+            word for word in (data.get("chosen_so_far") or []) if word
+        ]
+    return rendered
 
 
 @prompt_renderer("color_choice")

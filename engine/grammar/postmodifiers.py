@@ -513,6 +513,30 @@ def _parse_postmodifiers(
             ):
                 d.not_enchanted = True
                 continue
+            # "…target creature **that isn't of the chosen type**" (Callous
+            # Oppressor) and "all creatures **that aren't of a type chosen
+            # this way**" (Harsh Mercy). The two "of … type" narrowings
+            # ``seat_relations`` reads, as exclusions — a CR 614.1c record on
+            # the source, and the words a resolution's "each player chooses"
+            # wrote. Both verb numbers for the "enchanted" arm's reason above,
+            # and only behind a creature head noun, which is where the
+            # sentence names CR 205.3m's catalog.
+            elif "creature" in d.card_types and (
+                stream.accept_phrase("isn't", "of", "the", "chosen", "type")
+                or stream.accept_phrase("aren't", "of", "the", "chosen", "type")
+            ):
+                d.not_chosen_creature_type = True
+                continue
+            elif "creature" in d.card_types and (
+                stream.accept_phrase(
+                    "isn't", "of", "a", "type", "chosen", "this", "way"
+                )
+                or stream.accept_phrase(
+                    "aren't", "of", "a", "type", "chosen", "this", "way"
+                )
+            ):
+                d.not_of_a_type_chosen_this_way = True
+                continue
             # "…**that are enchanted**" (Song of Serenity). The exact positive
             # of the clause above, and it sets ``enchanted_only`` rather than
             # ``is_enchanted``: this is a *restriction* on any candidate — every

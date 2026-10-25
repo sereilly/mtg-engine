@@ -58,6 +58,7 @@ from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                              BIDDING_WINNER,
                              CHOSEN_COLOR_THIS_WAY,
                              CHOSEN_CREATURE_TYPE_THIS_WAY,
+                             CHOSEN_CREATURE_TYPES_THIS_WAY,
                              CHOSEN_NUMBER_THIS_WAY, COIN_FLIPS_MADE, COIN_FLIPS_WON,
                              CHOSEN_TARGET_GRAVEYARD_SLOTS,
                              CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
@@ -146,6 +147,10 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # "Destroy all creatures **of the creature type of your choice**."
     # (Extinction.) See ``oracle_types.CHOSEN_CREATURE_TYPE_THIS_WAY``.
     "choose_creature_type": CHOSEN_CREATURE_TYPE_THIS_WAY,
+    # "**Each player** chooses a creature type. Destroy all creatures that
+    # aren't of **a type chosen this way**." (Harsh Mercy.) See
+    # ``oracle_types.CHOSEN_CREATURE_TYPES_THIS_WAY``.
+    "each_player_chooses_creature_type": CHOSEN_CREATURE_TYPES_THIS_WAY,
     # "**Choose target opponent.** … When it regenerates this way, **that
     # player** may draw a card." (Soldevi Sentry.) The seat the *targeting*
     # sentence chose, under the same key the resolution-time choice above

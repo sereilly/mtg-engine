@@ -618,7 +618,21 @@ def choose_creature_type(game: Game, instruction: OracleInstruction, context: Or
         str(word).strip().lower()
         for word in (instruction.payload.get("excluded") or ())
     )
-    default = _best_creature_type_to_sweep(game, seat, excluded=excluded)
+    # **Whose creatures the word should name is what the rest of the card does
+    # with it** — "Creatures of the creature type of your choice get +0/+4"
+    # (Defensive Maneuvers) wants the chooser's own most common type, where
+    # Extinction's sweep wants the opponents'. Read off the compiled program
+    # (``ai_prompt_readers.resolution_creature_type_preference``), never off a
+    # name; a card nothing classifies keeps the sweep's default below.
+    from ..ai_prompt_readers import resolution_creature_type_preference
+
+    side, zone = (
+        resolution_creature_type_preference(context.card)
+        if context.card is not None else None
+    ) or (None, "battlefield")
+    default = best_creature_type(
+        game, seat, side=side, zone=zone, excluded=excluded,
+    )
     context.results[key] = default
     game.arm_creature_type_choice(
         seat, card_name=card_name, result_key=key, context=context,
@@ -628,6 +642,15 @@ def choose_creature_type(game: Game, instruction: OracleInstruction, context: Or
         f"{card_name}: {game.players[seat].name} chooses a creature type"
         + (f" other than {', '.join(word.title() for word in excluded)}" if excluded else "")
     )
+    # CR 608.2d: the choice is *announced* while the effect is applied. An
+    # interactive seat's answer is logged by the resolver; a seat nobody asks
+    # took the default as the prompt was armed, which writes nothing — so it is
+    # said here, and the table can see which type the sweep behind it reads.
+    if not any(
+        owed.kind == "creature_type_choice" and owed.data.get("_context") is context
+        for owed in game.pending_choices
+    ):
+        game.log.append(f"{card_name}: chose {default or 'no creature type'}")
     return True, "resolved"
 
 
@@ -653,21 +676,205 @@ def _best_creature_type_to_sweep(
     types are scored — an animated Forest's "forest" is a subtype of the
     permanent and no answer to "choose a creature type".
     """
-    from ..grammar.vocabulary import CREATURE_TYPES
-    from ..layer_bridge import computed_types
+    return best_creature_type(game, seat, excluded=excluded)
 
-    scores: dict[str, int] = {}
-    for owner, perm in game.permanents_with_controller():
-        if not perm.is_creature:
-            continue
-        for subtype in computed_types(perm)[1]:
-            word = str(subtype).lower()
-            if word in excluded or word not in CREATURE_TYPES:
+
+def _creature_type_census(
+    game: Game, zone: str, seat: int,
+) -> list[tuple[int, frozenset[str]]]:
+    """``(seat that holds it, its creature types)`` for every object a
+    creature-type default counts in *zone*.
+
+    * ``battlefield`` — every creature, by its controller, through CR 613
+      layer 4 (``computed_types``): a creature Artificial Evolution or a
+      Mistform made a Goblin is a Goblin here, as it is to the sweep.
+    * ``graveyard`` — every creature *card* in every graveyard, by its owner
+      (CR 404.2), through ``object_creature_types`` — the printed line, or
+      Conspiracy's override for the cards a seat owns.
+    * ``library`` — *seat*'s own creature cards only: a player knows their own
+      decklist (which ``_own_creature_type_counts`` already relies on for
+      Belbe's Portal), and nobody else's.
+
+    Only **creature** types (CR 205.3m): an animated Forest's "forest" is a
+    subtype of the permanent and no answer to "choose a creature type".
+    """
+    from ..grammar.vocabulary import CREATURE_TYPES
+    from ..layer_bridge import computed_types, printed_shape
+    from ..object_creature_types import object_creature_types
+
+    found: list[tuple[int, frozenset[str]]] = []
+    if zone == "battlefield":
+        for owner, perm in game.permanents_with_controller():
+            if not perm.is_creature:
                 continue
-            scores[word] = scores.get(word, 0) + (-1 if owner == seat else 1)
-    if not scores:
+            words = frozenset(
+                str(subtype).lower() for subtype in computed_types(perm)[1]
+            ) & CREATURE_TYPES
+            found.append((owner, words))
+        return found
+    seats = [seat] if zone == "library" else range(len(game.players))
+    for owner in seats:
+        player = game.players[owner]
+        if player.lost:
+            continue
+        for card in (player.library if zone == "library" else player.graveyard):
+            if "creature" not in printed_shape(card)[0]:
+                continue
+            words = frozenset(
+                str(word).lower()
+                for word in object_creature_types(game, card, owner)
+            ) & CREATURE_TYPES
+            found.append((owner, words))
+    return found
+
+
+def best_creature_type(
+    game: Game, seat: int, *, side: str | None = None,
+    zone: str = "battlefield", excluded: tuple[str, ...] = (),
+    covered: tuple[str, ...] = (),
+) -> str | None:
+    """The creature type *seat* names when nobody asks it, for what the
+    choice is about to do.
+
+    *side* is whose objects the word should name — read off the compiled
+    program by ``ai_prompt_readers.resolution_creature_type_preference``:
+
+    * ``None`` — a hoser (Extinction's sweep, Walking Desecration's attack
+      requirement): the type maximising (opponents' objects − own);
+    * ``"you"`` — a gift (Defensive Maneuvers' +0/+4, Riptide Chronologist's
+      untap, Harsh Mercy's survivors, Patriarch's Bidding's return): the type
+      maximising (own − opponents'), among types the seat has at least one of —
+      a gift aimed at a type only the opponents hold is not one;
+    * ``"majority"`` — "If you control more creatures of that type than each
+      other player, you gain control of all creatures of that type" (Peer
+      Pressure): among the types *seat* holds strictly more of than every other
+      seat, the one the others hold most of — the type the steal takes most
+      with.
+
+    *covered* is what earlier seats already chose this way (CR 101.4b: each
+    player knows the choices made before theirs): an object with one of those
+    types is already named, so it no longer argues for anything.
+
+    Ties go to the alphabetically first word, which keeps the answer
+    deterministic — the property the AI-simulation regressions depend on.
+    ``None`` when nothing in *zone* scores at all, which every reader takes as
+    "no creature type was chosen": a sweep does nothing rather than everything.
+    *excluded* is a printed "other than <type>": never the answer.
+    """
+    counts: dict[str, dict[int, int]] = {}
+    covered_words = {str(word).lower() for word in covered if word}
+    for owner, words in _creature_type_census(game, zone, seat):
+        if covered_words & words:
+            continue
+        for word in words:
+            if word in excluded:
+                continue
+            tally = counts.setdefault(word, {})
+            tally[owner] = tally.get(owner, 0) + 1
+    if not counts:
         return None
-    return max(sorted(scores), key=lambda word: scores[word])
+
+    def own(word: str) -> int:
+        return counts[word].get(seat, 0)
+
+    def others(word: str) -> int:
+        return sum(n for holder, n in counts[word].items() if holder != seat)
+
+    if side == "majority":
+        eligible = [
+            word for word in sorted(counts)
+            if all(
+                own(word) > n
+                for holder, n in counts[word].items() if holder != seat
+            )
+        ]
+        if not eligible:
+            return None
+        return max(eligible, key=others)
+    if side == "you":
+        mine = [word for word in sorted(counts) if own(word) > 0]
+        if not mine:
+            return None
+        return max(mine, key=lambda word: (own(word) - others(word), own(word)))
+    return max(sorted(counts), key=lambda word: others(word) - own(word))
+
+
+@effect_handler("each_player_chooses_creature_type")
+def each_player_chooses_creature_type(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"**Each player chooses a creature type.** Destroy all creatures that
+    aren't of a type chosen this way." (Harsh Mercy; Patriarch's Bidding.)
+
+    CR 101.4: the active player chooses first, then each other player in turn
+    order — and CR 101.4b, each knows the choices made before theirs. The
+    ruling on Patriarch's Bidding (2021-06-18) says it in the card's own words:
+    "The player whose turn it is chooses a creature type first, followed by
+    each other player in turn order. Then, all creature cards that have one or
+    more of the chosen types are returned to the battlefield at the same time."
+
+    So the seats are asked **one at a time** (``resumption.ask_in_turn_order``):
+    the next seat's prompt is armed only once the one before has answered, and
+    the sweep behind this step — the next step of the same sequence — runs once,
+    after the last. A non-interactive seat answers as it is armed, with the
+    default computed then, so it sees the earlier answers exactly as a person
+    would. "Any player may choose a creature type that's already been chosen"
+    (the same ruling), so nothing narrows the catalog between seats.
+
+    The answers are one list in APNAP order under ``result_key``
+    (``CHOSEN_CREATURE_TYPES_THIS_WAY``), each seat's at its own slot, which
+    the one prompt kind (``creature_type_choice``) writes when it carries
+    ``slot``.
+    """
+    from ..ai_prompt_readers import resolution_creature_type_preference
+    from ..resumption import ask_in_turn_order
+
+    key = str(instruction.payload["result_key"])
+    chosen: list = []
+    context.results[key] = chosen
+    card_name = getattr(context.card, "name", "an effect")
+    side, zone = (
+        resolution_creature_type_preference(context.card)
+        if context.card is not None else None
+    ) or ("you", "battlefield")
+
+    def ask(seat: int) -> None:
+        slot = len(chosen)
+        # Computed now, not up front: the seats before this one have answered,
+        # and what they named is already named (CR 101.4b).
+        default = best_creature_type(
+            game, seat, side=side, zone=zone,
+            covered=tuple(word for word in chosen if word),
+        )
+        chosen.append(default)
+        game.log.append(
+            f"{card_name}: {game.players[seat].name} chooses a creature type"
+        )
+        game.arm_creature_type_choice(
+            seat, card_name=card_name, result_key=key, context=context,
+            default=default, slot=slot,
+        )
+        # A seat nobody asks answered as it was armed (``default_at_arm``),
+        # which writes nothing to the log — and the choice is public the moment
+        # it is made (CR 101.4b), so it is said here.
+        if not any(
+            owed.kind == "creature_type_choice"
+            and owed.data.get("_context") is context
+            and owed.data.get("slot") == slot
+            for owed in game.pending_choices
+        ):
+            game.log.append(
+                f"{card_name}: {game.players[seat].name} chose "
+                f"{default or 'no creature type'}"
+            )
+
+    def done() -> None:
+        named = [word for word in chosen if word]
+        game.log.append(
+            f"{card_name}: creature types chosen this way: "
+            + (", ".join(named) if named else "none")
+        )
+
+    ask_in_turn_order(game, ask, then=done)
+    return True, "resolved"
 
 
 def _fewest_own_permanents_type(game: Game, seat: int, options: list[str]) -> str:

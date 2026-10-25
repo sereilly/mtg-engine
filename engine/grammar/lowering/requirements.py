@@ -36,7 +36,7 @@ from .. import ast
 from ..errors import LoweringError
 from ._common import (
     _describe_targets, _is_source, _names_several_targets, _restrictions_beyond,
-    testable_filter_payload,
+    split_creature_type_choice, testable_filter_payload,
 )
 from ._record_keys import (CHOSEN_PERMANENT, CHOSEN_PLAYER, DAMAGE_RECIPIENT,
                            _UNTAPPED_PERMANENTS)
@@ -257,8 +257,29 @@ def _lower_attacks_this_turn_if_able(
         # behind it. The seat is a filter word now
         # (``subject_filters``: ``controller: "active_player"``), which is what
         # turns one card's hook into a template.
+        #
+        # "{B}, {T}: Creatures **of the creature type of your choice** attack
+        # this turn if able." (Walking Desecration.) CR 608.2d's choice, made
+        # as the ability resolves: the choosing step goes in front
+        # (``split_creature_type_choice``, Extinction's arrangement) and the
+        # requirement reads the word back through ``subtype_filter_from``,
+        # which the handler resolves into the ordinary subtype key before it
+        # asks the matcher — so the phrase the gate below tests is the rest of
+        # the noun phrase, and the narrowing it could not test is honoured
+        # rather than dropped. The handler marks **nothing** without a word: an
+        # unresolved choice read as no narrowing would compel every creature.
+        type_prelude: tuple = ()
+        chosen_type: dict = {}
+        subject_filter = node.subject.filter
+        if subject_filter.creature_type_of_your_choice:
+            type_prelude, _rest, chosen_type = split_creature_type_choice(
+                {"creature_type_of_your_choice": True}
+            )
+            subject_filter = dataclasses.replace(
+                subject_filter, creature_type_of_your_choice=False
+            )
         described = testable_filter_payload(
-            node.subject.filter,
+            subject_filter,
             refusal=(
                 "the attack requirement is enforced against every creature the "
                 "phrase describes, so a narrowing the matcher cannot test "
@@ -275,10 +296,19 @@ def _lower_attacks_this_turn_if_able(
                 "an attack requirement names a creature", node=node
             )
         requirement = OracleInstruction(
-            "force_subject_to_attack_until_eot", "", {"subject": described}
+            "force_subject_to_attack_until_eot", "",
+            {"subject": described, **chosen_type},
         )
         if not node.destroy_if_absent:
-            return (requirement,)
+            return (*type_prelude, requirement)
+        if chosen_type:
+            # The tail's "those creatures" would have to read the same word,
+            # and its handler resolves no record — refused rather than a
+            # destruction that names every creature.
+            raise LoweringError(
+                "the end-step destruction cannot read a creature type this "
+                "resolution chose", node=node,
+            )
         # "…At the beginning of the next end step, destroy each of **those
         # creatures** that didn't attack this turn." Composed rather than fused
         # into a flag on the requirement, because the two halves *do* have a

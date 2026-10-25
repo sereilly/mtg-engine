@@ -20,7 +20,10 @@ outgrow its parse family without the parse family having to split with it.
 """
 
 
-from ...oracle_types import LAST_TARGET_CONTROLLER, OracleInstruction
+import dataclasses
+
+from ...oracle_types import (CHOSEN_CREATURE_TYPE_THIS_WAY,
+                             LAST_TARGET_CONTROLLER, OracleInstruction)
 from ...subject_filters import object_only_filter, untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
@@ -538,7 +541,25 @@ def _lower_gain_control(
                 raise LoweringError(
                     "no rider rides the board-wide control change", node=node
                 )
-            described = _filter_payload(subject.filter)
+            # "Choose a creature type. If you control more creatures of that
+            # type than each other player, you gain control of **all creatures
+            # of that type**." (Peer Pressure.) The word the step in front
+            # recorded (CR 608.2d), lifted off the filter and carried — after
+            # the gate below, which no matcher-less key may pass — as the
+            # record's name, which the handler turns into ``subtype_filter``.
+            # With no step that chose a type the words name nothing, and the
+            # line refuses rather than taking every creature on the table.
+            swept = subject.filter
+            bound_type: dict[str, object] = {}
+            if swept.of_bound_type:
+                if CHOSEN_CREATURE_TYPE_THIS_WAY not in produced:
+                    raise LoweringError(
+                        "'of that type' names a creature type no step of "
+                        "this effect chose", node=node,
+                    )
+                swept = dataclasses.replace(swept, of_bound_type=False)
+                bound_type["subtype_filter_from"] = CHOSEN_CREATURE_TYPE_THIS_WAY
+            described = _filter_payload(swept)
             # ``owner`` is the phrase's whole content here and the pure matcher
             # cannot answer it — an owner is a seat, and CR 108.3's answer is
             # the game's. So it is carried separately and the handler asks
@@ -557,7 +578,8 @@ def _lower_gain_control(
                 )
             return (
                 OracleInstruction(
-                    "gain_control_of_all_matching", "", described
+                    "gain_control_of_all_matching", "",
+                    {**described, **bound_type},
                 ),
             )
         if (
@@ -693,6 +715,27 @@ def _lower_gain_control(
         # opponent's pick is made at resolution instead. What that costs is the
         # 608.2b re-check and shroud on the picked creature; what the
         # alternative costs is a second seat inside the announcement step.
+        #
+        # "{T}: Gain control of **target creature** that isn't of the chosen
+        # type for as long as this creature remains tapped." (Callous
+        # Oppressor.) The same duration on a target the *activator* chooses
+        # (CR 601.2c, an ordinary announcement), so it is the monitored steal
+        # every other linked duration records with the one condition this
+        # clause prints — ``source_remains_tapped``, which the state sweep
+        # breaks when the source untaps or leaves (CR 611.2b).
+        if (
+            subject.quantifier == "target"
+            and subject.targeted
+            and not subject.filter.chosen_by_opponent
+            and node.gained_by is None
+            and not node.tap_when_lost
+            and not node.offered
+        ):
+            described = _linked_steal_filter(node, subject)
+            described["link_conditions"] = ["source_remains_tapped"]
+            return (
+                OracleInstruction("steal_target_linked_to_source", "", described),
+            )
         if subject.quantifier != "target" or not subject.filter.chosen_by_opponent:
             raise LoweringError(
                 "the tapped-source link is printed on a choice an opponent "

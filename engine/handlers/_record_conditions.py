@@ -184,6 +184,28 @@ def evaluate_record_condition(
             answer = len(matches) == len(wanted)
         else:
             answer = bool(matches)
+        # "If that card is a creature card **of the chosen type**" (Bloodline
+        # Shaman). The word the choosing step of this resolution wrote
+        # (CR 608.2d), asked of the card through the one off-battlefield reader
+        # of creature types (``object_creature_types``: the printed line, or
+        # Conspiracy's override for its owner's cards). No word answers no —
+        # "of the chosen type" with nothing chosen names no card.
+        chosen_from = payload.get("subtype_filter_from")
+        if answer and chosen_from is not None:
+            from ..object_creature_types import object_creature_types
+
+            word = (context.results or {}).get(str(chosen_from))
+            owner = next(
+                (
+                    seat for seat, player in enumerate(game.players)
+                    if any(held is revealed for held in player.library)
+                ),
+                None,
+            )
+            answer = bool(word) and str(word).lower() in {
+                str(kind).lower()
+                for kind in object_creature_types(game, revealed, owner)
+            }
         # "If it **isn't** a land card" (Wand of Ith) — the same reading turned
         # over at the end, after the union rule above has been applied, because
         # negating each type separately would ask a different question.

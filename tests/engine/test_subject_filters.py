@@ -406,6 +406,29 @@ def test_chosen_creature_type_is_read_off_the_ability_s_source(pool):
     assert not subject_matches(game, bears, {"chosen_creature_type": True})
 
 
+def test_not_chosen_creature_type_is_the_same_record_as_an_exclusion(pool):
+    """"…target creature **that isn't of the chosen type**" (Callous
+    Oppressor). The record above spent the other way: with the source in hand
+    the chosen type is excluded and every other creature matches; without it
+    the key refuses every permanent rather than admitting them all."""
+    bears = Permanent(card=pool["Grizzly Bears"])          # a Bear
+    knight = Permanent(card=pool["White Knight"])          # a Human Knight
+    oppressor = Permanent(
+        card=pool["Grizzly Bears"], metadata={"chosen_creature_type": "bear"}
+    )
+    game = Game(
+        players=[
+            PlayerState(name="P1", battlefield=[bears, knight, oppressor]),
+            PlayerState(name="P2"),
+        ]
+    )
+    described = {"type_filter": "creature", "not_chosen_creature_type": True}
+
+    assert subject_matches(game, knight, described, source=oppressor)
+    assert not subject_matches(game, bears, described, source=oppressor)
+    assert not subject_matches(game, knight, described)
+
+
 def test_chosen_land_type_is_read_off_the_ability_s_source(pool):
     """"Each land **of the chosen type**" (Shimmer).
 
@@ -715,6 +738,8 @@ _COVERED_ELSEWHERE = {
     "chosen_keyword": "test_chosen_keyword_is_read_off_the_ability_s_source",
     "chosen_creature_type":
         "test_chosen_creature_type_is_read_off_the_ability_s_source",
+    "not_chosen_creature_type":
+        "test_not_chosen_creature_type_is_the_same_record_as_an_exclusion",
     "chosen_land_type":
         "test_chosen_land_type_is_read_off_the_ability_s_source",
     "chosen_card_type":

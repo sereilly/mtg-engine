@@ -292,6 +292,41 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
     # time: "you control" inside such a phrase means the seat that activated the
     # ability, and the shield may still be armed when that seat is not the one
     # being damaged.
+    if instruction.payload.get("protection_kind") == "source_class":
+        # "{1}{W}: The next time **a creature of the chosen type** would deal
+        # damage to you this turn, prevent that damage." (Circle of Solace.)
+        # The noun-phrase Circle's shield with **no chosen source**: the next
+        # source the phrase describes spends it, rechecked when the damage
+        # would be dealt (``Shield.source_filter``). "Of the chosen type" is
+        # the CR 614.1c record on this ability's source, resolved now — the
+        # word is fixed when the ability resolves — and nothing recorded arms
+        # nothing, since a shield whose phrase still names "the chosen type"
+        # would answer no source at all and one with the phrase dropped would
+        # answer every creature.
+        from ._chosen import _CHOSEN_SUBTYPE_KEYS, _resolve_chosen_subtype
+
+        described = _resolve_chosen_subtype(
+            dict(instruction.payload.get("source_filter") or {}),
+            context.source_permanent,
+        )
+        if not described or any(described.get(key) for key in _CHOSEN_SUBTYPE_KEYS):
+            game.log.append(
+                f"{source_name or 'Effect'}: no creature type was chosen, so "
+                "no shield is set"
+            )
+            return True, "resolved"
+        add_shield(
+            caster,
+            make_source_subject_shield(
+                described, game.players.index(caster), source_name,
+            ),
+        )
+        game.log.append(
+            f"{caster.name} sets a shield against the next "
+            f"{described.get('subtype_filter') or 'matching'} source to deal "
+            "them damage this turn"
+        )
+        return True, "resolved"
     if instruction.payload.get("protection_kind") == "source_subject":
         described = dict(instruction.payload.get("source_filter") or {})
         if described:

@@ -53,6 +53,61 @@ from ._common import (
 _SELF_SHIELD_RIDERS = frozenset({"gain_life", "exile_from_library"})
 
 
+def _lower_class_instance_shield(
+    node: ast.PreventDamage,
+) -> tuple[OracleInstruction, ...]:
+    """"{1}{W}: The next time **a creature of the chosen type** would deal
+    damage to you this turn, prevent that damage." (Circle of Solace.)
+
+    The whole-instance shield with its source named as a class: nothing is
+    chosen (no picker), and the shield answers the next source the printed
+    noun phrase describes — rechecked when the damage would be dealt, through
+    ``subject_matches`` like every other shield phrase (``Shield.source_filter``).
+    So it is the noun-phrase Circle's shield (``protection_kind``
+    ``"source_subject"``) without the chosen source, its own protection kind
+    because the picker and the handler both branch on whether a source is
+    chosen.
+
+    "Of the chosen type" is the CR 614.1c record on the ability's source; the
+    handler resolves it when the ability resolves and arms nothing when nothing
+    is recorded. Only "you" as the recipient and "this turn" as the window —
+    the one printing — and the phrase must be one the matcher tests in full,
+    or the shield would answer more sources than the card names.
+    """
+    if not _is_you(node.to) or node.to_others:
+        raise LoweringError(
+            "a class-scoped shield protects only its controller", node=node
+        )
+    if node.duration.kind != "this_turn":
+        raise LoweringError(
+            "a class-scoped shield lasts for this turn", node=node
+        )
+    if (
+        node.prevented_rider is not None
+        or node.dealt_by is not None
+        or not isinstance(node.amount, ast.Fixed)
+    ):
+        raise LoweringError(
+            "a class-scoped shield prevents one whole instance and nothing "
+            "after it", node=node,
+        )
+    described = testable_filter_payload(
+        node.from_filter,
+        refusal="the shield's source phrase cannot be tested",
+        node=node,
+    )
+    return (
+        OracleInstruction(
+            "grant_prevention_shield", "",
+            {
+                "amount": 1,
+                "protection_kind": "source_class",
+                "source_filter": described,
+            },
+        ),
+    )
+
+
 def _lower_prevent_half(node: ast.PreventDamage) -> tuple[OracleInstruction, ...]:
     """"The next time a source of your choice would deal damage to you this
     turn, prevent half that damage, rounded down." (Dark Sphere.)
@@ -204,6 +259,8 @@ def _lower_prevent_damage(
         # "prevent the next N combat damage" onto it would also eat N damage
         # from a burn spell.
         raise LoweringError("no counted shield is scoped to combat damage", node=node)
+    if node.from_class:
+        return _lower_class_instance_shield(node)
     if node.from_filter is not None:
         # Colour-scoped whole-instance shield. The handler keys on the colour;
         # a shield against an uncoloured "source of your choice" (Reverse

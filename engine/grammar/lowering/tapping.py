@@ -29,7 +29,7 @@ from ._common import (
     _describe_several_targets, _describe_targets, _full_mana_payload,
     _is_enchanted, _is_you, _targets_only, _filter_payload, _is_source,
     _is_target, _names_several_targets, _restrictions_beyond,
-    refuse_untestable, testable_filter_payload
+    refuse_untestable, split_creature_type_choice, testable_filter_payload
 )
 from ._filters import split_bound_card_type
 from ._record_keys import REMOVED_FROM_COMBAT_PERMANENTS
@@ -454,6 +454,24 @@ def _lower_tap(
         }
         return (OracleInstruction("tap_creatures_blocking_target", "", payload),)
     if spec.quantifier in ("all", "each") and not spec.targeted:
+        # "{U}, Sacrifice this creature: Untap all creatures **of the creature
+        # type of your choice**." (Riptide Chronologist.) CR 608.2d's choice,
+        # made as the ability resolves: the choosing step goes in front
+        # (``split_creature_type_choice``, Extinction's arrangement) and the
+        # sweep reads the word back through ``subtype_filter_from``. Taken off
+        # the filter before the whitelist below, which reads the unsplit filter.
+        type_prelude: tuple = ()
+        chosen_type: dict = {}
+        if spec.filter.creature_type_of_your_choice:
+            type_prelude, _rest, chosen_type = split_creature_type_choice(
+                {"creature_type_of_your_choice": True}
+            )
+            spec = dataclasses.replace(
+                spec,
+                filter=dataclasses.replace(
+                    spec.filter, creature_type_of_your_choice=False
+                ),
+            )
         # Two checks and they ask different things, which is why both stay.
         # This one is about the **AST**: a field of `ObjectFilter` that
         # `to_payload` does not carry would be a restriction dropped before the
@@ -572,6 +590,8 @@ def _lower_tap(
                 "object, and this event freezes none", node=node,
             )
         kind = "tap_all_matching" if isinstance(node, ast.Tap) else "untap_all_matching"
+        if chosen_type:
+            described = {**described, **chosen_type}
         # "**Target player** untaps all basic lands they control." (Early
         # Harvest.) The printed subject is a *chosen seat* (CR 601.2c) and the
         # noun phrase records it as `controller: "that_player"` — which the
@@ -587,7 +607,7 @@ def _lower_tap(
                 **described,
                 "targets": {"quantifier": "target", "kind": "player"},
             }
-        return (OracleInstruction(kind, "", described),)
+        return (*type_prelude, OracleInstruction(kind, "", described))
     if _names_several_targets(spec):
         # "Tap up to two target creatures." (Frost Breath.) The same instruction
         # as the one-target tap — the effect per permanent is identical — with

@@ -137,7 +137,9 @@ def _card_matches_filter(
     # (``_resolve_chosen_subtype``). Surviving to here means nobody could, and
     # ignoring it would offer every creature card in the hand — so it refuses,
     # exactly as ``permanent_matches_filter`` does for the same two keys.
-    if any(filt.get(key) for key in _CHOSEN_SUBTYPE_KEYS):
+    if any(filt.get(key) for key in _CHOSEN_SUBTYPE_KEYS) or filt.get(
+        "not_chosen_creature_type"
+    ):
         return False
     # "…cards **of that color**" with nothing behind the pronoun: the colour is
     # in a resolution's scratchpad and a reader holding one resolves it into
@@ -696,7 +698,13 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     # characteristic over, refused here for the identical reason: the record
     # lives on the *source*, this function is the pure half, and ignoring the
     # key would widen "creatures of the chosen type" to every creature.
-    if payload.get("chosen_creature_type") or payload.get("chosen_land_type"):
+    if (
+        payload.get("chosen_creature_type") or payload.get("chosen_land_type")
+        # "…that isn't of the chosen type" (Callous Oppressor): the same
+        # record as an exclusion, refused unresolved for the same reason —
+        # ignored, it would widen the phrase to every creature.
+        or payload.get("not_chosen_creature_type")
+    ):
         return False
     # "All nontoken permanents **of that type**" (Teferi's Realm) — the same
     # recorded choice on the other half of the type line, refused here for the

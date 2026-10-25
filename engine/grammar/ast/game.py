@@ -475,9 +475,17 @@ class ChooseCreatureType:
     as lowercase creature types the answer may not be. A restriction on a
     *choice*, so it is enforced where the choice is made: the prompt does not
     offer the word and the resolver refuses it.
+
+    ``chooser`` is who names it, :class:`ChooseColor`'s field one
+    characteristic over. None is the effect's controller (CR 608.2d), which is
+    every sentence printed before Onslaught. "**Each player** chooses a creature
+    type." (Harsh Mercy, Patriarch's Bidding) is the other reading: one word per
+    seat, asked in APNAP order (CR 101.4), read back as "a type chosen this
+    way".
     """
 
     excluded: tuple[str, ...] = ()
+    chooser: PlayerRef | None = None
 
 
 @dataclass(frozen=True)

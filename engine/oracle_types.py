@@ -1317,6 +1317,22 @@ REMOVED_FROM_COMBAT_PERMANENTS = "removed_from_combat_permanents"
 #: card that prints it is a sorcery.
 CHOSEN_CREATURE_TYPE_THIS_WAY = "chosen_creature_type_this_way"
 
+#: What "**a type chosen this way**" names after "**Each player** chooses a
+#: creature type." (Harsh Mercy, Patriarch's Bidding.) A *list* of words, one
+#: per seat in APNAP order (CR 101.4: the active player chooses first, then
+#: each other player in turn order, each knowing the earlier choices — 101.4b),
+#: written by ``each_player_chooses_creature_type`` and read by the sweep behind
+#: it as a union. Its own key rather than the singular above widened, because
+#: "of that type" behind one chooser and "of a type chosen this way" behind
+#: every seat are different questions, and a reader of the singular handed a
+#: list would test one word of several.
+#:
+#: A seat whose default found no creature type to name records ``None``; the
+#: readers skip it. An absent record — the step never ran — is not an empty
+#: list: a sweep reading it must do nothing rather than read "no type was
+#: chosen" as "every creature is of no chosen type".
+CHOSEN_CREATURE_TYPES_THIS_WAY = "chosen_creature_types_this_way"
+
 #: The ``cost_from`` word for "**that spell's** mana cost" (Ice Cave): the price
 #: is the mana cost of the spell the trigger fired on, read off the stack as
 #: the offer is made. Named here because the lowering writes it and the offer

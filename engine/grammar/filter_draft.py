@@ -186,6 +186,12 @@ class _FilterDraft:
     chosen_creature_type: bool = False
     #: See ``ast.ObjectFilter.creature_type_of_your_choice``.
     creature_type_of_your_choice: bool = False
+    #: See ``ast.ObjectFilter.not_chosen_creature_type``.
+    not_chosen_creature_type: bool = False
+    #: See ``ast.ObjectFilter.of_a_type_chosen_this_way``.
+    of_a_type_chosen_this_way: bool = False
+    #: See ``ast.ObjectFilter.not_of_a_type_chosen_this_way``.
+    not_of_a_type_chosen_this_way: bool = False
     # "…all cards **of that color**" (Persecute) — see the field of the same
     # name on ``ast.ObjectFilter``.
     color_chosen_this_way: bool = False
@@ -367,6 +373,9 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         chosen_keyword=d.chosen_keyword,
         chosen_creature_type=d.chosen_creature_type,
         creature_type_of_your_choice=d.creature_type_of_your_choice,
+        not_chosen_creature_type=d.not_chosen_creature_type,
+        of_a_type_chosen_this_way=d.of_a_type_chosen_this_way,
+        not_of_a_type_chosen_this_way=d.not_of_a_type_chosen_this_way,
         color_chosen_this_way=d.color_chosen_this_way,
         color_of_your_choice=d.color_of_your_choice,
         chosen_land_type=d.chosen_land_type,

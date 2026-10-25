@@ -235,6 +235,17 @@ def accept_seat_relation(stream: TokenStream, d) -> bool:
     ):
         d.creature_type_of_your_choice = True
         return True
+    # "Each player returns all creature cards **of a type chosen this way** …"
+    # (Patriarch's Bidding.) The words "each player chooses a creature type"
+    # wrote in front of it — one per seat, a union — so a field of its own
+    # beside the one above, which names one chooser's word. Only behind a
+    # creature head noun: the catalog is CR 205.3m's, and the head noun is
+    # where the sentence spells it.
+    if "creature" in d.card_types and stream.accept_phrase(
+        "of", "a", "type", "chosen", "this", "way"
+    ):
+        d.of_a_type_chosen_this_way = True
+        return True
     if stream.accept_phrase("of", "the", "chosen", "type"):
         # Which catalog the chosen word came from is spelled once, in the
         # **head noun**: "Each *land* of the chosen type" (Shimmer) is a

@@ -238,8 +238,20 @@ def gain_control_of_all_matching(
     seat = game.players.index(context.caster)
     described = {
         key: value for key, value in instruction.payload.items()
-        if key not in ("targets",)
+        if key not in ("targets", "subtype_filter_from")
     }
+    # "…you gain control of all creatures **of that type**." (Peer Pressure.)
+    # The word the choosing step in front of this one wrote (CR 608.2d),
+    # turned into the ordinary ``subtype_filter`` the matcher answers through
+    # layer 4. **No word means no steal**: the phrase read as no narrowing
+    # would take every creature on the table.
+    chosen_from = instruction.payload.get("subtype_filter_from")
+    if chosen_from is not None:
+        chosen_word = (context.results or {}).get(str(chosen_from))
+        if not chosen_word:
+            game.log.append(f"{context.card.name}: no creature type was chosen")
+            return True, "resolved"
+        described["subtype_filter"] = str(chosen_word)
     took = 0
     for permanent in list(game.all_permanents()):
         if not subject_matches(game, permanent, described, observer=seat):

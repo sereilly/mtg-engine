@@ -37,7 +37,8 @@ from __future__ import annotations
 
 import dataclasses
 
-from ...oracle_types import CHOSEN_THIS_WAY_OBJECTS, OracleInstruction
+from ...oracle_types import (CHOSEN_CREATURE_TYPES_THIS_WAY,
+                             CHOSEN_THIS_WAY_OBJECTS, OracleInstruction)
 from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
@@ -74,6 +75,19 @@ def _reads_no_return_restriction(filt: ast.ObjectFilter) -> bool:
         or filt.mana_value or filt.named or filt.other_than_source
         or filt.is_source or filt.is_enchanted
         or any(state is not None for state in tri_state)
+        # "Return up to three target creature cards **of the creature type of
+        # your choice** from your graveyard to your hand." (Aphetto Dredging.)
+        # A chosen word — announced before the targets (the card's 2004-10-04
+        # ruling), recorded on a source, or written by an earlier step — is a
+        # narrowing like any adjective above, and none of these handlers reads
+        # one: unlisted, the phrase was dropped and the spell returned any three
+        # creature cards.
+        or filt.creature_type_of_your_choice or filt.chosen_creature_type
+        or filt.not_chosen_creature_type or filt.of_a_type_chosen_this_way
+        or filt.not_of_a_type_chosen_this_way or filt.of_bound_type
+        or filt.chosen_color or filt.color_of_your_choice
+        or filt.color_chosen_this_way or filt.chosen_land_type
+        or filt.chosen_keyword
     )
 
 
@@ -629,9 +643,24 @@ def lower_described_return(
         # phrase it can answer. Everything else — the narrowing, the keys the
         # card matcher cannot test — is that gate's answer and not a second
         # copy of it here.
+        # "Each player chooses a creature type. Each player returns all
+        # creature cards **of a type chosen this way** from their graveyard to
+        # the battlefield." (Patriarch's Bidding.) The words every seat named
+        # (CR 101.4), lifted off the filter for the reason the record above is
+        # and carried beside it as the record's name — the handler turns the
+        # list into the ordinary ``subtype_filter`` union the card matcher
+        # reads. Gated on the step that writes it, for that record's reason:
+        # with no choice in front of it the words name nothing, and the sweep
+        # would return every creature card in every graveyard.
+        chosen_types = subject.filter.of_a_type_chosen_this_way
+        if chosen_types and CHOSEN_CREATURE_TYPES_THIS_WAY not in produced:
+            raise LoweringError(
+                "'a type chosen this way' names creature types no step of "
+                "this effect chose", node=node,
+            )
         scoped = dataclasses.replace(
             subject.filter, zone="battlefield", zone_owner=None,
-            destroyed_this_way=False,
+            destroyed_this_way=False, of_a_type_chosen_this_way=False,
         )
         swept = chargeable_card_filter(scoped)
         if swept is None:
@@ -644,6 +673,8 @@ def lower_described_return(
         tapped = {"tapped": True} if node.entering_tapped else {}
         if destroyed:
             tapped = {**tapped, "destroyed_this_way": True}
+        if chosen_types:
+            tapped = {**tapped, "subtype_filter_from": CHOSEN_CREATURE_TYPES_THIS_WAY}
         return (
             OracleInstruction(
                 "return_all_cards_from_graveyard", "",

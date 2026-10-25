@@ -97,6 +97,14 @@ def chosen_creature_type_side(card: CardDefinition) -> str | None:
             )
             if total:
                 sides.add("you" if total > 0 else "opponent")
+            elif payload.get("keywords"):
+                # "Creatures of the chosen type have **fear**." (Cover of
+                # Darkness); "… have **shroud**." (Steely Resolve.) A keyword
+                # granted with no P/T change is a gift to the type, so the
+                # controller's own: aimed at the opponents' type, the
+                # enchantment made *their* creatures unblockable and
+                # untargetable.
+                sides.add("you")
         elif instruction.kind == "create_token":
             sides.add("you")
         elif instruction.kind == "put_chosen_card_from_hand_onto_battlefield" and (
@@ -110,6 +118,20 @@ def chosen_creature_type_side(card: CardDefinition) -> str | None:
             payload.get("whose") is None
         ):
             sides.add("you")
+    # "{3}, {T}, **Sacrifice a creature of the chosen type**: …" (Doom
+    # Cannon.) A cost is paid out of its payer's own permanents (CR 701.21a),
+    # so a type named in one is the controller's own: aimed at the opponents'
+    # type, the artifact could never be activated.
+    for ability in compile_card_oracle(card).activated_abilities:
+        cost = getattr(ability, "cost", None)
+        if cost is not None and _reads_chosen_creature_type([
+            getattr(cost, "sacrifice_filter", None),
+            getattr(cost, "tap_filter", None),
+            getattr(cost, "exile_filter", None),
+            getattr(cost, "return_to_hand_filter", None),
+            list(getattr(cost, "discard_filters", None) or ()),
+        ]):
+            sides.add("you")
     text = card.oracle_text or ""
     restriction = untap_restriction_for(text)
     if restriction is not None and _reads_chosen_creature_type(
@@ -120,6 +142,85 @@ def chosen_creature_type_side(card: CardDefinition) -> str | None:
         if modifier.chosen_creature_type:
             sides.add("you" if modifier.reduces else "opponent")
     return next(iter(sides)) if len(sides) == 1 else None
+
+
+def _signed(value) -> int:
+    """+1, -1 or 0 for a printed P/T amount: an int by its sign, a variable
+    ("x", "-x") by its spelling."""
+    if isinstance(value, bool):
+        return 0
+    if isinstance(value, int):
+        return (value > 0) - (value < 0)
+    if isinstance(value, str) and value:
+        return -1 if value.startswith("-") else 1
+    return 0
+
+
+def resolution_creature_type_preference(
+    card: CardDefinition,
+) -> "tuple[str | None, str] | None":
+    """Whose objects a creature type chosen **while the effect resolves**
+    should name, and where they are counted — ``(side, zone)``, or None when
+    nothing the card prints says.
+
+    The resolution-time twin of :func:`chosen_creature_type_side` (which reads
+    CR 614.1c's entry record), for CR 608.2d's choice — "of the creature type of
+    your choice", "Choose a creature type.", "Each player chooses a creature
+    type." The record is spent by a later step of the same effect, through
+    ``subtype_filter_from`` (the word names the set) or
+    ``exclude_subtypes_from`` (the word names the set spared), and what that
+    step does says whose type to name (``value_choices.best_creature_type``
+    reads *side*):
+
+    * a pump to the type, by its sign (Defensive Maneuvers +0/+4, Tribal Unity
+      +X/+X — the chooser's own; Outbreak's -1/-1 — the hoser default);
+    * an untap of the type (Riptide Chronologist) — the chooser's own;
+    * a sweep that spares the types named (Harsh Mercy) — the chooser's own;
+    * every creature card of the type returned from each graveyard (Patriarch's
+      Bidding) — the chooser's own, counted in the graveyards;
+    * a revealed card tested for the type (Bloodline Shaman) — the chooser's
+      own library;
+    * a gain of control of the type behind "more … than each other player"
+      (Peer Pressure) — ``"majority"``.
+
+    Everything else that reads the word (a destroy, a tap, a discard, a forced
+    attack) is a hoser, which is the default and needs no row.
+    """
+    from .oracle_types import (CHOSEN_CREATURE_TYPE_THIS_WAY,
+                               CHOSEN_CREATURE_TYPES_THIS_WAY)
+
+    records = (CHOSEN_CREATURE_TYPE_THIS_WAY, CHOSEN_CREATURE_TYPES_THIS_WAY)
+    found: set[tuple[str | None, str]] = set()
+    for instruction in _walk_program(compile_card_oracle(card)):
+        payload = instruction.payload or {}
+        if instruction.kind == "if_then":
+            condition = payload.get("condition") or {}
+            if (
+                condition.get("kind") == "revealed_card_is"
+                and condition.get("subtype_filter_from") in records
+            ):
+                found.add(("you", "library"))
+            continue
+        described = payload.get("filter")
+        reads = payload.get("subtype_filter_from") in records or (
+            isinstance(described, dict)
+            and described.get("subtype_filter_from") in records
+        )
+        if payload.get("exclude_subtypes_from") in records:
+            found.add(("you", "battlefield"))
+        elif not reads:
+            continue
+        elif instruction.kind == "buff_creatures_global":
+            sign = _signed(payload.get("power")) + _signed(payload.get("toughness"))
+            if sign > 0:
+                found.add(("you", "battlefield"))
+        elif instruction.kind == "untap_all_matching":
+            found.add(("you", "battlefield"))
+        elif instruction.kind == "gain_control_of_all_matching":
+            found.add(("majority", "battlefield"))
+        elif instruction.kind == "return_all_cards_from_graveyard":
+            found.add(("you", "graveyard"))
+    return next(iter(found)) if len(found) == 1 else None
 
 
 #: Instruction kinds whose whole effect is that the player performing them

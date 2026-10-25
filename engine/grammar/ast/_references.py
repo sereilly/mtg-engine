@@ -378,6 +378,25 @@ class ObjectFilter:
     #: into a choosing step plus a ``subtype_filter_from`` key naming the
     #: scratchpad slot that step writes.
     creature_type_of_your_choice: bool = False
+    #: "{T}: Gain control of target creature **that isn't of the chosen
+    #: type** …" (Callous Oppressor.) ``chosen_creature_type`` read the other
+    #: way: the same CR 614.1c record on the source, spent as an exclusion. A
+    #: reader holding the source resolves it into ``exclude_subtypes``
+    #: (``handlers/_chosen._resolve_chosen_subtype``); the pure matcher refuses
+    #: it, so a reader with no source answers no rather than every creature.
+    not_chosen_creature_type: bool = False
+    #: "Each player returns all creature cards **of a type chosen this way**
+    #: …" (Patriarch's Bidding.) The words chosen by "each player chooses a
+    #: creature type" in front of it (CR 608.2d, 101.4) — a *list*, one per
+    #: seat, read as a union. No matcher can answer it; the lowering lifts it
+    #: into a ``subtype_filter_from`` naming
+    #: ``CHOSEN_CREATURE_TYPES_THIS_WAY``, and only behind the step that writes
+    #: that record.
+    of_a_type_chosen_this_way: bool = False
+    #: "Destroy all creatures **that aren't of a type chosen this way**."
+    #: (Harsh Mercy.) The field above as an exclusion, lifted into
+    #: ``exclude_subtypes_from`` by the one lowering written for it.
+    not_of_a_type_chosen_this_way: bool = False
     #: "…discards all cards **of that color**." (Persecute.) ``chosen_color``
     #: above with the choice made at a different time, which is exactly the
     #: difference ``creature_type_of_your_choice`` draws from

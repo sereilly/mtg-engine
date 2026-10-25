@@ -50,6 +50,7 @@ from .entry_choices import (
     chooses_two_land_types_on_enter,
     chooses_land_type_on_enter,
     chooses_creature_type_on_enter,
+    opponent_chooses_creature_type_on_enter,
     chooses_two_card_names_on_enter,
     CHOOSE_CARD_NAME_ON_ENTER,
     _CHOOSE_CARD_NAME_ON_ENTER_RE,
@@ -1328,6 +1329,8 @@ def enter_effect_line(line: str, card_name: str | None = None) -> str | None:
         return "chooses two basic land types as it enters"
     if chooses_creature_type_on_enter(normalized):
         return "chooses a creature type as it enters"
+    if opponent_chooses_creature_type_on_enter(normalized):
+        return "an opponent chooses a creature type as it enters"
     if chooses_land_type_on_enter(normalized):
         return "chooses a land type as it enters"
     if chooses_two_card_names_on_enter(normalized):
@@ -1396,6 +1399,7 @@ __all__ = [
     "choose_one_of_two_on_enter",
     "chooses_two_land_types_on_enter",
     "chooses_creature_type_on_enter",
+    "opponent_chooses_creature_type_on_enter",
     "chooses_land_type_on_enter",
     "chooses_card_name_on_enter",
     "chooses_two_card_names_on_enter",

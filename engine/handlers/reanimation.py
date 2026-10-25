@@ -1130,6 +1130,30 @@ def return_all_cards_from_graveyard(game: Game, instruction: OracleInstruction, 
     """
     described = dict(instruction.payload.get("filter") or {})
     who = str(instruction.payload.get("who", "you"))
+    # "Each player returns all creature cards **of a type chosen this way**
+    # …" (Patriarch's Bidding.) The words every seat named in APNAP order
+    # (CR 101.4), turned into the ``subtype_filter`` union the card matcher
+    # already reads — "all creature cards that have one or more of the chosen
+    # types are returned to the battlefield at the same time" (2021-06-18
+    # ruling). **No record means no return**: the choosing step never ran,
+    # and the phrase read as no narrowing is every creature card in every
+    # graveyard. A record naming no word returns nothing, because no card is of
+    # a type nobody chose.
+    chosen_from = instruction.payload.get("subtype_filter_from")
+    if chosen_from is not None:
+        record = context.results.get(str(chosen_from))
+        words = (
+            [str(word) for word in record if word]
+            if isinstance(record, list)
+            else ([str(record)] if isinstance(record, str) and record else [])
+        )
+        if not words:
+            game.log.append(
+                f"{getattr(context.card, 'name', 'Effect')}: no creature type "
+                "was chosen, so no card returns"
+            )
+            return True, "resolved"
+        described["subtype_filter"] = words
     # "…to **your hand**." (Crystal Chimes.) The pair of zones is what picks the
     # move, and the graveyard half is the same either way — which is why it is
     # one key rather than a second kind that would re-derive the same sweep.

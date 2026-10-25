@@ -282,8 +282,28 @@ def lower_naming_statement(
         # as a sentence of its own — the same instruction and the same record,
         # so the sentence behind it reads the word back exactly as Extinction's
         # sweep does.
-        from ..oracle_types import CHOSEN_CREATURE_TYPE_THIS_WAY
+        from ..oracle_types import (CHOSEN_CREATURE_TYPE_THIS_WAY,
+                                    CHOSEN_CREATURE_TYPES_THIS_WAY)
 
+        if statement.chooser is not None:
+            # "**Each player** chooses a creature type." (Harsh Mercy.) One
+            # word per seat, asked in APNAP order (CR 101.4) — its own kind
+            # and its own record, because "a type chosen this way" behind it
+            # is a union over every seat's word and "that type" behind one
+            # chooser is one word. Any other printed chooser is a sentence
+            # with no reading here, refused rather than given to the
+            # controller.
+            if statement.chooser.kind != "each_player" or statement.excluded:
+                raise LoweringError(
+                    f"no step asks {statement.chooser.kind!r} for a creature type",
+                    node=statement,
+                )
+            return (
+                OracleInstruction(
+                    "each_player_chooses_creature_type", "",
+                    {"result_key": CHOSEN_CREATURE_TYPES_THIS_WAY},
+                ),
+            )
         chosen_type: dict[str, object] = {
             "result_key": CHOSEN_CREATURE_TYPE_THIS_WAY
         }
