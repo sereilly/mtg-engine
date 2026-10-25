@@ -51,7 +51,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | TOR | 143 | 261 | 86.2% | 86.2% | 68.2% | 138 |
 | JUD | 143 | 241 | 91.3% | 90.9% | 65.6% | 131 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| ONS *(measured)* | 335 | 541 | 69.9% | 66.5% | 47.1% | 216 |
+| ONS *(measured)* | 335 | 541 | 70.6% | 68.0% | 48.4% | 221 |
 | **All (shipped)** | **8027** | **11886** | **90.6%** | **90.1%** | **62.4%** | **6271** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -64,7 +64,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 752 | 398 | expected a subject |  |
+| 751 | 397 | expected a subject |  |
 | 189 | 103 | unrecognized effect verb |  |
 | 135 | 73 | unconsumed text |  |
 | 70 | 51 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -86,9 +86,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 3 | 3 | unrecognized "can't be" restriction |  |
 | 3 | 1 | expected 'top' |  |
 | 3 | 3 | an Aura's continuous grant is derived by engine/auras.py |  |
-| 3 | 3 | expected an object noun |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
+| 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
 
 ## Cards executing through the grammar
 
@@ -485,6 +485,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Untap target artifact or creature.`
 - **Aphetto Grifter**
   - `Tap two untapped Wizards you control: Tap target permanent.`
+- **Aphetto Vulture**
+  - `When this creature dies, you may put target Zombie card from your graveyard on top of your library.`
 - **Apocalypse**
   - `Exile all permanents. You discard your hand.`
 - **Apocalypse Chime**
@@ -990,6 +992,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Binding Grasp**
   - `At the beginning of your upkeep, sacrifice this Aura unless you pay {1}{U}.`
   - `At the beginning of your upkeep, sacrifice this Aura unless you pay {1}{U}.`
+- **Birchlore Rangers**
+  - `Tap two untapped Elves you control: Add one mana of any color.`
 - **Birds of Paradise**
   - `{T}: Add one mana of any color.`
   - `{T}: Add one mana of any color.`
@@ -9607,6 +9611,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {C}.`
 - **Sheltering Prayers**
   - `Basic lands each player controls have shroud as long as that player controls three or fewer lands. (They can't be the targets of spells or abilities.)`
+- **Shepherd of Rot**
+  - `{T}: Each player loses 1 life for each Zombie on the battlefield.`
 - **Shield Dancer**
   - `{2}{W}: The next time target attacking creature would deal combat damage to this creature this turn, that creature deals that damage to itself instead.`
 - **Shield Mate**
@@ -10375,6 +10381,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Starlit Sanctum**
   - `{T}: Add {C}.`
   - `{W}, {T}, Sacrifice a Cleric creature: You gain life equal to the sacrificed creature's toughness.`
+  - `{B}, {T}, Sacrifice a Cleric creature: Target player loses life equal to the sacrificed creature's power.`
 - **Starstorm**
   - `Starstorm deals X damage to each creature.`
 - **Stasis**
@@ -11558,6 +11565,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Draw a card.`
 - **Unholy Grotto**
   - `{T}: Add {C}.`
+  - `{B}, {T}: Put target Zombie card from your graveyard on top of your library.`
 - **Unified Strike**
   - `Exile target attacking creature if its power is less than or equal to the number of Soldiers on the battlefield.`
 - **Unifying Theory**
@@ -11911,6 +11919,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Tap an untapped Merfolk you control: This creature can attack this turn as though it didn't have defender.`
   - `Tap an untapped Merfolk you control: This creature gets +2/+1 until end of turn.`
   - `When this creature dies, destroy all Merfolk tapped this turn to pay for its abilities.`
+- **Voice of the Woods**
+  - `Tap five untapped Elves you control: Create a 7/7 green Elemental creature token with trample. (It can deal excess combat damage to the player or planeswalker it's attacking.)`
 - **Void**
   - `Choose a number. Destroy all artifacts and creatures with mana value equal to that number. Then target player reveals their hand and discards all nonland cards with mana value equal to the number.`
 - **Voidmage Prodigy**
@@ -12336,6 +12346,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Wirewood Lodge**
   - `{T}: Add {C}.`
   - `{G}, {T}: Untap target Elf.`
+- **Wirewood Pride**
+  - `Target creature gets +X/+X until end of turn, where X is the number of Elves on the battlefield.`
 - **Wirewood Savage**
   - `Whenever a Beast enters, you may draw a card.`
 - **Wishmonger**

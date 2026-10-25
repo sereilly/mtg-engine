@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**8 unclaimed sentence(s) across 7 supported card(s).**
+**6 unclaimed sentence(s) across 5 supported card(s).**
 
 - **Aurification**
   - `each creature with a gold counter on it is a wall in addition to its other creature types and has defender`
@@ -36,10 +36,6 @@ anything anyone did, and every ingest would arrive red.
 - **Risky Move**
   - `when you gain control of this enchantment from another player, choose a creature you control and an opponent`
   - `if you lose the flip, that opponent gains control of that creature`
-- **Starlit Sanctum**
-  - `{b}, {t}, sacrifice a cleric creature: target player loses life equal to the sacrificed creature's power`
-- **Unholy Grotto**
-  - `{b}, {t}: put target zombie card from your graveyard on top of your library`
 - **Wheel and Deal**
   - `any number of target opponents each discard their hands, then draw seven cards`
 
