@@ -466,6 +466,36 @@ def put_revealed_card_onto_battlefield(game: Game, instruction: OracleInstructio
     return True, "resolved"
 
 
+@effect_handler("put_revealed_card_into_hand")
+def put_revealed_card_into_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Reveal the top card of your library. If that card is a creature card
+    of the chosen type, **put it into your hand**." (Bloodline Shaman.)
+
+    ``put_revealed_card_onto_battlefield`` above with the third destination,
+    located the same way and for the same reason — the revealed card is still
+    in its library (CR 701.20 moves nothing), found by identity — and moved
+    through the one hand seam (``Game.put_card_into_hand``) into its
+    **owner's** hand (CR 400.3), which is the seat whose library it came out
+    of. A card that has moved since is left alone.
+    """
+    card = context.results.get("revealed_card")
+    if card is None:
+        game.log.append(f"{context.card.name}: no card was turned up")
+        return True, "resolved"
+    for player in game.players:
+        for index, held in enumerate(player.library):
+            if held is card:
+                player.library.pop(index)
+                if game.put_card_into_hand(player, held):
+                    game.log.append(
+                        f"{context.card.name}: {held.name} goes into "
+                        f"{player.name}'s hand"
+                    )
+                return True, "resolved"
+    game.log.append(f"{context.card.name}: {card.name} has already moved")
+    return True, "resolved"
+
+
 @effect_handler("reveal_until_match")
 def reveal_until_match(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"…reveals cards from the top of their library until they reveal a

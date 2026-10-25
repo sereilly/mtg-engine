@@ -20,7 +20,10 @@ outgrow its parse family without the parse family having to split with it.
 """
 
 
-from ...oracle_types import LAST_TARGET_CONTROLLER, OracleInstruction
+import dataclasses
+
+from ...oracle_types import (CHOSEN_CREATURE_TYPE_THIS_WAY,
+                             LAST_TARGET_CONTROLLER, OracleInstruction)
 from ...subject_filters import object_only_filter, untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
@@ -538,7 +541,25 @@ def _lower_gain_control(
                 raise LoweringError(
                     "no rider rides the board-wide control change", node=node
                 )
-            described = _filter_payload(subject.filter)
+            # "Choose a creature type. If you control more creatures of that
+            # type than each other player, you gain control of **all creatures
+            # of that type**." (Peer Pressure.) The word the step in front
+            # recorded (CR 608.2d), lifted off the filter and carried — after
+            # the gate below, which no matcher-less key may pass — as the
+            # record's name, which the handler turns into ``subtype_filter``.
+            # With no step that chose a type the words name nothing, and the
+            # line refuses rather than taking every creature on the table.
+            swept = subject.filter
+            bound_type: dict[str, object] = {}
+            if swept.of_bound_type:
+                if CHOSEN_CREATURE_TYPE_THIS_WAY not in produced:
+                    raise LoweringError(
+                        "'of that type' names a creature type no step of "
+                        "this effect chose", node=node,
+                    )
+                swept = dataclasses.replace(swept, of_bound_type=False)
+                bound_type["subtype_filter_from"] = CHOSEN_CREATURE_TYPE_THIS_WAY
+            described = _filter_payload(swept)
             # ``owner`` is the phrase's whole content here and the pure matcher
             # cannot answer it — an owner is a seat, and CR 108.3's answer is
             # the game's. So it is carried separately and the handler asks
@@ -557,7 +578,8 @@ def _lower_gain_control(
                 )
             return (
                 OracleInstruction(
-                    "gain_control_of_all_matching", "", described
+                    "gain_control_of_all_matching", "",
+                    {**described, **bound_type},
                 ),
             )
         if (

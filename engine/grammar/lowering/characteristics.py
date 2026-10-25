@@ -49,6 +49,7 @@ from ._counted_pumps import (_TARGET_PUMP_DURATIONS, lower_counted_pump,
 from ._events import (binds_block_pair, _EVENT_SUBJECT_OBJECTS,
                       ROLE_NAMES_EVENT_SUBJECT)
 from ._common import (
+    split_creature_type_choice,
     _describe_several_targets,
     _describe_targets,
     _durationless_reason,
@@ -482,6 +483,21 @@ def _lower_pump(
                 )
             filt = dataclasses.replace(filt, of_bound_type=False)
             bound_type["subtype_filter_from"] = CHOSEN_CREATURE_TYPE_THIS_WAY
+        # "Creatures **of the creature type of your choice** get +0/+4 until
+        # end of turn." (Defensive Maneuvers, Tribal Unity.) Extinction's
+        # phrase on a pump: CR 608.2d's choice made while the spell resolves,
+        # so the choosing step goes in front of the buff
+        # (``split_creature_type_choice``) and the buff reads the word back
+        # through the same ``subtype_filter_from`` key Outbreak's "of that
+        # type" already lands on. Taken off the filter here, before the
+        # whitelist below, which reads the unsplit filter and would refuse it.
+        type_prelude: tuple = ()
+        if filt.creature_type_of_your_choice:
+            type_prelude, _rest, chosen_type = split_creature_type_choice(
+                {"creature_type_of_your_choice": True}
+            )
+            filt = dataclasses.replace(filt, creature_type_of_your_choice=False)
+            bound_type.update(chosen_type)
         leftover = _restrictions_beyond(
             filt,
             frozenset({
@@ -681,7 +697,10 @@ def _lower_pump(
                     "buff_creatures_global_while_source_tapped", "", payload
                 ),
             )
-        return (OracleInstruction("buff_creatures_global", "", payload),)
+        return (
+            *type_prelude,
+            OracleInstruction("buff_creatures_global", "", payload),
+        )
 
     raise LoweringError("unsupported pump subject", node=node)
 

@@ -642,6 +642,15 @@ def choose_creature_type(game: Game, instruction: OracleInstruction, context: Or
         f"{card_name}: {game.players[seat].name} chooses a creature type"
         + (f" other than {', '.join(word.title() for word in excluded)}" if excluded else "")
     )
+    # CR 608.2d: the choice is *announced* while the effect is applied. An
+    # interactive seat's answer is logged by the resolver; a seat nobody asks
+    # took the default as the prompt was armed, which writes nothing — so it is
+    # said here, and the table can see which type the sweep behind it reads.
+    if not any(
+        owed.kind == "creature_type_choice" and owed.data.get("_context") is context
+        for owed in game.pending_choices
+    ):
+        game.log.append(f"{card_name}: chose {default or 'no creature type'}")
     return True, "resolved"
 
 

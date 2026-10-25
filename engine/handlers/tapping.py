@@ -338,6 +338,18 @@ def _tap_or_untap_all_matching(
     # direction — the alternative is tapping the target player's whole board on
     # a choice nobody made.
     described = resolve_chosen_card_type_in_resolution(described, context)
+    # "Untap all creatures **of the creature type of your choice**." (Riptide
+    # Chronologist.) The word the step in front of this one wrote (CR 608.2d),
+    # turned into the ordinary ``subtype_filter`` the matcher answers through
+    # layer 4 — Extinction's sweep's arrangement, and its rule: **no word means
+    # no sweep**, because the phrase read as no narrowing is every creature.
+    scratch_key = described.pop("subtype_filter_from", None)
+    if scratch_key is not None:
+        chosen_subtype = context.results.get(str(scratch_key))
+        if not chosen_subtype:
+            game.log.append(f"{context.card.name}: no creature type was chosen")
+            return True, "resolved"
+        described["subtype_filter"] = str(chosen_subtype)
     # "…all untapped Islands **that player** controls" (Monsoon). The seat is
     # the one the firing event froze (CR 603.10), not the source's controller —
     # which is the wrong seat on every end step but their own.

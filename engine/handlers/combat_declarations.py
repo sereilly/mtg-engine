@@ -476,6 +476,19 @@ def force_subject_to_attack_until_eot(game: Game, instruction: OracleInstruction
 
     payload = instruction.payload
     described = payload.get("subject") or {}
+    # "Creatures **of the creature type of your choice** attack this turn if
+    # able." (Walking Desecration.) The word the step in front of this one
+    # wrote (CR 608.2d), turned into the ordinary ``subtype_filter`` the
+    # matcher answers through layer 4. **No word means no requirement**: the
+    # phrase read as no narrowing would compel every creature on the
+    # battlefield, which is strictly more than the card names.
+    scratch_key = payload.get("subtype_filter_from")
+    if scratch_key is not None:
+        chosen_subtype = (context.results or {}).get(str(scratch_key))
+        if not chosen_subtype:
+            game.log.append(f"{context.card.name}: no creature type was chosen")
+            return True, "resolved"
+        described = {**described, "subtype_filter": str(chosen_subtype)}
     destroy = bool(payload.get("destroy_if_absent"))
     observer = (
         game.players.index(context.caster) if context.caster in game.players

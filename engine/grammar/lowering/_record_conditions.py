@@ -53,7 +53,8 @@ reader is ``conditions``, and it reads nothing back.
 from __future__ import annotations
 
 from ...damage_deaths import DAMAGED_BY_SOURCE_DIED
-from ...oracle_types import (CHOSEN_COLOR_THIS_WAY, CHOSEN_NUMBER_THIS_WAY,
+from ...oracle_types import (CHOSEN_COLOR_THIS_WAY, CHOSEN_CREATURE_TYPE_THIS_WAY,
+                             CHOSEN_NUMBER_THIS_WAY,
                              DISCARDED_THIS_WAY,
                              MILLED_THIS_WAY, PUT_INTO_HAND_THIS_WAY,
                              REVEALED_HAND_CARDS)
@@ -199,9 +200,21 @@ def lower_record_condition(
                 "'it' with nothing in this effect that revealed a card",
                 node=condition,
             )
+        # "Choose a creature type. Reveal the top card of your library. If that
+        # card is a creature card **of the chosen type**, …" (Bloodline
+        # Shaman.) "The chosen type" here is the word the step in front of the
+        # reveal chose (CR 608.2d) — the source made no entry choice — so it
+        # is read out of that step's record rather than off the source, and
+        # only behind such a step: with no producer the phrase is the CR
+        # 614.1c record this test cannot reach, and it refuses below.
+        chosen_this_way = (
+            condition.filter.chosen_creature_type
+            and CHOSEN_CREATURE_TYPE_THIS_WAY in produced
+        )
         leftover = _restrictions_beyond(
             condition.filter,
-            {"card_types", "is_card", "type_match", "excluded_types"},
+            {"card_types", "is_card", "type_match", "excluded_types"}
+            | ({"chosen_creature_type"} if chosen_this_way else set()),
         )
         if leftover:
             raise LoweringError(
@@ -232,6 +245,8 @@ def lower_record_condition(
         # pipeline is.
         if condition.negated:
             payload["negated"] = True
+        if chosen_this_way:
+            payload["subtype_filter_from"] = CHOSEN_CREATURE_TYPE_THIS_WAY
         return payload
     if isinstance(condition, ast.ItWas):
         # The pronoun's referent, resolved here because only here is the

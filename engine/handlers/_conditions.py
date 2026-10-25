@@ -503,6 +503,21 @@ def evaluate_state_condition(
                 return False
             players = [game.players[seat]]
         filters = payload.get("filter") or {}
+        # "If you control more creatures **of that type** than each other
+        # player" (Peer Pressure). The word an earlier step of this resolution
+        # chose (CR 608.2d), turned into the ordinary ``subtype_filter``
+        # before anything is counted. **No word answers False**: a count over
+        # "creatures of no type" read as every creature would hand the
+        # superlative to whoever has the biggest board.
+        chosen_from = filters.get("subtype_filter_from")
+        if chosen_from is not None:
+            chosen_word = (context.results or {}).get(str(chosen_from))
+            if not chosen_word:
+                return False
+            filters = {
+                **{k: v for k, v in filters.items() if k != "subtype_filter_from"},
+                "subtype_filter": str(chosen_word),
+            }
         # "another creature…" (Turret Ogre): the asking ability's own source
         # never satisfies its own condition. Outside the matcher's vocabulary
         # — it answers about a permanent alone — so it is asked here, the same
@@ -569,7 +584,6 @@ def evaluate_state_condition(
                 if other is not asked and not other.lost
             )
         if op == "more_than_you":
-            filters = payload.get("filter") or {}
             own = sum(
                 1
                 for permanent in game.controlled_by(context.caster)
