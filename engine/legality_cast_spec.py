@@ -292,6 +292,14 @@ class CastTargetSpecMixin:
                     )
                     for seat in sorted(counted)
                 }
+        # A seat announced beside the spec's own slots (the pile's owner, the
+        # opponent a count is taken on, the opponent beside a division —
+        # ``target_descriptions.ANNOUNCED_SEAT``): the seats the gate admits,
+        # in the picker's own words, so a client can ask for one rather than
+        # send whatever seat it holds (the caster's own pile, its default).
+        seats_beside = self._announced_seats(caster_index, card, spec)
+        if seats_beside is not None:
+            spec["announced_seats"] = sorted(seats_beside)
         # CR 107.3a's *other three* places an X can live. The browser asked only
         # the mana-cost string, so Fire Covenant ({1}{B}{R}, "pay X life") and
         # Infernal Harvest ({1}{B}, "return X Swamps") were offered no X box at

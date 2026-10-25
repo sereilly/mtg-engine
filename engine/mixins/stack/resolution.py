@@ -693,7 +693,10 @@ class StackResolutionMixin:
         CR 608.2b to re-check."""
         if item.ability_instruction is not None:
             return False
-        spec = graveyard_target_spec(item.card, compile_card_oracle(item.card)) or {}
+        # The spell's own card: an instant or sorcery on the stack *is* the
+        # card (no permanent's layers to read through).
+        spell = item.card
+        spec = graveyard_target_spec(spell, compile_card_oracle(spell)) or {}
         return bool(spec.get(ANNOUNCED_SEAT) and spec.get("own_graveyard_only"))
 
     def _run_stack_item_resolution(self, item: StackItem) -> None:
