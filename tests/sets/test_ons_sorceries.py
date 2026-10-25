@@ -345,4 +345,60 @@ def test_w1g13_strongarm_tactics_charges_each_seat_that_kept_its_creatures(set_p
     assert [c.name for c in bob.graveyard] == ["Hill Giant"]
     assert (alice.life, bob.life, cara.life) == (16, 20, 16)
 
+
+def _w1g13_tokens(game, seat, name="Bear Token"):
+    return [perm for perm in game.controlled_by(seat) if perm.card.name == name]
+
+
+def test_w1g13_kamahls_summons_each_seat_reveals_in_turn_and_gets_its_bears(set_pool):
+    """"Each player may reveal any number of creature cards from their hand.
+    Then each player creates a 2/2 green Bear creature token for each card
+    they revealed this way." Asked one seat at a time in APNAP order — Bob is
+    asked only after Alice's reveal is public (CR 101.4b) — only creature
+    cards are offered, a seat with none is not asked, and each seat's Bears
+    are its own count."""
+    game = _w1g13_table(
+        set_pool,
+        {0: ["Kamahl's Summons", _w1g13_creature("Alice's Bear", 2, 2), "Plains"],
+         1: [_w1g13_creature("Giant", 3, 3), _w1g13_creature("Dragon", 5, 5), "Shock"],
+         2: ["Plains"]},
+        interactive={0, 1, 2},
+    )
+    alice, bob, cara = game.players
+    assert game.cast_from_hand(0, "Kamahl's Summons").supported
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("choose_cards_in_hand", 0),
+    ]
+    offered = game.live_choose_cards_in_hand(game.pending_choices[0])
+    assert [alice.hand[i].name for i in offered] == ["Alice's Bear"]
+    assert game.confirm_choose_cards_in_hand(0, offered)
+    assert game.reveal_events[-1]["seat"] == 0
+    assert game.reveal_events[-1]["cards"] == ["Alice's Bear"]
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("choose_cards_in_hand", 1),
+    ]
+    offered = game.live_choose_cards_in_hand(game.pending_choices[0])
+    assert [bob.hand[i].name for i in offered] == ["Giant", "Dragon"]
+    assert game.confirm_choose_cards_in_hand(1, offered[:1])
+    assert game.pending_choices == [], "Cara holds no creature card and is not asked"
+    _w1g13_resolve_stack(game)
+    assert len(_w1g13_tokens(game, 0)) == 1
+    assert len(_w1g13_tokens(game, 1)) == 1
+    assert _w1g13_tokens(game, 2) == []
+    bear = _w1g13_tokens(game, 0)[0]
+    assert (bear.effective_power, bear.effective_toughness) == (2, 2)
+    assert len(alice.hand) == 2 and len(bob.hand) == 3, "a reveal moves nothing"
+
+
+def test_w1g13_kamahls_summons_a_seat_nobody_asks_reveals_every_creature(set_pool):
+    """The stated default for "any number": every eligible card."""
+    game = _w1g13_table(
+        set_pool,
+        {0: ["Kamahl's Summons"],
+         1: [_w1g13_creature("Giant", 3, 3), _w1g13_creature("Dragon", 5, 5)]},
+    )
+    assert game.cast_from_hand(0, "Kamahl's Summons").supported
+    _w1g13_resolve_stack(game)
+    assert [len(_w1g13_tokens(game, seat)) for seat in range(3)] == [0, 2, 0]
+
 # ==== end W1G13 ======================================================

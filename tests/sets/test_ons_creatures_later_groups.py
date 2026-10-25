@@ -340,4 +340,77 @@ def test_w1g13_gigapede_returns_from_the_graveyard_for_a_discard(set_pool):
     assert [c.name for c in alice.hand] == ["Gigapede"]
     assert [c.name for c in alice.graveyard] == ["Plains"]
 
+
+def _w1g13_quiet_put(game, seat, card):
+    permanent = _w1g13_Permanent(card=card)
+    game.players[seat].battlefield.append(permanent)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    game._sync_control()
+    return permanent
+
+
+def test_w1g13_tempting_wurm_each_opponent_puts_cards_from_their_hand(set_pool):
+    """"When this creature enters, each opponent may put any number of
+    artifact, creature, enchantment, and/or land cards from their hand onto
+    the battlefield." Each opponent in APNAP order, Bob before Cara, offered
+    only the four printed types (never the instant), the Wurm's controller
+    never asked; the chosen cards enter together under their owners, after
+    the last choice, and an Aura enters attached to a creature already there
+    (CR 303.4f) — its controller asked which."""
+    ons = set_pool("ONS")
+    giant = _w1g13_creature("Bob's Giant", 3, 3)
+    game = _w1g13_table(
+        set_pool,
+        {0: ["Tempting Wurm"], 1: [giant, "Pacifism", "Shock", "Forest"],
+         2: ["Plains"]},
+        interactive={0, 1, 2},
+    )
+    alice, bob, cara = game.players
+    alices = _w1g13_quiet_put(game, 0, _w1g13_creature("Alice's Bear", 2, 2))
+    assert game.cast_from_hand(0, "Tempting Wurm").supported
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("choose_cards_in_hand", 1),
+    ]
+    offered = game.live_choose_cards_in_hand(game.pending_choices[0])
+    assert [bob.hand[i].name for i in offered] == ["Bob's Giant", "Pacifism", "Forest"]
+    assert game.confirm_choose_cards_in_hand(1, offered)
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("choose_cards_in_hand", 2),
+    ]
+    assert not any(perm.card is giant for perm in game.controlled_by(1)), (
+        "nothing enters before the last opponent has chosen"
+    )
+    assert game.confirm_choose_cards_in_hand(2, [])
+    host = game.pending_choice_of("permanent_choice", 1)
+    assert host is not None, "Bob chooses what his Pacifism enchants"
+    assert game.confirm_permanent_choice(1, alices.permanent_id)
+    _w1g13_resolve_stack(game)
+    assert sorted(perm.card.name for perm in game.controlled_by(1)) == [
+        "Bob's Giant", "Forest", "Pacifism",
+    ]
+    assert [c.name for c in bob.hand] == ["Shock"]
+    pacifism = next(p for p in game.controlled_by(1) if p.card is ons["Pacifism"])
+    assert pacifism.metadata.get("attached_to") is alices
+    assert [c.name for c in cara.hand] == ["Plains"]
+    assert [perm.card.name for perm in game.controlled_by(2)] == []
+
+
+def test_w1g13_tempting_wurm_an_aura_with_nothing_to_enchant_stays_in_hand(set_pool):
+    """CR 303.4g: with no creature already on the battlefield besides the
+    Wurm — here none at all once the Wurm is gone — an Aura stays in the hand.
+    A seat nobody asks takes every card the sentence offers."""
+    ons = set_pool("ONS")
+    game = _w1g13_table(set_pool, {0: ["Tempting Wurm"], 1: ["Pacifism", "Forest"]})
+    bob = game.players[1]
+    assert game.queue_from_hand(0, "Tempting Wurm").supported
+    game.resolve_top_of_stack()
+    wurm = next(p for p in game.controlled_by(0) if p.card.name == "Tempting Wurm")
+    game.remove_from_battlefield(wurm)
+    _w1g13_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    assert [perm.card.name for perm in game.controlled_by(1)] == ["Forest"]
+    assert [c.name for c in bob.hand] == ["Pacifism"]
+    assert any("303.4g" in line for line in game.log)
+    assert ons["Pacifism"] in bob.hand
+
 # ==== end W1G13 ======================================================
