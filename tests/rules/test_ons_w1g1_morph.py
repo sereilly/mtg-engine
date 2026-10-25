@@ -110,6 +110,13 @@ def test_702_37c_taxes_see_the_face_down_spell_and_not_the_card(ons):
     the {3} as CR 118.9d keeps every increase on top of an alternative cost."""
     angel = ons["Exalted Angel"]
     game, p1, _p2 = _duel([angel], [Permanent(card=_CATALOG["Gloom"])])
+    # Every reader that *prices* the cast before making it — the offer's
+    # `payable`, the castable highlight, the AI — asks the one reader the
+    # cast path agrees with, and it says {3} as well.
+    (morph,) = game.applicable_alternative_costs(0, angel)
+    assert morph.describe() == "cast it face down as a 2/2 creature for {3}"
+    owed = game.alternative_cost_mana(0, angel, morph)
+    assert {k: v for k, v in owed.items() if v} == {"generic": 3}
     p1.mana_pool.update({"C": 3})
     _cast_face_down(game, 0, "Exalted Angel")
     assert len(game.stack) == 1 and sum(p1.mana_pool.values()) == 0

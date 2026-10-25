@@ -390,6 +390,10 @@ class AlternativeCost:
             # The words are the printed ones, so a log line and a prompt label
             # read back as the sentence the player is being offered.
             return "cast it without paying its mana cost"
+        if self.keyword == "morph":  # ``face_down.MORPH``
+            # CR 702.37a: what this cost buys is not only a price — the spell
+            # is a face-down 2/2 — so the offer a player is shown says so.
+            return f"cast it face down as a 2/2 creature for {self.mana}"
         parts = []
         if self.mana is not None:
             parts.append(f"pay {self.mana or 'a cost it does not have'}")
