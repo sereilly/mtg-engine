@@ -35,7 +35,7 @@ import random
 
 import pytest
 
-from engine import Game, PlayerState
+from engine import Game, PlayerState, faces
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
 from engine.targeting import announces_a_target
@@ -176,7 +176,8 @@ def _combat(card, road: str, *, watcher=None, interactive=()):
 
 def _combat_cards(catalog):
     seen = set()
-    for card in catalog:
+    # Each half of a split card is a card of its own (``faces``).
+    for card in faces.compilation_units(catalog):
         if card.name in seen or "Land" in card.type_line.split(" - ")[0]:
             continue
         seen.add(card.name)
@@ -190,7 +191,7 @@ def _combat_cards(catalog):
             yield card
 
 
-@pytest.mark.cr("603.3d", "115.10", "603.2")
+@pytest.mark.cr("603.3d", "115.10a", "603.2")
 def test_a_combat_trigger_that_names_no_target_announces_none(catalog):
     """Every triggered ability a combat fire site puts on the stack from a
     sampled card, down every road: one whose printed line names no target of
@@ -223,7 +224,7 @@ def test_a_combat_trigger_that_names_no_target_announces_none(catalog):
     assert acted_on >= 75, acted_on
 
 
-@pytest.mark.cr("603.2", "115.10")
+@pytest.mark.cr("603.2", "115.10a")
 def test_skulking_ghost_survives_blocking_an_aisling_leprechaun(set_pool):
     """"Whenever this creature blocks or becomes blocked by a creature, that
     creature becomes green." The Ghost ("When this creature becomes the target
@@ -248,7 +249,7 @@ def test_skulking_ghost_survives_blocking_an_aisling_leprechaun(set_pool):
     assert not any("sacrificed" in line for line in game.log)
 
 
-@pytest.mark.cr("603.2", "115.10")
+@pytest.mark.cr("603.2", "115.10a")
 def test_cowardice_does_not_bounce_a_cockatrice_for_blocking(set_pool):
     """Cowardice answers a creature that becomes a target, and Cockatrice's
     "destroy that creature at end of combat" targets nothing — the block made
