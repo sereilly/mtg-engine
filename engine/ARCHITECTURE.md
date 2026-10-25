@@ -232,7 +232,7 @@ the rules logic changing.
 
 | Accessor | Layer |
 | --- | --- |
-| `Permanent.effective_card` | 1 (copy), then 3 (text-changing) |
+| `Permanent.effective_card` | 1 (copy, then 1b face-down), then 3 (text-changing) |
 | `Permanent.copied_from` | 1 (copy) |
 | `Game.controller_index_of` / `controls` / `controlled_by` | 2 (control-changing; `engine/control.py`, contributions with timestamps over `base_controller_index`) |
 | `Permanent.is_creature`, `Permanent.has_type`, `Permanent.basic_land_types` | 4 (type-changing) |
@@ -252,6 +252,31 @@ copy is stamped onto the copy: P/T, colours, types and abilities are all read
 back through the layers from the recorded contribution, which is what keeps
 CR 707.2's boundary — printed values as modified by *copy* effects, and nothing
 else. `tests/engine/test_copy_reads.py` enforces it.
+
+**A face-down object's card is the blank 2/2** (CR 708.2a, layer 1b;
+`engine/face_down.py`). A face-down spell's `StackItem.card` and a face-down
+permanent's `Permanent.card` *are* `face_down.face_down_card(real)` — no
+name, text, subtypes, mana cost or colour, 2/2 — with the hidden card riding
+on it as `CardDefinition.face_down_of`. So every reader of a characteristic,
+every log line and every serializer is fail-closed by construction (a
+face-down object never names its card to the table, CR 708.5). What the shape
+owes in return is that the hidden card goes wherever the object goes when it
+stops being hidden (CR 708.9), and that is two seams, both asked already:
+`faces.whole_card` (every zone funnel and the stack's bin) follows
+`face_down_of` exactly as it follows a split half's `face_of`, and
+`Game.remove_all_from_battlefield` reveals a departing face-down permanent
+(`face_down.reveal_departing`): its card becomes the real one, and
+`copies.FACE_DOWN_AS_IT_LEFT` keeps what the departed object *was* the
+face-down 2/2 for every last-known-information reader (CR 603.10). Layer 1b
+follows 1a (CR 613.2b, 708.10): `copiable_card` returns a face-down
+permanent's blank whatever copy effect it carries, and `become_copy` copies a
+face-down source's values without the hidden card. Turning face up
+(`face_down.turn_face_up`, CR 708.8) changes `Permanent.card` and nothing
+else — the permanent is the same object, so counters, damage, Auras, control
+changes, P/T effects and tapped state all stay. Morph (CR 702.37) is an
+`AlternativeCost` the keyword line produces (`keyword="morph"`, {3}), turned
+face down by the cast path at the announcement, and a CR 116.2b special
+action (`turn_face_up`) on `engine/special_actions.py`'s permanent seam.
 
 A printed keyword is part of an object's copiable values, so it is *seeded*
 by layer 1 rather than granted afterwards; grants and removals are continuous

@@ -1,8 +1,11 @@
 """CR 116 special actions — what a player may do with priority without the stack.
 
 CR 116.1: "Special actions are actions a player may take when they have priority
-that don't use the stack." There are twelve, and this engine implements two of
-them. The land drop (CR 116.2a) is the older one and lives where it has always
+that don't use the stack." There are twelve, and this engine implements five of
+them: the land drop (116.2a), turning a face-down creature face up (116.2b —
+morph, registered by ``engine/face_down.py`` on the permanent seam below), the
+two offers a permanent makes (116.2c, 116.2d) and Circling Vultures' discard
+(116.2e). The land drop (CR 116.2a) is the older one and lives where it has always
 lived — `Game._land_play_refusal` plus the play path — because moving it is a
 refactor over every land in the pool rather than a card's work; this module is
 the seam every *other* special action arrives on, and the land drop's home is
