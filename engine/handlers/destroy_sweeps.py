@@ -245,6 +245,9 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
             # earlier step of this same resolution wrote, resolved just below
             # into the ordinary ``subtype_filter`` every matcher already reads.
             "subtype_filter_from",
+            # "…**that aren't of a type chosen this way**" (Harsh Mercy). The
+            # words every seat named, resolved below into ``exclude_subtypes``.
+            "exclude_subtypes_from",
             # "…with mana value **equal to that number**" (Void). The same
             # arrangement for a *number* an earlier step chose, resolved below
             # into the ordinary ``mana_value`` comparison.
@@ -273,6 +276,27 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
             )
             return True, "resolved"
         filters["subtype_filter"] = str(chosen)
+    # "Each player chooses a creature type. Destroy all creatures **that
+    # aren't of a type chosen this way**." (Harsh Mercy.) The list every seat
+    # wrote, in APNAP order, spent as the set the sweep spares — so a creature
+    # of any one of the types survives, through layer 4's ``has_type``.
+    #
+    # **No record means no sweep**, for the singular's reason above: the step
+    # that chooses never ran. A record holding no word at all is different —
+    # every seat was asked and none had a type to name — and then no creature
+    # is of a type chosen this way, so every creature is destroyed, which is
+    # what the card says.
+    spared_key = instruction.payload.get("exclude_subtypes_from")
+    if spared_key is not None:
+        spared = context.results.get(str(spared_key))
+        if not isinstance(spared, list):
+            game.log.append(f"{context.card.name}: no creature types were chosen")
+            return True, "resolved"
+        words = [str(word) for word in spared if word]
+        if words:
+            filters["exclude_subtypes"] = [
+                *(filters.get("exclude_subtypes") or ()), *words,
+            ]
     # "Destroy all enchantments **of the color of your choice**." (Root
     # Greevil.) CR 608.2d's choice again, a colour this time, read out of the
     # scratchpad the ``choose_color`` step in front wrote and turned into the

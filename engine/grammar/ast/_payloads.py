@@ -241,6 +241,17 @@ def object_filter_payload(self: "ObjectFilter") -> dict[str, object]:
     # lowering that reads the word and puts the choice where the rules do.
     if self.creature_type_of_your_choice:
         payload["creature_type_of_your_choice"] = True
+    # "…that isn't of the chosen type" (Callous Oppressor). Testable by a
+    # reader holding the source, exactly as ``chosen_creature_type`` above is.
+    if self.not_chosen_creature_type:
+        payload["not_chosen_creature_type"] = True
+    # Emitted and outside every testable set, for "of your choice"'s reason:
+    # the words a resolution's "each player chooses" wrote are in no matcher's
+    # reach, so only a lowering that lifts the key out admits the phrase.
+    if self.of_a_type_chosen_this_way:
+        payload["of_a_type_chosen_this_way"] = True
+    if self.not_of_a_type_chosen_this_way:
+        payload["not_of_a_type_chosen_this_way"] = True
     # Emitted and outside ``TESTABLE_SUBJECT_FILTER_KEYS`` for the reason
     # directly above: no matcher holds the resolution that chose the colour, so
     # every testability gate refuses the phrase and the only way through is a

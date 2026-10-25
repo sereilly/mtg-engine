@@ -265,6 +265,7 @@ class ValueChoicesMixin:
     def arm_creature_type_choice(
         self, player_index: int, *, card_name: str, result_key: str, context,
         default: str | None, excluded: tuple[str, ...] = (),
+        slot: int | None = None,
     ):
         """Queue "choose a creature type" for the resolving spell's controller.
 
@@ -278,7 +279,18 @@ class ValueChoicesMixin:
         carried on the prompt, which is what the picker's list and the
         resolver's check both read (``creature_type_choice_options``). Absent
         from the prompt data when the card prints none.
+
+        *slot* is "**each player** chooses a creature type" (Harsh Mercy): the
+        record under *result_key* is one list in APNAP order and this seat's
+        answer goes at its own position in it. Absent for a single chooser,
+        whose prompt is byte-identical to what it was. ``chosen_so_far`` is
+        what the seats before this one named (CR 101.4b: a player knows the
+        choices made before theirs), carried for the renderer.
         """
+        each: dict = {}
+        if slot is not None:
+            earlier = list((context.results.get(result_key) or [])[:slot])
+            each = {"slot": slot, "chosen_so_far": earlier}
         return self.arm_pending_choice(
             "creature_type_choice", player_index,
             card_name=card_name,
@@ -286,6 +298,7 @@ class ValueChoicesMixin:
             default_creature_type=default,
             _context=context,
             **({"excluded": list(excluded)} if excluded else {}),
+            **each,
         )
 
     def creature_type_choice_options(self, choice: PendingChoice) -> frozenset[str]:
@@ -330,8 +343,23 @@ class ValueChoicesMixin:
         if word:
             if word not in self.creature_type_choice_options(choice):
                 return False
-            choice.data["_context"].results[choice.data["result_key"]] = word
-            self.log.append(f"{choice.data.get('card_name', '')}: chose {word}")
+            results = choice.data["_context"].results
+            slot = choice.data.get("slot")
+            if slot is None:
+                results[choice.data["result_key"]] = word
+            else:
+                # One seat of "each player chooses" (Harsh Mercy): its own
+                # position in the APNAP-ordered list, never the whole record.
+                record = results.setdefault(choice.data["result_key"], [])
+                while len(record) <= slot:
+                    record.append(None)
+                record[slot] = word
+            self.log.append(
+                f"{choice.data.get('card_name', '')}: "
+                f"{self.players[choice.player_index].name} chose {word}"
+                if slot is not None
+                else f"{choice.data.get('card_name', '')}: chose {word}"
+            )
         self.discard_pending_choice(choice)
         return True
 

@@ -54,6 +54,7 @@ from __future__ import annotations
 import dataclasses
 
 from ...oracle_types import (CHOSEN_CREATURE_TYPE_THIS_WAY,
+                             CHOSEN_CREATURE_TYPES_THIS_WAY,
                              CHOSEN_NUMBER_THIS_WAY, CHOSEN_THIS_WAY_OBJECTS,
                              OracleInstruction)
 from ...subject_filters import object_only_filter, untestable_filter_keys
@@ -493,6 +494,21 @@ def lower_destroy_sweep(
             )
         filt = dataclasses.replace(filt, of_bound_type=False)
         bound_type["subtype_filter_from"] = CHOSEN_CREATURE_TYPE_THIS_WAY
+    # "Each player chooses a creature type. Destroy all creatures **that
+    # aren't of a type chosen this way**." (Harsh Mercy.) The words every
+    # seat named (CR 101.4), as the set the sweep *spares*: carried as the
+    # record's name and turned into ``exclude_subtypes`` by the handler, which
+    # tests through layer 4 like every other subtype question. Only behind the
+    # step that writes it — with no record the exclusion names nothing, and an
+    # unresolved exclusion read as none is every creature on the battlefield.
+    if filt.not_of_a_type_chosen_this_way:
+        if CHOSEN_CREATURE_TYPES_THIS_WAY not in produced:
+            raise LoweringError(
+                "'a type chosen this way' names creature types no step of "
+                "this effect chose", node=node,
+            )
+        filt = dataclasses.replace(filt, not_of_a_type_chosen_this_way=False)
+        bound_type["exclude_subtypes_from"] = CHOSEN_CREATURE_TYPES_THIS_WAY
     # "Choose a number. Destroy all artifacts and creatures with mana value
     # **equal to that number**." (Void.) The same split one characteristic
     # over: the number is the resolution's, so it travels as the record's

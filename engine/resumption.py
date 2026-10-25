@@ -130,6 +130,29 @@ def run_resumable(
     run_from(0)
 
 
+def ask_in_turn_order(
+    game, ask: Callable[[int], None], *, then: Callable[[], None] | None = None,
+) -> None:
+    """Ask every player still in the game, **one at a time in APNAP order**,
+    and run *then* once after the last answer.
+
+    CR 101.4: "the active player … makes any choices required, then the next
+    player in turn order …, followed by the remaining nonactive players in turn
+    order. Then the actions happen simultaneously." And CR 101.4b: "A player
+    knows the choices made by the previous players when making their choice."
+    So *ask* (called with a seat index) arms that seat's prompt and nothing
+    else, and the next seat is asked only once that prompt is answered — a seat
+    whose prompt suspends leaves the rest of the round on ``resume_stack``, and
+    the answer brings it back. *then* is where the simultaneous action goes, or
+    a summary of the answers; work after this call would not run when a seat
+    suspends (this module's rule).
+
+    A seat nobody asks answers as its prompt is armed (``default_at_arm``), so a
+    round with no interactive seat runs straight through, in the same order.
+    """
+    run_resumable(game, game.apnap_seats(), ask, then=then)
+
+
 def resume_after_answer(game) -> None:
     """Continue every loop that was waiting on the answer just applied.
 
