@@ -476,6 +476,15 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
               game, context, raw_count, game.players[seat],
               source=context.source_permanent,
           )
+          # One number per seat (Kamahl's Summons, Liege of the Hollows), so
+          # the one summary line below would report whichever seat came last
+          # — "created 2 Bear Token tokens" for a resolution that made three,
+          # and nothing at all when the last seat made none. Said per seat.
+          if count > 0:
+              game.log.append(
+                  f"{card.name}: {game.players[seat].name} created {count} "
+                  f"{token_card.name} token(s)"
+              )
       elif isinstance(raw_count, dict) and "per_each" in raw_count:
           owner = game.players[seat] if raw_count.get("per_recipient") else caster
           # "…for each permanent **of that color**" (Rith, the Awakener): the
@@ -533,6 +542,9 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
                     game.combat_attackers[slot] = defending
                     token.attacking = True
                     token.defending_player_index = defending
+    if isinstance(raw_count, dict) and "seat_record" in raw_count:
+        # Already said per seat, inside the loop.
+        return True, "resolved"
     if count == 1:
         game.log.append(f"{card.name} created a {token_card.name} token")
     elif count > 1:
