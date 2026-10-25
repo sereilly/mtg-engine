@@ -1292,3 +1292,31 @@ damage calls left without `asks`, and Carrionette's graveyard target. Four
 session ends stopped agents mid-work; each resumed by message from its
 measured state. "A confirmed answer may not leave the prompt queue" was not
 re-probed.
+
+### KG — 2026-10-25 (a round, not a set)
+
+*The playbook's eighteen Known gaps, in one round: eleven groups by subject
+in parallel, then the pool-wide `target_permanent_id` refactor alone on the
+merged tree, then the client halves of four of them.* Every entry was drained;
+what each group measured beside its entry and left is the new list (fourteen
+entries, each with its parts). Thirteen merges onto a chain of links; three
+conflicts, all resolved by asserting scripts (two import lines, and one
+function `kg/grammar` had moved while `kg/colour` edited it). Every link read
+0 on `oracle_diff` except the intended moves (2, 49, 7), `sim_fingerprint` read
+0 of 12 across the eleven wave-1 groups and 1 after the refactor (Goblin
+Cadets now chooses its opponent), and the wave's full gate and the round's
+final one read green. The bigger findings were beside the entries: the
+effect-label prefix read as dispatch (Rust could not counter 23 activated
+abilities), every "creature dies" trigger reading the printed type, Balance
+counting its three rounds at once, 932 combat triggers announced as targeting
+the object they were about, CR 509.1c's old checks too permissive as well as
+deadlocking, and four steps opening priority without the state check.
+
+*Edits in place:* Integration says a fix round runs like a set's waves;
+the machine gains kg's measured fan-out; Briefing gains "brief a Known-gaps
+entry by its subject"; the sampling bullet is a digest rule; Phase 4 runs the
+sampled censuses whole. CLAUDE.md and `engine/ARCHITECTURE.md` carry each seam
+the round changed. *Known gaps:* all eighteen drained; fourteen added from the
+reports (attack maximisation, damage calls outside the handlers, the CR 614
+queue's hold, the AI and graveyard abilities, printed types off the
+battlefield, the seat channel, and eight smaller).

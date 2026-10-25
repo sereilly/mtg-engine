@@ -1517,12 +1517,10 @@ def test_phyrexian_splicer_asks_for_its_two_slots_separately(set_pool):
     the handler dropped slot 0 at resolution while slot 1 still gained the
     ability.
 
-    The spec is now ordered roles, one enumeration per slot. **The narrowing on
-    slot 0 is still not carried** — "with the chosen ability" is a runtime fact
-    (which keyword the activation chose) and ``_narrowing_flags`` has no key for
-    it — so this asserts the shape that makes the remaining fix possible rather
-    than claiming the card is finished. SET_PLAYBOOK's Known gaps carries the
-    rest.
+    The spec is now ordered roles, one enumeration per slot, which is what this
+    asserts. Slot 0's narrowing is carried since round kg: ``chosen_keyword``
+    on the role, asked with the word the activation announces
+    (``tests/regressions/test_kg_slots_chosen_ability.py``).
     """
     from engine.oracle import compile_card_oracle
     from engine.targeting import derive_activation_spec

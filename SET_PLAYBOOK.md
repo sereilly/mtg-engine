@@ -31,9 +31,11 @@ A set runs as **waves** of parallel **groups**, each an agent in its own git
 worktree on its own branch. The **integrator** briefs them, merges their
 branches one at a time and gates the result. Analysis and authorship fan out;
 integration is serial. Integration, not budget, is the limit: expect about one
-integrator-hour per wave-hour, spent on merges rather than on cards. The
+integrator-hour per wave-hour, spent on merges rather than on cards. A fix
+round with no set (kg, the Known gaps) runs the same way: one group per
+subject, and a pool-wide refactor alone and last, on the merged tree. The
 scripts named below are in `scripts/integration/`, run from Git Bash with
-`ROUND` set (a set's code in lower case).
+`ROUND` set (a set's code in lower case, or the round's name).
 
 ### Agents and the machine
 
@@ -49,7 +51,8 @@ scripts named below are in `scripts/integration/`, run from Git Bash with
   an instrument, an agent's serial pytest. Five agents was right on an idle
   machine; at Judgment the owner's other work left ~18 GB, so three agents
   testing serially plus the integrator's `-n 2` meeting runs, and the full
-  gate alone at `-n 4`. Hold the rest of a wave and start each as a slot
+  gate alone at `-n 4`; at kg ~55 GB was free and eleven agents ran at once
+  beside `-n 2` meeting runs. Hold the rest of a wave and start each as a slot
   frees. Past the limit nothing fails loudly: a suite dies as a `MemoryError`
   formatting a collection error, a `sim_fingerprint` "moves" a run whose log
   is truncated, and agents stop mid-edit.
@@ -156,6 +159,14 @@ And when writing one:
   parts, and the names a sibling already took, so the two union rather than
   fork. File the measured-and-declined pile **by subject**, not by reporting
   group: five reports each holding a piece become one brief.
+- **Brief a Known-gaps entry by its subject, not its example.** At kg four of
+  twelve groups found a larger defect beside their entry than in it (the
+  effect-label prefix read as dispatch; every "creature dies" trigger reading
+  the printed type; Balance counting its three rounds at once; 932 combat
+  triggers announced as targeting the object they were about), and in four
+  more the entry's example or premise was wrong (the nineteen prompt kinds
+  never wedged; Carrionette's spec existed). The census of the subject is the
+  brief.
 - **Verify a report's correction before relaying it.** A report is model output
   about code, and the code is one grep away.
 - **Brief a speed group from a profile of two sets of different shape**, with
@@ -193,11 +204,13 @@ And when writing one:
   meeting run did not goes into `surprises.txt` that day. A branch arriving
   after the wave's gate has started needs no gate of its own when the
   promotion's is next.
-- **A census that samples by position re-samples at every merge.** Several
-  sweep every Nth card of a pool that includes the measured set, so a merge
-  that supports cards shifts which cards are examined: a red appears, or
-  vanishes, at a merge that did not cause it. Compute the sample on both
-  links before blaming the merge (Known gaps).
+- **A census samples by a stable digest of the card's name**
+  (`tests.helpers.stable_sample`), never by position. A position sample over
+  a pool that includes the measured set re-samples at every merge that
+  supports cards, so a red appears, or vanishes, at a merge that did not
+  cause it (Judgment). The censuses that still sample by position read only
+  the shipped pool and re-sample at a promotion (Known gaps): compute such a
+  sample on both trees before blaming the set.
 - **A merge commit claims only what was verified when it was made** — the
   conflict resolutions, `oracle_diff` over that merge, the scans, the meeting
   run — and says where the full gate's result will be recorded.
@@ -759,7 +772,10 @@ green, the trackers agreeing the set ships.
    trackers' aggregates to move on membership alone (the All row is
    printing-weighted): ask what changed in the membership before crediting the
    parser.
-8. **Gate the promotion commit with the full gate, and move `main` only after
+8. **Run the sampled censuses whole once**: `MTG_FULL_CENSUS=1` with the
+   files that call `tests.helpers.stable_sample` (a sample's floor is a
+   statement about the cards it happened to draw).
+9. **Gate the promotion commit with the full gate, and move `main` only after
    it.** A targeted rehearsal re-runs what was red; a later merge can turn a
    different file red that only the promoted tree shows.
 
@@ -895,185 +911,138 @@ phase that clears it and the parts. A Phase 6 that drains an entry deletes it
 (the story goes in the commit and the retrospective); a set that meets a new
 one adds it. Re-check an entry against the code before briefing it.
 
-- **Two kinds of target slot cannot be roles yet.** *Why:* each leaves a printed
-  narrowing or a choice to the handler at resolution. *Clears:* a round of its
-  own, with `oracle_diff`.
-  - *An optional slot.* "…fights **up to one** target creature an opponent
-    controls" (Primal Might): a roles walk answers every role or refuses, so
-    `target_descriptions._slot_roles_spec` leaves such a card on one shared list that
-    loses the per-slot narrowing (the description records `optional_slots`).
-    Part: an optional role in the walk and in the client.
-  - *A seat chosen by one instruction and read by the next.* Keeper of the Dead
-    ("Choose target opponent … Destroy target nonblack creature **that player**
-    controls"): the announcement's yes/no half is enforced (`dependent_slots`),
-    but which creature is the handler's pick. Parts: the earlier role's seat
-    pushed into the enumeration (`lowering/_roles._UNENUMERABLE_CONTROLLERS`),
-    and the re-lowering of a shipped card's two instructions.
-  - *A narrowing known only at activation.* Phyrexian Splicer's slot 0 is
-    "target creature **with the chosen ability**", and which keyword that is
-    depends on the activation's cost choice. It has per-slot enumeration
-    (`tests/sets/test_tmp_artifacts.py` asserts the two roles) but
-    `_narrowing_flags` has no key for a runtime fact and the enumerator has no
-    answer at picker time, so slot 0 offers every creature. Part: the keyword
-    choice reaching the enumerator.
+- **CR 508.1d's maximisation is not computed for attacks.** The block side's
+  is (`engine/phases/block_requirements.py`); `declare_attackers_step.
+  declare_attackers` clears every requirement once a cap is reached, so under
+  Dueling Grounds a vanilla creature attacking alone is accepted (CR 508.1d's
+  own example says it is illegal), and its cost clause knows only tap costs
+  (Juggernaut under Propaganda is compelled to attack and pay). *Clears:* a
+  round of its own. Parts: one attack-requirement list over
+  `_must_attack_if_able` and `_must_attack_beside`; a search over attackers ×
+  defenders under `attack_declaration_refusal` and the per-defender caps;
+  costs (`_attack_mana_costs_of`, `_declaration_sacrifice_plan`) left out of
+  the maximum; how a conditional requirement counts (Ekundu Cyclops); the AI's
+  `_legal_declaration` asking it. Probes: `scratch/kg/blocks/attack_probe.py`,
+  `attack_cost_probe.py`. (Measured at kg.)
 
-- **A target player inside another slot or a count is not announced.**
-  "Target player … target cards from their graveyard" (Drafna's Restoration,
-  Gaea's Blessing) and "target opponent" inside a count (Reap, Superior
-  Numbers) derive a spec without the player, so the handler picks the seat
-  (Superior Numbers: the target creature's controller if an opponent, else the
-  first opponent) and at three seats the caster cannot choose. Two same-kind
-  slots in one line are likewise read as one target named twice unless
-  `lowering/_roles._CONTRADICTORY_CONTROLLERS` says no permanent could fill
-  both. *Clears:* a round of its own. Parts: a count payload's
-  `owner: "target_opponent"` as an announced role, a player role over a
-  graveyard slot's owner, and the AI's chosen seat as a valuation. (Measured at
-  Urza's Destiny; Shower of Sparks, Phelddagrif and Soldevi Heretic have since
-  become roles — re-probe the rest before briefing.)
+- **The AI proposes blocks past an attacker's blocker ceiling.**
+  `ai_declarations._legal_block_declaration` never prunes against "can't be
+  blocked by more than one creature" (Stalking Tiger, Charging Rhino,
+  Familiar Ground), so on a board with no requirement the AI proposes three,
+  is refused and blocks with nobody (`refused_blocks`). On a requirement board
+  `obeying_block_declaration` already covers it. *Clears:* the next AI round
+  that opens the declaration chooser. Probe: `scratch/kg/blocks/tiger_probe.py`.
 
-- **`StackItem.target_permanent_id` means two things.** Two arities (the cast
-  and activation paths stamp the whole id list, a prompt's answer a bare id)
-  and two relations (the target the controller chose, and the object a combat
-  trigger is about), across about a hundred reads in 26 files.
-  `oracle_types.single_chosen_id` settles the arity at the seam; the field is
-  the remainder. *Why:* three shipped cards mis-played through the relation
-  (Seasoned Marshal, Elite Javelineer, Sidar Jabari), fixed by gating the
-  picker rather than at the field. *Clears:* a pool-wide round of its own that
-  settles arity, element type and relation together — a separate field for "the
-  object this is about" touches every combat fire site and
-  `resolve_own_combatant`.
+- **Twenty-one damage calls outside `engine/handlers` ask no CR 616.1e
+  question** — each dealt where no resumable loop holds the work behind it,
+  so the affected seat takes the default. The handlers and combat damage ask
+  (`tests/engine/test_kg_damage_handler_asks.py`). Upkeep effects resolved
+  inline (`phases/upkeep_effects.py`: Cyclone's two sweeps and two pay-or-damage
+  effects); prompt answers (`effects._apply_opponent_damage_choice` ×2,
+  `choices/card_names._resolve_name_then_reveal_top`,
+  `choices/optional_pay._apply_optional_pay_decline`,
+  `choices/sacrifice._apply_sacrifice_shortfall`); land riders
+  (`stack/resolution._resolve_card`'s extra-land damage,
+  `turn_management._resolve_tapped_land_trigger_step`); Earthbind
+  (`oracle_instructions._apply_aura_effect`); Eye for an Eye
+  (`effects._apply_mirror_damage`); and eight CR 614.9 redirects in
+  `replacements/redirects.py`, which deal a new event inside another event's
+  616.1 process (CR 616.1g wants a design). And a loop asks its recipients in
+  its own order, not APNAP (CR 616.1's last sentence), visible only when two
+  seats are asked in one effect. *Clears:* a round of its own per family; the
+  APNAP order moves the sim logs.
 
-- **Off-battlefield colour reads ignore a colour-defining static.**
-  `handlers/_filters.graveyard_card_matches`' colour branch (about twenty call
-  sites with no game or owner in scope), the `@staticmethod`
-  `_exile_search_matches` in `mixins/stack/choices/search.py`, and
-  `_card_matches_filter`'s `game=`/`owner=` (passed by only some callers)
-  read the printed `card.colors`; Celestial Dawn reaches a
-  graveyard. *Why:* the narrowing answers from the card as printed where the CR
-  asks the object. *Clears:* one round. `oracle_diff` is blind to it; the
-  differential is a census over boards × the pool, as the battlefield half's
-  was.
+- **A CR 614 replacement choice does not hold its stack object.** The prompt
+  queue holds a resolution until its last answer, but the replacement queue
+  does not: Blood of the Martyr's redirect is answered after Shock has
+  finished resolving, Mind Twist finishes before Library of Leng's choice,
+  and Mox Diamond's stack is empty while its discard toll is owed. End states
+  are right; the CR 608.2 timing is not, so anything that reads "while it
+  resolves" is wrong. ROADMAP had this as read and not measured; the boards in
+  `tests/regressions/test_kg_prompts_answered_choice_leaves_queue.py` measure it.
+  *Clears:* a round of its own, beside ROADMAP's "two prompts that meet".
 
-- **CR 509.1c's maximisation is not computed for blocks.** `declare_blockers`'
-  requirement checks do not compare requirements obeyed with the most obeyable,
-  so three Watchdogs under a Caverns of Despair have no legal declaration and
-  combat deadlocks for a human seat as for an AI. *Clears:* a round of its own.
-  Parts: one "is this creature compelled?" predicate over the requirement
-  channels; a substitution test rather than an addition test; the count of
-  requirements obeyed against the maximum; the AI's prune keeping compelled
-  blockers. (Measured at 6ED.)
+- **The AI never activates a graveyard ability.** No caller of
+  `activate_from_graveyard` exists outside the web route, so Ashen Ghoul,
+  Carrionette, Coffin Puppets, Glory, Hammer of Bogardan, Necrosavant, Shard
+  Phoenix and Whiteout are never used by a simulated seat. *Clears:* the next
+  AI round; it needs an honesty count (`activations_from_graveyard`) beside it.
 
-- **The client's request bodies are held to the schemas for one field.**
-  `tests/ui/test_special_action_wire.py` checks that every `sendAction` body in
-  `app.js` carries `GameActionRequest.seat`; every other required field of every
-  `web/schemas.py` model is supplied by hand at each call site, unchecked.
-  *Why:* a missing field is a 422 in a console nobody reads — every CR 116
-  special action was unreachable for four sets that way. *Clears:* a round
-  deriving the required fields from the schemas and asserting the JS agrees;
-  until then, Phase 5 of any set whose cards reach a route no browser test
-  drives.
+- **Printed types are still read off the battlefield and in two sweeps.**
+  `handlers/_filters.graveyard_card_matches`' `graveyard_subtypes` branch reads
+  printed subtypes (Conspiracy does not reach "target Griffin card"), and
+  `search_matches`' Conspiracy override is asked of the chooser rather than
+  the zone's owner — the type twin of the colour fix (every matcher already
+  takes `game=`/`owner=`). `mixins/game_ending.py`'s CR 704.5m / 702.16c
+  sweeps read the printed word "Aura", so a Gliding Licid that became an Aura
+  stays on a host given protection from blue (`scratch/kg/layers/
+  probe_licid_sba.py`). Two colour reads stay printed outside the matchers:
+  the wire's hand and stack cards (`web/serialization.py`, display only) and
+  `ai_valuation.CounterProfile.can_counter` (baselined in `test_layer_reads`).
+  *Clears:* one round, census over boards × the pool.
 
-- **The state-based check after a non-resolution is not audited for turn-based
-  actions.** It runs after a resolution, after a special action, and — since
-  Judgment — after a cost paid on every activation road (battlefield, hand and
-  graveyard; `tests/regressions/test_jud_w2g2_cost_state_census.py`). *Why:*
-  CR 704.3 checks before any player receives priority. *Clears:* Phase 3 of
-  the next set adding a turn-based state change.
-- **Censuses that sample by position re-sample at every merge.** The zone-cast
-  twin census (`test_ody_w2g2_zone_cast_census.py`, every 10th spell) and the
-  loses-all-abilities door census (every 6th granter) count over a pool that
-  includes the measured set, so each merge that supports cards moves the
-  sample; at Judgment Shaman's Trance's finding flickered in and out across
-  four merges. *Clears:* a round that samples by a stable digest of the name
-  (`zlib.crc32`, not the salted `hash()`), re-measures each floor once, and
-  keeps a full-stride run at promotion. Parts: the two censuses' samplers; any
-  other `[::STRIDE]` over `manifest_set_paths(include_measured=True)`.
-- **Fifteen damage calls in `engine/handlers` still ask no CR 616.1e
-  question** (no `asks`): the six sweep kinds were converted at Judgment, and
-  five multi-recipient loops are left (`deal_damage` at two sites,
-  `each_matching_bites_itself`, `deal_damage_to_recorded_permanents`,
-  `deal_damage_to_those_damaged_this_game`), each needing `asks=True` and a
-  resumable loop. List: `scratch/jud/w2g2/residue_damage_asks.txt`. *Clears:*
-  a round of its own, census first.
-- **A graveyard ability that targets cannot be activated by a person**
-  (Carrionette). The client's graveyard-ability gesture exists since Judgment
-  (`state.graveyard_abilities`, `activate_graveyard`), but there is no
-  activation target spec for a card in a graveyard and no routing of the
-  target prompt to `activate_graveyard`; the button is disabled with its
-  reason. *Clears:* the next client group.
+- **Ten censuses over the shipped pool sample by position**
+  (`tests/engine/test_kg_steps_stable_sampling.py`'s `POSITIONAL_SAMPLERS`),
+  so each re-samples at a promotion. Each is a one-line switch to
+  `tests.helpers.stable_sample` and one re-measure of its floors. *Clears:* any
+  round; until then a promotion's red in one of them is computed on both trees
+  before it is blamed on the set.
 
-- **A confirmed answer may not leave the prompt queue.** Urza's Destiny found
-  `_resolve_pay_any_amount` leaving its own choice queued — the game then
-  refused every action by the seat that had answered — and listed nineteen more
-  kinds with the same shape (`body_choice`, `cast_choice`,
-  `choose_cards_in_hand`, `entry_exile`, `graveyard_exile_pick`,
-  `opponent_damage`, `permanent_choice`, `player_choice`, `retarget_choice`,
-  and ten delegating to `resolve_replacement_choice`). Only an interactive
-  seat's confirm wedges; AI and headless seats discard. *Clears:* a per-kind
-  probe, then one of two one-line changes with a whole-pool blast radius —
-  `ChoiceSpec.open_for` treating an `_answered` choice as closed, or a discard
-  in `resolve_pending_choice` — as a round of its own. (Not re-probed since
-  Urza's Destiny.)
+- **Five prompts answer a permanent by index.** `untap_select` stores indices
+  across requests (the shape the upkeep target had); `opponent_damage_choose`
+  also takes an id; `sacrifice_confirm` and `optional_untap_confirm` have no id
+  form. *Clears:* the round that next opens those prompts. Parts per prompt:
+  an `id` on each offered entry, the answer read by id, a stale id a refusal.
 
-- **`upkeep_step._resolve_upkeep_trigger_target` falls back to `candidates[0]`
-  on a stale index**, silently replacing a player's choice with the engine's. It
-  is unreachable only because nothing resolves inside the upkeep-decision window
-  — a fact about `web/actions.py`'s gate, not about the reader. *Clears:*
-  whoever lets anything resolve in that window. Parts: three engine readers, one
-  web writer, an `id` on `valid_targets`, `session_store`'s annotation, and six
-  test call sites passing `(seat, index)`.
+- **Activated roles with a seat role skip the all-targets-illegal check.**
+  `legality_resolution.ability_target_verdicts` has no per-role verdict for a
+  seat, so Keeper of the Dead, Planeswalker's Scorn and Favor and Goblin Welder
+  are judged per target only (CR 608.2b's "every target illegal" never
+  fires); and Keeper of the Dead's creature is not destroyed when its
+  opponent gains shroud in response though the creature is still legal.
+  *Clears:* a small round. Part: one branch in `ability_target_verdicts`.
 
-- **`web/prompt_board.py`'s Balance lists ask the printed type.** The engine counts
-  lands and creatures through the layers; the prompt lists them by
-  `card.primary_type` (two of the reads ratcheted in
-  `tests/ui/test_layer_reads_in_web.py`), so an animated land or an
-  Opalescence enchantment is offered in the wrong list, and a land creature
-  belongs in both. `prompt_board` sits below `serialization` in `web.LAYERS`, so the
-  part missing is a second injected callable on `PromptContext` that takes a
-  permanent. *Clears:* a small round of its own.
+- **The seat channel still carries two meanings.** `StackItem.target_player_index`
+  holds either the player a controller chose or an event's seat ("that
+  player"). kg split the permanent half (`about_permanent_id`) and gated the
+  discard fire site's seat stamp (`trigger_utils.bound_event_seat`); a static
+  census of every seat stamp against lines that announce a player target found
+  only Goblin Cadets and Guerrilla Tactics, both fixed. The stamps left
+  (unblocked, attached-combat, "one or more attack", upkeep "that player",
+  delayed bound-player) are right only because no line beside them names a
+  player target. *Clears:* a round adding `about_player_index`, read the way
+  `about_permanent_id` is; `target_permanent_index` keeps its int-or-list shape
+  beside it and goes in the same round.
 
-- **Four `card.primary_type` reads in the AI are untriaged** — one in
-  `engine/ai_policy.py`, three in `ai_scoring.py`
-  (`PRIMARY_TYPE_BASELINE` in `tests/engine/test_layer_reads.py`): each wants
-  the card-or-permanent judgement the other sites got. (The attack and block
-  choosers' three and `ai_abilities`' one were read by layer at Judgment:
-  an animated land had never attacked or blocked for the AI.) Krovikan Vampire's death
-  record beside them wants a "was a creature" stamp at the removal seam
-  (CR 603.10a). *Clears:* the round that next opens those modules.
+- **A keep batch asks every seat at once.** Cataclysm's ruling (2004-10-04:
+  "The current player makes their choices before the other player") is the
+  order Balance now follows (`_finish_balance_round`), but `new_keep_batch`
+  arms every seat together, so a later chooser cannot see an earlier one's
+  choice. *Clears:* the round that next opens `new_keep_batch`; part: ask one
+  seat at a time in turn order, answers held and performed together.
 
-- **The chosen-source shield is four instruction kinds.**
-  `grant_reverse_damage_shield`, `grant_team_prevention_shield`,
-  `grant_exile_prevention_shield` and `grant_reflecting_prevention_shield` share
-  one body and differ by rider. Folding them into one kind with the rider as
-  payload moves every affected card's compiled program, because the kind is
-  read by `instruction_targets`' picker table and the effect-label buckets. *Clears:* a
-  round of its own with `oracle_diff`, never a wave's tail.
+- **The request-body guard derives presence, not shape.**
+  `tests/ui/test_kg_client_request_schemas.py` holds every body to its
+  route's required fields and its handler's refusals, but ten handlers refuse
+  on the prompt's own state (`activate` at three seats, `discard_confirm`,
+  `enter_choice_confirm`, `face_down_cast_confirm`,
+  `outside_game_pick_confirm`, `permanent_choice_confirm`,
+  `pile_search_confirm`, `put_from_hand_confirm`, `trigger_target_confirm`,
+  `word_of_command_confirm`) and no value's type is checked. *Clears:* Phase 5
+  of a set whose prompt reaches one of those routes.
 
-- **"Who <did X>" is spelled two ways.** `PlayerRef` carries
-  `attacked_this_turn` (Fire and Brimstone) and `damaged_by_source` (Diseased
-  Vermin) as picker-enforced flags beside `ast.PlayerDeed` and
-  `lowering/_common._PLAYER_DEEDS`. Folding them is a decision about which
-  deeds the picker can answer at announcement (these two can; the table's are
-  resolution-time records) and a refusal for the rest — a seat narrowing the
-  picker passes silently acts on every player. *Clears:* a round of its own;
-  it moves two shipped programs.
+- **Effect labels that name one card's effect, not the moment.**
+  `("matching_permanent_enters", "may")` → `triggered_damage` (Thelon's and
+  Tourach's Chant), `("end_step_enchanted_controller", "if_then")` →
+  `triggered_destruction` (Insubordination deals damage), and
+  `TRIGGERED_LABELS["if_then"]` is `triggered_label`, a word naming neither.
+  Report-only since kg (dispatch reads `StackItem.ability_kind`), but
+  `triggered_abilities.py:130` still reads `effect_kind == "triggered_delayed"`
+  as a flag (one producer, self-consistent). *Clears:* a label round with
+  `oracle_diff`; each move is label-only.
 
-- **`unless_player_pays` is labelled with an effect family.** It is a wrapper
-  filed under `activated_control`, which
-  `test_a_wrapper_kind_never_borrows_a_leaf_effects_bucket` forbids and passes
-  only because no leaf shares that bucket, so the first control leaf filed there
-  fires it. And that guard skips kinds missing from `ACTIVATED_LABELS`, so a
-  defaulting wrapper on a leaf bucket stays invisible until its row is added.
-  *Clears:* a round with `oracle_diff` (re-bucketing moves Scarwood Bandits).
-
-- **`engine/grammar/costs.py` is a third reader of "another".** Its comment's
-  reason for being separate is stale (`parse_target_spec` has had two "another"
-  branches for sets), though the decision stands: the word is consumed before
-  `parse_target_spec` sees it, and if it were not, `_parse_cost_object` would
-  drop the `distinct_from_prior` narrowing. Unifying the three moves every cost
-  payload in the pool. Its citation is also wrong — CR 602.5c is about an
-  acquired ability's restriction; "another" is CR 113.7 (113.7a for
-  last-known information) — and comments around `engine/subject_filters.py`
-  cite CR 109.5 for it, outside the 701 block the citation guard reads.
-  *Clears:* the round that next touches the cost grammar; the citations at any
-  time.
+- **About thirty-five comments cite CR 109.5 for "a spell's damage source is
+  its printed card"**; the rule is CR 120.7 (the source of damage is the
+  object that dealt it). List: `scratch/kg/grammar/spell_source_family.txt`,
+  including `tests/rules/test_damage_source_identity.py`'s marker. The
+  citation guard reads only the 701 block. *Clears:* any time.

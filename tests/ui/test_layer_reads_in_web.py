@@ -17,8 +17,9 @@ says where the question is asked of the wrong object.
 **``primary_type`` is in the pattern and it is not in the engine guard's.**
 Every one of the seven historical ``web/`` sites used it and the engine's regex
 covers ``type_line`` and ``colors`` alone — which is why widening the engine
-guard was not the move here: ``engine/`` carries 70 such reads and draining them
-is a round of its own (SET_PLAYBOOK.md, Known gaps).
+guard was not the move here: ``engine/``'s are held by their own ratchet
+(``tests/engine/test_layer_reads.py``'s ``PRIMARY_TYPE_BASELINE``, triaged
+since round kg).
 
 A **ratchet per module**, not a ban, for the reason ``test_control_reads.py``'s
 positional ratchet is one. The printed-read table is empty since round kg (the

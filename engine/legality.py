@@ -432,10 +432,11 @@ def _with_dependent_seat_slots(spec: dict, ability) -> dict:
     would make every seat pass and the restriction mean nothing — the silent
     widening, arriving through the check meant to remove one.
 
-    *Which* object then fills that slot is still the handler's pick at
-    resolution rather than the activator's choice: the roles walk that would
-    need is permanent-only, and a seat cannot be a role in it. That remainder is
-    SET_PLAYBOOK's Known gaps, not something this quietly covers.
+    *Which* object then fills that slot is announced only where the line
+    lowers to a roles walk with the seat as its first role (Keeper of the
+    Dead since round kg: ``same_controller_role`` through
+    ``target_roles.role_seat_of``); a spec that is still the seat alone leaves
+    it to the handler at resolution.
     """
     if not spec or spec.get("kind") not in _SEAT_ANSWER_SPEC_KINDS:
         return spec

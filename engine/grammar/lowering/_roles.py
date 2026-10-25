@@ -508,8 +508,9 @@ def describe_sequence_target_roles(
     "target creature an opponent controls" beside "target creature you
     control" (Crooked Scales) — and it is a table
     (:data:`_CONTRADICTORY_CONTROLLERS`), not a guess. Every other two of a
-    kind is still handed back rather than guessed at; that remainder is in
-    SET_PLAYBOOK's Known gaps with the cards it costs.
+    kind is still handed back rather than guessed at; the printed pairs left
+    (Mogg Assassin, Cuombajj Witches: a second target an opponent chooses)
+    are ROADMAP's "one derived slot" item, a different mechanism.
 
     **A spell beside anything that is not one is the first argument again**,
     one zone over: "Counter **target spell** and Suffocating Blast deals 3

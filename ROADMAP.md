@@ -400,8 +400,9 @@ one card prints this") reads as a work item long after it stopped being true.
   traded itself for a bystander). Held by
   `tests/engine/test_ability_target_resolution_census.py`. One clause is a
   separately named gate (EXO): `legality_resolution.stale_comparison_refusal` re-asks a
-  printed comparison between two seats ("target opponent who has more life
-  than you do" - the Keepers, the Oaths) at resolution.
+  printed comparison between two seats at resolution (the Oaths); a comparison
+  printed "as you activate this ability" (the Exodus Keepers) is asked only on
+  activation (`PlayerComparison.as_announced`, the 2009-10-01 rulings; kg).
 
   **The gate re-asks the target's *description* (NEM wave 2).** It used to ask
   only whether a target was still on the battlefield and targetable, so a
@@ -438,18 +439,15 @@ one card prints this") reads as a work item long after it stopped being true.
     (`legality_resolution.vanished_graveyard_target_refusal`).
   * **An ability printing "target" more than once with one derived slot**:
     Cuombajj Witches (still deals 1 to a first target that gained shroud),
-    Mogg Assassin, Keeper of the Dead. Needs the second slot announced - the
+    Mogg Assassin. Needs the second slot announced - the
     CR 602.3 entry above is the same missing prompt.
   * **A roles announcement with a non-permanent slot**: Planeswalker's Scorn
     and Favor (a shrouded "target opponent" still reveals), Goblin Welder's
-    graveyard slot - one branch in `ability_target_verdicts` with a per-role
+    graveyard slot, Keeper of the Dead's opponent (a roles announcement since
+    kg) - one branch in `ability_target_verdicts` with a per-role
     verdict for a seat or a stamp. On the spell side, still: a roles spell's
     player role (Donate), and a mode an opponent chose (CR 700.2e), at both
     ends, because the chooser's seat is held only by the prompt.
-  * **Per-slot enumeration at announcement**: Primal Might's cast gate accepts
-    two of the caster's own creatures where the second slot says "you don't
-    control", and with the first gone the second is pumped
-    (`.scratch`-era repro: cast it at two of your own).
   * **A spell whose target may be a player — closed 2026-10-06, and the
     reason it stood is the lesson.** This bullet said a seat and a chosen
     player reach a stack item through the same `target_player_index`, so
@@ -803,7 +801,7 @@ one card prints this") reads as a work item long after it stopped being true.
     target: 117 were stamped, 38 removed for want of a legal target and 21
     bare. Thirteen of the 21 are "that player" triggers that have no seat
     without a real event. Four of those were fired for real, and all four
-    were stamped from their own list. The **eight that have no list whatever
+    were stamped from their own list. The **seven that have no list whatever
     the event** each need `trigger_targets._trigger_target_candidates` to be handed
     a spec it can enumerate (`targeting.derive_instruction_spec`), and what
     differs is the shape:
@@ -813,7 +811,6 @@ one card prints this") reads as a work item long after it stopped being true.
     - Goblin Grenadiers: a two-role spec behind "if you do", where the
       candidates take single kinds only.
     - Rysorian Badger: "up to two target creature cards" in a graveyard.
-    - Carpet of Flowers: "target opponent" inside a count, in a "may".
     - Heart of Bogardan: derives `player_or_planeswalker` and is still bare,
       for a reason not established.
 
@@ -865,9 +862,9 @@ one card prints this") reads as a work item long after it stopped being true.
     returning other permanents, several graveyard cards, a card from an empty
     hand), and four are the verse enchantments at no counters. A land given
     an ability by an Aura (Barbed Field) is passed over with every other land.
-    The 8 `primary_type` reads in `ai_policy.py` and the modules split out
-    of it are untriaged (K3 sorted the
-    other 43).
+    Every `primary_type` read of a permanent in the AI asks layer 4 (Judgment's
+    four and kg's four); what is left are cards in hand, where the word
+    collapses an artifact creature to "creature" (a weight, not a rules read).
     *The fight reading, what it leaves* (L2, each pinned in the combat-trick
     census with its reason). Switching P/T is read as a gift (About Face at a
     0/4 Wall): `instruction_target_side` would have to read "switch" by its
@@ -1139,8 +1136,9 @@ one card prints this") reads as a work item long after it stopped being true.
     bottom order. What is left is the gate: `web.prompts.blocking_prompt`
     still refuses each of two prompts of different kinds in favour of the
     other when they meet some other way. Parts: admitting an answer to any
-    prompt the seat owes, or a queue order. Beside it, read and not
-    measured: a queued `ReplacementChoice` does not suspend the enclosing
+    prompt the seat owes, or a queue order. Beside it, measured at kg on three
+    shipped cards (SET_PLAYBOOK, Known gaps): a queued `ReplacementChoice` does
+    not suspend the enclosing
     resolution ("draw, then discard" would run on) or hold its stack object,
     and Breathstealer's Crypt loses its reveal-and-tax when its inner draw
     suspends.
@@ -1337,11 +1335,10 @@ one card prints this") reads as a work item long after it stopped being true.
     suspended, and `resolve_replacement_choice` runs none after the answer;
     measured before the closer taught the step window to check state as it
     closes - re-probe before taking it).
-    The `effect_order` prompt labels an option with the *exemplar* card's
-    name pool-wide - "Urza's Armor" for any static shield - because
-    `prevention/registry.py` and `replacements/registry.py` take the label from the
-    registration's docstring; it wants a per-event label hook reading the
-    source permanent.
+    An `effect_order` option names the effect, not the card on the table: a
+    prevention effect's `label=` (kg) and a replacement's docstring first line
+    ("Forethought Amulet" for any such shield) are both per registration; it
+    wants a per-event label hook reading the source permanent.
   * *Destruction.* Three sacrifices go round `Game.sacrifice_permanent`
     (Animate Dead's `_remove_aura_effects`, Golgothian Sylex and Apocalypse
     Chime, the end step's sacrifice sweep). `destroy_each_unless_life_paid`

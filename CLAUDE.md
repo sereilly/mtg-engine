@@ -349,9 +349,12 @@ entries, not editing dispatch**.
   seam: a conditional static, an activation restriction row, and a spell's
   "instead" (`line_rewrites.expand_instead_paragraph_lines`).
 - `engine/effect_labels.py` — the `effect_kind` *label* an ability reports. Never
-  dispatch: it feeds `SimulationResult`, the support report's buckets and the
-  `triggered_` prefix the web turns into `is_triggered`. Held to the pool both
-  ways by `tests/engine/test_effect_labels.py`.
+  dispatch: it feeds `SimulationResult` and the support report's buckets, and a
+  wrapper is labelled by its shape, never by a leaf's effect. Its prefix is not
+  the ability's kind: whether a stack object is activated or triggered is
+  `StackItem.ability_kind` (how it got there), read by `is_triggered`,
+  `stack_targets` and "counter target activated ability". Held to the pool
+  both ways by `tests/engine/test_effect_labels.py`.
 - `engine/card_hooks.py` — name-keyed registries for truly bespoke behaviour
   plus `CARD_LINE_INSTRUCTIONS` (one printed line of one card). The compiler
   reads it after the grammar refuses, so a line that later grows a production
@@ -414,7 +417,10 @@ entries, not editing dispatch**.
   set of names) and "effects … count it as a card named X".
 - `engine/object_colors.py`, `engine/color_census.py` — colour as a relation
   (`share_a_color`, `is_multicolored`, `of_each_color`) and as a count, both
-  read through the layers.
+  read through the layers. A card off the battlefield is asked through
+  `object_colors.card_colors` with its seat (Celestial Dawn): every card
+  matcher takes keyword-only `game=`/`owner=` and every call names both
+  (`tests/engine/test_kg_colour_off_battlefield_reads.py`).
 
 **Replacement, prevention and the CR 616 process**
 
@@ -431,7 +437,8 @@ entries, not editing dispatch**.
 - `engine/replacement_choices.py` — an optional replacement offers a
   `ReplacementChoice`; a `@replacement_choice(kind)` resolver finishes it, for
   an interactive seat (queued) and every other seat (default) alike.
-- `engine/prevention/` — CR 615 shields, `@prevention_effect(order, applies=…)`
+- `engine/prevention/` — CR 615 shields, `@prevention_effect(order, applies=…,
+  label=…)` (`label` is the one-line `effect_order` option, never a docstring)
   over one `{recipient, amount, source, combat}` event (recipient a player or a
   permanent). A new "prevent …" card is an entry here, never a branch in a
   damage path. `engine/shields.py` is the state they read: one `Shield`
@@ -443,7 +450,8 @@ entries, not editing dispatch**.
   (or `asks=True` to a damage entry point) so a contended choice can be asked.
 - `engine/resumption.py` — a loop records the rest of itself before each step,
   so answering resumes the targets, instructions and tail behind it. **A loop
-  using it must be the last thing its function does.**
+  using it must be the last thing its function does**; what follows the loop
+  is its own last step (`run_resumable(..., then=)`).
 - `engine/damage_events.py` — a damage event start to finish (CR 120.4's two
   halves, with 616.1's contention set inside each); `deal_damage` returns both
   numbers. Every damage path calls it. It carries who dealt the damage,
@@ -601,7 +609,14 @@ entries, not editing dispatch**.
   (`target_descriptions.slot_list_is_exact`); "up to N
   target cards from a single graveyard" is `target_descriptions.SINGLE_GRAVEYARD`; two
   players may be two roles (`choices["role_seats"]`). `Game.stack_target_seat`
-  is the controller of a targeted spell ("its controller").
+  is the controller of a targeted spell ("its controller"). An "up to one"
+  slot is an optional role (`target_roles.OPTIONAL_ROLE`, the last role only);
+  "that player controls" after a seat role is a role relation
+  (`same_controller_role`, `role_seat_of`); a seat a slot cannot carry (a
+  pile's owner, a count's opponent, an opponent beside a division) rides the
+  seat field as `target_descriptions.ANNOUNCED_SEAT`. A narrowing known only
+  at announcement (Phyrexian Splicer's chosen keyword) is asked with the
+  word this activation announces and rides the stack object.
 - `engine/target_requirements.py` — a target an opponent **must** choose (the
   Flagbearers): two gates over a whole announcement, deliberately not a
   narrowing in `_enumerate_targets` (which also serves resolution, retargets and
@@ -610,6 +625,12 @@ entries, not editing dispatch**.
   (`chosen_targets(item)`) and how they may change (CR 115.7). Every way an
   object comes to have targets announces it once through
   `Game.announce_targets_chosen`; "becomes the target" triggers hang off it.
+  **The object a trigger is about is never its target**: a fire site records it
+  as `StackItem.about_permanent_id` only for a line that names no target of
+  its own (`trigger_utils.bound_event_object`), and the context builder hands
+  it to the effect. `target_permanent_id` is `None` or a list of ids on every
+  holder (`game_types.check_target_ids` on each write), read through
+  `target_ids` / `single_chosen_id` / `first_target_id`.
 
 **Triggers**
 
@@ -649,7 +670,10 @@ entries, not editing dispatch**.
   gates it). **Adding a prompt is one `register_choice` row + its answer in the family
   module of `engine/mixins/stack/choices/` + one renderer in
   `web/prompt_cards.py`, `prompt_board.py` or `prompt_values.py` (by what the
-  prompt is answered with) + the code that arms it** — never a new `Game` field.
+  prompt is answered with) + the code that arms it + a scenario in
+  `tests/regressions/test_kg_prompts_answered_choice_leaves_queue.py`** — never a
+  new `Game` field. The queue closes an accepted answer itself
+  (`_close_answered_choice`, in both answer funnels).
 - **While a prompt is owed, the game waits** (CR 608.2, 117.3b): a prompt armed
   mid-resolution records its stack object, which stays on the stack until its
   last prompt (including one armed by answering an earlier one) is answered.
@@ -658,7 +682,9 @@ entries, not editing dispatch**.
   only). A private look stays private in the log (`Game.find_is_public`); "the
   rest in any order" is the looker's order (`Game.offer_library_bottom_order` /
   `offer_library_top_order`). A sentence that asks each player waits for the
-  last answer before acting (`new_keep_batch` / `finish_keep_batch`).
+  last answer before acting (`new_keep_batch` / `finish_keep_batch`); Balance
+  is three rounds, each counted as it starts and asked one seat at a time in
+  turn order (`_finish_balance_round`).
 - `engine/enter_effects.py` — entry-state phrases `_initialize_permanent_state`
   carries out; `enter_effect_line` is read by the support gate *and* the grammar.
   `ENTRY_CHOICES` (`engine/entry_choices.py`) is what a permanent may choose
@@ -768,14 +794,19 @@ entries, not editing dispatch**.
 
 - `engine/phases/` — one mixin per phase and step (CR 500–514), composed onto
   `Game`; phase/step turn-based logic goes here. The declaration steps have
-  `attack_legality.py`, `block_legality.py` and `block_triggers.py` beside them.
+  `attack_legality.py`, `block_legality.py` (CR 509.1b),
+  `block_requirements.py` (CR 509.1c: the requirement list and the
+  maximisation that judges a declaration and the AI's proposal) and
+  `block_triggers.py` beside them.
 - `engine/mixins/` — cross-cutting flow not tied to one step: priority and step
   navigation (`phase_steps`), per-turn and pregame management, state-based
   actions, effects, helpers. Consumes compiled programs; must never parse oracle
   text. **A step does not end on an empty stack alone**:
   `_resolve_priority_window` makes the state check before closing and goes round
-  again if it put something on the stack, and **the check is made between
-  resolutions** (`PhaseStepsMixin._check_between_resolutions`, CR 704.3).
+  again if it put something on the stack, **the check is made between
+  resolutions** (`PhaseStepsMixin._check_between_resolutions`, CR 704.3), and
+  **after each step's turn-based actions, before its first priority**
+  (`_check_after_turn_based_actions`, CR 703.3).
 - `engine/mixins/stack/` — the stack (CR 405), one family of mixins per stage:
   `casting` with `cast_announcement`, `cast_additional_costs`,
   `cast_alternative_costs`, `cast_target_validation` and `pool_payment`
@@ -885,7 +916,10 @@ payable now), `ability_denials` (the activation gate's refusal per ability),
 `ability_mana` (each mana ability's symbols and whether a colour is chosen),
 `abilities_lost`, `taps_for_mana`, `produced_mana`, a payment prompt's `payable`
 (a "pay" that cannot be collected is refused with the prompt kept, never read as
-a decline), and a search's `min_picks`. **Every automatic sender in the client
+a decline), a search's `min_picks`, a graveyard ability's `target_spec`, and a
+defending seat's `combat.block_requirements` (with `most_obeyable`). Every
+request body the client builds is held to what its route requires
+(`tests/ui/test_kg_client_request_schemas.py`). **Every automatic sender in the client
 re-asks by fetching the state when its in-flight flag clears.** The client does
 not plan taps: a click on a castable card is answered by `web/payment_plan.py`
 (`POST …/payment_plan` previews; `auto_tap` on the action taps).

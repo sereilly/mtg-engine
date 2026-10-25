@@ -378,10 +378,10 @@ def test_printed_colour_reads_of_a_non_permanent_stay_where_they_belong():
 # and the honesty check was lying, which is the expensive direction.
 #
 # So the field is in the scan at last, as a **ratchet rather than a ban**:
-# draining the 64 sites is a round of its own (SET_PLAYBOOK.md, Known gaps —
-# each one needs a judgement about whether it means the card or the permanent,
-# and some of them, like Balance's land/creature counts, cannot be fixed on this
-# side alone). What the ratchet buys is that there cannot be a 65th.
+# each site needed a judgement about whether it means the card or the
+# permanent, and some (Balance's land/creature counts) could not be fixed on
+# this side alone. They were triaged across K3, Judgment and round kg; what
+# survives is the table below, and the ratchet means there cannot be another.
 
 _PRINTED_PRIMARY_TYPE = re.compile(r"\.card\.primary_type\b")
 
