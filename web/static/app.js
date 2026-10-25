@@ -3001,6 +3001,13 @@ function getBalanceSelectInfo(state = currentState) {
   const info = state.balance_select;
   if (!info) return null;
   if (info.player_seat !== seat) return null;
+  // A pick belongs to the round it was made in: each round is counted on the
+  // board the last one left, so a slot picked among the lands names something
+  // else (or nothing) among the creatures. Every reader of the selection comes
+  // through here, so this is where a new round starts from nothing.
+  if (balanceSelection.stage !== (info.stage ?? null)) {
+    balanceSelection = { lands: [], creatures: [], hand: [], stage: info.stage ?? null };
+  }
   return info;
 }
 
@@ -4029,36 +4036,7 @@ function getPromptBoardTargeting(state = currentState) {
   // Balance: the lands/creatures to sacrifice are picked on the board (the cards
   // to discard are picked in hand — see the balanceHandSelectable hand option).
   const balanceSelectInfo = getBalanceSelectInfo(state);
-  if (balanceSelectInfo) {
-    const owner = Number(balanceSelectInfo.player_seat);
-    const need = {
-      lands: balanceSelectInfo.lands_to_sacrifice || 0,
-      creatures: balanceSelectInfo.creatures_to_sacrifice || 0,
-    };
-    // Lands and creatures index into the same battlefield array, so one map
-    // resolves a clicked index to the section it belongs to.
-    const kindByIndex = new Map();
-    if (need.lands) {
-      for (const land of balanceSelectInfo.lands || []) kindByIndex.set(Number(land.index), "lands");
-    }
-    if (need.creatures) {
-      for (const c of balanceSelectInfo.creatures || []) kindByIndex.set(Number(c.index), "creatures");
-    }
-    return promptTargeting({
-      permanentKeys: [...kindByIndex.keys()].map((idx) => `${owner}-${idx}`),
-      selectedKeys: [...balanceSelection.lands, ...balanceSelection.creatures].map((idx) => `${owner}-${idx}`),
-      onPermanent: (_targetSeat, idx) => {
-        const kind = kindByIndex.get(idx);
-        if (!kind) return;
-        const picked = balanceSelection[kind];
-        const at = picked.indexOf(idx);
-        if (at >= 0) picked.splice(at, 1);
-        else if (picked.length < need[kind]) picked.push(idx);
-        refreshPromptSelection(state);
-      },
-      invalidHint: "Balance only takes the highlighted lands and creatures.",
-    });
-  }
+  if (balanceSelectInfo) return balanceBoardTargeting(state, balanceSelectInfo);
 
   // Forced sacrifice (Lich, Lord of the Pit): pick `count` of your permanents.
   const sacrificeSelectInfo = getSacrificeSelectInfo(state);
@@ -5579,6 +5557,69 @@ function applyCommanderZoneChangePrompt(info) {
   });
 }
 
+// The board half of one Balance round: the round's own permanents (the
+// server's list, through the layers — an animated land among the lands in the
+// first round and among the creatures in the last) are what may be clicked,
+// and a click toggles one into the round's picks up to the count it owes.
+function balanceBoardTargeting(state, info) {
+  const owner = Number(info.player_seat);
+  const need = {
+    lands: info.lands_to_sacrifice || 0,
+    creatures: info.creatures_to_sacrifice || 0,
+  };
+  // Lands and creatures index into the same battlefield array, so one map
+  // resolves a clicked index to the section it belongs to.
+  const kindByIndex = new Map();
+  if (need.lands) {
+    for (const land of info.lands || []) kindByIndex.set(Number(land.index), "lands");
+  }
+  if (need.creatures) {
+    for (const c of info.creatures || []) kindByIndex.set(Number(c.index), "creatures");
+  }
+  return promptTargeting({
+    permanentKeys: [...kindByIndex.keys()].map((idx) => `${owner}-${idx}`),
+    selectedKeys: [...balanceSelection.lands, ...balanceSelection.creatures].map((idx) => `${owner}-${idx}`),
+    onPermanent: (_targetSeat, idx) => {
+      const kind = kindByIndex.get(idx);
+      if (!kind) return;
+      const picked = balanceSelection[kind];
+      const at = picked.indexOf(idx);
+      if (at >= 0) picked.splice(at, 1);
+      else if (picked.length < need[kind]) picked.push(idx);
+      refreshPromptSelection(state);
+    },
+    invalidHint: "Balance only takes the highlighted lands and creatures.",
+  });
+}
+
+// The panel's words for one round of Balance (`balance_select.stage`). A
+// payload without a stage is the one-prompt shape this predates, and keeps the
+// old words.
+function balanceRoundText(stage) {
+  if (stage === "lands") {
+    return {
+      title: "Balance — Lands (1 of 3)",
+      body: "Click the highlighted lands you will sacrifice. Cards in hand and creatures are counted next, on the board this leaves.",
+    };
+  }
+  if (stage === "hand") {
+    return {
+      title: "Balance — Cards in Hand (2 of 3)",
+      body: "Click the cards in your hand you will discard. Every player's discards are revealed together once all have chosen.",
+    };
+  }
+  if (stage === "creatures") {
+    return {
+      title: "Balance — Creatures (3 of 3)",
+      body: "Click the highlighted creatures you will sacrifice — every creature you control counts, a land that is one included.",
+    };
+  }
+  return {
+    title: "Balance — Choose Sacrifices",
+    body: "Click your highlighted lands and creatures to sacrifice them, and cards in your hand to discard.",
+  };
+}
+
 // Balance: the player picks exactly which lands/creatures to sacrifice and which
 // cards to discard down to the lowest counts, with a selected/total readout.
 function applyBalanceSelectPrompt(info) {
@@ -5604,10 +5645,16 @@ function applyBalanceSelectPrompt(info) {
   cancelBtn.disabled = true;
   customOkBtn.disabled = true;
 
-  title.textContent = "Balance — Choose Sacrifices";
+  // Balance is three rounds — lands, then cards in hand, then creatures — each
+  // counted on the board the last one left, and the payload names the one
+  // being answered (`stage`). The title and the instruction say which, so the
+  // hand round does not read as a sacrifice and the creature round says why a
+  // land (an animated Mishra's Factory) is among the creatures.
+  const round = balanceRoundText(info.stage);
+  title.textContent = round.title;
   // Permanents are picked on the board (highlighted lands/creatures), cards to
   // discard by clicking them in hand — never from a list of names here.
-  body.textContent = "Click your highlighted lands and creatures to sacrifice them, and cards in your hand to discard.";
+  body.textContent = round.body;
 
   // Only the counts, never the card lists — the board and hand are the pickers.
   function section(label, kind, where) {
@@ -5640,8 +5687,19 @@ function applyBalanceSelectPrompt(info) {
         creature_indices: balanceSelection.creatures.slice(),
         discard_indices: balanceSelection.hand.slice(),
       };
-      balanceSelection = { lands: [], creatures: [], hand: [] };
-      await sendAction(payload);
+      // Cleared before the request, so the next round's prompt (rendered by
+      // the response) starts empty; put back if the answer is refused, with
+      // the server's reason — a refusal used to vanish into an unhandled
+      // rejection and take the picks with it.
+      const picked = balanceSelection;
+      balanceSelection = { lands: [], creatures: [], hand: [], stage: picked.stage };
+      try {
+        await sendAction(payload);
+      } catch (e) {
+        balanceSelection = picked;
+        updateActionHint(e.message, true);
+        refreshPromptSelection();
+      }
     });
   }
 }
