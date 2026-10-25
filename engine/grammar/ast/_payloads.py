@@ -381,6 +381,13 @@ def object_filter_payload(self: "ObjectFilter") -> dict[str, object]:
     # so every payload written before this key existed is byte-identical.
     if self.multicolored:
         payload["multicolored"] = True
+    # "target **face-down** creature" (Nosy Goblin) and "…**with a morph
+    # ability**" (Backslide). Emitted only when set, so every payload written
+    # before these keys existed is byte-identical.
+    if self.face_down:
+        payload["face_down_only"] = True
+    if self.with_morph_ability:
+        payload["with_morph_ability"] = True
     # "with a +1/+1 counter on it" (Tempered Veteran). Emitted only when
     # set, so every payload written before this key existed is
     # byte-identical.

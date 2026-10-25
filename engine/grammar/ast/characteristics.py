@@ -761,3 +761,22 @@ class LandTypeSwap:
     first_basic: bool
     second_basic: bool
     duration: Duration = field(default_factory=Duration)
+
+
+@dataclass(frozen=True)
+class TurnFace:
+    """``Turn <permanent> face down`` / ``… face up``. (Backslide, Skittish
+    Valesk; Break Open, Ixidor, Reality Sculptor.)
+
+    CR 708.2a / 708.8: a permanent's face-down status (CR 110.5) is turned,
+    and that rewrites its copiable values (layer 1b) — so it is a
+    characteristic change, and the same object afterwards (CR 708.8: "Any
+    effects that have been applied to the face-down permanent still apply").
+    ``face_up`` is the direction the sentence prints. The subject is the
+    ordinary recipient — a target the picker offers, or the source itself —
+    and what may be turned is its noun phrase ("target face-down creature",
+    "target creature with a morph ability").
+    """
+
+    subject: Recipient
+    face_up: bool

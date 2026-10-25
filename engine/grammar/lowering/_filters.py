@@ -151,6 +151,12 @@ _PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
     # off the computed colours, ``_card_matches_filter`` off the printed ones —
     # so it is honoured in exactly the sense ``colors`` above is.
     "multicolored",
+    # "target **face-down** creature" (Nosy Goblin) and "…**with a morph
+    # ability**" (Backslide). ``to_payload`` emits each whenever it is set
+    # (``face_down_only``, ``with_morph_ability``) and the permanent matcher
+    # tests each off the object alone, so they are honoured in the sense the
+    # state words above are.
+    "face_down", "with_morph_ability",
     "supertypes", "excluded_supertypes",
     "not_enchanted",
     "enchanted_only",

@@ -188,6 +188,15 @@ class CostModifier:
     #: activation (``per_symbol`` None); Drought's taxes every ability and
     #: leaves it None.
     source_filter: dict | None = None
+    #: "**Face-down** creature spells you cast cost {1} less to cast." (Dream
+    #: Chisel.) CR 708.4: an object cast face down is turned face down before
+    #: it is put on the stack, so CR 601.2f sees the 2/2 blank
+    #: (``face_down.is_face_down_card``) and this is a fact about the taxed
+    #: card the matcher reads off it. A face-up creature spell is not one, and
+    #: neither is a morph card in a hand being *asked* what it would cost face
+    #: up. Set only on a one-subject sentence: printed once, the adjective
+    #: would be ambiguous over a list.
+    face_down: bool = False
 
 
 @dataclass(frozen=True)
@@ -243,11 +252,16 @@ class CostReduction:
 # subject and not another slot beside the colour and the type list: the word it
 # names is not in the sentence at all, it is on the permanent (CR 614.1c).
 _CHOSEN_TYPE_TAIL = r"(?: of the chosen type)"
+# "**Face-down** creature spells …" (Dream Chisel). CR 708.4's status, printed
+# in front of the type word; see ``CostModifier.face_down``.
+_FACE_DOWN_SLOT = r"(?:face-down )"
 _SPELL_SUBJECT_TEXT = (
-    rf"(?:(?:{_SPELL_COLOURS}) )?(?:(?:{_TYPE_LIST}) )?spells?{_CHOSEN_TYPE_TAIL}?"
+    rf"(?:(?:{_SPELL_COLOURS}) )?{_FACE_DOWN_SLOT}?(?:(?:{_TYPE_LIST}) )?"
+    rf"spells?{_CHOSEN_TYPE_TAIL}?"
 )
 _SPELL_SUBJECT = re.compile(
-    rf"^(?:(?P<colour>{_SPELL_COLOURS}) )?(?:(?P<type>{_TYPE_LIST}) )?"
+    rf"^(?:(?P<colour>{_SPELL_COLOURS}) )?(?P<face_down>{_FACE_DOWN_SLOT})?"
+    rf"(?:(?P<type>{_TYPE_LIST}) )?"
     rf"spell(?P<plural>s)?(?P<chosen>{_CHOSEN_TYPE_TAIL})?$"
 )
 # Split only where the "and" separates two *whole* subjects. `_TYPE_LIST`
@@ -673,12 +687,14 @@ def _spell_tax_modifier(match: "re.Match[str]") -> CostModifier | None:
     subjects: list[tuple[str | None, tuple[str, ...]]] = []
     singular = False
     chosen_type = False
+    face_down = False
     for printed in _SUBJECT_SPLIT.split(match.group("subjects")):
         read = _SPELL_SUBJECT.match(printed.strip())
         if read is None:
             return None
         singular = singular or not read.group("plural")
         chosen_type = chosen_type or bool(read.group("chosen"))
+        face_down = face_down or bool(read.group("face_down"))
         printed_colour = read.group("colour") or ""
         subjects.append(
             (
@@ -719,6 +735,10 @@ def _spell_tax_modifier(match: "re.Match[str]") -> CostModifier | None:
     # narrows.
     if chosen_type and (card_types != ("creature",) or len(subjects) > 1):
         return None
+    # "Face-down creature spells …" (Dream Chisel): one subject, for the
+    # chosen type's reason directly above — the adjective is printed once.
+    if face_down and len(subjects) > 1:
+        return None
     return CostModifier(
         amount=generic,
         applies_to="cast",
@@ -731,6 +751,7 @@ def _spell_tax_modifier(match: "re.Match[str]") -> CostModifier | None:
         alternative_subjects=tuple(subjects[1:]),
         off_controllers_turn=bool(match.group("off_turn")),
         chosen_creature_type=chosen_type,
+        face_down=face_down,
     )
 
 

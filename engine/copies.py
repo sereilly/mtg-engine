@@ -511,6 +511,31 @@ def copiable_card(permanent: "Permanent") -> "CardDefinition":
     return _fold(permanent.card, ordered)
 
 
+def face_up_copiable_card(permanent: "Permanent") -> "CardDefinition":
+    """What *permanent*'s copiable values would be **if it were face up**.
+
+    CR 702.37e asks it of a face-down permanent ("show all players what the
+    permanent's morph cost would be if it were face up … If the permanent
+    wouldn't have a morph cost if it were face up, it can't be turned face up
+    this way"), and CR 708.10's last sentence answers it: "if it is turned face
+    up, its copiable values become the values it copied from the other
+    permanent." So it is :func:`copiable_card`'s fold over the card the
+    face-down object hides rather than over the blank it wears — a Clone that
+    copied a morph creature and was then turned face down (Backslide) would be
+    that morph creature face up, and has its morph cost. A face-up permanent's
+    answer is :func:`copiable_card` itself.
+    """
+    hidden = getattr(permanent.card, "face_down_of", None)
+    if hidden is None:
+        return copiable_card(permanent)
+    entries = permanent.metadata.get(COPY_EFFECTS)
+    derived = _derived_entries(permanent)
+    if not entries and not derived:
+        return hidden
+    ordered = derived + sorted(entries or (), key=lambda item: item["timestamp"])
+    return _fold(hidden, ordered)
+
+
 def recorded_copiable_card(permanent: "Permanent") -> "CardDefinition":
     """*permanent*'s copiable values from the **recorded** channel alone.
 
@@ -549,6 +574,7 @@ __all__ = [
     "POWER_TOUGHNESS", "RECOPY_EACH_UPKEEP", "TEXT", "TYPES", "become_copy",
     "clear_derived_copy_sources", "copiable_card", "copied_name",
     "copy_effects", "copy_exceptions", "derived_copy_sources",
-    "end_copy", "grants_ability", "is_copy", "recorded_copiable_card",
+    "end_copy", "face_up_copiable_card", "grants_ability", "is_copy",
+    "recorded_copiable_card",
     "set_derived_copy_source",
 ]

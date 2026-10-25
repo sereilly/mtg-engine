@@ -176,6 +176,9 @@ class _FilterDraft:
     # "a **multicolored** creature card" (Dragon Arch) — see the field of the
     # same name on ``ast.ObjectFilter``.
     multicolored: bool = False
+    #: See ``ast.ObjectFilter.face_down`` and ``.with_morph_ability``.
+    face_down: bool = False
+    with_morph_ability: bool = False
     # "permanents **of the chosen color**" (Psychic Allergy) — see
     # ``ast.ObjectFilter.chosen_color``.
     chosen_color: bool = False
@@ -363,6 +366,8 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         nontoken=d.nontoken,
         colored=d.colored,
         multicolored=d.multicolored,
+        face_down=d.face_down,
+        with_morph_ability=d.with_morph_ability,
         chosen_color=d.chosen_color,
         chosen_keyword=d.chosen_keyword,
         chosen_creature_type=d.chosen_creature_type,

@@ -115,6 +115,14 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # Selection.) The same layer-4 family — CR 205.1a's subtype set where the
     # gain above is CR 205.1b's card-type addition.
     "set_target_creature_type": "characteristics",
+    # "Turn target creature with a morph ability face down." (Backslide),
+    # "Turn target face-down creature face up." (Ixidor, Break Open), "…turn
+    # this creature face down." (Skittish Valesk.) CR 708.2a / 708.8 rewrite
+    # the permanent's copiable values (layer 1b), so the family is what the
+    # permanent *is*.
+    "turn_target_face_down": "characteristics",
+    "turn_target_face_up": "characteristics",
+    "turn_self_face_down": "characteristics",
     # "{0}: This permanent becomes an enchantment." (Opal Acrolith.) The same
     # layer-4 family as the gain above it — CR 205.1a replacing rather than
     # CR 205.1b joining — so the same category.

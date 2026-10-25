@@ -353,6 +353,17 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
             stream.advance()
             continue
 
+        # "target **face-down** creature" (Nosy Goblin, Break Open, Aven
+        # Soulgazer), "**Face-down** creatures get +1/+1" (Ixidor), "any
+        # face-down creatures they control" (Spy Network). CR 110.5's status,
+        # one word to the lexer. Not a ``_STATE_ADJECTIVES`` row: those also
+        # feed the "tapped or blocking" union, whose reader (``state_holds``)
+        # has no face-down question to ask.
+        if word == "face-down":
+            d.face_down = True
+            stream.advance()
+            continue
+
         if word in COLOR_WORDS:
             # "a **green or white** creature" (Abomination) — a union of colour
             # adjectives, read as one the way "attacking or blocking" below is.

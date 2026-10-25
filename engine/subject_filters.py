@@ -69,6 +69,13 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # satisfied by one. Tested by ``permanent_matches_filter`` off the computed
     # colours, in the delegated half, for ``any_classes``' reason.
     "multicolored",
+    # "target **face-down** creature" (Nosy Goblin, Break Open, Aven
+    # Soulgazer) and "target creature **with a morph ability**" (Backslide).
+    # CR 110.5's face-down status and CR 702.37a's keyword, both read off the
+    # object alone (``face_down.is_face_down``, ``face_down.morph_cost`` of the
+    # effective card), so they sit in the delegated half; here rather than
+    # merely tested for ``any_classes``' reason.
+    "face_down_only", "with_morph_ability",
     "exclude_colors", "exclude_types", "exclude_subtypes",
     "tapped_only", "untapped_only",
     "mana_value", "power", "toughness", "with_plus1_counter",

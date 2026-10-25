@@ -24,6 +24,7 @@ from ._core import (
     Fixed,
     ObjectFilter,
     PlayerRef,
+    Recipient,
     Zone,
 )
 
@@ -770,6 +771,38 @@ class LookAtHand:
     #: printing "two cards at random" would need the number, and would refuse
     #: here until it had it.
     random_card: bool = False
+
+
+@dataclass(frozen=True)
+class LookAtFaceDown:
+    """"Look at target face-down creature." (Aven Soulgazer.)
+
+    CR 708.5's exception: a player may look at a face-down permanent another
+    player controls only when an effect lets them, and this is that effect.
+    Nothing about the permanent changes — it stays face down — so it is an
+    information effect like :class:`LookAtHand`, and the look is the looker's
+    alone (Spy Network's 2004-10-04 ruling: "Only you get to look").
+    ``subject`` is the ordinary recipient, so the noun phrase the picker offers
+    and the resolution re-asks is the printed one.
+    """
+    subject: Recipient
+
+
+@dataclass(frozen=True)
+class LookAtPlayerCards:
+    """"Look at target player's hand, the top card of that player's library,
+    and any face-down creatures they control." (Spy Network.)
+
+    One player's hidden objects, listed — one look over several of them, all
+    shown to the looker alone. ``parts`` is the printed list in order, each one
+    of ``"hand"``, ``"library_top"`` (the top card) and
+    ``"face_down_creatures"`` (every face-down creature that player controls,
+    CR 708.5), so a card listing a different selection of the three is this
+    node with a different tuple. The player is named once and the later parts
+    say "that player" / "they" back to it.
+    """
+    player: PlayerRef
+    parts: tuple[str, ...]
 
 # Two nodes that arrived from ``cards`` when Tempest's second wave took that
 # module past the size guard, and both belong here by this module's own printed

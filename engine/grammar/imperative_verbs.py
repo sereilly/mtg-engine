@@ -124,6 +124,7 @@ from .effects import (
     _parse_switch_pt,
     _parse_simultaneous_untap_and_tap,
     _parse_tap_untap,
+    parse_turn_face,
 )
 
 
@@ -174,6 +175,13 @@ def parse_imperative_verb(
         return _parse_destroy(stream)
     if stream.at_word("tap", "untap"):
         return _parse_tap_untap(stream)
+    # "Turn target creature with a morph ability face down." (Backslide),
+    # "Turn target face-down creature face up." (Ixidor.) CR 708's status
+    # turned by an effect; declines without consuming.
+    if stream.at_word("turn"):
+        turned = parse_turn_face(stream)
+        if turned is not None:
+            return turned
     # "**Simultaneously** untap all tapped creatures and tap all untapped
     # creatures." (Breaking Wave.) Sands of Time's inversion with its subject
     # implied, so the same production reads it — the adverb is what makes the

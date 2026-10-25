@@ -54,7 +54,7 @@ own-library sorting sentence in ``_parse_look_statement``.
 from .. import ast
 from ..amounts import parse_amount
 from ..errors import GrammarError
-from ..references import parse_player_ref
+from ..references import parse_player_ref, parse_recipient
 from ..stream import TokenStream
 from ..phrases import _parse_card_alternatives, _parse_mana_payment
 from ..vocabulary import CARD_TYPES
@@ -768,6 +768,12 @@ def _parse_look_statement(stream: TokenStream, defined: list) -> ast.Statement:
         return ast.LookTopPickToHand(
             count, pick_count=picks, rest_destination=rest_destination
         )
+    # "Look at **target face-down creature**." (Aven Soulgazer.) The third
+    # object this family names (see the docstring), tried before the player
+    # reader and declining without consuming when the noun phrase is not one.
+    face_down = _accept_look_at_face_down(stream)
+    if face_down is not None:
+        return face_down
     player = parse_player_ref(stream)
     if player is None:
         raise stream.error("expected the player whose hand is looked at")
@@ -775,6 +781,12 @@ def _parse_look_statement(stream: TokenStream, defined: list) -> ast.Statement:
     # be consumed or the line fails full-token consumption.
     stream.expect_word("'s")
     stream.expect_word("hand")
+    # "Look at target player's hand**, the top card of that player's library,
+    # and any face-down creatures they control**." (Spy Network.) One look over
+    # a list of that player's hidden objects; declines without consuming.
+    listed = _accept_look_list(stream, player)
+    if listed is not None:
+        return listed
     # "Look at target player's hand **and choose X cards from it. That player
     # discards those cards.**" (Mind Warp.) Duress's template with the hand
     # looked at instead of revealed, so it is that node rather than a second
@@ -785,6 +797,79 @@ def _parse_look_statement(stream: TokenStream, defined: list) -> ast.Statement:
     if picked is not None:
         return picked
     return ast.LookAtHand(player)
+
+
+def _accept_look_at_face_down(stream: TokenStream) -> "ast.LookAtFaceDown | None":
+    """``Look at **target face-down creature**.`` (Aven Soulgazer.)
+
+    CR 708.5's exception to who may look at a face-down permanent. Only a
+    *face-down* object is something to look at — a face-up permanent is
+    already public — so a noun phrase without the word is not this sentence
+    and the reader declines, cursor unmoved, leaving the player reader below
+    its turn and its own refusal.
+    """
+    if not stream.at_word("target"):
+        return None
+    mark = stream.mark()
+    try:
+        subject = parse_recipient(stream)
+    except GrammarError:
+        subject = None
+    if (
+        not isinstance(subject, ast.TargetSpec)
+        or subject.quantifier != "target"
+        or not subject.filter.face_down
+    ):
+        stream.reset(mark)
+        return None
+    return ast.LookAtFaceDown(subject)
+
+
+#: The parts of one player's hidden objects a listed look may name after the
+#: hand, each as the printed words that say "that player's" again.
+_LOOK_LIST_PARTS = (
+    (("the", "top", "card", "of", "that", "player", "'s", "library"), "library_top"),
+    (("any", "face-down", "creatures", "they", "control"), "face_down_creatures"),
+    (("any", "face-down", "creatures", "that", "player", "controls"),
+     "face_down_creatures"),
+)
+
+
+def _accept_look_list(
+    stream: TokenStream, player: ast.PlayerRef
+) -> "ast.LookAtPlayerCards | None":
+    """The tail of ``Look at <player>'s hand**, the top card of that player's
+    library, and any face-down creatures they control**.`` (Spy Network.)
+
+    A printed list — commas, and "and" before the last item — every item of
+    which is a back-reference to the same player, so it is one node
+    (:class:`~engine.grammar.ast.LookAtPlayerCards`) rather than a conjunction
+    whose later halves would each have to find "that player" again. Declines
+    without consuming unless the whole list reads.
+    """
+    if not (stream.at_punct(",") or stream.at_word("and")):
+        return None
+    mark = stream.mark()
+    parts = ["hand"]
+    while True:
+        joined = stream.accept_punct(",")
+        last = bool(stream.accept_word("and"))
+        if not (joined or last):
+            break
+        for words, part in _LOOK_LIST_PARTS:
+            if stream.accept_phrase(*words):
+                if part in parts:
+                    stream.reset(mark)
+                    return None
+                parts.append(part)
+                break
+        else:
+            stream.reset(mark)
+            return None
+        if last:
+            return ast.LookAtPlayerCards(player, tuple(parts))
+    stream.reset(mark)
+    return None
 
 
 def _accept_look_and_choose(

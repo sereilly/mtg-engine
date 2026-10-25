@@ -59,6 +59,8 @@ from ._common import (
     _names_several_targets,
     _restrictions_beyond,
     _signed,
+    _targets_only,
+    testable_filter_payload,
 )
 
 
@@ -839,3 +841,47 @@ def _lower_change_text(node: ast.ChangeText) -> tuple[OracleInstruction, ...]:
     if _filter_payload(node.subject.filter, carried_separately=union):
         _describe_targets(payload, node.subject, carried_separately=union)
     return (OracleInstruction("mark_text_modified", "", payload),)
+
+
+def _lower_turn_face(node: ast.TurnFace) -> tuple[OracleInstruction, ...]:
+    """``Turn <permanent> face down`` / ``… face up`` (CR 708.2a, 708.8).
+
+    Three shapes, each a handler over ``engine/face_down.py``'s two seams:
+
+    * "turn **this creature** face down" (Skittish Valesk) acts on the
+      ability's own source — ``turn_self_face_down``;
+    * "turn **target** <noun phrase> face down / face up" (Backslide, Break
+      Open, Ixidor) acts on the one permanent the picker offered and the
+      handler re-asks (CR 608.2b), so the noun phrase is described and carried
+      — ``turn_target_face_down`` / ``turn_target_face_up``. The gate is
+      ``TESTABLE_SUBJECT_FILTER_KEYS``, because the handler asks
+      ``subject_matches`` with the resolving seat as its observer: "an
+      opponent controls" (Break Open) is a seat comparison.
+
+    Everything else refuses by name. A sweep ("turn all …") has no handler,
+    and turning one's own source face up is printed on no card here; read as
+    one of the shapes above either would reach a permanent the card does not
+    name.
+    """
+    spec = node.subject
+    direction = "up" if node.face_up else "down"
+    if _is_source(spec):
+        if node.face_up:
+            raise LoweringError(
+                "no handler turns an ability's own source face up", node=node
+            )
+        return (OracleInstruction("turn_self_face_down", "", {}),)
+    if not isinstance(spec, ast.TargetSpec) or spec.quantifier != "target":
+        raise LoweringError(
+            f"no handler turns a permanent nobody targeted face {direction}",
+            node=node,
+        )
+    described = testable_filter_payload(
+        spec.filter,
+        refusal=f"nothing tests this narrowing of what is turned face {direction}",
+        node=node,
+        require_narrowing=False,
+    )
+    payload = _targets_only(spec)
+    payload.update(described)
+    return (OracleInstruction(f"turn_target_face_{direction}", "", payload),)
