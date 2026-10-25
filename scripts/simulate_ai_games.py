@@ -161,6 +161,15 @@ def main() -> int:
         for reason, count in report.refused_special_actions.most_common(5):
             print(f"  {count}x declined: {reason}")
 
+    # CR 702.37c: spells cast face down for a morph cost. Nothing could be
+    # before ONS's wave 1, so only a pool printing morph can move it; the turn
+    # back up is the ``turn_face_up`` special action above.
+    if report.face_down_casts:
+        print(
+            f"Cast face down (morph): {sum(report.face_down_casts.values())} "
+            f"({len(report.face_down_casts)} distinct cards)"
+        )
+
     # CR 400.11b: cards brought in from a seat's sideboard (a Wish, Ring of
     # Ma'rûf). No seat had a sideboard before JUD's wave 2, so only a pool
     # printing such a card can move it, and it is shown when it did.

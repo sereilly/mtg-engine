@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from ...alternative_costs import (AlternativeCost, alternative_costs,
                                   board_noun)
+from ...face_down import face_down_card, is_morph_cost
 from ...cost_modifiers import (CostReduction, cost_reduction_for_cast,
                                keyword_cost_modifiers, reduce_cost,
                                spell_cost_tax, spell_symbol_tax)
@@ -727,6 +728,15 @@ class AlternativeCastCostsMixin:
         reader so the day the cast path began charging the taxes was not the day
         the other three began offering casts it refuses.
         """
+        if is_morph_cost(cost):
+            # CR 702.37c: what a morph cast is taxed and discounted as is the
+            # face-down spell — colourless, nameless, mana value 0 — and not
+            # the card, which is the spell the cast path prices
+            # (``_cast_onto_stack`` turns it face down at the announcement).
+            # Priced off the card instead, Gloom made a face-down Exalted
+            # Angel read three mana dearer to every reader here than the cast
+            # charges.
+            card = face_down_card(card)
         tax, _taxing = spell_cost_tax(self, caster_index, card)
         pips, _pip_taxing = spell_symbol_tax(self, caster_index, card)
         reduction, _reducing = cost_reduction_for_cast(self, caster_index, card)

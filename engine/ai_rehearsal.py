@@ -1026,6 +1026,16 @@ def conceal_from(game, seat: int) -> None:
     away, a rehearsed cast of it was refused on every copy and a free cast off
     the top was never proposed.
 
+    * **each other player's face-down permanents and spells are dealt again
+      too** (CR 708.5: "You can't look at … face-down spells or permanents
+      controlled by another player"): what each one hides is pooled with that
+      player's library (and hand, when it is dealt) and dealt back onto the
+      same objects. A face-down creature is a 2/2 to every reader, but not to
+      every *outcome* — one Illusionary Mask put face down is turned up by the
+      damage a rehearsed Lightning Bolt would deal it, and what survives is
+      the card it hid (``tests/ai/test_ons_w1g1_face_down_concealment.py``).
+      The seat's own face-down objects are its own to look at and stay.
+
     What this does not know is what the seat has *been shown and remembers*:
     a card it looked at with a Duress of its own two turns ago, one it
     bounced to that hand, the three it put back with a Brainstorm. Nothing in
@@ -1047,6 +1057,8 @@ def conceal_from(game, seat: int) -> None:
             for entry in playable_from_zones(game, index)
         )
 
+    from .face_down import face_down_card, hidden_card_of
+
     owing = {choice.player_index for choice in game.pending_choices}
     for index, player in enumerate(game.players):
         library = player.library
@@ -1062,13 +1074,64 @@ def conceal_from(game, seat: int) -> None:
         )
         if deals_hand:
             hidden = [*player.hand, *hidden]
+        # CR 708.5: this player's face-down objects, in a fixed order (by id,
+        # then stack position) so that the deal is a function of *which*
+        # cards are hidden and of nothing about where.
+        face_down = [] if index == seat else _face_down_objects(game, index)
+        hidden = [*hidden, *(hidden_card_of(obj) for obj in face_down)]
         hidden.sort(key=_card_order)
         random.shuffle(hidden)
         if deals_hand:
             held = len(player.hand)
             player.hand[:] = hidden[:held]
             hidden = hidden[held:]
+        for obj in face_down:
+            obj.card = face_down_card(hidden.pop(_could_be_hidden_by(hidden, obj)))
         library[:] = [*seen_on_top, *hidden]
+
+
+def _could_be_hidden_by(pool: list, obj) -> int:
+    """Which card of the shuffled *pool* a face-down *obj* is dealt: the last
+    one it **could** be hiding, from what the table saw of how it went face
+    down — a creature card under Illusionary Mask (its marker,
+    ``face_down.MASK_FACE_DOWN``), a card with a morph cost otherwise (it was
+    announced as a morph, CR 702.37c) — and the last card at all when the
+    pool holds none such. The pool always holds at least the card *obj* hid.
+    """
+    from .face_down import MASK_FACE_DOWN, morph_cost
+
+    if getattr(obj, "metadata", {}).get(MASK_FACE_DOWN):
+        def could(card):
+            return "creature" in (card.type_line or "").lower()
+    else:
+        def could(card):
+            return morph_cost(card) is not None
+    for position in range(len(pool) - 1, -1, -1):
+        if could(pool[position]):
+            return position
+    return len(pool) - 1
+
+
+def _face_down_objects(game, index: int) -> list:
+    """Every face-down permanent *index* controls (phased out too, CR 708.5)
+    and every face-down spell it controls on the stack, in a fixed order."""
+    from .face_down import is_face_down
+
+    permanents = sorted(
+        (
+            permanent
+            for permanent in (
+                *game.controlled_by(index), *game.players[index].phased_out,
+            )
+            if is_face_down(permanent)
+        ),
+        key=lambda permanent: permanent.permanent_id,
+    )
+    spells = [
+        item for item in game.stack
+        if getattr(item, "caster_index", None) == index and is_face_down(item)
+    ]
+    return [*permanents, *spells]
 
 
 def _scratch(game, carried, detach, seat):

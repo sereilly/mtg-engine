@@ -63,6 +63,7 @@ from engine.restricted_mana import ACTIVATE, CAST, PaymentPurpose
 from engine.cost_modifiers import (cost_reduction_for_cast, reduce_cost,
                                    spell_cost_tax, spell_symbol_tax)
 from engine.cast_costs import additional_costs
+from engine.face_down import is_face_down
 from engine.targeting import (derive_activation_spec, derive_cast_spec,
                               spec_roles, usable_activated_abilities)
 from engine.untap_restrictions import permanent_in_limited_scope
@@ -80,6 +81,7 @@ from .serialization import (
     _serialize_permanent_summary,
     _serialize_player,
     _serialize_stack_item,
+    hidden_card_view,
 )
 from .catalog import CATALOG_BY_NAME
 from .pregame import _build_pregame_info
@@ -1072,6 +1074,19 @@ def build_card_target_spec(
     }
 
 
+def _with_hidden_card_for(viewer_seat: int | None, item, payload: dict) -> dict:
+    """*payload* (one stack object, as every viewer is sent it) with what a
+    face-down spell is added for the one seat that may look at it — its
+    controller (CR 708.5, ``serialization.hidden_card_view``) — and the public
+    fact that it is face down for everyone."""
+    payload["face_down"] = is_face_down(item)
+    if viewer_seat is not None and viewer_seat == item.caster_index:
+        hidden = hidden_card_view(item)
+        if hidden is not None:
+            payload["hidden_card"] = hidden
+    return payload
+
+
 def build_state(session: Session, viewer_seat: int | None) -> dict:
     """Settle what the game owes, then read it. What a route calls.
 
@@ -1312,7 +1327,10 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
             )
             for i in range(len(session.game.players))
         ],
-        "stack": [_serialize_stack_item(item, session.game) for item in reversed(session.game.stack)],
+        "stack": [
+            _with_hidden_card_for(viewer_seat, item, _serialize_stack_item(item, session.game))
+            for item in reversed(session.game.stack)
+        ],
         "combat": combat_state,
         "log": session.game.log,
         # Cards revealed to all players (CR 701.20) — an event feed the client

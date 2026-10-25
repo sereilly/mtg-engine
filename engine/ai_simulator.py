@@ -29,6 +29,7 @@ from .ai_rehearsal import mid_resolution, rehearsing
 from .ai_special_actions import special_action_before_combat
 from .ai_weighed_cast import permitted_casts
 from .card_loader import load_cards
+from .face_down import cast_announces_morph
 from .faces import whole_card
 from .game import Game
 from .search_filters import card_has_type
@@ -224,6 +225,14 @@ class SimulationReport:
     #: as clean as it does now. The refusals among them are beside it.
     special_actions_taken: Counter[str] = field(default_factory=Counter)
     refused_special_actions: Counter[str] = field(default_factory=Counter)
+    #: Spells cast **face down** for a morph cost (CR 702.37c), by the card
+    #: each one hid. Its partner is ``special_actions_taken["turn_face_up"]``
+    #: (CR 702.37e): one counts the morphs put on the table, the other the
+    #: ones turned up. **Both zero in every run before ONS's wave 1**, and
+    #: necessarily — no card could be cast face down — so a pool printing
+    #: morph that reads zero here is that coming back, or the policy never
+    #: finding the {3} worth it.
+    face_down_casts: Counter[str] = field(default_factory=Counter)
     #: Cards brought into a game from a seat's sideboard (CR 400.11b: a Wish,
     #: Ring of Ma'rûf), counted off the sideboards at each game's end. **Zero in
     #: every run before JUD's wave 2**, and necessarily: no seat was dealt a
@@ -609,13 +618,16 @@ def _zone_counter(game: Game) -> Counter[str]:
         for permanent in player.phased_out:
             already.add(id(permanent))
             if not permanent.metadata.get("is_token"):
-                counter[permanent.card.name] += 1
+                counter[whole_card(permanent.card).name] += 1
     for _seat, permanent in game.permanents_with_controller():
         already.add(id(permanent))
         # Ignore generated tokens in zone conservation checks.
         if permanent.metadata.get("is_token"):
             continue
-        counter[permanent.card.name] += 1
+        # By the card it is: a face-down permanent's card is the blank 2/2
+        # (CR 708.2a), and the card it hides is the one in the game
+        # (``faces.whole_card``, CR 708.9) — the stack's reading below.
+        counter[whole_card(permanent.card).name] += 1
     # A spell or ability mid-resolution is still a card in the game. The check
     # runs after the pending-choice drain, so this is normally empty — but a
     # prompt that suspends leaves its object here, and counting it stops that
@@ -654,7 +666,7 @@ def _zone_counter(game: Game) -> Counter[str]:
     for held in _held_out_of_play(game):
         if id(held) not in already and not held.metadata.get("is_token"):
             already.add(id(held))
-            counter[held.card.name] += 1
+            counter[whole_card(held.card).name] += 1
     return counter
 
 
@@ -978,12 +990,17 @@ def _play_one_cast(
     # cost (CR 118.9), the division (CR 601.2d), the optional costs and the
     # mode (CR 601.2b). Each of those was once a keyword spelled here and
     # missing from another executor.
+    # CR 702.37c: whether this announcement casts the card face down — asked
+    # of the engine's own reading of it before the card leaves the zone.
+    morphed = cast_announces_morph(game, active, card_to_cast, cast_action)
     result = game.cast_from_hand(
         active, card_to_cast.name, **cast_announcement(cast_action),
     )
     _resolve_pending_choices(game)
     after = _snap(game)
     report.interaction_count += 1
+    if result.supported and morphed:
+        report.face_down_casts[card_to_cast.name] += 1
     # Which mode, for a modal spell — after the outcome, so the line still
     # reads "cast <name> -> <outcome>" for everything that greps it.
     modes_named = _modes_named(card_to_cast, cast_action)

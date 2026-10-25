@@ -1,0 +1,561 @@
+"""Face-down spells and permanents (CR 708), and morph (CR 702.37).
+
+**What a face-down object is, here: a card.** CR 702.37c says it in as many
+words — "It becomes a 2/2 face-down creature card with no text, no name, no
+subtypes, and no mana cost" — and CR 708.2a lists the same values for every
+other way something is turned face down. So a face-down spell's
+``StackItem.card`` and a face-down permanent's ``Permanent.card`` **are** that
+blank card (:func:`face_down_card`), and the card it hides rides on it as
+``CardDefinition.face_down_of``. Two shapes were on the table, and this one was
+chosen by counting both sides (the round's commit message has the numbers):
+
+* **A face-down record beside the real card** (a layer-1b channel the fold
+  reads) leaves ``perm.card`` the hidden card. Every CR 613 accessor would be
+  right, and every *other* reader would not: 1,598 sites in ``engine/`` and
+  ``web/`` read ``.card.name``, most of them log lines and serializers, and
+  each one would name the hidden card to the whole table the first time the
+  creature attacked or was dealt damage.
+* **The blank card as the object's card** is fail-closed for all of them at
+  once — a log line says "Face-down creature", a serializer sends a 2/2 with
+  nothing else, a characteristic read sees CR 708.2a's values — and what it
+  owes in return is that every road *off* the battlefield or the stack puts the
+  hidden card in the new zone (CR 708.9). Those roads already meet at two
+  seams: ``faces.whole_card`` (asked by every zone funnel and by the stack's
+  bin, for split cards — CR 709.4 is the same question) and
+  ``Game.remove_all_from_battlefield``, the one transition out, which reveals
+  a departing face-down permanent (:func:`reveal_departing`).
+
+**The hidden card is what the object's controller may look at** (CR 708.5,
+:func:`hidden_card_of`) and what turning it face up restores (CR 708.8,
+:func:`turn_face_up`). Turning it face up changes ``Permanent.card`` and
+nothing else: it is the same object (CR 400.7 does not apply), so its
+counters, damage, Auras, control changes, P/T effects, tapped state and
+summoning sickness are all where they were — they live on the permanent, not
+on the card.
+
+**What a permanent was as it left** is CR 603.10's last-known information, and
+for a face-down permanent that is the blank 2/2: a face-down creature that dies
+has no "when this dies" ability and is no Goblin. The departing permanent's
+card becomes the hidden card (so whatever reads ``perm.card`` to put it in a
+zone gets the real one, revealed), and :data:`copies.FACE_DOWN_AS_IT_LEFT` on
+it keeps its characteristics the face-down ones for every reader of the
+departed object (``copies.copiable_card``).
+
+Morph is the keyword that casts a card this way. CR 702.37a makes it two
+things this engine already has: an **alternative cost** of {3} (CR 118.9,
+``engine/alternative_costs.py`` — :func:`morph_alternative_cost`, found by the
+one reader every cast question shares, ``Game.applicable_alternative_costs``)
+with the face-down status attached, and a **special action** (CR 702.37e,
+CR 116.2b) registered on ``engine/special_actions.py``'s permanent seam
+(:data:`TURN_FACE_UP`). Its keyword line is admitted by the reader that
+charges it (:func:`morph_cost_text`, ``keyword_lines._qualified_keyword_part``),
+madness's arrangement.
+"""
+
+from __future__ import annotations
+
+import dataclasses
+import re
+from typing import TYPE_CHECKING
+
+from .copies import FACE_DOWN_AS_IT_LEFT
+from .models import CardDefinition
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from .alternative_costs import AlternativeCost
+    from .game import Game
+    from .models import Permanent
+
+#: The keyword, as :attr:`AlternativeCost.keyword` carries it — what a
+#: "morph costs" modifier would be read against
+#: (``cost_modifiers.keyword_cost_modifiers``) and what a cast's log names.
+MORPH = "morph"
+
+#: The special action CR 702.37e makes of turning a face-down permanent with a
+#: morph ability face up (CR 116.2b), as ``special_actions`` registers it.
+TURN_FACE_UP = "turn_face_up"
+
+#: The trigger condition kind of "When this creature is turned face up"
+#: (Legions, Scourge), announced by :func:`turn_face_up` and by nothing else.
+TURNED_FACE_UP = "turned_face_up"
+
+#: Set on a permanent **Illusionary Mask** put face down: the record of which
+#: rule turns it face up (CR 708.6, 708.7) — the Mask's "if [it] would assign
+#: or deal damage, be dealt damage, or become tapped, instead it's turned face
+#: up", which ``EffectsMixin._turn_face_up`` asks at each of those events. Its
+#: own key because a morph creature put face down by its own ability is turned
+#: up by nothing of the kind. The spelling the Mask has always used.
+MASK_FACE_DOWN = "face_down"
+
+#: What the engine calls an object CR 708.2a says has **no name**. A display
+#: label, never a name a card can be asked for: nothing in the pool is called
+#: this, and nothing in the engine compares a name against it — whether an
+#: object is face down is asked of :func:`is_face_down_card`.
+FACE_DOWN_NAME = "Face-down creature"
+
+#: CR 708.2a's characteristics: "a 2/2 face-down creature with no text, no
+#: name, no subtypes, and no mana cost" — so mana value 0 (CR 202.3a) and, with
+#: no mana cost and no colour indicator, colourless (CR 202.2b). No set code,
+#: collector number, oracle id or printings either: each of those would tell a
+#: serializer which card it is. The face-down **values** with nothing hidden
+#: behind them — what a copy of a face-down permanent copies (CR 708.10,
+#: CR 707.2) and what a departed one last was.
+FACE_DOWN_CHARACTERISTICS = CardDefinition(
+    name=FACE_DOWN_NAME,
+    mana_cost="",
+    cmc=0.0,
+    type_line="Creature",
+    oracle_text="",
+    colors=(),
+    color_identity=(),
+    keywords=(),
+    produced_mana=(),
+    raw={
+        "name": FACE_DOWN_NAME, "type_line": "Creature", "power": "2",
+        "toughness": "2", "layout": "normal",
+    },
+    power="2",
+    toughness="2",
+)
+
+
+def face_down_card(card: CardDefinition) -> CardDefinition:
+    """The face-down object *card* becomes (CR 702.37c, CR 708.2a): the blank
+    2/2 with *card* hidden behind it.
+
+    Built once per card **object** and kept on it, the arrangement
+    ``faces.face_cards`` makes for a split card's halves and for its reason: a
+    deck repeats one immutable definition per copy, and the object a stack
+    item or a permanent holds should be the same one every time it is asked
+    for. Two face-down copies of one card are therefore one blank card, as two
+    face-up copies are one definition; what tells the two *objects* apart is
+    the permanent (``permanent_id``), never the card.
+
+    A card that is itself face down is returned unchanged (CR 708.2b: "A
+    face-down permanent can't be turned face down").
+    """
+    if card.face_down_of is not None:
+        return card
+    cached = card.__dict__.get("_face_down_card")
+    if cached is not None:
+        return cached
+    blank = dataclasses.replace(FACE_DOWN_CHARACTERISTICS, face_down_of=card)
+    # ``faces.face_cards``' trick: a frozen dataclass refuses ``setattr`` but
+    # its instance dict is an ordinary dict, and nothing here is a field.
+    card.__dict__["_face_down_card"] = blank
+    return blank
+
+
+def is_face_down_card(card) -> bool:
+    """Whether *card* is a face-down object's blank card."""
+    return getattr(card, "face_down_of", None) is not None
+
+
+def hidden_card(card) -> "CardDefinition | None":
+    """The card a face-down *card* hides, or None for a face-up one."""
+    return getattr(card, "face_down_of", None)
+
+
+def is_face_down(permanent) -> bool:
+    """Whether *permanent* (or a stack object) is face down right now."""
+    return is_face_down_card(getattr(permanent, "card", None))
+
+
+def hidden_card_of(permanent) -> "CardDefinition | None":
+    """What a face-down *permanent* (or stack object) is, for the one seat
+    CR 708.5 lets look at it — its controller — and for the rules that turn it
+    face up. None for a face-up object."""
+    return hidden_card(getattr(permanent, "card", None))
+
+
+def may_look_at(game: "Game", seat: "int | None", obj) -> bool:
+    """CR 708.5: "you may look at a face-down spell you control on the stack
+    or a face-down permanent you control (even if it's phased out). You can't
+    look at … face-down spells or permanents controlled by another player."
+
+    *obj* is a permanent or a stack object. A face-up object is anybody's to
+    look at; ``None`` as the seat (a spectator) may look at no face-down one.
+    """
+    if not is_face_down(obj):
+        return True
+    if seat is None:
+        return False
+    if hasattr(obj, "caster_index"):
+        return obj.caster_index == seat
+    return game.controller_index_of(obj) == seat
+
+
+# ---------------------------------------------------------------------------
+# Morph (CR 702.37): the keyword line and the alternative cost it is
+# ---------------------------------------------------------------------------
+
+#: "morph {1}{g}{g}" as a keyword-line part reads after
+#: ``normalize_creature_line`` (lowercased, reminder text gone).
+_MORPH_PART = re.compile(r"^morph\s+(?P<cost>(?:\{[^{}]+\})+)$")
+
+#: Any line that *is* a morph keyword line, readable or not — the word, then a
+#: mana symbol or the dash a non-mana cost is printed behind ("Morph—Reveal a
+#: white card", Legions). Megamorph is a different word and does not match.
+_MORPH_SHAPE = re.compile(r"^morph\s*(?:[—–-]|\{)", re.IGNORECASE)
+
+_REMINDER = re.compile(r"\([^)]*\)")
+
+#: CR 702.37a's alternative cost, in the rule's own words: what the cost's
+#: ``phrase`` is, so a log line or a prompt reads back the rule.
+MORPH_RULES_TEXT = (
+    "you may cast this card as a 2/2 face-down creature with no text, no "
+    "name, no subtypes, and no mana cost by paying {3} rather than paying its "
+    "mana cost"
+)
+
+#: What casting face down costs: CR 702.37a's "{3}", the same for every card.
+MORPH_CAST_COST = "{3}"
+
+
+def _stripped(line: str) -> str:
+    return " ".join(_REMINDER.sub("", line or "").split()).strip().rstrip(".")
+
+
+def morph_cost_text(part: str) -> str | None:
+    """The morph cost one keyword-line *part* prints, as mana symbols in upper
+    case ("{1}{G}{G}"), or None when the part is not a morph this engine can
+    charge.
+
+    The keyword-line gate's admission test (``keyword_lines.
+    _qualified_keyword_part``), for ``madness.madness_cost_text``'s reason:
+    the reader that charges the cost is the one that admits the line. A
+    hybrid, Phyrexian or {X} symbol refuses (``mana_cost_from_symbols``) — an
+    X would be CR 702.37f's number nothing here announces — and a non-mana
+    cost behind a dash refuses, so a card printing one stays unsupported
+    naming the line rather than turning face up for nothing.
+    """
+    from .mana_payment import mana_cost_from_symbols
+
+    match = _MORPH_PART.match(_stripped(part).lower())
+    if match is None:
+        return None
+    cost = match.group("cost").upper()
+    if mana_cost_from_symbols(cost) is None:
+        return None
+    return cost
+
+
+def is_morph_line(line: str) -> bool:
+    """Whether *line* is a morph keyword line at all, readable or not."""
+    return bool(_MORPH_SHAPE.match(_stripped(line)))
+
+
+def morph_cost(card) -> str | None:
+    """*card*'s printed morph cost ("{1}{G}{G}"), or None when it prints no
+    morph this engine can charge.
+
+    Read off ``line_rewrites.expand_card_lines``, which is CLAUDE.md's rule
+    for every reader of a card's lines.
+    """
+    if card is None or "morph" not in (card.oracle_text or "").lower():
+        return None
+    from .line_rewrites import expand_card_lines
+
+    for line in expand_card_lines(card):
+        cost = morph_cost_text(line)
+        if cost is not None:
+            return cost
+    return None
+
+
+def morph_alternative_cost(card) -> "AlternativeCost | None":
+    """CR 702.37a's alternative cost, for a card that prints morph: {3}
+    rather than its mana cost, as a face-down 2/2 — or None.
+
+    The face-down status is not a field of the cost: it is what the cast path
+    does when the announced cost is this one (:func:`is_morph_cost`), which is
+    CR 702.37c's order — the card is turned face down as the announcement is
+    made, before any characteristic of the spell is read.
+    """
+    if morph_cost(card) is None:
+        return None
+    from .alternative_costs import AlternativeCost
+
+    return AlternativeCost(MORPH_RULES_TEXT, mana=MORPH_CAST_COST, keyword=MORPH)
+
+
+def is_morph_cost(cost) -> bool:
+    """Whether *cost* is the alternative cost a morph ability offers."""
+    return cost is not None and getattr(cost, "keyword", None) == MORPH
+
+
+def announced_morph_cost(
+    game: "Game", seat: int, card, *, alternative_cost, permission,
+) -> "AlternativeCost | None":
+    """The morph cost this cast announces, or None (CR 702.37c, CR 601.2b).
+
+    The cast announces "an alternative cost" (the flag every caller sends,
+    ``Game.cast_from_hand(alternative_cost=True)``), and it is a morph cast
+    when the one alternative cost this card may be cast for is its morph —
+    asked of ``Game.applicable_alternative_costs``, the reader the picker,
+    the AI and the payment share. A permission that *requires* a cost of its
+    own (flashback, CR 118.9b) is that cast's cost and never a morph
+    (CR 118.9a: one alternative cost per spell).
+
+    Asked of the card **as its zone holds it**, before the cast path turns it
+    face down: once it is face down it has no text and offers no cost at all.
+    """
+    if not alternative_cost:
+        return None
+    if permission is not None and getattr(permission, "cost", None) is not None:
+        return None
+    if is_face_down_card(card):
+        return None
+    offered = game.applicable_alternative_costs(seat, card)
+    if len(offered) == 1 and is_morph_cost(offered[0]):
+        return offered[0]
+    return None
+
+
+def cast_announces_morph(game: "Game", seat: int, card, action) -> bool:
+    """Whether a policy's cast *action* of *card* is a morph cast — the
+    question :func:`announced_morph_cost` answers for the cast path, asked
+    the same way (an alternative cost announced from the hand, no permission
+    requiring a cost of its own). The simulator's ``face_down_casts`` honesty
+    count reads it."""
+    if not getattr(action, "alternative_cost", False):
+        return False
+    if getattr(action, "from_zone", "hand") != "hand":
+        return False
+    return announced_morph_cost(
+        game, seat, card, alternative_cost=True, permission=None,
+    ) is not None
+
+
+# ---------------------------------------------------------------------------
+# Turning face up (CR 702.37e, 708.7, 708.8) and face down (CR 708.2a/b)
+# ---------------------------------------------------------------------------
+
+
+def turn_face_up(game: "Game", permanent: "Permanent", *, how: str = "") -> bool:
+    """Turn *permanent* face up (CR 708.8); whether it was face down.
+
+    "As a face-down permanent is turned face up, its copiable values revert to
+    its normal copiable values. Any effects that have been applied to the
+    face-down permanent still apply to the face-up permanent. Any abilities
+    relating to the permanent entering the battlefield don't trigger and don't
+    have any effect, because the permanent has already entered the
+    battlefield."
+
+    So the permanent's card becomes the card it hid and nothing else moves:
+    it is the same object, with the same id and timestamp. No entry ability is
+    asked. The table recomputes what the board's statics give it — the face-up
+    card may be a lord, or a creature a lord reaches — and then the "When this
+    creature is turned face up" abilities it now has trigger
+    (:data:`TURNED_FACE_UP`, CR 603.2: the event happened to an object that
+    has them as it happens).
+
+    *how* is for the log ("for its morph cost {1}{G}{G}"). The reveal is public
+    (CR 702.37e: "show all players what the permanent's morph cost would be").
+    Asked by the morph special action, by Illusionary Mask's replacement, and
+    by an effect that turns a permanent face up without paying anything
+    (CR 708.7; Ixidor's ruling, 2004-10-04: "its controller does not have to
+    pay its Morph cost").
+    """
+    real = hidden_card(getattr(permanent, "card", None))
+    if real is None:
+        return False
+    permanent.card = real
+    controller = game.controller_index_of(permanent)
+    owner = game.players[controller].name if controller is not None else "Its controller"
+    game.log.append(
+        f"{owner} turned a face-down creature face up: it is {real.name}"
+        + (f" ({how})" if how else "")
+    )
+    game._recompute_continuous_effects()
+    _announce_turned_face_up(game, permanent, controller)
+    return True
+
+
+def _announce_turned_face_up(game: "Game", permanent: "Permanent", controller) -> None:
+    """Put the just-turned permanent's own "When this creature is turned face
+    up" abilities on the stack (CR 603.3), in one CR 603.3b window. The
+    dispatcher of :data:`TURNED_FACE_UP`."""
+    from .trigger_utils import matching_triggers
+
+    if controller is None:
+        return
+    found = list(matching_triggers(
+        permanent.effective_card, condition_kinds={TURNED_FACE_UP},
+    ))
+    if not found:
+        return
+    with game.putting_triggers_on_stack():
+        for trig in found:
+            game._enqueue_triggered_ability(
+                controller_index=controller,
+                source_permanent=permanent,
+                instruction=trig.instruction,
+                effect_kind=trig.effect_kind,
+                ability_text=trig.source_line,
+            )
+            game.log.append(f"{permanent.card.name} triggered (turned face up)")
+
+
+def turn_face_down(game: "Game", permanent: "Permanent") -> bool:
+    """Turn a face-up *permanent* face down (CR 708.2a); whether it turned.
+
+    "If a face-up permanent is turned face down by a spell or ability that
+    doesn't list any characteristics for that object, it becomes a 2/2
+    face-down creature with no text, no name, no subtypes, and no mana cost."
+    And CR 708.2b: one already face down stays as it is — "nothing happens".
+
+    The same object, as turning face up is: everything applied to it stays
+    (CR 708.8's rule read the other way). Not yet asked by any card in a
+    shipped set — Skittish Valesk's "turn this creature face down" is the
+    first, and W1G2's — so it is here, beside the rule it is the other half
+    of, rather than built for a card that does not exist yet. The log names
+    the card that went face down: the table watched it happen.
+    """
+    card = getattr(permanent, "card", None)
+    if card is None or is_face_down_card(card):
+        return False
+    permanent.card = face_down_card(card)
+    game.log.append(f"{card.name} was turned face down")
+    game._recompute_continuous_effects()
+    return True
+
+
+def reveal_departing(game: "Game", permanent: "Permanent") -> None:
+    """CR 708.9 for a face-down permanent leaving the battlefield: "its owner
+    must reveal it to all players as they move it".
+
+    Asked by ``Game.remove_all_from_battlefield`` — the one transition out —
+    for every departing permanent that is not merely phasing out (CR 708.5:
+    a phased-out face-down permanent is still face down). The permanent's
+    card becomes the card it hid, so the zone it is put into gets the real one
+    whichever road put it there; :data:`FACE_DOWN_AS_IT_LEFT` keeps the
+    departed object's characteristics the face-down ones, which is what it
+    last was (CR 603.10). Nothing happens to a face-up permanent.
+    """
+    real = hidden_card(getattr(permanent, "card", None))
+    if real is None:
+        return
+    permanent.card = real
+    permanent.metadata[FACE_DOWN_AS_IT_LEFT] = True
+    game.log.append(
+        f"The face-down creature leaving the battlefield is revealed: it is "
+        f"{real.name} (CR 708.9)"
+    )
+
+
+def revealed_as_it_moves(game: "Game", card, permanent=None):
+    """*card*, revealed if it is a face-down object's (CR 708.9) — the seams a
+    card enters a zone through ask this before ``faces.whole_card`` turns the
+    stand-in into the card it hid, so the move is said in the log.
+
+    *permanent* is the face-down permanent the card belongs to, when the seam
+    knows it (``from_battlefield``): a permanent whose card a sweep puts into
+    a zone before the battlefield is rebuilt is revealed there and then
+    (:func:`reveal_departing`), so the removal that follows does not reveal
+    it a second time. Returns *card* unchanged; the caller still asks
+    ``whole_card``.
+    """
+    real = hidden_card(card)
+    if real is None:
+        return card
+    if permanent is not None and hidden_card_of(permanent) is real:
+        reveal_departing(game, permanent)
+        return card
+    game.log.append(f"The face-down spell is revealed as it moves: it is {real.name} (CR 708.9)")
+    return card
+
+
+def forget_face_down_departure(permanent: "Permanent") -> None:
+    """Clear a departure's last-known record from a permanent object that is
+    entering the battlefield again — it is a new object there (CR 400.7), and
+    the face-down values it last had are not its values now."""
+    permanent.metadata.pop(FACE_DOWN_AS_IT_LEFT, None)
+
+
+# ---------------------------------------------------------------------------
+# CR 702.37e as a special action (CR 116.2b)
+# ---------------------------------------------------------------------------
+
+
+def _morph_offer(game: "Game", permanent: "Permanent"):
+    """The offer a face-down permanent with a morph ability makes to its
+    controller: turn it face up for its morph cost (CR 702.37e).
+
+    "If the permanent wouldn't have a morph cost if it were face up, it can't
+    be turned face up this way" — read off the hidden card's own text, which
+    is what it would have face up. A permanent Illusionary Mask put face down
+    has no morph cost unless its card prints one, and then this is its way up
+    too: the rule is about the card, not about how it came to be face down.
+    """
+    from .mana_payment import mana_cost_from_symbols
+    from .special_actions import SpecialActionOffer
+
+    real = hidden_card_of(permanent)
+    if real is None:
+        return None
+    printed = morph_cost(real)
+    if printed is None:
+        return None
+    controller = game.controller_index_of(permanent)
+    if controller is None:
+        return None
+    return SpecialActionOffer(seat=controller, mana=mana_cost_from_symbols(printed))
+
+
+def _take_morph(game: "Game", seat: int, permanent: "Permanent") -> None:
+    """Turn *permanent* face up, its morph cost already paid by the seam."""
+    turn_face_up(game, permanent, how=f"for its morph cost {morph_cost(hidden_card_of(permanent))}")
+
+
+def _morph_entry_extras(game: "Game", permanent: "Permanent") -> dict:
+    """What the client needs to show the offer: the price (CR 702.37e shows
+    it to all players as the action is taken; before then the offer is the
+    controller's alone, which is who this entry is listed for)."""
+    real = hidden_card_of(permanent)
+    printed = morph_cost(real) if real is not None else None
+    return {"morph_cost": printed} if printed else {}
+
+
+def _register() -> None:
+    from .special_actions import (PERMANENT_SPECIAL_ACTIONS, PermanentSpecialAction,
+                                  register_permanent_special_action)
+
+    if TURN_FACE_UP in PERMANENT_SPECIAL_ACTIONS:
+        return
+    register_permanent_special_action(PermanentSpecialAction(
+        TURN_FACE_UP, _morph_offer, _take_morph, entry_extras=_morph_entry_extras,
+    ))
+
+
+_register()
+
+
+__all__ = [
+    "FACE_DOWN_AS_IT_LEFT",
+    "FACE_DOWN_CHARACTERISTICS",
+    "FACE_DOWN_NAME",
+    "MASK_FACE_DOWN",
+    "MORPH",
+    "MORPH_CAST_COST",
+    "TURNED_FACE_UP",
+    "TURN_FACE_UP",
+    "announced_morph_cost",
+    "cast_announces_morph",
+    "forget_face_down_departure",
+    "face_down_card",
+    "hidden_card",
+    "hidden_card_of",
+    "is_face_down",
+    "is_face_down_card",
+    "is_morph_cost",
+    "is_morph_line",
+    "may_look_at",
+    "morph_alternative_cost",
+    "morph_cost",
+    "morph_cost_text",
+    "reveal_departing",
+    "revealed_as_it_moves",
+    "turn_face_down",
+    "turn_face_up",
+]

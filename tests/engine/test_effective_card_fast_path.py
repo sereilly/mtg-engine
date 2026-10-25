@@ -37,6 +37,7 @@ from engine import Game, PlayerState, fast_paths, layer_bridge, models, target_i
 from engine.aura_attachment import attach_aura
 from engine.card_loader import load_catalog
 from engine.copies import become_copy
+from engine.face_down import face_down_card, reveal_departing
 from engine.global_statics import record_stack_statics
 from engine.handlers.animation import _animation_record
 from engine.handlers.types import _record_set_card_types
@@ -126,6 +127,12 @@ def _board(by_name):
     remove_ability_line(panel["Tundra"], "({T}: Add {W} or {U}.)")
     remove_ability_keyword(panel["Grizzly Bears"], "flanking", duration="end_of_turn")
     remove_all_abilities(panel["Sol Ring"], duration="end_of_turn")
+    # A face-down permanent as it leaves (CR 708.9, ``face_down.
+    # reveal_departing``): what the departed object last was is read through
+    # the fold. Left listed here — the one state play never leaves on a
+    # battlefield — so the census can see the channel it fills.
+    departed = _put(game, face_down_card(by_name["Grizzly Bears"]), seat=1)
+    reveal_departing(game, departed)
     gain_types(clone, card_types=("enchantment",), source="test")
     lose_types(panel["Tundra"], supertypes=("basic",), source="test")
     for host, record in (

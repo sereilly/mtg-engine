@@ -10,10 +10,11 @@ re-aimed (CR 115.7), and the choice CR 707.10 gives a copy's controller.
 
 from __future__ import annotations
 
+from ....face_down import MASK_FACE_DOWN, face_down_card
 from ....faces import castable_faces, is_multi_face, spell_named
 from ....game_types import single_chosen_id
 from ....grammar.lowering._events import EVENT_SUBJECT_PLAYER
-from ....models import CardDefinition, Permanent
+from ....models import Permanent
 from ....pending_choices import PendingChoice
 
 
@@ -307,23 +308,22 @@ class SpellChoicesMixin:
         if creature_card.primary_type != "creature" or int(creature_card.cmc or 0) > max_cmc:
             return False
         player.hand.pop(hand_index)
-        face_down = CardDefinition(
-            name=creature_card.name,
-            mana_cost="",
-            cmc=0.0,
-            type_line="Creature",
-            oracle_text="",
-            colors=(),
-            color_identity=(),
-            keywords=(),
-            produced_mana=(),
-            raw={"name": creature_card.name, "type_line": "Creature", "power": "2", "toughness": "2"},
-        )
-        perm = Permanent(card=face_down)
-        perm.metadata["face_down"] = True
-        perm.metadata["face_down_real_card"] = creature_card
+        # The face-down object of CR 708 (``engine/face_down.py``): its card is
+        # the blank 2/2 with the creature card hidden behind it, so it has no
+        # name, no text and no colour for every reader (CR 708.2a) and the
+        # zone it leaves for is handed the real card (CR 708.9). This built a
+        # blank ``CardDefinition`` of its own that kept the creature's **name**
+        # — so every log line and every serializer told the opponent which
+        # card it was, starting with the line below.
+        perm = Permanent(card=face_down_card(creature_card))
+        # Which rule may turn it face up (CR 708.6, 708.7): the Mask's own —
+        # "if [it] has not been turned face up and would assign or deal
+        # damage, be dealt damage, or become tapped, instead it's turned face
+        # up" (``EffectsMixin._turn_face_up``). A morph creature put face down
+        # some other way is not turned up by that.
+        perm.metadata[MASK_FACE_DOWN] = True
         self._put_permanent_onto_battlefield(player_index, perm, None)
-        self.log.append(f"Illusionary Mask cast {creature_card.name} face down as a 2/2")
+        self.log.append("Illusionary Mask cast a creature card face down as a 2/2")
         self.discard_pending_choice(choice)
         return True
 

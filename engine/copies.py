@@ -86,6 +86,17 @@ COPY_EFFECTS = "copy_effects"
 #: derived land-type channel is kept separate to avoid one file over.
 DERIVED_COPY_SOURCES = "derived_copy_sources"
 
+#: Set on a **face-down permanent that has left the battlefield** (CR 708.9,
+#: ``engine/face_down.reveal_departing``): its card is the hidden card again,
+#: revealed as it moves, and the object it was is CR 603.10's last-known
+#: information — the face-down 2/2 (CR 708.2a). Layer 1b's answer for a
+#: departed object (CR 613.2b), so every reader of what it *was* — a dies
+#: trigger's "a Goblin", "a creature with flying", its own "when this dies" —
+#: reads the values it had and not the card it turned out to be. Here rather
+#: than in ``engine/face_down.py`` because the fold reads it and this module
+#: is the one ``models`` imports.
+FACE_DOWN_AS_IT_LEFT = "face_down_as_it_left"
+
 # CR 707.2's copiable values, grouped as the card object stores them. A copy
 # effect names the ones it takes; whatever it does not name is retained from
 # the object being copied *onto* (CR 707.9c).
@@ -188,9 +199,17 @@ def become_copy(
     """
     owner = effect_source if effect_source is not None else permanent
     kept = [entry for entry in copy_effects(permanent) if entry["source"] is not owner]
+    copied = copiable_card(source)
+    if getattr(copied, "face_down_of", None) is not None:
+        # CR 708.10 / CR 707.2: a copy of a face-down permanent copies the
+        # face-down values — a 2/2 with no name, text, subtypes or cost — and
+        # **not** what it hides. The values alone, with nothing behind them:
+        # the copy is a face-up object, and the card a face-down permanent
+        # wears is the one place the hidden card may ride.
+        copied = _late.face_down.FACE_DOWN_CHARACTERISTICS
     kept.append({
         "source": owner,
-        "card": copiable_card(source),
+        "card": copied,
         "copies": frozenset(copies),
         "adds_types": tuple(adds_types),
         "grants": tuple(grants),
@@ -470,9 +489,23 @@ def copiable_card(permanent: "Permanent") -> "CardDefinition":
     lets ``engine/zone_copies.py``'s standing question be answered without an
     event: reordering a graveyard changes the answer and nothing has to notice.
     """
+    if permanent.metadata.get(FACE_DOWN_AS_IT_LEFT):
+        # A face-down permanent that has left: what it last was (CR 603.10),
+        # the face-down values — see :data:`FACE_DOWN_AS_IT_LEFT`.
+        return _late.face_down.FACE_DOWN_CHARACTERISTICS
     entries = permanent.metadata.get(COPY_EFFECTS)
     derived = _derived_entries(permanent)
     if not entries and not derived:
+        return permanent.card
+    if getattr(permanent.card, "face_down_of", None) is not None:
+        # CR 708.10: "If a face-down permanent becomes a copy of another
+        # permanent, its copiable values become the copiable values of that
+        # permanent, as modified by its face-down status. Its characteristics
+        # therefore remain the same." Layer 1b is applied after 1a (CR
+        # 613.2b), so the copy is recorded and changes nothing until the
+        # permanent is turned face up — when the fold below runs over the
+        # face-up card and it becomes what it copied (the rule's last
+        # sentence).
         return permanent.card
     ordered = derived + sorted(entries or (), key=lambda item: item["timestamp"])
     return _fold(permanent.card, ordered)
@@ -512,7 +545,7 @@ def copied_name(permanent: "Permanent") -> str | None:
 
 __all__ = [
     "ALL_VALUES", "COLOR", "COPY_EFFECTS", "DERIVED_COPY_SOURCES",
-    "EXCEPT_COLOR", "MANA_COST", "NAME",
+    "EXCEPT_COLOR", "FACE_DOWN_AS_IT_LEFT", "MANA_COST", "NAME",
     "POWER_TOUGHNESS", "RECOPY_EACH_UPKEEP", "TEXT", "TYPES", "become_copy",
     "clear_derived_copy_sources", "copiable_card", "copied_name",
     "copy_effects", "copy_exceptions", "derived_copy_sources",

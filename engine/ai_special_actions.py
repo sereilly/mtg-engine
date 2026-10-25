@@ -33,6 +33,9 @@ cast from there (flashback) as the card in hand it nearly is.
   chooser is asked in a main phase. Not weighed.
 * Circling Vultures' discard (CR 116.2e) is a hand card's action, not a
   permanent's offer; nothing in a main phase prices a discard for its own sake.
+* ``turn_face_up`` (CR 702.37e, 116.2b): turning a face-down permanent with a
+  morph ability face up. What it buys is the face-up creature, in the fight and
+  after it, which is what the rehearsal reads. Weighed.
 
 Each of those is a finding left measured, not a branch here: a kind joins the
 set the day something can price what it buys.
@@ -58,6 +61,7 @@ from .ai_rehearsal import (
     rehearse,
     rehearsing,
 )
+from .face_down import TURN_FACE_UP
 from .game import Game
 from .special_actions import (
     available_permanent_special_actions,
@@ -67,7 +71,14 @@ from .special_actions import (
 #: The offer kinds this chooser weighs — the ones whose good a rehearsal run
 #: through the turn's fight can see. See the module docstring for the kinds
 #: left out and why.
-WEIGHED_OFFERS = frozenset({"ignore_attached_static_until_eot"})
+WEIGHED_OFFERS = frozenset({
+    "ignore_attached_static_until_eot",
+    # CR 702.37e: turning a face-down permanent face up for its morph cost.
+    # What it buys is the face-up creature — its power, toughness and
+    # abilities through the layers — on the board and in the turn's fight,
+    # which is exactly what a rehearsal through combat reads.
+    TURN_FACE_UP,
+})
 
 
 @dataclass(frozen=True)

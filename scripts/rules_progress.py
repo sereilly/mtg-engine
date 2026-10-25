@@ -141,6 +141,7 @@ SCOPE: dict[str, str | tuple[str, ...]] = {
         "702.28",  # Shadow (TMP: 17 Soltari/Dauthi/Thalakos creatures + 4 grants)
         "702.29",  # Cycling (USG: 34 cards)
         "702.36",  # Fear
+        "702.37",  # Morph (ONS: 46 cards; ``engine/face_down.py``)
         "702.108", # Prowess
         "702.111", # Menace
         # NOT 702.83 Exalted, for 701.43's reason: `engine/whenever_triggers.py` cites
@@ -153,6 +154,13 @@ SCOPE: dict[str, str | tuple[str, ...]] = {
     "704": "all",  # State-Based Actions
     "705": "all",  # Flipping a Coin (ARN: Bottle of Suleiman, ...)
     "707": "all",  # Copying Objects (LEA: Vesuvan Doppelganger, ...)
+    # Face-Down Spells and Permanents, joined with Onslaught's morph
+    # (``engine/face_down.py``; Illusionary Mask's face-down creature moved
+    # onto the same model). Every subrule: 708.6's "easily differentiated"
+    # and 708.11/708.12 (no card here prints an "as … is turned face up"
+    # ability or a reveal of a face-down permanent) stay in the denominator
+    # as untested, which is the honest reading.
+    "708": "all",
     # Split Cards, joined with Invasion's five (``engine/faces.py``). 709.1-
     # 709.4 only: 709.5 is the shared type line of a split *permanent* (Rooms),
     # a mechanic this engine does not have and no card in the pool prints.

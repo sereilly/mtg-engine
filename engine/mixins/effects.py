@@ -36,6 +36,7 @@ from ..land_play_allowance import (LandPlayAllowance,
                                    land_play_allowance_for,
                                    land_plays_forbidden_this_turn,
                                    land_play_prohibition, prohibition_holds)
+from ..face_down import MASK_FACE_DOWN, turn_face_up
 from ..models import CardDefinition, Permanent, PlayerState
 from ..pt import add_plus1_counters, add_pt_counters
 from ..regeneration import regeneration_replaces_destruction
@@ -539,18 +540,17 @@ class EffectsMixin:
         return chosen_card is source_card
 
     def _turn_face_up(self, permanent) -> None:
-        """Illusionary Mask: a face-down creature is turned face up any time it
-        would deal damage, damage would be dealt to it, or it becomes tapped.
-        Restores the real card stashed at cast time (P/T, types, abilities)."""
+        """Illusionary Mask: a face-down creature *it* put face down is turned
+        face up any time it would deal damage, damage would be dealt to it, or
+        it becomes tapped (CR 708.7: the ability that let it be face down says
+        when it turns up). Through ``face_down.turn_face_up``, the one turn of
+        a face-down permanent, so what CR 708.8 keeps and what turning up
+        triggers are one answer whatever turned it."""
         metadata = getattr(permanent, "metadata", None)
-        if not metadata or not metadata.get("face_down"):
+        if not metadata or not metadata.get(MASK_FACE_DOWN):
             return
-        real = metadata.pop("face_down_real_card", None)
-        metadata.pop("face_down", None)
-        if real is not None:
-            permanent.card = real
-            self.log.append(f"{real.name} was turned face up")
-            self._recalculate_lord_buffs()
+        metadata.pop(MASK_FACE_DOWN, None)
+        turn_face_up(self, permanent, how="Illusionary Mask")
 
     def _mark_damage_on_permanent(
         self, permanent, amount: int, source=None, combat: bool = False, *, then=None,
