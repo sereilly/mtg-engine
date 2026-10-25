@@ -288,6 +288,20 @@ class BlockRequirementsMixin:
                     count += 1
         return count
 
+    def block_requirement_summary(
+        self, controller_index: int,
+    ) -> "tuple[list[BlockRequirement], int]":
+        """*controller_index*'s requirements and the most of them one legal,
+        cost-free declaration obeys — what the declaration gate will hold a
+        declaration to, told to the player **before** they declare (the web's
+        ``combat.block_requirements``). The search runs only where there is a
+        requirement, which is nearly no board."""
+        requirements = self.block_requirements(controller_index)
+        if not requirements:
+            return [], 0
+        found = self._most_obeyed_block_declaration(controller_index, requirements)
+        return requirements, found.best
+
     def block_requirement_refusal(
         self,
         controller_index: int,

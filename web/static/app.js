@@ -20445,6 +20445,30 @@ function renderStack(stack) {
   _refreshStackHoldVisuals();
 }
 
+// CR 509.1c, as the declaring player reads it: one line per requirement the
+// server lists for `defenderSeat` (`combat.block_requirements`), the same
+// sentence counted once ("Watchdog blocks each combat if able (×3)"), and —
+// when they cannot all be obeyed together — how many a declaration must obey.
+// Empty where nothing is required, which is nearly every combat.
+function blockRequirementLines(combat, defenderSeat) {
+  const entry = (combat?.block_requirements || []).find(
+    (e) => Number(e.defending_player_index) === Number(defenderSeat),
+  );
+  const requirements = entry?.requirements || [];
+  if (!requirements.length) return [];
+  const counts = new Map();
+  for (const r of requirements) counts.set(r.reason, (counts.get(r.reason) || 0) + 1);
+  const lines = [...counts].map(([reason, n]) => `Required: ${reason}${n > 1 ? ` (×${n})` : ""}.`);
+  const most = Number(entry.most_obeyable);
+  if (Number.isInteger(most) && most < requirements.length) {
+    lines.push(
+      `Only ${most} of these ${requirements.length} requirements can be obeyed together — ` +
+      `your declaration must obey ${most} (CR 509.1c).`,
+    );
+  }
+  return lines;
+}
+
 function renderCombatControls(state) {
   const summary = q("combatSummary");
   const actions = q("combatActions");
@@ -20554,7 +20578,16 @@ function renderCombatControls(state) {
       prompt.textContent = "Declare blockers: drag from each blocker to an attacking creature, then press OK.";
     }
     damagePanel.appendChild(prompt);
-
+    // CR 509.1c: what this declaration has to obey, before it is sent — the
+    // numbers the server refuses a declaration by.
+    if (!combat?.blockers_locked) {
+      for (const line of blockRequirementLines(combat, blockDeclarationDefender(state))) {
+        const row = document.createElement("div");
+        row.className = "combat-summary block-requirement";
+        row.textContent = line;
+        damagePanel.appendChild(row);
+      }
+    }
   }
 
   // CR 702.22j: the defending player splits the damage of each attacker blocked by

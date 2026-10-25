@@ -1210,6 +1210,29 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         for defender_index in sorted(game.combat_defending_players())
         for pair in game.legal_blocker_assignments(defender_index)
     ]
+    # CR 509.1c: what each defending player's declaration must obey, and the
+    # most of it one legal declaration can — the numbers the declaration gate
+    # refuses by (``engine/phases/block_requirements.py``), shown before the
+    # player declares rather than only in the refusal. Three Watchdogs under a
+    # Caverns of Despair: three requirements, two obeyable.
+    combat_state["block_requirements"] = []
+    if (
+        game.current_turn_phase == "combat"
+        and game.current_step == "declare_blockers"
+        and not game.combat_blockers_locked
+    ):
+        for defender_index in sorted(game.combat_defending_players()):
+            requirements, most = game.block_requirement_summary(defender_index)
+            if requirements:
+                combat_state["block_requirements"].append({
+                    "defending_player_index": defender_index,
+                    "requirements": [
+                        {"blocker_index": r.blocker, "attacker_index": r.attacker,
+                         "reason": r.reason}
+                        for r in requirements
+                    ],
+                    "most_obeyable": most,
+                })
 
     return {
         "session_id": session.id,
