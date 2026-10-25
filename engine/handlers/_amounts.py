@@ -29,12 +29,13 @@ if TYPE_CHECKING:
     from ..game_types import OracleExecutionContext
     from ..oracle_types import OracleInstruction
 from ..models import Permanent, PlayerState
+from ..target_roles import COUNTED_SEAT_ROLE
 from ._chosen import (_resolve_chosen_color, _resolve_chosen_subtype,
                       count_spec_in_resolution,
                       resolve_chosen_card_type_in_resolution)
 from ._filters import (_card_matches_filter, permanent_effective_colors,
                        permanent_matches_filter, recorded_card_owner)
-from ._targets import (attached_host, defending_player_seat,
+from ._targets import (announced_role_seat, attached_host, defending_player_seat,
                        resolve_role_permanent, resolve_target_permanent)
 
 
@@ -360,7 +361,26 @@ def count_from_payload(
             spec,
         )
     scope = spec.get("owner", "you")
-    if scope in ("you", "opponents"):
+    # "…the number of creatures **target opponent** controls" where the
+    # opponent is a **role** of the announcement (Superior Numbers: "target
+    # creature … target opponent", ``lowering/_roles.describe_counted_seat_roles``).
+    # The seat is the one the caster named for that role, read off the
+    # announcement — never ``context.target``, which a step scoped to the
+    # creature holds as the *creature's* controller.
+    #
+    # CR 608.2b's last sentences where the seat no longer resolves (it left
+    # the game, gained shroud): "If part of the effect requires information
+    # about an illegal target, it fails to determine any such information.
+    # Any part of the effect that requires that information won't happen."
+    # The count fails, and the amount it is part of is nothing
+    # (:func:`_counted_seat_fails` below asks it for a subtrahend too).
+    role = spec.get(COUNTED_SEAT_ROLE)
+    if isinstance(role, str):
+        seat = announced_role_seat(game, context, instruction, role)
+        if seat is None:
+            return 0
+        owner = game.players[seat]
+    elif scope in ("you", "opponents"):
         # "…the number of permanents of the chosen color **your opponents
         # control**" (Chameleon Spirit). ``opponents`` widens the *scan*, not
         # the seat: the phrase's "your" is still CR 109.5's, so the seat this
@@ -439,10 +459,26 @@ def count_from_payload(
     # of" says (`ast.Minus`) and what every other subtraction in the pool does.
     subtrahend = spec.get("minus")
     if isinstance(subtrahend, dict):
+        # A subtrahend whose seat role no longer resolves fails to determine
+        # its information, and "any part of the effect that requires that
+        # information won't happen" (CR 608.2b) — the *difference*, not just
+        # the half it is taken off, so the amount is nothing rather than the
+        # whole left-hand count.
+        if _counted_seat_fails(game, context, subtrahend, instruction):
+            return 0
         return max(0, counted - count_from_payload(
             game, context, subtrahend, instruction, source=source,
         ))
     return counted
+
+
+def _counted_seat_fails(game, context, spec: dict, instruction) -> bool:
+    """Whether *spec* is counted on an announced seat role
+    (``target_roles.COUNTED_SEAT_ROLE``) that no longer resolves."""
+    role = spec.get(COUNTED_SEAT_ROLE)
+    return isinstance(role, str) and announced_role_seat(
+        game, context, instruction, role,
+    ) is None
 
 
 def per_recipient_amount(game, context, spec: dict, face, *, source=None) -> int:

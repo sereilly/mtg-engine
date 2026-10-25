@@ -29,6 +29,7 @@ offered it with — and nothing else of the handler package.
 
 from __future__ import annotations
 
+import dataclasses
 from typing import TYPE_CHECKING, Callable, Sequence
 
 
@@ -681,6 +682,106 @@ def resolve_role_player(
     return seat
 
 
+def announced_context(context: OracleExecutionContext) -> OracleExecutionContext:
+    """*context* with its target channels as the announcement left them.
+
+    The identity for every context no role has scoped yet; for one that has,
+    the three channels it saved before narrowing
+    (``control_flow._role_scoped``). Here, on the floor, because a count reads
+    it as well as the scoping (:func:`announced_role_seat`).
+    """
+    saved = context.announced_targets
+    if saved is None:
+        return context
+    target, ids, indices = saved
+    return dataclasses.replace(
+        context, target=target, target_permanent_id=ids,
+        target_permanent_index=indices,
+    )
+
+
+def announced_role_seat(
+    game: Game, context: OracleExecutionContext, instruction, role: str,
+) -> "int | None":
+    """The seat the announcement named for *instruction*'s player role *role*,
+    whatever role the step being resolved is scoped to — or None where the
+    payload carries no such role or CR 608.2b finds the seat no longer a
+    legal target (:func:`resolve_role_player`).
+
+    "…to target creature equal to … the number of creatures **target
+    opponent** controls." (Superior Numbers.) The step is scoped to the
+    creature, so its ``context.target`` is the creature's controller; the
+    count asks for the opponent role by name, off the channels the
+    announcement left (:func:`announced_context`).
+    """
+    payload = getattr(instruction, "payload", None) or {}
+    return resolve_role_player(game, announced_context(context), payload, role)
+
+
+def pile_owner_still_a_target(
+    game: Game, context: OracleExecutionContext, payload: dict,
+) -> bool:
+    """CR 608.2b for a graveyard effect whose pile's **owner is a target**:
+    whether ``context.target`` is still one its announcement could name.
+
+    "Put any number of target artifact cards from **target player's**
+    graveyard on top of their library" (Drafna's Restoration); "**Target
+    player** shuffles up to three target cards from their graveyard into their
+    library" (Gaea's Blessing). The cards and the player are separate targets,
+    so the spell resolves while any of them is legal — and where the player is
+    the one that is not, "if part of the effect requires information about an
+    illegal target, it fails to determine any such information" (CR 608.2b):
+    whose library is that player's to say, so the move does not happen. The
+    whole-object half is ``legality_resolution._announcement_target_legality``.
+
+    True for a payload whose pile names no targeted seat (``graveyard_owner``
+    "you", "an_opponent", …) — nothing to re-ask.
+    """
+    from ..payload_target_specs import player_pronoun_spec
+
+    described = player_pronoun_spec((payload or {}).get("graveyard_owner"))
+    if described is None:
+        return True
+    seat = next(
+        (index for index, player in enumerate(game.players) if player is context.target),
+        None,
+    )
+    return seat is not None and _role_seat_is_still_a_target(
+        game, context, described, seat,
+    )
+
+
+def named_seat_still_a_target(
+    game: Game, context: OracleExecutionContext, payload: dict,
+) -> bool:
+    """CR 608.2b's per-target half for a step whose own ``targets`` names a
+    **player** (``{"kind": "player", …}``): whether ``context.target`` is
+    still one that description admits.
+
+    "…divided as you choose among any number of targets. **Target opponent**
+    gains 5 life." (Fiery Justice.) A seat beside another target — the
+    whole-object half is ``legality_resolution._announced_seat_verdict`` — so
+    the spell may resolve with this one illegal, and then it is not affected.
+    For a lone seat the whole-object rule has already removed the spell, and
+    the answer here agrees.
+
+    True for a step that describes no player target: nothing to re-ask.
+    """
+    from ..target_descriptions import _from_targets_payload
+
+    described = (payload or {}).get("targets")
+    if not isinstance(described, dict) or described.get("kind") != "player":
+        return True
+    spec = _from_targets_payload(described)
+    if not isinstance(spec, dict):
+        return True
+    seat = next(
+        (index for index, player in enumerate(game.players) if player is context.target),
+        None,
+    )
+    return seat is not None and _role_seat_is_still_a_target(game, context, spec, seat)
+
+
 def _role_seat_is_still_a_target(
     game: Game, context: OracleExecutionContext, role: dict, seat: int,
 ) -> bool:
@@ -705,6 +806,8 @@ def _role_seat_is_still_a_target(
     True where the resolving object's controller cannot be found: a context
     with no seat to ask from is not evidence that a target went illegal.
     """
+    from ..player_comparisons import comparison_at_resolution
+
     caster = next(
         (index for index, player in enumerate(game.players) if player is context.caster),
         None,
@@ -712,6 +815,10 @@ def _role_seat_is_still_a_target(
     if caster is None:
         return True
     source = context.source_permanent
+    # …without a comparison the card bounds to the announcement ("…as you
+    # activate this ability", Keeper of the Dead's rulings): see
+    # ``player_comparisons.comparison_at_resolution``.
+    role = comparison_at_resolution(role)
     return any(
         entry.get("kind") == "player" and entry.get("seat") == seat
         for entry in game._enumerate_targets(

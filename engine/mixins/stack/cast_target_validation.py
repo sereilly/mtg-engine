@@ -42,6 +42,7 @@ from ...enchant_targets import (_ENCHANT_LAND_SUBTYPES,
                                 enchant_subject_seat)
 from ...targeting import (derive_cast_spec, role_is_stack, spec_roles,
                           targets_mana_value_x)
+from ...target_descriptions import ANNOUNCED_SEAT
 from ...target_roles import role_is_seat, roles_may_end_at
 from ...cost_x_definitions import defines_cast_x
 from ...divided_damage import (
@@ -310,6 +311,13 @@ def _named_divided_targets(
         card, compile_card_oracle(card), from_zone=from_zone
     ) or {}
     if spec.get("creatures_only") or spec.get("land_filter"):
+        return 0
+    # …and a division whose sentence announces a **seat beside it** ("…among
+    # any number of targets. Target opponent gains 5 life.", Fiery Justice —
+    # ``target_descriptions.ANNOUNCED_SEAT``): the seat field names that
+    # opponent, so it is no share of the division, which is announced on its
+    # own list.
+    if spec.get(ANNOUNCED_SEAT):
         return 0
     return 1
 
@@ -1086,8 +1094,18 @@ class CastTargetValidationMixin:
             # reads any graveyard, the caster's own otherwise. Resolved once and
             # asked by both branches, because "whose graveyard" is one question
             # and two copies of the answer is how they come to disagree.
+            # …except where that field names the seat the spell's count is
+            # taken on rather than a pile ("…where X is the number of black
+            # permanents **target opponent** controls", Reap —
+            # ``target_descriptions.ANNOUNCED_SEAT``): the cards are the
+            # caster's own whichever opponent was named.
+            counted_seat = bool(
+                (graveyard_target_spec(card, program, mode_index=mode_index) or {})
+                .get(ANNOUNCED_SEAT)
+            )
             wrong_seat = (
                 not any_graveyard
+                and not counted_seat
                 and target_player_index is not None
                 and target_player_index != caster_index
             )

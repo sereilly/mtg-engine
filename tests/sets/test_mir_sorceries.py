@@ -1520,9 +1520,11 @@ def test_w3g4_superior_numbers_is_the_difference_both_ways(
     pool = set_pool("MIR")
     game, victim = _w3g4s_board(pool, mine, theirs)
 
-    cast = game.cast_from_hand(
-        0, "Superior Numbers", target_player_index=1, target_permanent_index=0
-    )
+    # Both targets (the card's 2008-08-01 ruling: "As you cast this, you
+    # target a creature and an opponent"): the Dragon, then its controller.
+    cast = game.cast_from_hand(0, "Superior Numbers", target_role_refs=[
+        {"permanent_id": victim.permanent_id}, {"seat": 1},
+    ])
     assert cast.supported, cast.details
     game.resolve_stack()
     game._settle()
@@ -1530,20 +1532,19 @@ def test_w3g4_superior_numbers_is_the_difference_both_ways(
     assert victim.damage_marked == expected, game.log
 
 
-def test_w3g4_superior_numbers_counts_an_opponent_not_the_caster(set_pool):
-    """CR 102.3: a player is never their own opponent.
+def test_w3g4_superior_numbers_counts_the_opponent_the_caster_names(set_pool):
+    """The opponent is the caster's choice (the 2008-08-01 ruling: "The
+    opponent does not have to be that creature's controller"), and CR 102.3
+    keeps the caster out of it: a player is never their own opponent.
 
-    The client picks only the creature, so the seat the subtrahend is counted
-    on arrives as the resolution's default — and aiming at one's *own* creature
-    makes that default the caster. Counting the caster's board on both sides of
-    the subtraction is always zero, which is a spell reporting supported and
-    doing nothing; the scope resolves to the first living opponent instead."""
+    This used to be the resolution's default — the creature's controller, else
+    the first opponent — so at three seats the caster could not choose."""
     pool = set_pool("MIR")
     lea = _w3g4s_lea()
     mine = [_w3g4s_Permanent(card=lea["Grizzly Bears"]) for _ in range(3)]
+    dragon = _w3g4s_Permanent(card=lea["Shivan Dragon"])
     game = _w3g4s_Game(players=[
-        _w3g4s_PlayerState(name="P0",
-                           battlefield=[_w3g4s_Permanent(card=lea["Shivan Dragon"])],
+        _w3g4s_PlayerState(name="P0", battlefield=[dragon],
                            library=[lea["Island"]] * 6),
         _w3g4s_PlayerState(name="P1", library=[lea["Island"]] * 6),
         _w3g4s_PlayerState(name="P2", hand=[pool["Superior Numbers"]],
@@ -1552,25 +1553,36 @@ def test_w3g4_superior_numbers_counts_an_opponent_not_the_caster(set_pool):
     game.enforce_mana_costs = False
     game.interactive_seats = set()
 
-    # No seat on the wire, and the creature aimed at is the caster's own.
-    game.cast_from_hand(2, "Superior Numbers", target_permanent_index=0)
+    own = game.cast_from_hand(2, "Superior Numbers", target_role_refs=[
+        {"permanent_id": dragon.permanent_id}, {"seat": 2},
+    ])
+    assert not own.supported, "the caster is not their own opponent"
+
+    # The Dragon on P0, the count on P1's empty board: 3 of mine minus 0.
+    game.cast_from_hand(2, "Superior Numbers", target_role_refs=[
+        {"permanent_id": dragon.permanent_id}, {"seat": 1},
+    ])
     game.resolve_stack()
     game._settle()
 
-    # 3 of mine minus the 1 the first opponent controls, not 3 minus 3.
-    assert "dealt 2 damage" in " ".join(game.log), game.log
+    assert dragon.damage_marked == 3, game.log
 
 
 def test_w3g4_superior_numbers_offers_every_creature_as_the_target(set_pool):
     """"Target creature" narrows nothing — the printed restriction is on the
-    *count*, not on what may be damaged."""
+    *count*, not on what may be damaged. The opponent is the second role of
+    the same announcement, offered after each creature."""
     pool = set_pool("MIR")
     game, _ = _w3g4s_board(pool, 2, 1)
 
     spec = game.cast_target_spec(0, pool["Superior Numbers"])
 
-    assert spec["kind"] == "creature"
+    assert spec["kind"] == "roles"
     assert len(spec["valid_targets"]) == 4, spec["valid_targets"]
+    assert all(
+        [(n["kind"], n["seat"]) for n in entry["next"]] == [("player", 1)]
+        for entry in spec["valid_targets"]
+    )
 
 
 def test_w3g4_a_difference_counted_on_no_named_seat_refuses(set_pool):

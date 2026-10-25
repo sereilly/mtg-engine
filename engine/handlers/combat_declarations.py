@@ -481,6 +481,18 @@ def force_subject_to_attack_until_eot(game: Game, instruction: OracleInstruction
         game.players.index(context.caster) if context.caster in game.players
         else None
     )
+    # "Creatures **target player** controls attack this turn if able."
+    # (Instigator.) The seat the activation announced (CR 601.2c), handed to
+    # the matcher the way the animation and destroy sweeps hand it — without
+    # it the matcher refuses the word and no creature is compelled. By
+    # identity: a player compares by value.
+    targeted_seat = next(
+        (
+            seat for seat, player in enumerate(game.players)
+            if player is context.target
+        ),
+        None,
+    )
     # "**During that player's next turn**, the chosen creatures attack if able."
     # (Oracle en-Vec.) Two payload keys over the same requirement: which turn it
     # holds for, and where the set came from. A window nobody recorded a seat
@@ -500,6 +512,7 @@ def force_subject_to_attack_until_eot(game: Game, instruction: OracleInstruction
             if perm.is_creature and subject_matches(
                 game, perm, described,
                 observer=observer, source=context.source_permanent,
+                targeted_player=targeted_seat,
             )
         ]
     marked: list[str] = []

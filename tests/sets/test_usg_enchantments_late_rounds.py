@@ -1436,6 +1436,10 @@ def test_w3g3_carpet_asks_an_interactive_seat_which_colour(set_pool):
     game, carpet = _g3c_carpet_board(set_pool, islands=2, interactive=(0,))
 
     game._enter_main_phase(precombat=True)
+    # "…target opponent controls": the target is chosen as the trigger is put
+    # on the stack (CR 603.3d), before anything is offered.
+    assert [c.kind for c in game.pending_choices] == ["trigger_target"]
+    assert game.confirm_trigger_target(0, seat=1)
     while game.stack and game.resolve_top_of_stack():
         pass
 
@@ -1459,9 +1463,10 @@ def test_w3g3_a_colour_off_the_offer_is_refused_not_clamped(set_pool):
     game, _ = _g3c_carpet_board(set_pool, islands=1, interactive=(0,))
 
     game._enter_main_phase(precombat=True)
+    assert game.confirm_trigger_target(0, seat=1)
     while game.stack and game.resolve_top_of_stack():
         pass
-    game.confirm_optional_pay(0, "Carpet of Flowers", accept=True)
+    assert game.confirm_optional_pay(0, "Carpet of Flowers", accept=True)
 
     assert game.confirm_mana_color_choice(0, "purple") is False
     assert _g3c_pool(game) == {}

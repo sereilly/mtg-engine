@@ -727,8 +727,13 @@ def _candidates(
     """
     from .legality import targeting_instruction
     from .mixins.stack.trigger_targets import _controller_narrowing_is_in
+    from .player_comparisons import comparison_at_resolution
 
-    spec = dict(announcement.spec)
+    # A seat comparison the card bounds to the announcement ("…as you activate
+    # this ability", the Exodus Keepers) is not a restriction on this list: it
+    # was asked as the target was chosen and is not asked again
+    # (``player_comparisons.comparison_at_resolution``).
+    spec = dict(comparison_at_resolution(announcement.spec))
     instruction = announcement.instruction
     is_ability = bool(getattr(item, "is_ability", False))
     triggered = is_ability and _is_triggered(item)

@@ -958,3 +958,35 @@ GRAVEYARD_TARGET_KIND = "graveyard_creature"
 #: is all in one of them. The client reads it to keep a selection inside the
 #: pile its first card came from.
 SINGLE_GRAVEYARD = "single_graveyard"
+
+#: A **seat** the announcement names beside the spec's own slots, on the
+#: field every cast already carries (``target_player_index``), and the player
+#: description it is chosen by — a ``{"kind": "player", …}`` spec of its own.
+#: CR 601.2c: every instance of the word "target" is announced, and these are
+#: the instances a spec's one slot cannot carry:
+#:
+#: * the **owner of the pile** its cards are chosen from — "…target cards from
+#:   **target player's** graveyard" (Drafna's Restoration), "**Target player**
+#:   shuffles up to three target cards from their graveyard" (Gaea's
+#:   Blessing, Dwell on the Past, Krosan Reclamation). The pile follows the
+#:   seat: the graveyard enumerator offers cards only out of a pile whose
+#:   owner the description admits (shroud, a player who left the game);
+#: * the seat a **count** is taken on, beside a pick out of the caster's own
+#:   pile — "Return up to X target cards from **your** graveyard …, where X is
+#:   the number of black permanents **target opponent** controls" (Reap; the
+#:   2008-04-01 rulings: errata "so that it now targets a specific opponent",
+#:   counted "during announcement"). An ``own_graveyard_only`` spec's pile is
+#:   the caster's whatever the field says (``Game.graveyard_target_seat``), so
+#:   the field is free to name the opponent, and the X is counted on it;
+#: * a seat **beside a division** — "Fiery Justice deals 5 damage divided as
+#:   you choose among any number of targets. **Target opponent** gains 5
+#:   life." The division's entries carry their own seats, so the field names
+#:   the opponent.
+#:
+#: One key, read by: ``bare_announcements.announced_seat`` (the seat named, or
+#: the first the description admits — the cast writes it onto the
+#: announcement), the cast gate (CR 601.2c, whatever the cards or shares
+#: named), ``Game.announced_cast_x`` (a count taken on it) and CR 608.2b's
+#: whole-object re-check, with the handlers that act on the seat asking the
+#: per-target half.
+ANNOUNCED_SEAT = "announced_seat"

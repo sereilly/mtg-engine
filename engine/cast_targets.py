@@ -335,9 +335,8 @@ def _cast_target_spec(
     # gate is removed, so it is measured rather than assumed.
     type_line = card.type_line.lower()
     if "instant" in type_line or "sorcery" in type_line:
-        return _from_instructions(
-            viewed(announced_mode_instructions(program, mode_index))
-        )
+        steps = viewed(announced_mode_instructions(program, mode_index))
+        return _with_seat_beside_a_division(_from_instructions(steps), steps)
 
     # A permanent's enters-the-battlefield trigger is the one exception: this
     # engine picks its target as the permanent is cast (Oubliette), where
@@ -352,6 +351,50 @@ def _cast_target_spec(
     # ``triggered_abilities._apply_self_enters_battlefield_triggers``, which spends the
     # announcement on exactly the trigger this reads.
     return _from_instructions(viewed(_entry_trigger_instructions(program)))
+
+
+def _with_seat_beside_a_division(spec, instructions):
+    """*spec* with the **seat** a division's sentence announces beside it, or
+    *spec* unchanged.
+
+    "Fiery Justice deals 5 damage divided as you choose among any number of
+    targets. **Target opponent** gains 5 life." Two instances of the word: a
+    division (CR 601.2d), whose entries carry their own seats, and an
+    opponent, chosen as the spell is cast like every other target (CR 601.2c;
+    the card's 2017-03-14 ruling: "If all targets become illegal, including the
+    target opponent for the life-gaining effect, Fiery Justice doesn't
+    resolve"). The spec is the division's — the first described slot — so the
+    opponent was announced by nobody: the seat field the life gain reads was
+    whatever the caller sent, the caster's own included, and an AI seat casting
+    it gained the 5 life itself. A division is a list rather than a slot, so it
+    cannot be a role; the seat rides beside it
+    (``target_descriptions.ANNOUNCED_SEAT``) on the field the division leaves
+    free.
+
+    Exactly one plain "target" seat step beside the division, or nothing.
+    """
+    from .target_descriptions import ANNOUNCED_SEAT, _from_targets_payload
+
+    if not isinstance(spec, dict) or spec.get("kind") != "divided":
+        return spec
+    steps: list = []
+    for instruction in instructions or ():
+        if instruction.kind == "sequence":
+            steps.extend(instruction.payload.get("steps") or ())
+        else:
+            steps.append(instruction)
+    seats = [
+        _from_targets_payload(described)
+        for described in (
+            (step.payload or {}).get("targets") for step in steps
+        )
+        if isinstance(described, dict)
+        and described.get("kind") == "player"
+        and described.get("quantifier") == "target"
+    ]
+    if len(seats) != 1 or not isinstance(seats[0], dict):
+        return spec
+    return {**spec, ANNOUNCED_SEAT: seats[0]}
 
 
 def _entry_trigger_instructions(program) -> list:
