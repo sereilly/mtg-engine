@@ -256,7 +256,8 @@ class ActivationPaymentMixin:
         # "Exile the top creature card of your graveyard" (Necratog): the pile
         # is scanned, so a graveyard with no creature card pays nothing.
         if cost.exile_graveyard_position is not None and not positions_named(
-            controller.graveyard, cost.exile_graveyard_position
+            controller.graveyard, cost.exile_graveyard_position,
+            game=self, owner=controller,
         ):
             return (
                 f"{name}: {controller.name}'s graveyard has "
@@ -423,12 +424,14 @@ class ActivationPaymentMixin:
     # the gate above and for the payment's own pick in
     # ``_choose_activation_cost_payers``, so the two cannot count different sets.
 
-    @staticmethod
-    def _discard_cost_payable(cost, controller) -> list:
-        """The cards in hand a "Discard a <phrase>" cost may take."""
+    def _discard_cost_payable(self, cost, controller) -> list:
+        """The cards in hand a "Discard a <phrase>" cost may take — asked with
+        the game and the payer, whose statics colour the hand (CR 613.1)."""
         return [
             card for card in controller.hand
-            if card_matches_any(card, cost.discard_filters)
+            if card_matches_any(
+                card, cost.discard_filters, game=self, owner=controller,
+            )
         ]
 
     def _sacrifice_cost_candidates(
@@ -585,7 +588,9 @@ class ActivationPaymentMixin:
             # behind it.
             slots = [
                 index for index, card in enumerate(controller.hand)
-                if _card_matches_filter(card, described)
+                if _card_matches_filter(
+                    card, described, game=self, owner=controller,
+                )
             ]
             if len(slots) < wanted:
                 return None
@@ -627,7 +632,9 @@ class ActivationPaymentMixin:
             for pile in piles:
                 slots = [
                     index for index, card in enumerate(pile.graveyard)
-                    if _card_matches_filter(card, described)
+                    if _card_matches_filter(
+                        card, described, game=self, owner=pile,
+                    )
                 ]
                 if len(slots) < wanted:
                     continue
@@ -767,7 +774,9 @@ class ActivationPaymentMixin:
             if not (
                 isinstance(slot, int) and not isinstance(slot, bool)
                 and 0 <= slot < len(pile)
-                and _card_matches_filter(pile[slot], described)
+                and _card_matches_filter(
+                    pile[slot], described, game=self, owner=controller,
+                )
             ):
                 return f"no card at {where} {slot} that can be exiled for its cost"
         if len(set(slots)) != len(slots):

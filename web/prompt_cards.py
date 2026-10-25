@@ -461,7 +461,9 @@ def _search_exile(ctx: PromptContext, choices: list) -> dict:
     zones = tuple(choice.data.get("zones", ("graveyard", "library")))
 
     def _matches(card) -> bool:
-        return ctx.game._exile_search_matches(card, choice.data)
+        return ctx.game._exile_search_matches(
+            card, choice.data, game=ctx.game, owner=choice.player_index,
+        )
 
     payload = {
         "caster_seat": choice.player_index,
@@ -1086,7 +1088,9 @@ def _graveyard_pile_choice(ctx: PromptContext, choices: list) -> dict:
                 "name": ctx.game.players[seat].name,
                 "legal_cards": sum(
                     1 for card in ctx.game.players[seat].graveyard
-                    if graveyard_card_matches(payload, card)
+                    if graveyard_card_matches(
+                        payload, card, game=ctx.game, owner=seat,
+                    )
                 ),
             }
             for seat in live

@@ -619,7 +619,9 @@ def exile_graveyard_position(game: Game, instruction: OracleInstruction, context
         context.caster if owner == "you"
         else (context.target if context.target is not None else context.caster)
     )
-    taken = positions_named(victim.graveyard, dict(instruction.payload))
+    taken = positions_named(
+        victim.graveyard, dict(instruction.payload), game=game, owner=victim,
+    )
     exiled = [victim.graveyard[index] for index in taken]
     # Highest index first: the positions were found against the pile as it
     # stands, and removing a lower one renumbers every position above it.
@@ -843,7 +845,9 @@ def _exile_announced_graveyard_slots(
     wanted = int(context.x_value or 0) if count == "x" else int(count or 1)
     taken = [] if holder is None else _resolve_graveyard_slots(
         holder, context, wanted,
-        lambda card: graveyard_card_matches(instruction.payload, card),
+        lambda card: graveyard_card_matches(
+            instruction.payload, card, game=game, owner=holder,
+        ),
     )
     if holder is not None:
         holder.exile.extend(taken)
@@ -912,7 +916,8 @@ def _each_seat_picks_from_own_graveyard(
     for seat in seats:
         player = game.players[seat]
         available = len(graveyard_slots_matching(
-            dict(instruction.payload), player.graveyard, context.card
+            dict(instruction.payload), player.graveyard, context.card,
+            game=game, owner=player,
         ))
         if available <= 0:
             game.log.append(f"{player.name} has no card to exile from their graveyard")

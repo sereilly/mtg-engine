@@ -571,7 +571,10 @@ def _enough_cards_above_in_graveyard(
     for index, held in enumerate(graveyard):
         if held is source:
             above = graveyard[index + 1:]
-            return sum(1 for card in above if search_matches(card, described)) >= needed
+            return sum(
+                1 for card in above
+                if search_matches(card, described, game=game, owner=controller_index)
+            ) >= needed
     return False
 
 

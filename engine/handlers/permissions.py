@@ -294,7 +294,9 @@ def grant_cast_permission(game: Game, instruction: OracleInstruction, context: O
         cards = [
             entry["card"] for entry in linked_entries(source)
             if int(entry.get("owner_index", -1)) == caster_index
-            and card_matches_any(entry["card"], alternatives)
+            and card_matches_any(
+                entry["card"], alternatives, game=game, owner=caster_index,
+            )
         ]
         if not cards:
             game.log.append(f"{source_name} has exiled nothing to cast")

@@ -780,7 +780,7 @@ def condition_holds(game: "Game", caster_index: int, condition) -> bool:
     if condition.hand is not None:
         described, present = condition.hand
         found = any(
-            card_matches_any(held, (described,))
+            card_matches_any(held, (described,), game=game, owner=caster_index)
             for held in game.players[caster_index].hand
         )
         if found is not present:

@@ -60,7 +60,9 @@ class LibraryChoicesMixin:
             alternatives = (described,) if described else ()
         return [
             index for index in range(top_count)
-            if card_matches_any(caster.library[index], alternatives)
+            if card_matches_any(
+                caster.library[index], alternatives, game=self, owner=caster,
+            )
         ]
 
     def _resolve_look_top_pick(

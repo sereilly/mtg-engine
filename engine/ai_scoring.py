@@ -351,7 +351,8 @@ def _chosen_draw_worth(
         matching = sorted(
             (
                 (score, index) for index, (held, score) in enumerate(zip(library, scores))
-                if index not in taken and search_matches(held, payload)
+                if index not in taken
+                and search_matches(held, payload, game=game, owner=seat)
             ),
             key=lambda entry: (-entry[0], entry[1]),
         )

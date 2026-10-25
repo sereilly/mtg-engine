@@ -814,7 +814,9 @@ def spell_is_in_class(
     return card_has_type(card, spell_class)
 
 
-def source_is_in_class(game, source, source_class: str) -> bool:
+def source_is_in_class(
+    game, source, source_class: str, *, seat: int | None = None,
+) -> bool:
     """Whether the object whose **ability** is choosing belongs to *source_class*.
 
     :func:`spell_is_in_class`'s twin for the other half of CR 115.1, separate
@@ -824,11 +826,19 @@ def source_is_in_class(game, source, source_class: str) -> bool:
     land is an artifact source however its printed type line reads — which is
     why the card-type half goes through ``prevention.registry.source_has_type`` rather
     than through the printed line.
+
+    *seat* is the ability's controller, for a source that is **not** a
+    permanent — a card whose ability works from a graveyard or a hand
+    (CR 113.6) is an object off the battlefield, and its colour is the one its
+    owner's statics give it (CR 613.1, Celestial Dawn). A permanent answers
+    through the layers and ignores it.
     """
     if source_class.startswith(COLOR_CLASS_PREFIX):
         from .damage_source_colors import source_colors
 
-        return source_class[len(COLOR_CLASS_PREFIX):] in source_colors(source)
+        return source_class[len(COLOR_CLASS_PREFIX):] in source_colors(
+            source, game=game, seat=seat,
+        )
     from .prevention import source_has_type
 
     return source_has_type(game, source, source_class)

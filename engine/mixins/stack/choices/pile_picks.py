@@ -661,7 +661,8 @@ class PileChoicesMixin:
         spec = dict(choice.data.get("_payload") or {})
         context = choice.data.get("_context")
         return graveyard_slots_matching(
-            spec, owner.graveyard, getattr(context, "card", None)
+            spec, owner.graveyard, getattr(context, "card", None),
+            game=self, owner=owner,
         )
 
     def _how_many_graveyard_cards(self, choice: PendingChoice) -> int:
@@ -848,7 +849,7 @@ class PileChoicesMixin:
 
         return [
             seat for seat, player in enumerate(self.players)
-            if any(graveyard_card_matches(payload, card)
+            if any(graveyard_card_matches(payload, card, game=self, owner=seat)
                    for card in player.graveyard)
         ]
 

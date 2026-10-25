@@ -1203,7 +1203,10 @@ class EffectsMixin:
         """
         controller_index = self.players.index(caster)
 
-        def eligible(card) -> bool:
+        def eligible(card, owner) -> bool:
+            # *owner* is whose graveyard holds the card: *card_filter* asks
+            # its colour with it (CR 613.1).
+            #
             # ``card_has_type``, not ``primary_type``: CR 205.2a gives a card
             # **every** type printed on it, and ``primary_type`` picks one of
             # them by the order of a list — so "target artifact card" (Argivian
@@ -1213,7 +1216,7 @@ class EffectsMixin:
             # fourth way.
             if not card_has_type(card, card_type):
                 return False
-            return card_filter is None or card_filter(card)
+            return card_filter is None or card_filter(card, owner=owner)
 
         def arrive(card, owner_index: int) -> "Permanent":
             arrival = Permanent(card=card)
@@ -1236,7 +1239,7 @@ class EffectsMixin:
         if (
             isinstance(target_permanent_index, int)
             and 0 <= target_permanent_index < len(source.graveyard)
-            and eligible(source.graveyard[target_permanent_index])
+            and eligible(source.graveyard[target_permanent_index], source)
         ):
             return arrive(
                 source.graveyard.pop(target_permanent_index),
@@ -1244,7 +1247,7 @@ class EffectsMixin:
             )
         # Fallback (AI / legacy callers with no explicit choice): first creature.
         for idx, card in enumerate(caster.graveyard):
-            if eligible(card):
+            if eligible(card, caster):
                 return arrive(caster.graveyard.pop(idx), controller_index)
         return None
 

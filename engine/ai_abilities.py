@@ -876,7 +876,9 @@ def _madness_discard_index(
     player = game.players[seat]
     for index, card in enumerate(player.hand):
         madness = printed_madness_cost(card)
-        if madness is None or not card_matches_any(card, cost.discard_filters):
+        if madness is None or not card_matches_any(
+            card, cost.discard_filters, game=game, owner=seat,
+        ):
             continue
         if game.enforce_mana_costs:
             combined = dict(required)

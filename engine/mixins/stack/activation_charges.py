@@ -34,7 +34,8 @@ from .activation_payment import COST_PERFORMING_KINDS, activation_cost_choice
 
 
 def _named_discard_positions(
-    hand: list, cost, first: int | None, others: "list[int] | None"
+    hand: list, cost, first: int | None, others: "list[int] | None",
+    *, game=None, owner=None,
 ) -> "tuple[list[int], str | None]":
     """The hand positions the payer named for a "Discard N cards" cost, or why
     the naming is refused (CR 602.2b through CR 601.2b).
@@ -61,7 +62,9 @@ def _named_discard_positions(
             return [], (
                 f"no card at hand position {position} to discard for its cost"
             )
-        if not card_matches_any(hand[position], cost.discard_filters):
+        if not card_matches_any(
+            hand[position], cost.discard_filters, game=game, owner=owner,
+        ):
             return [], (
                 f"{hand[position].name} does not answer its discard cost"
             )
@@ -168,7 +171,8 @@ class ActivationChargesMixin:
                 # side's "and another card" (Foil) already announces on, so the
                 # second card is the player's rather than the default's.
                 named, denial = _named_discard_positions(
-                    hand, ability.cost, cost_hand_index, cost_other_hand_indices
+                    hand, ability.cost, cost_hand_index, cost_other_hand_indices,
+                    game=self, owner=controller,
                 )
                 if denial is not None:
                     details = f"{permanent.card.name}: {denial}"
@@ -179,7 +183,10 @@ class ActivationChargesMixin:
                 positions = named + [
                     i for i, held in enumerate(hand)
                     if i not in named
-                    and card_matches_any(held, ability.cost.discard_filters)
+                    and card_matches_any(
+                        held, ability.cost.discard_filters,
+                        game=self, owner=controller,
+                    )
                 ]
                 discard_cost_cards = [
                     hand[i] for i in positions[:ability.cost.discard_cards]
@@ -1122,7 +1129,9 @@ class ActivationChargesMixin:
             from ...graveyard_order import positions_named
 
             spec = ability.cost.exile_graveyard_position
-            taken = positions_named(controller.graveyard, spec)
+            taken = positions_named(
+                controller.graveyard, spec, game=self, owner=controller,
+            )
             from_graveyard = [controller.graveyard[index] for index in taken]
             for index in sorted(taken, reverse=True):
                 del controller.graveyard[index]

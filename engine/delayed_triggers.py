@@ -601,7 +601,13 @@ class DelayedTrigger:
                     observer=self.controller_index,
                 )
                 if hasattr(subject, "has_type")
-                else _card_matches_filter(subject, self.subject_filter)
+                # A card subject is a spell its caster cast, and the only
+                # event carrying one ("you cast") is collected for this
+                # entry's controller alone — the spell's controller (CR 109.5).
+                else _card_matches_filter(
+                    subject, self.subject_filter,
+                    game=game, owner=self.controller_index,
+                )
             )
             if not answers:
                 return False

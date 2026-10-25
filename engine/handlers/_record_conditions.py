@@ -29,7 +29,8 @@ from ..oracle_types import (BIDDING_WINNER, CHOSEN_COLOR_THIS_WAY,
                             DISCARDED_THIS_WAY, PROCESS_ROUNDS_SO_FAR)
 from ..turn_state import started_the_turn
 from ._conditions import _compare_count
-from ._filters import _card_matches_filter, permanent_matches_filter
+from ._filters import (_card_matches_filter, permanent_matches_filter,
+                       recorded_card_owner)
 
 if TYPE_CHECKING:
     from ..game import Game
@@ -233,7 +234,12 @@ def evaluate_record_condition(
         # could not be paid, is not a sacrifice of anything.
         given = list(context.results.get(payload.get("key")) or ())
         described = payload.get("filter") or {}
-        return any(_card_matches_filter(card, described) for card in given)
+        # "If **you** sacrifice …": the sacrificer is the resolution's
+        # controller, whose statics coloured what it sacrificed.
+        return any(
+            _card_matches_filter(card, described, game=game, owner=context.caster)
+            for card in given
+        )
 
     if kind == "exiled_this_way_share_a_name":
         # "…unless **it has the same name as another card exiled this way**" /
@@ -346,9 +352,16 @@ def evaluate_record_condition(
         milled = tuple(context.results.get(MILLED_THIS_WAY) or ())
         if len(milled) < wanted:
             return False
+        # Each card's colours as the object it is now (CR 613.1): under its
+        # owner's Celestial Dawn every nonland card milled is white, so two of
+        # them share a colour and the process repeats.
+        from ..object_colors import card_colors
+
         counts: Counter = Counter()
         for card in milled:
-            for color in getattr(card, "colors", ()) or ():
+            for color in card_colors(
+                game, card, recorded_card_owner(game, context, card)
+            ):
                 counts[color] += 1
         return any(seen >= wanted for seen in counts.values())
 
@@ -535,7 +548,11 @@ def evaluate_record_condition(
         described = payload.get("filter") or {}
         if isinstance(paid, Permanent):
             return permanent_matches_filter(paid, described)
-        return _card_matches_filter(paid, described)
+        # A card a cost took out of a zone: the payer's, which is the
+        # resolution's controller (CR 601.2h is paid by whoever casts).
+        return _card_matches_filter(
+            paid, described, game=game, owner=context.caster,
+        )
 
     if kind == "discarded_this_way":
         # "If you discard a creature card this way" (Aether Rift). The record

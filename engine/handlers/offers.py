@@ -148,7 +148,7 @@ def _exiled_cards_still_in_exile(game: Game, context) -> list:
     ]
 
 
-def _own_pile_can_supply(player, payload: dict, context) -> bool:
+def _own_pile_can_supply(game, player, payload: dict, context) -> bool:
     """Whether *player*'s own graveyard holds what an unannounced pick out of
     it owes — the **printed count** of cards the payload admits, less the one
     slot "other than this card" takes out.
@@ -165,7 +165,8 @@ def _own_pile_can_supply(player, payload: dict, context) -> bool:
 
     owed = 1 if payload.get("up_to") else max(1, int(payload.get("count", 1) or 1))
     return len(graveyard_slots_matching(
-        payload, player.graveyard, getattr(context, "card", None)
+        payload, player.graveyard, getattr(context, "card", None),
+        game=game, owner=player,
     )) >= owed
 
 
@@ -296,7 +297,9 @@ def _action_is_takeable(
 
         if instruction.payload.get("owner", "you") != "you":
             return True
-        return bool(positions_named(player.graveyard, dict(instruction.payload)))
+        return bool(positions_named(
+            player.graveyard, dict(instruction.payload), game=game, owner=player,
+        ))
     if instruction.kind == "ante_top_card":
         # "…may **ante the top card of their library**" (Amulet of Quoz,
         # Rebirth, Timmerian Fiends). An empty library is a real and checkable
@@ -338,7 +341,9 @@ def _action_is_takeable(
         if instruction.payload.get("targets"):
             return True
         return any(
-            graveyard_card_matches(instruction.payload, card)
+            graveyard_card_matches(
+                instruction.payload, card, game=game, owner=player,
+            )
             for card in player.graveyard
         )
     # "You may exile a land card from your graveyard. **If you do**, …"
@@ -364,7 +369,9 @@ def _action_is_takeable(
             ).get("defending_player_index")
             if isinstance(seat, int) and 0 <= seat < len(game.players):
                 return any(
-                    graveyard_card_matches(instruction.payload, card)
+                    graveyard_card_matches(
+                        instruction.payload, card, game=game, owner=seat,
+                    )
                     for card in game.players[seat].graveyard
                 )
             return True
@@ -375,14 +382,14 @@ def _action_is_takeable(
             or instruction.payload.get("targets")
         ):
             return True
-        return _own_pile_can_supply(player, instruction.payload, context)
+        return _own_pile_can_supply(game, player, instruction.payload, context)
     # "…sacrifice this creature unless you **put two cards from your
     # graveyard on the bottom of your library**." (Gurzigost.) The exile's
     # pick with another destination, and the same "nothing to give": a pile
     # one card short cannot cover the price, so the offer is not made and the
     # sacrifice stands.
     if instruction.kind == "put_chosen_graveyard_cards_on_library_bottom":
-        return _own_pile_can_supply(player, instruction.payload, context)
+        return _own_pile_can_supply(game, player, instruction.payload, context)
     # "Target player discards a card unless they **put a card from their hand on
     # top of their library**." (Tainted Specter.) An empty hand is a real and
     # checkable "nothing to give": the handler underneath moves as many cards as
@@ -527,7 +534,8 @@ def _action_is_takeable(
             return True
         return bool(
             positions_named(
-                game.players[seat].graveyard, dict(instruction.payload)
+                game.players[seat].graveyard, dict(instruction.payload),
+                game=game, owner=seat,
             )
         )
     # "You may **exile all cards from your hand** face down. **If you do**, put
@@ -545,7 +553,8 @@ def _action_is_takeable(
             return True
         described = dict(instruction.payload.get("card_filter") or {})
         return any(
-            _card_matches_filter(card, described) for card in player.hand
+            _card_matches_filter(card, described, game=game, owner=player)
+            for card in player.hand
         )
     # "You may **exile a card from your hand**. If you do, untap this land."
     # (Forsaken City.) A hand with no eligible card has nothing to give, which

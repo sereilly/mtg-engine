@@ -309,7 +309,9 @@ def exile_hand_pile(game: Game, instruction: OracleInstruction, context: OracleE
             context, source, victim_seat,
             [
                 slot for slot, card in enumerate(victim.hand)
-                if _card_matches_filter(card, described)
+                if _card_matches_filter(
+                    card, described, game=game, owner=victim_seat,
+                )
             ],
             face_down=bool(payload.get("face_down")),
         )
@@ -331,14 +333,16 @@ def exile_hand_pile(game: Game, instruction: OracleInstruction, context: OracleE
                 context, source, index,
                 [
                     slot for slot, card in enumerate(player.hand)
-                    if _card_matches_filter(card, described)
+                    if _card_matches_filter(
+                        card, described, game=game, owner=index,
+                    )
                 ],
                 face_down=bool(payload.get("face_down")),
             )
         return True, "resolved"
     slots = [
         index for index, card in enumerate(caster.hand)
-        if _card_matches_filter(card, described)
+        if _card_matches_filter(card, described, game=game, owner=caster)
     ]
     if payload.get("quantifier") == "any_number" and seat in game.interactive_seats:
         if not slots:
@@ -487,8 +491,15 @@ def put_exiled_with_source(game: Game, instruction: OracleInstruction, context: 
         # it, and an "Artifact Creature" collapsed to one word is a creature
         # this sentence would leave in exile.
         described = {"type_filter": str(wanted_type)}
-        kept = [e for e in entries if not _card_matches_filter(e["card"], described)]
-        entries = [e for e in entries if _card_matches_filter(e["card"], described)]
+        # Each entry with its own owner, the seat the link recorded.
+        def _answers(entry) -> bool:
+            return _card_matches_filter(
+                entry["card"], described,
+                game=game, owner=int(entry["owner_index"]),
+            )
+
+        kept = [e for e in entries if not _answers(e)]
+        entries = [e for e in entries if _answers(e)]
         for entry in kept:
             link_exiled_card(
                 source, entry["card"], int(entry["owner_index"]),
@@ -718,7 +729,10 @@ def exile_graveyard_until_leaves(game: Game, instruction: OracleInstruction, con
     owner_index = game.players.index(caster)
     described = dict(instruction.payload.get("filter") or {})
     alternatives = (described,) if described else ()
-    taken = [card for card in caster.graveyard if card_matches_any(card, alternatives)]
+    taken = [
+        card for card in caster.graveyard
+        if card_matches_any(card, alternatives, game=game, owner=caster)
+    ]
     if not taken:
         game.log.append(f"{caster.name} has no matching card in their graveyard")
         return True, "resolved"

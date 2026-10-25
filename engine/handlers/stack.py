@@ -1011,7 +1011,10 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
         # ones (CR 613.1).
         described = instruction.payload.get("countered_filter")
         if destination is not None and described:
-            if not _card_matches_filter(countered.card, described):
+            if not _card_matches_filter(
+                countered.card, described,
+                game=game, owner=countered.caster_index,
+            ):
                 destination = None
         if countered.is_copy:
             # 704.5e: a countered copy of a spell ceases to exist instead of

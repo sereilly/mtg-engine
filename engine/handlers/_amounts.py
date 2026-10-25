@@ -33,7 +33,7 @@ from ._chosen import (_resolve_chosen_color, _resolve_chosen_subtype,
                       count_spec_in_resolution,
                       resolve_chosen_card_type_in_resolution)
 from ._filters import (_card_matches_filter, permanent_effective_colors,
-                       permanent_matches_filter)
+                       permanent_matches_filter, recorded_card_owner)
 from ._targets import (attached_host, defending_player_seat,
                        resolve_role_permanent, resolve_target_permanent)
 
@@ -226,7 +226,10 @@ def count_from_payload(
         # resolved by the step at the top of this function when it is carried.
         return max(0, _scaled(sum(
             1 for card in (context.results.get(str(recorded_cards)) or ())
-            if _card_matches_filter(card, described)
+            if _card_matches_filter(
+                card, described,
+                game=game, owner=recorded_card_owner(game, context, card),
+            )
         ), spec))
     # "…where X is the total power of the creatures sacrificed this way"
     # (Sword of the Ages). Not a set in any zone either: the creatures paid this
@@ -1075,22 +1078,31 @@ def evaluate_count(
     # the printed phrase and so rides the spec — the same key that already says
     # "your graveyard". A caller that names no owner still gets the one it
     # passed, so nothing that worked changes.
+    #
+    # Each card is held with **its own pile's player**, never the counting
+    # seat: the matcher asks a card's colour with its owner (CR 108.3), and
+    # under one player's Celestial Dawn that player's nonland cards are white
+    # and nobody else's are.
     if spec.get("owner") == "all":
-        piles = [getattr(player, zone, None) for player in game.players]
-        cards = [card for pile in piles if pile is not None for card in pile]
+        seated = [
+            (card, player)
+            for player in game.players
+            for card in (getattr(player, zone, None) or ())
+        ]
     else:
         cards = getattr(owner, zone, None)
-    if cards is None:
-        return 0
+        if cards is None:
+            return 0
+        seated = [(card, owner) for card in cards]
     # *effect_spell* is the name of the spell whose effect is counting, when
     # one is: "effects from spells named Flame Burst count it as a card named
     # Flame Burst" (Pardic Firecat) is asked of the name test below, with the
     # zone the card is in, and by nobody else — a CR 604.3 recompute passes
     # none and gets CR 201.2a's plain answer.
     matched_cards = [
-        card for card in cards
+        card for card, holder in seated
         if _card_matches_filter(
-            card, filt, game=game, owner=owner, zone=zone,
+            card, filt, game=game, owner=holder, zone=zone,
             effect_spell=effect_spell,
         )
     ]
