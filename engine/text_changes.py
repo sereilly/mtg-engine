@@ -52,6 +52,18 @@ LAND_WORD = "land_word"
 #: are made of (CR 612.2: "Relentless Rats" keeps its name).
 CREATURE_WORD = "creature_word"
 
+#: The two words of "replacing all instances of **one creature type with
+#: another**" (Artificial Evolution): the word replaced and its replacement,
+#: each chosen as the spell resolves (the card's 2004-10-04 ruling, "You choose
+#: the words to change on resolution") by a ``choose_creature_type`` step whose
+#: ``result_key`` names one of these — resolution scratchpad records, the
+#: ``oracle_types.CHOSEN_CREATURE_TYPE_THIS_WAY`` shape — and both read by the
+#: ``mark_text_modified`` step behind them. Two keys rather than that one
+#: twice, because the second answer must not overwrite the first: "It can't
+#: change a word to the same word" is asked by comparing them.
+TEXT_CHANGE_OLD_CREATURE_TYPE = "text_change_old_creature_type"
+TEXT_CHANGE_NEW_CREATURE_TYPE = "text_change_new_creature_type"
+
 COLOR_WORDS: dict[str, str] = {
     "W": "white", "U": "blue", "B": "black", "R": "red", "G": "green",
 }
@@ -559,7 +571,8 @@ def changed_words(perm: Permanent) -> list[dict]:
 
 __all__ = [
     "COLOR_WORD", "COLOR_WORDS", "CREATURE_WORD", "LAND_TYPE_WORDS", "LAND_WORD",
-    "TEXT_CHANGE_EFFECTS", "apply_text_changes", "change_color_word",
+    "TEXT_CHANGE_EFFECTS", "TEXT_CHANGE_NEW_CREATURE_TYPE",
+    "TEXT_CHANGE_OLD_CREATURE_TYPE", "apply_text_changes", "change_color_word",
     "change_creature_word", "change_land_word", "changed_words",
     "creature_type_plural", "creature_types_written", "has_text_changes",
     "one_pass", "text_changes",

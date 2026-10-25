@@ -1333,18 +1333,6 @@ CHOSEN_CREATURE_TYPE_THIS_WAY = "chosen_creature_type_this_way"
 #: chosen" as "every creature is of no chosen type".
 CHOSEN_CREATURE_TYPES_THIS_WAY = "chosen_creature_types_this_way"
 
-#: The two words of "replacing all instances of **one creature type with
-#: another**" (Artificial Evolution, CR 612): the word replaced and its
-#: replacement, each chosen as the spell resolves (the card's 2004-10-04
-#: ruling, "You choose the words to change on resolution") by a
-#: ``choose_creature_type`` step whose ``result_key`` names one of these, and
-#: both read by the ``mark_text_modified`` step behind them. Two keys rather
-#: than :data:`CHOSEN_CREATURE_TYPE_THIS_WAY` twice, because the second answer
-#: must not overwrite the first — "It can't change a word to the same word" is
-#: asked by comparing them.
-TEXT_CHANGE_OLD_CREATURE_TYPE = "text_change_old_creature_type"
-TEXT_CHANGE_NEW_CREATURE_TYPE = "text_change_new_creature_type"
-
 #: The ``cost_from`` word for "**that spell's** mana cost" (Ice Cave): the price
 #: is the mana cost of the spell the trigger fired on, read off the stack as
 #: the offer is made. Named here because the lowering writes it and the offer

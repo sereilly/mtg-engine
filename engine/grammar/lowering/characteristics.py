@@ -877,7 +877,7 @@ def _lower_creature_type_text_change(
     this one is chosen **as the spell resolves** — the card's ruling
     (2004-10-04): "You choose the words to change on resolution." So the two
     words are two ``choose_creature_type`` steps in front of the change, each
-    writing its own record (``oracle_types.TEXT_CHANGE_OLD_CREATURE_TYPE`` /
+    writing its own record (``text_changes.TEXT_CHANGE_OLD_CREATURE_TYPE`` /
     ``…_NEW_…``), on the prompt every other creature-type choice uses:
 
     * the word replaced — any creature type (another ruling: it "can target a
@@ -890,7 +890,7 @@ def _lower_creature_type_text_change(
     The change re-reads both records and re-checks both restrictions, so a word
     that reached the scratchpad another way is held to the same rules.
     """
-    from ...oracle_types import (TEXT_CHANGE_NEW_CREATURE_TYPE,
+    from ...text_changes import (TEXT_CHANGE_NEW_CREATURE_TYPE,
                                  TEXT_CHANGE_OLD_CREATURE_TYPE)
 
     excluded = list(node.excluded_new)
