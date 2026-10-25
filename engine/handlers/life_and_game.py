@@ -4,7 +4,7 @@ import dataclasses
 from typing import TYPE_CHECKING
 
 from ._amounts import count_from_payload, per_recipient_amount, resolve_amount
-from ._targets import (bound_permanent, named_seat_still_a_target,
+from ._targets import (bound_permanent, damaged_end_seat, named_seat_still_a_target,
                        stack_target_controller_seat)
 from ..exiled_records import source_object
 from ..life_prohibitions import life_gain_banned
@@ -238,8 +238,10 @@ def target_loses_life(game: Game, instruction: OracleInstruction, context: Oracl
         # handler reads for Bellowing Fiend's identical phrase. Lethal damage is
         # the usual case here, so the creature is a card in a graveyard by
         # resolution and no board read could answer it (CR 603.10).
-        seat = (context.trigger_context or {}).get("damaged_permanent_controller")
-        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+        # …or the damaged *player* (Ebonblade Reaper's "that player"):
+        # ``damaged_end_seat`` says why one key answers both.
+        seat = damaged_end_seat(game, context)
+        if seat is None:
             game.log.append(f"{card.name}: no recorded controller, no life lost")
             return True, "resolved"
         victims = [game.players[seat]]

@@ -365,6 +365,79 @@ def test_w1g1_mistform_shrieker_face_down_has_neither_flying_nor_its_ability(set
     assert shrieker.has_keyword("flying")
 
 
+
+#: Morph cards whose face-up text acts when the creature attacks or deals
+#: combat damage to a player, with what the defending seat ends up with when
+#: it does: ``(life, hand size, creatures)`` after one unblocked attack into a
+#: defender holding three cards and two Grizzly Bears, from a 20-life,
+#: 3-card, 2-creature start. A face-down attack of the same card is a 2/2
+#: that does none of it: (18, 3, 2).
+_W1G1_COMBAT_FACE_UP = {
+    # "…that player sacrifices a creature of their choice."
+    "Cabal Executioner": (18, 3, 1),
+    # "…that player discards a card."
+    "Headhunter": (19, 2, 2),
+    # Flying; "…that player discards two cards."
+    "Silent Specter": (16, 1, 2),
+    # Trample; "…you may draw a card." — the defender is unchanged but for
+    # the damage.
+    "Hystrodon": (17, 3, 2),
+    # "…that player loses half their life, rounded up." 1 combat damage
+    # first (19), then half of 19 rounded up (10) is lost. Lost nobody
+    # anything before this round: ``handlers._targets.damaged_end_seat``.
+    "Ebonblade Reaper": (9, 3, 2),
+}
+
+
+@_w1g1_pytest.mark.parametrize("name", sorted(_W1G1_COMBAT_FACE_UP))
+def test_w1g1_combat_damage_abilities_act_only_face_up(set_pool, name):
+    """The same creature attacks twice: face down it is a vanilla 2/2
+    (CR 708.2a) and deals 2; turned face up (CR 702.37e) its printed
+    "deals combat damage to a player" ability acts."""
+    card = set_pool("ONS")[name]
+    for face_up in (False, True):
+        attacker = _w1g1_permanent(card, face_down=True)
+        bears = [_w1g1_permanent(_W1G1_CATALOG["Grizzly Bears"]) for _ in range(2)]
+        game, p1, p2 = _w1g1_game([attacker], bears, enforce=False)
+        p2.hand[:] = [_W1G1_CATALOG["Island"]] * 3
+        if face_up:
+            _w1g1_turn_up(game, 0, attacker)
+        _w1g1_declare_attack(game, 0)
+        while game.current_turn_phase == "combat":
+            game.advance_combat_phase()
+            _w1g1_resolve_stack(game)
+            # The discards are the defending seat's choices; a seat nobody
+            # asks answers with its default, as the simulator's drain does.
+            game.auto_resolve_pending_choices()
+        _w1g1_resolve_stack(game)
+        game.check_state_based_actions()
+        seen = (p2.life, len(p2.hand), len(p2.battlefield))
+        expected = _W1G1_COMBAT_FACE_UP[name] if face_up else (18, 3, 2)
+        assert seen == expected, (name, "face up" if face_up else "face down", game.log[-12:])
+        if name == "Ebonblade Reaper" and face_up:
+            # "Whenever this creature attacks, you lose half your life,
+            # rounded up." — 20 → 10.
+            assert p1.life == 10
+
+
+def test_w1g1_ironfist_crusher_blocks_any_number_only_face_up(set_pool):
+    """"This creature can block any number of creatures." Face down it is a
+    2/2 that blocks one; face up, the 4/4 blocks both attackers."""
+    crusher_card = set_pool("ONS")["Ironfist Crusher"]
+    for face_up in (False, True):
+        crusher = _w1g1_permanent(crusher_card, face_down=True)
+        attackers = [_w1g1_permanent(_W1G1_CATALOG["Grizzly Bears"]) for _ in range(2)]
+        game, _p1, _p2 = _w1g1_game(attackers, [crusher], enforce=False)
+        if face_up:
+            _w1g1_turn_up(game, 1, crusher)
+        game._set_phase_and_step("combat", "declare_attackers")
+        ok, why = game.declare_attackers(0, [0, 1], defending_player_index=1)
+        assert ok, why
+        game.advance_combat_phase()
+        ok, why = game.declare_blockers(1, {0: [0, 1]})
+        assert ok is face_up, why
+
+
 # ==== end W1G1 ======================================================
 
 

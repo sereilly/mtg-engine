@@ -484,6 +484,31 @@ def frozen_that_player_seat(game: Game, context: OracleExecutionContext) -> int 
     return None
 
 
+def damaged_end_seat(game: Game, context: OracleExecutionContext) -> int | None:
+    """The seat at the **damaged** end of the damage event that fired this
+    trigger (CR 603.10), or ``None``: the controller of the permanent it hit
+    (``damaged_permanent_controller``, frozen by ``damage_events._announce``),
+    or the player it hit when it hit a player.
+
+    Both readings come off one lowering. "Whenever this creature deals damage
+    to a creature, **that creature's controller** loses 2 life" (Death
+    Charmer) and "Whenever this creature deals combat damage to a player,
+    **that player** loses half their life" (Ebonblade Reaper) parse to the one
+    pronoun, and ``lowering._frozen_seats.damage_trigger_names_damaged_end``
+    answers both with "the damaged end" — which for a player is the player
+    itself. Ebonblade Reaper read only the permanent's key, found none, and
+    lost nobody any life while compiling supported (the one card in either
+    manifest role that reached it: a census of all 99 damage triggers).
+    """
+    frozen = context.trigger_context or {}
+    seat = frozen.get("damaged_permanent_controller")
+    if seat is None and isinstance(frozen.get("recipient"), PlayerState):
+        seat = frozen.get("defending_player_index")
+    if isinstance(seat, int) and 0 <= seat < len(game.players):
+        return seat
+    return None
+
+
 def triggering_spell(game: Game, context: OracleExecutionContext):
     """The spell a cast trigger fired on, if it is still on the stack; else
     ``None``.

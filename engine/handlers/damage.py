@@ -39,7 +39,7 @@ from ._amounts import per_recipient_amount, resolve_amount
 from ._common import apply_damage_to_creature, damage_dealer, flip_coin
 from ._filters import (permanent_matches_filter, seats_controlling,
                        seats_matching_deed)
-from ._targets import (divided_target_permanent, recorded_permanent_ids,
+from ._targets import (damaged_end_seat, divided_target_permanent, recorded_permanent_ids,
                        attached_host, frozen_that_player_seat,
                        resolve_target_permanent, resolve_target_permanents)
 from .registry import effect_handler
@@ -546,8 +546,10 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         # lowerings that ask `damage_trigger_names_damaged_end`, so a key with
         # no sentence behind it cannot appear. No record means the words named
         # nobody, and the damage does not happen rather than landing on a guess.
-        seat = (context.trigger_context or {}).get("damaged_permanent_controller")
-        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+        # …or the damaged *player*, under a trigger whose damage went to one
+        # (``damaged_end_seat``).
+        seat = damaged_end_seat(game, context)
+        if seat is None:
             game.log.append(f"{card.name}: no recorded controller, no damage dealt")
             return True, "resolved"
         victim = game.players[seat]
