@@ -738,10 +738,10 @@ def _counters_put_on_filter(
     """"Whenever one or more +1/+1 counters are put on another non-Hydra
     creature you control" (Wildwood Scourge).
 
-    "You control" is the observer's own seat, "another" excludes the observer
-    itself (CR 109.5), and the excluded subtype arrives as condition payload
-    from the trigger's own text — so a card printed with a different tribe
-    needs no code here.
+    "You control" is the observer's own seat (CR 109.5), "another" excludes the
+    observer itself (CR 113.7), and the excluded subtype arrives as condition
+    payload from the trigger's own text — so a card printed with a different
+    tribe needs no code here.
     """
     counted = event.subject
     if counted is None or event.payload.get("seat") is None:

@@ -32,7 +32,7 @@ from .chargeable import (_is_chargeable_counter_target, _is_chargeable_exile,
                          _is_chargeable_sacrifice)
 from .nouns import parse_object_filter
 from .readers import accept_source_reference
-from .references import parse_target_spec
+from .references import excluding_source, parse_target_spec
 from .stream import TokenStream
 from .vocabulary import (CARD_TYPES, IMPLEMENTED_KEYWORDS,
                          singular as _singular)
@@ -55,33 +55,35 @@ def _parse_cost_object(
     something the rest of the cost machinery has no way to express, so they
     raise instead.
     """
-    # "Sacrifice **another** creature" (Hobblefiend). The word sits where the
-    # article does, so the noun behind it parses bare — `parse_target_spec`
-    # returns quantifier "all" for "creature" and None for "another creature".
-    # Teaching the noun parser an "another" quantifier would change every
-    # targeted line in the pool, so the exclusion is read here and carried on
-    # the filter's existing `other_than_source` field: CR 602.5c's "another" is
-    # a restriction on what may pay, not a different kind of cost.
+    # "Sacrifice **another** creature" (Hobblefiend). Read by
+    # `parse_target_spec`, the one reader of the word in front of a noun, as
+    # an untargeted "a" that must differ from an earlier choice
+    # (``distinct_from_prior``). A cost chooses nothing before itself, so the
+    # only object the word can exclude is the ability's own source (CR 113.7)
+    # — `excluding_source` turns the one into the other, and the payer is held
+    # to it: a restriction on what may pay, not a different kind of cost.
     # "{1}{W}, Sacrifice **Lieutenant Kirtar**: …" A legendary permanent
     # naming itself in a cost (CR 201.5) - the lexer has collapsed the name to
     # one SELF token, the same reference "this creature" is, and the counter
     # costs below ("Remove a dream counter from Rasputin") already read it.
     if stream.accept_kind(SELF) is not None:
         return ast.ObjectFilter(is_source=True)
-    another = bool(stream.accept_word("another"))
     spec = parse_target_spec(stream)
     if spec is None:
         raise stream.error(f"expected what to {verb} as a cost")
+    spec = excluding_source(spec)
+    if spec is None:
+        raise stream.error(f"\"another\" names no set of objects to {verb}")
     # *bare_plural* is the "any number of **creatures you control**" tail (Sword
     # of the Ages): the count is printed in front of the phrase, so the phrase
     # itself is the bare plural the noun parser calls "all". Admitted only where
     # the caller has already read a count — an "all" quantifier reaching the
     # ordinary path still refuses, because "Sacrifice creatures you control"
     # names no number at all.
-    allowed = ("all",) if (another or bare_plural) else ("this", "a")
+    allowed = ("all",) if bare_plural else ("this", "a")
     if spec.quantifier not in allowed or spec.count != 1:
         raise stream.error(f"unsupported {verb} cost quantifier {spec.quantifier!r}")
-    return replace(spec.filter, other_than_source=True) if another else spec.filter
+    return spec.filter
 
 
 def _accept_cost_count(

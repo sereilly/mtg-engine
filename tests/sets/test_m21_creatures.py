@@ -395,7 +395,7 @@ def test_spellgorger_weird_counts_only_noncreature_spells(set_pool):
 
 def test_turret_ogre_needs_another_big_creature(set_pool):
     pool = set_pool("M21")
-    # Alone, his own power 4 does not satisfy "another creature" (CR 109.5).
+    # Alone, his own power 4 does not satisfy "another creature" (CR 113.7).
     p1 = PlayerState(name="P1", hand=[pool["Turret Ogre"]])
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
@@ -1559,7 +1559,7 @@ def test_selfless_savior_names_a_creature_that_is_not_itself(set_pool):
 
     It is back because the word now has somewhere to go. This sentence names one
     chosen object, so the only referent "another" can exclude is the ability's
-    source (CR 109.5) — which is what ``other_than_source``/``exclude_self``
+    source (CR 113.7) — which is what ``other_than_source``/``exclude_self``
     already says, and what the picker and the handlers already read. The
     genuinely-two-slot meaning is claimed above this by the fusers and refused
     everywhere else, so the two readings cannot be confused.
@@ -1976,7 +1976,7 @@ def test_selfless_savior_compiles_supported(set_pool):
     description had nowhere to say which other choice this one differs from
     (CR 601.2c), and dropped, the picker offered the Savior itself. It is back
     because the sentence chooses nothing else, so the only object "another" can
-    exclude is the source (CR 109.5) — and that restriction the payload can
+    exclude is the source (CR 113.7) — and that restriction the payload can
     carry."""
     program = compile_card_oracle(set_pool("M21")["Selfless Savior"])
 

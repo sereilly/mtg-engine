@@ -5,7 +5,7 @@ that question: every key it answers is readable off the permanent alone, so it
 needs no game and every filter reader in the engine already shares it. Three
 keys are not readable that way — a keyword is a layer-6 question (CR 613.1f),
 "you control" is a seat comparison, and "another" is an identity comparison
-against the ability's own source (CR 109.5) — so a caller that needs those needs
+against the ability's own source (CR 113.7) — so a caller that needs those needs
 the game as well.
 
 Until this module there was exactly one such caller: the trigger fire sites,
@@ -1490,7 +1490,7 @@ def subject_matches(
             return False
         if obj.metadata.get(PUT_ONTO_BATTLEFIELD_BY) != source.permanent_id:
             return False
-    # "Another" (CR 109.5) excludes the ability's own source by identity — a
+    # "Another" (CR 113.7) excludes the ability's own source by identity — a
     # look-alike on the same battlefield is a different permanent.
     if described.get("exclude_self") and source is not None and obj is source:
         return False

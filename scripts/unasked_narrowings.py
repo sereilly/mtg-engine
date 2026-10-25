@@ -92,7 +92,7 @@ CONTROLLER_ARGUMENT = {
 }
 #: Keys that are relative to the observer whatever their value.
 OBSERVER_KEYS = ("owner", "owner_or_controller")
-#: …and the key that needs the ability's own source (CR 109.5's "another").
+#: …and the key that needs the ability's own source (CR 113.7's "another").
 SOURCE_KEYS = ("another",)
 
 #: The default scope, and the reason this instrument is usable at all: the

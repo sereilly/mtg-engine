@@ -738,7 +738,7 @@ class BoardStaticsMixin:
         direction: a board-wide effect applying to the wrong side is worse than
         one that does not apply.
         """
-        # "**Other** enchantments have …" (Aura Flux). CR 109.5's exclusion,
+        # "**Other** enchantments have …" (Aura Flux). CR 113.7's exclusion,
         # asked in front of every scope rather than inside one, because the word
         # is a quantifier over whatever noun follows it and not part of the
         # noun. Read here and nowhere else, which is where the comment in

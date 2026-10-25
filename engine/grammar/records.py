@@ -89,7 +89,7 @@ def accept_damage_dealt_this_turn(
 
     Every narrowing is read rather than assumed, and the production refuses the
     moment one of them is missing. "This turn" is the ledger's window and a
-    clause without it is asking about a different one; "other" is CR 109.5's
+    clause without it is asking about a different one; "other" is CR 113.7's
     identity exclusion and dropping it would count the creature's own damage to
     itself; and the name must be the SELF token — the card naming itself — so a
     clause comparing against some *other* printed name refuses here instead of
@@ -685,10 +685,13 @@ def accept_player_deed(stream: TokenStream, parse_filter) -> "ast.PlayerDeed | N
 
     "…each player **who tapped a land for mana this turn** sacrifices a land of
     their choice. … deals 2 damage to each player **who sacrificed a Plains
-    this way**." (Desolation.) Both clauses narrow a player reference by
-    something the seat *did*, one within the turn and one within this very
-    resolution, and one reader answers both so the two sentences of that card
-    cannot drift about what "who" introduces.
+    this way**." (Desolation.) "…to target player **who attacked this turn**"
+    (Fire and Brimstone); "…to target opponent **previously dealt damage by
+    it**" (Diseased Vermin). Every clause narrows a player reference by
+    something done earlier, and one reader answers all of them so no two
+    sentences can drift about what "who" introduces — the attack and damage
+    clauses were read as flags beside the one lowering of each, until a flag
+    on the other kind of seat turned out to be dropped.
 
     Here rather than in ``references``, where the word "who" is read: this
     module is where a quantity named by an *event* is parsed, and a seat named
@@ -708,8 +711,19 @@ def accept_player_deed(stream: TokenStream, parse_filter) -> "ast.PlayerDeed | N
     line rather than widen the sentence to every seat.
     """
     mark = stream.mark()
+    # "target opponent **previously dealt damage by it**" (Diseased Vermin).
+    # The reduced relative — "[who was] previously dealt damage by it" — and
+    # the one deed whose record is kept on the ability's source rather than on
+    # the seat. "By it" is that source, the only referent the sentence has, and
+    # every word is required: "previously" is the whole window, and a printing
+    # naming another one would be a different record.
+    if stream.accept_phrase("previously", "dealt", "damage", "by", "it"):
+        return ast.PlayerDeed("dealt_damage_by_source")
     if not stream.accept_word("who"):
         return None
+    # "target player **who attacked this turn**" (Fire and Brimstone).
+    if stream.accept_phrase("attacked", "this", "turn"):
+        return ast.PlayerDeed("attacked_this_turn")
     if stream.accept_phrase(
         "tapped", "a", "land", "for", "mana", "this", "turn"
     ):

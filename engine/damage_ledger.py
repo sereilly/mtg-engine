@@ -204,7 +204,7 @@ def damage_dealt_to_permanent(
     """How much damage was dealt to one permanent this turn, narrowed by source.
 
     *source_name* is CR 201.2's comparison — "sources **named** …" — and
-    *exclude_source_permanent_id* is CR 109.5's "**other** sources", which is an
+    *exclude_source_permanent_id* is CR 113.7's "**other** sources", which is an
     identity comparison and not a property of anything. Both are passed by the
     reader that knows them; neither is spelled into this file, because the name
     a card compares against is data it printed and this module dispatches on

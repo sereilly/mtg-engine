@@ -411,7 +411,7 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
             # own, but the noun parser refuses it as an unknown adjective, so
             # leaving it would refuse every singular condition in the pool.
             # "**another** creature…" (Turret Ogre) is an article carrying the
-            # source-exclusion — CR 109.5's "other", contracted — so it sets
+            # source-exclusion — CR 113.7's "other", contracted — so it sets
             # the same field the leading adjective "other" does.
             another = stream.accept_word("another")
             if not another:

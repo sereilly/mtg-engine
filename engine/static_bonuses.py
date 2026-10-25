@@ -782,7 +782,7 @@ def conditional_static_holds(
                 else pivot_seat if who == "controller"
                 else None
             ),
-            # The pivot, not the raw source: "another" is CR 109.5 measured
+            # The pivot, not the raw source: "another" is CR 113.7 measured
             # against the permanent the sentence is about. For every clause
             # that carries no pronoun the two are the same object, so nothing
             # that worked changes.

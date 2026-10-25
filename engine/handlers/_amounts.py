@@ -420,7 +420,7 @@ def count_from_payload(
     # else keeps the source, which is what the relation has always meant.
     #
     # ``exclude`` is deliberately left as the source: it implements the printed
-    # word "other" (CR 109.5's own object), which is a different question from
+    # word "other" (the CR 113.7 source itself), which is a different question from
     # what the relation is measured against.
     counted = evaluate_count(
         game, owner, spec,
@@ -542,7 +542,7 @@ def _damage_dealt_this_turn(game, context, query: dict) -> int:
         game,
         permanent_id,
         source_name=wanted_name,
-        # CR 109.5's "**other** sources": an identity comparison against the
+        # CR 113.7's "**other** sources": an identity comparison against the
         # ability's own source, which no property of a damage entry can make.
         exclude_source_permanent_id=permanent_id if query.get("others_only") else None,
     )
@@ -744,7 +744,7 @@ def _battlefield_matches(
     # and it keeps its ``observer=None``.
     opponents_only = spec.get("owner") == "opponents"
     seat = None if every_seat else game.players.index(owner)
-    # "**Other** …" (CR 109.5) is an identity comparison against the ability's
+    # "**Other** …" (CR 113.7) is an identity comparison against the ability's
     # own source, which the matcher deliberately does not answer — it is
     # about one permanent alone. A spec carrying the key with no source to
     # compare against counts nothing extra rather than silently dropping it:

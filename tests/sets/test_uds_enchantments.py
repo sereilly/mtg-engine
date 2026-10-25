@@ -125,7 +125,7 @@ def test_opalescence_animates_another_enchantment(set_pool, catalog_by_name):
 
 
 def test_opalescence_does_not_animate_itself(set_pool, catalog_by_name):
-    """"Each **other**" is CR 109.5's exclusion, and the templates in this table
+    """"Each **other**" is CR 113.7's exclusion, and the templates in this table
     are applied to their own source unless the card says otherwise."""
     opal = Permanent(card=set_pool("UDS")["Opalescence"])
     game = _w1g3_uds_game([opal, Permanent(card=catalog_by_name["Crusade"])])

@@ -385,8 +385,8 @@ class AlternativeCastCostsMixin:
         """The hand positions that may pay *cost*'s "and another card" (Foil).
 
         Every card but the spell (CR 601.2a) and the one paying the narrowed
-        half — "another" is CR 109.5's other object, not a second copy of the
-        word. By position, because two copies of one card in hand are the same
+        half — "another" names an object other than that one, not a second
+        copy of the word. By position, because two copies of one card in hand are the same
         Python object and only the position tells them apart. One enumeration
         for the offer, the announcement's check, the CR 601.2h gate and the
         default pick.

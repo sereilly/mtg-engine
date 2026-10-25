@@ -119,7 +119,7 @@ class GlobalStatic:
     # A tuple, empty when the static sets nothing, for the reason ``colors`` is
     # one: a frozen dataclass has to stay hashable.
     sets_base_pt: tuple[int, int] = ()
-    # "**Other** enchantments have "…"." (Aura Flux.) CR 109.5's exclusion of
+    # "**Other** enchantments have "…"." (Aura Flux.) CR 113.7's exclusion of
     # the ability's own source, and the first template in this table to print
     # the word — ``board_statics._refresh_global_statics`` says in as many words
     # that "none of these templates says 'other'" and applies every one of them
@@ -196,7 +196,7 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], GlobalStatic], ...] = (
         # **And so is the exclusion.** "**Other** enchantments have "At the
         # beginning of your upkeep, sacrifice this enchantment unless you pay
         # {2}."" (Aura Flux) is Energy Flux's sentence with one noun changed and
-        # one word added, and the word is not a spelling of "all": CR 109.5 puts
+        # one word added, and the word is not a spelling of "all": CR 113.7 puts
         # the source outside the set, so it rides as ``other_than_source``
         # rather than joining the quantifier alternation above.
         re.compile(
@@ -396,7 +396,7 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], GlobalStatic], ...] = (
         # The differences from that row are the two words in front of the noun,
         # and each is stated rather than assumed:
         #
-        # * "**other**" is CR 109.5's exclusion, and it rides ``other_than_source``
+        # * "**other**" is CR 113.7's exclusion, and it rides ``other_than_source``
         #   for Aura Flux's reason -- ``_apply_global_statics`` applies every
         #   template to its own source unless the card says not to, and
         #   Opalescence emphatically does say not to: applied to itself it

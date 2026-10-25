@@ -450,11 +450,33 @@ def roles_spec(targets: dict) -> dict | None:
 
 
 
+def _carry_player_deed(spec: dict, targets: dict) -> None:
+    """Carry "…who attacked this turn" / "…previously dealt damage by it" onto
+    *spec*.
+
+    The ``who <did …>`` clause on a chosen seat (Fire and Brimstone, Diseased
+    Vermin), carried whole to the seat loop that enforces it — the picker, and
+    the CR 608.2b re-check that reads the picker's list. It is the picker that
+    enforces a printed narrowing, and an ability whose restriction stops at the
+    parser is one that hits anybody.
+
+    Written by both player kinds, for :func:`_carry_player_comparison`'s
+    reason: a key honoured for one kind and forgotten for the other is a
+    restriction that depends on which noun the card printed. The flags this
+    replaced were each read by one kind only, and the lowering's two branches
+    each read one of them, which is how "target opponent who attacked this
+    turn" compiled with the clause dropped.
+    """
+    deed = targets.get("did")
+    if deed:
+        spec["did"] = deed
+
+
 def _carry_player_comparison(spec: dict, targets: dict) -> None:
     """Carry "…who controls more creatures than they do" onto *spec*.
 
-    A whole clause rather than a flag, which is the only difference from the
-    three narrowings beside it: what is counted, in which direction, by how
+    A whole clause rather than a flag, which is the difference from the
+    ``opponents_only`` narrowing beside it: what is counted, in which direction, by how
     much and against whom are four printed facts, and the seat loop needs all
     four to answer any of them. Carried whole for that reason — a spec keeping
     three of them would be a picker enforcing a comparison the card did not
@@ -702,21 +724,12 @@ def _from_targets_payload(targets) -> dict | None:
         return spec
     if kind == "player":
         spec = {"kind": "player"}
-        if targets.get("attacked_this_turn"):
-            # "target player **who attacked this turn**" (Fire and Brimstone) —
-            # the printed narrowing, carried to the seat loop that enforces it.
-            spec["attacked_this_turn"] = True
         if targets.get("opponents_only"):
             # "Target opponent" — the caster's own seat is not a legal answer
             # (CR 102.2/102.3). The same flag Word of Command's kind-table entry
             # carries, enforced by legality's seat check.
             spec["opponents_only"] = True
-        if targets.get("damaged_by_source"):
-            # "…**previously dealt damage by it**" (Diseased Vermin). Carried to
-            # the same seat loop for the same reason the two flags above are: it
-            # is the picker that enforces a printed narrowing, and an ability
-            # whose restriction stops at the parser is one that hits anybody.
-            spec["damaged_by_source"] = True
+        _carry_player_deed(spec, targets)
         _carry_player_comparison(spec, targets)
         return spec
     if kind == "player_or_planeswalker":
@@ -730,6 +743,7 @@ def _from_targets_payload(targets) -> dict | None:
             # loop already asks it for this kind; without it here the flag never
             # reaches the loop and the caster is offered as a legal target.
             spec["opponents_only"] = True
+        _carry_player_deed(spec, targets)
         _carry_player_comparison(spec, targets)
         return spec
     if kind == "spell":

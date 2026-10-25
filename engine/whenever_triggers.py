@@ -153,7 +153,7 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # After the four `permanent_dies` rows because it is the widest reading
     # here; none of them could match this line ("from the battlefield" against
     # "from anywhere"), so the position is documentation rather than a guard.
-    # "another" is CR 109.5 and is enforced by the event filter, not by a
+    # "another" is CR 113.7 and is enforced by the event filter, not by a
     # payload: the comparison is between the moved card and the observer.
     ("card_put_into_graveyard",
      r"whenever (?P<another_card>)another card is put into a graveyard "
