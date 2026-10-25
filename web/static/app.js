@@ -3921,6 +3921,18 @@ function refreshPromptSelection(state = currentState) {
   renderBoard(state);
 }
 
+// The target of an upkeep trigger's answer: the clicked `valid_targets`
+// entry's `id`, which every entry carries (`web/turn_steps`). The seat and slot
+// are sent only for an entry without one, which the server still converts on
+// arrival — never both, so the request names one permanent one way.
+function upkeepTriggerTargetFields(targets, targetSeat, permanentIndex) {
+  const entry = (targets || []).find(
+    (t) => Number(t.seat) === Number(targetSeat) && Number(t.index) === Number(permanentIndex),
+  );
+  if (Number.isInteger(entry?.id)) return { target_permanent_id: entry.id };
+  return { target_seat: targetSeat, target_permanent_index: permanentIndex };
+}
+
 // The board-targeting descriptor for the prompt currently on screen, or null.
 // The order below mirrors renderActivationPrompt's dispatch so the highlights
 // always belong to the prompt the player is actually looking at: every prompt
@@ -3998,8 +4010,11 @@ function getPromptBoardTargeting(state = currentState) {
           prompt_permanent_id: current.permanent_id ?? null,
           prompt_subject_ordinal: current.subject_ordinal ?? null,
           accept: true,
-          target_seat: targetSeat,
-          target_permanent_index: idx,
+          // What it is aimed at, by the id of the entry clicked (CR 400.7):
+          // the slot is only how the click found it, and the board this
+          // prompt was drawn from may have renumbered by the time the step
+          // reads the answer. The server files the id; a stale one is a 404.
+          ...upkeepTriggerTargetFields(targets, targetSeat, idx),
         }),
       // Upkeep still allows tapping lands and activating abilities while the
       // trigger waits, so a click elsewhere keeps its normal meaning.
