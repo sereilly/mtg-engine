@@ -121,7 +121,6 @@ def _graveyard_cost_refusal(cost) -> str | None:
         ("sacrifice_also_filter", "a conjoined sacrifice cost"),
         ("remove_counter", "a counter-removal cost"),
         ("remove_counter_filter", "a counter-removal cost on a chosen permanent"),
-        ("tap_count", "a tap-other-permanents cost"),
         ("return_to_hand_count", "a return-other-permanents-to-hand cost"),
         ("untap_filter", "an untap-another-permanent cost"),
         ("tap_attached", "a tap-the-attached-permanent cost"),
@@ -373,6 +372,10 @@ class CardActivationMixin:
         ability_index: int = 0,
         graveyard_index: int | None = None,
         cost_permanent_id: int | None = None,
+        # "Tap three untapped Clerics you control: Return this card from your
+        # graveyard to your hand." (Gangrenous Goliath.) Which permanents pay a
+        # several-permanent cost, by id — the battlefield door's spelling.
+        cost_permanent_ids: "list[int] | None" = None,
         # What the ability aims at (CR 602.2b: an activated ability's targets
         # are chosen as it is activated, not when it resolves). Carrionette is
         # the first card here that needs them — "Exile this card and **target
@@ -555,12 +558,51 @@ class CardActivationMixin:
                 else self.default_sacrifice_pick(candidates)
             )
 
+        # "**Tap three untapped Clerics you control**: Return this card from
+        # your graveyard to your hand." (Gangrenous Goliath.) The permanents
+        # tapped are on the battlefield and the source is not, which is
+        # nothing CR 602 minds: the cost is an action the controller performs
+        # (CR 118.3) on permanents they control, and the card in the pile is
+        # never among them. Chosen before any mana is spent and tapped after,
+        # with the battlefield door's chooser — so an Elf that became a Cleric
+        # pays, and a Wizard named in error is a refusal rather than the
+        # default (CR 601.2h).
+        tap_cost_permanents: list = []
+        if cost.tap_count:
+            candidates = self._tap_cost_candidates(cost, controller_index)
+            if len(candidates) < cost.tap_count:
+                details = (
+                    f"{card.name}: not enough untapped "
+                    f"{filter_head_noun(cost.tap_filter or {})}s to tap for its cost"
+                )
+                self.log.append(details)
+                return SimulationResult(card.name, False, "unsupported", details)
+            named_cost_refusal = self._named_cost_refusal(
+                card, controller, candidates, cost_permanent_ids, None,
+            )
+            if named_cost_refusal is not None:
+                self.log.append(named_cost_refusal)
+                return SimulationResult(
+                    card.name, False, "unsupported", named_cost_refusal
+                )
+            tap_cost_permanents = self._choose_tap_cost_permanents(
+                cost, candidates, cost_permanent_ids,
+            )
+
         if self.enforce_mana_costs and not self._pay_mana_cost(
             controller, cost.mana, purpose=PaymentPurpose(ACTIVATE, source=card),
         ):
             details = f"{controller.name} cannot pay for {card.name}'s ability"
             self.log.append(details)
             return SimulationResult(card.name, False, "unsupported", details)
+        for tapped_for_cost in tap_cost_permanents:
+            self.become_tapped(tapped_for_cost)
+        if tap_cost_permanents:
+            self.log.append(
+                f"{card.name}: tapped "
+                + ", ".join(p.card.name for p in tap_cost_permanents)
+                + " to pay its cost"
+            )
         if sacrifice_victim is not None:
             self.sacrifice_permanent(sacrifice_victim)
             self.log.append(

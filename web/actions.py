@@ -754,6 +754,7 @@ def _action_activate_graveyard(session, req, seat_type):
             ability_index=req.ability_index if req.ability_index is not None else 0,
             graveyard_index=index,
             cost_permanent_id=req.cost_permanent_id,
+            cost_permanent_ids=req.cost_permanent_ids,
             target_player_index=req.target_seat,
             target_permanent_index=req.target_permanent_index,
             target_permanent_ids=req.target_permanent_ids,

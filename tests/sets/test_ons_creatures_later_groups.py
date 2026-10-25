@@ -348,6 +348,41 @@ def test_w1g7_daunting_defender_shaves_one_off_each_cleric_you_control(set_pool)
     assert p1.life == 18, "the player is not a Cleric creature"
 
 
+def test_w1g7_gangrenous_goliath_taps_three_clerics_from_the_graveyard(set_pool):
+    """"Tap three untapped Clerics you control: Return this card from your
+    graveyard to your hand." Supported on arrival and never activatable: the
+    graveyard door refused every tap-other-permanents cost. The Clerics are on
+    the battlefield and the card is in the pile, which CR 602 does not mind.
+    Two Clerics are not enough, an Elf is no Cleric, an Elf that became one
+    pays, and a Wizard named to pay is a refusal (CR 601.2h)."""
+    pool = set_pool("ONS")
+    medic = _w1g7_perm(pool, "Battlefield Medic")
+    archon = _w1g7_perm(pool, "Cabal Archon")
+    elf = _w1g7_perm(pool, "Wirewood Elf")
+    wizard = _w1g7_perm(pool, "Aphetto Grifter")
+    game, p1, _p2 = _w1g7_game(
+        [medic, archon, elf, wizard], p1={"graveyard": [pool["Gangrenous Goliath"]]},
+    )
+    refused = game.activate_from_graveyard(0, "Gangrenous Goliath")
+    assert not refused.supported
+    assert not any(p.tapped for p in (medic, archon, elf, wizard))
+
+    _w1g7_gain_types(elf, subtypes=("cleric",))
+    game._recompute_continuous_effects()
+    named_wrong = game.activate_from_graveyard(
+        0, "Gangrenous Goliath",
+        cost_permanent_ids=[medic.permanent_id, archon.permanent_id, wizard.permanent_id],
+    )
+    assert not named_wrong.supported
+    assert not any(p.tapped for p in (medic, archon, elf, wizard))
+
+    result = game.activate_from_graveyard(0, "Gangrenous Goliath")
+    assert result.supported, result.details
+    _w1g7_resolve(game)
+    assert [c.name for c in p1.hand] == ["Gangrenous Goliath"]
+    assert p1.graveyard == []
+    assert medic.tapped and archon.tapped and elf.tapped and not wizard.tapped
+
 # ==== end W1G7 ======================================================
 
 
