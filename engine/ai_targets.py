@@ -356,8 +356,13 @@ def _preferred_role_option(
     # which seat is the one the count comes out best on
     # (``ai_target_sides.best_counted_target_seat``): every option is already
     # an opponent, so the side is settled and only the number is left.
+    program = compile_card_oracle(card)
     counted = best_counted_target_seat(
-        game, caster_index, compile_card_oracle(card).instructions,
+        game, caster_index,
+        instructions_as_announced(
+            card, program, _OFFERS_ANNOUNCED.get() or {},
+            mode_index=_announced_mode(card),
+        ),
         [option.get("seat") for option in options], card,
     )
     if counted is not None:
@@ -570,7 +575,11 @@ def _choose_several_targets(
     )
     if counted_options:
         counted_seat = best_counted_target_seat(
-            game, caster_index, program.instructions,
+            game, caster_index,
+            instructions_as_announced(
+                card, program, _OFFERS_ANNOUNCED.get() or {},
+                mode_index=_announced_mode(card),
+            ),
             sorted(
                 counted_options,
                 key=lambda seat: seat != game._default_opposing_seat(caster_index),

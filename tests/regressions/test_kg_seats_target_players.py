@@ -398,6 +398,25 @@ def test_fiery_justice_with_every_target_gone_does_not_resolve(catalog_by_name):
     assert any("every target is illegal (608.2b)" in line for line in game.log), game.log
 
 
+def test_dwarven_catapult_divides_among_every_creature_of_the_opponent_named(catalog_by_name):
+    """"…divided evenly, rounded down, among all creatures target opponent
+    controls." The opponent is the target; the creatures are counted as it
+    resolves and share X — none of them is a target the caster picks, so none
+    can be left out to take the whole of it."""
+    game = _table(
+        boards=([], [_body("One", toughness=4)],
+                [_body("TwoA", toughness=4), _body("TwoB", toughness=4)]),
+        hands=([catalog_by_name["Dwarven Catapult"]], [], []),
+    )
+
+    result = game.cast_from_hand(0, "Dwarven Catapult", target_player_index=2, x_value=5)
+    resolve_stack(game)
+
+    assert result.supported, result.details
+    assert [p.damage_marked for p in game.players[2].battlefield] == [2, 2]
+    assert [p.damage_marked for p in game.players[1].battlefield] == [0]
+
+
 # --- The AI names the opponent by what the count comes to ---------------------
 
 def _ai_table(by_name, boards, hand, graveyards=((), (), ())):
@@ -452,14 +471,10 @@ def test_the_ai_names_the_opponent_superior_numbers_counts_least_on(catalog_by_n
 _SEAT_WORDS = re.compile(r"\btarget (?:player|opponent)s?\b", re.I)
 _TRIGGER_LINE = re.compile(r"^(when|whenever|at the beginning|at end)", re.I)
 
-#: Announcements whose line prints more seat words than their spec announces,
-#: each with what is left — the playbook's Known-gaps entry, by card.
-_UNANNOUNCED_REMAINDER = {
-    # "…divided evenly, rounded down, among all creatures target opponent
-    # controls": the creatures are announced as the division's targets, which
-    # they are not, and the opponent only as the seat they sit on.
-    "Dwarven Catapult#cast",
-}
+#: Announcements whose line prints more seat words than their spec announces.
+#: Empty since round kg: a new entry is a card a target seat reaches that no
+#: announcement carries — the finding this census is for.
+_UNANNOUNCED_REMAINDER: set = set()
 
 
 def _announced_seats(spec) -> int:
@@ -518,8 +533,8 @@ def test_every_printed_target_seat_is_announced():
     Validated backwards: run on the round's base (``c42aec75``) it names
     eleven — Drafna's Restoration, Gaea's Blessing, Dwell on the Past, Krosan
     Reclamation, Reap, Superior Numbers, Carpet of Flowers, Instigator, Fiery
-    Justice, Dwarven Catapult (left below) and Relic Bind, read whole there
-    and mode by mode here. (Keeper of the Dead announced its seat
+    Justice, Dwarven Catapult and Relic Bind — the last read whole there and
+    mode by mode here. (Keeper of the Dead announced its seat
     and left its *creature* to the handler: that is the slot half,
     ``test_sequence_target_roles``' seat-and-object ratchet.)"""
     examined = 0

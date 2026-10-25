@@ -730,7 +730,10 @@ class DividedShape:
     #: policy — what the AI *does* about it is stated in ``ai_policy``.
     thresholded: bool = False
     #: Whether the card names a whole board rather than offering a choice —
-    #: "…among **all creatures target opponent controls**" (Dwarven Catapult).
+    #: an evenly-divided description whose filter names a controller. Dwarven
+    #: Catapult ("…among **all creatures target opponent controls**") was the
+    #: printing; since round kg it lowers to the sweep it is — the opponent the
+    #: one target, the creatures a set — so no division in the pool sets this.
     #: Read as an evenly-divided description whose filter names a controller:
     #: an evenly-divided spell's caster announces no shares, so the target list
     #: is the only choice it has, and a filter bounding that list to one
