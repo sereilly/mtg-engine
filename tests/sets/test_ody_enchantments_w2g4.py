@@ -150,7 +150,7 @@ def test_an_opponents_disenchant_on_your_artifact_triggers_it(set_pool):
     # Its own controller's permanent is not one "that opponent controls".
     assert not game.confirm_trigger_target(0, permanent_id=mine.permanent_id)
     assert game.confirm_trigger_target(0, permanent_id=mox.permanent_id)
-    assert trigger.target_permanent_id == mox.permanent_id
+    assert trigger.target_permanent_id == [mox.permanent_id]
 
     assert game.resolve_top_of_stack(pause_for_choices=True)
     (offer,) = game.pending_choices
@@ -477,7 +477,7 @@ def test_karmic_justice_destroyed_by_an_opponents_spell_triggers(set_pool):
 
     assert _names(game.players[0].graveyard) == ["Karmic Justice"]
     (trigger,) = _justice_triggers(game)
-    assert trigger.target_permanent_id == mox.permanent_id
+    assert trigger.target_permanent_id == [mox.permanent_id]
     _settle(game)
     assert not game.is_on_battlefield(mox)
 
@@ -575,7 +575,7 @@ def test_an_opponents_activated_sweep_triggers_it_for_each_noncreature_permanent
 
     triggers = _justice_triggers(game)
     assert len(triggers) == 2
-    assert {item.target_permanent_id for item in triggers} == {island.permanent_id}
+    assert {tuple(item.target_permanent_id) for item in triggers} == {(island.permanent_id,)}
 
 
 # --- "that opponent" -------------------------------------------------------------

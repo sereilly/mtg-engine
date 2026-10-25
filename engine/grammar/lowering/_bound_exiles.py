@@ -134,8 +134,9 @@ def lower_restated_noun_exile(
             # "Whenever this creature deals damage to a creature, **exile that
             # creature**." (Pit Spawn.) The immediate twin of Lowland
             # Basilisk's delayed destroy, one keyword action over.
-            # `damage_events._announce` stamps the damaged permanent as the
-            # trigger's **target** (`target_permanent_id`), which is what lets
+            # `damage_events._announce` names the damaged permanent as what the
+            # trigger is **about** (`about_permanent_id`), which the context
+            # hands the effect as its target — which is what lets
             # this ride the ordinary targeted exile with no `targets`
             # description — nothing is chosen, exactly as
             # `destroy_target_permanent` reads the same stamp for the same

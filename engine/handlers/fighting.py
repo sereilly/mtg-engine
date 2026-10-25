@@ -17,6 +17,7 @@ Split out of ``damage.py`` at the 2,000-line cap's split round.
 
 from __future__ import annotations
 
+from ..game_types import target_ids
 from ..resumption import run_resumable
 from ._amounts import resolve_amount
 from ._common import apply_damage_to_creature, apply_temp_pt_boost
@@ -206,11 +207,9 @@ def target_fights_target(game, instruction, context):
     targets = instruction.payload.get("targets") or {}
     slot_filters = targets.get("filters") or [targets.get("filter") or {}] * 2
     observer = game.players.index(context.caster)
-    ids = context.target_permanent_id
-    if not isinstance(ids, list):
-        ids = [ids, None]
     resolved = [
-        game.permanent_by_id(pid) if isinstance(pid, int) else None for pid in ids
+        game.permanent_by_id(pid) if isinstance(pid, int) else None
+        for pid in target_ids(context.target_permanent_id)
     ]
 
     def slot(index: int):

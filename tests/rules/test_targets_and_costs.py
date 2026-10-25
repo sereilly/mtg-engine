@@ -989,7 +989,8 @@ def _leadb_resolve(game, card, instruction, source, index, permanent_id):
         game, instruction,
         OracleExecutionContext(
             caster=game.players[0], target=game.players[1], card=card,
-            target_permanent_index=index, target_permanent_id=permanent_id,
+            target_permanent_index=index,
+            target_permanent_id=None if permanent_id is None else [permanent_id],
             source_permanent=source,
         ),
     )
@@ -1812,29 +1813,37 @@ def test_115_7a_an_ability_with_nowhere_else_to_go_keeps_its_target(set_pool):
 
 # --- Integrator: an id alone is an address (CR 115.1, CR 400.7) -------------
 
-from engine.oracle_types import single_chosen_id as _int_single_chosen_id
+from engine.game_types import (as_target_ids, first_target_id,
+                               single_chosen_id as _int_single_chosen_id,
+                               target_ids)
 
 
 @pytest.mark.cr("400.7", "115.1")
 def test_single_chosen_id_reads_one_address_and_refuses_several():
     """The channel's arity, as a rule rather than as twelve assumptions.
 
-    ``StackItem.target_permanent_id`` carries a *list* when ``activation`` or
-    ``casting`` stamped it and a bare id when a prompt's answer did. One
-    element is one address. Several is not, and a single-target read that
-    picked slot zero would be the multi-target list read as a single target \u2014
-    wrong in the direction that looks right \u2014 so it gets None and the caller
-    falls back to whatever it did before.
+    ``StackItem.target_permanent_id`` is None or a list of slots, and nothing
+    else gets in (``game_types.check_target_ids``). One slot is one address.
+    Several is not, and a single-target read that picked slot zero would be
+    the multi-target list read as a single target -- wrong in the direction
+    that looks right -- so it gets None; the fused two-target sentences that
+    mean slot zero ask ``first_target_id``.
     """
-    assert _int_single_chosen_id(7) == 7
     assert _int_single_chosen_id([7]) == 7
-    assert _int_single_chosen_id((7,)) == 7
     assert _int_single_chosen_id([7, 9]) is None
     assert _int_single_chosen_id([]) is None
     assert _int_single_chosen_id(None) is None
     assert _int_single_chosen_id([None]) is None
-    # ``True`` is an ``int`` and is not a permanent id.
-    assert _int_single_chosen_id(True) is None
+    assert first_target_id([7, 9]) == 7 and first_target_id([None, 9]) is None
+    assert target_ids(None) == [] and target_ids([7, None]) == [7, None]
+    # A bare id is the other arity, and the reader refuses it rather than
+    # guessing -- so does a tuple, and ``True`` (an ``int`` that is no id).
+    for wrong in (7, (7,), [True], ["7"]):
+        with pytest.raises(TypeError):
+            target_ids(wrong)
+    # The writer is the one place the other arity is spelled into this one.
+    assert as_target_ids(7) == [7] and as_target_ids((7, None)) == [7, None]
+    assert as_target_ids(None) is None
 
 
 @pytest.mark.cr("115.1", "400.7")

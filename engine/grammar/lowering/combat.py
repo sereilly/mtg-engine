@@ -34,7 +34,8 @@ from ._frozen_seats import _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER
 #: stack item (``blocked_permanent_ids``), so an effect may say "that creature"
 #: about the other half of the blocking pair and mean it. The block-pair
 #: destroy events (`_BLOCK_PAIR_EVENTS`, lowering/_events.py) are a different
-#: binding — those push the paired creature as the item's *target* — which is
+#: binding — those name the paired creature as the object the item is *about*
+#: (``about_permanent_id``), which the effect is handed as its target — which is
 #: why this is its own set rather than a reuse of that one.
 _BLOCKED_SUBJECT_EVENTS = frozenset({"creature_blocks"})
 

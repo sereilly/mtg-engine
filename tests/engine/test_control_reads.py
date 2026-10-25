@@ -310,10 +310,12 @@ POSITIONAL_BASELINE: dict[str, int] = {
     # Glory's block in the chooser read its attackers by slot, and went when
     # the chooser started asking `Game.obeying_block_declaration` instead.
     "engine/ai_declarations.py": 9,
-    # Both moved from `_common.py` with the functions holding them when that
-    # module was split at the 2,000-line cap: `pick_target_permanent` (the
-    # acknowledged slot read above) and `resolve_own_combatant`.
-    "engine/handlers/_targets.py": 2,
+    # Moved from `_common.py` with the function holding it when that module
+    # was split at the 2,000-line cap: `pick_target_permanent` (the
+    # acknowledged slot read above). 2 -> 1 at round kg: `resolve_own_combatant`
+    # reads the object the trigger is about by id alone
+    # (`StackItem.about_permanent_id`).
+    "engine/handlers/_targets.py": 1,
     # `engine/handlers/board_misc.py` (now `colors.py`) left this table in the round after
     # Seventh Edition. Its two reads were one handler, `mark_text_modified`,
     # taking a text change's target by battlefield slot and falling back to

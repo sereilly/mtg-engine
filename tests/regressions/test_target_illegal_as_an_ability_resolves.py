@@ -282,7 +282,7 @@ def _drake_enters(catalog_by_name, *names_for_seat_1):
     drake = _put(game, 0, catalog_by_name["Gilded Drake"])
     assert game.stack, "the entry trigger is a stack object (CR 603.3)"
     item = game.stack[-1]
-    assert item.target_permanent_id == theirs[0].permanent_id, item
+    assert item.target_permanent_id == [theirs[0].permanent_id], item
     assert item.targets_chosen
     return game, drake, theirs
 
@@ -363,7 +363,7 @@ def test_blazing_effigys_dies_trigger_is_held_to_the_target_a_player_chose(catal
     that slid into its slot."""
     game, item, bears, giant = _effigy_dies(catalog_by_name, interactive={0})
     assert game.confirm_trigger_target(0, permanent_id=giant.permanent_id)
-    assert item.targets_chosen and item.target_permanent_id == giant.permanent_id
+    assert item.targets_chosen and item.target_permanent_id == [giant.permanent_id]
 
     _leave(game, giant)
     resolve_stack(game)
@@ -408,7 +408,7 @@ def test_a_target_a_fire_site_stamped_is_not_asked_the_rule(catalog_by_name):
     game._enqueue_triggered_ability(
         controller_index=0, source_permanent=effigy, instruction=trigger.instruction,
         effect_kind=trigger.effect_kind, ability_text=trigger.source_line,
-        target_player_index=1, target_permanent_id=bears.permanent_id,
+        target_player_index=1, target_permanent_id=[bears.permanent_id],
     )
     (item,) = game.stack
     assert not item.targets_chosen and not item.activated
@@ -445,7 +445,7 @@ def test_a_pick_made_at_the_upkeep_prompt_is_a_chosen_target(catalog_by_name):
         trigger_targets={djinn.permanent_id: bears.permanent_id},
     )
     (item,) = [obj for obj in game.stack if obj.card.name == "Erhnam Djinn"]
-    assert item.target_permanent_id == bears.permanent_id
+    assert item.target_permanent_id == [bears.permanent_id]
     assert item.targets_chosen, "a pick its own list accepted is a chosen target"
 
     _leave(game, bears)

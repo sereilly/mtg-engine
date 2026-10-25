@@ -375,9 +375,9 @@ def test_603_2d_a_seat_that_can_be_asked_is_asked_for_the_additional_instance():
 @pytest.mark.cr("603.2d")
 def test_603_2d_what_the_event_bound_is_bound_for_every_instance():
     """The other half, so the first is not "an additional instance forgets
-    its target": a target the **fire site** stamped is what the event was
-    about, and the event is the same however many times the ability triggers.
-    Only a cast's announcement is dropped."""
+    its target": the object the **fire site** recorded is what the event was
+    about (``StackItem.about_permanent_id``), and the event is the same however
+    many times the ability triggers. Only a cast's announcement is dropped."""
     game, p1, p2 = _duel()
     doubler = Permanent(card=_invented("Beast Chorus", "Enchantment", _DOUBLER_TEXT))
     triggerer = _beast("First Beast")
@@ -390,10 +390,10 @@ def test_603_2d_what_the_event_bound_is_bound_for_every_instance():
         controller_index=0, source_permanent=triggerer,
         instruction=OracleInstruction("gain_life", "", {"amount": 1}),
         effect_kind="triggered_life",
-        target_player_index=1, target_permanent_id=bears.permanent_id,
+        about_permanent_id=bears.permanent_id,
     )
 
-    assert [item.target_permanent_id for item in game.stack] == [
+    assert [item.about_permanent_id for item in game.stack] == [
         bears.permanent_id, bears.permanent_id,
     ]
 
@@ -997,21 +997,18 @@ def test_113_3c_a_ban_on_spells_and_activated_abilities_spares_a_trigger():
 
 
 @_w4g3_pytest.mark.cr("603.3d", "115.4")
-def test_603_3d_a_seat_the_fire_site_bound_stays_the_fire_site_s():
+def test_603_3d_any_target_is_chosen_where_the_fire_site_named_a_seat():
     """"When a spell or ability an opponent controls causes you to discard this
     card, it deals 4 damage to **any target**." (Guerrilla Tactics.)
 
-    The boundary of this round, written down rather than assumed. The discard
-    seam stamps the causing seat onto the trigger, so the ability arrives on the
-    stack with ``target_player_index`` already set - and the announcement steps
-    aside, exactly as it does for an object the fire site bound.
-
-    That is CR 601.2c's choice made by the engine rather than by the player, and
-    it is a *pre-existing* approximation this round leaves where it found it:
-    announcing here would move the damage off the discarder and onto
-    ``_default_opposing_seat``, which is a live behaviour change nothing in this
-    round pays for. A fire site that names a seat for a phrase that says
-    "any target" is its own question.
+    The discard seam names the causing seat for the trigger ("that player",
+    Psychic Purge), and it used to name it here too: the ability arrived on the
+    stack with ``target_player_index`` set, the announcement stepped aside as
+    for a choice already made, and the card always shot the discarder. A
+    boundary an earlier round wrote down and left; round kg answered it with
+    the rule every combat fire site now follows (``trigger_utils.
+    bound_event_seat``): a line that prints its own target chooses it
+    (CR 603.3d). Its controller is asked, and the causer is one answer.
     """
     game = _w4g3_table(3, interactive=True)
     tactics = _w4g3_card("ALL", "Guerrilla Tactics")
@@ -1023,8 +1020,9 @@ def test_603_3d_a_seat_the_fire_site_bound_stays_the_fire_site_s():
     finally:
         game.resolving_seats.pop()
 
-    assert game.pending_choices == [], "the fire site made the choice"
-    (item,) = game.stack
-    assert item.target_player_index == 2
+    (choice,) = game.pending_choices
+    assert (choice.kind, choice.player_index) == ("trigger_target", 0)
+    assert 2 in {entry.get("seat") for entry in choice.data["targets"] if entry.get("kind") == "player"}
+    assert game.confirm_trigger_target(0, seat=2)
     game.resolve_stack(pause_for_choices=True)
     assert [player.life for player in game.players] == [20, 20, 16], game.log

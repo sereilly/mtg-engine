@@ -363,7 +363,7 @@ def test_w1g3_laccolith_grunt_left_to_itself_still_shoots_its_blocker(set_pool):
     _w1g3_to_blocks(game, [0])
     assert game.declare_blockers(1, {0: 0})[0]
 
-    assert game.stack[-1].target_permanent_id == blocker.permanent_id
+    assert game.stack[-1].target_permanent_id == [blocker.permanent_id]
 
 
 # --- W1G5: library, hand and graveyard ---

@@ -121,9 +121,10 @@ def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: 
         # to its owner's hand at end of combat." (Wall of Tears.) CR 603.7c's
         # object once more, and the fourth place a creating ability can have
         # put it: a block announcement records the pair under
-        # ``blocked_permanent_ids`` and makes the stack item's target the
-        # ability's *own* creature, so ``binds_target`` beside this would bind
-        # the blocker — the card bouncing itself.
+        # ``blocked_permanent_ids`` and names the ability's *own* creature as
+        # the object it is about (handed to the effect as its target), so
+        # ``binds_target`` beside this would bind the blocker — the card
+        # bouncing itself.
         #
         # ``block_pair_permanents`` is the one reader of that difference, the
         # same one every immediate block-pair effect goes through. Exactly one,

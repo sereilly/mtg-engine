@@ -20,6 +20,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..exiled_records import record_exiled_card
+from ..game_types import first_target_id
 from ..linked_exile import link_exiled_card
 from ..models import Permanent
 from ..oracle_types import (EXILED_BY_SEAT, EXILED_THIS_WAY,
@@ -501,9 +502,7 @@ def exile_target_permanent(game: Game, instruction: OracleInstruction, context: 
     # beside it, and Topple ("…with the greatest power among creatures on the
     # battlefield") exiled whichever creature had just overtaken its target. A
     # seat-only announcement (no id) keeps the scan.
-    recorded = context.target_permanent_id
-    if isinstance(recorded, list):
-        recorded = recorded[0] if recorded else None
+    recorded = first_target_id(context.target_permanent_id)
     if isinstance(recorded, int):
         named = game.permanent_by_id(recorded)
         perm = named if named is not None and _answers(named) else None

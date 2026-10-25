@@ -76,6 +76,68 @@ def iter_triggered_abilities(
                     break
 
 
+def bound_event_object(instruction, permanent) -> int | None:
+    """The id a fire site records as the permanent its trigger is **about**
+    (``StackItem.about_permanent_id``), or None. *permanent* is the event's
+    object, or its id where the fire site holds only that (an event payload).
+
+    The object the event named — the attacker itself, the creature on the
+    other side of a block, the permanent a damage event damaged — is what a
+    trigger's effect acts on when the printed line names **no target of its
+    own**: "that creature becomes green" (Aisling Leprechaun), "destroy that
+    Wall" (Battering Ram), "remove this creature from combat" (Mijae Djinn).
+    CR 603.3d then has nothing to choose, and the context builder hands the
+    effect this object instead (``_ability_execution_context``).
+
+    A line that says "target" (CR 115.1d) chooses one as the ability is put on
+    the stack, and the event's object is no answer to that choice: "you may tap
+    target creature" (Seasoned Marshal), "…to target creature" (the
+    Laccoliths), "target opponent gains control of it" (Goblin Cadets),
+    "…deals 1 damage to any target" (Close Quarters). So none is recorded, and
+    the sentence's "it" is its source. ``announces_a_target`` is the
+    lowering's own record of the word, the one the trigger picker asks.
+
+    One rule for every fire site, because each of them used to decide it on
+    its own — or not at all: the becomes-blocked site asked, the attack and
+    block sites left it to the picker (which asked only when the object was
+    the source itself), and a board-wide block or a damage event never asked.
+    """
+    if permanent is None:
+        return None
+    from .targeting import announces_a_target
+
+    if announces_a_target(instruction):
+        return None
+    permanent_id = (
+        permanent if isinstance(permanent, int)
+        else getattr(permanent, "permanent_id", None)
+    )
+    if isinstance(permanent_id, bool) or not isinstance(permanent_id, int):
+        return None
+    return permanent_id
+
+
+def bound_event_seat(instruction, seat) -> int | None:
+    """:func:`bound_event_object`'s rule for a fire site that hands over the
+    **seat** its event was about in ``target_player_index`` — "that player
+    loses 5 life" (Psychic Purge) is the player who caused the discard — or
+    None where the line prints a target of its own and CR 603.3d chooses it.
+
+    The seat channel still holds either a choice or such a seat, and this
+    keeps the two from meeting on one ability: an event's seat in that field
+    is what ``_trigger_target_candidates`` reads as a choice already made, so
+    Guerrilla Tactics ("…it deals 4 damage to **any target**") shot the causer
+    with nothing chosen. A field of its own for "the player this trigger is
+    about", beside ``StackItem.about_permanent_id``, is the rest of that
+    separation.
+    """
+    if seat is None:
+        return None
+    from .targeting import announces_a_target
+
+    return None if announces_a_target(instruction) else seat
+
+
 _UNSET = object()
 
 

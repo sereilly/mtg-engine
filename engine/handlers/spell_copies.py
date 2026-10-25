@@ -19,7 +19,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..color_changes import forget_spell_color_change, recolor_spell
-from ..game_types import StackItem
+from ..game_types import StackItem, as_target_ids, single_chosen_id
 from ._targets import triggering_spell
 from .registry import effect_handler
 
@@ -106,7 +106,9 @@ def _copy_of_spell(copied: StackItem, controller_index: int) -> StackItem:
         caster_index=controller_index,
         target_player_index=copied.target_player_index,
         target_permanent_index=copied.target_permanent_index,
-        target_permanent_id=copied.target_permanent_id,
+        # Its own list: a slot CR 608.2b blanks on one is not blanked on the
+        # other.
+        target_permanent_id=as_target_ids(copied.target_permanent_id),
         target_graveyard_card=copied.target_graveyard_card,
         x_value=copied.x_value,
         # The copy has the original's choices, so this is one assignment
@@ -184,10 +186,7 @@ def copy_top_stack_spell(game: Game, instruction: OracleInstruction, context: Or
     # spell's controller (below) — so a creature named on the other
     # battlefield has no slot there, and read by the slot alone the new target
     # was "not named".
-    named_id = (
-        context.target_permanent_id
-        if isinstance(context.target_permanent_id, int) else None
-    )
+    named_id = single_chosen_id(context.target_permanent_id)
     named_on_the_cast = (
         named_id is not None or context.target_permanent_index is not None
     )
@@ -206,12 +205,12 @@ def copy_top_stack_spell(game: Game, instruction: OracleInstruction, context: Or
         if named is not None:
             copy.target_player_index = game.controller_index_of(named)
             copy.target_permanent_index = game.battlefield_index_of(named)
-            copy.target_permanent_id = named.permanent_id
+            copy.target_permanent_id = [named.permanent_id]
         elif named_id is not None:
             # The permanent named on the cast has left: the copy's new target
             # is gone with it, and CR 608.2b removes the copy as it resolves.
             copy.target_permanent_index = None
-            copy.target_permanent_id = named_id
+            copy.target_permanent_id = [named_id]
         else:
             # A caller that announced a slot and stamped no id: the slot is
             # all there is, on the seat the resolution was given.
@@ -329,7 +328,7 @@ def copy_this_spell(game: Game, instruction: OracleInstruction, context: OracleE
             original.target_permanent_index if original is not None
             else context.target_permanent_index
         ),
-        target_permanent_id=(
+        target_permanent_id=as_target_ids(
             original.target_permanent_id if original is not None
             else context.target_permanent_id
         ),
@@ -408,7 +407,7 @@ def copy_spell_for_each_other_target(game: Game, instruction: OracleInstruction,
             copy = _copy_of_spell(copied, seat)
             copy.target_player_index = game.controller_index_of(perm)
             copy.target_permanent_index = game.battlefield_index_of(perm)
-            copy.target_permanent_id = perm.permanent_id
+            copy.target_permanent_id = [perm.permanent_id]
             label = perm.card.name
         else:
             continue

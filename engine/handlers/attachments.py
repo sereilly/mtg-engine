@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..equipment import attach_equipment, attachment_refusal
+from ..game_types import first_target_id
 from ..oracle_types import OracleInstruction
 from .registry import effect_handler
 
@@ -76,9 +77,7 @@ def attach_source_to_target(
             and attachment_refusal(game, equipment, candidate) is None
         )
 
-    target_id = context.target_permanent_id
-    if isinstance(target_id, list):
-        target_id = target_id[0] if target_id else None
+    target_id = first_target_id(context.target_permanent_id)
     target_index = context.target_permanent_index
     if isinstance(target_index, list):
         target_index = target_index[0] if target_index else None
@@ -169,9 +168,7 @@ def _attach_chosen_to_chosen(
     from ..aura_attachment import attach_aura, aura_attach_refusal, detach_aura
 
     card_name = getattr(context.card, "name", "")
-    target_id = context.target_permanent_id
-    if isinstance(target_id, list):
-        target_id = target_id[0] if target_id else None
+    target_id = first_target_id(context.target_permanent_id)
     aura = game.permanent_by_id(target_id) if isinstance(target_id, int) else None
     if aura is None or not game.is_on_battlefield(aura):
         game.log.append(f"{card_name}: its target is no longer on the battlefield")

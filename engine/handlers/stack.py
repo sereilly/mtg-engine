@@ -25,7 +25,7 @@ from ..counter_conditions import (cant_be_countered,
 from ..exiled_records import (EXILE_RECORD_KEY, EXILED_SPELL_CONTROLLER_KEY,
                               StackAnnouncement, is_live, record_exiled_card,
                               record_in_context)
-from ..game_types import StackItem
+from ..game_types import StackItem, as_target_ids, target_ids
 from ..faces import is_face, spell_named, whole_card
 from ..flashback import leaves_stack_to_exile
 from ..mana_payment import mana_cost_label, total_pips
@@ -58,7 +58,7 @@ def _stack_announcement(item: StackItem) -> StackAnnouncement:
         caster_index=item.caster_index,
         target_player_index=item.target_player_index,
         target_permanent_index=item.target_permanent_index,
-        target_permanent_id=item.target_permanent_id,
+        target_permanent_id=as_target_ids(item.target_permanent_id),
         target_graveyard_card=item.target_graveyard_card,
         x_value=item.x_value,
         chosen_mode_index=item.chosen_mode_index,
@@ -233,7 +233,7 @@ def put_exiled_card_onto_stack_as_copy(game: Game, instruction: OracleInstructio
         owner_index=record.owner_index,
         target_player_index=announcement.target_player_index,
         target_permanent_index=announcement.target_permanent_index,
-        target_permanent_id=announcement.target_permanent_id,
+        target_permanent_id=as_target_ids(announcement.target_permanent_id),
         target_graveyard_card=announcement.target_graveyard_card,
         x_value=announcement.x_value,
         # A **copy** of the original spell (CR 707.2): its choices, and not a
@@ -471,9 +471,7 @@ def _spell_targets_matching(
         # here they made a Man-o'-War "a spell that targets a creature", which
         # Confound, Intervene, Mistfolk and Diplomatic Escort then countered.
         return False
-    recorded = getattr(item, "target_permanent_id", None)
-    ids = recorded if isinstance(recorded, list) else [recorded]
-    for permanent_id in ids:
+    for permanent_id in target_ids(item.target_permanent_id):
         found = game.permanent_by_id(permanent_id)
         if found is None:
             continue

@@ -290,8 +290,8 @@ def _lower_destroy(
     # nearest antecedent noun phrase, and a damage event has exactly two objects
     # -- the trigger's own condition named the damager, so the word names the one
     # that took it. Which is the same object "that <noun>" names under this
-    # event, and it rides the same instruction and the same
-    # ``target_permanent_id`` the fire site stamps.
+    # event, and it rides the same instruction and the same object the fire
+    # site names (``StackItem.about_permanent_id``).
     #
     # A branch of its own rather than a second word on the "that" guard below,
     # because that guard opens onto four readings this word does not have: the

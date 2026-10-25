@@ -47,6 +47,7 @@ import dataclasses
 import random
 from typing import TYPE_CHECKING
 
+from ..game_types import first_target_id
 from ..oracle_types import CHOSEN_TARGET_PERMANENTS
 from ._amounts import count_from_payload
 from ._filters import permanent_matches_filter
@@ -71,9 +72,7 @@ def _relative_object(game, payload: dict, context):
     """
     if payload.get("relative_to") != "target":
         return None
-    target_id = context.target_permanent_id
-    if isinstance(target_id, list):
-        target_id = target_id[0] if target_id else None
+    target_id = first_target_id(context.target_permanent_id)
     if not isinstance(target_id, int):
         return None
     return game.permanent_by_id(target_id)

@@ -203,7 +203,7 @@ def test_a_target_id_supplies_the_seat_it_is_on():
     item = game.stack[-1] if game.stack else None
     if item is not None:
         assert item.target_player_index == 1
-        assert item.target_permanent_id == theirs.permanent_id
+        assert item.target_permanent_id == [theirs.permanent_id]
     else:
         assert theirs.power_bonus == 3
 

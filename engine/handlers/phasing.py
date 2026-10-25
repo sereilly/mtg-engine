@@ -100,7 +100,7 @@ def phase_out_target(game: Game, instruction: OracleInstruction, context: Oracle
     # zone change, and the subject key is the only thing that differs, which is
     # why it is a payload here rather than a second handler.
     #
-    # ``block_pair_permanents`` rather than the stack item's target, because the
+    # ``block_pair_permanents`` rather than the context's target, because the
     # two halves of the pair are frozen differently and reading the target on
     # the *blocks* half names the source itself.
     if instruction.payload.get("subject") == "block_pair":

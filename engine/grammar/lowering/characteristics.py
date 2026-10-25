@@ -288,9 +288,10 @@ def _lower_pump(
     # in hand and no way to say which "that creature" is, so the printed
     # narrowing is the whole difference. Read **before** the target-shaped
     # branch below, and that order is the card: on the *blocks* half of the
-    # event the stack item's target is the blocking creature itself (the fire
-    # site puts it there so a self-affecting trigger can find itself), so the
-    # fall-through would pump the Drake and leave the creature it blocked alone.
+    # event the object the trigger is about is the blocking creature itself
+    # (``StackItem.about_permanent_id``, handed to the effect as its target), so
+    # the fall-through would pump the Drake and leave the creature it blocked
+    # alone.
     #
     # "…**the other creature**" is the same referent under a different printed
     # word, exactly as ``lowering/keywords.py`` and ``lowering/destruction.py``

@@ -689,12 +689,11 @@ def _lone_permanent_target(game, item) -> int | None:
     original target is itself illegal by then", so a spell whose creature died
     is exactly the spell a retarget is for.
     """
+    from .game_types import single_chosen_id
+
     ids = getattr(item, "target_permanent_id", None)
     if ids is not None:
-        chosen = list(ids) if isinstance(ids, (list, tuple)) else [ids]
-        if len(chosen) != 1 or not isinstance(chosen[0], int):
-            return None
-        return int(chosen[0])
+        return single_chosen_id(ids)
     idxs = getattr(item, "target_permanent_index", None)
     if idxs is None:
         return None
@@ -765,8 +764,9 @@ def spell_targets(game, item) -> tuple[tuple[int, ...], tuple[int, ...]]:
                 permanents.append(found.permanent_id)
         return tuple(seats), tuple(permanents)
 
-    ids = getattr(item, "target_permanent_id", None)
-    for permanent_id in (ids if isinstance(ids, (list, tuple)) else [ids]):
+    from .game_types import target_ids
+
+    for permanent_id in target_ids(getattr(item, "target_permanent_id", None)):
         if isinstance(permanent_id, int) and permanent_id not in permanents:
             permanents.append(permanent_id)
     if permanents:

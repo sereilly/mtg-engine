@@ -389,7 +389,7 @@ def add_counter_to_target(game: Game, instruction: OracleInstruction, context: O
         # counter on **that creature**." (Quagmire Lamprey.) The other half of
         # the block the trigger froze — nothing was chosen (CR 601.2c announces
         # targets when the ability goes on the stack, and on the *blocks* half
-        # the stack item's target is the blocking creature itself), so the
+        # the object the trigger is about is the blocking creature itself), so the
         # object is read through the one function that knows how each of the two
         # fire sites binds it. The named-counter handler beside this one reads
         # the same key for the same printed pronoun.

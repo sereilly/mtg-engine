@@ -39,7 +39,8 @@ from ...mana_payment import (answer_color_choices, is_mana_ability,
                              mana_cost_from_symbols)
 from ...events import emit
 from ...game_types import (OracleExecutionContext, OracleStateMachine,
-                           SimulationResult, StackItem, chosen_damage_source)
+                           SimulationResult, StackItem, as_target_ids,
+                           chosen_damage_source)
 from ...handlers._chosen import CHOSEN_ABILITY
 from ...handlers._targets import attached_host
 from ...oracle import OracleInstruction
@@ -1083,7 +1084,7 @@ class AbilityActivationMixin:
                 caster_index=controller_index,
                 target_player_index=announced_target_idx,
                 target_permanent_index=target_permanent_index,
-                target_permanent_id=target_permanent_ids,
+                target_permanent_id=as_target_ids(target_permanent_ids),
                 target_graveyard_card=graveyard_stamps,
                 x_value=x_value,
                 ability_instruction=instruction,

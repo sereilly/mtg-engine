@@ -212,8 +212,118 @@ class GraveyardTarget:
     ordinal: int = 0
 
 
+# ---------------------------------------------------------------------------
+# The chosen-target id channel: one shape, one writer, one reader
+# ---------------------------------------------------------------------------
+#
+# ``target_permanent_id`` is carried by four holders under one name —
+# ``StackItem``, ``ChosenMode``, ``OracleExecutionContext`` and
+# ``exiled_records.StackAnnouncement`` — and copied from one into the next. It
+# had **two arities**: the cast and activation paths stamped the whole
+# ``target_permanent_ids`` list, while ``_stack_push`` stamped a bare id off a
+# slot, and a prompt's answer, a copy's new target and a changed target each
+# wrote a bare id. Every reader answered the question for itself, and 26 of
+# them disagreed: an ``isinstance(ids, int)`` reader dropped a list on the
+# floor (Turn to Slag announced by id destroyed none of its Equipment, Glyph of
+# Reincarnation found "the creature whose blocks it names is gone"), a "first
+# slot" reader and an "exactly one" reader gave two answers for one list, and
+# ``single_chosen_id`` was the twelfth local normalisation rather than the end
+# of them.
+#
+# Settled here, beside the field: the channel is **None or a list of slots**,
+# each slot an id (``int``, negative once CR 608.2b has blanked it —
+# ``stack_targets.illegal_target_id``) or ``None`` (a slot no permanent
+# answered as it was stamped). Every holder refuses any other value as it is
+# written (``check_target_ids``), so a bare id cannot get in; a writer holding
+# one slot spells it ``[permanent_id]``, and one holding a value of either
+# arity hands it through :func:`as_target_ids`. Readers ask
+# :func:`target_ids` (every slot), :func:`single_chosen_id` (the one slot an
+# announcement of one named) or :func:`first_target_id` (slot zero, for the
+# single-target handlers a fused two-target sentence lowers to).
+
+
+def check_target_ids(value, holder: str = "target_permanent_id") -> None:
+    """Raise unless *value* is the channel's one shape: None, or a list whose
+    every entry is an id or None. ``holder`` names the field for the message."""
+    if value is None:
+        return
+    if type(value) is not list or any(
+        entry is not None and type(entry) is not int for entry in value
+    ):
+        raise TypeError(
+            f"{holder} is None or a list of permanent ids (one slot is "
+            f"[permanent_id]); got {value!r}"
+        )
+
+
+def as_target_ids(value) -> "list[int | None] | None":
+    """*value* in the channel's shape — the **writer** for a caller that holds
+    an announcement of either arity (``Game.permanent_ids_at`` answers a slot
+    with a bare id, and a list of slots with a list).
+
+    None stays None; one id becomes a one-slot list; a list or tuple of slots
+    is copied, so no two holders share one list a later rewrite would change
+    in both.
+    """
+    if value is None:
+        return None
+    if isinstance(value, (list, tuple)):
+        return list(value)
+    return [value]
+
+
+def target_ids(value) -> "list[int | None]":
+    """Every slot the channel *value* names, in order — empty for None.
+
+    A copy, so a reader that edits it changes nothing it was handed.
+    """
+    check_target_ids(value)
+    return [] if value is None else list(value)
+
+
+def single_chosen_id(value) -> "int | None":
+    """The one permanent id an announcement of **one** slot named, or None.
+
+    A longer list is several, and a single-target read has no business picking
+    from it: guessing slot zero is the multi-target list read as a single
+    target, wrong in the direction that looks right. Those get None, and so
+    does a slot that named nothing, and the caller does what it does with no
+    target at all.
+    """
+    slots = target_ids(value)
+    if len(slots) != 1:
+        return None
+    return slots[0] if type(slots[0]) is int else None
+
+
+def first_target_id(value) -> "int | None":
+    """The id in slot zero of the channel *value*, or None.
+
+    For the single-target handlers a sentence with two slots reaches by design
+    — a fused "tap target creature and untap target creature" lowers both
+    halves to handlers written for one target, each reading the first slot
+    (``grammar/lowering/fusions.py``). Every other single-target reader asks
+    :func:`single_chosen_id`.
+    """
+    slots = target_ids(value)
+    return slots[0] if slots and type(slots[0]) is int else None
+
+
+class _TargetIdsGuard:
+    """Mixed into every mutable holder of the channel: a write of any other
+    shape raises as it happens — on construction (a dataclass ``__init__``
+    assigns through ``__setattr__``) and on every later assignment alike."""
+
+    __slots__ = ()
+
+    def __setattr__(self, name, value):
+        if name == "target_permanent_id":
+            check_target_ids(value, f"{type(self).__name__}.target_permanent_id")
+        object.__setattr__(self, name, value)
+
+
 @dataclass
-class ChosenMode:
+class ChosenMode(_TargetIdsGuard):
     """One mode of a "Choose one or more —" spell, with the targets it chose.
 
     CR 601.2b picks the modes as the spell is cast and CR 601.2c picks each
@@ -232,7 +342,9 @@ class ChosenMode:
     # carries below: several chosen objects may sit on two battlefields, which
     # one seat index cannot say.
     target_permanent_index: int | list[int] | None = None
-    target_permanent_id: int | list[int | None] | None = None
+    # The mode's targets by identity: None or a list of slots, as on the item
+    # (``check_target_ids``).
+    target_permanent_id: list[int | None] | None = None
     # Resolved against the stack at cast time, exactly as the item's own
     # ``target_stack_item`` is: a stack index is a position in a list that
     # anything resolving in response renumbers.
@@ -240,7 +352,7 @@ class ChosenMode:
 
 
 @dataclass
-class StackItem:
+class StackItem(_TargetIdsGuard):
     card: CardDefinition
     caster_index: int
     target_player_index: int | None
@@ -252,9 +364,19 @@ class StackItem:
     # position in a battlefield list, and the whole point of the stack is that
     # time passes before this resolves: anything that leaves the battlefield in
     # between renumbers every later slot, so an index recorded at cast time can
-    # resolve to a *different* permanent at resolution time. Same shape as the
-    # index (an int, a list, or None) so the two stay readable side by side.
-    target_permanent_id: int | list[int | None] | None = None
+    # resolve to a *different* permanent at resolution time.
+    #
+    # **One shape: None, or a list of slots** — one id per slot, in the order
+    # the targets were announced, ``[permanent_id]`` for one target. Not the
+    # index's scalar-or-list: that was this field's shape too, and a reader
+    # written for one arity silently missed the other (see
+    # ``check_target_ids``, which every write passes through). Read it through
+    # ``target_ids`` / ``single_chosen_id`` / ``first_target_id``.
+    #
+    # **And one relation: what a player chose** (CR 601.2c, 602.2b, 603.3d,
+    # 115.7). The object a triggered ability is about is not a target and is
+    # never here — ``about_permanent_id`` below.
+    target_permanent_id: list[int | None] | None = None
     # The same target when the chosen index is a slot in a *graveyard* rather
     # than on a battlefield (CR 601.2c). A card there has no ``permanent_id`` to
     # stamp, so the identity is a :class:`GraveyardTarget`. Same shape as the
@@ -414,6 +536,32 @@ class StackItem:
     # creature had no place in layer 6, and survived a loss of all abilities
     # that was newer than the spell.
     timestamp: int | None = None
+    # **The permanent this triggered ability is about**, by id (CR 400.7):
+    # the object its firing event named for its effect to act on — the
+    # attacker or blocker itself (Mijae Djinn, Ydwen Efreet), the creature on
+    # the other side of a block ("destroy that Wall", Battering Ram; "that
+    # creature becomes green", Aisling Leprechaun), the permanent a damage
+    # event damaged ("destroy that planeswalker", Hooded Blightfang), the
+    # object a delayed ability refers to (CR 603.7c, Barreling Attack's "it").
+    # Frozen by the fire site as the ability triggers (CR 603.10).
+    #
+    # **Never a target.** Nobody chose it, so CR 603.3d has nothing left to
+    # choose, CR 608.2b does not ask about it, and nothing "becomes the
+    # target" of it (CR 115.10). The target fields above are the choice and
+    # only the choice: until this field existed the fire sites threaded the
+    # object through them, and every reader of a *target* read it as one —
+    # Skulking Ghost blocking an Aisling Leprechaun was sacrificed to an
+    # ability that targets nothing, and Goblin Cadets' "target opponent"
+    # was never chosen.
+    #
+    # Written only where the printed line **names no target of its own**
+    # (``trigger_utils.bound_event_object``): a line that says "target" chooses
+    # one (Seasoned Marshal, the Laccoliths), and its "it" is its source. Read
+    # by the context builder (``_ability_execution_context``), which hands it
+    # to the effect as the object the sentence acts on, and by
+    # ``handlers/_targets.resolve_own_combatant``. None for a spell, an
+    # activated ability and every trigger whose event named no such object.
+    about_permanent_id: int | None = None
 
     def __post_init__(self) -> None:
         if self.owner_index is None:
@@ -457,17 +605,20 @@ class StackItem:
 
 
 @dataclass
-class OracleExecutionContext:
+class OracleExecutionContext(_TargetIdsGuard):
     caster: PlayerState
     target: PlayerState
     card: CardDefinition
     # target_permanent_index may be a single int or a list of ints for multi-target spells
     target_permanent_index: int | list[int] | None = None
     # The target(s) by stable identity, carried over from the stack item (see
-    # StackItem.target_permanent_id). ``engine/handlers/_targets.py`` prefers it
-    # over the index, which is why a handler needs no new code to stop being
-    # positional — it already asks ``resolve_target_permanent``.
-    target_permanent_id: int | list[int | None] | None = None
+    # StackItem.target_permanent_id) — None or a list of slots, as there.
+    # ``engine/handlers/_targets.py`` prefers it over the index, which is why a
+    # handler needs no new code to stop being positional — it already asks
+    # ``resolve_target_permanent``. Where the ability chose nothing and its
+    # event named the object the sentence acts on, the context builder puts
+    # that object here (``[about_permanent_id]``).
+    target_permanent_id: list[int | None] | None = None
     # The same, for a target that is a **card in a graveyard** — carried over
     # from ``StackItem.target_graveyard_card`` unchanged (see there for why a
     # graveyard needs its own identity at all).
@@ -558,6 +709,13 @@ class OracleExecutionContext:
     # the rebind records it here. None everywhere nothing has moved
     # ``caster``; read it as ``ability_controller or caster``.
     ability_controller: PlayerState | None = None
+    # The permanent the resolving triggered ability is **about**, carried over
+    # from ``StackItem.about_permanent_id`` unchanged (see there). The target
+    # channels above already name it where the ability chose nothing — the
+    # context builder puts it there, because "that creature" is what the
+    # sentence acts on — so this is for the reader that wants the object the
+    # event named even beside a chosen target: ``resolve_own_combatant``.
+    about_permanent_id: int | None = None
 
 
 def chosen_damage_source(

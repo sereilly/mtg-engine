@@ -378,9 +378,10 @@ def _lower_create_delayed_trigger(
         # place a creating *trigger* can have put the object, and the one the
         # two readings above cannot reach: a block announcement records the
         # pair under ``blocked_permanent_ids`` and stamps no
-        # ``event_subject_permanent_id``, while its stack item's target is the
-        # ability's **own** creature — the blocker, so that a self-affecting
-        # trigger can find itself.
+        # ``event_subject_permanent_id``, while the object its stack item is
+        # about (``about_permanent_id``, handed to the effect as its target) is
+        # the ability's **own** creature — the blocker, so that a
+        # self-affecting trigger can find itself.
         #
         # So ``binds_target`` here does not merely find nothing, it finds the
         # *wrong* permanent: Wall of Tears would bounce itself. Asked last and
@@ -657,10 +658,11 @@ def _lower_delayed_destroy_of_damaged(
 
     The immediate spelling of the same sentence is already read one screen up
     (``_EVENT_STAMPED_TARGET_OBJECTS``): "that creature" under a damage trigger
-    is the *damaged* permanent, whose id ``damage_events._announce`` stamps onto
-    the stack item. The delay is CR 603.7 wrapped around that same object, so
-    ``binds_target`` — the stack item's target, which is that id — binds exactly
-    what the immediate destroy would have hit.
+    is the *damaged* permanent, whose id ``damage_events._announce`` names as
+    the object the stack item is about. The delay is CR 603.7 wrapped around
+    that same object, so ``binds_target`` — the target the context builder
+    hands the effect, which is that id — binds exactly what the immediate
+    destroy would have hit.
 
     Gated on :func:`damage_trigger_names_damaged_end` rather than on the kind,
     and that is the whole of its correctness: a ``damage_dealt`` event has two

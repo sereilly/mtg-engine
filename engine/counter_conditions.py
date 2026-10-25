@@ -99,8 +99,9 @@ def _targeted_permanent(game: "Game", spell: "StackItem"):
     permanent slid into the slot (CR 400.7), which on this question would let a
     counter fire for a land the spell was never aimed at.
     """
-    ids = getattr(spell, "target_permanent_id", None)
-    for permanent_id in (ids if isinstance(ids, (list, tuple)) else [ids]):
+    from .game_types import target_ids
+
+    for permanent_id in target_ids(getattr(spell, "target_permanent_id", None)):
         if permanent_id is None:
             continue
         found = game.permanent_by_id(permanent_id)

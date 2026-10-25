@@ -16,7 +16,7 @@ Split out of ``resolution.py`` at the 2,000-line cap, and composed onto
 
 from __future__ import annotations
 
-from ...game_types import StackItem
+from ...game_types import StackItem, target_ids
 from ...oracle import OracleInstruction
 from ...modal_triggers import modal_trigger_modes
 # Both owned by ``engine/targeting.py``: two callers ask whether a compiled
@@ -305,9 +305,10 @@ class TriggerTargetsMixin:
         Three ways out, all of them the safe direction:
 
         * the ability names no target — nothing to choose;
-        * the fire site already bound one (``target_permanent_id`` for an
-          object, ``target_player_index`` for a seat) — the event made
-          the choice and CR 603.3d has none left to make;
+        * a choice is already recorded (``target_permanent_id``), the event
+          named the object the effect acts on (``about_permanent_id``), or a
+          fire site bound the seat (``target_player_index``) — CR 603.3d has
+          none left to make;
         * no legal target exists — CR 603.3d removes the ability from the
           stack rather than resolving it into a no-op, which is the same rule
           :meth:`_choose_trigger_mode` applies to a mode that cannot be chosen.
@@ -429,10 +430,9 @@ class TriggerTargetsMixin:
             ):
                 return None
             return "illegal"
-        ids = item.target_permanent_id
         named = [
             permanent_id
-            for permanent_id in (ids if isinstance(ids, (list, tuple)) else [ids])
+            for permanent_id in target_ids(item.target_permanent_id)
             if isinstance(permanent_id, int)
         ]
         # "…exile **two** target lands" (Petradon) named with one land: a
@@ -500,32 +500,26 @@ class TriggerTargetsMixin:
             return
         if not announced and item.target_stack_item is not None:
             return
-        # A stamped target means the event made the choice — **unless what the
-        # fire site stamped is the ability's own source**. The two combat fire
-        # sites that announce a permanent's trigger about itself thread the
-        # permanent's own controller and slot through ``target_player_index`` /
-        # ``target_permanent_index`` so that ``resolve_own_combatant`` can find
-        # it again (Mijae Djinn removes *itself* from combat, Ydwen Efreet
-        # *itself* from the block). That is a reference, not a choice, and this
-        # method could not tell the two apart: three shipped cards printing
-        # "target" had CR 603.3d's choice skipped and resolved against the
-        # attacker or blocker instead. Sidar Jabari found nothing to tap
-        # (its "defending player controls" narrowing correctly refused itself),
-        # Seasoned Marshal tapped **itself**, and Elite Javelineer dealt its 1
-        # damage to **itself**.
+        # A recorded target is a choice already made — the upkeep step's pick,
+        # a copy's inherited target — and an object the event named for the
+        # effect to act on (``StackItem.about_permanent_id``: "destroy that
+        # Wall", "that creature becomes green", Mijae Djinn's "remove this
+        # creature from combat") leaves CR 603.3d nothing to choose. Neither
+        # is asked again.
         #
-        # ``announces_a_target`` is the second half and the safe direction: it
-        # is the lowering's own record that the printed line said the word, so
-        # a trigger the same fire site announces about an object the *event*
-        # named — Mindbender Spores' "put four fungus counters on **that
-        # creature**" — keeps the reference it has always had. Asked only in
-        # this branch, never as a general gate: for an unstamped trigger the
-        # record is evidence rather than proof, and a False there would take a
-        # real target away (Man-o'-War's bounce answers False today).
-        if not announced and item.target_permanent_id is not None and not (
-            item.source_permanent is not None
-            and item.target_permanent_id == item.source_permanent.permanent_id
-            and announces_a_target(instruction)
+        # The two used to be one field, and this gate could not tell them
+        # apart: the combat fire sites threaded the attacker or blocker itself
+        # through the target fields for ``resolve_own_combatant``, so three
+        # shipped cards printing "target" had the choice skipped and resolved
+        # against themselves (Seasoned Marshal tapped itself, Elite Javelineer
+        # damaged itself, Sidar Jabari found nothing to tap) until a
+        # source-equality exception here — which missed every stamp that was
+        # *not* the source: Close Quarters shot the blocker its board-wide
+        # event named. A fire site now records the object only for a line that
+        # names no target of its own (``trigger_utils.bound_event_object``).
+        if not announced and (
+            item.target_permanent_id is not None
+            or item.about_permanent_id is not None
         ):
             return
         spec = derive_instruction_spec([instruction])

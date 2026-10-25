@@ -272,8 +272,8 @@ CAST_SPELL_EVENTS: frozenset[str] = frozenset({
 })
 
 
-#: Trigger events whose fire site stamps the object the event was about onto the
-#: **stack item** (``target_permanent_id``), so an effect may say "that <noun>"
+#: Trigger events whose fire site names the object the event was about on the
+#: **stack item** (``about_permanent_id``), so an effect may say "that <noun>"
 #: or "the other <noun>" and mean it — and the ordinary targeted handler
 #: resolves it with no picker, because the choice was never offered
 #: (CR 603.3d).

@@ -197,9 +197,9 @@ def test_a_bare_activation_is_judged_by_the_target_it_was_given():
     ox = _w2g3_put(game, 0, _W2G3_OX)
 
     assert game.queue_permanent_ability(0, _W2G3_TOTEM.name).supported
-    assert game.stack[-1].target_permanent_id == [bear.permanent_id] or (
-        game.stack[-1].target_permanent_id == bear.permanent_id
-    ), game.stack[-1].target_permanent_id
+    assert game.stack[-1].target_permanent_id == [bear.permanent_id], (
+        game.stack[-1].target_permanent_id
+    )
     _w2g3_leave(game, bear)
     resolve_stack(game)
 
@@ -270,7 +270,7 @@ def test_a_trigger_whose_chosen_target_became_illegal_does_not_resolve():
     bear = _w2g3_put(game, 1, _W2G3_BEAR)
     _w2g3_put(game, 0, reaper)
     (item,) = game.stack
-    assert item.targets_chosen and item.target_permanent_id == bear.permanent_id
+    assert item.targets_chosen and item.target_permanent_id == [bear.permanent_id]
 
     grant_keyword(bear, "shroud")
     resolve_stack(game)

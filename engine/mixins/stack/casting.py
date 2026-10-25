@@ -49,7 +49,8 @@ from ...cost_modifiers import (CostReduction, buyback_cost_reduction,
                                spell_life_tax, spell_symbol_tax)
 from ...self_cost_modifiers import self_per_target_tax
 from ...flashback import is_flashback
-from ...game_types import SimulationResult, StackItem, chosen_damage_source
+from ...game_types import (SimulationResult, StackItem, as_target_ids,
+                           chosen_damage_source)
 from ...models import CardDefinition
 from ...oracle import compile_card_oracle
 from ...oracle_types import _COLOR_WORD_TO_SYMBOL
@@ -1243,7 +1244,7 @@ class SpellCastingMixin:
                     owner_index=source_seat,
                     target_player_index=target_player_index,
                     target_permanent_index=target_permanent_index,
-                    target_permanent_id=target_permanent_ids,
+                    target_permanent_id=as_target_ids(target_permanent_ids),
                     x_value=resolved_x_value,
                     target_stack_item=target_stack_item_val,
                     chosen_mode_index=mode_index,

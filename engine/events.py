@@ -44,7 +44,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable
 
 from .subject_filters import subject_matches
-from .trigger_utils import iter_triggered_abilities, make_trigger_event
+from .trigger_utils import (bound_event_object, iter_triggered_abilities,
+                            make_trigger_event)
 
 if TYPE_CHECKING:
     from .game import Game
@@ -315,15 +316,21 @@ def collect(game: Game, event: Event) -> list[dict]:
             trigger_context=dict(event.payload) or None,
         )
         # The object the event was **about**, promoted from the payload onto the
-        # stack item. A trigger that acts on it ("destroy that planeswalker")
-        # reads it from there rather than from the trigger context, and it is
-        # carried by id because an index is not an identity (CR 400.7). Done
+        # stack item (``StackItem.about_permanent_id``). A trigger that acts on
+        # it ("destroy that planeswalker") is handed it as it resolves, and it
+        # is carried by id because an index is not an identity (CR 400.7). Done
         # here rather than at each announcement: the two fire sites that used to
         # stamp it did so by hand, and a third would have had to remember.
-        for key in ("target_permanent_id", "target_player_index"):
-            bound = event.payload.get(key)
-            if bound is not None:
-                enqueued[key] = bound
+        #
+        # Per trigger, because whether it is the object the effect acts on is
+        # the *line's* question: one that prints "target" chooses (CR 603.3d),
+        # and was stamped into its own target fields instead — Close Quarters'
+        # "deals 1 damage to any target" shot the blocker every time.
+        about = bound_event_object(
+            trig.instruction, event.payload.get("about_permanent_id")
+        )
+        if about is not None:
+            enqueued["about_permanent_id"] = about
         events.append(enqueued)
     # An emblem's ability fires from the command zone (CR 114.4) — collected
     # beside the permanents', through the same event, so APNAP ordering and

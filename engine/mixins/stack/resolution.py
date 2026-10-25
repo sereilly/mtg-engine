@@ -26,7 +26,8 @@ from ...enter_effects import copy_on_enter_type
 from ...events import emit
 from ...faces import whole_card
 from ...flashback import leaves_stack_to_exile
-from ...game_types import OracleExecutionContext, OracleStateMachine, StackItem
+from ...game_types import (OracleExecutionContext, OracleStateMachine, StackItem,
+                           first_target_id)
 from ...handlers.control_flow import evaluate_condition
 from ...models import CardDefinition, Permanent
 from ...oracle import OracleInstruction, compile_card_oracle
@@ -350,19 +351,40 @@ class StackResolutionMixin:
         # spell's controller, whatever seat rode beside it — see
         # ``Game.stack_target_seat``.
         target_idx = self.stack_target_seat(item)
+        target_permanent_index = item.target_permanent_index
+        target_permanent_id = item.target_permanent_id
+        # **What the sentence acts on, where nothing was chosen**: the object
+        # the firing event named (``StackItem.about_permanent_id``) — "destroy
+        # that Wall", "that creature becomes green", "remove this creature from
+        # combat". The fire site records one only for a line that names no
+        # target of its own, so a chosen target is never displaced; here is
+        # where it becomes the object the ordinary handler resolves, on its
+        # current battlefield (CR 400.7: the id is the object wherever it now
+        # stands). It is handed over **here and nowhere earlier**, which is the
+        # whole of the split: on the stack object it is not a target, so
+        # nothing announces it as one (CR 115.10), CR 603.3d does not choose
+        # over it, and CR 608.2b does not judge it.
+        if item.about_permanent_id is not None and target_permanent_id is None:
+            target_permanent_id = [item.about_permanent_id]
+            found = self.find_permanent_by_id(item.about_permanent_id)
+            if found is not None:
+                if target_idx is None:
+                    target_idx = found[0]
+                target_permanent_index = self.battlefield_index_of(found[1])
+            else:
+                target_permanent_index = None
         if target_idx is None:
             target_idx = (
                 item.target_player_index
                 if item.target_player_index is not None
                 else self._default_opposing_seat(item.caster_index)
             )
-        target_permanent_index = item.target_permanent_index
         if item.activated:
             # CR 602.2b: an activated ability's slot is re-read off the ids
             # its announcement stamped, as a spell's is
             # (`bare_announcements.resolving_slots`). Not for a triggered
-            # ability, whose fire site threads other things through these
-            # fields.
+            # ability: its slot is re-read off the object it is about above,
+            # and a chosen one keeps the announcement's own reading.
             target_permanent_index = resolving_slots(
                 self, self.players[target_idx], target_permanent_index,
                 item.target_permanent_id, card=item.card,
@@ -374,7 +396,8 @@ class StackResolutionMixin:
             target=self.players[target_idx],
             card=item.card,
             target_permanent_index=target_permanent_index,
-            target_permanent_id=item.target_permanent_id,
+            target_permanent_id=target_permanent_id,
+            about_permanent_id=item.about_permanent_id,
             # The graveyard half of the same announcement, for a roles
             # instruction whose slots sit in two zones (Goblin Welder). Every
             # other graveyard target reads the index this method has already
@@ -913,7 +936,7 @@ class StackResolutionMixin:
         classification: CardClassification,
         target_player_index: int | None,
         target_permanent_index: int | None = None,
-        target_permanent_id: int | list[int | None] | None = None,
+        target_permanent_id: list[int | None] | None = None,
         x_value: int | None = None,
         new_color: str | None = None,
         stack_target=None,
@@ -968,15 +991,10 @@ class StackResolutionMixin:
             # beside the slot, because the slot is a position the board may
             # have renumbered since the cast (``_resolve_copy_target``).
             if target_permanent_index is not None:
-                chosen_id = (
-                    target_permanent_id[0]
-                    if isinstance(target_permanent_id, list) and target_permanent_id
-                    else target_permanent_id
-                )
                 permanent.metadata["copy_target"] = (
                     target_player_index if target_player_index is not None else caster_index,
                     target_permanent_index,
-                    chosen_id if isinstance(chosen_id, int) else None,
+                    first_target_id(target_permanent_id),
                 )
             # The one entry site in the engine that *is* a cast (CR 701.5a):
             # a permanent spell resolving. Every other path puts a permanent

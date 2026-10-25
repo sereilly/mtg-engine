@@ -744,7 +744,7 @@ def test_w1g6_radiate_copies_only_onto_what_the_spell_could_target(set_pool, cat
     game.resolve_top_of_stack()
     copies = [item for item in game.stack if item.is_copy]
     assert [item.target_permanent_id for item in copies] == [
-        _w1g6_permanent(game, 0, "Hill Giant").permanent_id
+        [_w1g6_permanent(game, 0, "Hill Giant").permanent_id]
     ]
     _w1g6_resolve_stack(game)
     assert [p.card.name for p in game.controlled_by(0)] == ["Sol Ring"]

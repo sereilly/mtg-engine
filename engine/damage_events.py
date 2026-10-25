@@ -551,7 +551,7 @@ def _announce(game, event: dict, dealt: int) -> None:
     }
     # "…this enchantment deals that much damage to **that creature**"
     # (Mangara's Equity). The *damager itself*, not the damaged permanent
-    # `target_permanent_id` below names — two different objects, and the pair
+    # `about_permanent_id` below names — two different objects, and the pair
     # is why this key is its own: the effect behind a damage trigger can act on
     # either end of the event.
     #
@@ -574,14 +574,15 @@ def _announce(game, event: dict, dealt: int) -> None:
         damaged_id = getattr(recipient, "permanent_id", None)
         seat = game.controller_index_of(recipient)
         if damaged_id is not None:
-            # The damaged permanent as a *target* of the trigger: "destroy that
-            # planeswalker" (Hooded Blightfang) resolves it through the ordinary
-            # destroy handler, which addresses a permanent by its controller and
-            # its id. By id, not by slot, because anything leaving in between
-            # renumbers every later index (CR 400.7).
-            payload["target_permanent_id"] = damaged_id
-            if seat is not None:
-                payload["target_player_index"] = seat
+            # The damaged permanent as what the trigger is **about**: "destroy
+            # that planeswalker" (Hooded Blightfang) resolves it through the
+            # ordinary destroy handler, which the context builder hands this
+            # object. By id, not by slot, because anything leaving in between
+            # renumbers every later index (CR 400.7) — and never as the
+            # trigger's target: a line that prints one chooses it
+            # (``trigger_utils.bound_event_object``, read in
+            # ``events.collect``).
+            payload["about_permanent_id"] = damaged_id
         if seat is not None:
             payload["defending_player_index"] = seat
             # "…deals 3 damage to **that creature's controller**" (Bellowing

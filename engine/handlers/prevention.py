@@ -32,7 +32,7 @@ from ..shields import (
 from ..divided_damage import DIVIDED_TARGETS, EVENLY, divide, divided_entry
 from ..next_damage import (DAMAGE_DOUBLED_NEXT, DAMAGE_PREVENTED_NEXT, arm,
                            rider_key)
-from ..oracle_types import single_chosen_id
+from ..game_types import single_chosen_id
 from ._amounts import resolve_amount
 from ._targets import (default_announced_permanent, divided_target_permanent,
                        names_a_target_list, recorded_permanent_ids,

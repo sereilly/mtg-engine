@@ -57,6 +57,7 @@ from functools import lru_cache
 from typing import TYPE_CHECKING
 
 from .divided_damage import DIVIDED_TARGETS, divided_entry, divided_entry_id
+from .game_types import target_ids
 from .modal_triggers import ENTRY_TRIGGER_CONDITIONS, modal_trigger_modes
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -385,10 +386,7 @@ def _spell_names_a_target(card) -> bool:
 
 
 def _ids(holder) -> list:
-    ids = getattr(holder, "target_permanent_id", None)
-    if ids is None:
-        return []
-    return list(ids) if isinstance(ids, (list, tuple)) else [ids]
+    return target_ids(getattr(holder, "target_permanent_id", None))
 
 
 def _stamps(holder) -> list:
@@ -998,14 +996,8 @@ def blank_illegal_targets(item: "StackItem", targets) -> int:
             if not 0 <= target.mode < len(modes):
                 continue
             holder = modes[target.mode]
-        ids = getattr(holder, "target_permanent_id", None)
-        several = isinstance(ids, (list, tuple))
-        current = (
-            ids[target.position]
-            if several and 0 <= target.position < len(ids)
-            else ids if not several and target.position == 0
-            else None
-        )
+        ids = target_ids(getattr(holder, "target_permanent_id", None))
+        current = ids[target.position] if 0 <= target.position < len(ids) else None
         tombstone = illegal_target_id(current)
         if tombstone is None:
             continue
@@ -1058,8 +1050,20 @@ def change_options(slots, picks: list) -> list[ChosenTarget]:
     ]
 
 
+def _set_id_at(value, position: int, new: int) -> list:
+    """The id channel *value* with *new* at slot *position* — a list always,
+    padded with ``None`` up to it (``game_types.check_target_ids``)."""
+    updated = target_ids(value)
+    while len(updated) <= position:
+        updated.append(None)
+    updated[position] = new
+    return updated
+
+
 def _set_at(value, position: int, new):
-    """*value* with *new* at *position*, keeping its scalar-or-list shape."""
+    """*value* with *new* at *position*, keeping its scalar-or-list shape —
+    for the slot and graveyard channels, which keep both; the id channel is
+    :func:`_set_id_at`'s."""
     if isinstance(value, list):
         updated = list(value)
         while len(updated) <= position:
@@ -1105,7 +1109,7 @@ def apply_target_change(game: "Game", item: "StackItem", slots, picks) -> bool:
                 item.target_stack_item = None
                 seat, permanent = game.find_permanent_by_id(pick.permanent_id)
                 item.target_player_index = seat
-                item.target_permanent_id = pick.permanent_id
+                item.target_permanent_id = [pick.permanent_id]
                 item.target_permanent_index = game.battlefield_index_of(permanent)
             continue
         if channel == "graveyard":
@@ -1140,18 +1144,18 @@ def apply_target_change(game: "Game", item: "StackItem", slots, picks) -> bool:
             item.target_permanent_id = None
             item.target_permanent_index = None
             continue
-        seat, permanent = game.find_permanent_by_id(pick.permanent_id)
-        item.target_permanent_id = _set_at(item.target_permanent_id, position, pick.permanent_id)
-        item.target_permanent_index = _set_at(
-            item.target_permanent_index, position, game.battlefield_index_of(permanent)
+        item.target_permanent_id = _set_id_at(
+            item.target_permanent_id, position, pick.permanent_id
         )
-        if not isinstance(item.target_permanent_id, list):
-            item.target_player_index = seat
+        item.target_permanent_index = _set_at(
+            item.target_permanent_index, position,
+            game.battlefield_index_of(game.permanent_by_id(pick.permanent_id)),
+        )
 
-    if isinstance(item.target_permanent_id, list):
-        # A list of objects has one seat beside it only while they share a
-        # battlefield (``Game.announced_target_seat``); the resolutions that
-        # read a list read the ids.
+    if item.target_permanent_id is not None:
+        # The objects have one seat beside them only while they share a
+        # battlefield (``Game.announced_target_seat``) — always, for one; the
+        # resolutions that read several read the ids.
         shared = game.announced_target_seat(item.target_permanent_id)
         if shared is not None:
             item.target_player_index = shared

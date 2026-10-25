@@ -33,7 +33,8 @@ from ..replacement_choices import DRAW_OF
 from ..replacements import apply_replacements
 from ..replacements.zone_changes import TOP_OF_LIBRARY_DISCARD_TEXT
 from ..oracle import compile_card_oracle
-from ..trigger_utils import make_trigger_event, matching_triggers
+from ..trigger_utils import (bound_event_seat, make_trigger_event,
+                             matching_triggers)
 
 
 class _DrawPromptAnswer:
@@ -650,7 +651,10 @@ class DrawsAndDiscardsMixin:
                 instruction=trig.instruction,
                 effect_kind=trig.effect_kind,
                 ability_text=trig.source_line,
-                target_player_index=causer,
+                # The causer, for "that player loses 5 life" (Psychic Purge) —
+                # never over a target the line chooses (Guerrilla Tactics'
+                # "any target", CR 603.3d).
+                target_player_index=bound_event_seat(trig.instruction, causer),
                 trigger_context={"event_subject_player": causer},
             )
         # "Whenever a spell or ability an opponent controls causes you to
@@ -683,7 +687,7 @@ class DrawsAndDiscardsMixin:
                     effect_kind=trig.effect_kind,
                     ability_text=trig.source_line,
                     source_permanent=observer,
-                    target_player_index=causer,
+                    target_player_index=bound_event_seat(trig.instruction, causer),
                     trigger_context={
                         "event_subject_player": causer,
                         "discarded_name": getattr(card, "name", None),

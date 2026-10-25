@@ -681,7 +681,7 @@ def test_w2g4_somnophore_holds_its_creature_only_while_it_is_there(set_pool):
     for item in game.stack:
         item.target = theirs
         item.target_permanent_index = 0
-        item.target_permanent_id = victim.permanent_id
+        item.target_permanent_id = [victim.permanent_id]
     _g4b_resolve(game)
 
     assert victim.tapped, "the trigger taps what it names"
@@ -1306,7 +1306,7 @@ def test_w3g2_gilded_drake_still_resolves_when_its_target_has_left(set_pool, cat
         trigger.instruction,
         OracleExecutionContext(
             caster=alice, target=game.players[1], card=drake.card,
-            source_permanent=drake, target_permanent_id=departed.permanent_id,
+            source_permanent=drake, target_permanent_id=[departed.permanent_id],
         ),
     )
 

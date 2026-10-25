@@ -84,7 +84,7 @@ def test_608_2b_an_object_whose_every_target_is_illegal_does_not_resolve():
     item = StackItem(
         card=bolt, caster_index=0, target_player_index=1,
         target_permanent_index=0, x_value=None,
-        target_permanent_id=victim.permanent_id,
+        target_permanent_id=[victim.permanent_id],
     )
 
     assert game.illegal_targets_refusal(item) is not None
@@ -113,7 +113,7 @@ def test_608_2b_a_printed_exception_keeps_the_object_resolving():
     item = StackItem(
         card=bolt, caster_index=0, target_player_index=1,
         target_permanent_index=0, x_value=None,
-        target_permanent_id=victim.permanent_id,
+        target_permanent_id=[victim.permanent_id],
     )
 
     assert game.illegal_targets_refusal(item) is None
@@ -171,7 +171,7 @@ def test_701_12a_no_part_of_the_exchange_occurs_when_the_source_has_left():
         trigger.instruction,
         OracleExecutionContext(
             caster=alice, target=game.players[1], card=drake_card,
-            source_permanent=drake, target_permanent_id=victim.permanent_id,
+            source_permanent=drake, target_permanent_id=[victim.permanent_id],
         ),
     )
 

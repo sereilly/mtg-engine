@@ -30,7 +30,8 @@ from ..destruction_events import mark_delayed_destruction
 from ..models import Permanent
 from ..named_counters import counters_on
 from ..resumption import run_resumable
-from ..oracle_types import (single_chosen_id, ATTACHED_PERMANENT_CONTROLLER,
+from ..game_types import single_chosen_id, target_ids
+from ..oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                             EVENT_SUBJECT_LAST_KNOWN, LAST_DAMAGER_CONTROLLER,
                             X_FROM_COUNT_PER_RECIPIENT)
 from ..mana_payment import generic_cost
@@ -887,13 +888,11 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         # means a target that survived is still hit even if an earlier one died
         # and shifted every later slot — which is precisely what a multi-target
         # spell waiting on the stack is exposed to.
-        ids = context.target_permanent_id
-        if not isinstance(ids, list):
-            ids = [None] * len(target_perm_idx)
+        ids = target_ids(context.target_permanent_id)
         chosen = []
         for position, idx in enumerate(target_perm_idx):
             permanent_id = ids[position] if position < len(ids) else None
-            found = game.chosen_permanent(target, idx, permanent_id)
+            found = game.chosen_permanent(target, idx, [permanent_id])
             if found is not None:
                 chosen.append(found)
         n = len(chosen)

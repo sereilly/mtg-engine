@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ..game_types import single_chosen_id
 from ..static_bonuses import singular_land_type
 from ..models import Permanent
 from ..object_colors import share_a_color
@@ -359,7 +360,7 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
     # graveyard and nothing on the board can answer the question.
     blocked_controllers: dict[int, int] = {}
     if instruction.payload.get("blocked_by_target_object"):
-        blocker = game.permanent_by_id(context.target_permanent_id)
+        blocker = game.permanent_by_id(single_chosen_id(context.target_permanent_id))
         if blocker is None:
             # CR 608.2b would normally have countered the spell for having no
             # legal target left; a blocker that is nonetheless gone (an ability
@@ -468,7 +469,7 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
         # payload key exists to prevent — so an unresolvable one ends the
         # resolution instead.
         if attached_to == "target":
-            host = game.permanent_by_id(context.target_permanent_id)
+            host = game.permanent_by_id(single_chosen_id(context.target_permanent_id))
         elif attached_to == "source":
             host = context.source_permanent
         if host is None:

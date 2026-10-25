@@ -628,21 +628,23 @@ class DelayedTrigger:
         ability. One builder for every site, so a delayed trigger reaches the
         stack the same way wherever it was announced.
 
-        *game* is what :attr:`bound_as_target` needs: an id names a battlefield
-        as well as an object, and the resolver scopes the id to the seat it is
-        handed, so the bound permanent's controller travels with it. A bound
-        object that has left still hands its id over — an id that resolves to
-        nothing is CR 608.2b's fizzle at the resolver, where an absent one
-        would send the ability looking for a new target.
+        :attr:`bound_as_target` hands the bound object over as the one the
+        ability is **about** (``StackItem.about_permanent_id``), which the
+        context builder gives the effect as the object its described sentence
+        acts on — not as a target: the delayed ability chose nothing (CR
+        603.7c refers it to the object the creating spell chose), so CR 603.3d
+        asks it nothing and nothing "becomes the target" of it. A bound object
+        that has left still hands its id over — an id that resolves to nothing
+        is CR 608.2b's fizzle at the resolver, where an absent one would send
+        the ability looking for a new target.
+
+        *game* is unused and kept for the callers' signature: the bound
+        permanent's controller is read as the ability resolves, off the id.
         """
         target_player_index = self.bound_player_index
-        target_permanent_id = None
-        if self.bound_as_target and self.bound_permanent_id is not None:
-            target_permanent_id = self.bound_permanent_id
-            bound = game.permanent_by_id(target_permanent_id) if game is not None else None
-            seat = game.controller_index_of(bound) if bound is not None else None
-            if seat is not None:
-                target_player_index = seat
+        about_permanent_id = (
+            self.bound_permanent_id if self.bound_as_target else None
+        )
         context = dict(self.captured)
         # CR 603.7c: an ability that refers to a particular object carries that
         # object with it. The effect addresses it by id, so a clause reading
@@ -663,7 +665,7 @@ class DelayedTrigger:
             # player" in this engine already reads. None on every other entry,
             # which leaves the stack item exactly as it was.
             "target_player_index": target_player_index,
-            "target_permanent_id": target_permanent_id,
+            "about_permanent_id": about_permanent_id,
             "trigger_context": context,
             # CR 603.7d again, on the channel the *effect*-scoped readers
             # ask. ``permanents_from`` and ``amount_from`` mean "a step of

@@ -1805,9 +1805,9 @@ def test_standard_bearer_takes_the_bolt_meant_for_anything_else(set_pool):
     assert not game.stack and len(game.players[0].hand) == 2
 
     assert game.queue_from_hand(0, "Lightning Bolt").supported
-    assert game.stack[-1].target_permanent_id in (
-        bearer.permanent_id, [bearer.permanent_id],
-    ), game.stack[-1].target_permanent_id
+    assert game.stack[-1].target_permanent_id == [bearer.permanent_id], (
+        game.stack[-1].target_permanent_id
+    )
     _w1g5_resolve_stack(game)
     game._settle()
     assert _w1g5_names(game, 1) == ["Grizzly Bears"]

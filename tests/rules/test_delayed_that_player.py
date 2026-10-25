@@ -189,7 +189,7 @@ def _seat_named(card, step, target: int, catalog_by_name):
     EFFECT_HANDLERS["create_delayed_trigger"](game, step, OracleExecutionContext(
         caster=game.players[0], target=game.players[target], card=card,
         source_permanent=source, trigger_context={},
-        target_permanent_id=bear.permanent_id,
+        target_permanent_id=[bear.permanent_id],
         results={"chosen_player": target},
     ))
     if not game.delayed_triggers:

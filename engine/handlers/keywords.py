@@ -640,8 +640,8 @@ def grant_target_ability_text(game: Game, instruction: OracleInstruction, contex
         # "Whenever this creature blocks a creature, … the creature gains
         # "<ability>"." (Mindbender Spores.) The creature the block trigger
         # froze, read through the one function that knows how the two fire
-        # sites bind it — on the *blocks* half the stack item's target is the
-        # blocker itself, so the ordinary target resolution below would grant
+        # sites bind it — on the *blocks* half the object the trigger is about
+        # is the blocker itself, so the ordinary target resolution below would grant
         # the abilities to the source.
         from ._targets import block_pair_permanents
 

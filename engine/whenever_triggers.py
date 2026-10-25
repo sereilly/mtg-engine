@@ -353,7 +353,7 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      # group, read by the same noun parser every other narrowed condition here
      # goes through, and tested by `engine/event_filters.py`'s filter against the
      # permanent that took the damage — which the one damage seam already
-     # freezes (`target_permanent_id`).
+     # freezes (`about_permanent_id`).
      #
      # The seat prefix is *optional* on this branch, which is what folds
      # Mangara's Equity's "to you or a white creature you control" back in: the

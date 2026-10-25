@@ -38,10 +38,16 @@ class TriggeredAbilitiesMixin:
         ability_text: str | None = None,
         target_player_index: int | None = None,
         target_permanent_index: int | None = None,
-        # A trigger that acts on the object its event was about ("destroy that
-        # planeswalker") is stamped with that object's id by the fire site. The
-        # index is unstable across a removal; the id is the identity (CR 400.7).
-        target_permanent_id: int | None = None,
+        # The target an entry trigger's permanent spell announced for it
+        # (``announced_at_cast``), by id — a *choice*, as every value of these
+        # target fields is. The object an event was about is not one: see
+        # *about_permanent_id*.
+        target_permanent_id: int | list[int | None] | None = None,
+        # The permanent the firing event named for this ability to act on
+        # ("destroy that planeswalker", "that creature becomes green") — see
+        # ``StackItem.about_permanent_id``, and ``trigger_utils.
+        # bound_event_object`` for when a fire site records one.
+        about_permanent_id: int | None = None,
         trigger_context: dict | None = None,
         # CR 603.7d's frozen scratchpad -- see ``StackItem.captured_results``.
         captured_results: dict | None = None,
@@ -89,6 +95,7 @@ class TriggeredAbilitiesMixin:
                 target_player_index=target_player_index,
                 target_permanent_index=target_permanent_index,
                 target_permanent_id=target_permanent_id,
+                about_permanent_id=about_permanent_id,
                 trigger_context=trigger_context,
                 captured_results=captured_results,
                 hook_key=hook_key,
@@ -122,9 +129,10 @@ class TriggeredAbilitiesMixin:
         # chose for (CR 603.3d): asked for where its seat can be, the picker's
         # default where it cannot, removed where nothing is legal.
         #
-        # Only an announcement is dropped. Fields a **fire site** bound are
-        # what the event was about ("destroy that Wall"), and the event is the
-        # same event however many times the ability triggers.
+        # Only an announcement is dropped. What a **fire site** bound
+        # (``about_permanent_id``, the seat beside a frozen event) is what the
+        # event was about ("destroy that Wall"), and the event is the same
+        # event however many times the ability triggers.
         for instance in range(1 + additional_triggers(
             self, source_permanent, controller_index,
             delayed=effect_kind == "triggered_delayed",
@@ -150,6 +158,7 @@ class TriggeredAbilitiesMixin:
                     hook_key=hook_key,
                     hook_event=hook_event,
                     targets_chosen=targets_chosen,
+                    about_permanent_id=about_permanent_id,
                 ),
                 announced_at_cast=from_the_cast,
             )

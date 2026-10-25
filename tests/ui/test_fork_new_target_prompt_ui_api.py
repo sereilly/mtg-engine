@@ -104,7 +104,7 @@ def test_forking_a_bolt_aimed_at_a_face_asks_for_the_copys_target():
     )
     assert aimed.status_code == 200, aimed.text
     assert _state(sid)["copy_spell_target"] is None
-    assert copy.target_permanent_id == theirs.permanent_id
+    assert copy.target_permanent_id == [theirs.permanent_id]
 
     for _ in range(8):
         if not game.stack:

@@ -103,7 +103,7 @@ def _fired(game: Game, card, delay: OracleInstruction, about: Permanent) -> Stac
         card=card, caster_index=0,
         target_player_index=event["target_player_index"],
         target_permanent_index=None,
-        target_permanent_id=event["target_permanent_id"],
+        about_permanent_id=event["about_permanent_id"],
         x_value=None,
         ability_instruction=event["instruction"],
         ability_effect_kind=event["effect_kind"],

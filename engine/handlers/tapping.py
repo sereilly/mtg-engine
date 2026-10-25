@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ..game_types import single_chosen_id
 from ..oracle_types import TAPPED_THIS_WAY_OBJECTS, X_FROM_COUNT
 from ._amounts import resolve_amount
 from ._chosen import resolve_chosen_card_type_in_resolution
@@ -837,7 +838,7 @@ def skip_next_untap(game: Game, instruction: OracleInstruction, context: OracleE
         # untap during its controller's next untap step." (Labyrinth Minotaur.)
         # The creature is the trigger's, not the sentence's — CR 509.1a's other
         # side of the block — so it comes from the one reader of both fire
-        # sites rather than from the stack item's target. Reading the target on
+        # sites rather than from the context's target. Reading the target on
         # the *blocks* half would mark the Minotaur itself, which is the bug
         # ``block_pair_permanents`` exists to stop.
         recorded = tuple(
@@ -1346,7 +1347,7 @@ def _restrict_untap_while_source(
             f"{names} won't untap while {context.card.name} {condition}"
         )
         return True, "resolved"
-    target = game.permanent_by_id(context.target_permanent_id) if context.target_permanent_id else None
+    target = game.permanent_by_id(single_chosen_id(context.target_permanent_id))
     if target is None and isinstance(context.target_permanent_index, int):
         target = game.chosen_permanent(
             context.target, context.target_permanent_index, context.target_permanent_id

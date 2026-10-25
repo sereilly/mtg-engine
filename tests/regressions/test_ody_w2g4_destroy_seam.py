@@ -421,7 +421,7 @@ def _drive(by_name, unit, how, *, interactive, mode=None, ability_index=None, tr
                 controller_index=0, source_permanent=source,
                 instruction=trig.instruction, effect_kind=trig.effect_kind,
                 ability_text=trig.source_line,
-                target_permanent_id=victim.permanent_id if wants_that else None,
+                about_permanent_id=victim.permanent_id if wants_that else None,
                 trigger_context={
                     "event_subject_permanent_id": victim.permanent_id,
                     "event_subject_name": victim.card.name,
@@ -1237,7 +1237,7 @@ def test_a_destroy_trigger_is_not_on_the_stack_until_the_sweep_has_finished(by_n
 
     assert seen == [False], "the trigger went on the stack mid-sweep"
     (trigger,) = [item for item in game.stack if item.is_ability]
-    assert trigger.target_permanent_id == survivor.permanent_id
+    assert trigger.target_permanent_id == [survivor.permanent_id]
     _settle(game)
     assert not game.is_on_battlefield(survivor)
 

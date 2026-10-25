@@ -11,6 +11,7 @@ re-aimed (CR 115.7), and the choice CR 707.10 gives a copy's controller.
 from __future__ import annotations
 
 from ....faces import castable_faces, is_multi_face, spell_named
+from ....game_types import single_chosen_id
 from ....grammar.lowering._events import EVENT_SUBJECT_PLAYER
 from ....models import CardDefinition, Permanent
 from ....pending_choices import PendingChoice
@@ -563,7 +564,7 @@ class SpellChoicesMixin:
                 return False
             copy_item.target_player_index = self.controller_index_of(perm)
             copy_item.target_permanent_index = self.battlefield_index_of(perm)
-            copy_item.target_permanent_id = self.permanent_id_of(perm)
+            copy_item.target_permanent_id = [perm.permanent_id]
             label = perm.card.name
         self.discard_pending_choice(choice)
         self.log.append(
@@ -616,7 +617,7 @@ class SpellChoicesMixin:
             # never stamped one still has a slot — resolved through the control
             # seam rather than left as None, which would make "keep the
             # original" silently fall through to "take the first offered".
-            held = copy_item.target_permanent_id
+            held = single_chosen_id(copy_item.target_permanent_id)
             if held is None:
                 perm = self.permanent_at(
                     copy_item.target_player_index, copy_item.target_permanent_index
