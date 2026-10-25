@@ -65,6 +65,9 @@ _PRINTED_SIDES = {
     "Crooked Scales": ("opponent", "you"),
     "Gauntlets of Chaos": ("you", "opponent"),
     "Goblin Welder": (None, None),
+    # Round kg: "Choose target opponent … Destroy target nonblack creature that
+    # player controls" — the seat, then a creature the seat's relation places.
+    "Keeper of the Dead": (None, None),
     "Phyrexian Splicer": ("opponent", "you"),
     "Planeswalker's Favor": (None, "you"),
     "Planeswalker's Scorn": (None, "opponent"),

@@ -33,6 +33,8 @@ from ...oracle import OracleInstruction, compile_card_oracle
 from ...modal_triggers import modal_trigger_modes
 from ...resumption import run_resumable
 from ...state_triggers import release_latch
+from ...target_descriptions import ANNOUNCED_SEAT
+from ...targeting import graveyard_target_spec
 
 
 class StackResolutionMixin:
@@ -681,6 +683,22 @@ class StackResolutionMixin:
             return False
         return not evaluate_condition(self, self._ability_execution_context(item), gate)
 
+    def _seat_names_no_pile(self, item: StackItem) -> bool:
+        """Whether *item*'s seat field names a **target seat** rather than the
+        pile its graveyard targets sit in: a spell scoped to its caster's own
+        graveyard that announces a seat beside it ("…where X is the number of
+        black permanents target opponent controls", Reap —
+        ``target_descriptions.ANNOUNCED_SEAT``). Its cards are the caster's
+        (``Game.graveyard_target_seat``), so the field keeps the opponent for
+        CR 608.2b to re-check."""
+        if item.ability_instruction is not None:
+            return False
+        # The spell's own card: an instant or sorcery on the stack *is* the
+        # card (no permanent's layers to read through).
+        spell = item.card
+        spec = graveyard_target_spec(spell, compile_card_oracle(spell)) or {}
+        return bool(spec.get(ANNOUNCED_SEAT) and spec.get("own_graveyard_only"))
+
     def _run_stack_item_resolution(self, item: StackItem) -> None:
         # **An index is not an identity** (ROADMAP idiom #11) and a graveyard is
         # the zone with no identity to fall back on, so what ``_stack_push``
@@ -712,7 +730,7 @@ class StackResolutionMixin:
                 if isinstance(stamps, list)
                 else stamps
             )
-            if first is not None:
+            if first is not None and not self._seat_names_no_pile(item):
                 item.target_player_index = first.seat
         # CR 608.2a, which the rule puts **before** 608.2b ("The steps
         # described in rules 608.2a and 608.2b are followed first"): CR 603.4's

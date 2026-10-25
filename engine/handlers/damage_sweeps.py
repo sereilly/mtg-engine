@@ -365,6 +365,17 @@ def deal_damage_each_matching(
             if dealt <= 0:
                 continue
         recipients.append((perm, dealt))
+    # "…X damage divided evenly, rounded down, among all creatures target
+    # opponent controls." (Dwarven Catapult.) The share is X over the set the
+    # sweep just found — counted now, at resolution (the card's 2004-10-04
+    # ruling) — and a share of 0 is no damage dealt at all (CR 120.8; the
+    # 2014-02-01 ruling: "If the targeted opponent controls more than X
+    # creatures, no damage will be dealt to any of them").
+    if instruction.payload.get("divided_evenly") and recipients:
+        damage = damage // len(recipients)
+        recipients = (
+            [(perm, damage) for perm, _whole in recipients] if damage > 0 else []
+        )
     struck = [
         f"{perm.card.name} ({dealt})" if per_recipient else perm.card.name
         for perm, dealt in recipients

@@ -725,6 +725,8 @@ def _lower_damage_shape(
     # payload Lightning Bolt produces. Recording the division here is what lets
     # engine/targeting.py raise the divided prompt from the compiled program
     # rather than from a "divided" substring in legality.py.
+    if node.riders.divided and _divides_among_a_described_set(recipient):
+        return _lower_division_among_a_set(node, recipient, payload)
     if node.riders.divided:
         described: dict[str, object] = {
             "quantifier": "divided",
@@ -931,3 +933,65 @@ def _lower_damage_dealt_riders(
     if node.riders.exile_if_dies:
         payload["exile_if_dies"] = True
     return (OracleInstruction("grant_damage_riders_until_eot", "", payload),)
+
+
+def _divides_among_a_described_set(recipient) -> bool:
+    """Whether a division's recipients are a **described set** — "among all
+    creatures **target opponent controls**" — rather than targets the caster
+    announces ("among any number of targets").
+
+    The seat word is the evidence. "Any number of targets" (Fireball, Fiery
+    Justice) parses to the same untargeted ``all`` quantifier with nothing in
+    its noun phrase; a set *described by* the seat a sentence targets is one
+    no caster picks the members of.
+    """
+    return (
+        isinstance(recipient, ast.TargetSpec)
+        and recipient.quantifier in ("all", "each")
+        and not recipient.targeted
+        and recipient.filter.controller in ("target_opponent", "target_player")
+    )
+
+
+def _lower_division_among_a_set(node, recipient, payload: dict):
+    """"Dwarven Catapult deals X damage divided evenly, rounded down, **among
+    all creatures target opponent controls**."
+
+    The creatures are not targets: the sentence names a set (CR 611.2c reads
+    it at resolution) and the only target is the opponent. The card's rulings:
+    "Count the number of creatures on resolution of the spell and divide X by
+    that number at that time" (2004-10-04), and "If the targeted opponent
+    controls more than X creatures, no damage will be dealt to any of them"
+    (2014-02-01). It was lowered as a division whose *targets* were the
+    creatures, so the caster announced them — and could announce one of two to
+    put all of X on it, a creature with shroud could not be named and so took
+    nothing, and at three seats the AI divided across two opponents' boards.
+
+    So it is the sweep Simoon's "each creature target opponent controls" is
+    (``deal_damage_each_matching``, whose seat is the announcement's — the
+    payload row reads the filter's controller), with the amount shared out
+    evenly among what the sweep finds (``divided_evenly``). Only the game's
+    division can be over a described set: "as you choose" over a set nobody
+    picks is a split no one is asked for, and refuses.
+    """
+    if not node.riders.divided_evenly:
+        raise LoweringError(
+            "a division among a described set is the game's to make, evenly",
+            node=node,
+        )
+    if node.riders.rounding == "up":
+        raise LoweringError("a division rounded up is not implemented", node=node)
+    narrowing = _filter_payload(recipient.filter)
+    if not narrowing or untestable_filter_keys(narrowing):
+        raise LoweringError(
+            "a division among a described set needs a set the matcher can test",
+            node=node,
+        )
+    shared = {**payload, "filter": narrowing, "divided_evenly": True}
+    # "…**rounded down**": the printed word for what the share's integer
+    # division does, recorded as the targeted division records it
+    # (``rounding``) — a word consumed and stored nowhere is one "rounded up"
+    # would read past.
+    if node.riders.rounding:
+        shared["rounding"] = node.riders.rounding
+    return (OracleInstruction("deal_damage_each_matching", "", shared),)

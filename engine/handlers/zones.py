@@ -25,7 +25,8 @@ from ..exiled_records import source_object
 from ..models import Permanent
 from ._filters import graveyard_card_matches
 from ._targets import (_resolve_graveyard_slots, frozen_that_player_seat,
-                       resolve_target_permanent, resolve_target_permanents)
+                       pile_owner_still_a_target, resolve_target_permanent,
+                       resolve_target_permanents)
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -70,6 +71,13 @@ def put_graveyard_cards_on_library_top(
         victim = context.target
     else:
         game.log.append(f"{context.card.name}: no player chosen")
+        return True, "resolved"
+    # The chosen player is a target of their own (CR 601.2c), and one gone
+    # illegal in response leaves "their library" undetermined (CR 608.2b).
+    if not pile_owner_still_a_target(game, context, instruction.payload):
+        game.log.append(
+            f"{context.card.name}: {victim.name} is no longer a legal target (608.2b)"
+        )
         return True, "resolved"
 
     def _eligible(card) -> bool:

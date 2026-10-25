@@ -319,7 +319,7 @@ def test_a_divided_spells_side_is_read_off_the_counter_it_places(
         name: divided_shape(compile_card_oracle(named[name])).side
         for name in (
             "Spoils of War", "Bounty of the Hunt", "Contagion",
-            "Pyrokinesis", "Fireball", "Dwarven Catapult",
+            "Pyrokinesis", "Fireball",
         )
     }
     assert sides == {
@@ -328,8 +328,11 @@ def test_a_divided_spells_side_is_read_off_the_counter_it_places(
         "Contagion": "opponent",
         "Pyrokinesis": "opponent",
         "Fireball": "opponent",
-        "Dwarven Catapult": "opponent",
     }
+    # Dwarven Catapult divides among a set nobody announces ("all creatures
+    # target opponent controls"), a sweep whose one target is the opponent
+    # since round kg — so it divides nothing among targets.
+    assert divided_shape(compile_card_oracle(named["Dwarven Catapult"])) is None
 
 
 def test_every_divided_card_in_the_pool_is_described(catalog):
@@ -367,7 +370,7 @@ def test_every_divided_card_in_the_pool_is_described(catalog):
     # is not. Equality was the spelling until Alliances' promotion, where it
     # failed for the second reason and said nothing about the first.
     reviewed = {
-        "Bounty of the Hunt", "Contagion", "Dwarven Catapult", "Fiery Justice",
+        "Bounty of the Hunt", "Contagion", "Fiery Justice",
         "Fire Covenant", "Fireball", "Meteor Shower", "Pyrokinesis",
         "Pyrotechnics", "Spoils of War",
         # Reviewed at Visions' promotion, which is what this inventory is for.

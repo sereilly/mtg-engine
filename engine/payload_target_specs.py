@@ -17,8 +17,9 @@ out of ``engine/targeting.py`` at the 2,000-line cap.
 
 from __future__ import annotations
 
-from .target_descriptions import (GRAVEYARD_TARGET_KIND, SINGLE_GRAVEYARD,
-                                  _from_targets_payload, _narrowing_flags)
+from .target_descriptions import (ANNOUNCED_SEAT, GRAVEYARD_TARGET_KIND,
+                                  SINGLE_GRAVEYARD, _from_targets_payload,
+                                  _narrowing_flags)
 
 
 #: The payload key a computed amount's count spec is stamped under. Spelled here
@@ -415,6 +416,14 @@ def _graveyard_return_spec(payload: dict) -> dict:
     # the card the printed word excludes and then have resolution decline it.
     if payload.get("exclude_source_card"):
         spec["exclude_source_card"] = True
+    # "…up to X target cards from your graveyard …, where X is the number of
+    # black permanents **target opponent** controls as you cast this spell."
+    # (Reap.) The count's seat is a target too
+    # (``target_descriptions.ANNOUNCED_SEAT``) — carried only beside the
+    # caster's own pile, where the announcement's seat field names no pile.
+    counted = player_pronoun_spec((payload.get(_X_FROM_COUNT) or {}).get("owner"))
+    if counted is not None and spec.get("own_graveyard_only"):
+        spec[ANNOUNCED_SEAT] = counted
     return spec
 
 
@@ -895,6 +904,26 @@ def _matching_sweep_spec(payload: dict) -> dict | None:
     return _from_targets_payload(payload.get("targets"))
 
 
+def _subject_controller_spec(payload: dict) -> dict | None:
+    """"Creatures **target player** controls attack this turn if able."
+    (Instigator.)
+
+    :func:`_sweep_controller_spec` for a requirement, whose described set
+    rides ``subject`` rather than ``filter``: the noun phrase says which
+    creatures, the ``controller`` key inside it says whose, and only the second
+    is a choice (CR 601.2c). Without the row the activation derived no target
+    at all — its picker offered only the discard cost — and the handler, handed
+    no seat, matched no creature: the ability resolved doing nothing at any
+    table. Every other printing of the kind ("Non-Wall creatures **the active
+    player** controls", Maddening Imp; a set an earlier step chose) names no
+    targeted seat, and the reader answers None for it.
+    """
+    described = payload.get("subject")
+    if not isinstance(described, dict):
+        return None
+    return player_pronoun_spec(described.get("controller"))
+
+
 def _counted_scope_spec(payload: dict) -> dict | None:
     """"Draw a card for each tapped creature **target opponent** controls."
     (Theft of Dreams.)
@@ -1017,6 +1046,13 @@ def _graveyard_to_library_spec(payload: dict) -> dict:
     # and the mirror of the mistake `own_graveyard_only` above exists to stop.
     elif payload.get("graveyard_owner") == "an_opponent":
         spec["opponent_graveyard_only"] = True
+    # "…from **target player's** graveyard" (Drafna's Restoration), "**Target
+    # player** shuffles … target cards from their graveyard" (Gaea's
+    # Blessing): the pile's owner is a target too, and the spec carries the
+    # description it is chosen by (``target_descriptions.ANNOUNCED_SEAT``).
+    pile_owner = player_pronoun_spec(payload.get("graveyard_owner"))
+    if pile_owner is not None:
+        spec[ANNOUNCED_SEAT] = pile_owner
     described = payload.get("targets") or {}
     if described.get("unbounded"):
         spec["unbounded_targets"] = True
@@ -1234,6 +1270,17 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     # inside a noun phrase, which is the only thing that separates this row
     # from the two sweeps above it.
     "draw_controller_cards": _counted_scope_spec,
+    # "…you may add X mana of any one color, where X is the number of Islands
+    # **target opponent** controls." (Carpet of Flowers.) The row above one
+    # verb over: the seat is inside the counted amount and is the ability's
+    # only target, so it is what CR 603.3d chooses as the trigger is put on
+    # the stack (the card's 2004-10-04 rulings: "You can target a different
+    # opponent each turn"; "The ability is not a mana ability"). Without the
+    # row the trigger derived no picker and the count fell to the first
+    # opponent at three seats. Every other printing of this kind counts
+    # nobody's board or the caster's, and the reader answers None for them.
+    "add_mana_from_text": _counted_scope_spec,
+    "force_subject_to_attack_until_eot": _subject_controller_spec,
     "grant_target_ability_text": _ability_text_grant_spec,
     "give_control_of_source_to_player": _control_gift_spec,
     "choose_permanents": _chosen_from_target_player_spec,

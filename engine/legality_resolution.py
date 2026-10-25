@@ -479,6 +479,20 @@ class ResolutionTargetsMixin:
             legality.append(self.graveyard_target_is_legal(stamp))
             if addresses is not None:
                 addresses.append(None)
+        # …and the pile's **owner**, where the pile's owner is a target ("…from
+        # target player's graveyard", Drafna's Restoration; "Target player
+        # shuffles up to three target cards from their graveyard", Gaea's
+        # Blessing) — or the opponent a count was taken on (Reap): one more
+        # target of the same announcement (:meth:`_announced_seat_verdict`).
+        # So a player who gained shroud in response, with no card named or
+        # every card gone, is every target illegal (Gaea's Blessing's
+        # 2018-04-27 ruling has the player shuffle their library when only the
+        # *cards* went).
+        verdict = self._announced_seat_verdict(item, card, spec, holder)
+        if verdict is not None:
+            legality.append(verdict)
+            if addresses is not None:
+                addresses.append(None)
         stack_target = getattr(holder, "target_stack_item", None)
         if stack_target is not None and (
             not program.modes
@@ -625,24 +639,61 @@ class ResolutionTargetsMixin:
             found.append(
                 (target.kind, target.channel, target.position, target.permanent_id)
             )
+        # "…divided as you choose among any number of targets. **Target
+        # opponent** gains 5 life." (Fiery Justice.) The opponent beside the
+        # division is a target of its own — the card's 2017-03-14 ruling: "If
+        # all targets become illegal, including the target opponent for the
+        # life-gaining effect, Fiery Justice doesn't resolve."
+        verdict = self._announced_seat_verdict(item, card, spec, holder)
+        if verdict is not None:
+            legality.append(verdict)
+            found.append(None)
         if addresses is not None:
             addresses.extend(found)
         return legality
+
+    def _announced_seat_verdict(self, item, card, spec, holder) -> "bool | None":
+        """CR 608.2b for a seat announced beside a spec's own slots
+        (``target_descriptions.ANNOUNCED_SEAT``): whether the seat the item
+        recorded is still one its description admits — or None for a spec
+        that announces none, and for a holder other than the item (a chosen
+        mode carries no seat of its own).
+
+        Its address is None for :meth:`blank_illegal_resolution_targets`: a
+        lone seat is not blanked (``stack_targets.blank_illegal_targets``),
+        and each handler acting on it asks the same question first
+        (``handlers/_targets.pile_owner_still_a_target``,
+        ``named_seat_still_a_target``).
+        """
+        if holder is not item:
+            return None
+        offered = self._announced_seats(item.caster_index, card, spec)
+        if offered is None:
+            return None
+        seat = getattr(holder, "target_player_index", None)
+        if not isinstance(seat, int):
+            seat = self._spell_default_seat(item.caster_index)
+        return seat in offered
 
     def stale_comparison_refusal(self, item) -> str | None:
         """CR 608.2b for **a printed comparison between two seats**, and for
         nothing else.
 
-        "Choose target opponent **who has more life than you do** as you
-        activate this ability" (the Exodus Keepers); "that player chooses target
-        player **who controls more creatures than they do and is their
-        opponent**" (the Oaths). ``legality``'s seat loop enforces the clause at
-        announcement, which is where a restriction on who may be chosen has to
-        be enforced or it does nothing — and until this, that was the *only*
-        moment it was asked. A Keeper of the Light activated while an opponent
-        was ahead on life gained its 3 life anyway if that life total dropped in
-        response, and the ability the rules would have countered instead
-        resolved in full.
+        "…that player chooses target player **who controls more creatures
+        than they do and is their opponent**" (the Oaths). ``legality``'s seat
+        loop enforces the clause at announcement, which is where a restriction
+        on who may be chosen has to be enforced or it does nothing — and CR
+        608.2b asks it again here, as the object resolves.
+
+        **Not the Exodus Keepers'.** "Choose target opponent who has more life
+        than you do **as you activate this ability**" bounds the clause to the
+        announcement in its own words, and the five cards' rulings (2009-10-01)
+        say so outright: "The ability will still resolve normally even if the
+        condition is no longer true at that time." This gate countered a Keeper
+        of the Light whose opponent fell behind in response, which is the
+        ruling's own example turned round; such a clause is now read through
+        ``player_comparisons.comparison_at_resolution``, which drops it, and
+        the seat is left to the ordinary target re-checks.
 
         **This is deliberately not "608.2b widened to abilities."** That is its
         own round, blocked on a different bug, and ``ROADMAP.md`` records the
@@ -677,7 +728,9 @@ class ResolutionTargetsMixin:
             return None
         if not 0 <= seat < len(self.players):
             return None
-        spec = derive_instruction_spec([instruction])
+        from .player_comparisons import comparison_at_resolution
+
+        spec = comparison_at_resolution(derive_instruction_spec([instruction]))
         compared = (spec or {}).get("compared")
         if not compared:
             return None

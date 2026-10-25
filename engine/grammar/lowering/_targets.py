@@ -484,6 +484,10 @@ def _player_comparison_payload(
     # only the comparison stays byte-identical to what it would have been.
     if comparison.is_opponent:
         described["is_opponent"] = True
+    # "…as you activate this ability": asked as the target is chosen and not
+    # again at resolution (``player_comparisons.comparison_at_resolution``).
+    if comparison.as_announced:
+        described["as_announced"] = True
     return described
 
 

@@ -384,6 +384,12 @@ def test_w2g7_every_spell_aimed_by_id_at_its_casters_side_is_the_cast_by_slot():
             or spec.get("kind") in (
                 "none", "modal", "hand_card", "graveyard_creature", "stack", "player",
             )
+            # A seat the spell announces beside its own slot ("Target opponent
+            # gains 5 life", Fiery Justice — ``target_descriptions.
+            # ANNOUNCED_SEAT``): its seat field names that opponent, not the
+            # board a slot counts into, so "by slot" is not an announcement it
+            # has (its division is named on its own list, or by id).
+            or spec.get("announced_seat")
         ):
             continue
         x_value = 1 if "{X}" in (card.mana_cost or "") else None

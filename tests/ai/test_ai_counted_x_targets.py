@@ -114,7 +114,9 @@ def test_reap_still_names_cards_in_its_casters_own_graveyard(pool):
     """The other card on this road: "Return up to X target cards from your
     graveyard to your hand, where X is the number of black permanents target
     opponent controls". Its slots are graveyard cards and only one graveyard
-    is legal, so it reads as it did."""
+    is legal — the caster's own — so the cast's seat field names the
+    *opponent* the X is counted on, which is a target of the same
+    announcement (``target_descriptions.COUNTED_SEAT_TARGET``)."""
     game = _duel(
         pool, hand=["Reap"], mine=["Swamp", "Forest"],
         theirs=["Drudge Skeletons", "Black Knight"],
@@ -124,7 +126,7 @@ def test_reap_still_names_cards_in_its_casters_own_graveyard(pool):
     action = choose_cast_action(game, ME)
 
     assert action.card_name == "Reap"
-    assert (action.target_player_index, action.target_permanent_index) == (ME, [0, 1])
+    assert (action.target_player_index, action.target_permanent_index) == (OPP, [0, 1])
     assert _cast(game, action).supported
     assert sorted(card.name for card in game.players[ME].hand) == [
         "Grizzly Bears", "Hill Giant",

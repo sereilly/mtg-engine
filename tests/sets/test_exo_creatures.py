@@ -202,7 +202,14 @@ def test_keeper_of_the_dead_destroys_out_of_the_chosen_players_board(set_pool):
         my_gy=[_g1_card("Dead %d" % i) for i in range(3)],
     )
 
-    result = _g1_activate(game, "Keeper of the Dead")
+    # Both targets, as one roles announcement (CR 602.2b): the seat, then the
+    # creature that seat controls — the creature is the activator's, never the
+    # handler's pick.
+    whitey = seat1.battlefield[1]
+    result = game.activate_permanent_ability(
+        0, "Keeper of the Dead", permanent_index=0,
+        target_role_refs=[{"seat": 1}, {"permanent_id": whitey.permanent_id}],
+    )
     assert result.supported, result.details
     resolve_stack(game)
 
@@ -1224,7 +1231,7 @@ def _g5_body(name, colors=()):
 
 
 def _g5_keeper_on_the_stack(set_pool, keeper, *, lives=(20, 25), theirs=(),
-                            my_gy=(), their_gy=(), hands=((), ())):
+                            my_gy=(), their_gy=(), hands=((), ()), role_refs=None):
     """Activate *keeper* at seat 1 and leave the ability **on the stack**.
 
     ``queue_permanent_ability`` rather than ``activate_permanent_ability``:
@@ -1251,19 +1258,25 @@ def _g5_keeper_on_the_stack(set_pool, keeper, *, lives=(20, 25), theirs=(),
     game.enforce_mana_costs = False
     game._settle()
     game.start_turn(0)
+    announcement = (
+        {"target_role_refs": role_refs(players)} if role_refs is not None
+        else {"target_player_index": 1}
+    )
     queued = game.queue_permanent_ability(
-        0, keeper, permanent_index=0, target_player_index=1,
+        0, keeper, permanent_index=0, **announcement,
     )
     assert queued.supported, queued.details
     assert len(game.stack) == 1, game.log
     return game, players[0], players[1]
 
 
-def test_w2g5_keeper_of_the_light_is_countered_when_the_lead_disappears(set_pool):
-    """CR 608.2b: an object whose every target has become illegal does not
-    resolve. The opponent was ahead when the ability was activated and is not
-    when it would resolve, so there is no legal target left and no life is
-    gained — where before the check the 3 life arrived regardless.
+def test_w2g5_keeper_of_the_light_still_resolves_when_the_lead_disappears(set_pool):
+    """"…as you activate this ability": the clause is asked as the target is
+    chosen and not again. The card's ruling (2009-10-01): "It is only necessary
+    that the condition be true as you activate the ability. The ability will
+    still resolve normally even if the condition is no longer true at that
+    time." This test used to assert the ability was countered (CR 608.2b), which
+    is that ruling turned round.
     """
     game, seat0, seat1 = _g5_keeper_on_the_stack(
         set_pool, "Keeper of the Light", lives=(20, 25),
@@ -1272,9 +1285,9 @@ def test_w2g5_keeper_of_the_light_is_countered_when_the_lead_disappears(set_pool
     seat1.life = 15
     _g5_resolve_stack(game)
 
-    assert seat0.life == 20, "the ability was countered, so nothing was gained"
+    assert seat0.life == 23, "the ability resolved normally"
     assert game.stack == []
-    assert any("608.2b" in line for line in game.log), game.log
+    assert not any("608.2b" in line for line in game.log), game.log
 
 
 def test_w2g5_keeper_of_the_light_still_pays_out_when_the_lead_holds(set_pool):
@@ -1292,10 +1305,10 @@ def test_w2g5_keeper_of_the_light_still_pays_out_when_the_lead_holds(set_pool):
     assert not any("608.2b" in line for line in game.log), game.log
 
 
-def test_w2g5_keeper_of_the_mind_is_countered_when_the_hands_even_up(set_pool):
-    """The same clause counted off a hand instead of a life total, so the
-    re-check is reading the printed noun phrase rather than one hard-wired
-    quantity: "at least two more cards in hand than you do", margin two.
+def test_w2g5_keeper_of_the_mind_still_resolves_when_the_hands_even_up(set_pool):
+    """The same clause counted off a hand instead of a life total, and the same
+    ruling (2009-10-01): the condition need only be true as the ability is
+    activated, so the card is drawn although the hands have evened up.
     """
     game, seat0, seat1 = _g5_keeper_on_the_stack(
         set_pool, "Keeper of the Mind",
@@ -1306,25 +1319,28 @@ def test_w2g5_keeper_of_the_mind_is_countered_when_the_hands_even_up(set_pool):
     del seat1.hand[1:]
     _g5_resolve_stack(game)
 
-    assert len(seat0.hand) == before, "no card was drawn"
-    assert any("608.2b" in line for line in game.log), game.log
+    assert len(seat0.hand) == before + 1, "the card was drawn"
+    assert not any("608.2b" in line for line in game.log), game.log
 
 
 def test_w2g5_keeper_of_the_dead_prints_two_targets_and_is_left_alone(set_pool):
-    """CR 608.2b is **all-or-nothing**, and this is the card that bounds the
-    gate: "Choose target opponent … Destroy target nonblack creature that
-    player controls" prints the word twice, so one target going illegal is not
-    every target going illegal and the ability still resolves.
+    """"Choose target opponent … as you activate this ability. Destroy target
+    nonblack creature that player controls" — two targets announced together
+    (the seat, then the creature that seat controls), and the comparison asked
+    as they are chosen and not again (the card's 2009-10-01 ruling: "The
+    ability will still resolve normally even if the condition is no longer
+    true at that time").
 
-    The creature is destroyed and the ability is not countered. That is the
-    honest answer for a gate that only claims the one-target case — and it is
-    also why the gate counts the printed quantifiers rather than assuming the
-    seat is the whole announcement.
+    The creature is destroyed and the ability is not countered.
     """
     game, _seat0, seat1 = _g5_keeper_on_the_stack(
         set_pool, "Keeper of the Dead",
         theirs=(_g5_body("Victim"),),
         my_gy=[_g5_body("Dead %d" % i) for i in range(3)],
+        role_refs=lambda players: [
+            {"seat": 1},
+            {"permanent_id": players[1].battlefield[0].permanent_id},
+        ],
     )
 
     # In response the opponent's graveyard fills and the margin is gone.
@@ -1429,8 +1445,13 @@ def test_w2g5_the_keeper_picker_offers_exactly_the_seats_the_gate_admits(set_poo
         fresh, _fresh_keeper = _g5_keeper_of_the_dead_table(
             set_pool, [[], [], [_g5_body("Reachable", ["W"])]], graveyard,
         )
+        # The seat and the one creature anybody could name beside it: the
+        # announcement is both targets (CR 602.2b), so the gate is asked
+        # whether *this seat* can be named with the creature behind it.
+        reachable = fresh.players[2].battlefield[0]
         result = fresh.queue_permanent_ability(
-            0, "Keeper of the Dead", permanent_index=0, target_player_index=seat,
+            0, "Keeper of the Dead", permanent_index=0,
+            target_role_refs=[{"seat": seat}, {"permanent_id": reachable.permanent_id}],
         )
         assert result.supported is admitted, (seat, result.details)
 

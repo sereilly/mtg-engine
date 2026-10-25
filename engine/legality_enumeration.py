@@ -984,6 +984,32 @@ class TargetEnumerationMixin:
             and card_matches_any(held, alternatives, game=self, owner=caster_index)
         ]
 
+    def _announced_seats(
+        self, caster_index: int, card, spec: dict | None,
+    ) -> "set[int] | None":
+        """The seats a spec's **announced seat** may be
+        (``target_descriptions.ANNOUNCED_SEAT``: the owner of the pile, the
+        seat a count is taken on, a seat beside a division), or None for a
+        spec that announces none.
+
+        Enumerated as the seat loop enumerates every "target player", with the
+        seat's own description as the spec. Not as a cast's probe
+        (``for_cast=False``): the probe asks the whole announcement's gate one
+        slot at a time, and a seat is half of this one.
+        """
+        from .target_descriptions import ANNOUNCED_SEAT
+
+        described = (spec or {}).get(ANNOUNCED_SEAT)
+        if not isinstance(described, dict):
+            return None
+        return {
+            entry["seat"]
+            for entry in self._enumerate_targets(
+                caster_index, card, dict(described), for_cast=False,
+            )
+            if entry.get("kind") == "player"
+        }
+
     def _enumerate_graveyard_creatures(
         self, caster_index: int, spec: dict, *, source_card=None
     ) -> list[dict]:
@@ -1026,7 +1052,22 @@ class TargetEnumerationMixin:
                     return False
             return graveyard_card_matches(spec, card, game=self, owner=seat)
 
+        # "…target cards from **target player's** graveyard" (Drafna's
+        # Restoration, Gaea's Blessing): the pile's owner is a target of the same
+        # announcement, so a pile is offered only where its owner is one the
+        # player description admits — the seat loop's own answer (a player with
+        # shroud, CR 702.18a, or one who has left the game, CR 800.4a, is not),
+        # through the list the cast gate holds the named seat to
+        # (``target_descriptions.ANNOUNCED_SEAT``). Not for a spell scoped to
+        # its caster's own pile, whose announced seat is the one a count is
+        # taken on (Reap) and names no pile.
+        pile_owners = (
+            None if spec.get("own_graveyard_only")
+            else self._announced_seats(caster_index, source_card, spec)
+        )
         for seat, player in enumerate(self.players):
+            if pile_owners is not None and seat not in pile_owners:
+                continue
             if spec.get("own_graveyard_only") and seat != caster_index:
                 continue
             # "from **an opponent's** graveyard" (Misinformation) — CR 102.2/102.3's

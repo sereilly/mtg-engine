@@ -176,14 +176,12 @@ def test_dwarven_catapult_divides_evenly_over_the_opponents_creatures(set_pool):
     """"Dwarven Catapult deals X damage divided evenly, rounded down, among all
     creatures target opponent controls."
 
-    It names no player, so a seat is not a legal target of it (CR 601.2c) --
-    and with no division announced the card burned a player's face for X
-    instead of dividing among a board. An evenly-divided spell announces no
-    *shares* (CR 601.2d asks a division only of a caster who chooses one), so
-    the announcement is the target list alone and the engine splits it.
+    The opponent is the one target; the creatures are a set counted as the
+    spell resolves (the card's 2004-10-04 ruling) and share X out evenly. They
+    were announced as a division's targets, which let a caster name one of two
+    creatures and put all of X on it (round kg).
     """
     from engine import Game
-    from engine.ai_divisions import choose_divided_targets
     from engine.models import Permanent, PlayerState
 
     pool = set_pool("FEM")
@@ -197,39 +195,32 @@ def test_dwarven_catapult_divides_evenly_over_the_opponents_creatures(set_pool):
     game.enforce_mana_costs = False
     game.start_turn(0)
 
-    catapult = pool["Dwarven Catapult"]
-    announced = choose_divided_targets(game, 0, catapult, 2)
-    result = game.cast_from_hand(
-        0, "Dwarven Catapult", target_player_index=1, x_value=2,
-        divided_targets=announced,
-    )
+    result = game.cast_from_hand(0, "Dwarven Catapult", target_player_index=1, x_value=5)
     game._settle()
 
     assert result.supported, result.details
-    assert announced == [(1, 0), (1, 1)], announced
     assert game.players[1].life == 20, "the card names creatures, not a player"
-    assert [perm.damage_marked for perm in game.players[1].battlefield] == [1, 1]
+    assert [perm.damage_marked for perm in game.players[1].battlefield] == [2, 2]
 
 
-def test_dwarven_catapult_with_no_target_named_is_refused(set_pool):
-    """CR 601.2d divides "among **one or more** targets". With no creature to
-    divide among, the proposal is illegal and CR 601.2e returns the game to the
-    moment before it -- rather than the spell being cast, for its full cost,
-    into a face it may not target.
-    """
+def test_dwarven_catapult_with_no_creature_still_targets_its_opponent(set_pool):
+    """The opponent is the target (CR 601.2c), so a board with no creature is
+    a legal cast that deals nothing — and the caster is never the opponent
+    (CR 102.3)."""
     from engine import Game
     from engine.models import PlayerState
 
     pool = set_pool("FEM")
-    p0 = PlayerState(name="P0", life=20, hand=[pool["Dwarven Catapult"]])
+    p0 = PlayerState(name="P0", life=20, hand=[pool["Dwarven Catapult"]] * 2)
     game = Game(players=[p0, PlayerState(name="P1", life=20)])
     game.enforce_mana_costs = False
     game.start_turn(0)
 
+    own = game.cast_from_hand(0, "Dwarven Catapult", target_player_index=0, x_value=3)
     result = game.cast_from_hand(0, "Dwarven Catapult", target_player_index=1, x_value=3)
+    game._settle()
 
-    assert not result.supported
-    assert "601.2d" in result.details, result.details
-    assert [card.name for card in game.players[0].hand] == ["Dwarven Catapult"]
-    assert game.players[1].life == 20
+    assert not own.supported
+    assert result.supported, result.details
+    assert [player.life for player in game.players] == [20, 20]
 # --- end W3-divided ---

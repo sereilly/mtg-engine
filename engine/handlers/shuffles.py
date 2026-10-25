@@ -20,7 +20,8 @@ from typing import TYPE_CHECKING
 from ..oracle_types import HAND_CARDS_TO_LIBRARY
 from ._amounts import resolve_amount
 from ._filters import graveyard_card_matches
-from ._targets import _resolve_graveyard_slots, resolve_target_permanent
+from ._targets import (_resolve_graveyard_slots, pile_owner_still_a_target,
+                       resolve_target_permanent)
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -195,6 +196,15 @@ def shuffle_graveyard_into_library(game: Game, instruction: OracleInstruction, c
     player = context.caster if whose == "you" else context.target
     if player is None:
         return False, "no player to shuffle"
+    # "**Target player** shuffles …" (Gaea's Blessing): the player is a target
+    # of their own, and one gone illegal in response is made to perform no
+    # action (CR 608.2b) — the shuffle does not happen, the rest of the spell
+    # does.
+    if not pile_owner_still_a_target(game, context, instruction.payload):
+        game.log.append(
+            f"{context.card.name}: {player.name} is no longer a legal target (608.2b)"
+        )
+        return True, "resolved"
     # "Target player shuffles **up to three target cards** from their graveyard
     # into their library." (Gaea's Blessing.) The moving cards were chosen at
     # announcement (CR 601.2c), so they are resolved as slots rather than

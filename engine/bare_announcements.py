@@ -65,13 +65,45 @@ from .oracle import compile_card_oracle
 from .stack_targets import names_a_target
 from .target_requirements import narrow_offer
 from .targeting import (
-    activation_target_slot, cast_target_slot,
+    activation_target_slot, cast_target_slot, derive_cast_spec,
     graveyard_target_spec, spec_offers_a_player, spec_roles,
 )
 from .target_roles import ROLES_TARGET_KIND
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .game import Game
+
+
+def announced_seat(
+    game: "Game", caster_index: int, card, named_seat, *,
+    mode_index: int | None = None,
+) -> "int | None":
+    """The seat a cast's **announced seat** names, or None for a spell whose
+    spec announces none (``target_descriptions.ANNOUNCED_SEAT``: the owner of
+    a pile, the seat a count is taken on, a seat beside a division).
+
+    The seat rides ``target_player_index``. A seat named there is the
+    announcement's choice and is returned as it stands for the gate to judge
+    (CR 601.2c) — **except the caster's own where the description cannot admit
+    it**: "target opponent" never names its caster (CR 102.3), so a caster's
+    seat there says only what a caller picking cards out of its own graveyard
+    sends as "the pile" (Reap), or what a cast that named nobody carries. Such
+    an omission is answered the way this module answers every other, once and
+    as the spell is announced: the first seat the description admits, in
+    standing order (the opposing seat first). None of them → the seat stays as
+    named and the gate refuses.
+    """
+    spec = derive_cast_spec(card, compile_card_oracle(card), mode_index=mode_index)
+    offered = game._announced_seats(caster_index, card, spec)
+    if offered is None:
+        return None
+    if isinstance(named_seat, int) and not isinstance(named_seat, bool) and (
+        named_seat != caster_index or caster_index in offered
+    ):
+        return named_seat
+    standing = game._default_opposing_seat(caster_index)
+    ordered = sorted(offered, key=lambda seat: (seat != standing, seat))
+    return ordered[0] if ordered else named_seat
 
 
 def standing_order(offered: list[dict], standing_seat: int | None) -> list[dict]:

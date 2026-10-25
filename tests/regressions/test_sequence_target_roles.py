@@ -284,13 +284,14 @@ def test_no_announcement_mixes_a_seat_and_an_object_without_roles():
         f"the sweep examined {examined} announcements, which is too few to be "
         "measuring the pool"
     )
-    assert sorted(set(unroled)) == ["Keeper of the Dead"], (
+    # Keeper of the Dead stood here alone until round kg: its object slot is
+    # narrowed by "that player controls", which named no seat the enumerator
+    # could be handed, so it announced the seat and picked the creature itself
+    # at resolution. "That player" is the seat role in front of it, and the
+    # walk now reads it as a relation between the two roles
+    # (``lowering/_roles._seat_bound_narrowing``, ``same_controller_role``).
+    assert sorted(set(unroled)) == [], (
         "an announcement naming one seat and one object must be described as "
-        f"ordered roles: {sorted(set(unroled))}. Keeper of the Dead is the one "
-        "the conversion declines, and by name: its object slot is narrowed by "
-        "'that player controls' — a seat nothing hands the enumerator, so a "
-        "role built from it would offer nothing. It is not silent about that "
-        "today either; it announces its seat and then picks the creature "
-        "itself at resolution, which is a target the activator is supposed to "
-        "choose (CR 601.2c)."
+        f"ordered roles: {sorted(set(unroled))} — the activator chooses both "
+        "(CR 601.2c), never the handler at resolution."
     )

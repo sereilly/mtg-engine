@@ -236,8 +236,19 @@ def _parse_choose_target(stream: TokenStream, parse_statement) -> "ast.ChooseTar
         # rather than left, because a production must consume every token of
         # its line; consumed only *after* a comparison, so a sentence that
         # printed the words alone is still nobody's.
-        if comparison is not None:
-            stream.accept_phrase("as", "you", "activate", "this", "ability")
+        #
+        # …and *recorded*, because the words are also a statement about the
+        # other moment: the rulings on all five Keepers (2009-10-01) say the
+        # ability "will still resolve normally even if the condition is no
+        # longer true" — so CR 608.2b does not ask it again
+        # (``ast.PlayerComparison.as_announced``).
+        if comparison is not None and stream.accept_phrase(
+            "as", "you", "activate", "this", "ability"
+        ):
+            player = dataclasses.replace(
+                player,
+                compared=dataclasses.replace(comparison, as_announced=True),
+            )
         after_player = stream.mark()
         if not stream.accept_punct("."):
             stream.reset(mark)
