@@ -27,7 +27,8 @@ each road that can fire it — attacking unblocked, attacking into a Wall,
 blocking a Bear — and asks the announcement itself: an ability whose printed
 line names no target announces nothing. Validated backwards: on the base
 tree the sample names 95 of its 175 objects (every one about an object)
-announced as targets, and the whole pool 298 (``MTG_FULL_CENSUS=1``).
+announced as targets; the round's scratch census of the whole pool down the
+same roads counted 298 such pushes (``MTG_FULL_CENSUS=1`` runs every card).
 """
 from __future__ import annotations
 
