@@ -87,30 +87,28 @@ def resolve_own_combatant(
 ) -> tuple[PlayerState, int, Permanent] | None:
     """Resolve a trigger fired *on a permanent about itself* — the shape combat
     triggers use, where ``_fire_creature_attacks_triggers`` /
-    ``_fire_creature_blocks_triggers`` thread the permanent's own controller and
-    battlefield index through ``target``/``target_permanent_index``. Returns
-    ``(controller, index, permanent)``, or ``None`` if the context no longer
-    points at a live permanent (already left combat/the battlefield).
+    ``_fire_creature_blocks_triggers`` record the attacker or blocker as the
+    object the ability is about (``StackItem.about_permanent_id``). Returns
+    ``(controller, index, permanent)``, or ``None`` if that permanent is no
+    longer on the battlefield.
 
-    An attack trigger is the clearest case for identity: it is put on the stack
-    during declare-attackers and resolves after every other trigger above it,
-    any of which may have destroyed a creature and shifted the attacker's slot.
-    The index is still returned, because callers report it — but it is
-    *re-derived* from the permanent the id found, never carried."""
-    controller = context.target
-    if controller is None:
+    **By id and by nothing else** (CR 400.7). An attack trigger is the clearest
+    case for identity: it is put on the stack during declare-attackers and
+    resolves after every other trigger above it, any of which may have
+    destroyed a creature and shifted the attacker's slot. The controller and
+    the index are *derived* from the permanent the id finds — the index
+    because callers report it — and never carried. Read off its own channel
+    rather than the target fields, which hold what a player chose: the two
+    were one field, and every reader of a target read this object as one.
+    """
+    found = game.find_permanent_by_id(context.about_permanent_id)
+    if found is None:
         return None
-    permanent_id = context.target_permanent_id
-    if isinstance(permanent_id, int):
-        found = game.permanent_by_id(permanent_id)
-        if found is not None and game.controls(controller, found):
-            index = game.battlefield_index_of(found)
-            if index is not None:
-                return controller, index, found
-    idx = context.target_permanent_index
-    if not isinstance(idx, int) or not (0 <= idx < len(controller.battlefield)):
+    seat, permanent = found
+    index = game.battlefield_index_of(permanent)
+    if index is None:
         return None
-    return controller, idx, controller.battlefield[idx]
+    return game.players[seat], index, permanent
 
 
 def defending_player_seat(game: "Game", context: "OracleExecutionContext") -> int | None:

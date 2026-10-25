@@ -414,6 +414,32 @@ class StackItem:
     # creature had no place in layer 6, and survived a loss of all abilities
     # that was newer than the spell.
     timestamp: int | None = None
+    # **The permanent this triggered ability is about**, by id (CR 400.7):
+    # the object its firing event named for its effect to act on — the
+    # attacker or blocker itself (Mijae Djinn, Ydwen Efreet), the creature on
+    # the other side of a block ("destroy that Wall", Battering Ram; "that
+    # creature becomes green", Aisling Leprechaun), the permanent a damage
+    # event damaged ("destroy that planeswalker", Hooded Blightfang), the
+    # object a delayed ability refers to (CR 603.7c, Barreling Attack's "it").
+    # Frozen by the fire site as the ability triggers (CR 603.10).
+    #
+    # **Never a target.** Nobody chose it, so CR 603.3d has nothing left to
+    # choose, CR 608.2b does not ask about it, and nothing "becomes the
+    # target" of it (CR 115.10). The target fields above are the choice and
+    # only the choice: until this field existed the fire sites threaded the
+    # object through them, and every reader of a *target* read it as one —
+    # Skulking Ghost blocking an Aisling Leprechaun was sacrificed to an
+    # ability that targets nothing, and Goblin Cadets' "target opponent"
+    # was never chosen.
+    #
+    # Written only where the printed line **names no target of its own**
+    # (``trigger_utils.bound_event_object``): a line that says "target" chooses
+    # one (Seasoned Marshal, the Laccoliths), and its "it" is its source. Read
+    # by the context builder (``_ability_execution_context``), which hands it
+    # to the effect as the object the sentence acts on, and by
+    # ``handlers/_targets.resolve_own_combatant``. None for a spell, an
+    # activated ability and every trigger whose event named no such object.
+    about_permanent_id: int | None = None
 
     def __post_init__(self) -> None:
         if self.owner_index is None:
@@ -558,6 +584,13 @@ class OracleExecutionContext:
     # the rebind records it here. None everywhere nothing has moved
     # ``caster``; read it as ``ability_controller or caster``.
     ability_controller: PlayerState | None = None
+    # The permanent the resolving triggered ability is **about**, carried over
+    # from ``StackItem.about_permanent_id`` unchanged (see there). The target
+    # channels above already name it where the ability chose nothing — the
+    # context builder puts it there, because "that creature" is what the
+    # sentence acts on — so this is for the reader that wants the object the
+    # event named even beside a chosen target: ``resolve_own_combatant``.
+    about_permanent_id: int | None = None
 
 
 def chosen_damage_source(

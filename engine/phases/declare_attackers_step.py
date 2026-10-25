@@ -23,7 +23,7 @@ from ..models import Permanent, PlayerState
 from ..oracle import compile_card_oracle
 from ..oracle_types import X_FROM_COUNT
 from ..pt import pt_counter_key
-from ..trigger_utils import matching_triggers
+from ..trigger_utils import bound_event_object, matching_triggers
 from ..turn_state import record_attacked_seat, record_attack
 
 
@@ -925,11 +925,18 @@ class DeclareAttackersStepMixin:
                     StackItem(
                         card=permanent.card,
                         caster_index=controller_index,
-                        # The attacker's own controller/index, so the coin-flip
-                        # handler can remove IT from combat without re-deriving
-                        # who owns it.
-                        target_player_index=controller_index,
-                        target_permanent_index=idx,
+                        # Nothing chosen: a line that prints "target" chooses
+                        # as it is put on the stack (CR 603.3d).
+                        target_player_index=None,
+                        target_permanent_index=None,
+                        # The attacker itself, which the coin-flip handler
+                        # removes from combat (``resolve_own_combatant``) — by
+                        # id, and never in the target fields, where every
+                        # reader of a target read it as one: Seasoned Marshal
+                        # tapped itself.
+                        about_permanent_id=bound_event_object(
+                            trig.instruction, permanent
+                        ),
                         x_value=None,
                         ability_instruction=trig.instruction,
                         ability_effect_kind=trig.effect_kind,

@@ -104,7 +104,16 @@ class OracleInstructionsMixin:
         # damage paths as a bare `CardDefinition`, which records neither its
         # controller nor its targets. "Prevent all damage that would be dealt to
         # this creature by spells that target it" (Bronze Horse) reads it.
-        recorded = getattr(context, "target_permanent_id", None)
+        #
+        # **Only what was chosen.** A triggered ability about an object its
+        # event named (``StackItem.about_permanent_id``) is handed that object
+        # in the target channel, because it is what the sentence acts on — and
+        # it is not a target (CR 115.10): "spells or abilities that target it"
+        # do not include Cockatrice's "destroy that creature".
+        recorded = (
+            None if getattr(context, "about_permanent_id", None) is not None
+            else getattr(context, "target_permanent_id", None)
+        )
         self.resolving_targets.append(
             tuple(
                 identity

@@ -46,8 +46,8 @@ if TYPE_CHECKING:
 def coin_flip_remove_attacker_and_tap(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Mijae Djinn: "Whenever this creature attacks, flip a coin. If you lose
     the flip, remove this creature from combat and tap it." Fired per-attacker
-    by _fire_creature_attacks_triggers, which threads the attacker's own
-    controller/index through target_player_index/target_permanent_index."""
+    by _fire_creature_attacks_triggers, which records the attacker as the
+    object the ability is about (``StackItem.about_permanent_id``)."""
     combatant = resolve_own_combatant(game, context)
     if combatant is None:
         return True, "resolved"

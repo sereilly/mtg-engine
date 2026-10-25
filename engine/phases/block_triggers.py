@@ -18,7 +18,7 @@ calls: a creature an effect blocks becomes blocked outside any declaration.
 
 from ..delayed_triggers import fire_delayed_triggers
 from ..models import Permanent
-from ..trigger_utils import matching_triggers
+from ..trigger_utils import bound_event_object, matching_triggers
 
 
 #: CR 509.3e's threshold, as ``engine/whenever_triggers.py``'s condition table records it:
@@ -102,7 +102,7 @@ class BlockTriggersMixin:
         from ..events import trigger_subject_matches
         from ..game_types import StackItem
 
-        for blocker_idx, blocker, blocked in self._resolved_block_pairs(
+        for _blocker_idx, blocker, blocked in self._resolved_block_pairs(
             controller_index, assignments
         ):
             # "attacks or blocks" (Elder Gargaroth): the block half of the
@@ -166,11 +166,19 @@ class BlockTriggersMixin:
                         StackItem(
                             card=source.card,
                             caster_index=source_seat,
-                            # The blocker's own controller/index, so the coin-flip
-                            # handler can remove IT from combat without re-deriving
-                            # who owns it.
-                            target_player_index=controller_index,
-                            target_permanent_index=blocker_idx,
+                            # Nothing chosen: a line that prints "target"
+                            # chooses as it is put on the stack (CR 603.3d).
+                            target_player_index=None,
+                            target_permanent_index=None,
+                            # The blocker, which the coin-flip handler removes
+                            # from combat (``resolve_own_combatant``) — the
+                            # blocker whether the ability is its own or an
+                            # Aura's on it. Never in the target fields: Elite
+                            # Javelineer dealt its damage to itself, and Goblin
+                            # Cadets' "target opponent" was its own controller.
+                            about_permanent_id=bound_event_object(
+                                trig.instruction, blocker
+                            ),
                             x_value=None,
                             ability_instruction=trig.instruction,
                             ability_effect_kind=trig.effect_kind,
@@ -506,7 +514,6 @@ class BlockTriggersMixin:
         from ..aura_attachment import attached_subject_triggers
         from ..events import trigger_subject_matches
         from ..game_types import StackItem
-        from ..targeting import announces_a_target
 
         seat = self.active_player_index
         # CR 506.2: the seat this attacker is attacking, frozen into the
@@ -582,41 +589,29 @@ class BlockTriggersMixin:
                 # With no threshold printed the per-creature firing of
                 # CR 509.3d stands, which is every other card here.
                 matched = _threshold_blockers(trig, matched)
-            # **A printed "target" is a choice, not the blocker.** "…you may
-            # have it deal damage equal to its power to **target creature**"
-            # (the Laccoliths) names any creature the controller picks
-            # (CR 603.3d), and stamping the blocker into the target field is
-            # what `_choose_trigger_targets` reads as "the event already made
-            # the choice" — so every Laccolith shot the creature that blocked
-            # it whatever its controller wanted. The blocker still travels as
-            # ``blocked_permanent_ids`` below, which is where "that creature"
-            # reads it, so only an ability that announces a target loses the
-            # stamp.
-            chooses = announces_a_target(trig.instruction)
             for blocker in matched:
-                # **The blocker is what the trigger bound**, so it is the
-                # stack item's target: "destroy that Wall" (Battering Ram)
-                # names the creature that blocked, and by the time the
-                # ability resolves nothing else could say which. Stamped by
-                # id as well as by slot, because a removal in between
-                # renumbers every later one (CR 400.7).
+                # **The blocker is what the trigger is about**: "destroy that
+                # Wall" (Battering Ram) names the creature that blocked, and by
+                # the time the ability resolves nothing else could say which —
+                # so it rides the stack object by id (CR 400.7), and never as
+                # its target. A line that prints "target" chooses one instead
+                # (CR 603.3d): "…you may have it deal damage equal to its power
+                # to **target creature**" (the Laccoliths) names any creature
+                # its controller picks, and recording the blocker there is how
+                # every Laccolith once shot the creature that blocked it. The
+                # blocker still travels as ``blocked_permanent_ids`` below for
+                # a sentence that says "that creature" beside a target.
                 blocker_seat = (
                     self.controller_index_of(blocker) if blocker is not None else None
                 )
-                stamped = blocker if not chooses else None
                 pushed = self._stack_push(
                     StackItem(
                         card=source.card,
                         caster_index=source_seat,
-                        target_player_index=(
-                            blocker_seat if blocker_seat is not None else seat
-                        ),
-                        target_permanent_index=(
-                            self.battlefield_index_of(stamped)
-                            if stamped is not None else None
-                        ),
-                        target_permanent_id=(
-                            stamped.permanent_id if stamped is not None else None
+                        target_player_index=None,
+                        target_permanent_index=None,
+                        about_permanent_id=bound_event_object(
+                            trig.instruction, blocker
                         ),
                         x_value=None,
                         ability_instruction=trig.instruction,
@@ -680,8 +675,11 @@ class BlockTriggersMixin:
         ``blocked_permanent_ids`` carries the **partner** under the key
         ``handlers/_targets.block_pair_permanents`` already reads, so the effect
         resolves the other half of the pair through the one reader every other
-        block-pair effect goes through. ``target_permanent_id`` carries it too,
-        for the stack item, the log and CR 400.7's identity.
+        block-pair effect goes through. ``about_permanent_id`` carries it too:
+        the object the trigger is about, which ``events.collect`` puts on the
+        stack object for a line that names no target of its own
+        (``trigger_utils.bound_event_object``) — never as its target, which a
+        line printing one chooses (Close Quarters' "any target").
         """
         from ..events import emit
 
@@ -694,7 +692,7 @@ class BlockTriggersMixin:
                     combatant_permanent_id=attacker.permanent_id,
                     partner_permanent_id=blocker.permanent_id,
                     blocked_permanent_ids=[blocker.permanent_id],
-                    target_permanent_id=blocker.permanent_id,
+                    about_permanent_id=blocker.permanent_id,
                     event_subject_permanent_id=attacker.permanent_id,
                     event_subject_controller=self.controller_index_of(attacker),
                     pair_announcement=True,
@@ -705,7 +703,7 @@ class BlockTriggersMixin:
                     combatant_permanent_id=blocker.permanent_id,
                     partner_permanent_id=attacker.permanent_id,
                     blocked_permanent_ids=[attacker.permanent_id],
-                    target_permanent_id=attacker.permanent_id,
+                    about_permanent_id=attacker.permanent_id,
                     event_subject_permanent_id=blocker.permanent_id,
                     event_subject_controller=self.controller_index_of(blocker),
                     pair_announcement=True,

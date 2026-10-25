@@ -375,9 +375,9 @@ def test_603_2d_a_seat_that_can_be_asked_is_asked_for_the_additional_instance():
 @pytest.mark.cr("603.2d")
 def test_603_2d_what_the_event_bound_is_bound_for_every_instance():
     """The other half, so the first is not "an additional instance forgets
-    its target": a target the **fire site** stamped is what the event was
-    about, and the event is the same however many times the ability triggers.
-    Only a cast's announcement is dropped."""
+    its target": the object the **fire site** recorded is what the event was
+    about (``StackItem.about_permanent_id``), and the event is the same however
+    many times the ability triggers. Only a cast's announcement is dropped."""
     game, p1, p2 = _duel()
     doubler = Permanent(card=_invented("Beast Chorus", "Enchantment", _DOUBLER_TEXT))
     triggerer = _beast("First Beast")
@@ -390,10 +390,10 @@ def test_603_2d_what_the_event_bound_is_bound_for_every_instance():
         controller_index=0, source_permanent=triggerer,
         instruction=OracleInstruction("gain_life", "", {"amount": 1}),
         effect_kind="triggered_life",
-        target_player_index=1, target_permanent_id=bears.permanent_id,
+        about_permanent_id=bears.permanent_id,
     )
 
-    assert [item.target_permanent_id for item in game.stack] == [
+    assert [item.about_permanent_id for item in game.stack] == [
         bears.permanent_id, bears.permanent_id,
     ]
 
