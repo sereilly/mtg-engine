@@ -76,6 +76,14 @@ _REJECTIONS: tuple[tuple[str, dict, str], ...] = (
     # a painted one is what the layers say — is demonstrated below, because a
     # matcher that always answered False also passes this row.
     ("multicolored", {"multicolored": True}, "Grizzly Bears"),
+    # "target **face-down** creature" (Nosy Goblin) and "target creature
+    # **with a morph ability**" (Backslide) — CR 110.5's status and CR
+    # 702.37a's keyword. A face-up Grizzly Bears is neither; the halves that
+    # matter (a face-down permanent *is* matched, a face-down morph creature
+    # has no morph ability, a Clone that copied one has it) are demonstrated
+    # below.
+    ("face_down_only", {"face_down_only": True}, "Grizzly Bears"),
+    ("with_morph_ability", {"with_morph_ability": True}, "Grizzly Bears"),
     ("exclude_types", {"exclude_types": ["creature"]}, "Grizzly Bears"),
     ("exclude_subtypes", {"exclude_subtypes": ["bear"]}, "Grizzly Bears"),
     ("tapped_only", {"tapped_only": True}, "Grizzly Bears"),
@@ -2628,3 +2636,29 @@ def test_tor_w1g2_a_power_bound_counts_the_observer_s_own_pile(pool):
     assert not permanent_matches_filter(lions, described), (
         "the pure half refuses the key rather than ignoring it"
     )
+
+
+def test_face_down_and_a_morph_ability_are_asked_of_the_permanent_as_it_is_now(pool):
+    """The positive halves of ``face_down_only`` and ``with_morph_ability``.
+
+    A face-down Exalted Angel is a face-down creature and — having no text
+    (CR 708.2a) — has no morph ability; the same card face up has one and is
+    not face down; a Clone that copied it has the ability it copied
+    (CR 707.2), off the effective card the copy folds."""
+    from engine.copies import become_copy
+    from engine.face_down import face_down_card
+
+    angel = pool["Exalted Angel"]
+    down = Permanent(card=face_down_card(angel))
+    up = Permanent(card=angel)
+    clone = Permanent(card=pool["Clone"])
+    become_copy(clone, up)
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[down, up, clone]), PlayerState(name="P2"),
+    ])
+    face_down = {"type_filter": "creature", "face_down_only": True}
+    morph = {"type_filter": "creature", "with_morph_ability": True}
+    assert subject_matches(game, down, face_down) and not subject_matches(game, down, morph)
+    assert subject_matches(game, up, morph) and not subject_matches(game, up, face_down)
+    assert subject_matches(game, clone, morph)
+    assert {"face_down_only", "with_morph_ability"} <= OBJECT_ONLY_FILTER_KEYS

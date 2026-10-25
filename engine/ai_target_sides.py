@@ -140,6 +140,16 @@ _OPPONENT_KINDS = frozenset({
     "put_target_on_library_top",
     "shuffle_target_permanent_into_library",
     "bounce_target_creature",
+    # CR 708.2a: "Turn target creature with a morph ability face down"
+    # (Backslide) makes the creature a 2/2 whose owner must pay its morph
+    # cost again — a setback, where ``characteristics`` reads a gift. Onslaught
+    # prints no "when turned face up" trigger that would make one's own the
+    # target (those are Legions').
+    "turn_target_face_down",
+    # CR 708.5: "Look at target face-down creature" (Aven Soulgazer) tells its
+    # controller nothing about their own face-down creatures, which they may
+    # look at already; the look is for an opponent's.
+    "look_at_target_face_down",
 })
 
 
