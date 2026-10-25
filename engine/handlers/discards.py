@@ -20,8 +20,10 @@ import random
 from typing import TYPE_CHECKING
 
 from ..counted_names import cards_sharing_a_name
-from ..oracle_types import (DISCARDED_BY_SEAT, DISCARDED_INTO_GRAVEYARD,
-                            DISCARDED_THIS_WAY, X_FROM_COUNT_PER_RECIPIENT)
+from ..oracle_types import (DISCARDED_BY_SEAT, DISCARDED_CARDS_BY_SEAT,
+                            DISCARDED_INTO_GRAVEYARD, DISCARDED_THIS_WAY,
+                            X_FROM_COUNT_PER_RECIPIENT)
+from ..resumption import ask_in_turn_order
 from ._amounts import evaluate_count, resolve_amount
 from ._filters import _card_matches_filter
 from ._targets import frozen_that_player_seat
@@ -170,28 +172,126 @@ def discard_target_cards(game: Game, instruction: OracleInstruction, context: Or
     return True, "pending_discard"
 
 
+def record_discards(results: "dict | None", seat: int, count: int, took) -> None:
+    """Write one seat's discard into a resolution's scratchpad — every record
+    a sentence behind a discard reads.
+
+    * ``discarded_count`` — the whole resolution's total, **accumulated**:
+      "Each other player discards a card. You draw a card for each card
+      discarded this way." (Syphon Mind) counts every seat's discard, and a
+      single-seat discard seeds it at zero before its one answer arrives;
+    * ``DISCARDED_BY_SEAT`` — how many this seat discarded (Mind Bomb, Flux);
+    * ``DISCARDED_THIS_WAY`` — which cards went, flat (Gerrard's Verdict);
+    * ``DISCARDED_CARDS_BY_SEAT`` — which cards went, per seat ("each player
+      who didn't discard a creature card this way", Strongarm Tactics).
+
+    One writer, because two paths discard for a seat — the ``discard``
+    prompt's answer (``choices/hand._after_discard_answered``, a chosen pick
+    and the non-interactive default alike) and the each-player discard's inline
+    default below — and a record one path forgot is a sentence that reads a
+    seat as having discarded nothing. *took* leaves out a card that went
+    somewhere hidden (CR 701.9c); *count* includes it.
+    """
+    if results is None:
+        return
+    results["discarded_count"] = int(results.get("discarded_count") or 0) + count
+    results.setdefault(DISCARDED_BY_SEAT, {})[seat] = count
+    results.setdefault(DISCARDED_THIS_WAY, []).extend(took or ())
+    results.setdefault(DISCARDED_CARDS_BY_SEAT, {}).setdefault(seat, []).extend(
+        took or ()
+    )
+
+
+def _seed_seat_discards(results: dict, seats) -> None:
+    """Every seat a sentence's discard is about, recorded as having discarded
+    nothing *yet* — so a seat with an empty hand reads as zero and an empty
+    list rather than as a missing key, which a back-reference reads as no
+    producer at all."""
+    results.setdefault("discarded_count", 0)
+    results.setdefault(DISCARDED_THIS_WAY, [])
+    by_seat = results.setdefault(DISCARDED_BY_SEAT, {})
+    cards_by_seat = results.setdefault(DISCARDED_CARDS_BY_SEAT, {})
+    for seat in seats:
+        by_seat.setdefault(seat, 0)
+        cards_by_seat.setdefault(seat, [])
+
+
+def _ask_seat_to_discard(
+    game: Game, seat: int, count: int, *, results: dict, cause_seat: int,
+    inline_default: bool = False,
+) -> None:
+    """One seat's turn in an each-seat discard, asked in APNAP order by
+    ``resumption.ask_in_turn_order`` (CR 101.4: the active player chooses
+    first, then each other player in turn order).
+
+    The ``discard`` prompt, which suspends the seat loop until it is answered.
+    Sized against the hand **now**, because a seat asked after another has
+    answered holds the hand it holds then.
+
+    *inline_default* is "Each player discards a card"'s standing arrangement
+    for a seat nobody asks: it discards its first cards where the sentence
+    stands rather than queueing a prompt the resolution would wait on — the
+    discard default's policy, through the same seam and the same records, in
+    the seat's own turn.
+
+    *cause_seat* is stamped rather than left to ``arm_pending_choice``: a seat
+    after the first is asked from inside the previous seat's answer, when no
+    resolution is on the seat stack to say whose spell made it discard — and
+    "a spell or ability an opponent controls causes you to discard" (Dodecapod)
+    is a question about exactly that.
+    """
+    player = game.players[seat]
+    count = min(int(count or 0), len(player.hand))
+    if count <= 0:
+        game.log.append(f"{player.name} has no cards to discard")
+        return
+    if inline_default and seat not in game.interactive_seats:
+        took: list = []
+        for _ in range(count):
+            card = player.hand[0]
+            game.take_card_from_hand(player, card)
+            game._discard_card(player, card, cause_seat=cause_seat)
+            took.append(card)
+            game.log.append(f"{player.name} discarded {card.name}")
+        record_discards(results, seat, count, took)
+        return
+    game.arm_pending_choice(
+        "discard", seat,
+        count=count,
+        allow_top_of_library=game._controls_top_of_library_discard(player),
+        _results=results,
+        _cause_seat=cause_seat,
+    )
+    game.log.append(f"{player.name} must choose {count} card(s) to discard")
+
+
 @effect_handler("each_opponent_discards_cards")
 def each_opponent_discards_cards(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    """"Each opponent discards two cards." (Bad Deal.) A chosen discard per
-    opponent, so each gets their own pending choice; an AI seat answers with
-    the discard default the moment it is armed, a human's queues."""
+    """"Each opponent discards two cards." (Bad Deal.) "**Each other player**
+    discards a card. You draw a card for each card discarded this way." (Syphon
+    Mind.)
+
+    A chosen discard per opponent, asked **one seat at a time in APNAP order**
+    (CR 101.4, ``resumption.ask_in_turn_order``): each opponent's ``discard``
+    prompt is armed once the one before it is answered, an AI seat's answered
+    with the discard default and a human's queued. The answers are recorded in
+    the resolution's scratchpad (:func:`record_discards`), so the sentence
+    behind — which waits for the last of them (the kind suspends) — counts
+    what every seat actually discarded."""
     amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
     caster_index = game.players.index(context.caster)
-    any_pending = False
-    for seat in game.opponents_of(caster_index):
-        opponent = game.players[seat]
-        actual = min(amount, len(opponent.hand))
-        if actual <= 0:
-            game.log.append(f"{opponent.name} has no cards to discard")
-            continue
-        game.arm_pending_choice(
-            "discard", seat,
-            count=actual,
-            allow_top_of_library=game._controls_top_of_library_discard(opponent),
-        )
-        game.log.append(f"{opponent.name} must choose {actual} card(s) to discard")
-        any_pending = True
-    return True, ("pending_discard" if any_pending else "resolved")
+    seats = {s for s in game.opponents_of(caster_index) if not game.players[s].lost}
+    _seed_seat_discards(context.results, sorted(seats))
+
+    def ask(seat: int) -> None:
+        if seat in seats:
+            _ask_seat_to_discard(
+                game, seat, amount,
+                results=context.results, cause_seat=caster_index,
+            )
+
+    ask_in_turn_order(game, ask)
+    return True, "resolved"
 
 
 @effect_handler("opponent_discards_random_card_on_damage")
@@ -705,9 +805,11 @@ def each_player_discards_a_card(game: Game, instruction: OracleInstruction, cont
     per_seat = instruction.payload.get(X_FROM_COUNT_PER_RECIPIENT)
     fixed = int(instruction.payload.get("amount", 1) or 0)
     could_not: list[int] = []
-    for seat, player in enumerate(game.players):
-        if player.lost:
-            continue
+    owed: dict[int, int] = {}
+    seats = game.apnap_seats()
+    _seed_seat_discards(context.results, seats)
+    for seat in seats:
+        player = game.players[seat]
         count = (
             evaluate_count(game, player, per_seat) if per_seat is not None else fixed
         )
@@ -721,22 +823,27 @@ def each_player_discards_a_card(game: Game, instruction: OracleInstruction, cont
                 could_not.append(seat)
                 game.log.append(f"{player.name} cannot discard (empty hand)")
             continue
-        if seat in game.interactive_seats:
-            game.arm_pending_choice(
-                "discard", seat,
-                count=count,
-                allow_top_of_library=game._controls_top_of_library_discard(player),
-            )
-            game.log.append(
-                f"{player.name} must choose {count} card(s) to discard"
-            )
-        else:
-            for _ in range(count):
-                card = player.hand[0]
-                game.take_card_from_hand(player, card)
-                game._discard_card(player, card)
-                game.log.append(f"{player.name} discarded {card.name}")
+        owed[seat] = count
     context.results["players_who_could_not_discard"] = could_not
+    caster_index = game.players.index(context.caster)
+
+    # One seat at a time in APNAP order (CR 101.4,
+    # ``resumption.ask_in_turn_order``): an interactive seat's prompt is armed
+    # once the seat before it has answered, and a seat nobody asks discards
+    # inline in its own turn. Every answer is recorded per seat
+    # (:func:`record_discards`), which is what the sentence behind reads —
+    # "each player who didn't discard a creature card this way" (Strongarm
+    # Tactics) runs after the last answer, because the prompt suspends the
+    # resolution until it is given.
+    def ask(seat: int) -> None:
+        if seat in owed:
+            _ask_seat_to_discard(
+                game, seat, owed[seat],
+                results=context.results, cause_seat=caster_index,
+                inline_default=True,
+            )
+
+    ask_in_turn_order(game, ask)
     return True, "resolved"
 
 

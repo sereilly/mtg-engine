@@ -20,7 +20,6 @@ from __future__ import annotations
 import random
 from ....linked_exile import link_exiled_card
 from ....models import Permanent
-from ....oracle_types import DISCARDED_BY_SEAT, DISCARDED_THIS_WAY
 from ....grammar.lowering._events import PUT_FROM_HAND_PERMANENTS
 from ....pending_choices import PendingChoice
 from ....search_filters import search_matches
@@ -112,24 +111,18 @@ class HandChoicesMixin:
         kind. Discarding nothing records a zero, which is what both sentences
         say.
         """
-        results = choice.data.get("_results")
-        if results is not None:
-            results["discarded_count"] = discarded
-            # And the per-seat tally, which is the same fact asked the way a
-            # sentence about "**they**" asks it. Written beside the single
-            # number rather than instead of it: "…then draw that many" reads
-            # one seat's answer where "damage to each player equal to 3 minus
-            # the number of cards they discarded" reads every seat's, and one
-            # key cannot be both.
-            by_seat = results.setdefault(DISCARDED_BY_SEAT, {})
-            by_seat[choice.player_index] = discarded
-            # …and *which* cards went, for the sentence that asks about them
-            # rather than about how many: "You gain 3 life for each **land
-            # card** discarded this way" (Gerrard's Verdict). Extended rather
-            # than assigned, as the random discard's record is: two discards in
-            # one resolution are one "this way". A card that went somewhere
-            # hidden is not in *took* (CR 701.9c) and is counted above only.
-            results.setdefault(DISCARDED_THIS_WAY, []).extend(took or ())
+        # The resolution's records — the total, the per-seat tally ("…3 minus
+        # the number of cards **they** discarded", Mind Bomb), which cards went
+        # ("for each **land card** discarded this way", Gerrard's Verdict) and
+        # which went per seat ("each player who didn't discard a creature card
+        # this way", Strongarm Tactics) — through the one writer the
+        # each-player discard's inline default shares. A card that went
+        # somewhere hidden is not in *took* (CR 701.9c) and is counted only.
+        from ....handlers.discards import record_discards
+
+        record_discards(
+            choice.data.get("_results"), choice.player_index, discarded, took,
+        )
         player = self.players[choice.player_index]
         if choice.data.get("draw_that_many") and discarded > 0:
             # CR 614.5: a draw a replacement effect *created* is not replaced

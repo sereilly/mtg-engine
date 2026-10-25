@@ -63,7 +63,8 @@ from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                              CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
                              COUNTERED_ABILITY_SOURCE,
                              COUNTERED_SPELL_CONTROLLER, COUNTERED_SPELL_NAME,
-                             COUNTERS_REMOVED, DISCARDED_BY_SEAT, DREW_BY_SEAT,
+                             COUNTERS_REMOVED, DISCARDED_BY_SEAT,
+                             DISCARDED_CARDS_BY_SEAT, DREW_BY_SEAT,
                              DREW_COUNT, EXILED_BY_SEAT, EXILED_THIS_WAY,
                              EXILED_THIS_WAY_OBJECTS, HAND_CARDS_TO_LIBRARY,
                              LAST_TARGET_CONTROLLER, LAST_TARGET_NAME,
@@ -301,6 +302,23 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # many cards" (Flux) had no per-seat producer to demand and the looped
     # draw would have read one seat's answer for everybody.
     "each_player_discards_up_to_cards": ("discarded_count", DISCARDED_BY_SEAT),
+    # "Each player discards a card. Then **each player who didn't discard a
+    # creature card this way** loses 4 life." (Strongarm Tactics.) "Each
+    # **other** player discards a card. You draw a card **for each card
+    # discarded this way**." (Syphon Mind.) The two each-seat chosen discards,
+    # asked a seat at a time (``resumption.ask_in_turn_order``), record every
+    # answer through ``handlers/discards.record_discards``: the resolution's
+    # total, the per-seat tally, the cards, and the cards per seat — the last
+    # being what "who didn't discard a creature card this way" asks of each
+    # seat (``oracle_types.DISCARDED_CARDS_BY_SEAT``).
+    "each_player_discards_a_card": (
+        "discarded_count", DISCARDED_BY_SEAT, DISCARDED_THIS_WAY,
+        DISCARDED_CARDS_BY_SEAT,
+    ),
+    "each_opponent_discards_cards": (
+        "discarded_count", DISCARDED_BY_SEAT, DISCARDED_THIS_WAY,
+        DISCARDED_CARDS_BY_SEAT,
+    ),
     # "…tokens equal to **the amount of mana they paid this way**." (Liege of
     # the Hollows.) See ``oracle_types.MANA_PAID_BY_SEAT``.
     "each_player_pays_any_mana": MANA_PAID_BY_SEAT,

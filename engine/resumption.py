@@ -130,6 +130,32 @@ def run_resumable(
     run_from(0)
 
 
+def ask_in_turn_order(
+    game, ask: Callable[[int], None], *, then: Callable[[], None] | None = None,
+) -> None:
+    """Ask every seat in **APNAP order**, one at a time (CR 101.4).
+
+        101.4b A player knows the choices made by the previous players when
+               making their choice, except as specified in 101.4a.
+
+    *ask(seat)* arms that one seat's prompt — or does what the seat owes
+    without asking, or nothing at all for a seat the sentence is not about —
+    and *then* runs once, after the last seat. It is :func:`run_resumable` over
+    ``game.apnap_seats()``: a prompt of a ``suspends`` kind stops the loop at
+    its seat, and answering it resumes the loop at the next one, so a later
+    seat is asked only once the one before has answered. A seat nobody asks
+    answers as its prompt is armed (``default_at_arm``) or when the queue is
+    drained, and the loop carries on from there either way.
+
+    **A copy of W1G4's (Onslaught wave 1, ``ons/w1g4``), to be deduplicated at
+    the merge** — written against the same name and signature so the two meet
+    as one function. The rule of :func:`run_resumable` holds: a caller's call
+    to this is the last thing its function does, and work after the last seat
+    goes in *then*.
+    """
+    run_resumable(game, game.apnap_seats(), ask, then=then)
+
+
 def resume_after_answer(game) -> None:
     """Continue every loop that was waiting on the answer just applied.
 

@@ -67,6 +67,12 @@ class PlayerDeed:
     #: record's cards are tested against. None for a deed that names no object;
     #: a lowering that gets neither what it needs refuses rather than widening.
     filter: "ObjectFilter | None" = None
+    #: "…each player **who didn't** discard a creature card this way" (Strongarm
+    #: Tactics). The clause names the seats the record does *not* answer for —
+    #: the complement over the loop's seats, asked of the same record, so the
+    #: two printed polarities cannot read two different records. Additive and
+    #: False for every clause printed before it.
+    negated: bool = False
 
 
 @dataclass(frozen=True)

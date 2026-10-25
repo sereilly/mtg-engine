@@ -4,6 +4,7 @@ import dataclasses
 from typing import TYPE_CHECKING
 
 from ._amounts import count_from_payload, per_recipient_amount, resolve_amount
+from ._filters import seats_matching_deed
 from ._targets import (bound_permanent, named_seat_still_a_target,
                        stack_target_controller_seat)
 from ..exiled_records import source_object
@@ -207,17 +208,31 @@ def target_loses_life(game: Game, instruction: OracleInstruction, context: Oracl
     # every living opponent. Life loss is not damage (CR 120.3), so no shield
     # or replacement contends here.
     recipient = instruction.payload.get("recipient")
+    # "Then each player **who didn't discard a creature card this way** loses
+    # 4 life." (Strongarm Tactics.) The seat narrowing the two looped
+    # recipients may carry, through the one reader Desolation's damage asks
+    # (``seats_matching_deed``) — a seat the clause excludes loses nothing.
+    deed = instruction.payload.get("recipient_did")
     if recipient == "caster":
         victims = [context.caster]
     elif recipient == "each_opponent":
         victims = [
             game.players[i]
-            for i in game.opponents_of(game.players.index(context.caster))
+            for i in seats_matching_deed(
+                game, context,
+                game.opponents_of(game.players.index(context.caster)), deed,
+            )
         ]
     elif recipient == "each_player":
         # "Each player loses 2 life." (Bad Deal) — the caster too; a player who
         # has already left the game is nobody (CR 800.4a).
-        victims = [p for p in game.players if not p.lost]
+        victims = [
+            game.players[i]
+            for i in seats_matching_deed(
+                game, context,
+                [i for i, p in enumerate(game.players) if not p.lost], deed,
+            )
+        ]
     elif recipient == "event_subject_controller":
         # "That player" after an event about an object: the controller of that
         # object, frozen by the fire site (CR 603.10). Massacre Wurm's dead

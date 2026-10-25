@@ -749,6 +749,24 @@ def accept_player_deed(stream: TokenStream, parse_filter) -> "ast.PlayerDeed | N
             stream.reset(mark)
             return None
         return ast.PlayerDeed("sacrificed_this_way", filter=filt)
+    # "…each player **who didn't discard a creature card this way** loses 4
+    # life." (Strongarm Tactics.) The sacrifice clause above one record over —
+    # what an earlier step of this same effect took out of each hand — and
+    # both polarities, because the negative is the one the pool prints: the
+    # lexer keeps "didn't" one word. The noun phrase is read by the shared
+    # parser for the reason the sacrifice's is, and every word is required.
+    negated = bool(stream.accept_word("didn't"))
+    if stream.accept_word("discard" if negated else "discarded"):
+        stream.accept_word("a", "an")
+        try:
+            filt = parse_filter(stream)
+        except GrammarError:
+            stream.reset(mark)
+            return None
+        if not filt.is_card or not stream.accept_phrase("this", "way"):
+            stream.reset(mark)
+            return None
+        return ast.PlayerDeed("discarded_this_way", filter=filt, negated=negated)
     stream.reset(mark)
     return None
 

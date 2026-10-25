@@ -42,7 +42,8 @@ the guard fired on the lowering first.
 
 import dataclasses
 
-from ...oracle_types import (COUNTERED_SPELL_CONTROLLER, LAST_TARGET_CONTROLLER,
+from ...oracle_types import (COUNTERED_SPELL_CONTROLLER,
+                             DISCARDED_CARDS_BY_SEAT, LAST_TARGET_CONTROLLER,
                              LAST_TARGET_OWNER, LIFE_LOST_WHEN_ENTERED,
                              MANA_PAID_BY_SEAT,
                              OracleInstruction, SECRET_NUMBERS_BY_SEAT,
@@ -56,6 +57,7 @@ from ._common import (
     _amount_payload,
     _describe_targets,
     _restrictions_beyond,
+    player_deed_payload,
 )
 from ._counted_life import (
     _life_gain_cap_payload,
@@ -272,12 +274,49 @@ def _lower_gain_life(
     _describe_targets(payload, node.player)
     return (OracleInstruction("target_gains_life", "", payload),)
 
+#: The ``who <did …>`` kinds whose record only *this* resolution writes, and
+#: the producer key each one reads — a clause naming one with nothing in front
+#: of it recording it names no seats at all.
+_DEED_PRODUCERS = {
+    "discarded_this_way": DISCARDED_CARDS_BY_SEAT,
+}
+
+
+def _stamp_loss_deed(payload: dict, node: ast.LoseLife, produced) -> None:
+    """"Then **each player who didn't discard a creature card this way** loses
+    4 life." (Strongarm Tactics.)
+
+    The seat narrowing the subject printed, carried to the handler that loops
+    the seats — the damage family's ``_stamp_recipient_deed``, through the same
+    ``player_deed_payload``. A "this way" record needs its producer in front of
+    it, for every back-reference's reason."""
+    deed = node.player.did
+    if deed is None:
+        return
+    needed = _DEED_PRODUCERS.get(deed.kind)
+    if needed is not None and needed not in produced:
+        raise LoweringError(
+            f"back-reference to {needed!r} with no producer in this effect",
+            node=node,
+        )
+    payload["recipient_did"] = player_deed_payload(node.player, node)
+
+
 def _lower_lose_life(
     node: ast.LoseLife,
     event: str | None = None,
     produced: frozenset[str] = frozenset(),
     event_subject: object | None = None,
 ) -> tuple[OracleInstruction, ...]:
+    if node.player.did is not None and node.player.kind not in (
+        "each_player", "each_opponent",
+    ):
+        # A seat narrowing only the two looped subjects carry (below). On any
+        # other subject it would reach a handler that never reads it — a loss
+        # landing on a seat the clause excludes.
+        raise LoweringError(
+            "only a looped life loss carries a who-did narrowing", node=node
+        )
     # "Whenever you gain life, target opponent loses **that much** life."
     # (Vito, Thorn of the Dusk Rose.) The number is the life-gain event's, not
     # anything this effect computed, so it arrives as a trigger-context key
@@ -643,11 +682,13 @@ def _lower_lose_life(
         return (OracleInstruction("target_loses_life", "", payload),)
     if node.player.kind == "each_opponent":
         payload["recipient"] = "each_opponent"
+        _stamp_loss_deed(payload, node, produced)
         return (OracleInstruction("target_loses_life", "", payload),)
     if node.player.kind == "each_player":
         # "Each player loses 2 life." (Bad Deal) — caster included, CR 120.3
         # plain, same handler with one more recipient key.
         payload["recipient"] = "each_player"
+        _stamp_loss_deed(payload, node, produced)
         return (OracleInstruction("target_loses_life", "", payload),)
     # "… and **defending player** loses 2 life." (Keeper of Tresserhorn,
     # Lim-Dûl's Paladin.) CR 506.2's seat, frozen into the trigger's context by

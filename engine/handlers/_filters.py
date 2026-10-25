@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from ..layer_bridge import printed_shape, printed_supertypes
-from ..oracle_types import SACRIFICED_CARDS_BY_SEAT
+from ..oracle_types import DISCARDED_CARDS_BY_SEAT, SACRIFICED_CARDS_BY_SEAT
 from ..models import Permanent
 from ..object_colors import is_multicolored
 from ..counted_names import card_answers_to_name
@@ -1220,6 +1220,23 @@ def _seat_sacrificed_this_way(game, seat, deed, source, results) -> bool:
     )
 
 
+def _seat_discarded_this_way(game, seat, deed, source, results) -> bool:
+    # "…each player **who didn't discard a creature card this way**"
+    # (Strongarm Tactics). The seat-keyed record of what an earlier step of
+    # this same resolution took out of each hand (``DISCARDED_CARDS_BY_SEAT``,
+    # written by ``handlers/discards.record_discards``). Never a read of a
+    # graveyard, for the sacrifice record's reason; a card that went somewhere
+    # hidden (CR 701.9c) is in no list, so it is no creature card. Matched
+    # against the printed card with the discarding seat as its owner, which is
+    # what a card in a hand is (CR 613.1 gives it no computed characteristics).
+    by_seat = (results or {}).get(DISCARDED_CARDS_BY_SEAT) or {}
+    described = deed.get("filter") or {}
+    return any(
+        _card_matches_filter(card, described, game=game, owner=seat)
+        for card in (by_seat.get(seat) or ())
+    )
+
+
 @dataclass(frozen=True)
 class PlayerDeedKind:
     """How one ``who <did …>`` kind is read, and when it can be.
@@ -1255,6 +1272,7 @@ PLAYER_DEEDS: dict[str, PlayerDeedKind] = {
         False, True, _seat_tapped_land_for_mana
     ),
     "sacrificed_this_way": PlayerDeedKind(True, False, _seat_sacrificed_this_way),
+    "discarded_this_way": PlayerDeedKind(True, False, _seat_discarded_this_way),
 }
 
 
@@ -1275,7 +1293,12 @@ def seat_did(game, seat: int, deed: dict, *, source=None, results=None) -> bool:
     row = PLAYER_DEEDS.get((deed or {}).get("kind"))
     if row is None:
         return False
-    return row.answers(game, seat, deed, source, results)
+    answered = bool(row.answers(game, seat, deed, source, results))
+    # "…who **didn't** discard a creature card this way" (Strongarm Tactics):
+    # the complement, over the same record. Taken only *after* the row was
+    # found, so an unknown kind stays the no it is above rather than becoming
+    # a yes for every seat.
+    return (not answered) if deed.get("negated") else answered
 
 
 def seats_matching_deed(game, context, seats, deed) -> list:

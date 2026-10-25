@@ -604,13 +604,18 @@ def test_two_seats_owing_a_discard_both_hold_the_resolution(catalog_by_name):
     for seat in (0, 1, 2):
         game.pass_priority(seat)
 
+    # CR 101.4: the opponents are asked one at a time in APNAP order, so the
+    # second is asked only once the first has answered
+    # (``resumption.ask_in_turn_order``).
     owed = [c.player_index for c in game.pending_choices if c.kind == "discard"]
-    assert owed == [1, 2], "each opponent was asked in turn order"
+    assert owed == [1], "the first opponent in turn order is asked first"
     assert game.effect_suspended is True
     assert [p.life for p in game.players] == [20, 20, 20]
 
     game.resolve_pending_choice("discard", 1, hand_indices=[0, 1], to_library=False)
 
+    owed = [c.player_index for c in game.pending_choices if c.kind == "discard"]
+    assert owed == [2], "the next opponent is asked once the first has answered"
     assert game.effect_suspended is True, (
         "seat 2 still owes a discard, so the resolution is still suspended"
     )

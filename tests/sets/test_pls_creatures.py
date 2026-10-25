@@ -1700,8 +1700,15 @@ def test_w1g2_marsh_crocodile_makes_each_player_discard(set_pool):
     assert game.confirm_permanent_set_choice(0, [knight.permanent_id])
     assert "Black Knight" in [c.name for c in game.players[0].hand]
     _w1g2_until_asked(game)
-    assert sorted((c.kind, c.player_index) for c in game.pending_choices) == [
-        ("discard", 0), ("discard", 1),
+    # CR 101.4: each seat chooses its own, the active player first — the
+    # opponent is asked once the active player has answered
+    # (``resumption.ask_in_turn_order``).
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("discard", 0),
+    ]
+    game.take_choice_default(game.pending_choices[0])
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("discard", 1),
     ]
     game.auto_resolve_pending_choices()
     _w1g2_resolve_stack(game)

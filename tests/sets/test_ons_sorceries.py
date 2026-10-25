@@ -276,4 +276,73 @@ def test_w1g13_biorhythm_sets_each_life_total_to_that_seats_creatures(set_pool):
     game.check_state_based_actions()
     assert cara.lost and not alice.lost and not bob.lost
 
+
+def _w1g13_discard(game, seat, hand_index):
+    assert game.resolve_pending_choice(
+        "discard", seat, hand_indices=[hand_index], to_library=False,
+    )
+
+
+def test_w1g13_syphon_mind_asks_each_other_player_in_turn_and_counts_them(set_pool):
+    """"Each other player discards a card. You draw a card for each card
+    discarded this way." At three seats both opponents discard, asked one at a
+    time in APNAP order (CR 101.4): Cara is not asked until Bob has answered,
+    and the draw waits for the last answer and counts both."""
+    bear = _w1g13_creature("Bob's Bear", 2, 2)
+    giant = _w1g13_creature("Cara's Giant", 3, 3)
+    game = _w1g13_table(
+        set_pool, {0: ["Syphon Mind"], 1: ["Shock", bear], 2: [giant]},
+        interactive={1, 2},
+    )
+    alice, bob, cara = game.players
+    assert game.cast_from_hand(0, "Syphon Mind").supported
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [("discard", 1)]
+    assert alice.hand == []
+    _w1g13_discard(game, 1, 1)
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [("discard", 2)]
+    assert alice.hand == [], "nothing is drawn while an opponent still owes"
+    _w1g13_discard(game, 2, 0)
+    _w1g13_resolve_stack(game)
+    assert [c.name for c in bob.graveyard] == ["Bob's Bear"]
+    assert [c.name for c in cara.graveyard] == ["Cara's Giant"]
+    assert len(alice.hand) == 2
+    assert alice.graveyard[-1].name == "Syphon Mind"
+
+
+def test_w1g13_syphon_mind_draws_only_for_what_was_discarded(set_pool):
+    """An opponent with an empty hand discards nothing, and the draw is the
+    count of the cards that actually went — here one."""
+    game = _w1g13_table(set_pool, {0: ["Syphon Mind"], 1: ["Shock"]})
+    alice, bob, cara = game.players
+    assert game.cast_from_hand(0, "Syphon Mind").supported
+    _w1g13_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    assert [c.name for c in bob.graveyard] == ["Shock"]
+    assert cara.graveyard == []
+    assert [c.name for c in alice.hand] == ["Plains"]
+
+
+def test_w1g13_strongarm_tactics_charges_each_seat_that_kept_its_creatures(set_pool):
+    """"Each player discards a card. Then each player who didn't discard a
+    creature card this way loses 4 life." The active player first (here a seat
+    nobody asks, which discards its first card), Bob asked and answering with a
+    creature card, and Cara — whose empty hand discarded nothing — counted as
+    not having discarded one. The loss waits for Bob's answer."""
+    giant = _w1g13_creature("Hill Giant", 3, 3)
+    game = _w1g13_table(
+        set_pool,
+        {0: ["Strongarm Tactics", "Plains", _w1g13_creature("Bear", 2, 2)],
+         1: ["Shock", giant]},
+        interactive={1},
+    )
+    alice, bob, cara = game.players
+    assert game.cast_from_hand(0, "Strongarm Tactics").supported
+    assert [c.name for c in alice.graveyard] == ["Plains"], "Alice chose first"
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [("discard", 1)]
+    assert (alice.life, cara.life) == (20, 20), "no loss before the last answer"
+    _w1g13_discard(game, 1, 1)
+    _w1g13_resolve_stack(game)
+    assert [c.name for c in bob.graveyard] == ["Hill Giant"]
+    assert (alice.life, bob.life, cara.life) == (16, 20, 16)
+
 # ==== end W1G13 ======================================================

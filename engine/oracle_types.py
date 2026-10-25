@@ -1433,6 +1433,19 @@ CHOSEN_CARD_TYPE_THIS_WAY = "chosen_card_type_this_way"
 #: ``grammar/lowering/_records._PRODUCES`` declares it.
 SACRIFICED_CARDS_BY_SEAT = "sacrificed_cards_by_seat"
 
+#: "Each player discards a card. Then **each player who didn't discard a
+#: creature card this way** loses 4 life." (Strongarm Tactics.) Which cards
+#: each seat discarded in this resolution, ``{seat: [cards]}`` — the discard's
+#: twin of ``SACRIFICED_CARDS_BY_SEAT``, for that key's reason: the flat
+#: ``DISCARDED_THIS_WAY`` answers "what went", and only a list per seat answers
+#: "which seats gave up a creature card". A card that went somewhere hidden
+#: (Library of Leng's library top, CR 701.9c) is counted in
+#: ``DISCARDED_BY_SEAT`` and listed nowhere, so it is no creature card.
+#: Written where every chosen discard is answered
+#: (``choices/hand._after_discard_answered``) and by the each-player discard's
+#: inline default; read by ``handlers/_filters._seat_discarded_this_way``.
+DISCARDED_CARDS_BY_SEAT = "discarded_cards_by_seat"
+
 #: **How many** permanents a sacrifice step actually ate, beside the list of
 #: what they were.
 #:
