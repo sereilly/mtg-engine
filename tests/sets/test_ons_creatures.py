@@ -46,8 +46,9 @@ from tests.helpers import resolve_stack as _w1g1_resolve_stack
 
 _W1G1_CATALOG = {card.name: card for card in _w1g1_load_catalog()}
 
-#: Every Onslaught card printing morph. The first 41 compile supported; the
-#: last five have a second line another wave-1 group owns (W1G2, W1G5, W1G7,
+#: Every Onslaught card printing morph. The first 41 compile supported — and
+#: Skittish Valesk, whose second line W1G2 built, at the end of the first
+#: tuple; the rest have a second line another wave-1 group owns (W1G5, W1G7,
 #: W1G10) and are cast face down and turned face up all the same.
 _W1G1_MORPHS = (
     "Aphetto Alchemist", "Ascending Aven", "Battering Craghorn",
@@ -61,11 +62,11 @@ _W1G1_MORPHS = (
     "Silent Specter", "Skirk Commando", "Snapping Thragg", "Snarling Undorak",
     "Spined Basher", "Spitting Gourna", "Thrashing Mudspawn",
     "Towering Baloth", "Treespring Lorian", "Venomspout Brackus",
-    "Voidmage Prodigy", "Whipcorder",
+    "Voidmage Prodigy", "Whipcorder", "Skittish Valesk",
 )
 _W1G1_OTHER_GROUPS_LINES = (
     "Birchlore Rangers", "Mistform Shrieker", "Quicksilver Dragon",
-    "Riptide Entrancer", "Skittish Valesk",
+    "Riptide Entrancer",
 )
 
 
