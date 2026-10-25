@@ -45,7 +45,7 @@ from engine.board_payment import board_can_pay
 from engine.card_loader import load_catalog
 from engine.land_types import added_land_types
 from engine.mana_payment import taps_for_payment, untapped_mana_lands
-from engine.mixins.turn_management import is_tap_alone_mana_ability
+from engine.mixins.land_mana_taps import is_tap_alone_mana_ability
 from engine.models import Permanent
 from tests.helpers import _nosick
 
@@ -181,13 +181,13 @@ def test_every_reader_counts_a_land_that_gained_a_type_as_the_seam_taps_it(_by_n
 def test_the_census_names_a_land_counted_by_the_ability_it_prints(_by_name, monkeypatch):
     """Backwards: no land has a gained type's mana ability, as far as the
     readers are told — which is how each of them read it."""
-    from engine.mixins.turn_management import TurnManagementMixin
+    from engine.mixins.land_mana_taps import LandManaTapsMixin
 
     monkeypatch.setattr(
-        TurnManagementMixin, "_tap_alone_makes_only_gained_mana",
+        LandManaTapsMixin, "_tap_alone_makes_only_gained_mana",
         staticmethod(lambda land: ()),
     )
-    real = TurnManagementMixin._land_mana_abilities
+    real = LandManaTapsMixin._land_mana_abilities
 
     import sys
 

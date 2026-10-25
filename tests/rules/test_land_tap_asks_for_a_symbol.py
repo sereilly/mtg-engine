@@ -51,7 +51,7 @@ from engine.card_loader import load_catalog
 from engine.faces import compilation_units
 from engine.mana_could_produce import lands_could_produce
 from engine.mana_payment import generic_cost, plan_payment, untapped_mana_lands
-from engine.mixins.turn_management import is_tap_alone_mana_ability
+from engine.mixins.land_mana_taps import is_tap_alone_mana_ability
 from engine.models import Permanent
 from tests.helpers import _nosick
 

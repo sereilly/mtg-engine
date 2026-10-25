@@ -97,8 +97,9 @@ def _lower_tap_lands_sharing_produced_mana(
     A sweep whose set is described by a comparison against the land the
     ability's own trigger watched being tapped — an object no filter can name,
     which is why the clause is a field on the node rather than a key on the noun
-    phrase. Only ``engine/mixins/turn_management.py``'s tap-for-mana seam holds
-    both lands at once, so the instruction is dispatched there and nowhere else.
+    phrase. Only ``engine/mixins/land_tapped_for_mana.py``'s tap-for-mana seam
+    holds both lands at once, so the instruction is dispatched there and
+    nowhere else.
 
     Three refusals, each of them a narrowing this kind would otherwise drop:
 

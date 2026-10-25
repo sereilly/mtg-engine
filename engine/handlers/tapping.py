@@ -958,9 +958,9 @@ def mark_skip_next_untap(game: Game, permanents, *, steps: int = 1, seat=None) -
 
     Its own function because it has **two** callers and only one of them is a
     resolution. The handler above is the ordinary one; the other is the
-    tap-for-mana seam in ``mixins/turn_management.py``, where Winter's Night's
-    "That land doesn't untap during its controller's next untap step" runs
-    *inline* inside a cost payment (CR 605.4a's moment) and so has no
+    tap-for-mana seam in ``mixins/land_tapped_for_mana.py``, where Winter's
+    Night's "That land doesn't untap during its controller's next untap step"
+    runs *inline* inside a cost payment (CR 605.4a's moment) and so has no
     ``OracleExecutionContext`` to reach a handler with. Two copies of this loop
     would be two answers to how two contributions merge, which is the one part
     of it that is not obvious.

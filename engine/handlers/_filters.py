@@ -1193,7 +1193,7 @@ def _seat_dealt_damage_by_source(game, seat, deed, source, results) -> bool:
 def _seat_tapped_land_for_mana(game, seat, deed, source, results) -> bool:
     # "…each player **who tapped a land for mana this turn**" (Desolation).
     # The seat's own per-turn record, written at the one tap-for-mana seam
-    # (``mixins/turn_management.tap_land_for_mana``) and cleared with the rest
+    # (``mixins/land_tapped_for_mana.py``) and cleared with the rest
     # of the turn histories. Never a read of the board: a land that untapped,
     # left, or was tapped again for something that is not mana would answer
     # the wrong question, and CR 106.4's mana is long gone by the end step this

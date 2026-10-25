@@ -10,6 +10,8 @@ from .models import CardDefinition, PlayerState
 from .mixins import (
     GameEndingMixin,
     TurnManagementMixin,
+    LandManaTapsMixin,
+    LandTappedForManaMixin,
     PhaseStepsMixin,
     SpellCastingMixin,
     AdditionalCastCostsMixin,
@@ -119,6 +121,10 @@ class Game(
     CleanupStepMixin,
     # Cross-cutting flow and supporting machinery
     TurnManagementMixin,
+    # Split out of TurnManagementMixin and composed immediately after it:
+    # tapping a land for mana, and the CR 106.12 event the tap raises.
+    LandManaTapsMixin,
+    LandTappedForManaMixin,
     PhaseStepsMixin,
     # The stack (CR 405): one mixin per stage of an object's life on it,
     # each followed by the parts split out of it at the 2,000-line cap.

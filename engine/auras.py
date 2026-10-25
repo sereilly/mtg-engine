@@ -398,8 +398,8 @@ def aura_enchants(oracle_text: str, noun: str) -> bool:
 #: additional {G}." (Wild Growth.) "…adds an additional {G}{G}." (Overgrowth.)
 #: The phrase compiles to no trigger — "tapped for mana" is not a condition the
 #: trigger table produces for an *attached* subject — so the mana is added by
-#: `mixins/turn_management.tap_land_for_mana` reading the Aura's text at the
-#: moment the land is tapped.
+#: `mixins/land_tapped_for_mana._land_tapped_for_mana` reading the Aura's
+#: text at the moment the land is tapped.
 #:
 #: **A run of symbols, not one.** The single-symbol group was a pattern written
 #: to the one card that printed it, and the second card printing the template

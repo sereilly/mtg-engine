@@ -462,9 +462,9 @@ def lower_untargeted_return(
         # Admitted under ``land_tapped_for_mana`` alone, for the reason the
         # bound-card set exists: that is the one event whose fire site is
         # holding the permanent when it executes the instruction
-        # (``mixins/turn_management.tap_land_for_mana``, inline as CR 605.4a
-        # requires of its triggered-mana siblings). Under any other condition
-        # the word "it" names a permanent nobody recorded.
+        # (``mixins/land_tapped_for_mana._land_tapped_for_mana``, inline as
+        # CR 605.4a requires of its triggered-mana siblings). Under any other
+        # condition the word "it" names a permanent nobody recorded.
         if event == "land_tapped_for_mana":
             if node.to.name != "hand" or node.to.owner is None:
                 raise LoweringError(

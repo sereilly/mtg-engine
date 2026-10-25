@@ -304,7 +304,7 @@ DELAYED_EVENTS: dict[str, str] = {
     # own example is this clause. See ``matching_delayed_triggers`` — the
     # enumeration half that exists so a site can resolve an entry where it
     # stands instead of enqueuing it.
-    "land_tapped_for_mana": "the tap-for-mana seam in mixins/turn_management.py",
+    "land_tapped_for_mana": "the tap-for-mana seam in mixins/land_tapped_for_mana.py",
     # "When it regenerates this way, that player may draw a card." (Soldevi
     # Sentry.) The shield being *spent*, which is CR 701.19a's replacement
     # actually applying — not the shield being created, which CR 701.19c says

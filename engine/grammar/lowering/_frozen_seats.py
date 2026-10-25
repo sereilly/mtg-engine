@@ -341,10 +341,10 @@ _EVENT_SUBJECT_PLAYERS: frozenset[str] = frozenset({
     # "Whenever a player taps a land for mana, this enchantment deals 1 damage
     # to **that player**" (Manabarbs). The condition names the tapping seat and
     # nothing chose it. This event's trigger resolves *inline* at the
-    # tap-for-mana seam in `mixins/turn_management.py` (CR 605.4a keeps its
-    # triggered-mana siblings off the stack, and the damage rides the same
-    # moment) — so the fire site is still holding the seat when it executes
-    # the instruction, which is the freeze.
+    # tap-for-mana seam in `mixins/land_tapped_for_mana.py` (CR 605.4a keeps
+    # its triggered-mana siblings off the stack, and the damage rides the
+    # same moment) — so the fire site is still holding the seat when it
+    # executes the instruction, which is the freeze.
     "land_tapped_for_mana",
     # "Whenever this enchantment becomes the target of a spell, **that spell's
     # controller** loses 5 life" (Forsaken Wastes). CR 603.2's event names the

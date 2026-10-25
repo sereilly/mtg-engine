@@ -60,9 +60,9 @@ from engine.aura_attachment import attach_aura
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units
 from engine.mana_payment import is_mana_ability
-from engine.mixins.turn_management import (TAP_TRIGGER_KINDS,
-                                           _tap_trigger_steps,
-                                           is_tap_alone_mana_ability)
+from engine.mixins.land_mana_taps import is_tap_alone_mana_ability
+from engine.mixins.land_tapped_for_mana import (TAP_TRIGGER_KINDS,
+                                                _tap_trigger_steps)
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.targeting import usable_activated_abilities

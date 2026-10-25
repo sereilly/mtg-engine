@@ -184,7 +184,7 @@ _MIXIN_TEXT_SCANS = (
     "you may choose not to untap this creature during your untap step",  # untap_step.py (Old Man of the Sea)
     "if you would begin your turn while this artifact is tapped, you may skip that turn instead",  # beginning_phase.py (Time Vault)
     "enters tapped",                                                     # permanent_state.py:100
-    "whenever enchanted land is tapped for mana, its controller adds an additional",  # turn_management.py:285 (Wild Growth)
+    "whenever enchanted land is tapped for mana, its controller adds an additional",  # land_tapped_for_mana.py (Wild Growth)
     "when enchanted creature dies, this aura deals damage equal to that creature's toughness",  # _trigger_aura_death_effects (Creature Bond)
     "if you do, untap this artifact",                                    # beginning_phase.py untap_for_skip (Time Vault)
     "enter as a copy of any artifact on the battlefield",                # copy machinery (Copy Artifact; legality + clone handler)

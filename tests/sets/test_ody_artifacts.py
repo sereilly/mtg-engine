@@ -528,7 +528,7 @@ def test_w1g6_a_mill_cost_cannot_be_paid_from_an_empty_library(set_pool):
 def test_w1g6_millikin_is_not_tapped_for_mana_like_a_mana_rock(set_pool):
     """The tap-for-mana seam is reached part-way through a payment, and this
     ability cannot be activated there (the ruling above)."""
-    from engine.mixins.turn_management import is_tap_alone_mana_ability
+    from engine.mixins.land_mana_taps import is_tap_alone_mana_ability
 
     lea, ody = set_pool("LEA"), set_pool("ODY")
     ability = _w1g6_compile(ody["Millikin"]).activated_abilities[0]

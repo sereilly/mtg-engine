@@ -1001,9 +1001,9 @@ def taps_for_payment(land) -> bool:
     the rest. The seam refused them (CR 602.2b) while the planner tapped them
     for one free mana of their summary's colour and spent no counter at all.
     """
-    from .mixins.turn_management import TurnManagementMixin
+    from .mixins.land_mana_taps import LandManaTapsMixin
 
-    free, priced = TurnManagementMixin._land_mana_abilities(land)
+    free, priced = LandManaTapsMixin._land_mana_abilities(land)
     if free is not None:
         return True
     if priced:
@@ -1011,7 +1011,7 @@ def taps_for_payment(land) -> bool:
         # tap does pay for (CR 305.7's last sentence, CR 305.6): a depletion
         # land under Blanket of Night taps for {B} at the seam, and this
         # answered for the whole land by the ability it prints.
-        return bool(TurnManagementMixin._gained_type_mana(land))
+        return bool(LandManaTapsMixin._gained_type_mana(land))
     # A land that has lost all abilities (an animated one under Humility) has
     # lost the mana ability its type gives it with the rest — the seam's own
     # refusal, asked here so the planner does not count what it will not tap.

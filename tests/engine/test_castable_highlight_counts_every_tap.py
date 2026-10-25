@@ -46,7 +46,7 @@ from engine import board_payment
 from engine.board_payment import board_can_pay
 from engine.card_loader import load_catalog
 from engine.land_mana_swaps import production_snapshot
-from engine.mixins.turn_management import is_tap_alone_mana_ability
+from engine.mixins.land_mana_taps import is_tap_alone_mana_ability
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
 from engine.restricted_mana import CAST, PaymentPurpose

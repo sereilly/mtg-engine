@@ -6,6 +6,10 @@
 # pending choices are a package of their own, one mixin per prompt family.
 from .game_ending import GameEndingMixin
 from .turn_management import TurnManagementMixin
+# Tapping a land for mana, and the CR 106.12 event the tap raises: split out
+# of turn_management.py (see each module's docstring).
+from .land_mana_taps import LandManaTapsMixin
+from .land_tapped_for_mana import LandTappedForManaMixin
 from .phase_steps import PhaseStepsMixin
 from .stack import (
     AbilityActivationMixin,
