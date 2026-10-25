@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**419 / 625 tracked rules covered (67%)** — 3171 tests, 0 unannotated.
+**419 / 625 tracked rules covered (67%)** — 3177 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -737,7 +737,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 608. Resolving Spells and Abilities
 
 - [x] **608.1** Each time all players pass in succession, the spell or ability on top of the stack resolves. (See... *(2 tests)*
-- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(169 tests, subrules bcdghmn)*
+- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(175 tests, subrules bcdghmn)*
 - [x] **608.3** If the object that’s resolving is a permanent spell, its resolution may involve several steps. Th... *(3 tests, subrules ab)*
 
 ### 609. Effects
@@ -779,7 +779,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 613. Interaction of Continuous Effects
 
-- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(164 tests, subrules abcdefg)*
+- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(168 tests, subrules abcdefg)*
 - [x] **613.2** Within layer 1, apply effects in a series of sublayers in the order described below. Within each ... *(20 tests, subrules ac)*
 - [x] **613.3** Within layers 2–6, apply effects from characteristic-defining abilities first (see rule 604.3), t... *(2 tests)*
 - [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(95 tests, subrules abcd)*
@@ -859,7 +859,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **701.6** Counter *(15 tests, subrules ab)*
 - [x] **701.7** Create *(3 tests, subrules a)*
 - [x] **701.8** Destroy *(7 tests, subrules abc)*
-- [x] **701.9** Discard *(6 tests, subrules ac)*
+- [x] **701.9** Discard *(7 tests, subrules ac)*
 - [x] **701.12** Exchange *(11 tests, subrules ab)*
 - [x] **701.13** Exile *(7 tests, subrules a)*
 - [x] **701.14** Fight *(7 tests, subrules abd)*
@@ -867,7 +867,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **701.18** Play *(6 tests, subrules ab)*
 - [x] **701.19** Regenerate *(29 tests, subrules abc)*
 - [x] **701.20** Reveal *(10 tests, subrules ab)*
-- [x] **701.21** Sacrifice *(17 tests, subrules a)*
+- [x] **701.21** Sacrifice *(20 tests, subrules a)*
 - [x] **701.22** Scry *(8 tests, subrules ab)*
 - [x] **701.23** Search *(13 tests, subrules abd)*
 - [x] **701.24** Shuffle *(2 tests, subrules a)*
