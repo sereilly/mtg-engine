@@ -27,6 +27,7 @@ import random
 from engine import Game, PlayerState, load_cards
 from engine.models import Permanent
 from engine.ai_declarations import choose_attackers
+from engine.face_down import hidden_card_of
 from engine.oracle import compile_card_oracle
 from engine.text_changes import changed_words
 from tests.helpers import _damage_dealt, _game, resolve_stack
@@ -1095,7 +1096,10 @@ class TestIllusionaryMask:
         fd = [p for p in p1.battlefield if p.metadata.get("face_down")]
         assert len(fd) == 1
         assert fd[0].effective_power == 2 and fd[0].effective_toughness == 2
-        assert fd[0].metadata["face_down_real_card"].name == "Grizzly Bears"
+        # CR 708.2a: the face-down creature has no name — the card it hides is
+        # its controller's to look at (CR 708.5), not a name the table sees.
+        assert fd[0].card.name != "Grizzly Bears"
+        assert hidden_card_of(fd[0]).name == "Grizzly Bears"
         assert [c.name for c in p1.hand] == ["Force of Nature"]
         assert game.pending_face_down_cast is None
 

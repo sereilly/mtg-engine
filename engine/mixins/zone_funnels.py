@@ -31,6 +31,7 @@ from ..enter_effects import CAST_THIS_TURN_STAMP
 from ..exiled_records import (forget_record, newest_record_for,
                               record_exiled_card)
 from ..events import emit
+from ..face_down import entered_face_up, revealed_as_it_moves
 from ..faces import whole_card
 from ..graveyard_order import record_graveyard_arrival
 from ..models import Permanent, PlayerState, next_permanent_id
@@ -184,7 +185,8 @@ class ZoneFunnelsMixin:
         # spell's card is its *half* (``engine/faces.py``), so the three zone
         # seams are where it becomes one card again — asked here rather than at
         # each place a spell can be sent, which is the reason these are seams.
-        card = whole_card(card)
+        # A face-down object is revealed as it moves the same way (CR 708.9).
+        card = whole_card(revealed_as_it_moves(self, card, from_battlefield))
         if is_token_card(card):
             # CR 111.7's own parenthesis: "if a token changes zones, applicable
             # triggered abilities will trigger before the token ceases to
@@ -269,7 +271,8 @@ class ZoneFunnelsMixin:
         ``position`` is "top" or "bottom"; the return value and
         *from_battlefield* read as :meth:`put_card_into_hand`'s do."""
         seat = self._owner_seat(owner)
-        card = whole_card(card)  # CR 709.4 — see ``put_card_into_hand``
+        # CR 709.4 and CR 708.9 — see ``put_card_into_hand``.
+        card = whole_card(revealed_as_it_moves(self, card, from_battlefield))
         if is_token_card(card):
             return False  # CR 111.7 / 704.5d: it ceases to exist instead
         if self._leaving_battlefield_replaced(from_battlefield, owner, "library"):
@@ -323,7 +326,8 @@ class ZoneFunnelsMixin:
         that already has one.
         """
         seat = self._owner_seat(owner)
-        card = whole_card(card)  # CR 709.4 — see ``put_card_into_hand``
+        # CR 709.4 and CR 708.9 — see ``put_card_into_hand``.
+        card = whole_card(revealed_as_it_moves(self, card, from_battlefield))
         # *from_battlefield* is the :class:`Permanent` this card is the card
         # **of**, when it is arriving here by leaving the battlefield — the
         # argument the hand and library seams already take, for the reason they
@@ -707,6 +711,10 @@ class ZoneFunnelsMixin:
         is one as it enters (CR 614.12), and Containment Priest asks.
         """
         cast_as_a_spell = was_cast and not played_as_land
+        # A permanent object entering again is a new object (CR 400.7): the
+        # face-down values it was last seen leaving with (CR 708.9,
+        # ``face_down.reveal_departing``) are not what it is now.
+        entered_face_up(permanent)
         # CR 614.12, before anything asks how this permanent enters: a land
         # is judged "as it would exist on the battlefield", under the
         # continuous effects already there. With Blood Moon out a nonbasic

@@ -41,6 +41,7 @@ from ...cast_timing import (CAST_AT_INSTANT_SPEED, a_sorcery_could_be_cast,
 from ...damage_ledger import record_cast
 from ...counter_conditions import spend_next_spell_promises
 from ...divided_damage import divided_entry, stamped_entry
+from ...face_down import announced_morph_cost, face_down_card
 from ...faces import choose_a_face_refusal, spell_named
 from ...classifier import classify_card
 from ...cost_modifiers import (CostReduction, buyback_cost_reduction,
@@ -377,6 +378,24 @@ class SpellCastingMixin:
             details = choose_a_face_refusal(held) or f"{card_name} is not a spell"
             self.log.append(details)
             return SimulationResult(card_name, False, None, details)
+        # **A morph cast turns the card face down before anything reads it**
+        # (CR 702.37c: "turn it face down and announce that you're using a
+        # morph ability … Any effects or prohibitions that would apply to
+        # casting a card with these characteristics (and not the face-up
+        # card's characteristics) are applied"; CR 708.4, CR 601.3e). So the
+        # spell *is* the face-down 2/2 from here on, the way a split card's
+        # spell is its half one step up: every prohibition, tax, reduction,
+        # timing gate and target gate below reads `card` and sees a colourless
+        # nameless creature with mana value 0, and the stack object the push
+        # makes is that card. `held` stays the card the zone holds, which is
+        # what leaves it. The cost is the morph's own {3}, announced as the
+        # cast's alternative cost (CR 118.9a) below.
+        morph_cost = announced_morph_cost(
+            self, caster_index, held,
+            alternative_cost=alternative_cost, permission=permission,
+        )
+        if morph_cost is not None:
+            card = face_down_card(held)
         classification = classify_card(card)
         # **An Aura announced by id alone** (CR 601.2c, CR 400.7). The id names
         # the object and its battlefield, so it is the whole announcement; the
@@ -814,7 +833,14 @@ class SpellCastingMixin:
                 # *require* an alternative cost — flashback's (CR 702.34a).
                 # Then that cost is the announcement, whatever the caller
                 # said, and CR 118.9a leaves no room for a second.
-                required=permission.cost if permission is not None else None,
+                #
+                # …and a morph cast's {3} (CR 702.37c) is the cost already
+                # announced above: the card is face down now and prints no
+                # cost for the lookup to find.
+                required=(
+                    morph_cost if morph_cost is not None
+                    else permission.cost if permission is not None else None
+                ),
             )
         )
         if alternative_denial is None:

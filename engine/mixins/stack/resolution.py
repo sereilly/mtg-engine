@@ -24,6 +24,7 @@ from ...color_changes import carry_spell_color_change
 from ...destruction_events import destruction_finished
 from ...enter_effects import copy_on_enter_type
 from ...events import emit
+from ...face_down import revealed_as_it_moves
 from ...faces import whole_card
 from ...flashback import leaves_stack_to_exile
 from ...game_types import (OracleExecutionContext, OracleStateMachine, StackItem,
@@ -149,7 +150,10 @@ class StackResolutionMixin:
         # log lines — that is the spell that resolved — and ``leaving`` is what
         # lands in a zone. The hand and graveyard seams ask the same question
         # themselves; exile has no seam, so it is asked here.
-        leaving = whole_card(card)
+        #
+        # …and a face-down spell is revealed as it leaves for anywhere but the
+        # battlefield (CR 708.9) — the card that lands is the one it hid.
+        leaving = whole_card(revealed_as_it_moves(self, card))
         if hand_instead and not (exile_instead and exile_is_final):
             self._bin_bought_back_spell(
                 owner, card, leaving, rider=exile_instead, verb=verb,

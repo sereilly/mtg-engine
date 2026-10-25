@@ -368,6 +368,12 @@ class PermanentSpecialAction:
     kind: str
     offer: "Callable[[Game, Permanent], SpecialActionOffer | None]"
     take: "Callable[[Game, int, Permanent], None]"
+    #: What else the offer's entry in :func:`available_permanent_special_actions`
+    #: tells a client, beyond the shape every entry has — the morph cost a
+    #: face-down permanent would be turned face up for (CR 702.37e), which the
+    #: seat taking it has to see before it pays. None for every kind that has
+    #: nothing to add, so their entries are unchanged.
+    entry_extras: "Callable[[Game, Permanent], dict] | None" = None
 
 
 #: Registered by the modules that create the effects these offers end — never
@@ -379,7 +385,9 @@ class PermanentSpecialAction:
 #: places that can say whether the effect is still running or take it back.
 #: `engine/cast_bans.py` holds the board-wide one (Damping
 #: Engine), for the same reason one zone out: it owns the prohibition and the
-#: record of who has bought a turn off it.
+#: record of who has bought a turn off it. `engine/face_down.py` holds CR
+#: 702.37e's (turning a face-down permanent with morph face up, CR 116.2b),
+#: because whether a permanent is face down and what it hides is its record.
 PERMANENT_SPECIAL_ACTIONS: dict[str, PermanentSpecialAction] = {}
 
 
@@ -402,6 +410,9 @@ def _load_registrations() -> None:
     """
     from . import auras  # noqa: F401
     from . import cast_bans  # noqa: F401
+    # CR 702.37e / 116.2b: ``face_down`` registers turning a face-down
+    # permanent with a morph ability face up.
+    from . import face_down  # noqa: F401
 
 
 def _split_sentences(line: str) -> list[str]:
@@ -690,7 +701,10 @@ def available_permanent_special_actions(game: "Game", seat: int) -> list[dict]:
                 # which ones before it sends the action (Lost in Thought's
                 # three). Only on an offer that charges one: every other
                 # entry's shape is unchanged.
-                offer = PERMANENT_SPECIAL_ACTIONS[kind].offer(game, permanent)
+                spec = PERMANENT_SPECIAL_ACTIONS[kind]
+                offer = spec.offer(game, permanent)
+                if spec.entry_extras is not None:
+                    entry.update(spec.entry_extras(game, permanent))
                 if offer is not None and offer.exile_from_graveyard:
                     entry["exile_from_graveyard"] = offer.exile_from_graveyard
                 # …and which permanents a "sacrifice a permanent **of their

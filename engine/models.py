@@ -12,8 +12,8 @@ from . import shields as _shields
 # timestamp counter, nothing from here. effective_card is read on nearly every
 # rules query, so this is not a function-local import.
 from .continuous import next_timestamp
-from .copies import (COPY_EFFECTS, DERIVED_COPY_SOURCES, card_identity,
-                     copiable_card, copied_name)
+from .copies import (COPY_EFFECTS, DERIVED_COPY_SOURCES, FACE_DOWN_AS_IT_LEFT,
+                     card_identity, copiable_card, copied_name)
 # …and land_types the same: the layer system's types and nothing from here.
 from .land_types import (DERIVED_LAND_TYPES, LAND_TYPE_EFFECTS,
                          added_land_types, lost_abilities_to_type_change)
@@ -57,8 +57,10 @@ def fold_channels() -> tuple[str, ...]:
     """
     keywords, global_statics = _late.keywords, _late.global_statics
     return (
-        # Layer 1 (``copies.copiable_card``) and layer 3.
-        COPY_EFFECTS, DERIVED_COPY_SOURCES, TEXT_CHANGE_EFFECTS,
+        # Layer 1 (``copies.copiable_card``) and layer 3 — and layer 1b's
+        # record on a face-down permanent that has left (CR 708.9, 603.10).
+        COPY_EFFECTS, DERIVED_COPY_SOURCES, FACE_DOWN_AS_IT_LEFT,
+        TEXT_CHANGE_EFFECTS,
         # CR 305.7 (``land_types.lost_abilities_to_type_change``).
         LAND_TYPE_EFFECTS, DERIVED_LAND_TYPES,
         # Layer 6: every ability lost (``keywords.abilities_lost_at``), and
@@ -162,6 +164,17 @@ class CardDefinition:
     # equal when their characteristics are, and a parent in the repr would
     # print the whole card inside each of its halves.
     face_of: "CardDefinition | None" = field(default=None, compare=False, repr=False)
+    # The card a **face-down** object is (CR 708): set only on the blank 2/2
+    # ``engine/face_down.face_down_card`` derives, which is what a face-down
+    # spell's ``StackItem.card`` and a face-down permanent's ``Permanent.card``
+    # *are* while it is hidden — so every reader of a characteristic, every log
+    # line and every serializer reads the face-down values and nothing else
+    # (CR 708.2a), and the hidden card travels with the object. What a zone is
+    # handed when the object leaves is the card this names (CR 708.9,
+    # ``faces.whole_card``). Out of the comparison and the repr for
+    # ``face_of``'s reason, and for a second one: a repr that printed it would
+    # print the hidden card.
+    face_down_of: "CardDefinition | None" = field(default=None, compare=False, repr=False)
 
     @property
     def is_legendary(self) -> bool:

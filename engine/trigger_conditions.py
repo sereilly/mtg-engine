@@ -63,6 +63,17 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r"when (?!(?:a|an|another) )(?:this|.+?) enters(?: the battlefield)? or dies"),
     ("enters_battlefield",
      r"when (?!(?:a|an|another) )(?:this|.+) enters(?: the battlefield)?"),
+    # "When this creature is turned face up, …" (CR 702.37e, 708.8; Legions
+    # and Scourge print dozens, Onslaught none). The permanent's own event,
+    # announced by ``face_down.turn_face_up`` — the one turn of a face-down
+    # permanent, whatever turned it — and not by entering: CR 708.8 says the
+    # entry abilities "don't trigger … because the permanent has already
+    # entered the battlefield", so this is its own kind rather than a
+    # spelling of the row above. The source only; "whenever a permanent you
+    # control is turned face up" (Legions' Ixidor's-cycle relatives) is a
+    # quantified subject and is not this row's, which the lookahead keeps.
+    ("turned_face_up",
+     r"when (?!(?:a|an|another) )(?:this|.+?) is turned face up"),
     # "When **the token** leaves the battlefield, sacrifice this enchantment."
     # (Dance of Many.) CR 603.6c's event asked about a *different* object from
     # the one whose ability it is — the token this permanent created — which is

@@ -307,6 +307,13 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
             if stream.accept_word("leaves"):
                 stream.accept_phrase("the", "battlefield")
                 return ast.TriggerEvent("leaves_battlefield", "when")
+            # "When this creature **is turned face up**, …" (CR 702.37e,
+            # 708.8; Legions, Scourge). The source's own event, read on this
+            # front end beside the condition table's row of the same kind
+            # (``engine/trigger_conditions.py``), so the two halves watch one
+            # event; announced by ``face_down.turn_face_up``.
+            if stream.accept_phrase("is", "turned", "face", "up"):
+                return ast.TriggerEvent("turned_face_up", "when")
         stream.reset(mark)
         # "**When** this creature blocks" (Elder Land Wurm), "**when** this
         # creature attacks or blocks" (Time Elemental) — events the "whenever"

@@ -183,7 +183,18 @@ def whole_card(card):
 
     What every zone but the stack holds. Asked wherever a spell's card is put
     somewhere, so a half never sits in a hand, a library, a graveyard or exile.
+
+    …and the card a **face-down** object is (CR 708.9: "If a face-down spell
+    moves from the stack to any zone other than the battlefield, its owner
+    must reveal it"; ``engine/face_down.py``). The blank 2/2 a face-down spell
+    or permanent wears is a stand-in for the object while it is hidden, never
+    a card a zone could hold, so the same seams that put a split card's whole
+    card into a zone put the face-down object's real one there — asked here,
+    once, rather than at every place a hidden object can be sent.
     """
+    hidden = getattr(card, "face_down_of", None)
+    if hidden is not None:
+        return whole_card(hidden)
     parent = getattr(card, "face_of", None)
     return parent if parent is not None else card
 

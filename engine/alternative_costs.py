@@ -1140,6 +1140,7 @@ def alternative_costs(card: CardDefinition) -> tuple[AlternativeCost, ...]:
     the two halves of one question are not read two ways, which is how the
     sibling would have been the one place short.
     """
+    from .face_down import morph_alternative_cost
     from .line_rewrites import expand_card_lines
 
     found = [
@@ -1147,6 +1148,15 @@ def alternative_costs(card: CardDefinition) -> tuple[AlternativeCost, ...]:
         for line in expand_card_lines(card)
         if (cost := alternative_cost_for_line(line)) is not None
     ]
+    # CR 702.37a: "Morph [cost]" means "You may cast this card as a 2/2
+    # face-down creature … by paying {3} rather than paying its mana cost" —
+    # an alternative cost the keyword *is*, read off its keyword line rather
+    # than off a sentence (``engine/face_down.py``). Here, in the one reader,
+    # so the picker, the announcement's check, the CR 601.2h gate, the AI and
+    # the payment all see it (``Game.applicable_alternative_costs``).
+    morph = morph_alternative_cost(card)
+    if morph is not None:
+        found.append(morph)
     return tuple(found)
 
 

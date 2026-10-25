@@ -885,6 +885,20 @@ class ControlSeamMixin:
         targets = [perm for perm in permanents if perm is not None]
         if not targets:
             return []
+        if zone_change:
+            # CR 708.9: "If a face-down permanent … moves from the battlefield
+            # to any other zone, its owner must reveal it to all players as they
+            # move it." Here, at the one transition out, so the card every
+            # caller then puts into a zone is the card it hid — whichever of the
+            # forty roads put it there — and before anything below reads what
+            # the departing object was, which stays the face-down 2/2
+            # (CR 603.10; ``face_down.reveal_departing``). A phase-out is not a
+            # move (CR 702.26d) and a phased-out face-down permanent is still
+            # face down (CR 708.5).
+            from ..face_down import reveal_departing
+
+            for perm in targets:
+                reveal_departing(self, perm)
         departing = {id(perm) for perm in targets}
         # Where each departing permanent sat, per seat, *before* the rebuild —
         # everything combat records is a slot on one of these lists, and once

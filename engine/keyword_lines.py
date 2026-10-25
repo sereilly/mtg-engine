@@ -171,6 +171,16 @@ def _qualified_keyword_part(part: str) -> bool:
 
     if madness_cost_text(part) is not None:
         return True
+    # Morph carries a cost as well (CR 702.37a), and is admitted the same way
+    # once more: by the reader that charges it (`engine/face_down.py`), which
+    # is also the reader the CR 702.37e special action and the {3}
+    # alternative cost are built from. A non-mana morph cost (Legions'
+    # "Morph—Reveal a white card") or an {X} keeps the line refused, naming
+    # it, rather than shipping a creature that turns face up for nothing.
+    from .face_down import morph_cost_text
+
+    if morph_cost_text(part) is not None:
+        return True
     # "Bands with other legendary creatures" (CR 702.22b). The quality is a
     # printed noun phrase rather than a word from a list, so what admits the
     # line is the reader that *implements* it — engine/banding.py, which turns
