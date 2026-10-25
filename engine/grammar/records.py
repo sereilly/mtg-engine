@@ -29,7 +29,7 @@ the guard too.
 from __future__ import annotations
 
 from ..oracle_types import (COIN_FLIPS_WON, EXILED_THIS_WAY, MILLED_THIS_WAY,
-                           REVEALED_THIS_WAY)
+                           REVEALED_BY_SEAT, REVEALED_THIS_WAY)
 from .errors import GrammarError
 from . import ast
 from .lexer import MANA, NUMBER, SELF, WORD
@@ -749,8 +749,61 @@ def accept_player_deed(stream: TokenStream, parse_filter) -> "ast.PlayerDeed | N
             stream.reset(mark)
             return None
         return ast.PlayerDeed("sacrificed_this_way", filter=filt)
+    # "…each player **who didn't discard a creature card this way** loses 4
+    # life." (Strongarm Tactics.) The sacrifice clause above one record over —
+    # what an earlier step of this same effect took out of each hand — and
+    # both polarities, because the negative is the one the pool prints: the
+    # lexer keeps "didn't" one word. The noun phrase is read by the shared
+    # parser for the reason the sacrifice's is, and every word is required.
+    negated = bool(stream.accept_word("didn't"))
+    if stream.accept_word("discard" if negated else "discarded"):
+        stream.accept_word("a", "an")
+        try:
+            filt = parse_filter(stream)
+        except GrammarError:
+            stream.reset(mark)
+            return None
+        if not filt.is_card or not stream.accept_phrase("this", "way"):
+            stream.reset(mark)
+            return None
+        return ast.PlayerDeed("discarded_this_way", filter=filt, negated=negated)
     stream.reset(mark)
     return None
+
+
+#: "…for each card **they** <participle> this way" — the per-seat records a
+#: sentence about each player reads, by participle. Its own table beside
+#: ``_THIS_WAY_COUNTS`` because the pronoun is the difference: "for each card
+#: revealed this way" is the one number the reveal recorded, and "for each card
+#: **they** revealed this way" is each seat's own.
+_PER_SEAT_THIS_WAY_COUNTS: dict[str, str] = {
+    "revealed": REVEALED_BY_SEAT,
+}
+
+
+def accept_for_each_card_they_did_this_way(stream: TokenStream) -> "ast.ThatMuch | None":
+    """``for each card they <participle> this way`` — one number per seat, or
+    None with the cursor unmoved.
+
+    "Then each player creates a 2/2 green Bear creature token **for each card
+    they revealed this way**." (Kamahl's Summons.) Every word is required: the
+    pronoun is what makes the count the performing seat's own, and "this way"
+    is the record. The lowering demands the producer and a distributed
+    subject, so with no each-seat step in front the words name nothing.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("for", "each", "card", "they"):
+        return None
+    participle = stream.peek_word()
+    key = _PER_SEAT_THIS_WAY_COUNTS.get(participle or "")
+    if key is None:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if not stream.accept_phrase("this", "way"):
+        stream.reset(mark)
+        return None
+    return ast.ThatMuch(key)
 
 
 def accept_greatest_discarded_this_way(

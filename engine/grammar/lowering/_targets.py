@@ -31,7 +31,7 @@ import dataclasses
 from .. import ast
 from ..errors import LoweringError
 
-from ._filters import _filter_payload
+from ._filters import _filter_payload, dropped_narrowings
 
 
 def divided_target_description(
@@ -518,6 +518,11 @@ def _deed_payload(deed: "ast.PlayerDeed", node) -> dict[str, object]:
     if row is None:
         raise LoweringError(f"no seat record answers {deed.kind!r}", node=node)
     payload: dict[str, object] = {"kind": deed.kind}
+    if getattr(deed, "negated", False):
+        # "…who **didn't** discard a creature card this way" (Strongarm
+        # Tactics). Emitted only when printed, so every clause lowered before
+        # the field existed keeps a byte-identical payload.
+        payload["negated"] = True
     if not row.names_objects:
         if deed.filter is not None:
             raise LoweringError(
@@ -529,7 +534,21 @@ def _deed_payload(deed: "ast.PlayerDeed", node) -> dict[str, object]:
             f"the {deed.kind!r} narrowing needs the noun phrase it counts",
             node=node,
         )
-    described = card_only_filter(_filter_payload(deed.filter))
+    if deed.filter.is_card:
+        # "…who didn't discard **a creature card** this way" (Strongarm
+        # Tactics). A phrase about a *card* — what a discard takes out of a
+        # hand — has no battlefield payload for ``_filter_payload`` to build,
+        # so it is held to the card matcher directly, with every printed word
+        # it cannot carry refused (the "for each land card discarded this way"
+        # gain's reading of the same kind of phrase).
+        raw = deed.filter.to_payload()
+        described = card_only_filter(raw)
+        if described is None or dropped_narrowings(deed.filter, raw):
+            raise LoweringError(
+                "a seat record cannot test this restriction", node=node
+            )
+    else:
+        described = card_only_filter(_filter_payload(deed.filter))
     if not described:
         raise LoweringError("a seat record cannot test this restriction", node=node)
     payload["filter"] = described

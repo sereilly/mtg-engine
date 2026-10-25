@@ -551,4 +551,145 @@ def test_w1g7_elvish_guidance_counts_toward_the_planned_payment(set_pool):
 # ==== W1G13 ==========================================================
 # W1G13's tests go between this line and the "end W1G13" line.
 
+# --- W1G13: each player, and graveyards --------------------------------------
+from engine import Game as _w1g13_Game
+from engine.models import Permanent as _w1g13_Permanent
+from engine.models import PlayerState as _w1g13_PlayerState
+
+from tests.helpers import _mk_creature_card as _w1g13_creature
+from tests.helpers import resolve_stack as _w1g13_resolve_stack
+
+
+def _w1g13_table(set_pool, hands=None, *, interactive=(), seats=3):
+    ons = set_pool("ONS")
+    hands = hands or {}
+    names = ["Alice", "Bob", "Cara", "Dan"][:seats]
+    players = [
+        _w1g13_PlayerState(
+            name=name,
+            hand=[ons[card] if isinstance(card, str) else card for card in hands.get(seat, ())],
+            library=[ons["Plains"]] * 5,
+        )
+        for seat, name in enumerate(names)
+    ]
+    game = _w1g13_Game(players=players)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game.active_player_index = 0
+    return game
+
+
+def _w1g13_put(game, seat, card):
+    permanent = _w1g13_Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    game._sync_control()
+    return permanent
+
+
+def _w1g13_buried(count):
+    return [_w1g13_creature(f"Buried {n}", 2, 2) for n in range(count)]
+
+
+def test_w1g13_oversold_cemetery_returns_a_creature_card_at_four(set_pool):
+    """"…if you have four or more creature cards in your graveyard, you may
+    return target creature card from your graveyard to your hand." The target
+    is named as the trigger goes on the stack (CR 603.3d) — asked of an
+    interactive seat — and the land in the pile counts for nothing."""
+    game = _w1g13_table(set_pool, interactive={0})
+    alice = game.players[0]
+    _w1g13_put(game, 0, set_pool("ONS")["Oversold Cemetery"])
+    buried = _w1g13_buried(4)
+    alice.graveyard.extend([buried[0], set_pool("ONS")["Plains"], *buried[1:]])
+    game.resolve_upkeep(0)
+    target = game.pending_choice_of("trigger_target", 0)
+    assert target is not None
+    assert [entry["name"] for entry in target.data["targets"]] == [c.name for c in buried]
+    game.auto_resolve_pending_choices(kinds=("trigger_target",))
+    _w1g13_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    assert [c.name for c in alice.hand] == ["Buried 0"]
+    assert "Buried 0" not in [c.name for c in alice.graveyard]
+
+
+def test_w1g13_oversold_cemetery_intervening_if_both_times(set_pool):
+    """CR 603.4, and the 2022-12-08 ruling: three creature cards and a land is
+    no trigger at all; four that drop to three before it resolves is a trigger
+    that does nothing."""
+    game = _w1g13_table(set_pool)
+    alice = game.players[0]
+    _w1g13_put(game, 0, set_pool("ONS")["Oversold Cemetery"])
+    alice.graveyard.extend([*_w1g13_buried(3), set_pool("ONS")["Plains"]])
+    game.resolve_upkeep(0)
+    assert not game.stack and not game.pending_choices
+    assert not any("Oversold Cemetery" in line for line in game.log)
+
+    alice.graveyard.append(_w1g13_creature("Fourth", 2, 2))
+    game.interactive_seats = {0}
+    game.resolve_upkeep(0)
+    game.auto_resolve_pending_choices(kinds=("trigger_target",))
+    assert [item.card.name for item in game.stack] == ["Oversold Cemetery"]
+    alice.graveyard.pop()
+    _w1g13_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    assert alice.hand == []
+    assert any("condition is no longer true" in line for line in game.log)
+
+
+def _w1g13_quiet_put(game, seat, card):
+    """Onto the battlefield without an entry event, so a watcher already in
+    play does not trigger on the table being set."""
+    permanent = _w1g13_Permanent(card=card)
+    game.players[seat].battlefield.append(permanent)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    game._sync_control()
+    return permanent
+
+
+def test_w1g13_death_match_the_entering_creatures_controller_aims_it(set_pool):
+    """"Whenever a creature enters, that creature's controller may have target
+    creature of their choice get -3/-3 until end of turn." Alice controls the
+    enchantment, Bob's creature enters: Bob is asked for the target (CR 603.3d,
+    "unless the effect states otherwise" — it does) and Bob is the one asked
+    "may?", and the -3/-3 lands on the creature Bob named."""
+    game = _w1g13_table(set_pool, {1: [_w1g13_creature("Bob's Giant", 3, 3)]},
+                        interactive={0, 1})
+    _w1g13_quiet_put(game, 0, set_pool("ONS")["Death Match"])
+    alices = _w1g13_quiet_put(game, 0, _w1g13_creature("Alice's Bear", 3, 3))
+    caras = _w1g13_quiet_put(game, 2, _w1g13_creature("Cara's Bear", 2, 2))
+    game.active_player_index = 1
+    assert game.queue_from_hand(1, "Bob's Giant").supported
+    game.resolve_top_of_stack()
+    assert game.pending_choice_of("trigger_target", 0) is None
+    asked = game.pending_choice_of("trigger_target", 1)
+    assert asked is not None
+    assert {entry["name"] for entry in asked.data["targets"]} == {
+        "Alice's Bear", "Bob's Giant", "Cara's Bear",
+    }
+    assert game.confirm_trigger_target(1, permanent_id=caras.permanent_id)
+    game.resolve_top_of_stack()
+    assert game.pending_choice_of("optional_pay", 0) is None
+    assert game.pending_choice_of("optional_pay", 1) is not None
+    assert game.confirm_optional_pay(1, "Death Match", accept=True)
+    _w1g13_resolve_stack(game)
+    game.check_state_based_actions()
+    assert not game.is_on_battlefield(caras)
+    assert game.is_on_battlefield(alices) and alices.effective_toughness == 3
+
+
+def test_w1g13_death_match_declined_does_nothing(set_pool):
+    """The "may" is the entering creature's controller's to decline."""
+    game = _w1g13_table(set_pool, {1: [_w1g13_creature("Bob's Giant", 3, 3)]},
+                        interactive={1})
+    _w1g13_quiet_put(game, 0, set_pool("ONS")["Death Match"])
+    alices = _w1g13_quiet_put(game, 0, _w1g13_creature("Alice's Bear", 3, 3))
+    game.active_player_index = 1
+    assert game.queue_from_hand(1, "Bob's Giant").supported
+    game.resolve_top_of_stack()
+    assert game.confirm_trigger_target(1, permanent_id=alices.permanent_id)
+    game.resolve_top_of_stack()
+    assert game.confirm_optional_pay(1, "Death Match", accept=False)
+    _w1g13_resolve_stack(game)
+    assert alices.effective_toughness == 3
+
 # ==== end W1G13 ======================================================

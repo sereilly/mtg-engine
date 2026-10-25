@@ -164,6 +164,15 @@ def _parse_draw_multiplier(stream: TokenStream) -> "ast.Amount | None":
     sacrificed = parse_for_each_sacrificed_this_way(stream, parse_object_filter)
     if sacrificed is not None:
         return sacrificed
+    # "Each other player discards a card. You draw a card **for each card
+    # discarded this way**." (Syphon Mind.) The bare count an earlier step of
+    # this effect recorded — ``_THIS_WAY_COUNTS``' row, the reader the life
+    # gain, the counter placement and the return already ask for the same five
+    # words — and first for the sacrifice's reason: the plain noun-phrase
+    # reading below would count every card in some zone instead.
+    recorded = _parse_for_each_this_way(stream)
+    if recorded is not None:
+        return recorded
     # "Target opponent reveals their hand. You draw a card **for each Mountain
     # and red card in it**." (Baleful Stare.) The same clause one record over —
     # the cards a hand reveal in front of this sentence showed — through the

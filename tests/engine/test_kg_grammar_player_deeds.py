@@ -61,6 +61,12 @@ _PRINTED = (
     ), "tapped_land_for_mana_this_turn"),
     (re.compile(r"\b(?:players?|opponents?) who sacrificed [\w ]+? this way\b", re.I),
      "sacrificed_this_way"),
+    # "…each player who didn't discard a creature card this way" (Strongarm
+    # Tactics, ONS): both polarities read the one record.
+    (re.compile(
+        r"\b(?:players?|opponents?) who (?:discarded|didn't discard) [\w ]+? "
+        r"this way\b", re.I,
+    ), "discarded_this_way"),
 )
 
 

@@ -64,7 +64,8 @@ from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                              CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
                              COUNTERED_ABILITY_SOURCE,
                              COUNTERED_SPELL_CONTROLLER, COUNTERED_SPELL_NAME,
-                             COUNTERS_REMOVED, DISCARDED_BY_SEAT, DREW_BY_SEAT,
+                             COUNTERS_REMOVED, DISCARDED_BY_SEAT,
+                             DISCARDED_CARDS_BY_SEAT, DREW_BY_SEAT,
                              DREW_COUNT, EXILED_BY_SEAT, EXILED_THIS_WAY,
                              EXILED_THIS_WAY_OBJECTS, HAND_CARDS_TO_LIBRARY,
                              LAST_TARGET_CONTROLLER, LAST_TARGET_NAME,
@@ -74,7 +75,8 @@ from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                              DISCARDED_INTO_GRAVEYARD, DISCARDED_THIS_WAY,
                              PER_OBJECT_SEAT_RECORDS, PUT_INTO_HAND_THIS_WAY,
                              REVEALED_HAND_CARDS,
-                             REVEALED_THIS_WAY, REVEALED_TOP_CARDS_BY_SEAT,
+                             REVEALED_BY_SEAT, REVEALED_THIS_WAY,
+                             REVEALED_TOP_CARDS_BY_SEAT,
                              SACRIFICED_CARDS_BY_SEAT, SACRIFICED_COUNT,
                              SEARCHED_PERMANENTS, SECRET_NUMBERS_BY_SEAT,
                              TAPPED_THIS_WAY,
@@ -306,6 +308,23 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # many cards" (Flux) had no per-seat producer to demand and the looped
     # draw would have read one seat's answer for everybody.
     "each_player_discards_up_to_cards": ("discarded_count", DISCARDED_BY_SEAT),
+    # "Each player discards a card. Then **each player who didn't discard a
+    # creature card this way** loses 4 life." (Strongarm Tactics.) "Each
+    # **other** player discards a card. You draw a card **for each card
+    # discarded this way**." (Syphon Mind.) The two each-seat chosen discards,
+    # asked a seat at a time (``resumption.ask_in_turn_order``), record every
+    # answer through ``handlers/discards.record_discards``: the resolution's
+    # total, the per-seat tally, the cards, and the cards per seat — the last
+    # being what "who didn't discard a creature card this way" asks of each
+    # seat (``oracle_types.DISCARDED_CARDS_BY_SEAT``).
+    "each_player_discards_a_card": (
+        "discarded_count", DISCARDED_BY_SEAT, DISCARDED_THIS_WAY,
+        DISCARDED_CARDS_BY_SEAT,
+    ),
+    "each_opponent_discards_cards": (
+        "discarded_count", DISCARDED_BY_SEAT, DISCARDED_THIS_WAY,
+        DISCARDED_CARDS_BY_SEAT,
+    ),
     # "…tokens equal to **the amount of mana they paid this way**." (Liege of
     # the Hollows.) See ``oracle_types.MANA_PAID_BY_SEAT``.
     "each_player_pays_any_mana": MANA_PAID_BY_SEAT,
@@ -865,6 +884,13 @@ _PRODUCES_FOR_PAYLOAD: dict[str, tuple[str, object, str]] = {
     # cards** onto the battlefield under their owners' control" — a sentence
     # that would compile clean and put nothing.
     "reveal_top_of_library": ("whose", "each_player", REVEALED_TOP_CARDS_BY_SEAT),
+    # "**Each player** may reveal any number of creature cards from their hand.
+    # Then each player creates a 2/2 green Bear creature token **for each card
+    # they revealed this way**." (Kamahl's Summons.) The per-seat count only
+    # the each-seat reveal writes — see ``oracle_types.REVEALED_BY_SEAT``; a
+    # reveal out of the caster's own hand records one number, and declaring
+    # the map flat would admit "for each card they revealed" behind it.
+    "reveal_cards_from_hand": ("actor", "each_player", REVEALED_BY_SEAT),
     # "Counter target spell **or ability** … If a permanent's ability is
     # countered this way, destroy that permanent." (Teferi's Response.) The
     # union counter writes the record ``counter_stack_ability`` writes for

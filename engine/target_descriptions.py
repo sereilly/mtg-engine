@@ -898,6 +898,15 @@ def _from_targets_payload(targets) -> dict | None:
         or flags.get("unbounded_targets")
     ) and (targets.get("distinct") if several_instances else True):
         flags = {**flags, "distinct_targets": True}
+    if targets.get("chooser"):
+        # "…that creature's controller may have **target creature of their
+        # choice** get -3/-3 until end of turn." (Death Match.) Who announces,
+        # carried onto a permanent slot exactly as ``_carry_player_comparison``
+        # carries it onto CR 115.4's union and the player kinds: the trigger's
+        # picker (``trigger_targets._trigger_chooser_seat``) asks that seat, and
+        # a spec that dropped it would hand the choice to the ability's
+        # controller — the one seat the card says does not make it.
+        flags = {**flags, "chooser": targets["chooser"]}
     type_filter = filt.get("type_filter")
     if not type_filter:
         # "X target **Mountains**" (Volcanic Eruption) prints no card type at

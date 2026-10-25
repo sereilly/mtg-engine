@@ -309,6 +309,41 @@ _SINGLE_PILE_WRONG_BEFORE = {
 _ONE_TARGET_WRONG_SINCE = {"Funeral Pyre", "Selfless Exorcist"}
 
 
+def _one_target_shape(rows) -> set[str]:
+    """Every card the sweep played whose program exiles **one targeted card
+    "from a graveyard"** — the seven's shape, derived rather than listed.
+
+    The two named sets above are a floor (the cards the defect was found on,
+    and the two that joined it), not the population: Onslaught's Fade from
+    Memory ("Exile target card from a graveyard.") is Coffin Purge's sentence
+    without the flashback, and the day it was ingested this check failed it for
+    being *outside* the lists while it showed exactly the defect the lists
+    name. A list a new printing of the shape has to be added to by hand is a
+    list the next printing fails; the program says which shape a card is.
+
+    Only a card that **exiled something** on the sweep's board, from either
+    chair, can show which pile it went to. Eater of the Dead (its ability does
+    nothing untapped), Mortiphobia and Phyrexian Furnace (the chooser takes a
+    different ability, or none) print the shape and are never seen exiling, so
+    they are not part of what this can demand. Nor is a card with a second way
+    of exiling out of a graveyard beside it, since which of the two the sweep
+    saw is not recorded: Phyrexian Furnace's "{T}: Exile the bottom card of
+    target player's graveyard" names its pile by target and is right on the
+    old defaults.
+    """
+    exiled = {row["card"] for row in rows if row["from"]}
+    shaped = set()
+    for name in exiled:
+        steps = list(_walk_program(compile_card_oracle(BY_NAME[name])))
+        exiles = {
+            step.kind for step in steps
+            if step.kind.startswith("exile_") and "graveyard" in step.kind
+        }
+        if exiles and exiles <= GRAVEYARD_DENIAL_KINDS:
+            shaped.add(name)
+    return shaped
+
+
 def test_the_sweep_names_the_defect_with_the_old_defaults_restored(monkeypatch):
     """Backwards: put "the first pile in seat order" back on both roads and
     the sweep must name the cards — every one wrong from chair 0 and right
@@ -342,7 +377,9 @@ def test_the_sweep_names_the_defect_with_the_old_defaults_restored(monkeypatch):
     old = census()
 
     wrong = {r["card"] for r in old if "AI" in r["from"] and r["seat"] == 0}
-    one_target = _ONE_TARGET_WRONG_BEFORE | _ONE_TARGET_WRONG_SINCE
+    one_target = _one_target_shape(old)
+    named = _ONE_TARGET_WRONG_BEFORE | _ONE_TARGET_WRONG_SINCE
+    assert named <= one_target, sorted(named - one_target)
     assert one_target <= wrong, sorted(one_target - wrong)
     assert wrong <= (one_target | _SINGLE_PILE_WRONG_BEFORE), sorted(wrong)
     assert [r["card"] for r in old if "AI" in r["from"] and r["seat"] == 1] == []

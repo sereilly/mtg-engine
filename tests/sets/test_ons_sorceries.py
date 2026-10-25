@@ -517,4 +517,196 @@ def test_w1g4_aphetto_dredging_refuses_rather_than_dropping_its_narrowing(set_po
 # ==== W1G13 ==========================================================
 # W1G13's tests go between this line and the "end W1G13" line.
 
+# --- W1G13: each player, and graveyards --------------------------------------
+#
+# Driven at three seats wherever "each player" and "each opponent" could read
+# differently from a duel: who is asked, in what order, and what each sees.
+from engine import Game as _w1g13_Game
+from engine.models import Permanent as _w1g13_Permanent
+from engine.models import PlayerState as _w1g13_PlayerState
+
+from tests.helpers import _mk_creature_card as _w1g13_creature
+from tests.helpers import resolve_stack as _w1g13_resolve_stack
+
+
+def _w1g13_table(set_pool, hands=None, *, interactive=(), seats=3):
+    """A *seats*-player table, Alice active, each with a five-Plains library."""
+    ons = set_pool("ONS")
+    hands = hands or {}
+    names = ["Alice", "Bob", "Cara", "Dan"][:seats]
+    players = [
+        _w1g13_PlayerState(
+            name=name,
+            hand=[ons[card] if isinstance(card, str) else card for card in hands.get(seat, ())],
+            library=[ons["Plains"]] * 5,
+        )
+        for seat, name in enumerate(names)
+    ]
+    game = _w1g13_Game(players=players)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game.active_player_index = 0
+    return game
+
+
+def _w1g13_put(game, seat, card):
+    permanent = _w1g13_Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    game._sync_control()
+    return permanent
+
+
+def test_w1g13_biorhythm_sets_each_life_total_to_that_seats_creatures(set_pool):
+    """"Each player's life total becomes the number of creatures they control."
+    Counted per seat on its own board: a loss for the seat above its count, a
+    *gain* (CR 119.5) for the one below it — and the seat with no creatures
+    goes to 0 and loses at the next state check (the 2004-10-04 ruling)."""
+    game = _w1g13_table(set_pool, {0: ["Biorhythm"]})
+    alice, bob, cara = game.players
+    for name in ("A1", "A2"):
+        _w1g13_put(game, 0, _w1g13_creature(name, 2, 2))
+    for name in ("B1", "B2", "B3"):
+        _w1g13_put(game, 1, _w1g13_creature(name, 2, 2))
+    alice.life = 1
+    gained: list = []
+    original = game._gain_life
+
+    def _spy(player, amount, *args, **kwargs):
+        gained.append((player.name, amount))
+        return original(player, amount, *args, **kwargs)
+
+    game._gain_life = _spy
+    assert game.cast_from_hand(0, "Biorhythm").supported
+    _w1g13_resolve_stack(game)
+    assert (alice.life, bob.life, cara.life) == (2, 3, 0)
+    assert gained == [("Alice", 1)], "a total set higher is a life gain"
+    game.check_state_based_actions()
+    assert cara.lost and not alice.lost and not bob.lost
+
+
+def _w1g13_discard(game, seat, hand_index):
+    assert game.resolve_pending_choice(
+        "discard", seat, hand_indices=[hand_index], to_library=False,
+    )
+
+
+def test_w1g13_syphon_mind_asks_each_other_player_in_turn_and_counts_them(set_pool):
+    """"Each other player discards a card. You draw a card for each card
+    discarded this way." At three seats both opponents discard, asked one at a
+    time in APNAP order (CR 101.4): Cara is not asked until Bob has answered,
+    and the draw waits for the last answer and counts both."""
+    bear = _w1g13_creature("Bob's Bear", 2, 2)
+    giant = _w1g13_creature("Cara's Giant", 3, 3)
+    game = _w1g13_table(
+        set_pool, {0: ["Syphon Mind"], 1: ["Shock", bear], 2: [giant]},
+        interactive={1, 2},
+    )
+    alice, bob, cara = game.players
+    assert game.cast_from_hand(0, "Syphon Mind").supported
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [("discard", 1)]
+    assert alice.hand == []
+    _w1g13_discard(game, 1, 1)
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [("discard", 2)]
+    assert alice.hand == [], "nothing is drawn while an opponent still owes"
+    _w1g13_discard(game, 2, 0)
+    _w1g13_resolve_stack(game)
+    assert [c.name for c in bob.graveyard] == ["Bob's Bear"]
+    assert [c.name for c in cara.graveyard] == ["Cara's Giant"]
+    assert len(alice.hand) == 2
+    assert alice.graveyard[-1].name == "Syphon Mind"
+
+
+def test_w1g13_syphon_mind_draws_only_for_what_was_discarded(set_pool):
+    """An opponent with an empty hand discards nothing, and the draw is the
+    count of the cards that actually went — here one."""
+    game = _w1g13_table(set_pool, {0: ["Syphon Mind"], 1: ["Shock"]})
+    alice, bob, cara = game.players
+    assert game.cast_from_hand(0, "Syphon Mind").supported
+    _w1g13_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    assert [c.name for c in bob.graveyard] == ["Shock"]
+    assert cara.graveyard == []
+    assert [c.name for c in alice.hand] == ["Plains"]
+
+
+def test_w1g13_strongarm_tactics_charges_each_seat_that_kept_its_creatures(set_pool):
+    """"Each player discards a card. Then each player who didn't discard a
+    creature card this way loses 4 life." The active player first (here a seat
+    nobody asks, which discards its first card), Bob asked and answering with a
+    creature card, and Cara — whose empty hand discarded nothing — counted as
+    not having discarded one. The loss waits for Bob's answer."""
+    giant = _w1g13_creature("Hill Giant", 3, 3)
+    game = _w1g13_table(
+        set_pool,
+        {0: ["Strongarm Tactics", "Plains", _w1g13_creature("Bear", 2, 2)],
+         1: ["Shock", giant]},
+        interactive={1},
+    )
+    alice, bob, cara = game.players
+    assert game.cast_from_hand(0, "Strongarm Tactics").supported
+    assert [c.name for c in alice.graveyard] == ["Plains"], "Alice chose first"
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [("discard", 1)]
+    assert (alice.life, cara.life) == (20, 20), "no loss before the last answer"
+    _w1g13_discard(game, 1, 1)
+    _w1g13_resolve_stack(game)
+    assert [c.name for c in bob.graveyard] == ["Hill Giant"]
+    assert (alice.life, bob.life, cara.life) == (16, 20, 16)
+
+
+def _w1g13_tokens(game, seat, name="Bear Token"):
+    return [perm for perm in game.controlled_by(seat) if perm.card.name == name]
+
+
+def test_w1g13_kamahls_summons_each_seat_reveals_in_turn_and_gets_its_bears(set_pool):
+    """"Each player may reveal any number of creature cards from their hand.
+    Then each player creates a 2/2 green Bear creature token for each card
+    they revealed this way." Asked one seat at a time in APNAP order — Bob is
+    asked only after Alice's reveal is public (CR 101.4b) — only creature
+    cards are offered, a seat with none is not asked, and each seat's Bears
+    are its own count."""
+    game = _w1g13_table(
+        set_pool,
+        {0: ["Kamahl's Summons", _w1g13_creature("Alice's Bear", 2, 2), "Plains"],
+         1: [_w1g13_creature("Giant", 3, 3), _w1g13_creature("Dragon", 5, 5), "Shock"],
+         2: ["Plains"]},
+        interactive={0, 1, 2},
+    )
+    alice, bob, cara = game.players
+    assert game.cast_from_hand(0, "Kamahl's Summons").supported
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("choose_cards_in_hand", 0),
+    ]
+    offered = game.live_choose_cards_in_hand(game.pending_choices[0])
+    assert [alice.hand[i].name for i in offered] == ["Alice's Bear"]
+    assert game.confirm_choose_cards_in_hand(0, offered)
+    assert game.reveal_events[-1]["seat"] == 0
+    assert game.reveal_events[-1]["cards"] == ["Alice's Bear"]
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("choose_cards_in_hand", 1),
+    ]
+    offered = game.live_choose_cards_in_hand(game.pending_choices[0])
+    assert [bob.hand[i].name for i in offered] == ["Giant", "Dragon"]
+    assert game.confirm_choose_cards_in_hand(1, offered[:1])
+    assert game.pending_choices == [], "Cara holds no creature card and is not asked"
+    _w1g13_resolve_stack(game)
+    assert len(_w1g13_tokens(game, 0)) == 1
+    assert len(_w1g13_tokens(game, 1)) == 1
+    assert _w1g13_tokens(game, 2) == []
+    bear = _w1g13_tokens(game, 0)[0]
+    assert (bear.effective_power, bear.effective_toughness) == (2, 2)
+    assert len(alice.hand) == 2 and len(bob.hand) == 3, "a reveal moves nothing"
+
+
+def test_w1g13_kamahls_summons_a_seat_nobody_asks_reveals_every_creature(set_pool):
+    """The stated default for "any number": every eligible card."""
+    game = _w1g13_table(
+        set_pool,
+        {0: ["Kamahl's Summons"],
+         1: [_w1g13_creature("Giant", 3, 3), _w1g13_creature("Dragon", 5, 5)]},
+    )
+    assert game.cast_from_hand(0, "Kamahl's Summons").supported
+    _w1g13_resolve_stack(game)
+    assert [len(_w1g13_tokens(game, seat)) for seat in range(3)] == [0, 2, 0]
+
 # ==== end W1G13 ======================================================

@@ -484,6 +484,13 @@ def _lower_reveal_cards_from_hand(
     whole hand is Brine Seer countering for the size of a hand.
     """
     filt = node.filter
+    if filt.zone_owner is not None and filt.zone_owner.kind != "you":
+        # "…from **their** hand" outside the each-seat offer that names whose
+        # (``_collapses._each_seat_optional_hand_reveal``): nobody for the
+        # pronoun to be, and the caster's own hand would be a guess.
+        raise LoweringError(
+            "only an offer to each seat reveals out of 'their' hand", node=node
+        )
     # The gate ``card_only_filter`` below cannot supply: ``to_payload`` emits
     # **nothing** for a relative narrowing, so a phrase this cannot honour
     # would arrive here already reduced to the bare noun and the reveal would

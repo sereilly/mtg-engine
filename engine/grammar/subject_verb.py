@@ -170,7 +170,13 @@ def parse_subject_verb(
         if isinstance(source_spec, ast.PlayerRef):
             deed_at = stream.mark()
             deed = accept_player_deed(stream, parse_object_filter)
-            if deed is not None and stream.at_word("sacrifices", "sacrifice"):
+            # "…**each player who didn't discard a creature card this way**
+            # loses 4 life." (Strongarm Tactics.) The life loss is the second
+            # reader: its lowering stamps the clause on the seats it loops and
+            # refuses it on every other subject.
+            if deed is not None and stream.at_word(
+                "sacrifices", "sacrifice", "loses", "lose",
+            ):
                 source_spec = dataclasses.replace(source_spec, did=deed)
             else:
                 stream.reset(deed_at)

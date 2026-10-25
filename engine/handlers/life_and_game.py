@@ -4,6 +4,7 @@ import dataclasses
 from typing import TYPE_CHECKING
 
 from ._amounts import count_from_payload, per_recipient_amount, resolve_amount
+from ._filters import seats_matching_deed
 from ._targets import (bound_permanent, damaged_end_seat, named_seat_still_a_target,
                        stack_target_controller_seat)
 from ..exiled_records import source_object
@@ -207,17 +208,31 @@ def target_loses_life(game: Game, instruction: OracleInstruction, context: Oracl
     # every living opponent. Life loss is not damage (CR 120.3), so no shield
     # or replacement contends here.
     recipient = instruction.payload.get("recipient")
+    # "Then each player **who didn't discard a creature card this way** loses
+    # 4 life." (Strongarm Tactics.) The seat narrowing the two looped
+    # recipients may carry, through the one reader Desolation's damage asks
+    # (``seats_matching_deed``) — a seat the clause excludes loses nothing.
+    deed = instruction.payload.get("recipient_did")
     if recipient == "caster":
         victims = [context.caster]
     elif recipient == "each_opponent":
         victims = [
             game.players[i]
-            for i in game.opponents_of(game.players.index(context.caster))
+            for i in seats_matching_deed(
+                game, context,
+                game.opponents_of(game.players.index(context.caster)), deed,
+            )
         ]
     elif recipient == "each_player":
         # "Each player loses 2 life." (Bad Deal) — the caster too; a player who
         # has already left the game is nobody (CR 800.4a).
-        victims = [p for p in game.players if not p.lost]
+        victims = [
+            game.players[i]
+            for i in seats_matching_deed(
+                game, context,
+                [i for i, p in enumerate(game.players) if not p.lost], deed,
+            )
+        ]
     elif recipient == "event_subject_controller":
         # "That player" after an event about an object: the controller of that
         # object, frozen by the fire site (CR 603.10). Massacre Wurm's dead
@@ -398,7 +413,13 @@ def set_life_total(game: Game, instruction: OracleInstruction, context: OracleEx
         players = [
             p for p in (context.target,) if p in game.players and not p.lost
         ]
+    # "Each player's life total becomes **the number of creatures they
+    # control**." (Biorhythm.) One number per seat, through the channel's one
+    # reader — each seat's own board, counted as its total is set.
+    per_seat = instruction.payload.get(X_FROM_COUNT_PER_RECIPIENT)
     for player in players:
+        if per_seat is not None:
+            total = per_recipient_amount(game, context, per_seat, player)
         before = player.life
         if total > before:
             game._gain_life(player, total - before, context.card.name)

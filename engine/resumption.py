@@ -141,14 +141,21 @@ def ask_in_turn_order(
     order. Then the actions happen simultaneously." And CR 101.4b: "A player
     knows the choices made by the previous players when making their choice."
     So *ask* (called with a seat index) arms that seat's prompt and nothing
-    else, and the next seat is asked only once that prompt is answered — a seat
-    whose prompt suspends leaves the rest of the round on ``resume_stack``, and
-    the answer brings it back. *then* is where the simultaneous action goes, or
-    a summary of the answers; work after this call would not run when a seat
-    suspends (this module's rule).
+    else — or does what the seat owes without asking, or nothing at all for a
+    seat the sentence is not about — and the next seat is asked only once that
+    prompt is answered: it is :func:`run_resumable` over ``game.apnap_seats()``,
+    so a seat whose prompt suspends leaves the rest of the round on
+    ``resume_stack``, and the answer brings it back. *then* is where the
+    simultaneous action goes, or a summary of the answers; work after this call
+    would not run when a seat suspends (this module's rule).
 
-    A seat nobody asks answers as its prompt is armed (``default_at_arm``), so a
-    round with no interactive seat runs straight through, in the same order.
+    A seat nobody asks answers as its prompt is armed (``default_at_arm``: the
+    creature-type choice) or when the queue is drained (the each-seat discard,
+    which is not ``default_at_arm``), and the loop carries on from there either
+    way, so a round with no interactive seat runs straight through, in the same
+    order. Its callers: each player choosing a creature type
+    (``handlers/value_choices``), the each-seat discards (``handlers/discards``)
+    and the each-seat hand picks and reveals (``handlers/hand``).
     """
     run_resumable(game, game.apnap_seats(), ask, then=then)
 

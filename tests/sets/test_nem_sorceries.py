@@ -176,9 +176,11 @@ def test_w1g5_stronghold_gambit_ties_all_enter_and_lands_do_not_compete(set_pool
 
 def test_w1g5_stronghold_gambit_keeps_a_pick_hidden_until_the_reveal(set_pool):
     """CR 101.4a: a card chosen out of a hand may stay face down as it is
-    chosen. Seat 1 (headless) has chosen by the time seat 0 is asked, and the
-    public log says only *that* it chose — the card is named by the reveal,
-    after seat 0 answers. The spell stays on the stack until then (CR 608.2)."""
+    chosen. CR 101.4: the active player (seat 0) chooses first and seat 1
+    (headless) after — asked one seat at a time since Onslaught's W1G13
+    (``resumption.ask_in_turn_order``) — and the public log says only *that*
+    seat 1 chose: the card is named by the reveal. The spell stays on the stack
+    until the last pick (CR 608.2)."""
     nem, lea = set_pool("NEM"), set_pool("LEA")
     game, me, _ = _w1g5_gambit(
         set_pool, [lea["Forest"], nem["Wild Mammoth"]], [nem["Rhox"]], interactive=(0,),
@@ -186,32 +188,40 @@ def test_w1g5_stronghold_gambit_keeps_a_pick_hidden_until_the_reveal(set_pool):
     pick = game.pending_choice_of("choose_cards_in_hand", 0)
     assert pick is not None and game.live_choose_cards_in_hand(pick) == [0, 1]
     assert game.stack, "the sorcery is still resolving"
-    assert not any("Rhox" in line for line in game.log), "seat 1's pick is face down"
-    assert any("W1G5-B chose 1 card(s)" in line for line in game.log)
+    assert not any("W1G5-B chose" in line for line in game.log), (
+        "seat 1 is asked after the active player"
+    )
 
     assert game.confirm_choose_cards_in_hand(0, [1])
+    chose = next(i for i, line in enumerate(game.log) if "W1G5-B chose 1 card(s)" in line)
+    assert "Rhox" not in game.log[chose], "seat 1's pick is face down"
     game._settle()
 
-    assert any("W1G5-B reveals Rhox" in line for line in game.log)
+    revealed = next(i for i, line in enumerate(game.log) if "W1G5-B reveals Rhox" in line)
+    assert chose < revealed
     assert _w1g5_names_on(game, 0) == ["Wild Mammoth"]
     assert [c.name for c in me.hand] == ["Forest"]
 
 
 def test_w1g5_stronghold_gambit_waits_for_every_seat_in_any_order(set_pool):
-    """Two interactive seats owe a pick at once. The first answer (seat 1's,
-    out of turn order) reveals nothing and moves nothing: the sorcery resolves
-    only when the last seat has chosen, and then compares both cards."""
+    """Two interactive seats owe a pick, asked one at a time in APNAP order
+    (CR 101.4; ``resumption.ask_in_turn_order`` since Onslaught's W1G13). The
+    first answer (the active player's) reveals nothing and moves nothing: the
+    sorcery resolves only when the last seat has chosen, and then compares
+    both cards."""
     nem, lea = set_pool("NEM"), set_pool("LEA")
     game, me, them = _w1g5_gambit(
         set_pool, [nem["Rhox"], nem["Mogg Toady"]], [nem["Wild Mammoth"], lea["Forest"]],
         interactive=(0, 1),
     )
     owed = sorted(c.player_index for c in game.pending_choices if c.kind == "choose_cards_in_hand")
-    assert owed == [0, 1]
+    assert owed == [0], "the active player is asked first"
 
-    assert game.confirm_choose_cards_in_hand(1, [0])
-    assert game.stack and game.reveal_events == [], "nothing is revealed yet"
     assert game.confirm_choose_cards_in_hand(0, [0])
+    assert game.stack and game.reveal_events == [], "nothing is revealed yet"
+    owed = sorted(c.player_index for c in game.pending_choices if c.kind == "choose_cards_in_hand")
+    assert owed == [1]
+    assert game.confirm_choose_cards_in_hand(1, [0])
     game._settle()
 
     assert not game.stack

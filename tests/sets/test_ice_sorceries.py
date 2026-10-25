@@ -782,9 +782,14 @@ def test_pox_asks_every_seat_and_not_only_the_caster(set_pool):
     game.cast_from_hand(0, "Pox")
     game._settle()
 
+    # CR 101.4: the active player chooses first and the opponent after
+    # (``resumption.ask_in_turn_order``), so the opponent's prompt is armed
+    # once the caster has answered.
     assert game.pending_choice_of("discard", 0) is not None
-    assert game.pending_choice_of("discard", 1) is not None
+    assert game.pending_choice_of("discard", 1) is None
     assert game.pending_choice_of("discard", 0).data["count"] == 2
+    game.take_choice_default(game.pending_choice_of("discard", 0))
+    assert game.pending_choice_of("discard", 1) is not None
     assert game.pending_choice_of("discard", 1).data["count"] == 1
 
 

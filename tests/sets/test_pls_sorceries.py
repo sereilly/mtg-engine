@@ -1162,8 +1162,10 @@ def test_w1g3_noxious_vapors_holds_each_players_answer_to_one_card_per_colour(se
     game.queue_from_hand(0, "Noxious Vapors")
     game.resolve_top_of_stack()
 
+    # CR 101.4: one seat at a time, the active player first
+    # (``resumption.ask_in_turn_order`` since Onslaught's W1G13).
     owed = [c for c in game.pending_choices if c.kind == "choose_cards_in_hand"]
-    assert sorted(c.player_index for c in owed) == [0, 1]
+    assert sorted(c.player_index for c in owed) == [0]
     assert game.live_choose_cards_in_hand(owed[0]) == [0, 1, 2], "never the Forest"
     assert game._how_many_cards_to_choose(owed[0]) == 2
     assert not game.confirm_choose_cards_in_hand(0, [0, 1]), "two red cards"
@@ -1172,6 +1174,8 @@ def test_w1g3_noxious_vapors_holds_each_players_answer_to_one_card_per_colour(se
     assert game.confirm_choose_cards_in_hand(0, [1, 2])
 
     assert len(mine.hand) == 4 and not mine.graveyard, "B has not answered yet"
+    assert [c.player_index for c in game.pending_choices
+            if c.kind == "choose_cards_in_hand"] == [1]
     assert game.confirm_choose_cards_in_hand(1, [1, 0])
     _w1g3_resolve_stack(game)
 
@@ -1273,12 +1277,16 @@ def test_w1g3_urzas_guilt_takes_no_life_until_the_discards_are_chosen(set_pool):
     game.queue_from_hand(0, "Urza's Guilt")
     game.resolve_top_of_stack()
 
+    # CR 101.4: one seat at a time, the active player first
+    # (``resumption.ask_in_turn_order`` since Onslaught's W1G13).
     owed = {c.player_index: c.data["count"] for c in game.pending_choices if c.kind == "discard"}
-    assert owed == {0: 3, 1: 2}
+    assert owed == {0: 3}
     assert _w1g3_zone(mine.hand) == ["Counterspell", "Island", "Lightning Bolt", "Swamp"]
     assert (mine.life, theirs.life) == (20, 20)
 
     assert game.confirm_discard(0, [0, 1, 2])
+    owed = {c.player_index: c.data["count"] for c in game.pending_choices if c.kind == "discard"}
+    assert owed == {1: 2}
     assert (mine.life, theirs.life) == (20, 20), "B has not discarded yet"
     assert game.confirm_discard(1, [0, 1])
     _w1g3_resolve_stack(game)

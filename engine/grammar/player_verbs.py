@@ -773,6 +773,21 @@ def parse_player_subject_verb(
             return ast.May(source_spec, action=action)
         except GrammarError:
             stream.reset(mark_may)
+        # "…that creature's controller may **have** target creature of their
+        # choice get -3/-3 until end of turn." (Death Match.) The causative
+        # "you may have <subject> <verb>" ``statements`` already reads for the
+        # bare "you may", with a printed seat in front: the verb table accepts
+        # the uninflected spelling the causative leaves behind, so consuming
+        # "have" is the whole difference. Tried only after the reading above
+        # refused, because "may have **it** deal damage" (Pandemonium) is read
+        # *with* its "have" by the damage production and keeps that reading.
+        stream.advance()
+        if stream.accept_word("have"):
+            try:
+                return ast.May(source_spec, action=parse_optional_action(stream))
+            except GrammarError:
+                pass
+        stream.reset(mark_may)
     return None
 
 
