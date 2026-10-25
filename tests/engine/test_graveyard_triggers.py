@@ -65,10 +65,24 @@ def _destination(instruction) -> str:
     wrapped: Krovikan Horror's return sits inside a ``may`` and Death Spark's
     inside a ``may``'s "if you do". ``return_self_from_graveyard`` says where it
     lands in its own payload (absent means the battlefield, which is what every
-    payload written before the hand spelling existed says).
+    payload written before the hand spelling existed says). A tree that names
+    no move at all is the battlefield, for the same reason.
+    """
+    found = _destination_in(instruction)
+    return "battlefield" if found is None else found
+
+
+def _destination_in(instruction) -> str | None:
+    """The zone the first *move* in this tree names, or None if it names none.
+
+    None is a real answer and not a default: "you may **discard a card**. If you
+    do, return this card to your hand" (Gigapede, ONS) puts its price ahead of
+    its move in the ``may``'s ``action``, and a walk that answered
+    "battlefield" for every leaf read the discard as the destination and failed
+    a card that had arrived in the hand it prints.
     """
     if instruction is None:
-        return "battlefield"
+        return None
     payload = instruction.payload or {}
     if instruction.kind == "return_self_from_graveyard":
         return str(payload.get("to") or "battlefield")
@@ -84,10 +98,10 @@ def _destination(instruction) -> str:
         return "hand"
     for key in ("steps", "action", "then", "effect", "otherwise"):
         for step in payload.get(key) or ():
-            found = _destination(step)
+            found = _destination_in(step)
             if found is not None:
                 return found
-    return "battlefield"
+    return None
 
 
 def _arm(game: Game, seat: int, card, gate: dict) -> None:
@@ -137,6 +151,25 @@ def _arm_offered_price(game: Game, seat: int, card, instruction, pool) -> None:
         return
     for step in payload.get("action") or ():
         price = step.payload or {}
+        if step.kind == "discard_controller_cards":
+            # "…you may **discard a card**. If you do, return this card to
+            # your hand." (Gigapede, ONS.) The hand twin of the pile below: an
+            # empty hand has nothing to discard and the offer is rightly never
+            # made (``offers`` asks the hand before offering). The card that
+            # pays is the first in the pool the price's own filter admits.
+            from engine.handlers._filters import _card_matches_filter
+
+            described = dict(price.get("filter") or {})
+            fodder = next(
+                candidate for candidate in pool.values()
+                if candidate is not card
+                and _card_matches_filter(candidate, described, game=game, owner=seat)
+            )
+            amount = price.get("amount", 1)
+            game.players[seat].hand.extend(
+                [fodder] * (amount if isinstance(amount, int) else 1)
+            )
+            continue
         if step.kind != "exile_cards_from_graveyard" or price.get("graveyard_owner") != "you":
             continue
         fodder = next(
@@ -212,9 +245,10 @@ def test_every_graveyard_functioning_trigger_reaches_its_zone():
                 f"{card.name}: its own offer could not be accepted"
             )
             # The offer's price, where it is a pick out of the graveyard
-            # (Ichorid's exile), answered by the pick's own default: which
-            # card pays is not this guard's question.
-            game.auto_resolve_pending_choices(kinds=("graveyard_exile_pick",))
+            # (Ichorid's exile) or out of the hand (Gigapede's discard),
+            # answered by the pick's own default: which card pays is not this
+            # guard's question.
+            game.auto_resolve_pending_choices(kinds=("graveyard_exile_pick", "discard"))
             game._settle()
 
         zone = _destination(trig.instruction)
