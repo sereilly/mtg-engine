@@ -49,6 +49,10 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
         # The definite article is what keeps it off the bare row's other cards,
         # and the description behind it is what says which object it names.
         "when the creature put onto the battlefield with this enchantment dies",
+        # The explicit-self union (Rotlung Reanimator): the source itself or
+        # another Cleric, after Basri's Lieutenant's controller-scoped
+        # spelling, which this one must not be swallowed by.
+        "whenever this creature or another cleric dies",
     ),
     # Both printed spellings, because the kind is in both tables: "whenever" for
     # an Equipment (Malefic Scythe) and "when" for an Aura (Creature Bond). One

@@ -66,7 +66,9 @@ _TRIGGER_KEYS = frozenset({
 #: without it does not match), enforced by the kind's event filter.
 _TRIGGER_KINDS_REQUIRING_THE_WORD = frozenset({"counters_put_on_creature"})
 #: "this creature **or another** creature you control" — a union with the
-#: source, so there is nothing to exclude.
+#: source: the phrase keeps its exclusion and the condition puts the source
+#: back by identity (``<stem>_includes_source``), which
+#: ``tests/regressions/test_w1g7_own_death_and_self_union.py`` holds.
 _UNION_WITH_SOURCE = re.compile(r"\bthis \w+ or another\b", re.I)
 
 
