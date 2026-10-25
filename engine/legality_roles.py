@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from .models import CardDefinition, Permanent, PlayerState
 from .targeting import role_is_stack, spec_roles
-from .target_roles import role_relation_holds
+from .target_roles import role_announcement, role_relation_holds, roles_may_end_at
 
 
 def _role_object_key(obj) -> tuple:
@@ -323,11 +323,15 @@ class RoleTargetsMixin:
                 ability_instruction=ability_instruction,
                 ability_source=ability_source,
             )
-            if not following and len(chosen) + 1 < len(spec_roles(spec)):
+            if not following and not roles_may_end_at(
+                spec_roles(spec), len(chosen) + 1
+            ):
                 # CR 601.2c: every target of the spell is chosen, so a first
                 # choice that leaves a later role with no legal object is not a
                 # legal first choice at all. Dropped here rather than offered
-                # and refused after the click.
+                # and refused after the click — unless every later role is
+                # optional, where an empty ``next`` is the announcement ending
+                # (Primal Might with no creature on the other side to fight).
                 continue
             walked.append({**option, "next": following})
         return walked
@@ -338,11 +342,17 @@ class RoleTargetsMixin:
         ability_instruction=None, ability_source=None,
     ) -> bool:
         """Whether *chosen* - one permanent per role, in role order - is a legal
-        announcement, asked through the very list the picker was built from."""
+        announcement, asked through the very list the picker was built from.
+
+        An optional role left unanswered is the shorter announcement
+        :func:`role_announcement` reads it as; every role that *was* answered
+        is judged against its own list exactly as before."""
         roles = spec_roles(spec)
-        if len(chosen) != len(roles) or any(perm is None for perm in chosen):
+        named = role_announcement(roles, chosen)
+        if named is None:
             return False
-        for index in range(len(roles)):
+        chosen = named
+        for index in range(len(chosen)):
             options = self.role_target_options(
                 caster_index, card, spec, tuple(chosen[:index]), for_cast=for_cast,
                 source_permanent=source_permanent,

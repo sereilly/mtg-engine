@@ -42,7 +42,7 @@ from ...enchant_targets import (_ENCHANT_LAND_SUBTYPES,
                                 enchant_subject_seat)
 from ...targeting import (derive_cast_spec, role_is_stack, spec_roles,
                           targets_mana_value_x)
-from ...target_roles import role_is_seat
+from ...target_roles import role_is_seat, roles_may_end_at
 from ...cost_x_definitions import defines_cast_x
 from ...divided_damage import (
     CARD_DIVIDED, EACH, EVENLY, FIXED, card_shares, divided_description,
@@ -765,7 +765,13 @@ class CastTargetValidationMixin:
                 target_permanent_ids, roles, target_stack_item,
                 role_seats=target_role_seats,
             )
-            if len(chosen) != len(roles):
+            # "…fights **up to one** target creature you don't control"
+            # (Primal Might): an announcement may stop short of an optional
+            # role (``target_roles.roles_may_end_at``), and what it did name
+            # is judged by ``_role_targets_legal`` below like any other.
+            if len(chosen) != len(roles) and not (
+                len(chosen) < len(roles) and roles_may_end_at(roles, len(chosen))
+            ):
                 return False, f"{card.name} requires {len(roles)} targets"
             if not self._role_targets_legal(
                 caster_index, card, cast_spec, chosen, for_cast=True

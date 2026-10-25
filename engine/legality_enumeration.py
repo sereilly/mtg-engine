@@ -435,6 +435,25 @@ class TargetEnumerationMixin:
                         source=ability_source or source_permanent,
                     ):
                         continue
+                # "target creature **with the chosen ability**" (Phyrexian
+                # Splicer). The word was announced with the activation
+                # (CR 601.2b, before CR 601.2c's targets) and is recorded on
+                # the ability's source, so a flag of ``True`` is asked through
+                # ``subject_matches`` with that source exactly as the
+                # relations above are — no source, or nothing recorded, offers
+                # nothing. A *word* on the flag is the picker enumerating one
+                # printed option before any was chosen
+                # (``target_descriptions.with_chosen_keyword``).
+                chosen_keyword = spec.get("chosen_keyword")
+                if chosen_keyword and not subject_matches(
+                    self, perm,
+                    {"with_keywords": [chosen_keyword]}
+                    if isinstance(chosen_keyword, str)
+                    else {"chosen_keyword": True},
+                    observer=caster_index,
+                    source=ability_source or source_permanent,
+                ):
+                    continue
                 # Whatever the printed noun phrase says beyond its head noun
                 # ("a creature **with defender**", Portcullis Vine). The same
                 # matcher the payment path runs, so the list offered here and

@@ -74,12 +74,22 @@ def _resolve_chosen_keyword(filt: dict, source) -> dict:
     if not filt.get("chosen_keyword"):
         return filt
     keyword = getattr(source, "metadata", {}).get(CHOSEN_ABILITY) if source else None
-    if not keyword:
+    return chosen_keyword_as_word(filt, keyword)
+
+
+def chosen_keyword_as_word(filt: dict, word) -> dict:
+    """*filt* with "with the chosen ability" answered by *word* — the one
+    substitution, for a reader that holds the word itself rather than the
+    source's record: a resolving ability reads the word **it** announced
+    (``StackItem.choices[CHOSEN_ABILITY]``), because the record is the latest
+    activation's. No word leaves the key in place, which the pure matcher then
+    refuses (the safe direction, as above)."""
+    if not filt.get("chosen_keyword") or not word:
         return filt
     resolved = dict(filt)
     resolved.pop("chosen_keyword", None)
     resolved["with_keywords"] = list(resolved.get("with_keywords") or ()) + [
-        str(keyword)
+        str(word)
     ]
     return resolved
 

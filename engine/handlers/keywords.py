@@ -524,9 +524,10 @@ def move_chosen_keyword_between_targets(game: Game, instruction: OracleInstructi
 
     The word is neither in the payload nor in the sentence: both clauses print
     the pronoun, and what it names is the option the *activation* chose
-    (CR 601.2b through CR 602.2b), recorded on the ability's own source. With
-    nothing recorded there is no ability to move and the resolution does
-    nothing, which is the direction that cannot invent one.
+    (CR 601.2b through CR 602.2b), carried by the ability's own stack object
+    (``choices[CHOSEN_ABILITY]``). With nothing recorded there is no ability to
+    move and the resolution does nothing, which is the direction that cannot
+    invent one.
 
     The two slots are resolved positionally and each is re-checked against its
     own filter, exactly as the pump above does — a slot that has become illegal
@@ -536,11 +537,17 @@ def move_chosen_keyword_between_targets(game: Game, instruction: OracleInstructi
     governs both halves of the one sentence.
     """
     from ..subject_filters import subject_matches
-    from ._chosen import CHOSEN_ABILITY
+    from ._chosen import CHOSEN_ABILITY, chosen_keyword_as_word
 
     card = context.card
     source = context.source_permanent
-    keyword = (getattr(source, "metadata", {}) or {}).get(CHOSEN_ABILITY)
+    # The word **this** ability announced, off its own stack object: the
+    # source's record is the latest activation's, and an untap between two
+    # activations would otherwise hand the first the second's word. The record
+    # stands in only for a context built without the object's choices.
+    keyword = (context.choices or {}).get(CHOSEN_ABILITY) or (
+        getattr(source, "metadata", {}) or {}
+    ).get(CHOSEN_ABILITY)
     if not keyword:
         game.log.append(f"{card.name}: no ability was chosen to move")
         return True, "resolved"
@@ -553,7 +560,9 @@ def move_chosen_keyword_between_targets(game: Game, instruction: OracleInstructi
 
     taken: list[Permanent] = []
     for index, permanent in enumerate(chosen):
-        wanted = slot_filters[index] if index < len(slot_filters) else {}
+        wanted = chosen_keyword_as_word(
+            slot_filters[index] if index < len(slot_filters) else {}, keyword,
+        )
         if permanent is None or not game.is_on_battlefield(permanent):
             game.log.append(f"{card.name}: nothing legal in slot {index + 1}")
             continue

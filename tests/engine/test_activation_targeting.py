@@ -492,17 +492,16 @@ def test_slots_that_differ_become_roles_and_keep_both_narrowings():
     assert both_slots["max_targets"] == 2
 
 
-def test_an_optional_slot_keeps_the_shared_list_it_can_still_be_cast_with():
-    """The shape roles cannot express, and why it is left alone.
-
-    "…it fights **up to one** target creature an opponent controls" (Primal
-    Might). CR 601.2c lets that slot name nothing, and a roles walk has no way
-    to say so — every role is answered or the announcement is refused. Turning
-    an optional target into a required one is a *different* wrongness, not a
-    smaller one, so these keep the shared list and the narrowing loss that comes
-    with it. ``optional_slots`` is what the description records to say so.
-    """
+def test_an_optional_slot_is_an_optional_role_with_its_own_narrowing():
+    """"…it fights **up to one** target creature an opponent controls" (Primal
+    Might). CR 601.2c lets that slot name nothing, and the roles walk can now
+    say so (``target_roles.OPTIONAL_ROLE``): each slot keeps its own narrowing,
+    and only the skippable one is marked. It used to stay on one shared list
+    whose intersection of the two seat tests was nothing, so the picker offered
+    every creature for both slots. ``optional_slots`` is what the description
+    records to say which slot may be left empty."""
     from engine.target_descriptions import _from_targets_payload
+    from engine.target_roles import OPTIONAL_ROLE
 
     spec = _from_targets_payload({
         "quantifier": "target", "kind": "object", "count": 2,
@@ -513,9 +512,10 @@ def test_an_optional_slot_keeps_the_shared_list_it_can_still_be_cast_with():
         ],
         "optional_slots": [1],
     })
-    assert spec["kind"] == "creature"
-    assert spec["max_targets"] == 2
-    assert "own_only" not in spec, "the intersection still governs a shared list"
+    assert spec["kind"] == "roles"
+    first, second = spec["roles"]
+    assert first["own_only"] is True and not first.get(OPTIONAL_ROLE)
+    assert second["opponent_only"] is True and second[OPTIONAL_ROLE] is True
 
 
 # ---------------------------------------------------------------------------

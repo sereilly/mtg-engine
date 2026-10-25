@@ -6742,18 +6742,26 @@ function renderAbilityWordPrompt(card, options, then) {
   const cardName = card?.name || "an ability";
   title.textContent = "Choose an ability";
   body.textContent = `${cardName}: the creature you target first must have it.`;
+  // A word with no legal walk behind it (no creature has it, or nothing is
+  // left for the second target) is an announcement the server refuses
+  // (CR 601.2c), so it is not offered as one: the server ships the walk per
+  // word (`valid_targets_by_keyword`), and an empty one disables its button.
+  const walks = targetSpecOf(card)?.valid_targets_by_keyword || null;
+  const unanswerable = (word) => !!walks && Array.isArray(walks[word]) && !walks[word].length;
   steps.innerHTML =
     `<div class="prompt-choice-column">` +
     options
       .map(
         (word) =>
-          `<button type="button" class="prompt-choice-btn" data-ability-word="${escapeHtml(word)}">` +
+          `<button type="button" class="prompt-choice-btn" data-ability-word="${escapeHtml(word)}"`
+          + `${unanswerable(word) ? ` disabled title="No creature has ${escapeHtml(word)} to lose"` : ""}>` +
           `${escapeHtml(word.charAt(0).toUpperCase() + word.slice(1))}</button>`
       )
       .join("") +
     `</div>`;
 
   steps.querySelectorAll("[data-ability-word]").forEach((btn) => {
+    if (btn.disabled) return;
     btn.addEventListener("click", () => {
       pendingChosenAbilityWord = btn.dataset.abilityWord;
       then();
@@ -13080,11 +13088,24 @@ function renderActivationPrompt() {
         + "targets one at a time — each choice narrows the next. A role may be a "
         + "player, in which case the pill is what glows, or a spell on the "
         + "stack, in which case the stack card is.";
+      // An optional role ("…fights **up to one** target creature you don't
+      // control", Primal Might) may be left unanswered (CR 601.2c), so the
+      // walk offers to stop there — the engine's `role_announcement` reads
+      // the shorter announcement as complete.
+      const mayStop = rolesMayEndAt(
+        pendingCastTarget.roles, pendingCastTarget.roleChosen.length,
+      ) && pendingCastTarget.roleChosen.length < pendingCastTarget.roles.length;
       steps.innerHTML = [
         `<div>Card: ${escapeHtml(pendingCastTarget.cardName)}</div>`,
         `<div>${escapeHtml(roleTargetsHint())}</div>`,
         ...targetRequirementRowsHtml(pendingCastTarget.card, rolePermanentPicks(pendingCastTarget)),
+        ...(mayStop
+          ? [`<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn" id="roleSkipBtn">`
+            + `No ${escapeHtml(roleTargetNoun(currentRole(pendingCastTarget)))} — this target is optional</button></div>`]
+          : []),
       ].join("");
+      const skipBtn = document.getElementById("roleSkipBtn");
+      if (skipBtn) skipBtn.addEventListener("click", finishRoleWalkEarly);
       cancelBtn.classList.remove("hidden");
       cancelBtn.disabled = false;
       customOkBtn.disabled = true;
@@ -16556,7 +16577,7 @@ function restartRoleWalkForRequirement() {
   if (targetRequirementMet(p.card, rolePermanentPicks(p))) return false;
   const requirement = targetRequirementOf(p.card);
   p.roleChosen = [];
-  p.roleOptions = targetSpecOf(p.card).valid_targets || [];
+  p.roleOptions = roleWalkOf(p.card, p.castAction);
   Object.assign(p, indexValidTargets(p.roleOptions));
   renderActivationPrompt();
   renderBoard(currentState);
@@ -16641,6 +16662,43 @@ function currentRole(p) {
   return p.roles[p.roleChosen.length] || null;
 }
 
+/** Whether a roles announcement may stop after its first `count` roles: every
+ * later role optional (`engine/target_roles.OPTIONAL_ROLE`, Primal Might's "up
+ * to one target creature you don't control"). The server's
+ * `roles_may_end_at`, read off the same flag. */
+function rolesMayEndAt(roles, count) {
+  return (roles || []).slice(count).every((role) => !!role?.optional_role);
+}
+
+/** The choice tree a roles walk starts from. An activation whose cost chose a
+ * word ("Choose flying, first strike, trample, or shadow", Phyrexian Splicer)
+ * walks the tree the server built for *that* word
+ * (`valid_targets_by_keyword`) — its first role is "target creature with the
+ * chosen ability", which only the word answers. Everything else walks
+ * `valid_targets`. */
+function roleWalkOf(card, castAction) {
+  const spec = targetSpecOf(card) || {};
+  const byWord = spec.valid_targets_by_keyword;
+  if (
+    castAction === "activate" && pendingChosenAbilityWord
+    && byWord && Array.isArray(byWord[pendingChosenAbilityWord])
+  ) {
+    return byWord[pendingChosenAbilityWord];
+  }
+  return spec.valid_targets || [];
+}
+
+/** Finish a roles walk where it stands, leaving its optional roles unanswered
+ * (CR 601.2c: "up to one" may name none). Reached from the prompt's button and
+ * when an optional role has nothing to offer. */
+function finishRoleWalkEarly() {
+  const p = pendingCastTarget;
+  if (!p || p.targetKind !== "roles") return;
+  if (!rolesMayEndAt(p.roles, p.roleChosen.length)) return;
+  if (restartRoleWalkForRequirement()) return;
+  confirmRoleTargets();
+}
+
 function roleTargetsHint() {
   const p = pendingCastTarget;
   if (!p || p.targetKind !== "roles") return "";
@@ -16676,7 +16734,7 @@ function startCastRolesTargetPrompt(card, castAction = "cast", extra = null) {
   if (!cardName) return;
   const spec = targetSpecOf(card);
   const roles = spec.roles || [];
-  const options = spec.valid_targets || [];
+  const options = roleWalkOf(card, castAction);
   // The backend has already dropped a first choice that would leave a later
   // role with nothing (CR 601.2c chooses every target, so such a choice is not
   // a legal one) — an empty list here therefore means the spell cannot be cast
@@ -16777,6 +16835,13 @@ function advanceRoleWalk(option) {
     return;
   }
   p.roleOptions = option.next || [];
+  // An optional role with nothing to offer ("…fights up to one target creature
+  // you don't control" with none on the other side) is the announcement
+  // ending, not a prompt with nothing to click.
+  if (!p.roleOptions.length && rolesMayEndAt(p.roles, p.roleChosen.length)) {
+    finishRoleWalkEarly();
+    return;
+  }
   Object.assign(p, indexValidTargets(p.roleOptions));
   renderActivationPrompt();
   renderBoard(currentState);
@@ -16877,6 +16942,19 @@ function confirmRoleTargets() {
   if (rolesSpec?.requires_source && !p.__sourceStage) {
     clearPendingCastTargeting();
     startCastChosenSourceStage(p, rolesSpec, body);
+    return;
+  }
+  // "Target creature you control gets **+X/+X** … Then it fights up to one
+  // target creature you don't control." (Primal Might.) A roles *cast* with an
+  // X: the walk is the whole target announcement (CR 601.2c), and CR 601.2b's
+  // X still has to be announced. The walk ended by sending, so the X was never
+  // asked and the spell went out at X = 0; now the X prompt carries the body
+  // the walk built and sends it with the X in it.
+  if (!activating && hasXCost(p.card) && castXAnnouncedByCost() === null) {
+    clearPendingCastTargeting();
+    startCastXPrompt(p.card, null, null, castAction || "cast");
+    if (pendingCastX) pendingCastX.rolesBody = body;
+    updateActionHint(`Choose X for ${cardName}.`);
     return;
   }
   const verb = activating ? "Activating" : "Casting";
@@ -18107,6 +18185,17 @@ function resolvePendingCastX(xValue) {
   const pending = pendingCastX;
   pendingCastX = null;
   renderActivationPrompt();
+
+  // A roles walk already built the announcement's targets (Primal Might —
+  // see `confirmRoleTargets`); X is the one thing it lacked.
+  if (pending.rolesBody) {
+    updateActionHint(`Casting ${pending.cardName} with X = ${selectedX}...`);
+    sendAction({ ...pending.rolesBody, seat, x_value: selectedX })
+      .then(() => updateActionHint(`Cast ${pending.cardName} with X = ${selectedX}.`))
+      .catch((e) => updateActionHint(e.message, true))
+      .finally(() => clearPendingHandCast());
+    return;
+  }
 
   // "X target creatures gain islandwalk" (Part Water) / "Tap X target
   // creatures" (Winter Blast). The announced X is how many targets the spell
@@ -24668,6 +24757,10 @@ q("promptCancelBtn").addEventListener("click", () => {
   pendingActivationCost = null;
   pendingAbilityChoice = null;
   pendingChannel = null;
+  // A Phyrexian Splicer word chosen for an activation that was then cancelled
+  // is not the next activation's: left set, the next Splicer skipped the word
+  // prompt and announced the cancelled word.
+  pendingChosenAbilityWord = null;
   const wasPickingAttackTarget = !!pendingAttackTarget;
   pendingAttackTarget = null;
   clearPendingHandCast();

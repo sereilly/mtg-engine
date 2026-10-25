@@ -1462,12 +1462,13 @@ def test_a_refusal_below_the_gate_restores_the_word_the_last_one_chose(set_pool)
     second announcement must not overwrite it with the word the refusal
     declined. The ledger records what was there rather than assuming it was
     empty, which is the difference between reversing an action and clearing a
-    field.
+    field. The Stomper also flies, so the second announcement is a legal one
+    for flying and its refusal really is the tap cost's, below the gate.
     """
     from tests.helpers import _mk_card, _nosick
     from engine.models import Permanent
 
-    trampler = _nosick(Permanent(card=_mk_card("Stomper", "{2}", "Creature - Beast", "Trample")))
+    trampler = _nosick(Permanent(card=_mk_card("Stomper", "{2}", "Creature - Beast", "Flying, trample")))
     other = _nosick(Permanent(card=_mk_card("Bear", "{2}", "Creature - Bear", "")))
     game, splicer = _promo_splicer_alone(set_pool)
     game.players[0].battlefield.extend([trampler, other])

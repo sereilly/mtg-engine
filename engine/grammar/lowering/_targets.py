@@ -796,6 +796,21 @@ def _optional_slot_key(specs) -> dict:
     and the ordinary two-target card stays byte-identical to what it was — an
     ``optional_slots: []`` on every multi-slot description would move every one
     of their compiled programs to say nothing.
+
+    **Only the last slot may be skipped.** The picker reads such a description
+    as ordered roles (``target_descriptions._slot_roles_spec``) and an optional
+    role ends the walk where it is skipped, so "up to one target creature …
+    fights target creature …" — an empty slot with a mandatory one behind it —
+    is an announcement the walk cannot make: read as roles it would force the
+    first slot, read as one list it would lose both narrowings. No card in the
+    pool prints it; it refuses until the walk has a node for a skipped role.
     """
     positions = optional_slot_positions(specs)
+    if positions and positions != (len(specs) - 1,):
+        raise LoweringError(
+            'an "up to one" target slot with a slot behind it needs a roles '
+            "walk that can skip a role and go on; only the last slot may be "
+            "left empty",
+            node=specs[positions[0]],
+        )
     return {"optional_slots": list(positions)} if positions else {}

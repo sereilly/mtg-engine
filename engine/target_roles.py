@@ -269,6 +269,53 @@ def spec_roles(spec: dict | None) -> list[dict]:
     return list(spec.get("roles") or ())
 
 
+#: The flag a role carries when CR 601.2c lets the announcement leave it
+#: unanswered: "…it fights **up to one** target creature you don't control"
+#: (Primal Might's second slot, ``target_descriptions._slot_roles_spec``). Read
+#: through :func:`roles_may_end_at` / :func:`role_announcement` by the walk and
+#: the gates (``engine/legality_roles.py``, the cast and activation gates), and
+#: by the AI's role choosers and the browser's role picker, which offer to stop
+#: there.
+OPTIONAL_ROLE = "optional_role"
+
+
+def roles_may_end_at(roles, count: int) -> bool:
+    """Whether an announcement answering only the first *count* of *roles* is
+    complete — every role after them optional (:data:`OPTIONAL_ROLE`). True for
+    ``count == len(roles)`` by definition, and the only answer for a roles list
+    with no optional role in it."""
+    return all(
+        isinstance(role, dict) and role.get(OPTIONAL_ROLE)
+        for role in list(roles)[count:]
+    )
+
+
+def role_announcement(roles, chosen) -> "list | None":
+    """*chosen* as the announcement it is — one object per answered role, in
+    role order — or None where it is not one.
+
+    **An optional role may be left unanswered**, and the wire has two ways to
+    say so: a shorter list, or a ``None`` in the slot (a ``target_role_refs``
+    entry naming nothing, an id list with a hole). Both come out here as the
+    shorter list, so every reader counts one shape. A hole anywhere else, a
+    list longer than the roles, or a mandatory role left unanswered is no
+    announcement at all (CR 601.2c: every owed target is chosen).
+    """
+    roles = list(roles)
+    named = list(chosen)
+    if len(named) > len(roles):
+        return None
+    while (
+        named and named[-1] is None
+        and isinstance(roles[len(named) - 1], dict)
+        and roles[len(named) - 1].get(OPTIONAL_ROLE)
+    ):
+        named.pop()
+    if any(obj is None for obj in named) or not roles_may_end_at(roles, len(named)):
+        return None
+    return named
+
+
 def payload_role_slot(payload: dict | None, role: str | None) -> int | None:
     """Which slot of the chosen-target list *role* occupies, read straight off
     an instruction's own ``targets`` description.

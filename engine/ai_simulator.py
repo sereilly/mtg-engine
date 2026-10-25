@@ -856,6 +856,7 @@ def _execute_foreign_activation(
         permanent_index=action.permanent_index,
         target_permanent_index=action.target_permanent_index,
         target_role_refs=action.target_role_refs,
+        chosen_keyword=action.chosen_keyword,
         ability_index=action.ability_index,
         source_controller_index=action.source_controller_index,
     )
@@ -1122,6 +1123,9 @@ def _play_activations(
             permanent_index=activation_action.permanent_index,
             target_permanent_index=activation_action.target_permanent_index,
             target_role_refs=activation_action.target_role_refs,
+            # The word a "Choose flying, …" cost announces, when the policy
+            # named one (`ai_abilities._keyword_walk_order`).
+            chosen_keyword=activation_action.chosen_keyword,
             # Which card a "Discard a card" cost takes, when the policy named
             # one (a card with madness, `ai_abilities._madness_discard_index`).
             cost_hand_index=activation_action.cost_hand_index,

@@ -2108,14 +2108,18 @@ def test_115_3_several_printed_instances_may_still_name_one_object(
     could fill both slots, and only a printed "another" would forbid it. Here
     the two filters are disjoint, so a legal announcement names two creatures
     and the gate stays out of the way.
+
+    The two slots differ, so the announcement is two **roles**, one per printed
+    instance, each with its own narrowing (the second optional, CR 601.2c's
+    "up to one") — never one instance made plural.
     """
     from engine.oracle import compile_card_oracle
-    from engine.targeting import derive_cast_spec
+    from engine.targeting import derive_cast_spec, spec_roles
 
     card = catalog_by_name["Primal Might"]
     spec = derive_cast_spec(card, compile_card_oracle(card))
 
-    assert spec.get("max_targets") == 2
+    assert len(spec_roles(spec)) == 2
     assert not spec.get("distinct_targets"), (
         "two printed instances of the word are not one instance made plural"
     )

@@ -267,7 +267,14 @@ def test_a_printed_number_is_reported_exact():
     exact = {name for name, spec in specs.items() if spec.get("exact_targets")}
     assert {"Ashes to Ashes", "Dust to Dust", "Retribution", "Undo"} <= exact
     assert {"Deadshot", "Rookie Mistake", "Steal Strength"} <= exact
-    assert not specs["Primal Might"].get("exact_targets")
+    # Primal Might's "up to one" is the softening one slot list prints; its two
+    # slots differ, so it is a roles announcement now and the softening is its
+    # optional last role (``target_roles.OPTIONAL_ROLE``) rather than a missing
+    # ``exact_targets`` on a shared list.
+    primal = _POOL["Primal Might"]
+    roles = derive_cast_spec(primal, compile_card_oracle(primal))["roles"]
+    assert "Primal Might" not in specs
+    assert [bool(role.get("optional_role")) for role in roles] == [False, True]
     assert not specs["Sanguine Indulgence"].get("exact_targets")
     assert not specs["Basri's Acolyte"].get("exact_targets")
 
