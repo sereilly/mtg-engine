@@ -375,6 +375,18 @@ def _action_is_takeable(
                     for card in game.players[seat].graveyard
                 )
             return True
+        if pile_owner == "chosen" and not instruction.payload.get("targets"):
+            # "…you may exile a creature card **from a graveyard**. If you do,
+            # put a +1/+1 counter on this creature. **If you don't**, tap this
+            # creature." (Entrails Feaster.) Any pile the controller names, so
+            # the price is payable exactly when some graveyard holds a card the
+            # phrase admits — through the one rule the pile prompt and the pick
+            # behind it ask. With none, the offer is never made and the decline
+            # branch runs, which is the card: there was nothing to exile, so
+            # you didn't.
+            return bool(game.graveyard_piles_with_a_legal_card(
+                dict(instruction.payload)
+            ))
         if (
             # "you" and the seat an offer was made to (Gravestorm) are both
             # *player* here — the offered seat picking from its own pile.

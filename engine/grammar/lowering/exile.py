@@ -692,6 +692,31 @@ def _lower_exile(
         )
         chosen["count"] = int(subject.count)
         return (OracleInstruction("exile_cards_from_graveyard", "", chosen),)
+    # "…you may exile **a creature card from a graveyard**. If you do, …"
+    # (Entrails Feaster.) The same untargeted pick with no pile printed at
+    # all: "a graveyard" is any of them, and the controller chooses which as
+    # the effect resolves — the handler's ``"chosen"`` pile without a
+    # ``targets`` description (a "which graveyard?" prompt when more than one
+    # holds a card the phrase admits, then the pick out of it). One card, so
+    # the count is the builder's one.
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier in ("a", "an")
+        and not subject.targeted
+        and subject.count == 1
+        and not subject.count_from_x
+        and subject.count_amount is None
+        and subject.filter.zone == "graveyard"
+        and subject.filter.is_card
+        and subject.filter.zone_owner is None
+        and not node.same_zone
+    ):
+        if node.counters:
+            raise LoweringError(
+                "the chosen graveyard exile reads one card type", node=node
+            )
+        chosen = one_card_pile_pick(subject.filter, _CHOSEN_GRAVEYARD_PILE, node)
+        return (OracleInstruction("exile_cards_from_graveyard", "", chosen),)
     # "…**with two delay counters on it**." (Ertai's Meddling.) CR 121.1's
     # counters put on the card as it arrives in exile, which only ``exile_self``
     # performs — it is the one exile that keeps a record for them to sit on

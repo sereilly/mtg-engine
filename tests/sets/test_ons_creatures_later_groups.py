@@ -238,4 +238,106 @@ def test_w1g3_a_cycling_creature_cycles_from_hand_and_never_from_play(set_pool, 
 # ==== W1G13 ==========================================================
 # W1G13's tests go between this line and the "end W1G13" line.
 
+# --- W1G13: each player, and graveyards --------------------------------------
+from engine import Game as _w1g13_Game
+from engine.models import Permanent as _w1g13_Permanent
+from engine.models import PlayerState as _w1g13_PlayerState
+
+from tests.helpers import _mk_creature_card as _w1g13_creature
+from tests.helpers import resolve_stack as _w1g13_resolve_stack
+
+
+def _w1g13_table(set_pool, hands=None, *, interactive=(), seats=3):
+    ons = set_pool("ONS")
+    hands = hands or {}
+    names = ["Alice", "Bob", "Cara", "Dan"][:seats]
+    players = [
+        _w1g13_PlayerState(
+            name=name,
+            hand=[ons[card] if isinstance(card, str) else card for card in hands.get(seat, ())],
+            library=[ons["Plains"]] * 5,
+        )
+        for seat, name in enumerate(names)
+    ]
+    game = _w1g13_Game(players=players)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game.active_player_index = 0
+    return game
+
+
+def _w1g13_put(game, seat, card):
+    permanent = _w1g13_Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    game._sync_control()
+    return permanent
+
+
+def test_w1g13_entrails_feaster_exiles_from_any_graveyard_it_names(set_pool):
+    """"At the beginning of your upkeep, you may exile a creature card from a
+    graveyard. If you do, put a +1/+1 counter on this creature." Any pile:
+    the controller names Cara's graveyard and the creature card in it, never
+    the land beside it, and the Feaster grows."""
+    game = _w1g13_table(set_pool, interactive={0})
+    alice, bob, cara = game.players
+    feaster = _w1g13_put(game, 0, set_pool("ONS")["Entrails Feaster"])
+    bob.graveyard.append(_w1g13_creature("Bob's Bear", 2, 2))
+    cara.graveyard.extend([set_pool("ONS")["Plains"], _w1g13_creature("Cara's Giant", 3, 3)])
+    game.resolve_upkeep(0)
+    assert game.confirm_optional_pay(0, "Entrails Feaster", accept=True)
+    pile = game.pending_choice_of("graveyard_pile_choice", 0)
+    assert pile is not None and sorted(pile.data["seats"]) == [1, 2]
+    assert game.confirm_graveyard_pile_choice(0, 2)
+    assert game.confirm_graveyard_exile_pick(0, [1])
+    _w1g13_resolve_stack(game)
+    assert [c.name for c in cara.exile] == ["Cara's Giant"]
+    assert [c.name for c in cara.graveyard] == ["Plains"]
+    assert [c.name for c in bob.graveyard] == ["Bob's Bear"]
+    assert (feaster.effective_power, feaster.effective_toughness) == (2, 2)
+    assert not feaster.tapped
+
+
+def test_w1g13_entrails_feaster_taps_when_it_does_not_exile(set_pool):
+    """"If you don't, tap this creature." Declining taps it; and with no
+    creature card in any graveyard there is nothing to exile, so the offer is
+    never made and it taps all the same."""
+    game = _w1g13_table(set_pool, interactive={0})
+    bob = game.players[1]
+    feaster = _w1g13_put(game, 0, set_pool("ONS")["Entrails Feaster"])
+    bob.graveyard.append(_w1g13_creature("Bob's Bear", 2, 2))
+    game.resolve_upkeep(0)
+    assert game.confirm_optional_pay(0, "Entrails Feaster", accept=False)
+    _w1g13_resolve_stack(game)
+    assert feaster.tapped and feaster.effective_power == 1
+    assert [c.name for c in bob.graveyard] == ["Bob's Bear"]
+
+    game = _w1g13_table(set_pool)
+    feaster = _w1g13_put(game, 0, set_pool("ONS")["Entrails Feaster"])
+    game.players[1].graveyard.append(set_pool("ONS")["Plains"])
+    game.resolve_upkeep(0)
+    _w1g13_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    assert game.pending_choices == []
+    assert feaster.tapped and feaster.effective_power == 1
+
+
+def test_w1g13_gigapede_returns_from_the_graveyard_for_a_discard(set_pool):
+    """"At the beginning of your upkeep, if this card is in your graveyard,
+    you may discard a card. If you do, return this card to your hand." The
+    graveyard-trigger census's red on the ingest was the census, not the card:
+    the discard pays, and the Gigapede is in the hand."""
+    gigapede = set_pool("ONS")["Gigapede"]
+    game = _w1g13_table(set_pool, {0: ["Plains"]}, interactive={0})
+    alice = game.players[0]
+    alice.graveyard.append(gigapede)
+    game.resolve_upkeep(0)
+    assert game.confirm_optional_pay(0, "Gigapede", accept=True)
+    assert game.resolve_pending_choice(
+        "discard", 0, hand_indices=[0], to_library=False,
+    )
+    _w1g13_resolve_stack(game)
+    assert [c.name for c in alice.hand] == ["Gigapede"]
+    assert [c.name for c in alice.graveyard] == ["Plains"]
+
 # ==== end W1G13 ======================================================
