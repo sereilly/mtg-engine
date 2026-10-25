@@ -423,6 +423,13 @@ class EndStepMixin:
 
         self._enqueue_triggered_batch(events)
 
+        # The sweeps above carry out "at the beginning of the next end step"
+        # removals inline (Krovikan Elementalist's sacrifice, Berserk's
+        # destruction, Rakalite's bounce), so a lord can be gone before anyone
+        # has priority — and CR 704.3 checks first. This step opened its
+        # window straight after them; the upkeep, whose inline effects are the
+        # same shape, has always checked here.
+        self._check_after_turn_based_actions()
         if self._receives_priority(step):
             self.start_priority_window(self.active_player_index)
 

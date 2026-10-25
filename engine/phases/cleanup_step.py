@@ -367,6 +367,17 @@ class CleanupStepMixin:
                 self._put_permanent_onto_battlefield(owner_idx, new_perm, None)
                 self.log.append(f"{card_def.name} returned from exile to {owner.name}'s battlefield")
         self._reset_combat_state(clear_damage_marked=False)
+        # CR 514.3a's first half: "the game checks to see if any state-based
+        # actions would be performed" once 514.1's discard and 514.2's sweeps
+        # are done — and if so performs them, before the triggered abilities
+        # below go on the stack. An "until end of turn" effect ending is a
+        # state change: a Grizzly Bears Giant Growth kept alive under an
+        # Enfeeblement is a 0/0 now (CR 704.5f), and a creature Ray of Command
+        # stole goes home to a controller holding its namesake (CR 704.5j).
+        # This step checked only when something had triggered, so those waited
+        # for the next turn's untap step — and died on the wrong turn, after
+        # `begin_turn_bookkeeping` had already reset this one's death counts.
+        self._check_after_turn_based_actions()
         # CR 514.3a: "…the game checks to see if … any triggered abilities are
         # waiting to be put onto the stack (**including those that trigger 'at
         # the beginning of the next cleanup step'**). If so, … those triggered

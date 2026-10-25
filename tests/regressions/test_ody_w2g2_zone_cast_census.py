@@ -49,11 +49,15 @@ permission waives it); accepted; and the card gone from the pile it was cast
 from. Each card takes ``graveyard_open`` and one of the other four in
 rotation.
 
-The twin sweep runs over **every Nth card** in the suite (``STRIDE``) — a
+The twin sweep runs over **one spell in N** in the suite (``STRIDE``) — a
 proposal on a populated board is the engine's whole target enumeration, and
-the pool is five thousand cards — and over the whole pool when run as a
-module. The whole pool, at the round's end: 9,990 rows over 5,023 spells, and
-three rows that differ, each for a reason the card prints —
+the pool is five thousand cards — chosen by a digest of the spell's name
+(``tests.helpers.stable_sample``), and over the whole pool when run as a
+module with ``--stride 1`` or under ``MTG_FULL_CENSUS=1``. It took every Nth
+spell by position until round ``kg``: this pool holds the measured set, so
+each card a merge supported shifted every spell behind it, and the sample
+moved at every merge. The whole pool, at the round's end: 9,990 rows over
+5,023 spells, and three rows that differ, each for a reason the card prints —
 
 * *Demonic Embrace* is not proposed from an opened graveyard: its "by paying
   3 life and discarding a card" is a price for a cast **from the graveyard**,
@@ -66,6 +70,14 @@ three rows that differ, each for a reason the card prints —
   one being cast (`legality_cast_spec.announced_cast_x` is not told the zone — CR 601.2a
   has already moved it to the stack). Reachable only with a graveyard opened
   by another effect; left as measured.
+
+Re-measured over the whole pool at round ``kg`` (Judgment shipped, each spell's
+second kind now chosen by digest too): 10,019 rows over 5,037 spells and six
+that differ, every one for a reason the card prints and each named in
+``MEASURED``. Forgotten Lore no longer differs; the four new ones are a
+buyback bought from an opponent's exile, which would return the card to *its
+owner's* hand (CR 702.27a), and a kicker a free cast with no mana cannot pay
+(CR 601.2f, 118.9d), leaving a combat trick that does nothing on this board.
 
 Validated backwards: on the tree before the change every flashback row and
 every twin row reads "never proposed" — the whole population.
@@ -90,7 +102,9 @@ from engine.flashback import printed_flashback_cost
 from engine.mana_payment import mana_cost_from_symbols
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
-from tests.helpers import _mk_card, _nosick, resolve_stack
+from tests.helpers import (
+    _mk_card, _nosick, resolve_stack, stable_digest, stable_sample,
+)
 
 ME, OPP = 0, 1
 
@@ -99,8 +113,33 @@ BY_NAME: dict = {}
 for _card in POOL:
     BY_NAME.setdefault(_card.name, _card)
 
-#: The twin sweep's sample in the suite: every STRIDE-th supported spell.
+#: The twin sweep's sample in the suite: one supported spell in STRIDE, by a
+#: digest of its name.
 STRIDE = 10
+
+#: Twin rows that differ for a reason the card prints — measured over the whole
+#: pool and left (the module docstring has each one's story). A finding on any
+#: other row fails, and so does one of these that was examined and agreed.
+_BUYBACK_TO_ITS_OWNER = (
+    "from an opponent's exile the buyback is declined: it would put the card "
+    "into its owner's hand (CR 702.27a), the opponent's"
+)
+_KICKER_UNPAYABLE = (
+    "a free cast with no mana cannot pay the kicker (CR 601.2f, 118.9d), and "
+    "the unkicked trick does nothing on this board"
+)
+MEASURED = {
+    ("Demonic Embrace", "graveyard_open"): (
+        "its graveyard cost discards a card, and the rig's hand is empty"
+    ),
+    ("Aether Burst", "graveyard_open"): (
+        "its X counts the copy being cast (announced_cast_x is not told the zone)"
+    ),
+    ("Imps' Taunt", "opponents_exile"): _BUYBACK_TO_ITS_OWNER,
+    ("Brush with Death", "opponents_exile"): _BUYBACK_TO_ITS_OWNER,
+    ("Savage Offensive", "exile_free"): _KICKER_UNPAYABLE,
+    ("Vigorous Charge", "exile_free"): _KICKER_UNPAYABLE,
+}
 
 
 def _creature(name, colors=(), power=2, toughness=2, text="", type_line=None):
@@ -405,13 +444,15 @@ FLOATING = 8
 
 def twin_census(stride: int = STRIDE) -> list[dict]:
     rows = []
-    ordinal = -1
     for held in POOL:
         for spell in castable_faces(held):
-            if not compile_card_oracle(spell).supported:
+            # Sampled by the spell's name, not its place in the pool (see
+            # ``tests.helpers.stable_sample``): this pool holds the measured
+            # set, so every card a round supported shifted every spell behind
+            # it one place, and the sample moved at every merge.
+            if not stable_sample(spell.name, stride):
                 continue
-            ordinal += 1
-            if ordinal % stride:
+            if not compile_card_oracle(spell).supported:
                 continue
             hand_game = rig(held, None, floating=FLOATING)
             try:
@@ -429,7 +470,11 @@ def twin_census(stride: int = STRIDE) -> list[dict]:
             hand_left = _floating(hand_game)
             is_land = spell.primary_type == "land"
             asks_x = "{X}" in (spell.mana_cost or "").upper()
-            rotating = KINDS[1 + (ordinal // stride) % (len(KINDS) - 1)]
+            # Which of the four other kinds this spell takes, by a digest of
+            # its own as well — a rotation by position moved with the pool.
+            rotating = KINDS[
+                1 + stable_digest(f"{spell.name}/kind") % (len(KINDS) - 1)
+            ]
             for kind in ("graveyard_open", rotating):
                 if is_land and kind not in PLAY_KINDS:
                     continue  # "cast" covers no land (CR 305.1)
@@ -531,22 +576,34 @@ def test_a_flashback_card_in_the_graveyard_is_cast_from_it(flashback_rows):
 
 
 def test_the_twin_sweep_examined_the_pool(twin_rows):
-    """The floor, per kind: each is a different road through the cast path."""
+    """The floor, per kind: each is a different road through the cast path.
+
+    Re-measured once the sample was taken by digest (round ``kg``): 1,059
+    rows over 534 spells — graveyard_open 534, exile_lent 157, exile_free 126,
+    library_top_free 122, opponents_exile 120 — and every one proposed but five
+    (four free casts, one library top). A growing pool only adds to it."""
     by_kind = Counter(row["kind"] for row in twin_rows)
-    assert by_kind["graveyard_open"] >= 300, by_kind
+    assert by_kind["graveyard_open"] >= 480, by_kind
     for kind in KINDS[1:]:
-        assert by_kind[kind] >= 60, (kind, by_kind)
+        assert by_kind[kind] >= 105, (kind, by_kind)
     proposed = Counter(row["kind"] for row in twin_rows if row["proposed"])
     for kind in KINDS:
-        assert proposed[kind] >= 50, (kind, proposed)
+        assert proposed[kind] >= 100, (kind, proposed)
 
 
 def test_what_a_seat_casts_from_its_hand_it_casts_from_an_opened_zone(twin_rows):
     named = sorted(
         f"{row['card']} [{row['kind']}]: {row['finding']}"
-        for row in twin_rows if row["finding"]
+        for row in twin_rows
+        if row["finding"] and (row["card"], row["kind"]) not in MEASURED
     )
     assert named == []
+    # …and a measured row the sweep examined must still be one: a card that
+    # stopped differing comes off the list rather than excusing the next.
+    examined = {(row["card"], row["kind"]) for row in twin_rows}
+    differing = {(row["card"], row["kind"]) for row in twin_rows if row["finding"]}
+    agreed = sorted(key for key in MEASURED if key in examined and key not in differing)
+    assert agreed == [], f"measured rows that no longer differ: {agreed}"
 
 
 if __name__ == "__main__":

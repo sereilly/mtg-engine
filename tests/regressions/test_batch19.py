@@ -79,7 +79,9 @@ class TestErhnamDjinn:
         game, _, p2 = self._djinn_game(arn_by_name)
         # Hill Giant is index 2 — deliberately NOT the first legal candidate,
         # which is what the old auto-target always picked.
-        game.resolve_upkeep(0, trigger_targets={"Erhnam Djinn": (1, 2)})
+        game.resolve_upkeep(
+            0, trigger_targets={"Erhnam Djinn": p2.battlefield[2].permanent_id}
+        )
         game.resolve_stack()
         # Read through the layer-6 accessor, not a metadata key: round 29
         # retired the card-keyed hook that wrote one, and the grant now goes
@@ -94,9 +96,16 @@ class TestErhnamDjinn:
         game.resolve_stack()
         assert game._has_keyword(p2.battlefield[0], "forestwalk")
 
-    def test_a_target_that_left_the_battlefield_falls_back(self, arn_by_name):
+    def test_a_target_that_left_the_battlefield_is_chosen_again(self, arn_by_name):
+        # The answer is the Hill Giant's id, and the Giant is gone: an id names
+        # that permanent or nothing, so the pick is set aside and the trigger
+        # chooses for itself (CR 603.3d) — a seat nobody asks takes the first
+        # legal creature. What it never does is take whatever now sits in the
+        # Giant's old slot (`tests/regressions/test_kg_steps_upkeep_target_by_id`).
         game, _, p2 = self._djinn_game(arn_by_name)
-        game.resolve_upkeep(0, trigger_targets={"Erhnam Djinn": (1, 99)})
+        giant = p2.battlefield[2]
+        game.remove_from_battlefield(giant)
+        game.resolve_upkeep(0, trigger_targets={"Erhnam Djinn": giant.permanent_id})
         game.resolve_stack()
         assert game._has_keyword(p2.battlefield[0], "forestwalk")
 

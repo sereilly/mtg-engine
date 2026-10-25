@@ -509,6 +509,12 @@ class CombatPhaseMixin:
             # legal block, and a Camouflage resolution all reach it, and none
             # of them reaches the other two's code.
             self._fire_unblocked_attack_triggers()
+            # …and the declaration's state-based check, for the same reason it
+            # is here: `declare_blockers` makes it when the last defender
+            # declares, and a defender auto-skipped after another one paid to
+            # block (CR 802.4) locks the declaration here instead, with no
+            # declaration of its own to make it (CR 704.3).
+            self._check_after_turn_based_actions()
 
         # Close current combat step, then enter the next one.
         if self._receives_priority(self.current_step):

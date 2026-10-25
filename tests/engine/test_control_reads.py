@@ -378,7 +378,8 @@ POSITIONAL_BASELINE: dict[str, int] = {
     # resolves every slot through `permanent_at`.
     "engine/phases/declare_blockers_step.py": 10,
     "engine/phases/untap_step.py": 1,
-    "engine/phases/upkeep_step.py": 2,
+    # upkeep_step.py's two (the upkeep target's slot read back, twice) went
+    # when the answer became a permanent id (round `kg`).
     # web/actions.py's four sites moved with their handlers when the dispatch
     # became a registry: the cast plumbing's one and the turn handlers' three.
     "web/action_helpers.py": 1,

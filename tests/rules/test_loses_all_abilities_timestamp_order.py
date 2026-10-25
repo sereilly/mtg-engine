@@ -29,8 +29,10 @@ Measured over the whole pool (604 pairs) on the tree before the fix: 537
 grants outlived a later loss, 2 later grants lost their keyword word (Rapid
 Fire's rampage, Jabari's Banner's flanking) and 10 later-granted activated
 abilities were refused at the door. The committed run samples the granters —
-the full walk is a minute — and pins one card per channel so the sample can
-never miss a way an ability is granted.
+the full walk is a minute — by a digest of each name
+(``tests.helpers.stable_sample``), and pins one card per channel so the sample
+can never miss a way an ability is granted. ``MTG_FULL_CENSUS=1`` walks every
+granter (the promotion gate's run).
 """
 
 from __future__ import annotations
@@ -51,7 +53,7 @@ from engine.layer_bridge import computed_abilities
 from engine.models import CardDefinition, Permanent, _abilities_stripped
 from engine.oracle import compile_card_oracle
 from engine.targeting import usable_activated_abilities
-from tests.helpers import _nosick, resolve_stack
+from tests.helpers import _nosick, resolve_stack, stable_sample
 
 #: Each effect that takes all abilities: how it is applied, and the subject it
 #: is aimed at — one that prints an ability of its own, so the loss is visible.
@@ -86,7 +88,7 @@ PINNED = (
     "Resuscitate", "Citanul Hierophants",
 )
 
-#: Every STRIDE-th granter beside the pinned ones.
+#: One granter in STRIDE beside the pinned ones, by a digest of its name.
 STRIDE = 6
 
 _GRANT_WORDS = re.compile(r"\b(has|have|gains?)\b", re.I)
@@ -239,7 +241,12 @@ def _granters(by_name, names=None):
         ),
         key=lambda card: card.name,
     )
-    sampled = {card.name for card in found[::STRIDE]} | set(PINNED)
+    # By a digest of the name, not by place in the sorted list: a promotion's
+    # new granters used to shift every granter behind them and move the
+    # sample off the door's cards (``tests.helpers.stable_sample``).
+    sampled = {
+        card.name for card in found if stable_sample(card.name, STRIDE)
+    } | set(PINNED)
     return [card for card in found if card.name in sampled]
 
 
@@ -333,14 +340,16 @@ def _census(by_name, names=None):
 def test_every_grant_is_ordered_against_every_loss_of_all_abilities(_by_name):
     counts, kept, taken, door, printed = _census(_by_name)
 
-    # Floors: a sweep that reaches nothing passes. Measured 129 / 121 / 79 / 9
-    # on the pool this was written against, and 107 / 99 / 65 / 6 once
-    # Apocalypse and Odyssey moved which granters the stride samples. The
-    # door's is met by PINNED alone since Judgment's promotion (5 rows), so
-    # the stride can no longer move it below the floor.
-    assert counts["pairs"] >= 95, counts
-    assert counts["grant_first"] >= 88, counts
-    assert counts["loss_first"] >= 58, counts
+    # Floors: a sweep that reaches nothing passes. A positional stride read
+    # 129 / 121 / 79 / 9 on the pool this was written against, 107 / 99 / 65 / 6
+    # once Apocalypse and Odyssey moved which granters it sampled, and 141 /
+    # 130 / 84 / 7 after Judgment. Sampled by a digest of the name since round
+    # `kg`, which a growing pool only adds to: 132 / 119 / 83 / 7 of 192
+    # granters (the whole pool: 692 / 640 / 410 / 31 of 979, nothing kept,
+    # taken, refused or printed). The door's is met by PINNED alone (5 rows).
+    assert counts["pairs"] >= 120, counts
+    assert counts["grant_first"] >= 108, counts
+    assert counts["loss_first"] >= 75, counts
     assert counts["door"] >= 5, counts
     assert kept == [], f"an older grant outlived the loss: {kept[:20]}"
     assert taken == [], f"a newer grant was taken by the loss: {taken[:20]}"

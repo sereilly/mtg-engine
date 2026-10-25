@@ -315,8 +315,13 @@ class DeclareBlockersStepMixin:
             self._fire_delayed_becomes_blocked_triggers(controller_index, assignments)
             self._fire_board_wide_block_triggers(controller_index, assignments)
         # CR 509.2/802.4: once every defending player has declared, the active
-        # player receives priority.
+        # player receives priority — after the state-based check (CR 704.3).
+        # A block can make one due: Heat Wave's life, paid down to 0, or
+        # Hollow Warrior's tap ending a lord. This went straight to the
+        # window, so a defender at 0 life stayed in the game long enough to
+        # resolve a block trigger that gained it back.
         if self.combat_blockers_locked:
+            self._check_after_turn_based_actions()
             self.start_priority_window(self.active_player_index)
         return True, "declared blockers"
 

@@ -375,8 +375,12 @@ class TestErhnamDjinnTargetPrompt:
         assert current is not None
         assert current["mandatory"] is True
         assert current["needs_target"] == "creature"
+        # `id` is what the answer is filed under; the seat and slot are where
+        # the client draws the highlight.
+        bears_id = game.players[1].battlefield[0].permanent_id
         assert current["valid_targets"] == [
-            {"kind": "permanent", "seat": 1, "index": 0, "name": "Grizzly Bears"}
+            {"kind": "permanent", "seat": 1, "index": 0, "id": bears_id,
+             "name": "Grizzly Bears"}
         ], "the Wall is not a legal target and must not be offered"
 
     def test_clicking_a_target_grants_forestwalk(self, arn_by_name):

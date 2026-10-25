@@ -442,7 +442,7 @@ def test_a_pick_made_at_the_upkeep_prompt_is_a_chosen_target(catalog_by_name):
 
     game.resolve_upkeep(
         0, defer_priority=True,
-        trigger_targets={djinn.permanent_id: (1, game.battlefield_index_of(bears))},
+        trigger_targets={djinn.permanent_id: bears.permanent_id},
     )
     (item,) = [obj for obj in game.stack if obj.card.name == "Erhnam Djinn"]
     assert item.target_permanent_id == bears.permanent_id
