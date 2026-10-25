@@ -445,6 +445,319 @@ def test_w1g4_bloodline_shaman_default_names_its_librarys_commonest_type(set_poo
 # ==== W1G5 ==========================================================
 # W1G5's tests go between this line and the "end W1G5" line.
 
+# --- W1G5: creature types changed (CR 205.1a, CR 613.1d) -------------------
+#
+# "{1}: This creature becomes the creature type of your choice until end of
+# turn." The type is chosen as the ability resolves (CR 608.2d, W1G4's
+# ``creature_type_choice``) and *set*: it replaces the creature's creature
+# types (CR 205.1a) in layer 4, with its own timestamp, until the cleanup step
+# drops the record. Everything that asks a type through the layers sees it —
+# a lord, a chosen-type anthem, a count, a "tap N untapped <type>" cost.
+import pytest as _w1g5_pytest
+
+from engine import Game as _W1G5Game
+from engine import PlayerState as _W1G5PlayerState
+from engine.face_down import face_down_card as _w1g5_face_down_card
+from engine.face_down import turn_face_up as _w1g5_turn_face_up
+from engine.layer_bridge import computed_types as _w1g5_computed_types
+from engine.models import Permanent as _W1G5Permanent
+from engine.oracle import compile_card_oracle as _w1g5_compile
+from engine.targeting import derive_activation_spec as _w1g5_activation_spec
+from tests.helpers import resolve_stack as _w1g5_resolve_stack
+
+_W1G5_MISTFORMS = (
+    "Mistform Dreamer", "Mistform Skyreaver", "Mistform Stalker",
+    "Mistform Wall", "Mistform Shrieker",
+)
+
+
+def _w1g5_game(*, interactive=(0,)):
+    """Two seats with costs off, seat 0 active in its main phase. Seat 0 is
+    interactive by default, so the type prompt is *queued* and answered by the
+    test rather than by its default."""
+    game = _W1G5Game(players=[_W1G5PlayerState(name="A"), _W1G5PlayerState(name="B")])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game.active_player_index = 0
+    game.current_turn_phase = game.current_step = "precombat_main"
+    return game
+
+
+def _w1g5_put(game, seat, card):
+    """*card* onto *seat*'s battlefield, able to act this turn."""
+    permanent = _W1G5Permanent(card=card)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    game.players[seat].battlefield.append(permanent)
+    game._recompute_continuous_effects()
+    return permanent
+
+
+def _w1g5_types(permanent):
+    """The creature's subtypes through the CR 613 layers."""
+    return set(_w1g5_computed_types(permanent)[1])
+
+
+def _w1g5_become(game, name, word, *, seat=0):
+    """*seat* activates *name*'s type change and answers *word*."""
+    result = game.activate_permanent_ability(seat, name)
+    assert result.supported, result.details
+    assert [choice.kind for choice in game.pending_choices] == ["creature_type_choice"]
+    assert game.confirm_creature_type_choice(seat, word)
+    _w1g5_resolve_stack(game)
+
+
+@_w1g5_pytest.mark.parametrize("name", _W1G5_MISTFORMS)
+def test_w1g5_each_mistform_becomes_the_chosen_type_and_only_that_type(
+    set_pool, catalog_by_name, name,
+):
+    """The whole sentence on each of the five: nothing changes before the
+    answer, then the creature is a Goblin and **no longer** an Illusion (or a
+    Wall) — the set replaces (CR 205.1a) — so an opponent's Goblin King pumps it
+    and gives it mountainwalk; at cleanup the record ends and it is what it
+    printed again. The activation names no target, so no picker is derived."""
+    card = set_pool("ONS")[name]
+    game = _w1g5_game()
+    mistform = _w1g5_put(game, 0, card)
+    _w1g5_put(game, 1, catalog_by_name["Goblin King"])
+    printed = _w1g5_types(mistform)
+    assert "illusion" in printed and "goblin" not in printed
+    body = (mistform.effective_power, mistform.effective_toughness)
+
+    ability = next(
+        ab for ab in _w1g5_compile(card).activated_abilities
+        if "creature type of your choice" in ab.source_line
+    )
+    assert _w1g5_activation_spec(ability) is None
+
+    result = game.activate_permanent_ability(0, name)
+    assert result.supported, result.details
+    assert _w1g5_types(mistform) == printed, "nothing changes before the answer"
+    assert game.confirm_creature_type_choice(0, "goblin")
+    _w1g5_resolve_stack(game)
+
+    assert _w1g5_types(mistform) == {"goblin"}
+    assert (mistform.effective_power, mistform.effective_toughness) == (
+        body[0] + 1, body[1] + 1,
+    )
+    assert game._has_keyword(mistform, "mountainwalk")
+    assert f"{name} became a Goblin until end of turn ({name})" in game.log
+
+    game.resolve_cleanup_step(0)
+    assert _w1g5_types(mistform) == printed
+    assert (mistform.effective_power, mistform.effective_toughness) == body
+    assert not game._has_keyword(mistform, "mountainwalk")
+
+
+def test_w1g5_two_mistform_activations_apply_in_timestamp_order(
+    set_pool, catalog_by_name,
+):
+    """Two sets on one creature are two layer-4 effects, and CR 613.7 applies
+    the later one last: Goblin then Elf is an Elf, and the Goblin King that was
+    pumping it stops. Two activations stacked at once resolve top first, so the
+    one activated *first* resolves last and is the one that wins."""
+    game = _w1g5_game()
+    dreamer = _w1g5_put(game, 0, set_pool("ONS")["Mistform Dreamer"])
+    _w1g5_put(game, 1, catalog_by_name["Goblin King"])
+    _w1g5_become(game, "Mistform Dreamer", "goblin")
+    assert (dreamer.effective_power, dreamer.effective_toughness) == (3, 2)
+    _w1g5_become(game, "Mistform Dreamer", "elf")
+    assert _w1g5_types(dreamer) == {"elf"}
+    assert (dreamer.effective_power, dreamer.effective_toughness) == (2, 1)
+
+    stacked = _w1g5_game()
+    dreamer = _w1g5_put(stacked, 0, set_pool("ONS")["Mistform Dreamer"])
+    assert stacked.queue_permanent_ability(0, "Mistform Dreamer").supported
+    assert stacked.queue_permanent_ability(0, "Mistform Dreamer").supported
+    assert len(stacked.stack) == 2
+    stacked.resolve_top_of_stack(pause_for_choices=True)
+    assert stacked.confirm_creature_type_choice(0, "elf")
+    _w1g5_resolve_stack(stacked)
+    assert stacked.confirm_creature_type_choice(0, "goblin")
+    _w1g5_resolve_stack(stacked)
+    assert _w1g5_types(dreamer) == {"goblin"}
+
+
+def test_w1g5_a_mistform_that_left_in_response_changes_nothing(set_pool):
+    """The ability names its source. Gone before it resolves — a new object if
+    it comes back (CR 400.7) — so nothing becomes anything, and nothing else on
+    the battlefield is changed in its place."""
+    game = _w1g5_game(interactive=())
+    dreamer = _w1g5_put(game, 0, set_pool("ONS")["Mistform Dreamer"])
+    other = _w1g5_put(game, 0, set_pool("ONS")["Mistform Stalker"])
+    assert game.queue_permanent_ability(0, "Mistform Dreamer").supported
+    game.remove_from_battlefield(dreamer)
+    _w1g5_resolve_stack(game)
+    assert _w1g5_types(other) == {"illusion"}
+    assert "Mistform Dreamer: has left the battlefield, so nothing changes" in game.log
+
+
+def test_w1g5_shared_triumph_naming_illusion_stops_pumping_a_mistform_that_became_a_goblin(
+    set_pool,
+):
+    """A chosen-type anthem asks the type through the layers too: Shared
+    Triumph naming Illusion pumps the Dreamer until it becomes a Goblin, and
+    again once cleanup ends the change."""
+    game = _w1g5_game()
+    dreamer = _w1g5_put(game, 0, set_pool("ONS")["Mistform Dreamer"])
+    triumph = _w1g5_put(game, 0, set_pool("ONS")["Shared Triumph"])
+    triumph.metadata["chosen_creature_type"] = "illusion"
+    game._recompute_continuous_effects()
+    assert (dreamer.effective_power, dreamer.effective_toughness) == (3, 2)
+
+    _w1g5_become(game, "Mistform Dreamer", "goblin")
+    assert (dreamer.effective_power, dreamer.effective_toughness) == (2, 1)
+
+    game.resolve_cleanup_step(0)
+    assert (dreamer.effective_power, dreamer.effective_toughness) == (3, 2)
+
+
+def test_w1g5_mistform_wall_has_defender_only_while_it_is_a_wall(set_pool):
+    """"This creature has defender as long as it's a Wall." A static asked of
+    its own type through layer 4 every recompute: printed, it is a Wall and
+    cannot attack (CR 702.3b); made a Goblin it has no defender and attacks;
+    made a Wall again it has it back, and so it does when cleanup ends the
+    change."""
+    game = _w1g5_game()
+    wall = _w1g5_put(game, 0, set_pool("ONS")["Mistform Wall"])
+    assert game._has_keyword(wall, "defender")
+    game._set_phase_and_step("combat", "declare_attackers")
+    ok, _why = game.declare_attackers(0, [0], defending_player_index=1)
+    assert not ok
+
+    game._set_phase_and_step("precombat_main", "precombat_main")
+    _w1g5_become(game, "Mistform Wall", "goblin")
+    assert _w1g5_types(wall) == {"goblin"}
+    assert not game._has_keyword(wall, "defender")
+    game._set_phase_and_step("combat", "declare_attackers")
+    ok, why = game.declare_attackers(0, [0], defending_player_index=1)
+    assert ok, why
+
+    other = _w1g5_game()
+    wall = _w1g5_put(other, 0, set_pool("ONS")["Mistform Wall"])
+    _w1g5_become(other, "Mistform Wall", "goblin")
+    _w1g5_become(other, "Mistform Wall", "wall")
+    assert _w1g5_types(wall) == {"wall"}
+    assert other._has_keyword(wall, "defender")
+    _w1g5_become(other, "Mistform Wall", "elf")
+    other.resolve_cleanup_step(0)
+    assert other._has_keyword(wall, "defender")
+
+
+def test_w1g5_mistform_wall_defender_line_compiles_to_a_self_type_condition(set_pool):
+    """The static is read by ``static_bonuses``' table (the grammar declines a
+    same-subject condition to it), as a ``self_matches`` condition over the
+    noun phrase — asked by ``subject_matches``, never by the printed type
+    line."""
+    program = _w1g5_compile(set_pool("ONS")["Mistform Wall"])
+    (static,) = [ins for ins in program.instructions if ins.kind == "conditional_static"]
+    assert static.payload["keywords"] == ["defender"]
+    assert static.payload["condition"] == {
+        "kind": "self_matches",
+        "filter": {"type_filter": "creature", "subtype_filter": "wall"},
+    }
+
+
+def test_w1g5_mistform_shrieker_changes_type_once_turned_face_up(set_pool):
+    """Face down, W1G1's blank 2/2 has no ability to activate (their test);
+    turned face up it is the Shrieker, and its line works."""
+    shrieker_card = set_pool("ONS")["Mistform Shrieker"]
+    game = _w1g5_game()
+    shrieker = _W1G5Permanent(card=_w1g5_face_down_card(shrieker_card))
+    shrieker.metadata["summoning_sickness_turn"] = -99
+    game.players[0].battlefield.append(shrieker)
+    assert game.usable_abilities_of(shrieker, card=shrieker.effective_card) == []
+    assert _w1g5_types(shrieker) == set()
+
+    assert _w1g5_turn_face_up(game, shrieker)
+    _w1g5_become(game, "Mistform Shrieker", "dragon")
+    assert _w1g5_types(shrieker) == {"dragon"}
+    assert game._has_keyword(shrieker, "flying")
+
+
+# --- the tribal counts and costs see the layer ------------------------------
+
+
+def test_w1g5_reckless_one_counts_a_mistform_that_became_a_goblin(set_pool):
+    """"…power and toughness are each equal to the number of Goblins on the
+    battlefield." A characteristic-defining count (W1G7's drive list) over the
+    layers: the Dreamer made a Goblin is one more Goblin, and stops being one
+    at cleanup."""
+    game = _w1g5_game()
+    reckless = _w1g5_put(game, 0, set_pool("ONS")["Reckless One"])
+    _w1g5_put(game, 0, set_pool("ONS")["Mistform Dreamer"])
+    game._refresh_dynamic_creatures()
+    assert reckless.effective_power == 1
+    _w1g5_become(game, "Mistform Dreamer", "goblin")
+    assert (reckless.effective_power, reckless.effective_toughness) == (2, 2)
+    game.resolve_cleanup_step(0)
+    game._refresh_dynamic_creatures()
+    assert reckless.effective_power == 1
+
+
+def test_w1g5_wellwisher_counts_a_mistform_that_became_an_elf(set_pool):
+    """"{T}: You gain 1 life for each Elf on the battlefield." A count read at
+    resolution: Wellwisher and a Dreamer made an Elf are two Elves."""
+    game = _w1g5_game()
+    _w1g5_put(game, 0, set_pool("ONS")["Wellwisher"])
+    _w1g5_put(game, 0, set_pool("ONS")["Mistform Dreamer"])
+    _w1g5_become(game, "Mistform Dreamer", "elf")
+    assert "Mistform Dreamer became an Elf until end of turn (Mistform Dreamer)" in game.log
+    life = game.players[0].life
+    assert game.activate_permanent_ability(0, "Wellwisher").supported
+    _w1g5_resolve_stack(game)
+    assert game.players[0].life == life + 2
+
+
+def test_w1g5_a_mistform_made_a_wizard_pays_aphetto_grifters_cost(set_pool):
+    """"Tap two untapped Wizards you control: Tap target permanent." The cost
+    asks the type through the layers: Grifter alone cannot pay it, and with a
+    Dreamer made a Wizard it can — the Dreamer is tapped for it."""
+    game = _w1g5_game(interactive=())
+    grifter = _w1g5_put(game, 0, set_pool("ONS")["Aphetto Grifter"])
+    dreamer = _w1g5_put(game, 0, set_pool("ONS")["Mistform Dreamer"])
+    target = _w1g5_put(game, 1, set_pool("ONS")["Mistform Stalker"])
+    assert not game.activate_permanent_ability(
+        0, "Aphetto Grifter", target_permanent_ids=[target.permanent_id],
+    ).supported
+
+    game.interactive_seats = {0}
+    _w1g5_become(game, "Mistform Dreamer", "wizard")
+    result = game.activate_permanent_ability(
+        0, "Aphetto Grifter", target_permanent_ids=[target.permanent_id],
+    )
+    assert result.supported, result.details
+    _w1g5_resolve_stack(game)
+    assert grifter.tapped and dreamer.tapped and target.tapped
+
+
+# --- the default a seat nobody asks takes -----------------------------------
+
+
+def test_w1g5_a_mistform_nobody_asks_joins_its_controllers_tribe(
+    set_pool, catalog_by_name,
+):
+    """The default for a type set on the source: the controller's own
+    commonest type among its *other* creatures — the tribe its lords pump.
+    With Lord of Atlantis beside it the Dreamer becomes a Merfolk (+1/+1 and
+    islandwalk); with no other creature of its controller's it names nothing
+    and changes nothing, even beside an opponent's Goblin King."""
+    game = _w1g5_game(interactive=())
+    dreamer = _w1g5_put(game, 0, set_pool("ONS")["Mistform Dreamer"])
+    _w1g5_put(game, 0, catalog_by_name["Lord of Atlantis"])
+    _w1g5_put(game, 1, catalog_by_name["Grizzly Bears"])
+    assert game.activate_permanent_ability(0, "Mistform Dreamer").supported
+    _w1g5_resolve_stack(game)
+    assert _w1g5_types(dreamer) == {"merfolk"}
+    assert (dreamer.effective_power, dreamer.effective_toughness) == (3, 2)
+
+    lonely = _w1g5_game(interactive=())
+    dreamer = _w1g5_put(lonely, 0, set_pool("ONS")["Mistform Dreamer"])
+    _w1g5_put(lonely, 1, catalog_by_name["Goblin King"])
+    assert lonely.activate_permanent_ability(0, "Mistform Dreamer").supported
+    _w1g5_resolve_stack(lonely)
+    assert _w1g5_types(dreamer) == {"illusion"}
+    assert "Mistform Dreamer: no creature type was chosen, so nothing changes" in lonely.log
+
 # ==== end W1G5 ======================================================
 
 

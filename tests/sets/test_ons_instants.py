@@ -445,6 +445,115 @@ def test_w1g4_a_pump_with_no_type_to_name_pumps_nothing(set_pool):
 # ==== W1G5 ==========================================================
 # W1G5's tests go between this line and the "end W1G5" line.
 
+# --- W1G5: Trickery Charm, Standardize (CR 205.1a, CR 611.2c) ---------------
+from engine import Game as _W1G5Game
+from engine import PlayerState as _W1G5PlayerState
+from engine.layer_bridge import computed_types as _w1g5_computed_types
+from engine.models import Permanent as _W1G5Permanent
+from tests.helpers import resolve_stack as _w1g5_resolve_stack
+
+
+def _w1g5_table(set_pool, hand, *, interactive=(0,)):
+    """Seat 0 holding *hand* (ONS names), costs off, in its main phase."""
+    game = _W1G5Game(players=[
+        _W1G5PlayerState(name="A", hand=[set_pool("ONS")[name] for name in hand]),
+        _W1G5PlayerState(name="B"),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game.active_player_index = 0
+    game.current_turn_phase = game.current_step = "precombat_main"
+    return game
+
+
+def _w1g5_put(game, seat, card):
+    permanent = _W1G5Permanent(card=card)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    game.players[seat].battlefield.append(permanent)
+    game._recompute_continuous_effects()
+    return permanent
+
+
+def _w1g5_types(permanent):
+    return set(_w1g5_computed_types(permanent)[1])
+
+
+def test_w1g5_trickery_charm_sets_its_targets_type(set_pool, catalog_by_name):
+    """"• Target creature becomes the creature type of your choice until end of
+    turn." The mode's picker offers creatures and only creatures; the type is
+    chosen as the Charm resolves, with no exclusion — an opponent's Bears can
+    be made a Wall — and it is a Wall alone until cleanup."""
+    game = _w1g5_table(set_pool, ["Trickery Charm"])
+    bears = _w1g5_put(game, 1, catalog_by_name["Grizzly Bears"])
+    forest = _w1g5_put(game, 1, catalog_by_name["Forest"])
+    charm = set_pool("ONS")["Trickery Charm"]
+    spec = game.cast_target_spec(0, charm, mode_index=1)
+    assert spec["kind"] == "creature" and spec["requires_target"]
+    assert not game.queue_from_hand(
+        0, "Trickery Charm", mode_index=1, target_permanent_ids=[forest.permanent_id],
+    ).supported
+    assert game.queue_from_hand(
+        0, "Trickery Charm", mode_index=1, target_permanent_ids=[bears.permanent_id],
+    ).supported
+    game.resolve_top_of_stack(pause_for_choices=True)
+    assert game.confirm_creature_type_choice(0, "wall")
+    _w1g5_resolve_stack(game)
+    assert _w1g5_types(bears) == {"wall"}
+    assert "Grizzly Bears became a Wall until end of turn (Trickery Charm)" in game.log
+    game.resolve_cleanup_step(0)
+    assert _w1g5_types(bears) == {"bear"}
+
+
+def test_w1g5_trickery_charm_flying_mode_is_untouched(set_pool, catalog_by_name):
+    """The first mode is still flying alone: no type prompt is armed."""
+    game = _w1g5_table(set_pool, ["Trickery Charm"])
+    bears = _w1g5_put(game, 0, catalog_by_name["Grizzly Bears"])
+    assert game.queue_from_hand(
+        0, "Trickery Charm", mode_index=0, target_permanent_ids=[bears.permanent_id],
+    ).supported
+    _w1g5_resolve_stack(game)
+    assert game._has_keyword(bears, "flying") and _w1g5_types(bears) == {"bear"}
+    assert not game.pending_choices
+
+
+def test_w1g5_standardize_sets_every_creature_on_the_battlefield(
+    set_pool, catalog_by_name,
+):
+    """"Choose a creature type other than Wall. Each creature becomes that type
+    until end of turn." Wall is refused with the question still standing; the
+    answer sets every creature on either side — so Goblin King, itself made a
+    Goblin, pumps all the others — and a creature that enters afterwards is
+    untouched (CR 611.2c; the card's ruling: "This spell only affects creatures
+    on the battlefield when it resolves"). Cleanup ends every one."""
+    game = _w1g5_table(set_pool, ["Standardize"])
+    game.players[0].hand.append(catalog_by_name["Grizzly Bears"])
+    dreamer = _w1g5_put(game, 0, set_pool("ONS")["Mistform Dreamer"])
+    king = _w1g5_put(game, 0, catalog_by_name["Goblin King"])
+    their_bears = _w1g5_put(game, 1, catalog_by_name["Grizzly Bears"])
+    assert game.queue_from_hand(0, "Standardize").supported
+    game.resolve_top_of_stack(pause_for_choices=True)
+    assert game.confirm_creature_type_choice(0, "wall") is False
+    assert _w1g5_types(their_bears) == {"bear"}
+    assert game.confirm_creature_type_choice(0, "goblin")
+    _w1g5_resolve_stack(game)
+
+    assert [_w1g5_types(p) for p in (dreamer, king, their_bears)] == [{"goblin"}] * 3
+    assert (their_bears.effective_power, their_bears.effective_toughness) == (3, 3)
+    assert (dreamer.effective_power, dreamer.effective_toughness) == (3, 2)
+
+    assert game.queue_from_hand(0, "Grizzly Bears").supported
+    _w1g5_resolve_stack(game)
+    (late,) = [
+        perm for perm in game.controlled_by(0) if perm.card.name == "Grizzly Bears"
+    ]
+    assert _w1g5_types(late) == {"bear"}
+    assert (late.effective_power, late.effective_toughness) == (2, 2)
+
+    game.resolve_cleanup_step(0)
+    assert _w1g5_types(dreamer) == {"illusion"}
+    assert _w1g5_types(king) == {"goblin"}
+    assert _w1g5_types(their_bears) == {"bear"}
+
 # ==== end W1G5 ======================================================
 
 

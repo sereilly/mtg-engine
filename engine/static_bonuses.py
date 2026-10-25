@@ -227,6 +227,9 @@ def _parse_condition_text(text: str) -> dict[str, object] | None:
     match = _STATE_CONDITION.match(text)
     if match is not None:
         return {"kind": "is_state", "state": match.group("state")}
+    described = _self_noun_condition(text)
+    if described is not None:
+        return described
     match = _CONTROLS_POWER_CONDITION.match(text)
     if match is not None:
         return {
@@ -266,6 +269,59 @@ _CONTROLS_NOUN_CONDITION = re.compile(
 )
 
 
+#: "This creature has defender as long as **it's a Wall**." (Mistform Wall.)
+#: What the permanent itself *is*, asked of the source — the same-subject twin
+#: of the grammar's ``attached_matches`` ("as long as enchanted land is a basic
+#: Mountain", Goblin Caves), and answered the same way: the noun phrase is read
+#: by the grammar's noun parser and tested through ``subject_matches``, so the
+#: layers answer it. A Mistform Wall that has become a Goblin until end of turn
+#: is no Wall, and its defender goes with the type (CR 613.1d before 613.1f).
+_SELF_NOUN_CONDITION = re.compile(
+    r"^(?:it's|this creature is) (?:a|an) (?P<phrase>.+)$"
+)
+
+
+def _self_noun_condition(text: str) -> dict[str, object] | None:
+    """"it's a <noun phrase>" as a ``self_matches`` payload, or None.
+
+    :func:`_controls_noun_condition`'s reading of the phrase, for its reason: a
+    second reader of "a Wall" would be free to disagree with the matcher about
+    what a Wall is. A phrase the parser cannot read, or one carrying a key the
+    matcher cannot test, refuses — and so does a phrase that narrows nothing,
+    which would be a condition that always holds.
+    """
+    match = _SELF_NOUN_CONDITION.match(text)
+    if match is None:
+        return None
+    payload = _noun_phrase_payload(match.group("phrase"))
+    if not payload:
+        return None
+    return {"kind": "self_matches", "filter": payload}
+
+
+def _noun_phrase_payload(phrase: str) -> dict[str, object] | None:
+    """*phrase* read by the grammar's noun parser as a testable filter
+    payload, or None when it does not read in full or carries a key
+    ``subject_matches`` cannot test."""
+    from .grammar.errors import GrammarError
+    from .grammar.nouns import parse_object_filter
+    from .grammar.stream import TokenStream
+    from .grammar.lexer import tokenize
+    from .subject_filters import untestable_filter_keys
+
+    stream = TokenStream(tokenize(phrase).tokens)
+    try:
+        described = parse_object_filter(stream)
+    except GrammarError:
+        return None
+    if not stream.exhausted:
+        return None
+    payload = described.to_payload()
+    if not payload or untestable_filter_keys(payload):
+        return None
+    return payload
+
+
 def _controls_noun_condition(text: str) -> dict[str, object] | None:
     """"you control <noun phrase>" as a ``controls`` payload, or None.
 
@@ -280,12 +336,6 @@ def _controls_noun_condition(text: str) -> dict[str, object] | None:
     if match is None:
         return None
     who = "you" if match.group("you") else "opponent"
-    from .grammar.errors import GrammarError
-    from .grammar.nouns import parse_object_filter
-    from .grammar.stream import TokenStream
-    from .grammar.lexer import tokenize
-    from .subject_filters import untestable_filter_keys
-
     # The article is the quantifier, and it is what the printed clause means:
     # "you control **a** snow land" is a presence test, which is the default the
     # consumer applies when no count rides the payload. "Two or more" is a
@@ -308,15 +358,8 @@ def _controls_noun_condition(text: str) -> dict[str, object] | None:
         counted = {"count": 0, "op": "eq"}
     elif article not in ("a", "an"):
         return None
-    stream = TokenStream(tokenize(rest).tokens)
-    try:
-        described = parse_object_filter(stream)
-    except GrammarError:
-        return None
-    if not stream.exhausted:
-        return None
-    payload = described.to_payload()
-    if not payload or untestable_filter_keys(payload):
+    payload = _noun_phrase_payload(rest)
+    if not payload:
         return None
     return {"kind": "controls", "who": who, "filter": payload, **counted}
 
@@ -610,6 +653,19 @@ def conditional_static_holds(
             return False
         return subject_matches(
             game, host, condition.get("filter") or {}, observer=seat, source=source
+        )
+    if kind == "self_matches":
+        # "…as long as **it's a Wall**." (Mistform Wall.) ``attached_matches``
+        # asked of the source itself rather than of its host, through the same
+        # reader, so the type is read through layer 4 on every recompute: a
+        # Mistform Wall that became a Goblin stops having defender with nothing
+        # to undo, and gets it back when the change ends at cleanup.
+        from .subject_filters import subject_matches
+
+        if source is None:
+            return False
+        return subject_matches(
+            game, source, condition.get("filter") or {}, observer=seat, source=source
         )
     if kind == "has_plus1_counter":
         return int(source.metadata.get("plus_counters", 0)) > 0

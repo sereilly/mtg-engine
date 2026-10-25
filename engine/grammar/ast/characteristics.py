@@ -728,10 +728,19 @@ class BecomeThatType:
     The duration is read rather than defaulted, for :class:`ChangeLandType`'s
     reason: without the words the change would last as long as the game does
     (CR 611.2a), which is a different card.
+
+    ``of_your_choice`` is the same set with the choice printed **in** the
+    sentence rather than in front of it: "This creature becomes **the creature
+    type of your choice** until end of turn." (the Mistforms, Mistform Mask,
+    Trickery Charm.) One node, because what the permanent becomes and how long
+    for are the same; the only difference is whether this sentence asks the
+    question (CR 608.2d) or reads an answer an earlier one recorded, and that is
+    a step the lowering puts in front — never a second effect.
     """
 
     subject: Recipient
     duration: Duration = field(default_factory=Duration)
+    of_your_choice: bool = False
 
 
 @dataclass(frozen=True)

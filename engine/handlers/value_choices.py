@@ -630,8 +630,19 @@ def choose_creature_type(game: Game, instruction: OracleInstruction, context: Or
         resolution_creature_type_preference(context.card)
         if context.card is not None else None
     ) or (None, "battlefield")
+    # "join" (a type set on the source or its Aura's host, the Mistforms):
+    # the permanent changing type is no voter for its own new type.
+    ignoring: tuple = ()
+    if side == "join":
+        from ._targets import attached_host
+
+        source = context.source_permanent
+        ignoring = tuple(
+            perm for perm in (source, attached_host(game, source))
+            if perm is not None
+        )
     default = best_creature_type(
-        game, seat, side=side, zone=zone, excluded=excluded,
+        game, seat, side=side, zone=zone, excluded=excluded, ignoring=ignoring,
     )
     context.results[key] = default
     game.arm_creature_type_choice(
@@ -680,7 +691,7 @@ def _best_creature_type_to_sweep(
 
 
 def _creature_type_census(
-    game: Game, zone: str, seat: int,
+    game: Game, zone: str, seat: int, ignoring: tuple = (),
 ) -> list[tuple[int, frozenset[str]]]:
     """``(seat that holds it, its creature types)`` for every object a
     creature-type default counts in *zone*.
@@ -697,6 +708,9 @@ def _creature_type_census(
 
     Only **creature** types (CR 205.3m): an animated Forest's "forest" is a
     subtype of the permanent and no answer to "choose a creature type".
+
+    *ignoring* is permanents left out of a battlefield count — the creature
+    whose own type is being chosen (side ``"join"``).
     """
     from ..grammar.vocabulary import CREATURE_TYPES
     from ..layer_bridge import computed_types, printed_shape
@@ -705,7 +719,7 @@ def _creature_type_census(
     found: list[tuple[int, frozenset[str]]] = []
     if zone == "battlefield":
         for owner, perm in game.permanents_with_controller():
-            if not perm.is_creature:
+            if not perm.is_creature or any(perm is other for other in ignoring):
                 continue
             words = frozenset(
                 str(subtype).lower() for subtype in computed_types(perm)[1]
@@ -731,7 +745,7 @@ def _creature_type_census(
 def best_creature_type(
     game: Game, seat: int, *, side: str | None = None,
     zone: str = "battlefield", excluded: tuple[str, ...] = (),
-    covered: tuple[str, ...] = (),
+    covered: tuple[str, ...] = (), ignoring: tuple = (),
 ) -> str | None:
     """The creature type *seat* names when nobody asks it, for what the
     choice is about to do.
@@ -749,7 +763,12 @@ def best_creature_type(
       other player, you gain control of all creatures of that type" (Peer
       Pressure): among the types *seat* holds strictly more of than every other
       seat, the one the others hold most of — the type the steal takes most
-      with.
+      with;
+    * ``"join"`` — a type *set* on one creature of the seat's own (the
+      Mistforms, Mistform Mask): ``"you"`` counted without *ignoring* (that
+      creature), so it joins the tribe the seat's lords and chosen-type
+      anthems pump rather than voting for the type it already has. ``None``
+      when the seat has no other creature — no type is worth the change.
 
     *covered* is what earlier seats already chose this way (CR 101.4b: each
     player knows the choices made before theirs): an object with one of those
@@ -763,7 +782,7 @@ def best_creature_type(
     """
     counts: dict[str, dict[int, int]] = {}
     covered_words = {str(word).lower() for word in covered if word}
-    for owner, words in _creature_type_census(game, zone, seat):
+    for owner, words in _creature_type_census(game, zone, seat, ignoring):
         if covered_words & words:
             continue
         for word in words:
@@ -791,7 +810,7 @@ def best_creature_type(
         if not eligible:
             return None
         return max(eligible, key=others)
-    if side == "you":
+    if side in ("you", "join"):
         mine = [word for word in sorted(counts) if own(word) > 0]
         if not mine:
             return None

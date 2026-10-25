@@ -147,13 +147,15 @@ def test_w1g1_the_census_was_right_about_these_morph_cards(set_pool):
     census expected another group's line to hold back (Ascending Aven,
     Charging Slateback, Ironfist Crusher, Nameless One: each other line is
     read by a text-keyed table the grammar probe does not ask) — and the five
-    whose other line is another group's stay unsupported naming that line."""
+    whose other line is another group's are unsupported naming that line until
+    that group lands it (W1G5's Mistform Shrieker has), never for the morph
+    line."""
     ons = set_pool("ONS")
     assert [n for n in _W1G1_MORPHS if not _w1g1_compile(ons[n]).supported] == []
     for name in _W1G1_OTHER_GROUPS_LINES:
         program = _w1g1_compile(ons[name])
-        assert not program.supported
-        assert "morph" not in program.reason.lower(), (name, program.reason)
+        if not program.supported:
+            assert "morph" not in program.reason.lower(), (name, program.reason)
 
 
 def test_w1g1_exalted_angel_gains_life_only_face_up(set_pool):

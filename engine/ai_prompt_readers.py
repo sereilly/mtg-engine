@@ -181,7 +181,13 @@ def resolution_creature_type_preference(
     * a revealed card tested for the type (Bloodline Shaman) — the chooser's
       own library;
     * a gain of control of the type behind "more … than each other player"
-      (Peer Pressure) — ``"majority"``.
+      (Peer Pressure) — ``"majority"``;
+    * the type **set** on the ability's own source or on its Aura's host ("{1}:
+      This creature becomes the creature type of your choice until end of
+      turn", the Mistforms; Mistform Mask) — ``"join"``: the chooser's own
+      commonest type among its *other* creatures, the tribe its lords and
+      chosen-type anthems pump, so the creature changing type does not vote
+      for the type it already has.
 
     Everything else that reads the word (a destroy, a tap, a discard, a forced
     attack) is a hoser, which is the default and needs no row.
@@ -220,6 +226,17 @@ def resolution_creature_type_preference(
             found.add(("majority", "battlefield"))
         elif instruction.kind == "return_all_cards_from_graveyard":
             found.add(("you", "graveyard"))
+    for instruction in _walk_program(compile_card_oracle(card)):
+        # A type *set* reads the word through ``subtype_from`` rather than as a
+        # filter, so it is asked after the loop above and only of the two
+        # subjects the chooser's own seat holds: a targeted set (Unnatural
+        # Selection, Trickery Charm) may be aimed either way and keeps the
+        # hoser default.
+        if (
+            instruction.kind in ("set_self_creature_type", "set_enchanted_creature_type")
+            and (instruction.payload or {}).get("subtype_from") in records
+        ):
+            found.add(("join", "battlefield"))
     return next(iter(found)) if len(found) == 1 else None
 
 
