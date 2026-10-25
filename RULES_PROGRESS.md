@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**419 / 625 tracked rules covered (67%)** — 3190 tests, 0 unannotated.
+**427 / 638 tracked rules covered (66%)** — 3203 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -89,11 +89,12 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [616. Interaction of Replacement and/or Prevention Effects](#616-interaction-of-replacement-andor-prevention-effects) | 2/2 | 100% |
 | [700. General](#700-general) | 2/16 | 12% |
 | [701. Keyword Actions](#701-keyword-actions) | 19/19 | 100% |
-| [702. Keyword Abilities](#702-keyword-abilities) | 32/32 | 100% |
+| [702. Keyword Abilities](#702-keyword-abilities) | 33/33 | 100% |
 | [703. Turn-Based Actions](#703-turn-based-actions) | 4/4 | 100% |
 | [704. State-Based Actions](#704-state-based-actions) | 8/8 | 100% |
 | [705. Flipping a Coin](#705-flipping-a-coin) | 2/3 | 66% |
 | [707. Copying Objects](#707-copying-objects) | 6/14 | 42% |
+| [708. Face-Down Spells and Permanents](#708-face-down-spells-and-permanents) | 7/12 | 58% |
 | [709. Split Cards](#709-split-cards) | 4/4 | 100% |
 | [724. Ending Turns and Phases](#724-ending-turns-and-phases) | 1/2 | 50% |
 | [733. Handling Illegal Actions](#733-handling-illegal-actions) | 2/2 | 100% |
@@ -278,8 +279,8 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 116. Special Actions
 
 - [x] **116.1** Special actions are actions a player may take when they have priority that don’t use the stack. T... *(6 tests)*
-- [x] **116.2** There are twelve special actions: *(6 tests, subrules acde)*
-- [x] **116.3** If a player takes a special action, that player receives priority afterward. *(3 tests)*
+- [x] **116.2** There are twelve special actions: *(7 tests, subrules abcde)*
+- [x] **116.3** If a player takes a special action, that player receives priority afterward. *(4 tests)*
 
 ### 117. Timing and Priority
 
@@ -300,7 +301,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **118.6** Some objects have no mana cost. This represents an unpayable cost. An ability can also have an un... *(1 tests)*
 - [x] **118.7** What a player actually needs to do to pay a cost may be changed or reduced by effects. If the man... *(7 tests, subrules abc)*
 - [x] **118.8** Some spells and abilities have additional costs. An additional cost is a cost listed in a spell’s... *(5 tests)*
-- [x] **118.9** Some spells have alternative costs. An alternative cost is a cost listed in a spell’s text, or ap... *(29 tests, subrules abcd)*
+- [x] **118.9** Some spells have alternative costs. An alternative cost is a cost listed in a spell’s text, or ap... *(32 tests, subrules abcd)*
 - [ ] **118.10** Each payment of a cost applies to only one spell, ability, or effect. For example, a player can’t...
 - [ ] **118.11** The actions performed when paying a cost may be modified by effects. Even if they are, meaning th...
 - [x] **118.12** Some spells, activated abilities, and triggered abilities read, “[Do something]. If [a player] [d... *(5 tests, subrules a)*
@@ -608,7 +609,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **506.1** The combat phase has five steps, which proceed in order: beginning of combat, declare attackers, ... *(6 tests)*
 - [x] **506.2** During the combat phase, the active player is the attacking player; creatures that player control... *(8 tests)*
 - [x] **506.3** Only a creature can attack or block. Only a player, a planeswalker, or a battle can be attacked. *(13 tests, subrules ab)*
-- [x] **506.4** A permanent is removed from combat if it leaves the battlefield, if its controller or protector c... *(11 tests, subrules bc)*
+- [x] **506.4** A permanent is removed from combat if it leaves the battlefield, if its controller or protector c... *(12 tests, subrules bc)*
 - [x] **506.5** A creature attacks alone if it’s the only creature declared as an attacker during the declare att... *(8 tests)*
 - [ ] **506.6** A creature attacks a player alone if it’s declared as an attacker attacking a player during the d...
 - [x] **506.7** Some abilities check to see whether or not a creature “had to attack” during a particular combat ... *(2 tests)*
@@ -668,7 +669,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(318 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(319 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(30 tests, subrules a)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [ ] **601.5** While announcing the choices of any targets and/or the division or distribution of any effects as...
@@ -687,7 +688,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 603. Handling Triggered Abilities
 
 - [x] **603.1** Triggered abilities have a trigger condition and an effect. They are written as “[When/Whenever/A... *(3 tests, subrules b)*
-- [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(36 tests, subrules bcd)*
+- [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(37 tests, subrules bcd)*
 - [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(109 tests, subrules bcd)*
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(26 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(10 tests)*
@@ -695,7 +696,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed... *(41 tests, subrules abcde)*
 - [x] **603.8** Some triggered abilities trigger when a game state (such as a player controlling no permanents of... *(14 tests)*
 - [ ] **603.9** Some triggered abilities trigger specifically when a player loses the game. These abilities trigg...
-- [x] **603.10** Normally, objects that exist immediately after an event are checked to see if the event matched a... *(16 tests, subrules a)*
+- [x] **603.10** Normally, objects that exist immediately after an event are checked to see if the event matched a... *(17 tests, subrules a)*
 - [x] **603.11** Some objects have a static ability that’s linked to one or more triggered abilities. (See rule 60... *(1 tests)*
 - [x] **603.12** A resolving spell or ability may allow or instruct a player to take an action and create a trigge... *(2 tests)*
 
@@ -780,7 +781,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 613. Interaction of Continuous Effects
 
 - [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(168 tests, subrules abcdefg)*
-- [x] **613.2** Within layer 1, apply effects in a series of sublayers in the order described below. Within each ... *(20 tests, subrules ac)*
+- [x] **613.2** Within layer 1, apply effects in a series of sublayers in the order described below. Within each ... *(22 tests, subrules abc)*
 - [x] **613.3** Within layers 2–6, apply effects from characteristic-defining abilities first (see rule 604.3), t... *(2 tests)*
 - [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(95 tests, subrules abcd)*
 - [x] **613.5** The application of continuous effects as described by the layer system is continually and automat... *(2 tests)*
@@ -905,6 +906,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.30** Echo *(16 tests, subrules ab)*
 - [x] **702.32** Fading *(14 tests, subrules a)*
 - [x] **702.36** Fear *(5 tests, subrules ab)*
+- [x] **702.37** Morph *(10 tests, subrules ace)*
 - [x] **702.108** Prowess *(3 tests, subrules a)*
 - [x] **702.111** Menace *(5 tests, subrules ab)*
 
@@ -935,7 +937,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 707. Copying Objects
 
 - [ ] **707.1** Some objects become or turn another object into a “copy” of a spell, permanent, or card. Some eff...
-- [x] **707.2** When copying an object, the copy acquires the copiable values of the original object’s characteri... *(39 tests, subrules abc)*
+- [x] **707.2** When copying an object, the copy acquires the copiable values of the original object’s characteri... *(40 tests, subrules abc)*
 - [x] **707.3** The copy’s copiable values become the copied information, as modified by the copy’s status (see r... *(2 tests)*
 - [x] **707.4** Some effects cause a permanent that’s copying a permanent to copy a different object while remain... *(2 tests)*
 - [x] **707.5** An object that enters the battlefield “as a copy” or “that’s a copy” of another object becomes a ... *(13 tests)*
@@ -948,6 +950,21 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **707.12** An effect that instructs a player to cast a copy of an object (and not just copy a spell) follows...
 - [ ] **707.13** One card (Garth One-Eye) instructs a player to create a copy of a card defined by name rather tha...
 - [ ] **707.14** One card (Magar of the Magic Strings) instructs a player to note the name of a particular card in...
+
+### 708. Face-Down Spells and Permanents
+
+- [ ] **708.1** Some cards allow spells and permanents to be face down.
+- [x] **708.2** Face-down spells and face-down permanents have no characteristics other than those listed by the ... *(1 tests, subrules a)*
+- [x] **708.3** Objects that are put onto the battlefield face down are turned face down before they enter the ba... *(2 tests)*
+- [x] **708.4** Objects that are cast face down are turned face down before they are put onto the stack, so effec... *(2 tests)*
+- [x] **708.5** At any time, you may look at a face-down spell you control on the stack or a face-down permanent ... *(1 tests)*
+- [ ] **708.6** If you control multiple face-down spells or face-down permanents, you must ensure at all times th...
+- [ ] **708.7** The ability or rules that allow a permanent to be face down may also allow the permanent’s contro...
+- [x] **708.8** As a face-down permanent is turned face up, its copiable values revert to its normal copiable val... *(2 tests)*
+- [x] **708.9** If a face-down permanent or a face-down component of a merged permanent moves from the battlefiel... *(1 tests)*
+- [x] **708.10** If a face-down permanent becomes a copy of another permanent, its copiable values become the copi... *(1 tests)*
+- [ ] **708.11** If a face-down permanent would have an “As [this permanent] is turned face up . . .” ability afte...
+- [ ] **708.12** If a spell or ability that instructs a player to reveal a face-down permanent needs information a...
 
 ### 709. Split Cards
 
