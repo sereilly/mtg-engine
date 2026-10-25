@@ -53,8 +53,8 @@ _LAND_TYPES = ("plains", "island", "swamp", "mountain", "forest")
 #   creatures_must_attack_if_source_attacks
 #                                   phases/attack_legality._must_attack_beside
 #                                   (the same scan, asking identity)
-#   must_block_each_combat          phases/declare_blockers_step.declare_blockers
-#   creatures_must_block            phases/block_legality._board_compels_block
+#   must_block_each_combat          phases/block_requirements.block_requirements
+#   creatures_must_block            phases/block_requirements._board_block_compulsions
 #                                   (a board scan)
 #   attacker_chooses_blocks         phases/combat_phase.block_chooser_index
 #                                   (the declaration, CR 509.1c)
@@ -77,8 +77,8 @@ _LAND_TYPES = ("plains", "island", "swamp", "mountain", "forest")
 #                                   phases/attack_legality.can_attack
 #   can_block_only_with_keyword     phases/block_legality
 #   subject_can_block_only          phases/block_legality (a board scan)
-#   must_be_blocked                 phases/declare_blockers_step
-#   must_be_blocked_by_all_able     phases/declare_blockers_step
+#   must_be_blocked                 phases/block_requirements.block_requirements
+#   must_be_blocked_by_all_able     phases/block_requirements.block_requirements
 #   max_attackers_each_combat       phases/declare_attackers_step.declare_attackers
 #   max_attackers_on_you_each_combat  phases/declare_attackers_step.declare_attackers
 #   max_blockers_each_combat        phases/block_legality.block_declaration_refusal

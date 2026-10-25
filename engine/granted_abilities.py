@@ -106,7 +106,7 @@ def _probe_card(text: str, self_name: str | None):
 #: as the permanent arrives, and handed over later it would be a line that
 #: compiles, reports supported and does nothing. So each kind here names a
 #: reader that was checked: ``block_legality`` reads ``cant_block`` and
-#: ``declare_blockers_step`` ``must_be_blocked_by_all_able`` off the blocker's
+#: ``block_requirements`` ``must_be_blocked_by_all_able`` off the blocker's
 #: and the attacker's effective card at the declaration, and
 #: ``attack_legality._must_attack_if_able`` reads
 #: ``must_attack_each_combat`` the same way. Adding a kind is a claim about its

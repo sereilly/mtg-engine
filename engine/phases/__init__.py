@@ -15,6 +15,7 @@ the comprehensive rules turn structure:
       │    └─ its legality     attack_legality
       ├─ Declare blockers      declare_blockers_step
       │    ├─ its legality     block_legality
+      │    ├─ its requirements block_requirements
       │    └─ its triggers     block_triggers
       ├─ Combat damage         combat_damage_step
       └─ End of combat         end_of_combat_step
@@ -39,6 +40,7 @@ from .declare_attackers_step import DeclareAttackersStepMixin
 from .attack_legality import AttackLegalityMixin
 from .declare_blockers_step import DeclareBlockersStepMixin
 from .block_legality import BlockLegalityMixin
+from .block_requirements import BlockRequirementsMixin
 from .block_triggers import BlockTriggersMixin
 from .combat_damage_step import CombatDamageStepMixin
 from .end_of_combat_step import EndOfCombatStepMixin
@@ -59,6 +61,7 @@ __all__ = [
     "AttackLegalityMixin",
     "DeclareBlockersStepMixin",
     "BlockLegalityMixin",
+    "BlockRequirementsMixin",
     "BlockTriggersMixin",
     "CombatDamageStepMixin",
     "EndOfCombatStepMixin",

@@ -11,7 +11,10 @@ blocks", a cap per defender (:func:`_legal_declaration`,
 :func:`_legal_block_declaration`) — nor a requirement the set itself creates
 (:func:`_with_conditional_requirements`), nor a total cost the whole
 declaration has to pay (CR 508.1h, 509.1d: :func:`_unaffordable_attacker`,
-:func:`_unaffordable_blocker`).
+:func:`_unaffordable_blocker`). A block declaration's requirements are the
+engine's to settle last (CR 509.1c, ``Game.obeying_block_declaration``),
+because only a maximum over every declaration can say which compelled block a
+cap may cost.
 
 Which trades are worth making is :func:`_score_block_pair`'s, with the
 damage estimates beside it.
@@ -21,9 +24,7 @@ from __future__ import annotations
 
 from .game import Game
 from .aura_restrictions import aura_restriction_active
-from .combat_permissions import MUST_BLOCK_ATTACKERS_UNTIL_EOT
 from .models import Permanent
-from .oracle import compile_card_oracle
 from .ai_scoring import choose_attack_target, _permanent_value
 
 
@@ -472,7 +473,12 @@ def choose_combat_blockers(
         and chooser != defending_player_index
         and chooser in game.opponents_of(defending_player_index)
     ):
-        return {}
+        # "Nothing", as far as CR 509.1c allows. Invasion Plans prints the
+        # substitution beside "All creatures block each combat if able", so on
+        # the card's own board the empty declaration is illegal whenever a
+        # creature can block — and the nearest legal one is the fewest blocks
+        # the requirements force, which is still the chooser's play.
+        return game.obeying_block_declaration(defending_player_index, {})
 
     active_index = game.active_player_index
     # CR 802.4a: this defender may only block attackers aimed at them.
@@ -547,49 +553,6 @@ def choose_combat_blockers(
         assignments[blocker_idx] = attacker_idx
         used_blockers.add(blocker_idx)
 
-    # Blaze of Glory: a creature marked "blocks each attacking creature this
-    # turn if able" must be assigned every attacker it can legally block —
-    # declare_blockers rejects anything less.
-    for blocker_idx in available_blockers:
-        blocker = defender.battlefield[blocker_idx]
-        if not blocker.metadata.get("must_block_all_until_eot"):
-            continue
-        must = [
-            attacker_idx
-            for attacker_idx in attackers
-            if 0 <= attacker_idx < len(attacker_player.battlefield)
-            and game._can_block_attacker(blocker, attacker_player.battlefield[attacker_idx])
-        ]
-        if must:
-            assignments[blocker_idx] = must
-
-    # "Must be blocked if able" (Canopy Stalker): declare_blockers refuses a
-    # declaration that leaves such an attacker unblocked while an able creature
-    # stands by, so the AI assigns one — the cheapest still-free blocker, which
-    # is a stated policy and not a valuation. Blocking is compulsory here, so
-    # declining is not the safe fallback it is for menace below.
-    for attacker_idx in attackers:
-        attacker = game.permanent_at(attacker_player, attacker_idx)
-        if attacker is None:
-            continue
-        if not any(
-            i.kind == "must_be_blocked"
-            for i in compile_card_oracle(attacker.effective_card).instructions
-        ):
-            continue
-        if any(
-            attacker_idx == assigned or (isinstance(assigned, list) and attacker_idx in assigned)
-            for assigned in assignments.values()
-        ):
-            continue
-        for blocker_idx in available_blockers:
-            if blocker_idx in assignments:
-                continue
-            blocker = game.permanent_at(defender, blocker_idx)
-            if blocker is not None and game._can_block_attacker(blocker, attacker):
-                assignments[blocker_idx] = attacker_idx
-                break
-
     # CR 509.1b's minimum-blocker restrictions (menace, and Gorilla Berserkers'
     # printed spelling of the same thing): declare_blockers refuses an
     # assignment that puts fewer than N blockers on such an attacker, so the AI
@@ -614,81 +577,30 @@ def choose_combat_blockers(
             elif assigned == attacker_idx:
                 del assignments[blocker_idx]
 
-    # "Target creature blocks **this creature** this turn if able."
-    # (Trumpeting Armodon.) The narrowed requirement: the mark on the blocker
-    # names the attackers it owes a block to, by id. Assigned before the
-    # unnarrowed Watchdog rule below, because obeying this one also obeys that
-    # one — the reverse order would spend the creature on the wrong attacker
-    # and leave the declaration illegal.
-    for blocker_idx in available_blockers:
-        if blocker_idx in assignments:
-            continue
-        blocker = game.permanent_at(defender, blocker_idx)
-        if blocker is None:
-            continue
-        owed = blocker.metadata.get(MUST_BLOCK_ATTACKERS_UNTIL_EOT) or ()
-        if not owed:
-            continue
-        for attacker_idx in attackers:
-            attacker = game.permanent_at(attacker_player, attacker_idx)
-            if attacker is None or attacker.permanent_id not in owed:
-                continue
-            if not game._can_block_attacker(blocker, attacker):
-                continue
-            joined = sum(
-                1
-                for assigned in assignments.values()
-                if attacker_idx == assigned
-                or (isinstance(assigned, list) and attacker_idx in assigned)
-            )
-            if joined + 1 < minimum_blockers.get(attacker_idx, 1):
-                continue
-            assignments[blocker_idx] = attacker_idx
-            break
-
-    # "This creature blocks each combat if able." (Watchdog.) CR 509.1c aimed
-    # at the blocker: declare_blockers refuses a declaration that leaves such a
-    # creature out while it could legally block something, so the AI assigns it
-    # the first attacker it can block rather than submitting a declaration that
-    # bounces every combat.
+    # CR 509.1b's restrictions on the declaration as a whole — the mirror of
+    # `_legal_declaration` at the tail of `choose_attackers`.
+    pruned = _legal_block_declaration(game, defending_player_index, assignments)
+    # …and CR 509.1c's requirements, **last**, asked of the engine's own
+    # maximisation (``Game.obeying_block_declaration``): handed back unchanged
+    # when the gate accepts it, otherwise the nearest declaration obeying the
+    # most requirements any declaration can, with the blocks this seat chose
+    # tried first and the rest ranked by the same `_score_block_pair` that
+    # chose them.
     #
-    # **After the menace pruning above**, not before it: that loop strips
-    # blocks that under-fill a minimum, and a compelled block stripped there
-    # would leave the declaration illegal for the reason it was added. Which
-    # is also why the minimum is checked here — CR 509.1c asks for the
-    # requirement to be obeyed *without disobeying a restriction*, and joining
-    # a menace attacker alone disobeys one.
-    for blocker_idx in available_blockers:
-        if blocker_idx in assignments:
-            continue
-        blocker = game.permanent_at(defender, blocker_idx)
-        if blocker is None:
-            continue
-        if not any(
-            i.kind == "must_block_each_combat"
-            for i in compile_card_oracle(blocker.effective_card).instructions
-        ):
-            continue
-        for attacker_idx in attackers:
-            attacker = game.permanent_at(attacker_player, attacker_idx)
-            if attacker is None or not game._can_block_attacker(blocker, attacker):
-                continue
-            joined = sum(
-                1
-                for assigned in assignments.values()
-                if attacker_idx == assigned
-                or (isinstance(assigned, list) and attacker_idx in assigned)
-            )
-            if joined + 1 < minimum_blockers.get(attacker_idx, 1):
-                continue
-            assignments[blocker_idx] = attacker_idx
-            break
-
-    # CR 509.1b's restrictions on the declaration as a whole, last — the mirror
-    # of `_legal_declaration` at the tail of `choose_attackers`, and last for
-    # its reason: every requirement above may still *add* a blocker, and a set
-    # that was under the cap before one was added is not under it after.
-    return _legal_block_declaration(game, defending_player_index, assignments)
+    # Last because the prune just above cannot see a requirement: a cap is
+    # disobeyed by the set, so it drops the worst block — and the worst block
+    # may be the compelled one, so under a Caverns of Despair a Watchdog
+    # dropped for a Bear the seat liked better left a declaration the gate
+    # refuses whole. And asked of the engine rather than answered here: this
+    # function used to carry four requirement blocks of its own (Blaze of
+    # Glory, "must be blocked if able", Trumpeting Armodon, Watchdog), each an
+    # addition test like the gate's five were, reading one channel apiece —
+    # Watchdog's printed line but not Provoke's mark, Invasion Plans or an
+    # Aura — so the seat's guess and the rule drifted exactly where a
+    # requirement was armed some other way.
+    return game.obeying_block_declaration(
+        defending_player_index, pruned, rank=_score_block_pair
+    )
 
 
 def _score_block_pair(blocker: Permanent, attacker: Permanent) -> float:

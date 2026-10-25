@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-"""Block legality (CR 509.1a–c).
+"""Block legality (CR 509.1a–b).
 
 Whether a creature can block an attacker (``_can_block_attacker``: every
 restriction on the pair, evasion and the landwalk reading beside it, and
 whether a toll to block can be paid), how many attackers one creature may
 block (``_max_blocks_for``), the fewest and most creatures an attacker may be
-blocked by, what the board compels to block (CR 509.1c), and whether a
-declared *set* of blockers is legal (``block_declaration_refusal``: the
-CR 509.1b restrictions only a whole declaration can disobey).
+blocked by, and whether a declared *set* of blockers is legal
+(``block_declaration_refusal``: the CR 509.1b restrictions only a whole
+declaration can disobey). What the board compels to block (CR 509.1c) is
+``block_requirements.py``, which asks every predicate here.
 
 Split out of ``DeclareBlockersStepMixin``, which declares the blocks and pays
 for them, and composed onto ``Game`` directly after it; each side calls the
@@ -255,34 +256,6 @@ class BlockLegalityMixin:
                 ):
                     caps.append(int(instr.payload.get("count", 1)))
         return min(caps) if caps else None
-
-    def _board_compels_block(self, blocker: Permanent) -> bool:
-        """The board-reaching half of Watchdog's requirement.
-
-        "All creatures block each combat if able." (Invasion Plans.) Printed on
-        an enchantment nobody is blocking with, so it is found by scanning the
-        board rather than read off the blocker's own program — the requirement
-        twin of ``creatures_cant_block`` in ``_can_block_attacker`` and the
-        block-side mirror of ``_must_attack_if_able``'s ``creatures_must_attack``
-        scan, over the same ``subject`` payload and the same ``subject_matches``.
-
-        The observer is the seat whose ability this is (CR 109.5), so a
-        "creatures **you** control" printing would compel that seat's creatures
-        rather than the blocker's controller's.
-        """
-        for source_perm in self.all_permanents():
-            source_seat = self.controller_index_of(source_perm)
-            for instr in compile_card_oracle(
-                source_perm.effective_card
-            ).instructions:
-                if instr.kind != "creatures_must_block":
-                    continue
-                if subject_matches(
-                    self, blocker, dict(instr.payload.get("subject") or {}),
-                    observer=source_seat, source=source_perm,
-                ):
-                    return True
-        return False
 
     def _can_block_attacker(self, blocker: Permanent, attacker: Permanent) -> bool:
         if attacker.metadata.get("cant_be_blocked_until_eot"):
