@@ -77,6 +77,14 @@ let camouflagePromptSig = null;
 let ragingRiverPromptSig = null;
 // Chosen mode index for the cast in progress, injected into the cast action.
 let pendingCastModeIndex = null;
+// CR 601.2c: the target **player** a cast names beside its other targets
+// (`target_spec.announced_seats`, the engine's `ANNOUNCED_SEAT`) — the owner
+// of the pile Gaea's Blessing shuffles from, the opponent Reap's X is counted
+// on, the opponent Fiery Justice gives the life. Asked before the rest of the
+// cascade and written onto the cast body's `target_seat` by sendAction, the way
+// the mode index rides it — so every path that ends the cast (the graveyard
+// picker, the division, a cast naming no card at all) carries it.
+let pendingAnnouncedSeat = null;
 // "Choose one or more —" (Sublime Epiphany, CR 700.2d). The modes the caster
 // picked, walked one at a time through the ordinary per-mode targeting prompts:
 // each prompt ends by calling sendAction with that mode's target, and sendAction
@@ -2204,11 +2212,23 @@ function startCastGraveyardCreatureTargetPrompt(card, castAction = "cast", extra
   // Nostalgic Dreams) with X announced by the discard picker: exactly X slots
   // (CR 601.2c), and an X of zero names nothing and is sent as it stands.
   const announcedX = castAction !== "activate" && cardNamesXTargets(card) ? castXAnnouncedByCost() : null;
-  const max = announcedX !== null ? announcedX : severalTargetMaximum(card);
+  // The target player named beside the cards (`announced_seats`), answered
+  // before this prompt: its X caps the cards where X is counted on it (Reap,
+  // `defined_x_by_seat`), and its graveyard is the only pile where the cards
+  // come from it (Gaea's Blessing). The spec's own list is every pile and the
+  // default seat's X; both are narrowed to the answer here.
+  const seatX = Number.isInteger(pendingAnnouncedSeat) ? announcedSeatX(spec, pendingAnnouncedSeat) : null;
+  const pileSeat = Number.isInteger(pendingAnnouncedSeat) && announcedSeatRole(spec) === "pile"
+    ? pendingAnnouncedSeat : null;
+  const offered = (spec.valid_targets || []).filter(
+    (t) => pileSeat === null || t.kind !== "graveyard" || Number(t.seat) === pileSeat,
+  );
+  const max = announcedX !== null ? announcedX : seatX !== null ? seatX : severalTargetMaximum(card);
   // An empty graveyard is not a reason to refuse the cast when the maximum may
   // be zero (CR 601.2c). The prompt opens with nothing clickable and a reachable
   // confirm, which is what announcing no targets looks like.
-  if (announcedX === 0 || (!max && (spec.valid_targets || []).length === 0)) {
+  if (announcedX === 0 || seatX === 0 || (!max && offered.length === 0)
+      || (pileSeat !== null && offered.length === 0)) {
     // Nothing to click. For an ability that is the answer. For a **cast** it
     // is the engine's to give: the spec says "a card in a graveyard" for
     // every spell that picks one, a *choice* included ("…then you may return
@@ -2248,7 +2268,7 @@ function startCastGraveyardCreatureTargetPrompt(card, castAction = "cast", extra
     // Exactly this many, rather than "up to" (`severalGraveyardHint`, the
     // confirm): the X the caster announced.
     ...(announcedX !== null ? { exactTargets: announcedX } : {}),
-    ...pendingTargetFields(card),
+    ...pendingTargetFields(card, offered),
     // Which permanent, and which of its abilities, when this prompt was opened
     // by an activation rather than a cast. The picker is identical — the card
     // clicked is in a graveyard either way — so only the action differs.
@@ -3001,6 +3021,13 @@ function getBalanceSelectInfo(state = currentState) {
   const info = state.balance_select;
   if (!info) return null;
   if (info.player_seat !== seat) return null;
+  // A pick belongs to the round it was made in: each round is counted on the
+  // board the last one left, so a slot picked among the lands names something
+  // else (or nothing) among the creatures. Every reader of the selection comes
+  // through here, so this is where a new round starts from nothing.
+  if (balanceSelection.stage !== (info.stage ?? null)) {
+    balanceSelection = { lands: [], creatures: [], hand: [], stage: info.stage ?? null };
+  }
   return info;
 }
 
@@ -3921,6 +3948,18 @@ function refreshPromptSelection(state = currentState) {
   renderBoard(state);
 }
 
+// The target of an upkeep trigger's answer: the clicked `valid_targets`
+// entry's `id`, which every entry carries (`web/turn_steps`). The seat and slot
+// are sent only for an entry without one, which the server still converts on
+// arrival — never both, so the request names one permanent one way.
+function upkeepTriggerTargetFields(targets, targetSeat, permanentIndex) {
+  const entry = (targets || []).find(
+    (t) => Number(t.seat) === Number(targetSeat) && Number(t.index) === Number(permanentIndex),
+  );
+  if (Number.isInteger(entry?.id)) return { target_permanent_id: entry.id };
+  return { target_seat: targetSeat, target_permanent_index: permanentIndex };
+}
+
 // The board-targeting descriptor for the prompt currently on screen, or null.
 // The order below mirrors renderActivationPrompt's dispatch so the highlights
 // always belong to the prompt the player is actually looking at: every prompt
@@ -3998,8 +4037,11 @@ function getPromptBoardTargeting(state = currentState) {
           prompt_permanent_id: current.permanent_id ?? null,
           prompt_subject_ordinal: current.subject_ordinal ?? null,
           accept: true,
-          target_seat: targetSeat,
-          target_permanent_index: idx,
+          // What it is aimed at, by the id of the entry clicked (CR 400.7):
+          // the slot is only how the click found it, and the board this
+          // prompt was drawn from may have renumbered by the time the step
+          // reads the answer. The server files the id; a stale one is a 404.
+          ...upkeepTriggerTargetFields(targets, targetSeat, idx),
         }),
       // Upkeep still allows tapping lands and activating abilities while the
       // trigger waits, so a click elsewhere keeps its normal meaning.
@@ -4014,36 +4056,7 @@ function getPromptBoardTargeting(state = currentState) {
   // Balance: the lands/creatures to sacrifice are picked on the board (the cards
   // to discard are picked in hand — see the balanceHandSelectable hand option).
   const balanceSelectInfo = getBalanceSelectInfo(state);
-  if (balanceSelectInfo) {
-    const owner = Number(balanceSelectInfo.player_seat);
-    const need = {
-      lands: balanceSelectInfo.lands_to_sacrifice || 0,
-      creatures: balanceSelectInfo.creatures_to_sacrifice || 0,
-    };
-    // Lands and creatures index into the same battlefield array, so one map
-    // resolves a clicked index to the section it belongs to.
-    const kindByIndex = new Map();
-    if (need.lands) {
-      for (const land of balanceSelectInfo.lands || []) kindByIndex.set(Number(land.index), "lands");
-    }
-    if (need.creatures) {
-      for (const c of balanceSelectInfo.creatures || []) kindByIndex.set(Number(c.index), "creatures");
-    }
-    return promptTargeting({
-      permanentKeys: [...kindByIndex.keys()].map((idx) => `${owner}-${idx}`),
-      selectedKeys: [...balanceSelection.lands, ...balanceSelection.creatures].map((idx) => `${owner}-${idx}`),
-      onPermanent: (_targetSeat, idx) => {
-        const kind = kindByIndex.get(idx);
-        if (!kind) return;
-        const picked = balanceSelection[kind];
-        const at = picked.indexOf(idx);
-        if (at >= 0) picked.splice(at, 1);
-        else if (picked.length < need[kind]) picked.push(idx);
-        refreshPromptSelection(state);
-      },
-      invalidHint: "Balance only takes the highlighted lands and creatures.",
-    });
-  }
+  if (balanceSelectInfo) return balanceBoardTargeting(state, balanceSelectInfo);
 
   // Forced sacrifice (Lich, Lord of the Pit): pick `count` of your permanents.
   const sacrificeSelectInfo = getSacrificeSelectInfo(state);
@@ -4422,6 +4435,7 @@ function clearPendingHandCast() {
   pendingCastCost = null;
   pendingCastOffers = null;
   pendingCastCreatureType = null;
+  pendingAnnouncedSeat = null;
   document.querySelectorAll(".casting-card").forEach((el) => el.classList.remove("casting-card"));
 }
 
@@ -5564,6 +5578,69 @@ function applyCommanderZoneChangePrompt(info) {
   });
 }
 
+// The board half of one Balance round: the round's own permanents (the
+// server's list, through the layers — an animated land among the lands in the
+// first round and among the creatures in the last) are what may be clicked,
+// and a click toggles one into the round's picks up to the count it owes.
+function balanceBoardTargeting(state, info) {
+  const owner = Number(info.player_seat);
+  const need = {
+    lands: info.lands_to_sacrifice || 0,
+    creatures: info.creatures_to_sacrifice || 0,
+  };
+  // Lands and creatures index into the same battlefield array, so one map
+  // resolves a clicked index to the section it belongs to.
+  const kindByIndex = new Map();
+  if (need.lands) {
+    for (const land of info.lands || []) kindByIndex.set(Number(land.index), "lands");
+  }
+  if (need.creatures) {
+    for (const c of info.creatures || []) kindByIndex.set(Number(c.index), "creatures");
+  }
+  return promptTargeting({
+    permanentKeys: [...kindByIndex.keys()].map((idx) => `${owner}-${idx}`),
+    selectedKeys: [...balanceSelection.lands, ...balanceSelection.creatures].map((idx) => `${owner}-${idx}`),
+    onPermanent: (_targetSeat, idx) => {
+      const kind = kindByIndex.get(idx);
+      if (!kind) return;
+      const picked = balanceSelection[kind];
+      const at = picked.indexOf(idx);
+      if (at >= 0) picked.splice(at, 1);
+      else if (picked.length < need[kind]) picked.push(idx);
+      refreshPromptSelection(state);
+    },
+    invalidHint: "Balance only takes the highlighted lands and creatures.",
+  });
+}
+
+// The panel's words for one round of Balance (`balance_select.stage`). A
+// payload without a stage is the one-prompt shape this predates, and keeps the
+// old words.
+function balanceRoundText(stage) {
+  if (stage === "lands") {
+    return {
+      title: "Balance — Lands (1 of 3)",
+      body: "Click the highlighted lands you will sacrifice. Cards in hand and creatures are counted next, on the board this leaves.",
+    };
+  }
+  if (stage === "hand") {
+    return {
+      title: "Balance — Cards in Hand (2 of 3)",
+      body: "Click the cards in your hand you will discard. Every player's discards are revealed together once all have chosen.",
+    };
+  }
+  if (stage === "creatures") {
+    return {
+      title: "Balance — Creatures (3 of 3)",
+      body: "Click the highlighted creatures you will sacrifice — every creature you control counts, a land that is one included.",
+    };
+  }
+  return {
+    title: "Balance — Choose Sacrifices",
+    body: "Click your highlighted lands and creatures to sacrifice them, and cards in your hand to discard.",
+  };
+}
+
 // Balance: the player picks exactly which lands/creatures to sacrifice and which
 // cards to discard down to the lowest counts, with a selected/total readout.
 function applyBalanceSelectPrompt(info) {
@@ -5589,10 +5666,16 @@ function applyBalanceSelectPrompt(info) {
   cancelBtn.disabled = true;
   customOkBtn.disabled = true;
 
-  title.textContent = "Balance — Choose Sacrifices";
+  // Balance is three rounds — lands, then cards in hand, then creatures — each
+  // counted on the board the last one left, and the payload names the one
+  // being answered (`stage`). The title and the instruction say which, so the
+  // hand round does not read as a sacrifice and the creature round says why a
+  // land (an animated Mishra's Factory) is among the creatures.
+  const round = balanceRoundText(info.stage);
+  title.textContent = round.title;
   // Permanents are picked on the board (highlighted lands/creatures), cards to
   // discard by clicking them in hand — never from a list of names here.
-  body.textContent = "Click your highlighted lands and creatures to sacrifice them, and cards in your hand to discard.";
+  body.textContent = round.body;
 
   // Only the counts, never the card lists — the board and hand are the pickers.
   function section(label, kind, where) {
@@ -5625,8 +5708,19 @@ function applyBalanceSelectPrompt(info) {
         creature_indices: balanceSelection.creatures.slice(),
         discard_indices: balanceSelection.hand.slice(),
       };
-      balanceSelection = { lands: [], creatures: [], hand: [] };
-      await sendAction(payload);
+      // Cleared before the request, so the next round's prompt (rendered by
+      // the response) starts empty; put back if the answer is refused, with
+      // the server's reason — a refusal used to vanish into an unhandled
+      // rejection and take the picks with it.
+      const picked = balanceSelection;
+      balanceSelection = { lands: [], creatures: [], hand: [], stage: picked.stage };
+      try {
+        await sendAction(payload);
+      } catch (e) {
+        balanceSelection = picked;
+        updateActionHint(e.message, true);
+        refreshPromptSelection();
+      }
     });
   }
 }
@@ -13188,14 +13282,31 @@ function renderActivationPrompt() {
       // Command) excludes the caster's own seat, and a dead seat is nobody's
       // legal target. An empty/absent list means every seat is fair game.
       const legalSeats = pendingCastTarget.validPlayerSeats;
+      // The target player a cast names beside its other targets: say what the
+      // choice decides, and — where it fixes a count (Reap) — what X each
+      // player would make it.
+      const seatStage = !!pendingCastTarget.__announcedSeatStage;
+      const seatSpec = seatStage ? targetSpecOf(pendingCastTarget.card) : null;
       const targetButtons = players
         .map((player, index) => {
           if (legalSeats && legalSeats.size > 0 && !legalSeats.has(index)) return "";
-          const label = player?.name || `Seat ${index}`;
+          let label = player?.name || `Seat ${index}`;
+          if (index === seat && seatStage) label = `${label} (you)`;
+          const x = seatStage ? announcedSeatX(seatSpec, index) : null;
+          if (x !== null) label = `${label} (X = ${x})`;
           return `<button type="button" class="prompt-choice-btn" data-target-choice="${index}">${escapeHtml(label)}</button>`;
         })
         .join("");
-      body.textContent = "Select a player to target.";
+      const seatRole = seatStage ? announcedSeatRole(seatSpec) : null;
+      body.textContent = seatRole === "pile"
+        ? "Choose the target player — the cards are chosen from their graveyard next."
+        : seatRole === "count"
+        ? "Choose the target opponent — X is the count taken on them, and it caps the cards you choose next."
+        : seatRole === "division"
+        ? "Choose the target player named beside the division (the damage is divided next)."
+        : seatStage
+        ? "Choose the target player this spell names beside its other targets."
+        : "Select a player to target.";
       steps.innerHTML = [
         `<div>Card: ${pendingCastTarget.cardName}</div>`,
         `<div class="prompt-choice-row">${targetButtons}</div>`,
@@ -15877,6 +15988,15 @@ function startCastPromptForKind(card, castAction, kind, validTargets = null) {
 // should send the cast itself.
 function startCastTargetCascade(card, castAction = "cast", targetSeat = null) {
   if (!card || typeof card !== "object") return false;
+  // The target player named beside the other targets comes first: the cards
+  // are taken from that player's graveyard (Gaea's Blessing), or counted on
+  // them (Reap), so the pickers below are sized by the answer. One legal seat
+  // is the answer; none is the engine's to refuse.
+  const announced = announcedSeatsOf(card);
+  if (announced && !Number.isInteger(pendingAnnouncedSeat)) {
+    if (announced.length > 1) { startAnnouncedSeatPrompt(card, castAction, announced); return true; }
+    if (announced.length === 1) pendingAnnouncedSeat = announced[0];
+  }
   if (cardRequiresTargetRoles(card)) { startCastRolesTargetPrompt(card, castAction); return true; }
   // "Return **up to two** target creature cards from your graveyard" (Sanguine
   // Indulgence) names several targets and is still asked here rather than by
@@ -15914,6 +16034,56 @@ function startCastTargetCascade(card, castAction = "cast", targetSeat = null) {
     return true;
   }
   return false;
+}
+
+// The seats a cast's announced target player may be (`announced_seats`), or
+// null for a spell that names none beside its other targets.
+function announcedSeatsOf(card) {
+  const seats = targetSpecOf(card).announced_seats;
+  return Array.isArray(seats) ? seats.map(Number).filter(Number.isInteger) : null;
+}
+
+// What the announced seat is for, in the spell's own terms — the line the
+// seat picker shows, and the X each opponent would fix where it counts one.
+function announcedSeatRole(spec) {
+  if (spec?.defined_x_by_seat) return "count";
+  if (spec?.kind === "graveyard_creature" && !spec.own_graveyard_only) return "pile";
+  if (spec?.kind === "divided") return "division";
+  return "player";
+}
+
+function announcedSeatX(spec, targetSeat) {
+  const bySeat = spec?.defined_x_by_seat;
+  if (!bySeat) return null;
+  const x = bySeat[targetSeat] ?? bySeat[String(targetSeat)];
+  return Number.isInteger(x) ? x : null;
+}
+
+// Ask which player the cast names: the ordinary player picker (buttons and
+// life pills, the seats the engine admits), whose answer is recorded and the
+// cascade run again with it.
+function startAnnouncedSeatPrompt(card, castAction, seats) {
+  const cardName = normalizeCardName(card);
+  pendingCastTarget = {
+    card,
+    cardName,
+    targetKind: "player",
+    castAction,
+    __announcedSeatStage: true,
+    ...indexValidTargets(seats.map((s) => ({ kind: "player", seat: s }))),
+  };
+  renderActivationPrompt();
+  renderBoard(currentState);
+}
+
+// sendAction's half: the recorded seat onto the cast body (and the caller's,
+// for an auto-tap retry that resends it), spent as it is sent.
+function carryAnnouncedSeat(body, actionBody) {
+  if (!_CAST_ACTIONS.has(body.action) || !Number.isInteger(pendingAnnouncedSeat)) return body;
+  body.target_seat = pendingAnnouncedSeat;
+  if (actionBody && typeof actionBody === "object") actionBody.target_seat = pendingAnnouncedSeat;
+  pendingAnnouncedSeat = null;
+  return body;
 }
 
 // ---------------------------------------------------------------------------
@@ -17804,6 +17974,15 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
   }
   clearFfaTargetingHighlights();
   renderActivationPrompt();
+
+  // The target player a cast names beside its other targets (`announced_seats`):
+  // recorded, and the rest of the cast asked with it — the graveyard picker
+  // narrowed to that player's pile or sized by the X it fixes.
+  if (pending.__announcedSeatStage) {
+    pendingAnnouncedSeat = selectedTarget;
+    continueCastAfterCost(pending.card, pending.castAction || "cast");
+    return;
+  }
 
   // A graveyard ability's target (Carrionette): the activation is sent now,
   // with whatever the button announced before the picker opened.
@@ -20430,6 +20609,30 @@ function renderStack(stack) {
   _refreshStackHoldVisuals();
 }
 
+// CR 509.1c, as the declaring player reads it: one line per requirement the
+// server lists for `defenderSeat` (`combat.block_requirements`), the same
+// sentence counted once ("Watchdog blocks each combat if able (×3)"), and —
+// when they cannot all be obeyed together — how many a declaration must obey.
+// Empty where nothing is required, which is nearly every combat.
+function blockRequirementLines(combat, defenderSeat) {
+  const entry = (combat?.block_requirements || []).find(
+    (e) => Number(e.defending_player_index) === Number(defenderSeat),
+  );
+  const requirements = entry?.requirements || [];
+  if (!requirements.length) return [];
+  const counts = new Map();
+  for (const r of requirements) counts.set(r.reason, (counts.get(r.reason) || 0) + 1);
+  const lines = [...counts].map(([reason, n]) => `Required: ${reason}${n > 1 ? ` (×${n})` : ""}.`);
+  const most = Number(entry.most_obeyable);
+  if (Number.isInteger(most) && most < requirements.length) {
+    lines.push(
+      `Only ${most} of these ${requirements.length} requirements can be obeyed together — ` +
+      `your declaration must obey ${most} (CR 509.1c).`,
+    );
+  }
+  return lines;
+}
+
 function renderCombatControls(state) {
   const summary = q("combatSummary");
   const actions = q("combatActions");
@@ -20539,7 +20742,16 @@ function renderCombatControls(state) {
       prompt.textContent = "Declare blockers: drag from each blocker to an attacking creature, then press OK.";
     }
     damagePanel.appendChild(prompt);
-
+    // CR 509.1c: what this declaration has to obey, before it is sent — the
+    // numbers the server refuses a declaration by.
+    if (!combat?.blockers_locked) {
+      for (const line of blockRequirementLines(combat, blockDeclarationDefender(state))) {
+        const row = document.createElement("div");
+        row.className = "combat-summary block-requirement";
+        row.textContent = line;
+        damagePanel.appendChild(row);
+      }
+    }
   }
 
   // CR 702.22j: the defending player splits the damage of each attacker blocked by
@@ -24428,6 +24640,7 @@ async function sendAction(actionBody) {
     promptNextModeTarget();
     return;
   }
+  carryAnnouncedSeat(body, actionBody);
   carryCastZoneAndCost(body);
   carryMadnessAnswer(body);
   const payload = await postJson(`/api/sessions/${sessionId}/action`, body);

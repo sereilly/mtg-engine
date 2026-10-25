@@ -37,11 +37,14 @@ eligible Nether Shadows, where one "yes" used to return both.
 from __future__ import annotations
 
 import re
+import shutil
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from engine.models import Permanent
+from tests.helpers import run_app_js
 from web.app import app, store
 from web.runtime import CARD_BY_NAME
 from web.turn_steps import _gather_upkeep_decisions
@@ -378,3 +381,89 @@ def test_an_ordinal_that_is_not_pending_is_refused_rather_than_falling_back():
     assert response.status_code == 400
     assert "not awaiting" in response.json()["detail"], response.text
     assert game.players[0].battlefield == []
+
+
+# ---------------------------------------------------------------------------
+# The upkeep trigger's *target*, answered by id (kg/steps; client half kg/client)
+# ---------------------------------------------------------------------------
+
+_BOARD_TARGETING_PRELUDE = r'''
+let seat = 0;
+const sent = [];
+function sendAction(body) { sent.push(body); return Promise.resolve(); }
+function updateActionHint() {}
+function refreshPromptSelection() {}
+function getPregameInfo() { return null; }
+function getTimeVaultInfo() { return null; }
+function getCleanupDiscardInfo() { return null; }
+function getUntapLandSelectionInfo() { return null; }
+function getOptionalUntapInfo() { return null; }
+function getOpponentDamageInfo() { return null; }
+function getLampDrawInfo() { return null; }
+function getOutsideGameDrawInfo() { return null; }
+function getOutsideGamePickInfo() { return null; }
+function getUpkeepPayInfo() { return null; }
+'''
+
+
+def _erhnam_upkeep():
+    """Erhnam Djinn's upkeep trigger owed by seat 0, with three opposing
+    creatures — a Wall of Wood the prompt does not offer (a Wall), and the
+    two it does."""
+    created = client.post("/api/sessions", json={
+        "mode": "human_vs_ai", "host_name": "H",
+        "host_colors": 2, "guest_colors": 2, "seed": 9,
+    }).json()
+    sid = created["session_id"]
+    session = store.get(sid)
+    game = session.game
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    session.current_turn = 0
+    djinn = Permanent(card=CARD_BY_NAME["erhnam djinn"])
+    bears = Permanent(card=CARD_BY_NAME["grizzly bears"])
+    wall = Permanent(card=CARD_BY_NAME["wall of wood"])
+    giant = Permanent(card=CARD_BY_NAME["hill giant"])
+    game.players[0].battlefield = [djinn]
+    game.players[1].battlefield = [bears, wall, giant]
+    game._settle()
+    game._set_phase_and_step("beginning", "upkeep")
+    assert _gather_upkeep_decisions(session, 0)
+    return sid, game, bears, giant
+
+
+def test_the_board_click_answers_the_upkeep_target_by_the_entrys_id():
+    """``getPromptBoardTargeting``'s optional-trigger branch, run in node over
+    the state the server serves: a click on the Hill Giant sends that entry's
+    ``id`` as ``target_permanent_id`` — and no seat or slot beside it — and
+    exactly that body, posted, gives the Giant forestwalk."""
+    if shutil.which("node") is None:
+        pytest.skip("node is not on PATH; the client half cannot run")
+    sid, game, bears, giant = _erhnam_upkeep()
+    state = client.get(f"/api/sessions/{sid}/state?seat=0").json()
+    (entry,) = state["optional_trigger"]["pending"]
+    offered = {t["name"]: t for t in entry["valid_targets"]}
+    assert offered["Hill Giant"]["id"] == giant.permanent_id
+
+    out = run_app_js(
+        ["getPromptBoardTargeting", "getOptionalTriggerInfo", "promptTargeting",
+         "upkeepTriggerTargetFields", "submitPromptAction"],
+        r'''
+        const targeting = getPromptBoardTargeting(INPUT.state);
+        targeting.onPermanent(INPUT.seat, INPUT.index);
+        await Promise.resolve();
+        return { keys: [...targeting.permanentKeys].sort(), sent };
+        ''',
+        {"state": state, "seat": 1, "index": game.battlefield_index_of(giant)},
+        prelude=_BOARD_TARGETING_PRELUDE,
+    )
+    assert out["keys"] == sorted(f"{t['seat']}-{t['index']}" for t in entry["valid_targets"])
+    (body,) = out["sent"]
+    assert body["action"] == "resolve_optional_trigger" and body["accept"] is True
+    assert body["target_permanent_id"] == giant.permanent_id
+    assert "target_seat" not in body and "target_permanent_index" not in body
+
+    posted = client.post(f"/api/sessions/{sid}/action", json=body)
+    assert posted.status_code == 200, posted.text
+    assert game._has_keyword(giant, "forestwalk")
+    assert not game._has_keyword(bears, "forestwalk")

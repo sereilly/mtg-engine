@@ -353,7 +353,10 @@ def test_an_alternative_cost_named_in_part_holds_the_confirm_and_says_what_is_ow
 
 def test_a_cast_with_no_graveyard_card_to_click_is_the_engine_s_to_refuse():
     prompt = app_js_function_body("startCastGraveyardCreatureTargetPrompt")
-    empty = prompt.split("(spec.valid_targets || []).length === 0", 1)[1]
+    # The offered list is the spec's own, narrowed to the announced player's
+    # pile where the cards come from it (kg/client, `announced_seats`).
+    assert "const offered = (spec.valid_targets || []).filter(" in prompt
+    empty = prompt.split("(!max && offered.length === 0)", 1)[1]
     assert 'if (castAction === "activate") {' in empty
     assert 'const body = { seat, action: castAction || "cast", card_name: cardName };' in empty
 
