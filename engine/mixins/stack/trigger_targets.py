@@ -16,7 +16,7 @@ Split out of ``resolution.py`` at the 2,000-line cap, and composed onto
 
 from __future__ import annotations
 
-from ...game_types import StackItem
+from ...game_types import StackItem, target_ids
 from ...oracle import OracleInstruction
 from ...modal_triggers import modal_trigger_modes
 # Both owned by ``engine/targeting.py``: two callers ask whether a compiled
@@ -430,10 +430,9 @@ class TriggerTargetsMixin:
             ):
                 return None
             return "illegal"
-        ids = item.target_permanent_id
         named = [
             permanent_id
-            for permanent_id in (ids if isinstance(ids, (list, tuple)) else [ids])
+            for permanent_id in target_ids(item.target_permanent_id)
             if isinstance(permanent_id, int)
         ]
         # "…exile **two** target lands" (Petradon) named with one land: a

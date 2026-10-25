@@ -20,13 +20,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ..game_types import first_target_id
 from ..models import Permanent
 from ..oracle_types import named_no_target
 from ..search_filters import card_has_type
 from ._amounts import resolve_amount
 from ._common import return_permanent_to_owners_hand
 from ._filters import excluded_graveyard_slot, graveyard_card_matches
-from ._targets import (_one_choice, _resolve_graveyard_slots,
+from ._targets import (_resolve_graveyard_slots,
                        frozen_that_player_seat, resolve_role_permanent,
                        resolve_target_permanent, resolve_target_permanents)
 from .registry import effect_handler
@@ -794,14 +795,13 @@ def return_all_matching(game: Game, instruction: OracleInstruction, context: Ora
         # creature, so ``permanent_by_id`` no longer finds it while every Aura
         # still holds the record of what it was on. CR 400.7 makes the id
         # unique to that object, so a look-alike cannot answer to it.
-        # Through ``_one_choice``, because the two callers hand this field
-        # different shapes: a *spell* records one id (Word of Undoing) and an
-        # *activated ability* records the whole announced list, even when the
-        # list is one long. Read raw, an ability's `[7]` never equals any
-        # permanent's id and the sweep found nothing on a host the player had
-        # chosen — Scarab of the Unseen is the first ability to reach here.
+        # Slot zero of the id channel (``game_types.first_target_id``): the
+        # field is a list of slots whoever wrote it. Read raw, an ability's
+        # `[7]` never equals any permanent's id and the sweep found nothing on a
+        # host the player had chosen — Scarab of the Unseen was the first
+        # ability to reach here.
         host_id = (
-            _one_choice(context.target_permanent_id)
+            first_target_id(context.target_permanent_id)
             if attached_to == "target" else None
         )
         if not isinstance(host_id, int):

@@ -383,7 +383,7 @@ class OptionalPayChoicesMixin:
             context,
             target=self.players[seat],
             target_permanent_index=self.battlefield_index_of(perm),
-            target_permanent_id=permanent_id,
+            target_permanent_id=[permanent_id],
         )
         self.discard_pending_choice(choice)
         self.log.append(

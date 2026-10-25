@@ -758,11 +758,13 @@ def _lower_gain_control(
             # A damage event has two objects and the trigger's own condition
             # named one of them — the enchanted creature that dealt it — so "the
             # other" names the one that took it. That is the object
-            # `damage_events._announce` stamps onto the stack item, which is why
+            # `damage_events._announce` names as the one the trigger is about
+            # (``StackItem.about_permanent_id``), which is why
             # this rides the ordinary linked steal and describes **no** targets:
             # `_describe_targets` would raise a picker for a choice CR 603.3d
             # says was never offered, and the handler's own
-            # `resolve_target_permanent` reads the stamped id instead.
+            # `resolve_target_permanent` reads that id, handed over as the
+            # effect's target by the context builder.
             #
             # `lowering/destruction.py` reads the same printed word under the
             # same gate for Vampiric Feast's sentence, off the same floor table,

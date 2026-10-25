@@ -195,7 +195,7 @@ def test_every_step_behind_an_offer_waits_for_its_answer(monkeypatch):
         game.queue_from_hand(1, "Lightning Bolt", target_player_index=0)
         context = OracleExecutionContext(
             caster=game.players[0], target=game.players[1], card=card,
-            source_permanent=source, target_permanent_id=creature.permanent_id,
+            source_permanent=source, target_permanent_id=[creature.permanent_id],
             stack_target=game.stack[-1] if game.stack else None,
             trigger_context={"event_subject_player": 1, "event_subject_controller": 1},
         )

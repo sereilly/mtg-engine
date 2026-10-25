@@ -41,11 +41,10 @@ from ..layer_bridge import computed_controller
 from ..land_types import end_land_type_change, end_land_type_changes_tied_to
 from ..linked_exile import LEAVES
 from ..models import Permanent, PlayerState
-from ..game_types import GraveyardTarget
+from ..game_types import GraveyardTarget, single_chosen_id
 from ..tokens import CREATED_WITH_PERMANENT_ID
 from ..trigger_utils import make_trigger_event, matching_triggers
 from ..turn_state import forget_controllers_upkeep
-from ..oracle_types import single_chosen_id
 
 
 class ControlSeamMixin:
@@ -641,31 +640,15 @@ class ControlSeamMixin:
         Scoped to *seat* like the index it replaces, so a permanent that changed
         controller is not silently still targeted from its old side.
 
-        **And it reads the channel's two arities**, which is why the id was
-        being ignored on the path that needs it most. ``StackItem`` carries one
-        field, and its producers disagree: ``activation`` and ``casting`` stamp
-        the whole ``target_permanent_ids`` *list*, a prompt's answer stamps a
-        bare id. Asking ``isinstance(permanent_id, int)`` alone meant a caller
-        that named its target the only stable way there is — CR 400.7's id, the
-        address CLAUDE.md says to prefer — had the name silently dropped and got
-        the index it did not send. ``deal_damage`` is where that showed: an
-        ``any_target`` activation addressed by id alone fell past the permanent
-        branch entirely and burned the *player*. The web layer fills an index in
-        ``web/actions.py`` and masked it; the AI, a headless driver and a test
-        do not.
-
-        A **one**-element sequence is one address and resolves. A longer one is
-        several, and a single-target read has no business picking from it — that
-        falls through to the index exactly as before, rather than guessing slot
-        zero, which is the multi-target list read as a single target and wrong
-        in the direction that looks right. Still additive on purpose: this can
-        only turn a dropped id into a used one.
-
-        The wider question — one field carrying two arities across 119 reader
-        sites — is `SET_PLAYBOOK.md`'s Known gaps, and settling it is a
-        pool-wide refactor rather than a fix. This is the seam every caller
-        already goes through, so it is the one place the disagreement can be
-        absorbed without becoming a twelfth local normalisation.
+        *permanent_id* is the **id channel itself** — None or a list of slots
+        (``game_types.check_target_ids``), the shape every holder of it keeps —
+        read through ``single_chosen_id``: a one-slot announcement is one
+        address and resolves, and a longer one is several, which a
+        single-target read has no business picking from. That falls through to
+        the index exactly as before, rather than guessing slot zero — the
+        multi-target list read as a single target, wrong in the direction that
+        looks right. A caller holding one slot of a longer list passes it as a
+        list of one.
         """
         named = single_chosen_id(permanent_id)
         if named is not None:

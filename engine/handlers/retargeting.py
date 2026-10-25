@@ -16,7 +16,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..divided_damage import DIVIDED_TARGETS, divided_entry, stamped_entry
-from ..game_types import StackItem
+from ..game_types import StackItem, single_chosen_id
 from ..resumption import run_resumable
 from .registry import effect_handler
 
@@ -308,7 +308,7 @@ def change_target_spell_target(game: Game, instruction: OracleInstruction, conte
             return True, "resolved"
         seat, permanent = found
         item.target_player_index = seat
-        item.target_permanent_id = game.permanent_id_of(permanent)
+        item.target_permanent_id = [permanent.permanent_id]
         item.target_permanent_index = game.battlefield_index_of(permanent)
         divided = (item.choices or {}).get(DIVIDED_TARGETS)
         if divided:
@@ -322,7 +322,8 @@ def change_target_spell_target(game: Game, instruction: OracleInstruction, conte
             share = divided_entry(divided[0])[2] if len(divided) == 1 else None
             item.choices[DIVIDED_TARGETS] = [
                 stamped_entry(
-                    seat, item.target_permanent_index, share, item.target_permanent_id
+                    seat, item.target_permanent_index, share,
+                    single_chosen_id(item.target_permanent_id),
                 )
             ]
         game.log.append(

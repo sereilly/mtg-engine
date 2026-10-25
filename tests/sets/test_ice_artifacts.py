@@ -1695,7 +1695,8 @@ def _talisman_resolve(game, set_pool, name, source, index, permanent_id):
         OracleExecutionContext(
             caster=game.players[0], target=game.players[1],
             card=set_pool("ICE")[name],
-            target_permanent_index=index, target_permanent_id=permanent_id,
+            target_permanent_index=index,
+            target_permanent_id=None if permanent_id is None else [permanent_id],
             source_permanent=source,
         ),
     )

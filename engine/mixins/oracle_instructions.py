@@ -9,7 +9,7 @@ from ..destruction_events import instruction_finished
 from ..event_durations import end_event_durations
 from ..cast_costs import kicked
 from ..events import emit
-from ..game_types import OracleExecutionContext, OracleStateMachine
+from ..game_types import OracleExecutionContext, OracleStateMachine, target_ids
 from ..handlers import EFFECT_HANDLERS
 from ..handlers._amounts import count_from_payload
 from ..oracle_types import X_FROM_COUNT, substitute_x_bounds
@@ -117,7 +117,7 @@ class OracleInstructionsMixin:
         self.resolving_targets.append(
             tuple(
                 identity
-                for identity in (recorded if isinstance(recorded, list) else [recorded])
+                for identity in target_ids(recorded)
                 if identity is not None
             )
         )
@@ -168,7 +168,7 @@ class OracleInstructionsMixin:
         target: PlayerState,
         card: CardDefinition,
         target_permanent_index: int | None = None,
-        target_permanent_id: int | list[int | None] | None = None,
+        target_permanent_id: list[int | None] | None = None,
         x_value: int | None = None,
         new_color: str | None = None,
         stack_target=None,
@@ -464,7 +464,7 @@ class OracleInstructionsMixin:
         aura_permanent: Permanent,
         target_player_index: int | None,
         target_permanent_index: int | None = None,
-        target_permanent_id: int | list[int | None] | None = None,
+        target_permanent_id: list[int | None] | None = None,
     ) -> bool:
         """Attach a resolving Aura to what it targeted, and run its enter text.
 

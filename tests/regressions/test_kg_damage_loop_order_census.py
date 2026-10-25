@@ -242,7 +242,7 @@ def _that_player_target(game, card, instruction):
     source = _put(game, 1, card.name)
     return [asker], 0, lambda: _execute(
         game, card, instruction, source_permanent=source,
-        target_permanent_id=asker.permanent_id,
+        target_permanent_id=[asker.permanent_id],
         trigger_context={"event_subject_player": 0, "amount": 1},
     )
 
@@ -283,7 +283,7 @@ def _simulacrum(game, card, instruction):
     game.players[0].damage_taken_this_turn = 2
     return [asker], 0, lambda: _execute(
         game, card, instruction, caster=game.players[0], target=game.players[0],
-        target_permanent_id=asker.permanent_id,
+        target_permanent_id=[asker.permanent_id],
     )
 
 
@@ -340,7 +340,7 @@ def _source_fight(game, card, instruction):
     _arm_two(opponent)
     return [opponent, fighter], 0, lambda: _execute(
         game, card, instruction, caster=game.players[1], target=game.players[0],
-        source_permanent=fighter, target_permanent_id=opponent.permanent_id,
+        source_permanent=fighter, target_permanent_id=[opponent.permanent_id],
     )
 
 
@@ -353,7 +353,7 @@ def _self_damage(game, card, instruction):
     _arm_two(game.players[1])
     return [asker, game.players[1]], 0, lambda: _execute(
         game, card, instruction, caster=game.players[1], target=game.players[0],
-        target_permanent_id=asker.permanent_id,
+        target_permanent_id=[asker.permanent_id],
     )
 
 

@@ -358,9 +358,9 @@ def _lower_lose_keyword(
     # spelling fires once per creature and names exactly one.
     #
     # It has to come **before** the target-shaped reading below, and that order
-    # is the card: on the *blocks* half of the event the stack item's target is
-    # the blocking creature itself (the fire site puts it there so a
-    # self-affecting trigger can find itself), so falling through would strip
+    # is the card: on the *blocks* half of the event the object the trigger is
+    # about is the blocking creature itself (``StackItem.about_permanent_id``,
+    # handed to the effect as its target), so falling through would strip
     # first strike from the Champion and leave the creature it blocked with it
     # — the card playing as its own opposite while reporting supported. The
     # grant one function up records the same trap.

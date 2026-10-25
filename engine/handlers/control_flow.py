@@ -321,7 +321,7 @@ def _role_scoped(
         if not isinstance(recorded, int):
             return None
         return dataclasses.replace(
-            context, target_permanent_index=None, target_permanent_id=recorded,
+            context, target_permanent_index=None, target_permanent_id=[recorded],
             announced_targets=remembered,
         )
     seat = game.controller_index_of(permanent)
@@ -334,7 +334,7 @@ def _role_scoped(
         # index read against the wrong one addresses a different permanent.
         target=game.players[seat] if seat is not None else context.target,
         target_permanent_index=game.battlefield_index_of(permanent),
-        target_permanent_id=game.permanent_id_of(permanent),
+        target_permanent_id=[permanent.permanent_id],
         announced_targets=remembered,
     )
 

@@ -1197,7 +1197,7 @@ def _reached_by_the_effect(
             target=game.players[entry["seat"]],
             card=card,
             target_permanent_index=entry["index"],
-            target_permanent_id=game.permanent_id_of(permanent),
+            target_permanent_id=[permanent.permanent_id],
         )
         return any(evaluate_condition(game, context, guard) for guard in guards)
 

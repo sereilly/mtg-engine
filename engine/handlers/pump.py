@@ -602,7 +602,7 @@ def pump_block_pair(game: Game, instruction: OracleInstruction, context: OracleE
     The P/T twin of ``keywords.grant_keyword_to_block_pair``, and it reads the pair
     the same way — through ``block_pair_permanents``, the one function that
     knows the two fire sites bind "that creature" differently. Reaching for the
-    stack item's target instead would name the flanker itself on the *blocks*
+    context's target instead would name the flanker itself on the *blocks*
     half of a block trigger, which is the bug that function exists to stop.
 
     CR 702.25b's several instances are several abilities, so each resolution

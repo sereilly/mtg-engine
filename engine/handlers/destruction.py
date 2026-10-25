@@ -16,6 +16,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..dexterity import flip_lands_on
+from ..game_types import target_ids
 from ..models import Permanent, PlayerState
 from ..destruction_events import (begin_destruction_hold,
                                   end_destruction_hold,
@@ -303,9 +304,10 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
     # "one caller's spelling enforced, another's silently not" the CR 702.16b
     # gate in `mixins/stack/casting.py` records about itself.
     singular_seat: int | None = None
-    named_id = context.target_permanent_id
-    if isinstance(named_id, list):
-        named_id = next((pid for pid in named_id if isinstance(pid, int)), None)
+    named_id = next(
+        (pid for pid in target_ids(context.target_permanent_id) if isinstance(pid, int)),
+        None,
+    )
     if isinstance(chosen_index, int) or isinstance(named_id, int):
         # Resolved **once**, by id, and the slot re-derived from what came back.
         # This site used to resolve twice: `chosen_permanent` here for the

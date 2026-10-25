@@ -19,6 +19,7 @@ Split out of ``damage.py`` at the 2,000-line cap's split round.
 
 from __future__ import annotations
 
+from ..game_types import target_ids
 from ..resumption import run_resumable
 from ._common import apply_damage_to_creature
 from ._filters import permanent_matches_filter
@@ -483,10 +484,10 @@ def target_bites_target(game, instruction, context):
     names (CR 608.2b)."""
     from ..subject_filters import subject_matches
 
-    ids = context.target_permanent_id
-    if not isinstance(ids, list):
-        ids = [ids, None]
-    resolved = [game.permanent_by_id(pid) if isinstance(pid, int) else None for pid in ids]
+    resolved = [
+        game.permanent_by_id(pid) if isinstance(pid, int) else None
+        for pid in target_ids(context.target_permanent_id)
+    ]
     biter = resolved[0] if resolved else None
     bitten = resolved[1] if len(resolved) > 1 else None
     described = instruction.payload.get("targets") or {}

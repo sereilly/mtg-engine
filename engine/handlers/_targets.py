@@ -36,6 +36,7 @@ from typing import TYPE_CHECKING, Callable, Sequence
 if TYPE_CHECKING:
     from ..game import Game
     from ..game_types import OracleExecutionContext
+from ..game_types import first_target_id, target_ids
 from ..oracle_types import named_no_target
 from ..models import Permanent, PlayerState
 from ._filters import graveyard_card_matches
@@ -273,11 +274,12 @@ def block_pair_permanents(game, context) -> list:
 
     One reader for both halves, because the two fire sites bind it differently
     and the difference is not the effect's business. On the *becomes blocked*
-    half the blocker is the stack item's target. On the *blocks* half the target
-    is the blocking creature itself — the fire site needs it there so a
-    self-affecting trigger (Ydwen Efreet) can find itself — and the creatures the
-    firing is about ride ``blocked_permanent_ids``, by stable id because a
-    removal renumbers every later slot (CR 400.7).
+    half the blocker is the object the trigger is about, which the context
+    builder hands the effect as its target. On the *blocks* half that object
+    is the blocking creature itself — a self-affecting trigger (Ydwen Efreet)
+    finds itself there — and the creatures the firing is about ride
+    ``blocked_permanent_ids``, by stable id because a removal renumbers every
+    later slot (CR 400.7).
 
     Reading the target on the blocks half is the bug this function exists to
     stop: the card would name *itself*, destroying or recolouring the blocker
@@ -969,7 +971,7 @@ def resolve_target_permanent(
         player if player is not None else context.target,
         _one_choice(context.target_permanent_index),
         game=game,
-        permanent_id=_one_choice(context.target_permanent_id),
+        permanent_id=first_target_id(context.target_permanent_id),
         predicate=predicate,
         fallback_players=fallback_players,
         fallback_on_invalid_choice=fallback_on_invalid_choice,
@@ -1214,7 +1216,7 @@ def resolve_target_permanents(
         predicate = lambda p: p.is_creature
     owner = player if player is not None else context.target
     indices = _as_slots(context.target_permanent_index)
-    ids = _as_slots(context.target_permanent_id)
+    ids = target_ids(context.target_permanent_id)
     # Positional pairing: `permanent_ids_at` keeps a slot that did not resolve as
     # None rather than dropping it, so the two lists stay the same length and
     # index k means the same choice in both.
@@ -1271,7 +1273,7 @@ def resolve_target_slots(
     where it can say which of the two slots to drop (the later one, CR 608.2b).
     No fallback scan, for the reason `resolve_target_permanents` documents.
     """
-    ids = _as_slots(context.target_permanent_id)
+    ids = target_ids(context.target_permanent_id)
     indices = _as_slots(context.target_permanent_index)
     owner = player if player is not None else context.target
     found: list[Permanent | None] = []
@@ -1291,7 +1293,9 @@ def resolve_target_slots(
 
 
 def _as_slots(chosen: object) -> list:
-    """A chosen-target field as a list of slots, whatever shape it arrived in."""
+    """The **slot** field (``target_permanent_index``) as a list of slots,
+    whichever of its two shapes it holds. The id field has one shape and is
+    read through ``game_types.target_ids``."""
     if isinstance(chosen, list):
         return list(chosen)
     return [] if chosen is None else [chosen]

@@ -1424,7 +1424,7 @@ def test_deflection_leaves_a_spell_with_nowhere_else_to_go_alone(set_pool):
     game.queue_from_hand(0, "Deflection", target_stack_index=0)
     game.resolve_top_of_stack()
 
-    assert game.stack[0].target_permanent_id == only.permanent_id, game.log
+    assert game.stack[0].target_permanent_id == [only.permanent_id], game.log
     assert any("no other legal target" in line for line in game.log), game.log
 
 
@@ -1467,7 +1467,7 @@ def test_deflection_asks_nothing_about_who_the_spell_points_at_now(set_pool):
     game.queue_from_hand(0, "Deflection", target_stack_index=0)
     game.resolve_top_of_stack()
 
-    assert game.stack[0].target_permanent_id == mine.permanent_id, game.log
+    assert game.stack[0].target_permanent_id == [mine.permanent_id], game.log
 
 
 def test_deflection_asks_its_caster_which_of_several_targets(set_pool):

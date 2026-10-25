@@ -106,7 +106,7 @@ def test_the_mode_and_its_target_are_one_announcement():
         "mode_choice", 0, mode_index=0, target={"permanent_id": spare.permanent_id},
     )
     item = game.stack[-1]
-    assert item.target_permanent_id == spare.permanent_id
+    assert item.target_permanent_id == [spare.permanent_id]
 
     game.resolve_top_of_stack()
     assert [perm.card.name for perm in p2.battlefield] == ["Host"], (

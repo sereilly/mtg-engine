@@ -90,6 +90,8 @@ class StackAnnouncement:
     caster_index: int
     target_player_index: int | None = None
     target_permanent_index: object = None
+    #: The stack object's chosen-target ids, in its one shape (None or a list
+    #: of slots, ``game_types.check_target_ids``), held to it as it is frozen.
     target_permanent_id: object = None
     target_graveyard_card: object = None
     x_value: int | None = None
@@ -121,6 +123,11 @@ class StackAnnouncement:
     #: originally paid. It'll be exiled when it resolves or otherwise leaves
     #: the stack."
     flashback: bool = False
+
+    def __post_init__(self) -> None:
+        from .game_types import check_target_ids
+
+        check_target_ids(self.target_permanent_id, "StackAnnouncement.target_permanent_id")
 
 
 @dataclass

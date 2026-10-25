@@ -25,7 +25,7 @@ from ...activation_zones import GRAVEYARD, HAND, ability_functions_from
 from ...targeting import usable_activated_abilities
 from ...mana_payment import is_mana_ability
 from ...game_types import (OracleExecutionContext, OracleStateMachine,
-                           SimulationResult, StackItem)
+                           SimulationResult, StackItem, as_target_ids)
 from ...oracle import compile_card_oracle
 from ...stack_targets import names_a_target
 from ...subject_filters import filter_head_noun, subject_matches
@@ -580,7 +580,7 @@ class CardActivationMixin:
                 caster_index=controller_index,
                 target_player_index=target_player_index,
                 target_permanent_index=target_permanent_index,
-                target_permanent_id=target_permanent_ids,
+                target_permanent_id=as_target_ids(target_permanent_ids),
                 x_value=None,
                 ability_instruction=ability.instruction,
                 ability_effect_kind=ability.effect_kind,

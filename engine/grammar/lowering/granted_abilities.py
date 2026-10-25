@@ -163,9 +163,9 @@ def _lower_gain_ability_text(
         # is neither a target nor a record this effect wrote.
         #
         # Read **before** the target-shaped reading below, and that order is the
-        # card: on the *blocks* half of the event the stack item's target is the
-        # blocking creature itself (the fire site puts it there so a
-        # self-affecting trigger can find itself), so the fall-through would
+        # card: on the *blocks* half of the event the object the trigger is
+        # about is the blocking creature itself (``StackItem.about_permanent_id``,
+        # handed to the effect as its target), so the fall-through would
         # have granted both abilities to the Spores and left the creature it
         # blocked untouched — a card that reports supported and plays as its own
         # opposite.

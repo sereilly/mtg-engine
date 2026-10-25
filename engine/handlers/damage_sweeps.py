@@ -29,6 +29,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..dexterity import flip_lands_on
+from ..game_types import single_chosen_id
 from ..models import Permanent
 from ..named_counters import counters_on
 from ..resumption import run_resumable
@@ -333,7 +334,7 @@ def deal_damage_each_matching(
     # sentences that never named one, and a seat answered where none was named
     # is a board burned that the card never pointed at.
     if targeted is None and instruction.payload.get("target_controller_if_permanent"):
-        chosen = game.permanent_by_id(context.target_permanent_id)
+        chosen = game.permanent_by_id(single_chosen_id(context.target_permanent_id))
         if chosen is not None:
             targeted = game.controller_index_of(chosen)
     # "…each creature without flying **defending player** controls" (Scalding

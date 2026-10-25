@@ -353,8 +353,8 @@ def evaluate_state_condition(
         # "if at least one other Wall creature is blocking that creature"
         # (Wall of Caltrops). CR 509.1a's relation, asked of the creature the
         # firing block event named: the fire site stamped its id into the
-        # trigger context, because by resolution the ability's own target
-        # indices name the *blocker* and nothing else could say what it blocked.
+        # trigger context, because by resolution the object the ability is
+        # about is the *blocker* and nothing else could say what it blocked.
         blocked_ids = (context.trigger_context or {}).get("blocked_permanent_ids") or []
         blocked = [
             perm for perm in (game.permanent_by_id(i) for i in blocked_ids)

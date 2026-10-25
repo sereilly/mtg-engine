@@ -103,9 +103,7 @@ def _targets(item) -> tuple:
     stack_target = item.target_stack_item
     return (
         item.target_player_index,
-        item.target_permanent_id
-        if not isinstance(item.target_permanent_id, list)
-        else tuple(item.target_permanent_id),
+        tuple(item.target_permanent_id or ()),
         id(stack_target) if stack_target is not None else None,
         # "…or one about a different event of a different object": the object
         # the event named is not a target, and it tells two firings apart all

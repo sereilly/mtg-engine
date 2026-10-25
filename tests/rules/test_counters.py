@@ -514,7 +514,7 @@ def _run_move(game, p1, catalog, move, grove, bears):
     context = OracleExecutionContext(
         caster=p1, target=p1, card=catalog["Afiya Grove"],
         source_permanent=grove,
-        target_permanent_id=game.permanent_id_of(bears),
+        target_permanent_id=[bears.permanent_id],
     )
     return EFFECT_HANDLERS[move.kind](game, move, context)
 

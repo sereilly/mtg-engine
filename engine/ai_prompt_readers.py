@@ -338,9 +338,9 @@ def offered_alternative_changes_nothing(game, instruction, context) -> bool:
     if kind in _GRANTS_TO_SOURCE:
         recipient = getattr(context, "source_permanent", None)
     elif kind in _GRANTS_TO_TARGET or kind in _REMOVES_FROM_TARGET:
-        announced = getattr(context, "target_permanent_id", None)
-        if isinstance(announced, list):
-            announced = announced[0] if len(announced) == 1 else None
+        from .game_types import single_chosen_id
+
+        announced = single_chosen_id(getattr(context, "target_permanent_id", None))
         recipient = game.permanent_by_id(announced) if isinstance(announced, int) else None
     else:
         return False
@@ -502,10 +502,9 @@ class TollLoss:
 def _offer_target_permanent(game, context):
     """The one permanent the offer's resolution announced as its target, or
     None where it named none, named several, or the permanent has left."""
-    named = getattr(context, "target_permanent_id", None)
-    # One id, or the one-slot list an announcement made by id arrives as.
-    if isinstance(named, (list, tuple)) and len(named) == 1:
-        named = named[0]
+    from .game_types import single_chosen_id
+
+    named = single_chosen_id(getattr(context, "target_permanent_id", None))
     if not isinstance(named, int):
         return None
     return game.permanent_by_id(named)

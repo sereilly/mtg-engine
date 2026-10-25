@@ -274,7 +274,7 @@ def remove_keyword_from_block_pair(game: Game, instruction: OracleInstruction, c
     The exact mirror of ``keywords.grant_keyword_to_block_pair``, and it reads the
     pair through the same ``block_pair_permanents`` — the one function that
     knows the two fire sites bind "that creature" differently. Reaching for the
-    stack item's target instead would name the *Champion* on the blocks half of
+    context's target instead would name the *Champion* on the blocks half of
     the event, which is a card that strips its own first strike and leaves the
     creature it blocked with theirs.
 

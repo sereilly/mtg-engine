@@ -270,7 +270,7 @@ def test_a_targeted_spell_still_hits_its_target_after_the_board_renumbers():
         0, "Giant Growth", target_player_index=1, target_permanent_index=1
     )
     assert queued.supported
-    assert game.stack[-1].target_permanent_id == wanted.permanent_id
+    assert game.stack[-1].target_permanent_id == [wanted.permanent_id]
 
     # The Grizzly Bears leaves before the spell resolves; the Hill Giant slides
     # from slot 1 to slot 0, so slot 1 is now out of range and slot 0 is the
@@ -350,4 +350,4 @@ def test_the_stack_records_identity_for_every_targeted_object():
     game.queue_from_hand(0, "Giant Growth", target_player_index=1, target_permanent_index=0)
     item = game.stack[-1]
     assert item.target_permanent_index == 0
-    assert item.target_permanent_id == bear.permanent_id
+    assert item.target_permanent_id == [bear.permanent_id]

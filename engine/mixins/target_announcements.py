@@ -25,6 +25,7 @@ chosen target is a spell.
 from __future__ import annotations
 
 from ..continuous import next_timestamp
+from ..game_types import as_target_ids, target_ids
 from ..events import emit
 from ..oracle import compile_card_oracle
 from ..targeting import graveyard_target_spec
@@ -310,9 +311,9 @@ class TargetAnnouncementsMixin:
                     else item.caster_index
                 )
             if 0 <= seat < len(self.players):
-                mode.target_permanent_id = self.permanent_ids_at(
+                mode.target_permanent_id = as_target_ids(self.permanent_ids_at(
                     seat, mode.target_permanent_index
-                )
+                ))
         spec = graveyard_target_spec(
             item.card,
             compile_card_oracle(item.card),
@@ -366,7 +367,9 @@ class TargetAnnouncementsMixin:
             # The convention resolution uses when no target player was named.
             seat = 1 - item.caster_index if len(self.players) == 2 else item.caster_index
         if 0 <= seat < len(self.players):
-            item.target_permanent_id = self.permanent_ids_at(seat, item.target_permanent_index)
+            item.target_permanent_id = as_target_ids(
+                self.permanent_ids_at(seat, item.target_permanent_index)
+            )
 
     def announced_target_seat(self, permanent_ids) -> int | None:
         """The seat an announcement made by ``permanent_id`` already names, or
@@ -407,13 +410,9 @@ class TargetAnnouncementsMixin:
         -2) has no one seat to be on, and those resolutions read the ids
         anyway. Naming either seat would invent a fact about the other slot.
         """
-        if permanent_ids is None:
-            return None
-        listed = (
-            permanent_ids
-            if isinstance(permanent_ids, (list, tuple))
-            else [permanent_ids]
-        )
+        # An announcement's own argument as well as the field it is stamped
+        # into, so either arity a caller holds (``as_target_ids``).
+        listed = as_target_ids(permanent_ids) or []
         seats = {
             self.controller_index_of(permanent)
             for permanent in (
@@ -510,12 +509,7 @@ class TargetAnnouncementsMixin:
         naming two is announcing something this cannot settle.
         """
         named = [
-            permanent_id
-            for permanent_id in (
-                permanent_ids
-                if isinstance(permanent_ids, (list, tuple))
-                else [permanent_ids]
-            )
+            permanent_id for permanent_id in as_target_ids(permanent_ids) or []
             if isinstance(permanent_id, int)
         ]
         if len(named) != 1:
@@ -563,10 +557,7 @@ class TargetAnnouncementsMixin:
         if self.spell_targets_nothing(item):
             return
         self._announce_targeted_player(item)
-        ids = item.target_permanent_id
-        if ids is None:
-            return
-        for permanent_id in (ids if isinstance(ids, (list, tuple)) else [ids]):
+        for permanent_id in target_ids(item.target_permanent_id):
             if not isinstance(permanent_id, int):
                 continue
             targeted = self.permanent_by_id(permanent_id)
@@ -681,10 +672,9 @@ class TargetAnnouncementsMixin:
         # A spec that is a player and nothing else never reads an id as its
         # target (a fire site may thread a reference through the field), so
         # for that kind the seat is still the announcement.
-        ids = getattr(item, "target_permanent_id", None)
         if spec.get("kind") != "player" and any(
             isinstance(permanent_id, int)
-            for permanent_id in (ids if isinstance(ids, (list, tuple)) else [ids])
+            for permanent_id in target_ids(item.target_permanent_id)
         ):
             return
         emit(

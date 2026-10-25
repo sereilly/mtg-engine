@@ -129,7 +129,7 @@ def test_the_cast_chains_body_goes_out_as_the_offers_answer():
     assert _state(sid)["madness_cast"] is None
     spell = game.stack[-1]
     assert spell.card.name == "Fiery Temper" and not spell.ability_effect_kind
-    assert spell.target_permanent_id == bears.permanent_id
+    assert spell.target_permanent_id == [bears.permanent_id]
 
 
 @needs_node

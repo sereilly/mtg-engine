@@ -19,6 +19,7 @@ have been refused then is refused now.
 
 from __future__ import annotations
 
+from .game_types import target_ids
 from .oracle import compile_card_oracle
 from .resolution_overrides import resolves_with_illegal_targets
 from .modal_triggers import modal_trigger_modes
@@ -422,9 +423,8 @@ class ResolutionTargetsMixin:
                     )
                     if entry.get("kind") == "permanent"
                 }
-        ids = getattr(holder, "target_permanent_id", None)
         for position, permanent_id in enumerate(
-            ids if isinstance(ids, (list, tuple)) else [ids]
+            target_ids(getattr(holder, "target_permanent_id", None))
         ):
             if not isinstance(permanent_id, int):
                 continue
@@ -1276,10 +1276,9 @@ class ResolutionTargetsMixin:
         modes = tuple(getattr(item, "chosen_modes", ()) or ())
 
         def live_ids(holder) -> list:
-            ids = getattr(holder, "target_permanent_id", None)
             return [
                 permanent_id
-                for permanent_id in (ids if isinstance(ids, (list, tuple)) else [ids])
+                for permanent_id in target_ids(getattr(holder, "target_permanent_id", None))
                 if isinstance(permanent_id, int) and not isinstance(permanent_id, bool)
                 and self.permanent_by_id(permanent_id) is not None
             ]
@@ -1347,9 +1346,8 @@ class ResolutionTargetsMixin:
             # are a list of one still has a scalar slot, and a handler that
             # reads only an ``int`` there (Swords to Plowshares) would read a
             # list as no slot at all and go scanning.
-            ids = holder.target_permanent_id
             slots = []
-            for permanent_id in (ids if isinstance(ids, (list, tuple)) else [ids]):
+            for permanent_id in target_ids(holder.target_permanent_id):
                 permanent = (
                     self.permanent_by_id(permanent_id)
                     if isinstance(permanent_id, int) else None
@@ -1359,7 +1357,7 @@ class ResolutionTargetsMixin:
                 )
             listed = isinstance(holder.target_permanent_index, (list, tuple))
             holder.target_permanent_index = (
-                slots if listed or len(slots) > 1 else slots[0]
+                slots if listed or len(slots) > 1 else (slots[0] if slots else None)
             )
             moved += 1
         return moved

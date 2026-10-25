@@ -378,11 +378,10 @@ def announced_slots(game: "Game", seat_player, index, ids):
             return None
         return game.battlefield_index_of(permanent)
 
-    if isinstance(ids, int) and not isinstance(ids, bool):
-        return slot_of(ids)
-    if not isinstance(ids, (list, tuple)) or not any(
-        isinstance(entry, int) for entry in ids
-    ):
+    from .game_types import target_ids
+
+    ids = target_ids(ids)
+    if not any(isinstance(entry, int) for entry in ids):
         return index
     listed = isinstance(index, (list, tuple))
     indices = list(index) if listed else [index]
