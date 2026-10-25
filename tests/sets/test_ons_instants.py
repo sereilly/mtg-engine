@@ -445,11 +445,13 @@ def test_w1g4_a_pump_with_no_type_to_name_pumps_nothing(set_pool):
 # ==== W1G5 ==========================================================
 # W1G5's tests go between this line and the "end W1G5" line.
 
-# --- W1G5: Trickery Charm, Standardize (CR 205.1a, CR 611.2c) ---------------
+# --- W1G5: Trickery Charm, Standardize (CR 205.1a, CR 611.2c) and
+# Artificial Evolution (CR 612, CR 613.1c) ---------------------------------
 from engine import Game as _W1G5Game
 from engine import PlayerState as _W1G5PlayerState
 from engine.layer_bridge import computed_types as _w1g5_computed_types
 from engine.models import Permanent as _W1G5Permanent
+from engine.text_changes import changed_words as _w1g5_changed_words
 from tests.helpers import resolve_stack as _w1g5_resolve_stack
 
 
@@ -553,6 +555,133 @@ def test_w1g5_standardize_sets_every_creature_on_the_battlefield(
     assert _w1g5_types(dreamer) == {"illusion"}
     assert _w1g5_types(king) == {"goblin"}
     assert _w1g5_types(their_bears) == {"bear"}
+
+
+
+def _w1g5_evolve(game, target, old, new):
+    """Seat 0 casts Artificial Evolution at *target* and names *old*, then
+    *new* — each asked as the spell resolves, one after the other."""
+    assert game.queue_from_hand(
+        0, "Artificial Evolution", target_permanent_ids=[target.permanent_id],
+    ).supported
+    game.resolve_top_of_stack(pause_for_choices=True)
+    assert [c.kind for c in game.pending_choices] == ["creature_type_choice"]
+    assert game.confirm_creature_type_choice(0, old)
+    assert [c.kind for c in game.pending_choices] == ["creature_type_choice"]
+    assert game.confirm_creature_type_choice(0, new)
+    _w1g5_resolve_stack(game)
+
+
+def test_w1g5_artificial_evolution_rewrites_a_lords_text_and_type_line(
+    set_pool, catalog_by_name,
+):
+    """"Change the text of target spell or permanent by replacing all instances
+    of one creature type with another." Elf to Goblin on Elvish Champion: its
+    "Other Elf creatures" now reads Goblin, so the opponent's Llanowar Elves
+    lose the +1/+1 and seat 0's Raging Goblin gets it with forestwalk; its type
+    line reads Goblin too (CR 612.1 — the ruling: "the text box and the type
+    line"); its name does not change (CR 612.2). Indefinite: cleanup leaves
+    it."""
+    game = _w1g5_table(set_pool, ["Artificial Evolution"])
+    champion = _w1g5_put(game, 1, catalog_by_name["Elvish Champion"])
+    elves = _w1g5_put(game, 1, catalog_by_name["Llanowar Elves"])
+    goblin = _w1g5_put(game, 0, catalog_by_name["Raging Goblin"])
+    assert (elves.effective_power, goblin.effective_power) == (2, 1)
+
+    _w1g5_evolve(game, champion, "elf", "goblin")
+
+    assert champion.effective_card.oracle_text.startswith(
+        "Other Goblin creatures get +1/+1 and have forestwalk."
+    )
+    assert _w1g5_types(champion) == {"goblin"}
+    assert (elves.effective_power, elves.effective_toughness) == (1, 1)
+    assert (goblin.effective_power, goblin.effective_toughness) == (2, 2)
+    assert game._has_keyword(goblin, "forestwalk")
+    assert champion.effective_card.name == "Elvish Champion"
+    assert {"from": "elf", "to": "goblin"} in _w1g5_changed_words(champion)
+    assert (
+        "Artificial Evolution changed elf to goblin in Elvish Champion's text"
+        in game.log
+    )
+    game.resolve_cleanup_step(0)
+    assert goblin.effective_power == 2
+
+
+def test_w1g5_artificial_evolution_refuses_wall_and_the_same_word(
+    set_pool, catalog_by_name,
+):
+    """"The new creature type can't be Wall." and the ruling "It can't change
+    a word to the same word": the second question refuses both with the
+    question still standing, and its own list offers neither."""
+    from web.prompts import PromptContext, render_prompts
+
+    game = _w1g5_table(set_pool, ["Artificial Evolution"])
+    champion = _w1g5_put(game, 1, catalog_by_name["Elvish Champion"])
+    assert game.queue_from_hand(
+        0, "Artificial Evolution", target_permanent_ids=[champion.permanent_id],
+    ).supported
+    game.resolve_top_of_stack(pause_for_choices=True)
+    assert game.confirm_creature_type_choice(0, "elf")
+    assert game.confirm_creature_type_choice(0, "wall") is False
+    assert game.confirm_creature_type_choice(0, "elf") is False
+    offered = render_prompts(PromptContext(
+        game=game, viewer_seat=0,
+        serialize_card=lambda card: {"name": getattr(card, "name", str(card))},
+        seat_type=lambda index: "human" if index in game.interactive_seats else "ai",
+    ))["creature_type_choice"]
+    assert "wall" not in offered["creature_types"]
+    assert "elf" not in offered["creature_types"]
+    assert _w1g5_types(champion) == {"elf"}
+    assert game.confirm_creature_type_choice(0, "zombie")
+    _w1g5_resolve_stack(game)
+    assert _w1g5_types(champion) == {"zombie"}
+
+
+def test_w1g5_a_creature_type_set_by_an_effect_beats_the_text_change(set_pool):
+    """The ruling: "If a creature's creature type has been changed by a spell
+    or ability, changing the card's text won't affect or alter the new
+    creature type." The Mistform's set is layer 4 and the text change layer 3
+    (CR 613.1c–d), so the set wins whichever came first: an Elf by its own
+    ability stays an Elf after its "Illusion" is rewritten Goblin, and once
+    cleanup ends the set it is the Goblin its text now says. A set made after
+    the text change wins the same way."""
+    game = _w1g5_table(set_pool, ["Artificial Evolution"])
+    dreamer = _w1g5_put(game, 0, set_pool("ONS")["Mistform Dreamer"])
+    assert game.activate_permanent_ability(0, "Mistform Dreamer").supported
+    assert game.confirm_creature_type_choice(0, "elf")
+    _w1g5_resolve_stack(game)
+
+    _w1g5_evolve(game, dreamer, "illusion", "goblin")
+    assert dreamer.effective_card.type_line == "Creature — Goblin"
+    assert _w1g5_types(dreamer) == {"elf"}
+    game.resolve_cleanup_step(0)
+    assert _w1g5_types(dreamer) == {"goblin"}
+
+    assert game.activate_permanent_ability(0, "Mistform Dreamer").supported
+    assert game.confirm_creature_type_choice(0, "wizard")
+    _w1g5_resolve_stack(game)
+    assert _w1g5_types(dreamer) == {"wizard"}
+
+
+def test_w1g5_artificial_evolution_for_a_seat_nobody_asks(set_pool, catalog_by_name):
+    """The defaults: the word replaced is the first creature type written on
+    the target (its type line), and its replacement the caster's own
+    commonest type that is neither Wall nor that word — so the opponent's
+    Elvish Champion becomes a lord of seat 0's Goblins."""
+    game = _w1g5_table(set_pool, ["Artificial Evolution"], interactive=())
+    champion = _w1g5_put(game, 1, catalog_by_name["Elvish Champion"])
+    kings = [_w1g5_put(game, 0, catalog_by_name["Goblin King"]) for _ in range(2)]
+    assert game.queue_from_hand(
+        0, "Artificial Evolution", target_permanent_ids=[champion.permanent_id],
+    ).supported
+    _w1g5_resolve_stack(game)
+    assert _w1g5_types(champion) == {"goblin"}
+    assert (
+        "Artificial Evolution changed elf to goblin in Elvish Champion's text"
+        in game.log
+    )
+    # Each King: 2/2, +1/+1 from the other King, +1/+1 from the Champion.
+    assert kings[0].effective_power == 4
 
 # ==== end W1G5 ======================================================
 

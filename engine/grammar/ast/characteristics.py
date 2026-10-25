@@ -360,11 +360,16 @@ class ChangeText:
     one ("…until end of turn"), and it needs the field rather than a separate
     node because what differs is when the record is dropped, not what the
     record says.
+
+    *excluded_new* is a printed "The new creature type can't be Wall."
+    (Artificial Evolution): words the replacement may not be. Empty for every
+    other card, whose node is unchanged.
     """
 
     subject: Recipient
     mode: str
     duration: Duration = field(default_factory=Duration)
+    excluded_new: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

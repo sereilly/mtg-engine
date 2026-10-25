@@ -618,6 +618,13 @@ def choose_creature_type(game: Game, instruction: OracleInstruction, context: Or
         str(word).strip().lower()
         for word in (instruction.payload.get("excluded") or ())
     )
+    # "It can't change a word to the same word." (Artificial Evolution's
+    # ruling.) The word an earlier step of this resolution recorded, named by
+    # its key, joins the printed exclusion — so the prompt cannot offer it and
+    # the resolver refuses it. Absent for every other card.
+    excluded_from = instruction.payload.get("excluded_from")
+    if excluded_from and context.results.get(str(excluded_from)):
+        excluded = excluded + (str(context.results[str(excluded_from)]).lower(),)
     # **Whose creatures the word should name is what the rest of the card does
     # with it** — "Creatures of the creature type of your choice get +0/+4"
     # (Defensive Maneuvers) wants the chooser's own most common type, where
@@ -644,6 +651,13 @@ def choose_creature_type(game: Game, instruction: OracleInstruction, context: Or
     default = best_creature_type(
         game, seat, side=side, zone=zone, excluded=excluded, ignoring=ignoring,
     )
+    if instruction.payload.get("written_on_target"):
+        # "…replacing all instances of **one creature type** …" (Artificial
+        # Evolution): the word to replace. Any creature type may be named, but
+        # the one a seat nobody asks names is the first written on the target —
+        # its type line before its rules text — the one word sure to change
+        # something; ``None`` when nothing is written there.
+        default = _first_creature_type_written_on_target(game, context, excluded)
     context.results[key] = default
     game.arm_creature_type_choice(
         seat, card_name=card_name, result_key=key, context=context,
@@ -663,6 +677,28 @@ def choose_creature_type(game: Game, instruction: OracleInstruction, context: Or
     ):
         game.log.append(f"{card_name}: chose {default or 'no creature type'}")
     return True, "resolved"
+
+
+def _first_creature_type_written_on_target(
+    game: Game, context: OracleExecutionContext, excluded: tuple[str, ...],
+) -> str | None:
+    """The first creature type written on the permanent this resolution
+    targeted (``text_changes.creature_types_written``, read off its current
+    text), skipping *excluded*; None with no such permanent or word."""
+    from ..text_changes import creature_types_written
+    from ._targets import resolve_target_permanent
+
+    target = resolve_target_permanent(
+        game, context, predicate=lambda perm: True,
+        fallback_on_invalid_choice=False,
+    )
+    if target is None:
+        return None
+    return next(
+        (word for word in creature_types_written(target.effective_card)
+         if word not in excluded),
+        None,
+    )
 
 
 def _best_creature_type_to_sweep(

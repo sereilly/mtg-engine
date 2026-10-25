@@ -187,7 +187,11 @@ def resolution_creature_type_preference(
       turn", the Mistforms; Mistform Mask) — ``"join"``: the chooser's own
       commonest type among its *other* creatures, the tribe its lords and
       chosen-type anthems pump, so the creature changing type does not vote
-      for the type it already has.
+      for the type it already has;
+    * the replacement word of a creature-type text change (Artificial
+      Evolution) — the chooser's own: the rewritten lord or type line is about
+      the chooser's tribe. (The word *replaced* is read off the target by its
+      own step, ``written_on_target``.)
 
     Everything else that reads the word (a destroy, a tap, a discard, a forced
     attack) is a hoser, which is the default and needs no row.
@@ -237,6 +241,10 @@ def resolution_creature_type_preference(
             and (instruction.payload or {}).get("subtype_from") in records
         ):
             found.add(("join", "battlefield"))
+        elif instruction.kind == "mark_text_modified" and (
+            instruction.payload or {}
+        ).get("new_type_from"):
+            found.add(("you", "battlefield"))
     return next(iter(found)) if len(found) == 1 else None
 
 
