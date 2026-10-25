@@ -27,6 +27,311 @@ log), not instruction kinds alone.
 # ==== W1G2 ==========================================================
 # W1G2's tests go between this line and the "end W1G2" line.
 
+# Face-down permanents acted on by a spell (CR 708): Backslide turns a creature
+# with a morph ability face down, Break Open turns an opponent's face-down
+# creature face up for free, and Spy Network looks at one player's hidden
+# objects — each driven through the cast path, picker included.
+
+import pytest as _w1g2_pytest
+
+from engine import Game as _W1G2Game, PlayerState as _W1G2PlayerState
+from engine import targeting as _w1g2_targeting
+from engine.card_loader import load_catalog as _w1g2_load_catalog
+from engine.copies import become_copy as _w1g2_become_copy
+from engine.face_down import (face_down_card as _w1g2_face_down_card,
+                              face_up_morph_cost as _w1g2_face_up_morph_cost,
+                              hidden_card_of as _w1g2_hidden_card_of,
+                              is_face_down as _w1g2_is_face_down)
+from engine.mana_payment import mana_cost_from_symbols as _w1g2_symbols
+from engine.models import Permanent as _W1G2Permanent
+from engine.oracle import compile_card_oracle as _w1g2_compile
+from engine.pt import add_plus1_counters as _w1g2_add_plus1
+from engine.special_actions import (
+    take_permanent_special_action as _w1g2_take_special_action)
+from tests.helpers import resolve_stack as _w1g2_resolve_stack
+
+_W1G2_CATALOG = {card.name: card for card in _w1g2_load_catalog()}
+
+
+def _w1g2_game(mine=(), theirs=(), hand=(), *, enforce=False):
+    p1 = _W1G2PlayerState(name="A", hand=list(hand), battlefield=list(mine),
+                          library=[_W1G2_CATALOG["Island"]] * 10)
+    p2 = _W1G2PlayerState(name="B", battlefield=list(theirs),
+                          library=[_W1G2_CATALOG["Island"]] * 10)
+    game = _W1G2Game(players=[p1, p2])
+    game.enforce_mana_costs = enforce
+    game.interactive_seats = set()
+    game.active_player_index = 0
+    game.current_turn_phase = game.current_step = "precombat_main"
+    game._sync_control()
+    game._recompute_continuous_effects()
+    return game, p1, p2
+
+
+def _w1g2_permanent(card, *, face_down=False):
+    permanent = _W1G2Permanent(card=_w1g2_face_down_card(card) if face_down else card)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    return permanent
+
+
+def _w1g2_turn_up_for(game, seat, permanent, cost):
+    """CR 702.37e with *cost* in the pool and nothing else."""
+    pool = game.players[seat].mana_pool
+    for symbol, count in _w1g2_symbols(cost).items():
+        key = "C" if symbol == "generic" else symbol
+        pool[key] = pool.get(key, 0) + count
+    game.priority_player_index = seat
+    refusal = _w1g2_take_special_action(game, seat, permanent, "turn_face_up")
+    assert refusal is None, refusal
+    assert sum(pool.values()) == 0
+
+
+def _w1g2_cast_offers(game, seat, card):
+    """What the cast picker offers *card*, as ``(seat, battlefield index)``."""
+    spec = _w1g2_targeting.derive_cast_spec(card, _w1g2_compile(card))
+    assert spec is not None, card.name
+    return [
+        (entry["seat"], entry["index"])
+        for entry in game._enumerate_targets(seat, card, spec, for_cast=True)
+    ]
+
+
+# --- Backslide -------------------------------------------------------------
+
+
+def test_w1g2_backslide_turns_a_morph_creature_face_down_and_it_keeps_its_state(set_pool):
+    """"Turn target creature with a morph ability face down." The opponent's
+    face-up Exalted Angel, tapped, with a +1/+1 counter and 1 damage, becomes
+    the face-down 2/2 (CR 708.2a) — the same permanent with all of it still
+    on (a 3/3 with 1 damage, tapped) — and its controller turns it face up
+    again for its morph cost {2}{W}{W} (CR 702.37e)."""
+    ons = set_pool("ONS")
+    angel = _w1g2_permanent(ons["Exalted Angel"])
+    angel.tapped = True
+    _w1g2_add_plus1(angel, 1)
+    angel.damage_marked = 1
+    game, _p1, _p2 = _w1g2_game(theirs=[angel], hand=[ons["Backslide"]])
+    identity = angel.permanent_id
+    result = game.queue_from_hand(
+        0, "Backslide", target_player_index=1, target_permanent_ids=[angel.permanent_id],
+    )
+    assert result.supported, result.details
+    _w1g2_resolve_stack(game)
+    game.check_state_based_actions()
+    assert _w1g2_is_face_down(angel) and angel.permanent_id == identity
+    assert (angel.effective_power, angel.effective_toughness) == (3, 3)
+    assert angel.tapped and angel.damage_marked == 1 and game.is_on_battlefield(angel)
+    assert not angel.has_keyword("flying")
+    assert _w1g2_hidden_card_of(angel) is ons["Exalted Angel"]
+
+    _w1g2_turn_up_for(game, 1, angel, "{2}{W}{W}")
+    assert angel.card is ons["Exalted Angel"] and angel.has_keyword("flying")
+    assert (angel.effective_power, angel.effective_toughness) == (5, 6)
+
+
+def test_w1g2_backslide_kills_a_turned_down_creature_its_damage_now_exceeds(set_pool):
+    """Damage stays on the permanent (CR 708.8's same object), so a 5/5
+    Skittish Valesk with 3 damage on it is a 2/2 with 3 damage once face down
+    — and dies to CR 704.5g; it goes to the graveyard as the card it is
+    (CR 708.9)."""
+    ons = set_pool("ONS")
+    valesk = _w1g2_permanent(ons["Skittish Valesk"])
+    valesk.damage_marked = 3
+    game, _p1, p2 = _w1g2_game(theirs=[valesk], hand=[ons["Backslide"]])
+    assert game.queue_from_hand(
+        0, "Backslide", target_player_index=1, target_permanent_ids=[valesk.permanent_id],
+    ).supported
+    _w1g2_resolve_stack(game)
+    game.check_state_based_actions()
+    assert not game.is_on_battlefield(valesk)
+    assert [c.name for c in p2.graveyard] == ["Skittish Valesk"]
+
+
+def test_w1g2_backslide_is_refused_at_a_creature_without_morph_or_already_face_down(set_pool):
+    """The picker offers the morph creature and nothing else: a Grizzly Bears
+    has no morph ability, and a face-down creature has no text and so none
+    either (CR 708.2a — which is CR 708.2b's "can't be turned face down"
+    reached at announcement). Either named, the cast is refused before any
+    mana is spent (CR 601.2c)."""
+    ons = set_pool("ONS")
+    angel = _w1g2_permanent(ons["Exalted Angel"])
+    bears = _w1g2_permanent(_W1G2_CATALOG["Grizzly Bears"])
+    hidden = _w1g2_permanent(ons["Krosan Colossus"], face_down=True)
+    game, p1, _p2 = _w1g2_game(theirs=[angel, bears, hidden], hand=[ons["Backslide"]],
+                               enforce=True)
+    assert _w1g2_cast_offers(game, 0, ons["Backslide"]) == [(1, 0)]
+    p1.mana_pool.update({"U": 1, "C": 1})
+    for refused in (bears, hidden):
+        result = game.queue_from_hand(
+            0, "Backslide", target_player_index=1,
+            target_permanent_ids=[refused.permanent_id],
+        )
+        assert not result.supported
+        assert [c.name for c in p1.hand] == ["Backslide"]
+        assert sum(p1.mana_pool.values()) == 2, "nothing paid for a refused cast"
+
+
+def test_w1g2_backslide_on_a_clone_of_a_morph_creature(set_pool):
+    """A face-up Clone copying a morph creature has the morph ability it
+    copied (CR 707.2: copiable values include the text), so Backslide may
+    turn it face down; face down it is a 2/2 like any other (CR 708.10); and
+    because face up it *would* have a morph cost — its copiable values become
+    the copied ones again (CR 708.10's last sentence) — it is turned face up
+    for the copied cost (CR 702.37e: "what the permanent's morph cost would be
+    if it were face up"), as the Exalted Angel it copied."""
+    ons = set_pool("ONS")
+    angel = _w1g2_permanent(ons["Exalted Angel"])
+    clone = _w1g2_permanent(_W1G2_CATALOG["Clone"])
+    # Copied before the board is built: a bare Clone is a 0/0.
+    _w1g2_become_copy(clone, angel)
+    game, _p1, _p2 = _w1g2_game(theirs=[angel, clone], hand=[ons["Backslide"]])
+    assert clone.effective_card.name == "Exalted Angel"
+    assert (1, 1) in _w1g2_cast_offers(game, 0, ons["Backslide"])
+    assert game.queue_from_hand(
+        0, "Backslide", target_player_index=1, target_permanent_ids=[clone.permanent_id],
+    ).supported
+    _w1g2_resolve_stack(game)
+    assert _w1g2_is_face_down(clone)
+    assert (clone.effective_power, clone.effective_toughness) == (2, 2)
+    assert clone.effective_card.name != "Exalted Angel"
+    assert _w1g2_face_up_morph_cost(clone) == "{2}{W}{W}"
+
+    _w1g2_turn_up_for(game, 1, clone, "{2}{W}{W}")
+    assert not _w1g2_is_face_down(clone)
+    assert clone.effective_card.name == "Exalted Angel" and clone.has_keyword("flying")
+
+
+# --- Break Open ------------------------------------------------------------
+
+
+def test_w1g2_break_open_turns_an_opponents_face_down_creature_up_for_free(set_pool):
+    """"Turn target face-down creature an opponent controls face up." Its
+    2004-10-04 ruling: "The player does not have to pay the Morph cost (if
+    any) of the creature." The face-down Krosan Colossus is a 9/9 for the
+    Break Open's {1}{R}; the reveal is public."""
+    ons = set_pool("ONS")
+    colossus = _w1g2_permanent(ons["Krosan Colossus"], face_down=True)
+    game, p1, p2 = _w1g2_game(theirs=[colossus], hand=[ons["Break Open"]], enforce=True)
+    p1.mana_pool.update({"R": 1, "C": 1})
+    result = game.queue_from_hand(
+        0, "Break Open", target_player_index=1, target_permanent_ids=[colossus.permanent_id],
+    )
+    assert result.supported, result.details
+    _w1g2_resolve_stack(game)
+    assert sum(p1.mana_pool.values()) == 0 and sum(p2.mana_pool.values()) == 0
+    assert not _w1g2_is_face_down(colossus)
+    assert (colossus.effective_power, colossus.effective_toughness) == (9, 9)
+    assert any("it is Krosan Colossus (Break Open)" in line for line in game.log)
+
+
+def test_w1g2_break_open_offers_only_an_opponents_face_down_creature(set_pool):
+    """The picker holds every word: not the caster's own face-down creature
+    ("an opponent controls"), not a face-up one ("face-down"). Named, both are
+    refused at announcement (CR 601.2c)."""
+    ons = set_pool("ONS")
+    theirs_down = _w1g2_permanent(ons["Exalted Angel"], face_down=True)
+    theirs_up = _w1g2_permanent(_W1G2_CATALOG["Grizzly Bears"])
+    mine_down = _w1g2_permanent(ons["Krosan Colossus"], face_down=True)
+    game, p1, _p2 = _w1g2_game([mine_down], [theirs_down, theirs_up],
+                               hand=[ons["Break Open"]])
+    assert _w1g2_cast_offers(game, 0, ons["Break Open"]) == [(1, 0)]
+    for seat, refused in ((0, mine_down), (1, theirs_up)):
+        result = game.queue_from_hand(
+            0, "Break Open", target_player_index=seat,
+            target_permanent_ids=[refused.permanent_id],
+        )
+        assert not result.supported
+    assert _w1g2_is_face_down(mine_down) and [c.name for c in p1.hand] == ["Break Open"]
+
+
+def test_w1g2_break_open_does_nothing_to_a_creature_already_turned_up_in_response(set_pool):
+    """The target is turned face up for its morph cost before Break Open
+    resolves: it is no longer a face-down creature (CR 608.2b), so the spell
+    does nothing — no second "turned face up" and no error."""
+    ons = set_pool("ONS")
+    angel = _w1g2_permanent(ons["Exalted Angel"], face_down=True)
+    game, _p1, _p2 = _w1g2_game(theirs=[angel], hand=[ons["Break Open"]])
+    assert game.queue_from_hand(
+        0, "Break Open", target_player_index=1, target_permanent_ids=[angel.permanent_id],
+    ).supported
+    assert len(game.stack) == 1
+    _w1g2_turn_up_for(game, 1, angel, "{2}{W}{W}")
+    turned = sum("turned a face-down creature face up" in line for line in game.log)
+    _w1g2_resolve_stack(game)
+    assert sum("turned a face-down creature face up" in line for line in game.log) == turned
+    assert angel.card is ons["Exalted Angel"]
+
+
+# --- Spy Network -----------------------------------------------------------
+
+
+def test_w1g2_spy_network_looks_at_one_players_hidden_cards_then_orders_your_top_four(set_pool):
+    """"Look at target player's hand, the top card of that player's library,
+    and any face-down creatures they control. Look at the top four cards of
+    your library, then put them back in any order." Every look is a prompt
+    owed by the caster alone, in printed order, and the log names none of what
+    was seen; the last answer rearranges the caster's own top four."""
+    ons = set_pool("ONS")
+    colossus = _w1g2_permanent(ons["Krosan Colossus"], face_down=True)
+    angel = _w1g2_permanent(ons["Exalted Angel"], face_down=True)
+    bears = _w1g2_permanent(_W1G2_CATALOG["Grizzly Bears"])
+    game, p1, p2 = _w1g2_game(theirs=[colossus, angel, bears], hand=[ons["Spy Network"]])
+    game.interactive_seats = {0}
+    p2.hand[:] = [_W1G2_CATALOG["Lightning Bolt"], _W1G2_CATALOG["Shock"]]
+    p2.library[:] = [_W1G2_CATALOG["Forest"]] + [_W1G2_CATALOG["Island"]] * 4
+    mine = ["Swamp", "Plains", "Mountain", "Forest"]
+    p1.library[:] = [_W1G2_CATALOG[name] for name in mine] + [_W1G2_CATALOG["Island"]]
+
+    result = game.queue_from_hand(0, "Spy Network", target_player_index=1)
+    assert result.supported, result.details
+    game.resolve_top_of_stack()
+    assert game.pending_choice_of("hand_reveal", 0).data["card_names"] == [
+        "Lightning Bolt", "Shock",
+    ]
+    peek = game.pending_choice_of("reorder_library", 0)
+    assert peek.data["target_index"] == 1 and peek.data["top_count"] == 1
+    assert not peek.data["may_reorder"]
+    assert game.resolve_pending_choice("reorder_library", 0, new_order=[0], shuffle=False)
+
+    look = game.pending_choice_of("face_down_look", 0)
+    assert look is not None and look.data["permanent_ids"] == [
+        colossus.permanent_id, angel.permanent_id,
+    ]
+    assert game.pending_choice_of("face_down_look", 1) is None
+    own = game.pending_choice_of("reorder_library", 0)
+    assert own.data["target_index"] == 0 and own.data["top_count"] == 4
+    assert game.resolve_pending_choice("reorder_library", 0, new_order=[3, 2, 1, 0], shuffle=False)
+    assert [c.name for c in p1.library[:4]] == list(reversed(mine))
+    assert _w1g2_is_face_down(colossus) and _w1g2_is_face_down(angel)
+    for secret in ("Krosan Colossus", "Exalted Angel", "Lightning Bolt", "Forest"):
+        assert not any(secret in line for line in game.log), secret
+    game.dismiss_face_down_look(0)
+    game.dismiss_hand_reveal(0)
+    _w1g2_resolve_stack(game)
+    assert [c.name for c in p1.graveyard] == ["Spy Network"]
+
+
+def test_w1g2_spy_network_on_a_player_with_no_face_down_creature(set_pool):
+    """"Any face-down creatures" admits none: the look over an empty set
+    shows nothing and arms nothing, and the spell resolves."""
+    ons = set_pool("ONS")
+    game, p1, _p2 = _w1g2_game(theirs=[_w1g2_permanent(_W1G2_CATALOG["Grizzly Bears"])],
+                               hand=[ons["Spy Network"]])
+    assert game.queue_from_hand(0, "Spy Network", target_player_index=1).supported
+    _w1g2_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    _w1g2_resolve_stack(game)
+    assert any("controls no face-down creatures" in line for line in game.log)
+    assert [c.name for c in p1.graveyard] == ["Spy Network"]
+
+
+@_w1g2_pytest.mark.parametrize("name", ["Backslide", "Break Open", "Spy Network"])
+def test_w1g2_the_face_down_instants_compile_whole(set_pool, name):
+    """Each spell line is an instruction (Backslide compiled 'supported' on its
+    cycling line alone before this, and did nothing when cast)."""
+    program = _w1g2_compile(set_pool("ONS")[name])
+    assert program.supported and program.instructions, (name, program.reason)
+
 # ==== end W1G2 ======================================================
 
 

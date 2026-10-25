@@ -27,6 +27,87 @@ log), not instruction kinds alone.
 # ==== W1G2 ==========================================================
 # W1G2's tests go between this line and the "end W1G2" line.
 
+# Dream Chisel — a cost reduction for face-down creature spells (CR 601.2f,
+# CR 708.4: an object cast face down is turned face down before it is put on
+# the stack, so the reduction sees the face-down 2/2).
+
+from engine import Game as _W1G2Game, PlayerState as _W1G2PlayerState
+from engine.card_loader import load_catalog as _w1g2_load_catalog
+from engine.face_down import is_face_down as _w1g2_is_face_down
+from engine.models import Permanent as _W1G2Permanent
+from engine.oracle import compile_card_oracle as _w1g2_compile
+from tests.helpers import resolve_stack as _w1g2_resolve_stack
+
+_W1G2_CATALOG = {card.name: card for card in _w1g2_load_catalog()}
+
+
+def _w1g2_table(mine=(), theirs=(), hand=()):
+    p1 = _W1G2PlayerState(name="A", hand=list(hand), battlefield=list(mine),
+                          library=[_W1G2_CATALOG["Island"]] * 10)
+    p2 = _W1G2PlayerState(name="B", battlefield=list(theirs),
+                          library=[_W1G2_CATALOG["Island"]] * 10)
+    game = _W1G2Game(players=[p1, p2])
+    game.enforce_mana_costs = True
+    game.interactive_seats = set()
+    game.active_player_index = 0
+    game.current_turn_phase = game.current_step = "precombat_main"
+    game._sync_control()
+    return game, p1, p2
+
+
+def _w1g2_morph_price(game, seat, card):
+    """What the picker, the AI and ``payable`` price a morph cast at."""
+    (morph,) = game.applicable_alternative_costs(seat, card)
+    owed = game.alternative_cost_mana(seat, card, morph)
+    return sum(owed.values())
+
+
+def test_w1g2_dream_chisel_makes_a_morph_cast_cost_two(set_pool):
+    """"Face-down creature spells you cast cost {1} less to cast." Exalted
+    Angel cast face down for {3} − {1}: two colourless mana pay for it, and
+    every reader that prices the cast says {2}."""
+    ons = set_pool("ONS")
+    assert _w1g2_compile(ons["Dream Chisel"]).supported
+    chisel = _W1G2Permanent(card=ons["Dream Chisel"])
+    game, p1, _p2 = _w1g2_table([chisel], hand=[ons["Exalted Angel"]])
+    assert _w1g2_morph_price(game, 0, ons["Exalted Angel"]) == 2
+    p1.mana_pool.update({"C": 2})
+    result = game.queue_from_hand(0, "Exalted Angel", alternative_cost=True)
+    assert result.supported, result.details
+    _w1g2_resolve_stack(game)
+    assert sum(p1.mana_pool.values()) == 0
+    (_chisel, angel) = p1.battlefield
+    assert _w1g2_is_face_down(angel)
+    assert any("costs less to cast (Dream Chisel)" in line for line in game.log)
+
+
+def test_w1g2_two_dream_chisels_and_an_opponents(set_pool):
+    """Two of yours reduce a morph cast to {1} (CR 601.2f adds every
+    reduction); the opponent's does nothing for you ("you cast")."""
+    ons = set_pool("ONS")
+    mine = [_W1G2Permanent(card=ons["Dream Chisel"]) for _ in range(2)]
+    theirs = [_W1G2Permanent(card=ons["Dream Chisel"])]
+    game, p1, _p2 = _w1g2_table(mine, theirs, hand=[ons["Exalted Angel"]])
+    assert _w1g2_morph_price(game, 0, ons["Exalted Angel"]) == 1
+    p1.mana_pool.update({"C": 1})
+    assert game.queue_from_hand(0, "Exalted Angel", alternative_cost=True).supported
+    assert sum(p1.mana_pool.values()) == 0
+
+
+def test_w1g2_dream_chisel_does_nothing_for_a_face_up_creature_spell(set_pool):
+    """A creature spell cast face up is no face-down creature spell: a
+    Grizzly Bears still costs {1}{G}, and the morph card cast for its mana cost
+    pays all of it."""
+    ons = set_pool("ONS")
+    chisel = _W1G2Permanent(card=ons["Dream Chisel"])
+    game, p1, _p2 = _w1g2_table([chisel], hand=[_W1G2_CATALOG["Grizzly Bears"]])
+    p1.mana_pool.update({"G": 1})
+    refused = game.queue_from_hand(0, "Grizzly Bears")
+    assert not refused.supported and [c.name for c in p1.hand] == ["Grizzly Bears"]
+    p1.mana_pool.update({"C": 1})
+    assert game.queue_from_hand(0, "Grizzly Bears").supported
+    assert sum(p1.mana_pool.values()) == 0
+
 # ==== end W1G2 ======================================================
 
 
