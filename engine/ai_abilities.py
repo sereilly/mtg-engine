@@ -736,13 +736,43 @@ def _activation_candidate(
         ability_index=ability_index,
         chosen_keyword=chosen_keyword,
     )
-    if ability_index is not None:
+    if ability_index is not None or _sets_only_what_its_source_is(
+        ability.instruction
+    ):
         # A land's ability: proposed only where carrying it out on a copy of
-        # the game leaves the seat ahead once the turn is over.
+        # the game leaves the seat ahead once the turn is over. …and an ability
+        # whose whole effect is what its own source is until end of turn (a
+        # Mistform's "becomes the creature type of your choice"), which the
+        # flat score above prices like any other: the seat paid {1} every main
+        # phase for a type nothing on the board asks about, and — with no type
+        # of its own worth naming — for no change at all.
         worth = _land_ability_worth(game, player_index, candidate)
         if worth is None:
             return None
     return candidate
+
+
+#: What an ability that only changes what its own source — or the creature
+#: its Aura enchants — **is** until end of turn compiles to: "{1}: This
+#: creature becomes the creature type of your choice until end of turn" (the
+#: Mistforms), "{1}: Enchanted creature becomes …" (Mistform Mask), with the
+#: choosing step in front. Read off the compiled program, so it names no card.
+_OWN_TYPE_SET_KINDS = frozenset({
+    "set_self_creature_type", "set_enchanted_creature_type",
+})
+
+
+def _sets_only_what_its_source_is(instruction) -> bool:
+    """Whether *instruction* is a type set on its source or host and nothing
+    else (:data:`_OWN_TYPE_SET_KINDS`, behind any ``choose_creature_type``)."""
+    steps = (
+        tuple(instruction.payload.get("steps") or ())
+        if instruction.kind == "sequence" else (instruction,)
+    )
+    kinds = {step.kind for step in steps}
+    return bool(kinds & _OWN_TYPE_SET_KINDS) and kinds <= (
+        _OWN_TYPE_SET_KINDS | {"choose_creature_type"}
+    )
 
 
 def _rehearse_activation(

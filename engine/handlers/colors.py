@@ -78,10 +78,16 @@ def mark_text_modified(game: Game, instruction: OracleInstruction, context: Orac
     ):
         game.log.append(f"{card.name}: no legal permanent to change the text of")
         return True, "resolved"
-    if target_perm is not None:
+    mode = instruction.payload.get("mode")
+    # Every mode but the creature-type one marks the target as soon as it is
+    # found, whatever the change then records (the LEA tests read the mark).
+    # A creature-type change marks it only when it records one: the mark is a
+    # field of the permanent, so a change that recorded nothing read as a
+    # change to the AI's rehearsal (``ai_rehearsal.position_digest``) and was
+    # cast for no effect.
+    if target_perm is not None and mode != "creature_type":
         target_perm.metadata["text_modified"] = True
 
-    mode = instruction.payload.get("mode")
     new_symbol = (context.choices.get("new_color") or "").upper()
     old_symbol = (context.choices.get("old_color") or "").upper()
     # "…**until end of turn**." (Whim of Volrath.) Absent for every card printed
@@ -211,6 +217,7 @@ def _change_creature_type_word(
             f"{target_perm.card.name}'s text is unchanged"
         )
         return
+    target_perm.metadata["text_modified"] = True
     game.log.append(
         f"{card.name} changed {old} to {new} in {target_perm.card.name}'s text"
     )
