@@ -107,7 +107,7 @@ def _priced_mana_source(
     from .activation_restrictions import prints_activation_restriction
     from .mana_payment import carries_an_offer
     from .mana_payment import is_mana_ability as is_cr_mana_ability
-    from .mixins.turn_management import is_tap_alone_mana_ability
+    from .mixins.land_mana_taps import is_tap_alone_mana_ability
     from .spell_prohibitions import permanent_activations_forbidden
 
     if permanent is None or permanent.tapped:
@@ -192,7 +192,7 @@ def _sacrifices_only_itself(cost) -> bool:
     permanent.
 
     Compared against a default cost rather than by listing what must be empty,
-    for `turn_management._is_free_beyond_tapping`'s reason: a list would start
+    for `land_mana_taps._is_free_beyond_tapping`'s reason: a list would start
     ignoring any cost component added later, and ignoring one here is the AI
     paying a price it never weighed.
     """
@@ -264,7 +264,7 @@ def _nonland_mana_source(
     from .activation_restrictions import prints_activation_restriction
     from .mana_could_produce import ability_colors_on_offer
     from .mana_payment import carries_an_offer
-    from .mixins.turn_management import is_tap_alone_mana_ability
+    from .mixins.land_mana_taps import is_tap_alone_mana_ability
     from .spell_prohibitions import permanent_activations_forbidden
 
     if permanent is None:
@@ -484,7 +484,7 @@ def _tap_alone_land_symbols(game: Game, land: Permanent) -> set[str]:
     """Every symbol one of *land*'s tap-alone mana abilities makes — the
     abilities the tap seam runs (`ai_payment.planned_tap_ability` picks among them), and
     none it refuses (`land_mana_tap_refusal`)."""
-    from .mixins.turn_management import is_tap_alone_mana_ability
+    from .mixins.land_mana_taps import is_tap_alone_mana_ability
 
     found: set[str] = set()
     usable = usable_activated_abilities(compile_card_oracle(game.playable_card_of(land)))

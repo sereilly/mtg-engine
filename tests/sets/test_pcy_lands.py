@@ -35,7 +35,7 @@ from engine.ai_payment import _plan_land_taps as _w3g1_ai_tap_plan
 from engine.mana_payment import plan_payment as _w3g1_plan_payment
 from engine.mana_payment import untapped_mana_lands as _w3g1_payment_lands
 from engine.mana_payment import is_mana_ability as _w3g1_is_mana_ability
-from engine.mixins.turn_management import (
+from engine.mixins.land_mana_taps import (
     is_tap_alone_mana_ability as _w3g1_seam_runs,
 )
 from engine.models import Permanent as _W3G1Permanent

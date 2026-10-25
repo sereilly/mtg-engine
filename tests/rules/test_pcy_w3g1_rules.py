@@ -27,7 +27,7 @@ import pytest
 
 from engine import Game, PlayerState
 from engine.mana_payment import is_mana_ability, taps_for_payment, untapped_mana_lands
-from engine.mixins.turn_management import is_tap_alone_mana_ability
+from engine.mixins.land_mana_taps import is_tap_alone_mana_ability
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from tests.helpers import _mk_card

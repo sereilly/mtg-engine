@@ -1223,7 +1223,7 @@ class PlayerState:
     attacked_this_turn: bool = False
     # Whether this seat tapped a land for mana this turn (CR 106.4 /
     # CR 701.26a's event, announced by the one tap seam in
-    # `mixins/turn_management.py`). Beside `attacked_this_turn` above and for
+    # `mixins/land_tapped_for_mana.py`). Beside `attacked_this_turn` above and for
     # exactly its reason: Desolation's "each player who tapped a land for mana
     # this turn" is a fact about the *seat*, and reading it off the board would
     # forget a land that has since untapped, left, or been tapped again for

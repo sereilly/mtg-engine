@@ -35,7 +35,7 @@ from engine.ai_policy import choose_cast_action
 from engine.card_loader import load_cards, manifest_set_path, manifest_set_paths
 from engine.faces import compilation_units
 from engine.mana_payment import is_mana_ability
-from engine.mixins.turn_management import is_tap_alone_mana_ability
+from engine.mixins.land_mana_taps import is_tap_alone_mana_ability
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.targeting import usable_activated_abilities

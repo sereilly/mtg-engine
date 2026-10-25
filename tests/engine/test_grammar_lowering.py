@@ -2669,7 +2669,7 @@ def test_every_executed_upkeep_trigger_lands_on_a_pair_something_dispatches(cata
 # reported Storm Cauldron and Winter's Night — both verified working — as
 # undispatched at Alliances' promotion gate. A guard that re-spells the thing it
 # checks invents the disagreement it then reports.
-from engine.mixins.turn_management import (
+from engine.mixins.land_tapped_for_mana import (
     TAP_TRIGGER_KINDS as _LAND_TAPPED_FIRE_SITE_KINDS,
     _tap_trigger_steps,
 )

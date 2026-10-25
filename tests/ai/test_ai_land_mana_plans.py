@@ -29,7 +29,7 @@ from engine.ai_payment import _plan_land_taps
 from engine.ai_policy import choose_land_drop
 from engine.ai_valuation import entry_sacrifice_is_unavoidable
 from engine.card_loader import manifest_set_paths
-from engine.mixins.turn_management import is_tap_alone_mana_ability
+from engine.mixins.land_mana_taps import is_tap_alone_mana_ability
 from engine.models import Permanent
 from engine.oracle import compiled_units
 

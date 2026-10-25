@@ -302,8 +302,8 @@ class AddManaForTappedLand:
     #: makes a triggered mana ability resolve without using the stack, inside
     #: the cost payment that tapped the land — there is no priority window in
     #: which a prompt could be answered, so the offer is recorded here and the
-    #: dispatcher takes it (`engine/mixins/turn_management.py` says why that is
-    #: safe in this engine).
+    #: dispatcher takes it (`engine/mixins/land_tapped_for_mana.py` says why
+    #: that is safe in this engine).
     optional: bool = False
     #: "**If that Island is snow**, its controller may add an additional
     #: {U}{U} **instead**." (Snowfall.) The supertype the *tapped land* must

@@ -125,7 +125,7 @@ def _seam_abilities(game: "Game", land: "Permanent") -> list:
     """The instructions the tap seam would run for *land*, one per mana
     ability a tap alone pays for — ``None`` standing for the printed-summary
     path a basic or a dual takes."""
-    from .mixins.turn_management import is_tap_alone_mana_ability
+    from .mixins.land_mana_taps import is_tap_alone_mana_ability
 
     found: list = []
     if game.land_mana_tap_refusal(land) is None:
@@ -375,7 +375,7 @@ def source_tap_yields(
     fallback, and a non-land source has no seam.
     """
     from .activation_prohibitions import activation_prohibition
-    from .mixins.turn_management import is_tap_alone_mana_ability
+    from .mixins.land_mana_taps import is_tap_alone_mana_ability
 
     if permanent.tapped or permanent.has_type("land"):
         return []
@@ -482,7 +482,7 @@ def tap_alone_symbols(game: "Game", land: "Permanent") -> "tuple[str, ...] | Non
     then the rest in WUBRG-then-colourless order, then the mana of a basic
     land type the land *gained* (CR 305.7).
     """
-    from .mixins.turn_management import is_tap_alone_mana_ability
+    from .mixins.land_mana_taps import is_tap_alone_mana_ability
 
     free, _priced = game._land_mana_abilities(land)
     if free is None:

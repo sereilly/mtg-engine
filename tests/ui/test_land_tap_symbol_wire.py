@@ -19,7 +19,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from engine.card_loader import load_catalog
-from engine.mixins.turn_management import is_tap_alone_mana_ability
+from engine.mixins.land_mana_taps import is_tap_alone_mana_ability
 from engine.models import Permanent
 from web.app import app, store
 
