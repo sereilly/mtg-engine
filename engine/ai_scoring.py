@@ -58,6 +58,7 @@ from .cast_costs import additional_costs, cast_announces_x
 from .classifier import classify_card
 from .faces import castable_faces
 from .game import Game
+from .late_modules import LateModules
 from .models import CardDefinition, Permanent, PlayerState
 from .oracle import OracleInstruction, compile_card_oracle
 from .search_filters import search_matches
@@ -81,6 +82,10 @@ from .ai_actions import (
     _cast_spec,
     _announces_any_offer,
 )
+
+# ``ai_targets`` imports this module, so its role chooser is reached late
+# (``engine/late_modules.py``) rather than by an import that would be a cycle.
+_late = LateModules(__package__)
 
 
 def choose_attack_target(game: Game, player_index: int) -> int:
@@ -164,9 +169,11 @@ def _announcement(
     permanent_index: "int | list[int] | None" = None,
     permanent_ids: "list[int] | None" = None,
     x_value: int | None = None,
+    stack_index: int | None = None,
 ) -> dict:
     """What a cast of the candidate being built announces when it names
-    *target* (and the permanent given), in `cast_announcement`'s own shape —
+    *target* (and the permanent given — and the spell, *stack_index*, for a
+    stack role), in `cast_announcement`'s own shape —
     so a rehearsal of a half-built candidate and of the finished `CastAction`
     are one question asked once.
 
@@ -188,6 +195,7 @@ def _announcement(
         hand_index=0,
         target_permanent_index=permanent_index,
         target_permanent_ids=permanent_ids,
+        target_stack_index=stack_index,
         optional_cost_payments=(
             dict(offers) if _announces_any_offer(card, offers) else None
         ),
@@ -717,7 +725,9 @@ def _score_spell_target(
     the standing's own units.
 
     A seat-only announcement — the engine picks the object for a spell that
-    names one, as it does for any cast that names none. A cast the engine
+    names one, as it does for any cast that names none — except for a spell
+    that names **roles**, which is announced with the cast path's own chain
+    (below). A cast the engine
     refuses there scores far below any it accepts, and one that changes
     nothing scores nothing.
 
@@ -731,10 +741,33 @@ def _score_spell_target(
         # A permanent: the seat is its own controller's unless an entry
         # trigger says otherwise, which the caller has already read.
         return 1.0 if target_index == caster_index else 0.0
-    rehearsal = _rehearse_announcement(
-        game, caster_index, card,
-        _announcement(card, target=target_index, caster=caster_index, x_value=x_value),
+    announcement = _announcement(
+        card, target=target_index, caster=caster_index, x_value=x_value,
     )
+    # **A roles spell is announced with its roles.** "Target player gains
+    # control of target permanent you control" (Donate), "…target creature
+    # and target land" (Fumarole): the engine fills no role a cast leaves
+    # unnamed (``engine/bare_announcements.py`` refuses a role announcement
+    # rather than default it, CR 601.2c), so the seat-only announcement above
+    # was refused for every one of them and each scored -SWING_CAP wherever it
+    # was weighed in the abstract — a library search, a scry, the top of a
+    # library — whatever it would have done. The chain is the cast path's own
+    # (``ai_targets._choose_role_targets``, the one ``ai_casts`` announces),
+    # so the cast weighed is the cast the seat would make. With no chain on
+    # this board (``()``) the seat-only announcement stands, and is refused
+    # as the cast would be. Not asked inside a rehearsal, where no rehearsal
+    # is run (``_rehearse_announcement``) and the chain would be wasted.
+    roles = (
+        None if rehearsing()
+        else _late.ai_targets._choose_role_targets(game, caster_index, card)
+    )
+    if roles:
+        seat, indices, ids, stack_index = roles
+        announcement = _announcement(
+            card, target=seat, caster=caster_index, permanent_index=indices,
+            permanent_ids=ids, x_value=x_value, stack_index=stack_index,
+        )
+    rehearsal = _rehearse_announcement(game, caster_index, card, announcement)
     if rehearsal is None:
         return 0.0
     if not rehearsal.accepted:
