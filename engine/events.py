@@ -425,6 +425,7 @@ def trigger_subject_matches(
     *,
     observer: int | None,
     source: Permanent | None = None,
+    subject_seat: int | None = None,
 ) -> bool:
     """Whether *obj* is in the set *trig*'s condition names under ``<key>_filter``.
 
@@ -441,6 +442,16 @@ def trigger_subject_matches(
     ``<key>_includes_source``: the source answers by identity (CR 201.5: text
     naming the object it is on means that object, whatever its types now are)
     and every other object by the phrase, which keeps its "another".
+
+    *subject_seat* is the seat that controlled *obj* as the event happened, for
+    a fire site whose subject may already be off the battlefield — a death
+    (CR 603.10a looks back in time). "Whenever an artifact **you control** is
+    put into a graveyard from the battlefield" (Tablet of Epityr) asked the
+    control seam of an artifact a Shatter had already removed, which answers
+    no seat at all, so the Tablet never saw a single artifact destroyed or
+    sacrificed — only the ones a sweep announced before removing. The relative
+    seat words ("you", "an opponent", "you don't control") are answered against
+    it and the rest of the phrase by the shared matcher.
     """
     if (
         obj is not None
@@ -449,13 +460,29 @@ def trigger_subject_matches(
         and trig.condition.payload.get(f"{key}_includes_source")
     ):
         return True
+    described = trig.condition.payload.get(f"{key}_filter")
+    if subject_seat is not None and described and (
+        described.get("controller") in _RELATIVE_CONTROLLER_WORDS
+    ):
+        if observer is None:
+            return False
+        if (subject_seat == observer) != (described["controller"] == "you"):
+            return False
+        described = {k: v for k, v in described.items() if k != "controller"}
     return subject_matches(
         game,
         obj,
-        trig.condition.payload.get(f"{key}_filter"),
+        described,
         observer=observer,
         source=source,
     )
+
+
+#: The ``controller`` values ``subject_matches`` answers by comparing the
+#: object's controller with the observer's seat — "you control", "an opponent
+#: controls", "you don't control" — and so the ones a last-known seat can answer
+#: in their place. A named seat (the defending player, a target) is not one.
+_RELATIVE_CONTROLLER_WORDS = frozenset({"you", "opponent", "not_you"})
 
 
 def _controller_of(game: Game, permanent: Permanent) -> PlayerState:

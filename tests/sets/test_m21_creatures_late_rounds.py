@@ -1063,9 +1063,13 @@ def test_thieves_guild_enforcer_compiles_supported(set_pool):
 
     (trigger,) = program.triggered_abilities
     assert trigger.condition.kind == "matching_permanent_enters"
-    # "This creature or another Rogue" *includes* the source, so the exclusion
-    # the noun parser folds on for "another" has to be undone.
-    assert "exclude_self" not in trigger.condition.payload["enterer_filter"]
+    # "This creature or another Rogue" is a union: the source itself, by
+    # identity, or another Rogue you control. The phrase keeps its "another"
+    # and the source is put back in by the marker — undoing the exclusion
+    # instead read it as "a Rogue you control", which loses the source the
+    # moment it is not a Rogue (ONS W1G7, `test_a_source_that_is_no_rogue_*`).
+    assert trigger.condition.payload["enterer_filter"].get("exclude_self") is True
+    assert trigger.condition.payload["enterer_includes_source"] is True
 
 
 def test_its_own_entry_fires_it(set_pool):

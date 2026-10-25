@@ -662,10 +662,14 @@ class DeathsMixin:
                 # "Whenever **this creature or** another Cleric dies" (Rotlung
                 # Reanimator) is a union with the source, which the shared
                 # trigger reader answers by identity; every other condition
-                # here is the printed phrase alone.
+                # here is the printed phrase alone. "…an artifact **you
+                # control**" is asked of the seat the permanent last had
+                # (CR 603.10a), which the control seam no longer knows for a
+                # permanent its caller already removed.
                 if not trigger_subject_matches(
                     self, trig, "dying", dead_permanent,
                     observer=controller_index, source=observer,
+                    subject_seat=dead_seat,
                 ):
                     continue
                 # "…is put into **your** graveyard from the battlefield"

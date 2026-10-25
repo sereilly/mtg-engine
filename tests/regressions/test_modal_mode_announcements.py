@@ -373,14 +373,37 @@ _CENSUS_AURA = _mk_card(
 )
 
 
+def _census_subtype_bait(card) -> list:
+    """One creature of each creature type a mode of *card* names in its target
+    ("Fever Charm deals 3 damage to target **Wizard** creature", "Destroy
+    target **Cleric**", Misery Charm) — derived from the modes' own target
+    specs, so a tribe the fixed zoo above does not carry still has a legal
+    target on the census board, and a mode the sentence narrows still has
+    the rest of the zoo to refuse."""
+    named: list[str] = []
+    for _index, _mode, spec, _instruction in _census_modes(card):
+        wanted = ((spec or {}).get("filter") or {}).get("subtype_filter")
+        for subtype in (wanted if isinstance(wanted, (list, tuple)) else (wanted,)):
+            if subtype and subtype not in named:
+                named.append(subtype)
+    return [
+        _mk_card(
+            name=f"Bait {subtype.title()}",
+            type_line=f"Creature - {subtype.title()}", power=2, toughness=2,
+        )
+        for subtype in named
+    ]
+
+
 def _census_board(card, *, combat: bool) -> Game:
     """A mirrored zoo — the same bait on both sides, so a scan that ignored
     the announcement has somewhere wrong to land. *combat*: seat 1 is
     attacking seat 0 with two of its creatures."""
+    bait = _census_bait() + _census_subtype_bait(card)
     game = _w2g2_table(
         [card],
-        mine=[Permanent(card=c) for c in _census_bait()],
-        theirs=[Permanent(card=c) for c in _census_bait()],
+        mine=[Permanent(card=c) for c in bait],
+        theirs=[Permanent(card=c) for c in bait],
         active=1 if combat else 0,
     )
     for perm in game.all_permanents():

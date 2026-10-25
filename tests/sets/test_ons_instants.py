@@ -56,6 +56,54 @@ log), not instruction kinds alone.
 
 # ==== W1G7 ==========================================================
 # W1G7's tests go between this line and the "end W1G7" line.
+from engine import Game as _w1g7_Game, PlayerState as _w1g7_PlayerState
+from engine.models import Permanent as _w1g7_Permanent
+from engine.type_changes import gain_types as _w1g7_gain_types
+from tests.helpers import _nosick as _w1g7_nosick, resolve_stack as _w1g7_resolve
+
+
+def _w1g7_perm(pool, name):
+    return _w1g7_nosick(_w1g7_Permanent(card=pool[name]))
+
+
+def _w1g7_game(mine=(), theirs=(), *, p1=None, p2=None):
+    one = _w1g7_PlayerState(name="P1", battlefield=list(mine), **(p1 or {}))
+    two = _w1g7_PlayerState(name="P2", battlefield=list(theirs), **(p2 or {}))
+    game = _w1g7_Game(players=[one, two])
+    game.enforce_mana_costs = False
+    game._settle()
+    return game, one, two
+
+
+def test_w1g7_wirewood_pride_counts_every_elf(set_pool):
+    """"…+X/+X until end of turn, where X is the number of **Elves** on the
+    battlefield." Both sides' Elves, not a Goblin — and a Goblin that became
+    an Elf is one."""
+    pool = set_pool("ONS")
+    target = _w1g7_perm(pool, "Skirk Prospector")
+    game, p1, _p2 = _w1g7_game(
+        [target, _w1g7_perm(pool, "Wirewood Elf")],
+        [_w1g7_perm(pool, "Wellwisher")],
+        p1={"hand": [pool["Wirewood Pride"]] * 2},
+    )
+    result = game.cast_from_hand(
+        0, "Wirewood Pride", target_player_index=0,
+        target_permanent_ids=[target.permanent_id],
+    )
+    assert result.supported, result.details
+    _w1g7_resolve(game)
+    game._recompute_continuous_effects()
+    assert (target.effective_power, target.effective_toughness) == (3, 3)
+
+    _w1g7_gain_types(target, subtypes=("elf",))
+    game._recompute_continuous_effects()
+    game.cast_from_hand(
+        0, "Wirewood Pride", target_player_index=0,
+        target_permanent_ids=[target.permanent_id],
+    )
+    _w1g7_resolve(game)
+    game._recompute_continuous_effects()
+    assert (target.effective_power, target.effective_toughness) == (6, 6)
 
 # ==== end W1G7 ======================================================
 
