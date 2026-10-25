@@ -117,6 +117,27 @@ def bound_event_object(instruction, permanent) -> int | None:
     return permanent_id
 
 
+def bound_event_seat(instruction, seat) -> int | None:
+    """:func:`bound_event_object`'s rule for a fire site that hands over the
+    **seat** its event was about in ``target_player_index`` — "that player
+    loses 5 life" (Psychic Purge) is the player who caused the discard — or
+    None where the line prints a target of its own and CR 603.3d chooses it.
+
+    The seat channel still holds either a choice or such a seat, and this
+    keeps the two from meeting on one ability: an event's seat in that field
+    is what ``_trigger_target_candidates`` reads as a choice already made, so
+    Guerrilla Tactics ("…it deals 4 damage to **any target**") shot the causer
+    with nothing chosen. A field of its own for "the player this trigger is
+    about", beside ``StackItem.about_permanent_id``, is the rest of that
+    separation.
+    """
+    if seat is None:
+        return None
+    from .targeting import announces_a_target
+
+    return None if announces_a_target(instruction) else seat
+
+
 _UNSET = object()
 
 

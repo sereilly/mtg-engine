@@ -321,3 +321,38 @@ def test_mijae_djinn_still_removes_itself_from_combat(set_pool, monkeypatch):
     resolve_stack(game)
     assert not djinn.attacking and game.is_on_battlefield(djinn), game.log
     assert any("lost the coin flip: removed from combat" in line for line in game.log)
+
+
+@pytest.mark.cr("603.3d", "115.1d")
+def test_guerrilla_tactics_chooses_any_target(set_pool, catalog_by_name):
+    """"When a spell or ability an opponent controls causes you to discard
+    this card, it deals 4 damage to any target." The seat twin of the block
+    site's stamp: the discard fire site handed over the player who caused it
+    in ``target_player_index``, which the picker read as a choice already
+    made, so the card always shot the causer. Its owner chooses — here, the
+    causer's creature."""
+    game = Game(players=[
+        PlayerState(name="P1", hand=[catalog_by_name["Mind Rot"]]),
+        PlayerState(name="P2", hand=[catalog_by_name["Guerrilla Tactics"]] * 2),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {1}
+    bear = _put(game, 0, BEAR)
+    game.active_player_index = 0
+    game.current_turn_phase = "precombat_main"
+    assert game.queue_from_hand(0, "Mind Rot", target_player_index=1).supported
+    game.resolve_top_of_stack(pause_for_choices=True)
+    (discard,) = game.pending_choices
+    assert discard.kind == "discard"
+    assert game.confirm_discard(1, [0, 1])
+
+    owed = game.pending_choices_of("trigger_target", 1)
+    assert owed, "CR 603.3d: the owner is asked"
+    assert bear.permanent_id in {entry.get("permanent_id") for entry in owed[0].data["targets"]}
+    assert game.confirm_trigger_target(1, permanent_id=bear.permanent_id)
+    for choice in list(game.pending_choices_of("trigger_target", 1)):
+        assert game.confirm_trigger_target(1, seat=0)
+    resolve_stack(game)
+
+    assert bear.damage_marked == 4, game.log
+    assert game.players[0].life == 16, game.log
