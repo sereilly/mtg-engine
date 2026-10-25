@@ -758,6 +758,64 @@ def test_w1g5_a_mistform_nobody_asks_joins_its_controllers_tribe(
     assert _w1g5_types(dreamer) == {"illusion"}
     assert "Mistform Dreamer: no creature type was chosen, so nothing changes" in lonely.log
 
+
+
+# --- the drive list: supported on arrival, given a game ---------------------
+
+
+def test_w1g5_imagecrafter_taps_to_set_a_targets_type(set_pool, catalog_by_name):
+    """"{T}: Choose a creature type other than Wall. Target creature becomes
+    that type until end of turn." Summoning sick it cannot pay {T}; ready, it
+    taps, Wall is refused, and the opponent's Bears become a Goblin under
+    their own Goblin King's pump until cleanup."""
+    game = _w1g5_game()
+    crafter_card = set_pool("ONS")["Imagecrafter"]
+    sick = _W1G5Permanent(card=crafter_card)
+    game._put_permanent_onto_battlefield(0, sick, None)
+    bears = _w1g5_put(game, 1, catalog_by_name["Grizzly Bears"])
+    _w1g5_put(game, 1, catalog_by_name["Goblin King"])
+    assert not game.activate_permanent_ability(
+        0, "Imagecrafter", target_permanent_ids=[bears.permanent_id],
+    ).supported
+
+    sick.metadata["summoning_sickness_turn"] = -99
+    assert game.activate_permanent_ability(
+        0, "Imagecrafter", target_permanent_ids=[bears.permanent_id],
+    ).supported
+    assert sick.tapped
+    assert game.confirm_creature_type_choice(0, "wall") is False
+    assert game.confirm_creature_type_choice(0, "goblin")
+    _w1g5_resolve_stack(game)
+    assert _w1g5_types(bears) == {"goblin"}
+    assert (bears.effective_power, bears.effective_toughness) == (3, 3)
+    game.resolve_cleanup_step(0)
+    assert _w1g5_types(bears) == {"bear"}
+
+
+def test_w1g5_mistform_mutant_pays_its_cost_and_sets_a_targets_type(
+    set_pool, catalog_by_name,
+):
+    """"{1}{U}: Choose a creature type other than Wall. Target creature
+    becomes that type until end of turn." Paid from the pool with costs on;
+    aimed at a Wall of Wood, the set takes its Wall type away (it keeps its
+    printed defender — a keyword, not a type)."""
+    game = _w1g5_game()
+    game.enforce_mana_costs = True
+    _w1g5_put(game, 0, set_pool("ONS")["Mistform Mutant"])
+    wall = _w1g5_put(game, 1, catalog_by_name["Wall of Wood"])
+    assert not game.activate_permanent_ability(
+        0, "Mistform Mutant", target_permanent_ids=[wall.permanent_id],
+    ).supported, "nothing to pay with"
+    game.players[0].mana_pool.update({"U": 1, "C": 1})
+    assert game.activate_permanent_ability(
+        0, "Mistform Mutant", target_permanent_ids=[wall.permanent_id],
+    ).supported
+    assert sum(game.players[0].mana_pool.values()) == 0
+    assert game.confirm_creature_type_choice(0, "elf")
+    _w1g5_resolve_stack(game)
+    assert _w1g5_types(wall) == {"elf"}
+    assert game._has_keyword(wall, "defender")
+
 # ==== end W1G5 ======================================================
 
 
