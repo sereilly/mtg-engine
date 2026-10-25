@@ -214,21 +214,14 @@ _KIND_TO_SPEC: dict[str, dict] = {
     # "The next time a source of your choice would deal damage to you this turn":
     # the source may be a permanent on any battlefield or a spell on the stack,
     # which `also_stack` folds into one prompt. The engine matches the chosen
-    # source by identity, so no colour filter narrows it.
-    "grant_reverse_damage_shield": {
-        "kind": "permanent", "source_of_choice": True, "also_stack": True,
-    },
-    # Bone Mask prints the same seven words and so runs the same prompt; what
-    # its shield does after absorbing is the interceptor's business, not the
-    # picker's.
-    "grant_exile_prevention_shield": {
-        "kind": "permanent", "source_of_choice": True, "also_stack": True,
-    },
-    # Shadowbane prints the same seven words again; what its shield then covers
-    # is the interceptor's business, not the picker's.
-    "grant_team_prevention_shield": {
-        "kind": "permanent", "source_of_choice": True, "also_stack": True,
-    },
+    # source by identity, so no colour filter narrows it. Pentagram of the
+    # Ages' kind carries that spec — and Reverse Damage's, Bone Mask's and
+    # Shadowbane's, whose riders are its payload — through
+    # ``payload_target_specs._whole_prevention_shield_spec``, because the same
+    # kind also prints a source it names itself (Mercenaries) and a recipient it
+    # targets (Circle of Despair). What a shield does after absorbing is the
+    # interceptor's business, not the picker's.
+    #
     # Samite Ministration and Protective Sphere print the phrase behind a
     # blanket — "Prevent all damage … this turn by a source of your choice" —
     # and run the same prompt; Shieldmage Advocate prints it around **any

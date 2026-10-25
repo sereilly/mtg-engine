@@ -442,7 +442,10 @@ def _source_class_label(wanted: dict) -> str:
     return "matching"
 
 
-@prevention_effect(SOURCE_TYPE_BLANKET, applies=_applies_source_type_blanket)
+@prevention_effect(
+    SOURCE_TYPE_BLANKET, applies=_applies_source_type_blanket,
+    label="Prevent all damage to this permanent from the described sources",
+)
 def _prevent_all_from_source_type(game, event: dict) -> PreventionOutcome | None:
     wanted = _source_type_shielded_by(game, event)
     if wanted is None:
@@ -556,13 +559,16 @@ def _applies_static_points(game, event: dict) -> bool:
     return _static_points_prevented(game, event) > 0
 
 
-@prevention_effect(STATIC_POINTS, applies=_applies_static_points)
+@prevention_effect(
+    STATIC_POINTS, applies=_applies_static_points,
+    label="A static prevention",
+)
 def _prevent_static_points(game, event: dict) -> PreventionOutcome | None:
     """A static prevention: "If a source would deal damage to you, prevent 1 of
     that damage." (Urza's Armor; the five Spheres print it over one colour.)
 
-    The words before the colon are the option a player is shown when CR 616.1
-    asks which effect applies first, so they name what the effect *is* rather
+    Its registration's ``label`` is the option a player is shown when CR 616.1
+    asks which effect applies first, so it names what the effect *is* rather
     than the first card that printed it — with a Sphere of Law on the table the
     prompt offered "Urza's Armor", a card that was not there.
 
@@ -622,6 +628,7 @@ def _place_counter_unpreventable(game, event: dict) -> None:
 @prevention_effect(
     STATIC_WHOLE_EVENT, applies=_applies_static_whole_event,
     unpreventable=_place_counter_unpreventable,
+    label="Prevent the damage and put a counter on this permanent",
 )
 def _prevent_and_place_counter(game, event: dict) -> PreventionOutcome | None:
     """Nine Lives: "If a source would deal damage to you, prevent that damage
@@ -789,14 +796,15 @@ def _remove_counter_unpreventable(game, event: dict) -> None:
 @prevention_effect(
     SELF_WHOLE_EVENT_COUNTER, applies=_applies_self_counter_shield,
     unpreventable=_remove_counter_unpreventable,
+    label="Prevent the damage and remove a counter from the creature",
 )
 def _prevent_and_remove_own_counter(game, event: dict) -> PreventionOutcome | None:
     """Prevent the damage and remove a counter from the creature: "If damage
     would be dealt to this creature, prevent that damage. Remove a +1/+1
     counter from this creature." (The Phantoms.)
 
-    The words before the colon are the option CR 616.1e's prompt shows, so they
-    say what the effect does rather than which card printed it (Urza's Armor's
+    The registration's ``label`` is the option CR 616.1e's prompt shows, so it
+    says what the effect does rather than which card printed it (Urza's Armor's
     reason, above).
 
     The whole event, however large, from every source; then one counter off,
@@ -895,6 +903,7 @@ def _remove_counters_per_damage_unpreventable(game, event: dict) -> None:
 @prevention_effect(
     PER_POINT_COUNTER_SHIELD, applies=_applies_per_damage_counter,
     unpreventable=_remove_counters_per_damage_unpreventable,
+    label="Prevent each 1 damage by removing a counter from the creature",
 )
 def _remove_counter_per_damage(game, event: dict) -> PreventionOutcome | None:
     """Rock Hydra's automatic half: one counter per point, only as far as the
@@ -1048,7 +1057,10 @@ def _applies_controller_blanket(game, event: dict) -> bool:
     return bool(event.get("combat")) or not described["combat_only"]
 
 
-@prevention_effect(CONTROLLER_BLANKET, applies=_applies_controller_blanket)
+@prevention_effect(
+    CONTROLLER_BLANKET, applies=_applies_controller_blanket,
+    label="Prevent all damage that would be dealt to you",
+)
 def _prevent_all_to_controller(game, event: dict) -> PreventionOutcome | None:
     """Glacial Chasm: "Prevent all damage that would be dealt to you."
 
@@ -1155,7 +1167,10 @@ def _applies_spell_class_blanket(game, event: dict) -> bool:
     return _spell_class_blanket(game, event) is not None
 
 
-@prevention_effect(SPELL_CLASS_BLANKET, applies=_applies_spell_class_blanket)
+@prevention_effect(
+    SPELL_CLASS_BLANKET, applies=_applies_spell_class_blanket,
+    label="Prevent all damage dealt by the described spells",
+)
 def _prevent_all_from_spell_class(game, event: dict) -> PreventionOutcome | None:
     """Energy Storm: "Prevent all damage that would be dealt by instant and
     sorcery spells."
@@ -1310,7 +1325,10 @@ def _applies_matching_blanket(game, event: dict) -> bool:
     return _matching_blanket_for(game, event) is not None
 
 
-@prevention_effect(MATCHING_BLANKET, applies=_applies_matching_blanket)
+@prevention_effect(
+    MATCHING_BLANKET, applies=_applies_matching_blanket,
+    label="Prevent all damage to the described permanents",
+)
 def _prevent_all_to_matching(game, event: dict) -> PreventionOutcome | None:
     """Bubble Matrix: "Prevent all damage that would be dealt to creatures."
     Statecraft: "…combat damage that would be dealt to and dealt by creatures
@@ -1350,7 +1368,10 @@ def _applies_chosen_source_one_shot(game, event: dict) -> bool:
     ) > 0
 
 
-@prevention_effect(CHOSEN_SOURCE_ONE_SHOT, applies=_applies_chosen_source_one_shot)
+@prevention_effect(
+    CHOSEN_SOURCE_ONE_SHOT, applies=_applies_chosen_source_one_shot,
+    label="Prevent the next damage the chosen source would deal",
+)
 def _prevent_next_damage_from_chosen_source(game, event: dict) -> PreventionOutcome | None:
     """Desperate Gambit's losing flip: "the next time it would deal damage this
     turn, prevent that damage."
@@ -1440,7 +1461,10 @@ def _applies_small_event_blanket(game, event: dict) -> bool:
     return _small_event_threshold_for(game, event) is not None
 
 
-@prevention_effect(SMALL_EVENT_BLANKET, applies=_applies_small_event_blanket)
+@prevention_effect(
+    SMALL_EVENT_BLANKET, applies=_applies_small_event_blanket,
+    label="Prevent damage of the printed amount or less",
+)
 def _prevent_small_event(game, event: dict) -> PreventionOutcome | None:
     """Callous Giant: "If a source would deal 3 or less damage to this
     creature, prevent that damage."
@@ -1544,7 +1568,10 @@ def _applies_shared_color_blanket(game, event: dict) -> bool:
     return _shared_color_blanket_for(game, event) is not None
 
 
-@prevention_effect(SHARED_COLOR_BLANKET, applies=_applies_shared_color_blanket)
+@prevention_effect(
+    SHARED_COLOR_BLANKET, applies=_applies_shared_color_blanket,
+    label="Prevent damage between creatures that share a color",
+)
 def _prevent_between_shared_colors(game, event: dict) -> PreventionOutcome | None:
     """Well-Laid Plans: "Prevent all damage that would be dealt to a creature
     by another creature if they share a color."

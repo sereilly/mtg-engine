@@ -267,14 +267,6 @@ def put_exiled_card_onto_stack_as_copy(game: Game, instruction: OracleInstructio
     return True, "resolved"
 
 
-#: How a stack object's recorded ``ability_effect_kind`` says which kind of
-#: ability it is. `engine/effect_labels.py` produces these prefixes and
-#: `web/serialization.py` already reads the triggered one to set `is_triggered`;
-#: reading them here rather than keeping a third opinion is what stops the
-#: three drifting.
-_ABILITY_KIND_PREFIXES = {"triggered": "triggered_", "activated": "activated_"}
-
-
 def _stack_ability_kind(item) -> str | None:
     """Which kind of ability *item* is, or None when it is not one.
 
@@ -282,18 +274,19 @@ def _stack_ability_kind(item) -> str | None:
     the presence of an ``ability_instruction`` rather than the absence of a
     card: a triggered ability carries the source permanent's card for its
     display name (CR 113.7a gives the ability no card of its own).
+
+    Which kind is ``StackItem.ability_kind`` — how the object was put on the
+    stack. This read the effect label's ``activated_`` / ``triggered_`` prefix
+    until the kg round, on the reasoning that sharing the web layer's reading
+    kept the two from drifting; but the label is a report vocabulary and its
+    prefixes drift from the ability's kind by themselves. Twenty-three shipped
+    activated abilities carry ``triggered_counter`` (Serrated Arrows, Extruder,
+    the Spikes), and "counter target activated ability" (Rust, Interdict, Bind,
+    Brown Ouphe, Ayesha Tanaka) could neither name nor counter one.
     """
     if item.ability_instruction is None:
         return None
-    label = item.ability_effect_kind or ""
-    for kind, prefix in _ABILITY_KIND_PREFIXES.items():
-        if label.startswith(prefix):
-            return kind
-    # An ability whose label says neither. It is still an ability on the stack,
-    # and "activated or triggered" is every ability a player can respond to
-    # (CR 113.3a–c: the third kind is static and never uses the stack), so
-    # reporting None here would make a real object uncounterable.
-    return "triggered" if item.trigger_context is not None else "activated"
+    return item.ability_kind
 
 
 @effect_handler("counter_stack_ability")

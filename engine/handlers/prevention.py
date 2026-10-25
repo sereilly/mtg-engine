@@ -647,10 +647,12 @@ def _arm_chosen_source_shield(
 ) -> tuple[bool, str]:
     """Resolve the chosen source, arm the shield *build* makes, and log it.
 
-    The body five handlers had a copy of. What each of them really contributes
-    is *build* — one ``shields.make_*`` call, which is to say one
-    ``Shield.kind`` — and every other line was the same: read the choice, arm
-    against it if there was one, arm a sourceless charge if there was not.
+    The body five handlers had a copy of, and then the body two kinds share
+    once four of those handlers became one payload key
+    (``_whole_shield_build``). What each caller really contributes is *build* —
+    one ``shields.make_*`` call, which is to say one ``Shield.kind`` — and every
+    other line was the same: read the choice, arm against it if there was one,
+    arm a sourceless charge if there was not.
 
     *recipient* is who the shield protects, defaulting to the ability's
     controller (CR 109.5) because that is who every card but Circle of Despair
@@ -827,117 +829,88 @@ def grant_chosen_source_blanket_shield(
     return True, "resolved"
 
 
-@effect_handler("grant_reverse_damage_shield")
-def grant_reverse_damage_shield(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    """Reverse Damage: arm a one-shot shield against "a source of your choice".
-
-    The caster picks the source — a permanent on any battlefield (chosen via
-    target_permanent_index) or a spell on the stack (the threatening burn spell,
-    chosen via stack_target). Only damage from that source is prevented and gained
-    as life. With no chosen source (AI / headless casts), fall back to a generic
-    charge that shields the entire next damage event from any source.
-    """
-    return _arm_chosen_source_shield(
-        game, context,
-        lambda chosen, by: (
-            make_life_gain_source(chosen, by) if chosen is not None
-            else make_life_gain_charge(by)
-        ),
-        verb="armed a prevent-and-gain-life shield",
+def _either(against_source, sourceless):
+    """One ``build`` for ``_arm_chosen_source_shield`` out of a builder pair:
+    the shield against the chosen source, and the sourceless charge an AI or
+    headless announcement that named none is armed with instead."""
+    return lambda chosen, by: (
+        against_source(chosen, by) if chosen is not None else sourceless(by)
     )
 
 
-@effect_handler("grant_team_prevention_shield")
-def grant_team_prevention_shield(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    """Shadowbane: "The next time a source of your choice would deal damage to
-    you and/or creatures you control this turn, prevent that damage. If damage
-    from a black source is prevented this way, you gain that much life."
+def _whole_shield_build(game, instruction, context):
+    """The ``(build, verb)`` pair a whole-instance shield's payload arms, or
+    None for a rider no interceptor performs.
 
-    The same choice its siblings make — a permanent on any battlefield, or a
-    spell on the stack matched by the ``CardDefinition`` it will deal its damage
-    with (CR 615.8). What differs is where the shield can be *found*: it covers
-    a printed set of permanents as well as its caster, so it records the phrase
-    and `prevention.shields._class_shields` asks that phrase about each damaged
-    permanent.
+    ``rider`` is CR 615.5's additional effect — the sentence printed after
+    "prevent that damage" — in the word the parse wrote for it
+    (``ast.PreventedRider.effect``). What it selects is ``Shield.kind``, which
+    names the interceptor that consumes the shield, and so what happens once the
+    shield has absorbed. Nothing *before* the interceptor differs: every card
+    here prints Pentagram of the Ages' sentence and then one more, so each makes
+    that sentence's choice (CR 609.7a, 615.8), runs its picker and resolves
+    through its body. That is why the rider is payload on this kind rather than
+    four kinds of its own, which is what it was until the round that folded
+    them: four handlers around one body, and every reader of the kind — the
+    picker table, the effect labels, the categories — saying the same thing four
+    times.
 
-    The seat is recorded with the phrase, because "creatures **you** control" is
-    the caster's "you" (CR 109.5) and by damage time the resolution is long
-    over.
+    ``recipients`` is Shadowbane's second recipient, "…to you **and/or
+    creatures you control**": a printed set of permanents the shield also
+    covers, recorded as the phrase and asked of each damaged permanent
+    (``prevention.shields._class_shields``). Its interceptor is the team one,
+    whose rider gains life, so a team shield carries exactly that rider — the
+    lowering refuses any other, and this refuses it again rather than arm a
+    shield that pays for something the card does not print. The seat is
+    recorded with the phrase, because "creatures **you** control" is the
+    caster's "you" (CR 109.5) and by damage time the resolution is long over.
+
+    ``rider_colors`` is the condition a rider may carry ("If damage from a
+    **red** source is prevented this way", Honorable Passage). It rides the
+    shield rather than being rechecked here, because CR 615.9 asks about the
+    source when the damage would be dealt and this resolution is over by then.
     """
-    caster = context.caster
-    recipients = dict(instruction.payload.get("recipients") or {})
-    rider_colors = tuple(instruction.payload.get("rider_colors") or ())
-    seat = game.players.index(caster) if caster in game.players else None
-    return _arm_chosen_source_shield(
-        game, context,
-        lambda chosen, by: (
-            make_team_source(chosen, recipients, seat, rider_colors, by)
-            if chosen is not None
-            else make_team_charge(recipients, seat, rider_colors, by)
-        ),
-        verb="will prevent the next damage to them or their creatures",
-    )
-
-
-@effect_handler("grant_exile_prevention_shield")
-def grant_exile_prevention_shield(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    """Bone Mask: "{2}, {T}: The next time a source of your choice would deal
-    damage to you this turn, prevent that damage. Exile cards from the top of
-    your library equal to the damage prevented this way."
-
-    Reverse Damage's shield with a different sentence after it (CR 615.5), so
-    it makes the same choice its three siblings make — a permanent on any
-    battlefield, or a spell on the stack matched by the ``CardDefinition`` it
-    will deal its damage with. What differs is only what the interceptor does
-    once it has absorbed, which is what ``Shield.kind`` selects.
-    """
-    return _arm_chosen_source_shield(
-        game, context,
-        lambda chosen, by: (
-            make_exile_source(chosen, by) if chosen is not None
-            else make_exile_charge(by)
-        ),
-    )
-
-
-@effect_handler("grant_reflecting_prevention_shield")
-def grant_reflecting_prevention_shield(
-    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
-) -> tuple[bool, str]:
-    """Honorable Passage: "The next time a source of your choice would deal
-    damage to any target this turn, prevent that damage. If damage from a red
-    source is prevented this way, this spell deals that much damage to the
-    source's controller."
-
-    Pentagram of the Ages' any-target shield with CR 615.5's sentence after it,
-    so it makes the same two choices that one makes and in the same two places:
-    the *protected* object comes from the ability's own target channel, and the
-    *source* from the announcement's separate ``chosen_source`` field. Reading
-    the source off the target channel would arm the shield against the very
-    permanent it protects — the bug that branch of ``grant_whole_prevention_shield``
-    records — so ``from_target_channel`` is off here for that reason too.
-
-    What differs from Pentagram is entirely in ``Shield.kind``: which
-    interceptor consumes the shield, and therefore what happens once it has
-    absorbed. The colours the rider tests ride the shield rather than being
-    rechecked here, because CR 615.9 asks about the source when the damage would
-    be dealt and this resolution is over by then.
-    """
-    granted_by = context.card.name if context.card else None
-    rider_colors = tuple(instruction.payload.get("rider_colors") or ())
-    protected = _shield_target(game, context)
-    if protected is None:
-        game.log.append(f"{granted_by}: nothing is there to protect")
-        return True, "resolved"
-    return _arm_chosen_source_shield(
-        game, context,
-        lambda chosen, by: (
-            make_reflect_source(chosen, rider_colors, by) if chosen is not None
-            else make_reflect_charge(rider_colors, by)
-        ),
-        recipient=protected, from_target_channel=False,
-        verb="will prevent the next damage and answer it",
-    )
+    payload = instruction.payload
+    rider = payload.get("rider")
+    rider_colors = tuple(payload.get("rider_colors") or ())
+    if payload.get("recipients"):
+        if rider != "gain_life":
+            return None
+        caster = context.caster
+        recipients = dict(payload["recipients"])
+        seat = game.players.index(caster) if caster in game.players else None
+        return (
+            lambda chosen, by: (
+                make_team_source(chosen, recipients, seat, rider_colors, by)
+                if chosen is not None
+                else make_team_charge(recipients, seat, rider_colors, by)
+            ),
+            "will prevent the next damage to them or their creatures",
+        )
+    if rider is None:
+        return _either(make_whole_source, make_whole_charge), "will prevent the next damage"
+    if rider == "gain_life":
+        # "You gain life equal to the damage prevented this way." (Reverse
+        # Damage, Cho-Arrim Alchemist.)
+        return (
+            _either(make_life_gain_source, make_life_gain_charge),
+            "armed a prevent-and-gain-life shield",
+        )
+    if rider == "exile_from_library":
+        # "Exile cards from the top of your library equal to the damage
+        # prevented this way." (Bone Mask.)
+        return _either(make_exile_source, make_exile_charge), "will prevent the next damage"
+    if rider == "damage_source_controller":
+        # "If damage from a red source is prevented this way, this spell deals
+        # that much damage to the source's controller." (Honorable Passage.)
+        return (
+            lambda chosen, by: (
+                make_reflect_source(chosen, rider_colors, by) if chosen is not None
+                else make_reflect_charge(rider_colors, by)
+            ),
+            "will prevent the next damage and answer it",
+        )
+    return None
 
 
 @effect_handler("grant_whole_prevention_shield")
@@ -945,11 +918,13 @@ def grant_whole_prevention_shield(game: Game, instruction: OracleInstruction, co
     """Pentagram of the Ages: "The next time a source of your choice would deal
     damage to you this turn, prevent that damage."
 
-    The same choice the two shields below and above it make — a permanent on any
+    CR 615.8's whole-instance shield. The choice it makes — a permanent on any
     battlefield, or a spell on the stack matched by the ``CardDefinition`` it
-    will deal its damage with — because it is the same printed phrase (CR
-    615.8). What differs is only what happens after the prevention, which here
-    is nothing: Reverse Damage's sentence continues and this one stops.
+    will deal its damage with — is the printed phrase's, and Dark Sphere's
+    halving shield makes it too. What follows the prevention is the payload's
+    ``rider`` (Reverse Damage, Bone Mask, Shadowbane, Honorable Passage), read
+    once by ``_whole_shield_build``: the shield kind it arms, and so the
+    interceptor that performs the sentence after "prevent that damage".
 
     ``from_source`` is the third way the sentence names its source: not chosen
     at all, but printed — "The next time **this creature** would deal damage to
@@ -957,9 +932,10 @@ def grant_whole_prevention_shield(game: Game, instruction: OracleInstruction, co
     because the shield it arms is the same whole-instance shield; only where the
     source comes from differs.
 
-    The shield goes on ``caster`` either way, and on this card that is not the
-    permanent's controller: Mercenaries prints "Any player may activate this
-    ability", so the seat that paid is the seat protected (CR 109.5).
+    The shield goes on ``caster`` unless the payload names another recipient,
+    and on Mercenaries that is not the permanent's controller: it prints "Any
+    player may activate this ability", so the seat that paid is the seat
+    protected (CR 109.5).
     """
     caster = context.caster
     granted_by = context.card.name if context.card else None
@@ -974,6 +950,13 @@ def grant_whole_prevention_shield(game: Game, instruction: OracleInstruction, co
             "would deal them"
         )
         return True, "resolved"
+    shaped = _whole_shield_build(game, instruction, context)
+    if shaped is None:
+        return False, (
+            "no interceptor performs the rider "
+            f"{instruction.payload.get('rider')!r} on this shield"
+        )
+    build, verb = shaped
     if instruction.payload.get("recipient") == "attached":
         # "Sacrifice this Aura: The next time a source of your choice would deal
         # damage to **enchanted creature** this turn, prevent that damage."
@@ -992,18 +975,14 @@ def grant_whole_prevention_shield(game: Game, instruction: OracleInstruction, co
             game.log.append(f"{granted_by}: nothing is enchanted to protect")
             return True, "resolved"
         return _arm_chosen_source_shield(
-            game, context,
-            lambda chosen, by: (
-                make_whole_source(chosen, by) if chosen is not None
-                else make_whole_charge(by)
-            ),
-            recipient=host,
+            game, context, build, recipient=host, verb=verb,
         )
     if instruction.payload.get("recipient") == "target":
         # "…would deal damage to **any target** this turn, prevent that
-        # damage." (Circle of Despair.) The shield goes around what the ability
-        # targeted rather than around its controller — CR 615.1 puts one around
-        # a player *or* a permanent, and `add_shield` has always taken both.
+        # damage." (Circle of Despair; Honorable Passage with its rider.) The
+        # shield goes around what the ability targeted rather than around its
+        # controller — CR 615.1 puts one around a player *or* a permanent, and
+        # `add_shield` has always taken both.
         #
         # The target channel is spent on that choice, so the source cannot come
         # from it: read from the target channel it would arm the shield against
@@ -1025,25 +1004,10 @@ def grant_whole_prevention_shield(game: Game, instruction: OracleInstruction, co
             game.log.append(f"{granted_by}: nothing is there to protect")
             return True, "resolved"
         return _arm_chosen_source_shield(
-            game, context,
-            lambda chosen, by: (
-                make_whole_source(chosen, by) if chosen is not None
-                else make_whole_charge(by)
-            ),
-            recipient=protected, from_target_channel=False,
+            game, context, build,
+            recipient=protected, from_target_channel=False, verb=verb,
         )
-    chosen = chosen_shield_source(game, context)
-    if chosen is not None:
-        add_shield(caster, make_whole_source(chosen, granted_by))
-        source_card = getattr(chosen, "card", chosen)
-        game.log.append(
-            f"{caster.name} will prevent the next damage from "
-            f"{getattr(source_card, 'name', 'a source')}"
-        )
-    else:
-        add_shield(caster, make_whole_charge(granted_by))
-        game.log.append(f"{caster.name} will prevent the next damage dealt to them")
-    return True, "resolved"
+    return _arm_chosen_source_shield(game, context, build, verb=verb)
 
 
 @effect_handler("grant_half_prevention_shield")

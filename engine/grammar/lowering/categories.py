@@ -381,20 +381,12 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # GRAMMAR_CATEGORIES is unchanged.
     "upkeep_damage_unless_cost": "damage",
     "grant_half_prevention_shield": "prevention",
+    # Pentagram of the Ages' shield, and — with CR 615.5's sentence after it
+    # as the ``rider`` payload key — Reverse Damage's, Bone Mask's,
+    # Shadowbane's and Honorable Passage's. One category whatever the rider
+    # does, Honorable Passage's damage included: the category names what the
+    # *line* is, and every one of these lines is a shield.
     "grant_whole_prevention_shield": "prevention",
-    # Honorable Passage: the same any-target shield with CR 615.5's
-    # sentence after it. The rider deals damage, and the category is
-    # still "prevention" — the category names what the *line* is, and
-    # this line is a shield whose interceptor answers back.
-    "grant_reflecting_prevention_shield": "prevention",
-    # CR 615.5's additional effect: the same absorption with a sentence
-    # after it. `grant_reverse_damage_shield` reached the engine through a
-    # name-keyed hook until Mirage printed a second rider on the same
-    # sentence, which is what made it a production; it is declared here now
-    # because the grammar emits it.
-    "grant_reverse_damage_shield": "prevention",
-    "grant_exile_prevention_shield": "prevention",
-    "grant_team_prevention_shield": "prevention",
     # "Prevent all damage that would be dealt to you this turn by a source of
     # your choice." (Samite Ministration, Protective Sphere.) The chosen-source
     # shield that lasts the turn; see ``_blankets._lower_chosen_source_blanket``.

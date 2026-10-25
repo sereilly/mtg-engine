@@ -1,10 +1,20 @@
 """The reporting label an ability's compiled instruction carries.
 
-``effect_kind`` is a *label*, never dispatch. It reaches three places and no
-others: ``SimulationResult.effect_kind`` (the string the duel scripts and the
-per-card tests report a cast by), ``scripts/support_report.py``'s buckets, and
-``StackItem.ability_effect_kind`` — whose ``triggered_`` prefix is what
-``web/serialization.py`` serializes as a stack item's ``is_triggered``.
+``effect_kind`` is a *label*, never dispatch. It reaches ``SimulationResult.effect_kind``
+(the string the duel scripts and the per-card tests report a cast by),
+``scripts/support_report.py``'s buckets, and ``StackItem.ability_effect_kind``
+(the stack object's own copy of the same report).
+
+**Its prefix says nothing about the ability's kind**, and nothing may read it as
+if it did: ``add_counter_to_target`` is ``triggered_counter`` in the activated
+table, and hundreds of triggers are ``upkeep_effect`` or ``spell_pattern``.
+Whether a stack object is an activated or a triggered ability is
+``StackItem.ability_kind`` — how it was put on the stack. Until the kg round
+three readers took the ``triggered_`` / ``activated_`` prefix for that answer
+(the client's ``is_triggered``, ``stack_targets``' CR 115.7 lists and "counter
+target activated ability"), which is why several notes below justify a row by
+the prefix it gave ``is_triggered``: they record why the row was added, not
+what reads it now.
 
 Its vocabulary was ``engine/parsing/``'s. Each string was named after the rule
 that produced it (``activated_deny_regeneration`` because there was a rule
@@ -13,7 +23,7 @@ matched the same line the grammar had already read. Deleting the registry
 without carrying the vocabulary would therefore have silently re-bucketed 57
 cards — an activated regeneration reported ``activated_regeneration`` where it
 had always said ``activated_regenerate``, and every trigger the grammar reads
-losing the ``triggered_`` prefix that flag depends on.
+losing the ``triggered_`` prefix the client's flag then depended on.
 
 So the vocabulary moves here, which is the move
 ``card_hooks.CardLine.effect_kind`` already made for the lines that became
@@ -144,9 +154,20 @@ ACTIVATED_LABELS: dict[str, str] = {
     "swap_controller_land_mana_until_eot": "activated_mana",
     "exile_target_permanent": "activated_destruction",
     # "Unless an opponent pays {2}, gain control of target artifact…"
-    # (Scarwood Bandits). The offer is the control change's price, not an effect
-    # of its own, so the ability reports what it *does* if the offer is declined.
-    "unless_player_pays": "activated_control",
+    # (Scarwood Bandits), "…gets +1/+1 until end of turn unless any player pays
+    # {2}" (Nakaya Shade), "…unless a player has this creature deal 4 damage to
+    # them" (Barbarian Bully), "Any player may pay {1}. If no one does, …"
+    # (Rhystic Circle). A **wrapper** -- its payload carries the effect behind
+    # each answer -- so it takes the label naming its shape, which is `may`'s:
+    # CR 118.12a defines "[do something] unless [a player does something else]"
+    # as "[a player may do something else]. If [that player doesn't], [do
+    # something]". It read `activated_control` for eight sets, after the card
+    # that prompted the row; that was true of Scarwood Bandits and false of the
+    # other three, a pump and a prevention among them -- the guess the
+    # `sequence` row below calls wrong in proportion to how well the wrapper
+    # generalises. It passed `test_a_wrapper_kind_never_borrows_a_leaf_effects_bucket`
+    # only because no leaf had been filed under `activated_control` yet.
+    "unless_player_pays": "activated_optional",
     "add_counter_to_self": "activated_counter",
     "add_power_counters_to_self": "activated_counter",
     # Jandor's Saddlebags. Declared here rather than taken from the "tapping"
@@ -501,6 +522,10 @@ ACTIVATED_LABELS: dict[str, str] = {
     # fallback would label it `activated_damage`, which is the one thing this
     # ability never does.
     "redirect_source_damage_to_target_until_eot": "activated_prevention",
+    # Pentagram of the Ages, and with a CR 615.5 rider as payload Cho-Arrim
+    # Alchemist's life (Reverse Damage's sentence, one activation over) and
+    # Bone Mask's exile — one bucket, because what each ability is for is the
+    # prevention, and the sentence after it is what that prevention pays.
     "grant_whole_prevention_shield": "activated_prevention",
     "grant_chosen_source_blanket_shield": "activated_prevention",
     # --- Invasion, at its promotion ---------------------------------------
@@ -510,7 +535,6 @@ ACTIVATED_LABELS: dict[str, str] = {
     # card to *activate* it, and it takes the bucket every other activated
     # shield in this block has.
     "prevent_damage_to_target_until_eot": "activated_prevention",
-    "grant_exile_prevention_shield": "activated_prevention",
     # --- Fallen Empires' activated abilities, added at its promotion --------
     # Same rule as M21's block above: the bucket the *ability* belongs to, not
     # the one its instruction kind reads like — and where the kind is a
@@ -623,9 +647,10 @@ ACTIVATED_LABELS: dict[str, str] = {
     # Deliberately **not** `activated_steal`, for the reason
     # ``exchange_life_totals`` is not `activated_lifegain`: a bucket that says
     # "steal" of an ability whose whole effect is giving your own permanent away
-    # is a report that misleads. `activated_control` is unavailable for a second
-    # reason worth recording -- ``unless_player_pays`` holds it and is a
-    # *wrapper*, so filing a leaf there would make that entry borrow. The kind
+    # is a report that misleads. `activated_control` was unavailable for a
+    # second reason when this row was written -- ``unless_player_pays`` held it,
+    # and is a *wrapper*, so filing a leaf there would have made that entry
+    # borrow; the wrapper takes its shape's label now. The kind
     # arrived in this set's wave 2 for Starke of Rath's second sentence, where
     # it lowers inside a ``sequence``; Jinxed Idol is the card that reaches it
     # as a whole activated ability.
@@ -691,9 +716,8 @@ ACTIVATED_LABELS: dict[str, str] = {
     #
     # Cho-Arrim Alchemist's shield is Reverse Damage's, one activation over: a
     # source of your choice, the whole of its damage, and life for what was
-    # prevented. It goes beside `grant_whole_prevention_shield`, the shield it
-    # is a variant of.
-    "grant_reverse_damage_shield": "activated_prevention",
+    # prevented. Its own row here until the round that folded the riders into
+    # `grant_whole_prevention_shield`'s payload; it takes that row's bucket now.
     # General's Regalia moves damage from a chosen source onto a creature. The
     # redirect family is split across two spellings of one bucket name and this
     # one takes `activated_prevent`, beside
@@ -995,10 +1019,18 @@ TRIGGERED_LABELS: dict[str, str] = {
     # the next end step**." (Rukh Egg.) A shipped card whose instruction kind
     # changed: the delay used to be a `Game`-level queue behind an
     # `arm_end_step_token` hook, and the grammar reads the trailing delay now.
-    # The label is what the report and the web payload have always shown for it
-    # — a triggered ability that creates something — so the card is not
+    # The label was what the report and the web payload had always shown for it
+    # — a triggered ability that creates something — so the card was not
     # re-bucketed by the change underneath it.
-    "create_delayed_trigger": "triggered_token",
+    #
+    # The kind is a **wrapper** (its payload carries what the delay does), and
+    # by the kg round it had generalised to some forty triggers under a dozen
+    # conditions — Fog Elemental's sacrifice, Lowland Basilisk's destruction,
+    # Carrier Pigeons' draw — three of which make a token. So it takes the
+    # label naming its shape, the activated side's `activated_delayed_trigger`
+    # with this side's prefix, never the leaf bucket one card shared:
+    # `test_a_triggered_wrapper_row_never_borrows_a_leaf_effects_bucket`.
+    "create_delayed_trigger": "triggered_delayed_trigger",
     "opponent_discards_random_card_on_damage": "triggered_discard",
     "sacrifice_self": "triggered_sacrifice",
     # "When this Aura enters, tap enchanted creature." (Paralyze, Venarian
@@ -1121,13 +1153,16 @@ TRIGGERED_LABELS: dict[str, str] = {
     # `triggered_combat` the optional combat triggers already take.
     "cant_attack_during_controllers_next_turn": "triggered_combat",
     # Gabriel Angelfire's upkeep grant ("choose flying, first strike, trample,
-    # or rampage 3" — a CR 608.2d choice, not a modal one; Elder Gargaroth and
-    # Trufflesnout are the modal heads). `choose_one` is a wrapper and says
-    # nothing by itself, but every mode of the one card that prints it grants a
-    # keyword — so it takes the keyword-grant bucket, exactly as `if_then` takes
-    # the bucket of the branch the Urza's cycle guards. A second card choosing
-    # among something else splits this by condition.
-    "choose_one": "triggered_pump",
+    # or rampage 3" — a CR 608.2d choice, not a modal one) and Illusionary
+    # Presence's landwalk, and every printed modal trigger ("Whenever … ,
+    # choose one —", Elder Gargaroth, Trufflesnout), which
+    # ``ability_lines`` labels through this same row. `choose_one` is a
+    # **wrapper** and says nothing by itself, so it takes the shape label the
+    # activated side's `activated_modal` already is. It read `triggered_pump`
+    # because the two grammar-read cards both grant keywords — the borrowing
+    # `if_then` was argued into for the Urza's cycle and argued out of, and
+    # which put every modal trigger in the pool in the pump bucket.
+    "choose_one": "triggered_modal",
     # In the Eye of Chaos, Invoke Prejudice, Nether Void, Presence of the
     # Master. `activated_counter` / `triggered_counter` mean a +1/+1 counter, so
     # countering takes the grammar category's word, matching
@@ -1230,7 +1265,6 @@ TRIGGERED_LABELS: dict[str, str] = {
     "prevent_damage_to_target_until_eot": "triggered_prevention",
     "exile_target_permanent": "triggered_exile",
     "exile_bound_card_from_graveyard": "triggered_exile",
-    "unless_player_pays": "upkeep_effect",
     "deny_regeneration_to_block_pair": "spell_pattern",
     # Icatian Skirmishers. The activated twin above is `activated_pump`,
     # because there the ability is a pump however it is spelled; a keyword
@@ -1406,6 +1440,15 @@ TRIGGERED_LABELS_BY_CONDITION: dict[tuple[str, str], str] = {
     # says only that a price is offered round the table; the condition is what
     # says this is a counterspell, the bucket the conditional one above takes.
     ("spell_cast", "unless_player_pays"): "triggered_counterspells",
+    # Icy Prison: "At the beginning of your upkeep, sacrifice this enchantment
+    # unless any player pays {3}." The wrapper says nothing about what is
+    # offered, so the condition names the moment, beside ("upkeep_self", "may").
+    # It was a condition-blind row in TRIGGERED_LABELS until the kg round, which
+    # gave every `unless_player_pays` trigger the upkeep's word whatever
+    # triggered it: a second card printing the offer on a cast or a combat
+    # would have been reported as an upkeep effect rather than falling back,
+    # which is what makes this table name it.
+    ("upkeep_self", "unless_player_pays"): "upkeep_effect",
     ("creature_dies", "may"): "spell_pattern",
     ("enchantment_cast", "may"): "triggered_draw",
     ("spell_cast", "may"): "spell_pattern",
@@ -1514,8 +1557,11 @@ TRIGGERED_LABELS_BY_CONDITION: dict[tuple[str, str], str] = {
     # onto the battlefield, this enchantment deals 3 damage to that player
     # unless they put a -1/-1 counter on a creature they control." The offer is
     # the damage's price, so the ability reports what it *does* when the offer
-    # is declined — the same reading `unless_player_pays` takes for Scarwood
-    # Bandits in the activated table above.
+    # is declined. It cited `unless_player_pays`' row for Scarwood Bandits,
+    # which read the same way until the kg round gave that wrapper its shape's
+    # label. This row still names the declined branch rather than the moment,
+    # which is the rule the rest of this table follows; no guard can tell the
+    # two apart, because a moment's word and an effect's are both labels.
     ("matching_permanent_enters", "may"): "triggered_damage",
     # --- Odyssey, at its promotion ------------------------------------------
     # `may` says nothing, so each row names the moment, as M21's and Legends'

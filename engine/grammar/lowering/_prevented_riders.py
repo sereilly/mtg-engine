@@ -159,11 +159,12 @@ def _lower_team_shield(
     damage from a black source is prevented this way, you gain that much life."
 
     CR 615.8's whole-instance shield over a player *and* a printed set of
-    permanents. Its own instruction rather than a flag on the single-recipient
-    one, because ``Shield.kind`` names the interceptor that consumes the shield
-    and this one is found by a different route: a phrase has no object to hang a
-    record on, so it lives on the seat and is matched against each damaged
-    permanent (``prevention.shields._class_shields``).
+    permanents — Pentagram of the Ages' instruction with the second recipient
+    as ``recipients`` and the rider as ``rider``. The handler arms the team
+    shield for it (``handlers.prevention._whole_shield_build``), whose
+    ``Shield.kind`` names an interceptor found by a different route: a phrase
+    has no object to hang a record on, so it lives on the seat and is matched
+    against each damaged permanent (``prevention.shields._class_shields``).
 
     Every part of the sentence is checked, because each is a way it could mean
     more:
@@ -173,9 +174,12 @@ def _lower_team_shield(
     * the phrase must be one ``subject_matches`` can test in full. A narrowing
       the matcher drops is a shield covering strictly more permanents than the
       card names.
-    * the rider, if printed, must be one the interceptor performs. Its condition
-      is a property of the *source*, so it rides beside the shield's own rather
-      than inside it: this card prevents every colour's damage and pays for one.
+    * the rider must be printed, and must be the one the interceptor performs.
+      That interceptor gains life — unconditionally when no colour is recorded —
+      so a team shield with nothing after "prevent that damage" would pay for
+      what it prevented, which the card does not say. Its condition is a
+      property of the *source*, so it rides beside the shield's own rather than
+      inside it: this card prevents every colour's damage and pays for one.
     """
     if len(node.to_others) != 1:
         raise LoweringError(
@@ -197,16 +201,18 @@ def _lower_team_shield(
         refusal="the team shield cannot test the noun phrase it also covers",
         node=node,
     )
-    payload: dict[str, object] = {"recipients": described}
     rider = node.prevented_rider
-    if rider is not None:
-        if rider.effect != "gain_life" or rider.repeating:
-            raise LoweringError(
-                "the team shield's interceptor gains life and nothing else",
-                node=node,
-            )
-        payload["rider_colors"] = list(rider.source_colors)
-    return (OracleInstruction("grant_team_prevention_shield", "", payload),)
+    if rider is None or rider.effect != "gain_life" or rider.repeating:
+        raise LoweringError(
+            "the team shield's interceptor gains life and nothing else",
+            node=node,
+        )
+    payload: dict[str, object] = {
+        "recipients": described,
+        "rider": rider.effect,
+        "rider_colors": list(rider.source_colors),
+    }
+    return (OracleInstruction("grant_whole_prevention_shield", "", payload),)
 
 
 # ---------------------------------------------------------------------------

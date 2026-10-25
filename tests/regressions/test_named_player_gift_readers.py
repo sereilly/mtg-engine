@@ -55,7 +55,10 @@ SEAT_SPEC_KINDS = frozenset({"player", "player_or_planeswalker", "any"})
 GIFTS = frozenset({
     "draw_target_cards", "target_gains_life", "grant_extra_turn",
     "untap_all_matching", "grant_prevention_shield",
-    "grant_reflecting_prevention_shield",
+    # Honorable Passage's any-target shield, its reflecting rider a payload
+    # key on Pentagram of the Ages' kind since the chosen-source riders were
+    # folded into one.
+    "grant_whole_prevention_shield",
     "remove_all_counters_from_target_player",
     # "Creatures target player controls get +1/+1 until end of turn." (Day,
     # of Night // Day.) A gift by its family; reached once a split card's

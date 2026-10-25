@@ -42,6 +42,17 @@ from ._common import (
 )
 
 
+#: The CR 615.5 riders a chosen-source shield around its own controller may
+#: carry, by the word the parse writes (``ast.PreventedRider.effect``): "You
+#: gain life equal to the damage prevented this way" (Reverse Damage) and "Exile
+#: cards from the top of your library equal to …" (Bone Mask). Each names an
+#: interceptor that pays the shield's holder, which is why this branch's
+#: recipient — "you" — is the only one either is admitted on. The handler maps
+#: the same words to the shields that perform them
+#: (``handlers.prevention._whole_shield_build``).
+_SELF_SHIELD_RIDERS = frozenset({"gain_life", "exile_from_library"})
+
+
 def _lower_prevent_half(node: ast.PreventDamage) -> tuple[OracleInstruction, ...]:
     """"The next time a source of your choice would deal damage to you this
     turn, prevent half that damage, rounded down." (Dark Sphere.)
@@ -253,10 +264,12 @@ def _lower_prevent_damage(
                 # "…**If damage from a red source is prevented this way, ~
                 # deals that much damage to the source's controller.**"
                 # (Honorable Passage.) The one CR 615.5 rider printed on an
-                # any-target shield — its own kind rather than a flag, for the
-                # reason ``Shield.kind`` exists: it names the interceptor, and
-                # what the interceptor does after absorbing is the whole
-                # difference between this card and Pentagram of the Ages.
+                # any-target shield. Payload on the same kind rather than a
+                # kind of its own: what the rider selects is ``Shield.kind`` —
+                # the interceptor, and so what happens after absorbing — and
+                # that is the handler's to arm (``_whole_shield_build``), while
+                # the choice, the picker and the recipient are Pentagram of
+                # the Ages' exactly.
                 #
                 # The other two riders are refused here rather than mapped:
                 # both gain their *controller* something, and this shield can
@@ -268,10 +281,11 @@ def _lower_prevent_damage(
                         "any-target shield",
                         node=node,
                     )
+                payload_for_target["rider"] = rider.effect
                 payload_for_target["rider_colors"] = list(rider.source_colors)
                 return (
                     OracleInstruction(
-                        "grant_reflecting_prevention_shield", "",
+                        "grant_whole_prevention_shield", "",
                         payload_for_target,
                     ),
                 )
@@ -397,27 +411,26 @@ def _lower_prevent_damage(
                     "instance, not a counted amount",
                     node=node,
                 )
-            # CR 615.5's additional effect. Its own instruction per rider
-            # rather than a payload flag, because ``Shield.kind`` names the
-            # *interceptor* that consumes the shield — and what happens after
-            # the absorption is what that interceptor does. Reverse Damage
-            # reached `grant_reverse_damage_shield` through a name-keyed hook
-            # until this round; the same instruction is what the production
-            # emits, so the card's compiled program is unchanged and only the
-            # hook is gone.
+            # CR 615.5's additional effect, as the ``rider`` payload key: the
+            # word the parse wrote for it, which the handler maps to the
+            # ``Shield.kind`` whose interceptor performs it
+            # (``handlers.prevention._whole_shield_build``). One kind for all
+            # of them, because nothing *before* the interceptor differs — the
+            # choice, the picker and the recipient are this sentence's whether
+            # anything follows it or not. They were one kind per rider (Reverse
+            # Damage's, Bone Mask's, Shadowbane's, Honorable Passage's) until
+            # the round that folded them, and every reader of the kind had a
+            # row per rider saying the same thing.
             if node.to_others:
                 return _lower_team_shield(node)
-            rider_kinds = {
-                "gain_life": "grant_reverse_damage_shield",
-                "exile_from_library": "grant_exile_prevention_shield",
-            }
             if node.prevented_rider is not None:
-                if node.prevented_rider.effect not in rider_kinds:
+                if node.prevented_rider.effect not in _SELF_SHIELD_RIDERS:
                     # "…~ deals that much damage to the source's controller"
                     # printed on a shield its caster hangs on *themselves*.
                     # No card prints it, and the reflecting interceptor is
                     # armed by the any-target branch above; refusing names the
-                    # gap rather than raising a KeyError two lines down.
+                    # gap rather than admitting a third rider on a branch no
+                    # printed card has driven it through.
                     raise LoweringError(
                         "no shield on its own controller carries this rider",
                         node=node,
@@ -432,7 +445,8 @@ def _lower_prevent_damage(
                     )
                 return (
                     OracleInstruction(
-                        rider_kinds[node.prevented_rider.effect], "", {}
+                        "grant_whole_prevention_shield", "",
+                        {"rider": node.prevented_rider.effect},
                     ),
                 )
             return (OracleInstruction("grant_whole_prevention_shield", "", {}),)

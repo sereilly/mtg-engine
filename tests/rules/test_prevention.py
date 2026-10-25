@@ -339,7 +339,7 @@ def test_616_1_prevention_order_is_total_and_unambiguous():
     assert len(orders) == len(set(orders)), "two prevention effects share an order"
 
     with pytest.raises(ValueError, match="already used"):
-        prevention_effect(orders[0], applies=lambda game, event: True)(
+        prevention_effect(orders[0], applies=lambda game, event: True, label="A test shield")(
             lambda game, event: None
         )
 
@@ -521,6 +521,7 @@ def test_615_1_a_new_shield_is_one_registration_and_a_shield():
             s.kind == kind and not s.spent and s.would_prevent(event["amount"]) > 0
             for s in shields_on(event["recipient"])
         ),
+        label="Prevent 2 of the damage, twice",
     )
     def _halve(game, event):
         """A shield no card in the pool has: absorbs 2 points, twice."""
