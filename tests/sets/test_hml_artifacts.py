@@ -143,8 +143,10 @@ def test_the_expansion_phrase_is_read_once_for_both_cards_that_print_it(
     assert _read("a name originally printed in the Homelands expansion") == ("hml", True)
     assert _read("a name originally printed in the Antiquities expansion") == ("atq", True)
     # A set the manifest has never heard of refuses rather than sweeping the
-    # set the reader guessed.
-    assert _read("a name originally printed in the Onslaught expansion")[0] is None
+    # set the reader guessed. A name no set will ever print — the example was
+    # Onslaught until Onslaught was ingested, and a real set name here expires
+    # the day that set is.
+    assert _read("a name originally printed in the Nonesuch expansion")[0] is None
 
     sylex = compile_card_oracle(set_pool("ATQ")["Golgothian Sylex"])
     (sacrifice,) = sylex.activated_abilities

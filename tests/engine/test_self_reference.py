@@ -136,6 +136,12 @@ def test_no_card_in_the_pool_loses_a_word_to_the_expansion(_r28_pool):
     write the whole name: the cost reader then sees the card's own name and
     reads the cost as exiling the source (ruling 2013-07-01: the ability can
     only be activated while Balthor is on the battlefield).
+
+    Onslaught added one: Arcanis the Omnipotent's second ability reads
+    "{2}{U}{U}: Return Arcanis to its owner's hand." The legend naming itself
+    as the object its own ability returns, and "Arcanis" is not a word the
+    game uses to describe objects, so the expansion is right to write the
+    whole name.
     """
     changed = {
         card.name
@@ -161,4 +167,5 @@ def test_no_card_in_the_pool_loses_a_word_to_the_expansion(_r28_pool):
         "Volrath the Fallen",
         "Mageta the Lion",
         "Balthor the Defiled",
+        "Arcanis the Omnipotent",
     }
