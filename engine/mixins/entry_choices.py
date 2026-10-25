@@ -277,6 +277,43 @@ class EntryChoicesMixin:
             return "W"
         return max(sorted(counts), key=lambda c: counts[c])
 
+    def _next_opponent_in_turn_order(self, seat: int) -> int | None:
+        """The first living opponent of *seat* after it in turn order, or None.
+
+        The seat an "an opponent chooses" entry asks (Callous Oppressor). With
+        several opponents the controller decides who (CR 700.2e's rule for an
+        opponent's choice of mode); the next one in turn order is the stated
+        default, and on a two-player table it is the only answer.
+        """
+        total = len(self.players)
+        for step in range(1, total):
+            other = (seat + step) % total
+            if not self.players[other].lost:
+                return other
+        return None
+
+    def _protecting_creature_type(self, seat: int) -> str:
+        """The creature type *seat* names when its choice **spares** its own
+        creatures — "target creature that isn't of the chosen type" (Callous
+        Oppressor), chosen by the Oppressor's opponent.
+
+        The type the seat's own creatures have most of, net of everyone
+        else's (``value_choices.best_creature_type``'s ``"you"`` side, through
+        the layers); with none on its board, the type its own cards still to be
+        played have most of (:meth:`_own_creature_type_counts`); with none of
+        those, "human", the catalog's commonest word, for
+        :meth:`_default_chosen_creature_type`'s reason.
+        """
+        from ..handlers.value_choices import best_creature_type
+
+        chosen = best_creature_type(self, seat, side="you")
+        if chosen:
+            return chosen
+        own = self._own_creature_type_counts(seat)
+        if own:
+            return max(sorted(own), key=lambda word: own[word])
+        return "human"
+
     def _default_chosen_creature_type(self, caster_index: int, card=None) -> str:
         """The creature type An-Zerrin Ruins takes when nobody chooses.
 

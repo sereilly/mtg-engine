@@ -16,6 +16,7 @@ this reaches for a ``stack`` spec.
 
 from __future__ import annotations
 
+from .handlers._chosen import _resolve_chosen_subtype
 from .handlers._filters import (excluded_graveyard_slot,
                                 graveyard_card_matches,
                                 permanent_matches_filter, seat_did,
@@ -609,7 +610,15 @@ class TargetEnumerationMixin:
             # to the permanent, and ``subject_matches`` refuses that key
             # outright — so the swap trades a widened picker for an empty one.
             # The two phrases want different readers; see the W1G2 report.
-            return permanent_matches_filter(perm, instruction.payload)
+            #
+            # "…target creature **that isn't of the chosen type**" (Callous
+            # Oppressor) is the one narrowing here recorded on the *source*
+            # (CR 614.1c), which the pure matcher refuses: resolved off the
+            # source first, through the reader ``subject_matches`` uses, so the
+            # picker and the handler's own ``subject_matches`` agree.
+            return permanent_matches_filter(
+                perm, _resolve_chosen_subtype(instruction.payload, source_permanent)
+            )
         if instruction.kind == "grant_regeneration_to_target_creature":
             # Elephant Graveyard's "target Elephant" — the same subtype filter
             # _grant_regeneration_shield enforces at resolution. Death Ward's

@@ -430,6 +430,33 @@ def chooses_creature_type_on_enter(text: str) -> bool:
     return bool(_CHOOSE_CREATURE_TYPE_ON_ENTER_RE.search(text or ""))
 
 
+#: "As this creature enters, **an opponent chooses** a creature type."
+#: (Callous Oppressor.) The row above with a different chooser, and the same
+#: record (``chosen_creature_type``) — what reads it ("target creature that
+#: isn't of the chosen type") asks the permanent, not who answered. Its own
+#: reader because the mixin branches on *whose* prompt to arm, and a choice the
+#: card hands to an opponent made by the controller is the card backwards.
+#:
+#: The noun is data, as every reader here; the negative lookahead keeps a
+#: sentence that goes on ("… and a color") from being claimed with its second
+#: half dropped.
+_OPPONENT_CHOOSES_CREATURE_TYPE_ON_ENTER_RE = re.compile(
+    r"as this [a-z]+ enters, an opponent chooses a creature type(?! and| other)"
+)
+
+
+def opponent_chooses_creature_type_on_enter(text: str) -> bool:
+    """Whether *text* has an **opponent** choose a creature type as the
+    permanent enters (CR 614.1c, 614.12a).
+
+    A substring probe for :func:`chooses_creature_type_on_enter`'s reason:
+    the mixin asks it of the card's whole normalized text and
+    :func:`enter_effect_line` asks the whole-line question through this same
+    matcher.
+    """
+    return bool(_OPPONENT_CHOOSES_CREATURE_TYPE_ON_ENTER_RE.search(text or ""))
+
+
 #: "As this enchantment enters, **you and an opponent each** choose a card name
 #: other than a basic land card name." (Null Chamber.) Two names, chosen by two
 #: *different seats* — which is what separates it from Runed Halo's single
@@ -782,6 +809,7 @@ ENTRY_CHOICES: "tuple[EntryChoice, ...]" = (
         lambda text, lines, name: bool(
             chooses_creature_type_on_enter(text)
             or chooses_color_and_creature_type_on_enter(text)
+            or opponent_chooses_creature_type_on_enter(text)
         ),
         _shown_word,
     ),

@@ -715,6 +715,27 @@ def _lower_gain_control(
         # opponent's pick is made at resolution instead. What that costs is the
         # 608.2b re-check and shroud on the picked creature; what the
         # alternative costs is a second seat inside the announcement step.
+        #
+        # "{T}: Gain control of **target creature** that isn't of the chosen
+        # type for as long as this creature remains tapped." (Callous
+        # Oppressor.) The same duration on a target the *activator* chooses
+        # (CR 601.2c, an ordinary announcement), so it is the monitored steal
+        # every other linked duration records with the one condition this
+        # clause prints — ``source_remains_tapped``, which the state sweep
+        # breaks when the source untaps or leaves (CR 611.2b).
+        if (
+            subject.quantifier == "target"
+            and subject.targeted
+            and not subject.filter.chosen_by_opponent
+            and node.gained_by is None
+            and not node.tap_when_lost
+            and not node.offered
+        ):
+            described = _linked_steal_filter(node, subject)
+            described["link_conditions"] = ["source_remains_tapped"]
+            return (
+                OracleInstruction("steal_target_linked_to_source", "", described),
+            )
         if subject.quantifier != "target" or not subject.filter.chosen_by_opponent:
             raise LoweringError(
                 "the tapped-source link is printed on a choice an opponent "

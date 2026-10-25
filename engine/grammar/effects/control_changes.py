@@ -96,6 +96,15 @@ def _parse_gain_control(
     ):
         return ast.GainControl(subject, "while_source_on_battlefield")
     stream.reset(mark)
+    # "{T}: Gain control of target creature that isn't of the chosen type **for
+    # as long as this creature remains tapped**." (Callous Oppressor.)
+    # Preacher's leading duration printed behind the verb — the same words and
+    # the same duration, so the same value the statement layer hands down for
+    # the fronted spelling. CR 611.2b: it ends the moment the source untaps or
+    # leaves (a permanent that has left is not tapped).
+    if _accept_self_reference(stream) and stream.accept_phrase("remains", "tapped"):
+        return ast.GainControl(subject, "while_source_tapped")
+    stream.reset(mark)
     # "…for as long as **that creature is enchanted**" (Rootwater Matriarch).
     # The one linked duration whose condition is about the permanent the steal
     # *took* rather than about the source, which is why it is read here rather
