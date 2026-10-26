@@ -290,6 +290,19 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
                 stream.advance()
                 return ast.TriggerEvent("lose_control_of_source", "when")
         stream.reset(mark_control)
+        # "**When you gain control of this enchantment from another player**,
+        # …" (Risky Move.) The gaining end of the same event, read the same
+        # way: the permanent noun consumed as a word, and "from another
+        # player" required — a gain with no previous controller is not this
+        # event.
+        if stream.accept_phrase("you", "gain", "control", "of"):
+            if stream.accept_word("this", "the") and not (
+                stream.exhausted or stream.at_punct(",", ".")
+            ):
+                stream.advance()
+                if stream.accept_phrase("from", "another", "player"):
+                    return ast.TriggerEvent("gain_control_of_source", "when")
+        stream.reset(mark_control)
         mark = stream.mark()
         if stream.at_kind(SELF) or stream.at_word("this"):
             stream.advance()

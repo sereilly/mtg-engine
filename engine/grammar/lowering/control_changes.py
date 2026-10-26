@@ -247,6 +247,35 @@ def _lower_another_seat_gains_control(
     # over with a player in slot 0.
     if _is_target(subject) and node.gained_by.kind == "target_player":
         return (_lower_seat_gains_target_permanent(node, subject),)
+    # "Choose a creature you control and an opponent. Flip a coin. If you lose
+    # the flip, **that opponent gains control of that creature**." (Risky
+    # Move.) Both ends are back-references to picks this same resolution made
+    # (CR 608.2d) — the permanent a ``choose_permanent`` step recorded and the
+    # seat a ``choose_opponent`` step recorded — so both producers must have
+    # run, and the bound noun carries no narrowing the record could honour.
+    if (
+        subject.quantifier == "that"
+        and not subject.targeted
+        and node.gained_by.kind in _EVENT_GAINERS
+        and CHOSEN_PERMANENT in produced
+        and CHOSEN_PLAYER in produced
+    ):
+        if _restrictions_beyond(subject.filter, frozenset({"card_types"})):
+            raise LoweringError(
+                "a chosen permanent carries no narrowing the record could "
+                "honour", node=node,
+            )
+        if node.duration != "indefinite" or node.tap_when_lost or node.offered:
+            raise LoweringError(
+                "a chosen permanent handed to a chosen seat changes "
+                "controllers untimed", node=node,
+            )
+        return (
+            OracleInstruction(
+                "give_control_of_chosen_to_player", "",
+                {"permanents_from": CHOSEN_PERMANENT},
+            ),
+        )
     if not _is_source(subject):
         raise LoweringError(
             "only a permanent handing itself over is implemented", node=node

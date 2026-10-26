@@ -533,6 +533,94 @@ def test_w1g7_elvish_guidance_counts_toward_the_planned_payment(set_pool):
 # ==== W1G10 ==========================================================
 # W1G10's tests go between this line and the "end W1G10" line.
 
+# --- W1G10: Risky Move ---------------------------------------------------------
+#
+# "At the beginning of each player's upkeep, that player gains control of this
+# enchantment. When you gain control of this enchantment from another player,
+# choose a creature you control and an opponent. Flip a coin. If you lose the
+# flip, that opponent gains control of that creature." The gain trigger fires
+# from the one seam a permanent changes hands at (`_sync_control`).
+from unittest.mock import patch as _w1g10_patch
+
+from engine import Game as _w1g10_Game
+from engine.models import Permanent as _w1g10_Permanent
+from engine.models import PlayerState as _w1g10_PlayerState
+from tests.helpers import resolve_stack as _w1g10_resolve_stack
+
+
+def _w1g10_risky_table(set_pool):
+    """Three seats: Risky Move and a Hill Giant on seat 0, Grizzly Bears on
+    seat 1, nothing on seat 2."""
+    game = _w1g10_Game(players=[
+        _w1g10_PlayerState(
+            name=f"P{seat + 1}", life=20,
+            library=[set_pool("LEA")["Island"]] * 10,
+        )
+        for seat in range(3)
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    placed = {}
+    for seat, code, name in (
+        (0, "ONS", "Risky Move"), (0, "LEA", "Hill Giant"), (1, "LEA", "Grizzly Bears"),
+    ):
+        perm = _w1g10_Permanent(card=set_pool(code)[name])
+        game._put_permanent_onto_battlefield(seat, perm, None)
+        placed[name] = perm
+    _w1g10_resolve_stack(game)
+    return game, placed
+
+
+def _w1g10_next_upkeep(game, *, won: bool):
+    with _w1g10_patch("engine.handlers.control_flow.flip_coin", return_value=won):
+        game.start_next_turn()
+        _w1g10_resolve_stack(game)
+        for _ in range(10):
+            if not game.pending_choices:
+                break
+            game.auto_resolve_pending_choices()
+            _w1g10_resolve_stack(game)
+
+
+def test_w1g10_risky_move_hands_itself_over_and_a_lost_flip_gives_a_creature(set_pool):
+    """On seat 1's upkeep seat 1 takes the enchantment; gaining it from another
+    player triggers for seat 1, which chooses its own creature and an
+    opponent, loses the flip, and the opponent takes the creature — for good
+    (the ruling: not at end of turn, nor when this card leaves)."""
+    game, placed = _w1g10_risky_table(set_pool)
+    risky, bears, giant = placed["Risky Move"], placed["Grizzly Bears"], placed["Hill Giant"]
+    assert game.controller_index_of(risky) == 0
+    _w1g10_next_upkeep(game, won=False)
+
+    assert game.controller_index_of(risky) == 1, game.log
+    assert "Risky Move: chose Grizzly Bears" in game.log
+    new_owner = game.controller_index_of(bears)
+    assert new_owner in (0, 2), game.log
+    assert game.controller_index_of(giant) == 0, "seat 0's creature was never seat 1's to give"
+
+    game.remove_from_battlefield(risky)
+    game.resolve_cleanup_step(game.active_player_index)
+    assert game.controller_index_of(bears) == new_owner, game.log
+
+
+def test_w1g10_risky_move_a_won_flip_keeps_the_creature(set_pool):
+    game, placed = _w1g10_risky_table(set_pool)
+    _w1g10_next_upkeep(game, won=True)
+    assert game.controller_index_of(placed["Risky Move"]) == 1
+    assert game.controller_index_of(placed["Grizzly Bears"]) == 1, game.log
+    assert any("won the coin flip" in line for line in game.log), game.log
+
+
+def test_w1g10_risky_move_its_own_controllers_upkeep_triggers_nothing(set_pool):
+    """The upkeep hand-over to the seat that already controls it is no change
+    of control, so the "from another player" trigger does not fire."""
+    game, placed = _w1g10_risky_table(set_pool)
+    game.start_turn(0)
+    _w1g10_resolve_stack(game)
+    assert game.controller_index_of(placed["Risky Move"]) == 0
+    assert not any("Risky Move: chose" in line for line in game.log), game.log
+
 # ==== end W1G10 ======================================================
 
 

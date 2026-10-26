@@ -528,6 +528,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # is the permanent, which makes it an ordered-roles announcement and not a
     # second effect family.
     "give_control_of_target_to_player": "control",
+    # "Choose a creature you control and an opponent. Flip a coin. If you lose
+    # the flip, **that opponent gains control of that creature**." (Risky
+    # Move.) The hand-over with both ends *chosen on resolution* (CR 608.2d)
+    # rather than targeted — the same family again.
+    "give_control_of_chosen_to_player": "control",
     # The monitored linked durations (CR 611.2b): "for as long as you control
     # this creature and this creature remains tapped" (Willow Satyr, Rubinia
     # Soulsinger) and The Wretched's end-of-combat blocker steal. The
