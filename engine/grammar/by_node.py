@@ -536,6 +536,11 @@ _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
 #: the three above like every other pair of them.
 _BY_NODE_TYPE_WITH_EVENT_AND_PRODUCED: dict[type, object] = {
     ast.BlocksThisTurnIfAble: _lower_blocks_this_turn_if_able,
+    # "Add **{G}** for each …" reads only the records an earlier step wrote
+    # ("the sacrificed land", "the milled card"); "…an amount of {C} equal to
+    # the number of creatures you control that share a creature type **with
+    # it**" (Mana Echoes) reads the firing event too, for its pronoun.
+    ast.AddMana: _lower_add_mana,
     # "Choose a color. … you choose a card **of that color** from it." (Addle.)
     # The narrowing is a record an earlier step of the same effect wrote, so
     # the picker's lowering has to know one did — which is this table's shape.
@@ -689,7 +694,6 @@ _BY_NODE_TYPE_WITH_PRODUCED: dict[type, object] = {
     # record from an earlier step of the same sentence, "it" has no referent but
     # the source, and the two readings lower to different machinery.
     ast.SacrificeUnlessPay: _lower_sacrifice_unless_pay,
-    ast.AddMana: _lower_add_mana,
     # "it" names the card an earlier step of *this* effect turned up, so the
     # lowering needs ``produced`` where the event-bearing table passes
     # ``event``.

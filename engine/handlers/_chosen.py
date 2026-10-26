@@ -267,17 +267,27 @@ def resolve_color_chosen_in_resolution(described: dict, context) -> dict:
     return resolved
 
 
-def count_spec_in_resolution(spec: dict, context) -> dict:
+def count_spec_in_resolution(spec: dict, context, game=None) -> dict:
     """*spec* with its filter's resolution-scoped words resolved.
 
     The one place a count taken while an effect is applied turns "of that
     color" into a colour, asked by both readers that hold a resolution
     (:func:`count_from_payload` and :func:`per_recipient_amount`) so the
     sentence means one thing whichever channel carried it.
+
+    "…the number of creatures you control **that share a creature type with
+    it**" (Mana Echoes) is resolved here too, through
+    :func:`resolve_shared_creature_type` — *game* is what finds the event's
+    object by id where the fire site froze only that.
     """
     described = spec.get("filter")
     if not isinstance(described, dict):
         return spec
+    if described.get(SHARES_CREATURE_TYPE_WITH):
+        spec = {**spec, "filter": resolve_shared_creature_type(
+            described, context, game,
+        )}
+        described = spec["filter"]
     if described.get(NAMED_FROM_KEY):
         spec = {**spec, "filter": _resolve_named_from(described, context)}
         described = spec["filter"]

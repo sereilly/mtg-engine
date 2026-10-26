@@ -109,7 +109,7 @@ def count_from_payload(
     # colour, chosen by the step in front of this one: resolved here, where the
     # resolution is in hand, because `evaluate_count` below is also the CR 604.3
     # recompute's reader and holds no scratchpad.
-    spec = count_spec_in_resolution(spec, context)
+    spec = count_spec_in_resolution(spec, context, game)
     # "…choose **X** cards in your hand and discard the rest." (Breakthrough.)
     # The count less the X the cast announced (CR 107.3a) — read off the
     # context before the dispatch point substitutes this spec's own answer for
@@ -510,7 +510,7 @@ def per_recipient_amount(game, context, spec: dict, face, *, source=None) -> int
     # "…the number of creatures **of that color** that player controls"
     # (Searing Rays): the same resolution-scoped colour `count_from_payload`
     # resolves, through the same function.
-    spec = count_spec_in_resolution(spec, context)
+    spec = count_spec_in_resolution(spec, context, game)
     tally = spec.get("seat_tally_of")
     if tally is not None:
         recorded = context.results.get(tally) or {}

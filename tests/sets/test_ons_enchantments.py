@@ -685,6 +685,118 @@ def test_w1g6_a_crown_on_a_face_down_creature_reaches_only_that_creature(set_poo
     assert _w1g6_pt(other) == (2, 2), game.log
     assert _w1g6_pt(elf) == (1, 2), game.log
 
+
+# -- Mana Echoes ---------------------------------------------------------------
+# "Whenever a creature enters, you may add an amount of {C} equal to the number
+# of creatures you control that share a creature type with it."
+
+
+def _w1g6_settle(game):
+    """Resolve the stack and take every owed default — what a headless seat's
+    loop does between actions."""
+    _w1g6_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    _w1g6_resolve_stack(game)
+
+
+def _w1g6_echoes_table(set_pool, *, hand=(), opp_hand=(), mine=(), theirs=()):
+    game = _w1g6_table(set_pool, hand=hand)
+    game.players[1].hand.extend(_w1g6_card(set_pool, n) for n in opp_hand)
+    _w1g6_put(game, set_pool, 0, "Mana Echoes")
+    board = {name: _w1g6_put(game, set_pool, 0, name) for name in mine}
+    board.update({name: _w1g6_put(game, set_pool, 1, name) for name in theirs})
+    # The puts above are entries too; their triggers are not this test's.
+    game.stack.clear()
+    game.pending_choices.clear()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    return game, board
+
+
+def _w1g6_colorless(game, seat=0):
+    return game.players[seat].mana_pool.get("C", 0)
+
+
+def test_w1g6_mana_echoes_counts_the_creatures_that_share_a_type_with_the_one_that_entered(set_pool):
+    """An Elf Warrior enters under Mana Echoes. It shares a type with itself
+    (the ruling of 2020-08-07: "…so Mana Echoes usually adds at least {C}"),
+    with the Goblin Warrior and with the Elf Druid — and the other Elf Warrior
+    counts **once**, though it shares both types ("Mana Echoes counts the
+    number of creatures that share a type, not how many types they share").
+    The Human Soldier shares nothing: {C}{C}{C}{C}."""
+    game, _board = _w1g6_echoes_table(
+        set_pool, hand=["Elvish Warrior"],
+        mine=["Goblin Sky Raider", "Wirewood Elf", "Elvish Vanguard", "Glory Seeker"],
+    )
+    assert game.queue_from_hand(0, "Elvish Warrior").supported
+    _w1g6_settle(game)
+
+    assert _w1g6_colorless(game) == 4, game.log
+    assert "Mana Echoes produced {C}{C}{C}{C}" in game.log
+
+
+def test_w1g6_mana_echoes_counts_only_your_creatures_when_an_opponents_enters(set_pool):
+    """"…the number of creatures **you** control." The opponent's Goblin
+    Warrior enters: it is not one of Mana Echoes' controller's creatures, so it
+    does not count itself, and neither do the opponent's other Goblins — only
+    the controller's Elf Warrior (Warrior) and Goblin (Goblin): {C}{C}. The
+    opponent's pool is untouched."""
+    game, _board = _w1g6_echoes_table(
+        set_pool, opp_hand=["Goblin Piledriver"],
+        mine=["Elvish Warrior", "Skirk Prospector", "Glory Seeker"],
+        theirs=["Goblin Sky Raider"],
+    )
+    assert game.queue_from_hand(1, "Goblin Piledriver").supported
+    _w1g6_settle(game)
+
+    assert _w1g6_colorless(game, 0) == 2, game.log
+    assert _w1g6_colorless(game, 1) == 0
+
+
+def test_w1g6_mana_echoes_counts_as_it_resolves_after_a_response(set_pool):
+    """Mana Echoes (2020-08-07): "The amount of mana to add is determined only
+    as the triggered ability of Mana Echoes resolves. The ability isn't a mana
+    ability; players may respond to it." The trigger for an entering Elf
+    Warrior is on the stack; in response the opponent Shocks the Elf Druid, and
+    by resolution only the Elf Warrior itself and the Goblin Warrior are left
+    to count: {C}{C}."""
+    game, board = _w1g6_echoes_table(
+        set_pool, hand=["Elvish Warrior"], opp_hand=["Shock"],
+        mine=["Goblin Sky Raider", "Wirewood Elf"],
+    )
+    assert game.queue_from_hand(0, "Elvish Warrior").supported
+    game.resolve_top_of_stack()
+    assert [item.card.name for item in game.stack] == ["Mana Echoes"], game.stack
+    elf = board["Wirewood Elf"]
+    assert game.queue_from_hand(
+        1, "Shock", target_permanent_ids=[elf.permanent_id],
+    ).supported
+    assert game.resolve_top_of_stack()
+    # CR 704.3: the state-based check a player's priority makes between the
+    # two resolutions puts the Elf Druid into its owner's graveyard.
+    game._check_between_resolutions()
+    assert not game.is_on_battlefield(elf), game.log
+    assert [item.card.name for item in game.stack] == ["Mana Echoes"]
+    _w1g6_settle(game)
+
+    assert _w1g6_colorless(game) == 2, game.log
+    assert "Mana Echoes produced {C}{C}" in game.log
+
+
+def test_w1g6_mana_echoes_adds_nothing_for_a_face_down_creature(set_pool):
+    """A face-down creature has no creature types (CR 708.2), so nothing —
+    not even itself — shares one with it, and Mana Echoes adds no mana; the
+    Krosan Colossus it really is would have shared Beast with the Ravenous
+    Baloth."""
+    game, _board = _w1g6_echoes_table(
+        set_pool, hand=["Krosan Colossus"], mine=["Ravenous Baloth", "Glory Seeker"],
+    )
+    assert game.queue_from_hand(0, "Krosan Colossus", alternative_cost=True).supported
+    _w1g6_settle(game)
+
+    assert any(_w1g6_is_face_down(p) for p in game.all_permanents())
+    assert _w1g6_colorless(game) == 0, game.log
+
 # ==== end W1G6 ======================================================
 
 
