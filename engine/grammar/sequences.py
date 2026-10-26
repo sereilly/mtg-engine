@@ -81,6 +81,7 @@ from .sentence_rebinding import (
     rebind_alternative_pronoun_to_choice_target,
     rebind_delayed_pronoun_to_sentence_target,
     rebind_keyword_loss_pronoun_to_clause_target,
+    rebind_permanent_or_player_to_chosen_target,
     rebind_pump_pronoun_to_sentence_target,
     rebind_token_maker_to_previous_player,
 )
@@ -844,6 +845,11 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
     sequence = rebind_keyword_loss_pronoun_to_clause_target(
         rebind_pump_pronoun_to_sentence_target(ast.Sequence(tuple(steps)))
     )
+    # "Choose any target. … deals damage … to **that permanent or player**."
+    # (Erratic Explosion.) The choosing sentence hands its spec to the damage
+    # it was printed for, two sentences on.
+    if isinstance(sequence, ast.Sequence):
+        sequence = rebind_permanent_or_player_to_chosen_target(sequence)
     # The other cross-sentence pronoun, and the same argument: "remove all
     # -1/-1 counters from **the creature**" (Giant Oyster) names the creature
     # the sentence in front of it chose, and read as the bare source pronoun it

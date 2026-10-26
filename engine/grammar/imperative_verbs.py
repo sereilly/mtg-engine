@@ -55,6 +55,7 @@ from .references import _parse_further_subjects
 from .readers import _parse_entering_counters
 from .effects import (
     parse_bin_revealed_card,
+    parse_put_revealed_cards_on_bottom,
     parse_choose_host_at_random,
     parse_put_outside_game_card_into_hand,
     _parse_force_chosen_creature_to_attack,
@@ -228,6 +229,13 @@ def parse_imperative_verb(
         linked = _parse_put_exiled_with_source(stream)
         if linked is not None:
             return linked
+        # "Put the revealed cards on the bottom of your library in any order."
+        # (Goblin Machinist, Erratic Explosion.) The pile a fateless
+        # reveal-until left on top; non-consuming on refusal, for the
+        # counter production's reason above.
+        revealed_pile = parse_put_revealed_cards_on_bottom(stream)
+        if revealed_pile is not None:
+            return revealed_pile
         # "Put the card on top of your library." (Sylvan Library.) The same
         # treatment and for the same reason: the counter production reads
         # "the" as a counter kind and refuses with a site naming counters.

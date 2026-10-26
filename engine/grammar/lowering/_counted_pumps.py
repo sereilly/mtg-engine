@@ -539,6 +539,28 @@ def _x_definition_spec(
         # sacrificed it took it off the battlefield without destroying the
         # object the resolution still holds.
         return {"source_counters": definition.kind}
+    if (
+        recorded is not None
+        and isinstance(definition, ast.CharacteristicOfSubject)
+        and definition.characteristic == "mana_value"
+        and definition.offset == 0
+        and definition.referent is not None
+        and definition.referent.is_card
+        and not _restrictions_beyond(definition.referent, frozenset({"is_card"}))
+    ):
+        # "…, where X is **that card's** mana value." (Goblin Machinist.) Not
+        # the pumped creature: "card" names an object outside the battlefield
+        # (CR 400.1), which here is the card a step of this effect turned up
+        # and froze the number of (CR 608.2h) — the record "deals damage
+        # equal to that card's mana value" reads in the sentence form
+        # (``amounts``), on the channel the "revealed this way" count below
+        # uses. With no such step the words name nothing and refuse.
+        if "its_mana_value" not in recorded:
+            raise LoweringError(
+                "\"that card's mana value\" with no step that recorded a card",
+                node=node,
+            )
+        return {"back_reference": "its_mana_value"}
     if isinstance(definition, ast.CharacteristicOfSubject):
         # "…, where X is **its** mana value" (Great Defender, Subdue, Kry
         # Shield), "…, where X is **its toughness minus 1**" (Blood Lust). Not

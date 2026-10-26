@@ -867,8 +867,20 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
 #: One table rather than a predicate, for :data:`_PRODUCES`' own reason: this is
 #: a registry, and the thing being registered is a payload entry the lowering
 #: already writes.
-_PRODUCES_FOR_PAYLOAD: dict[str, tuple[str, object, str]] = {
+_PRODUCES_FOR_PAYLOAD: dict[str, tuple[str, object, "str | tuple[str, ...]"]] = {
     "search_library": ("destination", "exile", "exiled_cards"),
+    # "Reveal cards from the top of your library until you reveal a nonland
+    # card. This creature gets +X/+0 until end of turn, where X is **that
+    # card's mana value**. Put **the revealed cards** on the bottom of your
+    # library in any order." (Goblin Machinist.) Only the fateless run
+    # leaves anything for a later sentence: every other spelling places the
+    # find and the rest in its own sentence, so declaring these flat would
+    # admit "the revealed cards" behind a run whose pile is already gone.
+    # Two records, the pile and the find's mana value (0 when the run found
+    # nothing, CR 107.2 — the rulings' "X is zero").
+    "reveal_until_match": (
+        "destination", "revealed", ("revealed_until_cards", "its_mana_value"),
+    ),
     # "Reveal the top three cards of your library and put one of them into
     # your hand. You gain life equal to **that card's mana value**." (Reviving
     # Vapors.) The pick writes the taken card's mana value only when the
@@ -998,7 +1010,7 @@ def _produced_by_kind(instruction) -> frozenset[str]:
     if conditional is not None:
         payload_key, payload_value, record = conditional
         if (instruction.payload or {}).get(payload_key) == payload_value:
-            keys = keys | {record}
+            keys = keys | ({record} if isinstance(record, str) else set(record))
     unless = _PRODUCES_FOR_PAYLOAD_WITHOUT.get(kind)
     if unless is not None:
         payload_key, payload_value, record, absent = unless

@@ -689,6 +689,9 @@ ACTIVATED_LABELS: dict[str, str] = {
     # "chosen from a zone nobody sees" -- this one is revealed as it goes and
     # can whiff, and a deck with no white card left exiles itself.
     "reveal_until_match": "activated_library",
+    # "Put the revealed cards on the bottom of your library in any order."
+    # (Goblin Machinist.) The run's tail, and the same object: the library.
+    "put_revealed_cards_on_bottom": "activated_library",
     # --- Exodus, at its promotion -----------------------------------------
     # Two kinds the promotion gate surfaced, which is the asymmetry
     # ``measured_grammar_abilities``' docstring explains: "no ability falls

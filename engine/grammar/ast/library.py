@@ -830,11 +830,31 @@ class RevealUntil:
     both stated, because a card that milled the rest instead of shuffling them
     back is a different card and the difference is invisible in the first two
     sentences.
+
+    ``"revealed"`` for both is the run with **no fate of its own** (Goblin
+    Machinist, Erratic Explosion): CR 701.20b leaves every card it turned over
+    on top of the library, revealed, while the sentences behind read the found
+    card, and a later sentence (:class:`PutRevealedCardsOnBottom`) places the
+    whole pile — the find among it.
     """
     whose: str
     filter: ObjectFilter
     destination: str = "battlefield"
     rest: str = "shuffle_into_library"
+
+
+@dataclass(frozen=True)
+class PutRevealedCardsOnBottom:
+    """``Put the revealed cards on the bottom of your library in any order.``
+    (Goblin Machinist, Erratic Explosion; Kaboom! prints "then you put …".)
+
+    The pile a fateless :class:`RevealUntil` left on top of the library — the
+    find and everything before it — going to the other end of it, in an order
+    its owner chooses (CR 401.4). Its own sentence and its own node because it
+    is printed *after* the sentences that read the found card, and CR 608.2c
+    performs them in the order printed. No fields: the pile is the run's
+    record and the library is the one it came out of.
+    """
 
 @dataclass(frozen=True)
 class PutExiledPileOnLibrary:

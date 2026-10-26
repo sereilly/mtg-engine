@@ -358,6 +358,7 @@ from .reveal import (
     _lower_reveal_top_sorting_by_chosen_name,
     _lower_reveal_top_sorting_by_filter,
     _lower_reveal_until,
+    _lower_put_revealed_cards_on_bottom,
 )
 from .search import (
     HELD_SEARCH_PILE,
@@ -583,6 +584,7 @@ __all__ = [
     "_lower_reveal_top",
     "_lower_reveal_cards_from_hand",
     "_lower_reveal_until",
+    "_lower_put_revealed_cards_on_bottom",
     "_lower_simultaneous_untap_and_tap",
     "_lower_tap_or_untap",
     "_lower_attach",

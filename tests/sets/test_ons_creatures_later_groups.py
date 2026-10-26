@@ -1192,6 +1192,149 @@ def test_w1g7_gangrenous_goliath_taps_three_clerics_from_the_graveyard(set_pool)
 # ==== W1G12 ==========================================================
 # W1G12's tests go between this line and the "end W1G12" line.
 
+# --- W1G12: revealing ---------------------------------------------------------
+from engine import Game as _w1g12_Game
+from engine.models import Permanent as _w1g12_Permanent
+from engine.models import PlayerState as _w1g12_PlayerState
+from engine.oracle import compile_card_oracle as _w1g12_compile
+from engine.targeting import derive_activation_spec as _w1g12_activation_spec
+
+from tests.helpers import resolve_stack as _w1g12_resolve_stack
+
+
+def _w1g12_table(set_pool, library, *, hands=None, interactive=(), seats=2):
+    ons = set_pool("ONS")
+    hands = hands or {}
+    names = ["Alice", "Bob", "Cara"][:seats]
+    players = [
+        _w1g12_PlayerState(
+            name=name,
+            hand=[ons[card] if isinstance(card, str) else card for card in hands.get(seat, ())],
+            library=(
+                [ons[c] if isinstance(c, str) else c for c in library]
+                if seat == 0 else [ons["Plains"]] * 5
+            ),
+        )
+        for seat, name in enumerate(names)
+    ]
+    game = _w1g12_Game(players=players)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game.active_player_index = 0
+    return game
+
+
+def _w1g12_put(game, seat, card):
+    permanent = _w1g12_Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    game._sync_control()
+    return permanent
+
+
+def _w1g12_names(cards):
+    return [card.name for card in cards]
+
+
+def test_w1g12_goblin_machinist_pumps_by_the_first_nonland_and_bottoms_the_run(set_pool):
+    """"{2}{R}: Reveal cards from the top of your library until you reveal a
+    nonland card. This creature gets +X/+0 until end of turn, where X is that
+    card's mana value. Put the revealed cards on the bottom of your library in
+    any order." The run stops on Akroma's Vengeance (mana value 6) under two
+    lands; the Machinist is 6/5; the three revealed cards — the find among
+    them — go under the two cards that were never turned over, in the order
+    the interactive owner chose (CR 401.4)."""
+    game = _w1g12_table(
+        set_pool,
+        ["Mountain", "Island", "Akroma's Vengeance", "Forest", "Goblin Taskmaster"],
+        interactive={0},
+    )
+    machinist = _w1g12_put(game, 0, set_pool("ONS")["Goblin Machinist"])
+    assert game.activate_permanent_ability(0, "Goblin Machinist").supported
+    assert not game.resolve_top_of_stack()
+    order = game.pending_choice_of("reorder_library", 0)
+    assert order is not None and order.data["position"] == "bottom"
+    assert order.data["top_count"] == 3
+    # Before the order is answered the pump has already happened (CR 608.2c:
+    # the pump is printed before the bottom).
+    assert (machinist.effective_power, machinist.effective_toughness) == (6, 5)
+    assert game.confirm_reorder_library(0, [2, 1, 0])
+    _w1g12_resolve_stack(game)
+    assert _w1g12_names(game.players[0].library) == [
+        "Forest", "Goblin Taskmaster", "Akroma's Vengeance", "Island", "Mountain",
+    ]
+    assert (machinist.effective_power, machinist.effective_toughness) == (6, 5)
+    assert any("stopped on Akroma's Vengeance" in line for line in game.log)
+
+
+def test_w1g12_goblin_machinist_over_an_all_land_library_is_zero(set_pool):
+    """The ruling (2004-10-04): "If all the cards in your library are lands, X
+    is zero." The whole library is revealed and put back, in the order a
+    headless owner leaves it; the Machinist stays 0/5."""
+    game = _w1g12_table(set_pool, ["Mountain", "Island", "Forest"])
+    machinist = _w1g12_put(game, 0, set_pool("ONS")["Goblin Machinist"])
+    assert game.activate_permanent_ability(0, "Goblin Machinist").supported
+    _w1g12_resolve_stack(game)
+    assert (machinist.effective_power, machinist.effective_toughness) == (0, 5)
+    assert _w1g12_names(game.players[0].library) == ["Mountain", "Island", "Forest"]
+    assert game.pending_choices == []
+
+
+def test_w1g12_riptide_shapeshifter_digs_for_the_type_it_names(set_pool):
+    """"{2}{U}{U}, Sacrifice this creature: Choose a creature type. Reveal
+    cards from the top of your library until you reveal a creature card of
+    that type. Put that card onto the battlefield and shuffle the rest into
+    your library." Named Goblin, the run passes the Elf (a creature card, but
+    not of that type) and stops on the Goblin under it; the Elf and the land
+    are shuffled back, the Goblin under the bottom stays in the library."""
+    game = _w1g12_table(
+        set_pool,
+        ["Forest", "Wellwisher", "Goblin Taskmaster", "Island", "Skirk Commando"],
+        interactive={0},
+    )
+    _w1g12_put(game, 0, set_pool("ONS")["Riptide Shapeshifter"])
+    # It targets nothing: no picker for the client to fill in.
+    assert _w1g12_activation_spec(
+        _w1g12_compile(set_pool("ONS")["Riptide Shapeshifter"]).activated_abilities[0]
+    ) is None
+    assert game.activate_permanent_ability(0, "Riptide Shapeshifter").supported
+    assert _w1g12_names(game.players[0].graveyard) == ["Riptide Shapeshifter"]
+    assert not game.resolve_top_of_stack()
+    assert game.confirm_creature_type_choice(0, "Goblin")
+    _w1g12_resolve_stack(game)
+    assert [p.card.name for p in game.all_permanents()] == ["Goblin Taskmaster"]
+    assert sorted(_w1g12_names(game.players[0].library)) == [
+        "Forest", "Island", "Skirk Commando", "Wellwisher",
+    ]
+
+
+def test_w1g12_riptide_shapeshifter_naming_a_type_nothing_has_finds_nothing(set_pool):
+    """A type no card in the library has: the whole library is revealed,
+    nothing enters, and every card is shuffled back — never the first creature
+    card of some other type. And the default a seat nobody asks takes is its
+    own library's commonest type (two Goblins against one Elf)."""
+    game = _w1g12_table(
+        set_pool, ["Forest", "Wellwisher", "Island"], interactive={0},
+    )
+    _w1g12_put(game, 0, set_pool("ONS")["Riptide Shapeshifter"])
+    assert game.activate_permanent_ability(0, "Riptide Shapeshifter").supported
+    assert not game.resolve_top_of_stack()
+    assert game.confirm_creature_type_choice(0, "Goblin")
+    _w1g12_resolve_stack(game)
+    assert list(game.all_permanents()) == []
+    assert sorted(_w1g12_names(game.players[0].library)) == [
+        "Forest", "Island", "Wellwisher",
+    ]
+
+    game = _w1g12_table(
+        set_pool,
+        ["Forest", "Wellwisher", "Goblin Taskmaster", "Island", "Skirk Commando"],
+    )
+    _w1g12_put(game, 0, set_pool("ONS")["Riptide Shapeshifter"])
+    assert game.activate_permanent_ability(0, "Riptide Shapeshifter").supported
+    _w1g12_resolve_stack(game)
+    assert [p.card.name for p in game.all_permanents()] == ["Goblin Taskmaster"]
+
 # ==== end W1G12 ======================================================
 
 

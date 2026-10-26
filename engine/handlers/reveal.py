@@ -529,12 +529,35 @@ def reveal_until_match(game: Game, instruction: OracleInstruction, context: Orac
         return True, "resolved"
     player = game.players[seat]
     described = dict(payload.get("filter") or {})
+    # "Choose a creature type. Reveal cards … until you reveal a creature card
+    # **of that type**." (Riptide Shapeshifter.) The word the choosing step in
+    # front wrote (CR 608.2d), turned into the ``subtype_filter`` the card
+    # matcher reads. **No word means no match** — read as no narrowing, the
+    # run would stop on the first creature card of any type — so the run turns
+    # over the whole library and finds nothing, which is what a reveal for a
+    # type nobody named does.
+    chosen_from = described.pop("subtype_filter_from", None)
+    chosen_word = None
+    if chosen_from is not None:
+        chosen_word = context.results.get(str(chosen_from))
+        if chosen_word:
+            described["subtype_filter"] = str(chosen_word)
+        else:
+            game.log.append(f"{context.card.name}: no creature type was chosen")
+
+    def matches(card) -> bool:
+        if chosen_from is not None and not chosen_word:
+            return False
+        return _card_matches_filter(card, described, game=game, owner=player)
+
+    if payload.get("destination") == "revealed":
+        return _reveal_until_match_in_place(game, seat, matches, context)
 
     revealed: list = []
     found = None
     while player.library:
         card = player.library.pop(0)
-        if _card_matches_filter(card, described, game=game, owner=player):
+        if matches(card):
             found = card
             break
         revealed.append(card)
@@ -575,6 +598,98 @@ def reveal_until_match(game: Game, instruction: OracleInstruction, context: Orac
     else:
         for card in revealed:
             game.put_card_into_graveyard(player, card, from_zone="library")
+    return True, "resolved"
+
+
+#: The pile a fateless reveal-until left revealed on top of its library, in
+#: the order it was turned over — the find last. Spelled once more in
+#: ``grammar/lowering/reveal.REVEALED_UNTIL_CARDS``, which the record
+#: declaration reads.
+REVEALED_UNTIL_CARDS = "revealed_until_cards"
+
+
+def _reveal_until_match_in_place(
+    game: Game, seat: int, matches, context: OracleExecutionContext,
+) -> tuple[bool, str]:
+    """"Reveal cards from the top of your library until you reveal a nonland
+    card." with **no fate of its own** (Goblin Machinist, Erratic Explosion).
+
+    CR 701.20b: revealing moves nothing. So nothing is popped — the run reads
+    down the library from the top, stops on the first card *matches* accepts,
+    and leaves every card it turned over where it lay, revealed (CR 701.20a:
+    "for as long as necessary to complete the parts of the effect that card is
+    relevant to"). Two records for the sentences behind: the pile itself,
+    under :data:`REVEALED_UNTIL_CARDS`, for "put the revealed cards on the
+    bottom", and the find's mana value under ``its_mana_value`` for "that
+    card's mana value".
+
+    **A library with no match is the whole library, and X is zero** — the
+    rulings for both cards (2004-10-04): "If all the cards in your library are
+    lands, X is zero" / "no damage is dealt". CR 107.2 gives the number of a
+    card that does not exist as 0, and the pile is every card turned over.
+    """
+    player = game.players[seat]
+    pile: list = []
+    found = None
+    for card in player.library:
+        pile.append(card)
+        if matches(card):
+            found = card
+            break
+    context.results[REVEALED_UNTIL_CARDS] = pile
+    context.results["its_mana_value"] = int(found.cmc or 0) if found is not None else 0
+    if pile:
+        game.record_reveal(seat, [card.name for card in pile])
+    if found is not None:
+        game.log.append(
+            f"{player.name} revealed {len(pile)} card(s) and stopped on "
+            f"{found.name} (mana value {int(found.cmc or 0)})"
+        )
+    else:
+        game.log.append(
+            f"{player.name} revealed their library ({len(pile)} card(s)) and "
+            "found nothing"
+        )
+    return True, "resolved"
+
+
+@effect_handler("put_revealed_cards_on_bottom")
+def put_revealed_cards_on_bottom(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Put the revealed cards on the bottom of your library in any order."
+    (Goblin Machinist, Erratic Explosion.)
+
+    The pile the run in front of this step left revealed on top of the
+    library (:func:`_reveal_until_match_in_place`), moved to the other end of
+    the same library. Not a zone change — CR 701.20b left the cards in the
+    library, and the bottom of that library is still that library — so it is
+    laid down directly, as ``_place_sorted_reveal`` lays Goblin Ringleader's
+    rest, rather than through ``put_card_into_library``.
+
+    Each card is taken out **by identity**, top first: two copies of a card in
+    a deck are the same ``CardDefinition``, and the pile is the top of the
+    library, so the first occurrence from the top is the card the run turned
+    over. A card that has left since is left alone (CR 608.2). Then CR 401.4:
+    the owner orders cards put in one position at one time, asked once through
+    ``offer_library_bottom_order`` — the seam every "in any order" bottom
+    reaches.
+    """
+    pile = list(context.results.get(REVEALED_UNTIL_CARDS) or ())
+    player = context.caster
+    moved: list = []
+    for card in pile:
+        for index, held in enumerate(player.library):
+            if held is card:
+                moved.append(player.library.pop(index))
+                break
+    if not moved:
+        game.log.append(f"{context.card.name}: no revealed card to put back")
+        return True, "resolved"
+    player.library.extend(moved)
+    game.log.append(
+        f"{player.name} put {len(moved)} revealed card(s) on the bottom of "
+        "their library"
+    )
+    game.offer_library_bottom_order(player, len(moved))
     return True, "resolved"
 
 

@@ -51,7 +51,11 @@ anything here, which is what lets the two sit side by side as families.
 
 from __future__ import annotations
 
-from ...oracle_types import (CHOSEN_COLOR_THIS_WAY, CHOSEN_HAND_CARDS_BY_SEAT,
+import dataclasses
+
+from ...oracle_types import (CHOSEN_COLOR_THIS_WAY,
+                             CHOSEN_CREATURE_TYPE_THIS_WAY,
+                             CHOSEN_HAND_CARDS_BY_SEAT,
                              LAST_TARGET_CONTROLLER,
                              OracleInstruction, REVEALED_HAND_CARDS,
                              REVEALED_THIS_WAY, X_FROM_COUNT)
@@ -91,7 +95,31 @@ def _lower_reveal_until(
         raise LoweringError(
             "\"that creature's controller\" with no exile before it", node=node,
         )
-    described = card_only_filter(node.filter.to_payload())
+    # "Choose a creature type. Reveal cards from the top of your library until
+    # you reveal a creature card **of that type**." (Riptide Shapeshifter.)
+    # The word the step in front recorded (CR 608.2d), lifted off the filter
+    # and named by its record — Peer Pressure's arrangement one sentence over
+    # (``conditions``). ``of_bound_type`` has no ``to_payload`` form, so this
+    # lowering used to drop the phrase in silence and stop on the first
+    # creature card of any type; with no step that chose a type the words
+    # name nothing, and the line refuses.
+    filt = node.filter
+    bound_type: dict[str, object] = {}
+    if filt.of_bound_type:
+        if CHOSEN_CREATURE_TYPE_THIS_WAY not in produced:
+            raise LoweringError(
+                "'of that type' names a creature type no step of this effect "
+                "chose", node=node,
+            )
+        filt = dataclasses.replace(filt, of_bound_type=False)
+        bound_type["subtype_filter_from"] = CHOSEN_CREATURE_TYPE_THIS_WAY
+    payload_filter = filt.to_payload()
+    dropped = dropped_narrowings(filt, payload_filter)
+    if dropped:
+        raise LoweringError(
+            f"the reveal does not honour {dropped[0]!r}", node=node,
+        )
+    described = card_only_filter(payload_filter)
     if described is None:
         raise LoweringError(
             "the reveal cannot test this restriction on a card", node=node,
@@ -101,12 +129,36 @@ def _lower_reveal_until(
             "reveal_until_match", "",
             {
                 "whose": node.whose,
-                "filter": described,
+                "filter": {**described, **bound_type},
                 "destination": node.destination,
                 "rest": node.rest,
             },
         ),
     )
+
+
+def _lower_put_revealed_cards_on_bottom(
+    node: ast.PutRevealedCardsOnBottom, produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """"Put the revealed cards on the bottom of your library in any order."
+    (Goblin Machinist, Erratic Explosion.)
+
+    Demands the run that left the pile revealed — a fateless
+    ``reveal_until_match``, which records it under ``revealed_until_cards``
+    (``_records._PRODUCES_FOR_PAYLOAD``). Without it "the revealed cards" name
+    nothing, and a step moving nothing would report supported.
+    """
+    if REVEALED_UNTIL_CARDS not in produced:
+        raise LoweringError(
+            '"the revealed cards" with no reveal in front of them', node=node,
+        )
+    return (OracleInstruction("put_revealed_cards_on_bottom", "", {}),)
+
+
+#: The pile a fateless reveal-until leaves revealed on top of its library —
+#: the scratchpad key ``handlers/reveal.reveal_until_match`` writes, spelled
+#: there as ``REVEALED_UNTIL_CARDS`` too.
+REVEALED_UNTIL_CARDS = "revealed_until_cards"
 
 
 def _lower_reveal_top(node: ast.RevealTopToHandOrBottom) -> tuple[OracleInstruction, ...]:

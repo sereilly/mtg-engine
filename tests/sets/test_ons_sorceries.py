@@ -511,6 +511,121 @@ def test_w1g4_aphetto_dredging_refuses_rather_than_dropping_its_narrowing(set_po
 # ==== W1G12 ==========================================================
 # W1G12's tests go between this line and the "end W1G12" line.
 
+# --- W1G12: revealing ---------------------------------------------------------
+from engine import Game as _w1g12_Game
+from engine.models import Permanent as _w1g12_Permanent
+from engine.models import PlayerState as _w1g12_PlayerState
+from engine.oracle import compile_card_oracle as _w1g12_compile
+from engine.targeting import derive_cast_spec as _w1g12_cast_spec
+
+from tests.helpers import _mk_creature_card as _w1g12_creature
+from tests.helpers import resolve_stack as _w1g12_resolve_stack
+
+
+def _w1g12_table(set_pool, library, *, hands=None, interactive=(), seats=2,
+                 libraries=None):
+    ons = set_pool("ONS")
+    hands = hands or {}
+    libraries = libraries or {}
+    names = ["Alice", "Bob", "Cara"][:seats]
+    players = [
+        _w1g12_PlayerState(
+            name=name,
+            hand=[ons[card] if isinstance(card, str) else card for card in hands.get(seat, ())],
+            library=[
+                ons[c] if isinstance(c, str) else c
+                for c in (library if seat == 0 else libraries.get(seat, ["Plains"] * 5))
+            ],
+        )
+        for seat, name in enumerate(names)
+    ]
+    game = _w1g12_Game(players=players)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game.active_player_index = 0
+    return game
+
+
+def _w1g12_put(game, seat, card):
+    permanent = _w1g12_Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    game._sync_control()
+    return permanent
+
+
+def _w1g12_names(cards):
+    return [card.name for card in cards]
+
+
+def test_w1g12_erratic_explosion_hits_the_chosen_creature_for_the_mana_value(set_pool):
+    """"Choose any target. Reveal cards from the top of your library until you
+    reveal a nonland card. Erratic Explosion deals damage equal to that card's
+    mana value to that permanent or player. Put the revealed cards on the
+    bottom of your library in any order." The picker offers any target (the
+    choosing sentence is the announcement, CR 601.2c); the run stops on
+    Akroma's Vengeance under a land, the giant takes 6, and the two revealed
+    cards go under the one never turned over."""
+    explosion = set_pool("ONS")["Erratic Explosion"]
+    spec = _w1g12_cast_spec(explosion, _w1g12_compile(explosion))
+    assert spec is not None and spec.get("kind") == "any"
+    game = _w1g12_table(
+        set_pool, ["Mountain", "Akroma's Vengeance", "Forest"],
+        hands={0: ["Erratic Explosion"]},
+    )
+    giant = _w1g12_put(game, 1, _w1g12_creature("Bob's Giant", 5, 7))
+    assert game.cast_from_hand(
+        0, "Erratic Explosion", target_permanent_ids=[giant.permanent_id],
+    ).supported
+    _w1g12_resolve_stack(game)
+    assert giant.damage_marked == 6
+    assert game.players[1].life == 20
+    assert _w1g12_names(game.players[0].library) == [
+        "Forest", "Mountain", "Akroma's Vengeance",
+    ]
+    assert _w1g12_names(game.players[0].graveyard) == ["Erratic Explosion"]
+
+
+def test_w1g12_erratic_explosion_at_a_player_and_over_an_all_land_library(set_pool):
+    """At a player: Shock on top deals 1. And the ruling (2004-10-04): "If all
+    your cards are lands, no damage is dealt" — the whole library is turned
+    over and put back, and the player is untouched."""
+    game = _w1g12_table(
+        set_pool, ["Shock", "Forest"], hands={0: ["Erratic Explosion"]},
+    )
+    assert game.cast_from_hand(0, "Erratic Explosion", target_player_index=1).supported
+    _w1g12_resolve_stack(game)
+    assert game.players[1].life == 19
+    assert _w1g12_names(game.players[0].library) == ["Forest", "Shock"]
+
+    game = _w1g12_table(
+        set_pool, ["Mountain", "Forest"], hands={0: ["Erratic Explosion"]},
+    )
+    assert game.cast_from_hand(0, "Erratic Explosion", target_player_index=1).supported
+    _w1g12_resolve_stack(game)
+    assert game.players[1].life == 20
+    assert _w1g12_names(game.players[0].library) == ["Mountain", "Forest"]
+
+
+def test_w1g12_erratic_explosion_whose_target_left_does_not_reveal(set_pool):
+    """CR 608.2b: the one target is illegal as the spell resolves, so the
+    spell does nothing at all — no card is revealed and the library is as it
+    was."""
+    game = _w1g12_table(
+        set_pool, ["Mountain", "Shock", "Forest"], hands={0: ["Erratic Explosion"]},
+    )
+    giant = _w1g12_put(game, 1, _w1g12_creature("Bob's Giant", 5, 7))
+    assert game.queue_from_hand(
+        0, "Erratic Explosion", target_player_index=1,
+        target_permanent_ids=[giant.permanent_id],
+    ).supported
+    assert len(game.stack) == 1
+    game.remove_from_battlefield(giant)
+    _w1g12_resolve_stack(game)
+    assert _w1g12_names(game.players[0].library) == ["Mountain", "Shock", "Forest"]
+    assert not any("stopped on" in line for line in game.log)
+    assert _w1g12_names(game.players[0].graveyard) == ["Erratic Explosion"]
+
 # ==== end W1G12 ======================================================
 
 

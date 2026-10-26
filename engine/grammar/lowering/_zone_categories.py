@@ -276,6 +276,9 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # sentences then do about it.
     "reveal_top_of_library": "zones",
     "reveal_until_match": "zones",
+    # The pile a fateless reveal-until left on top, sent to the bottom
+    # (Goblin Machinist): the same library, the other end.
+    "put_revealed_cards_on_bottom": "zones",
     "name_and_strip": "zones",
     # Its decomposed half (Lobotomy): the same strip across the same three
     # zones, reading a name an earlier step of the spell recorded rather than
