@@ -5017,6 +5017,30 @@ function applyUpkeepPreventionPrompt(info) {
 // Disrupting Scepter: the discarding player picks which card to discard. With
 // Library of Leng a destination toggle lets them send it to the top of their
 // library instead of the graveyard.
+// What a discard prompt says before its instruction: which spell or ability
+// made this seat discard (`card_name`), and — "Each player discards a card"
+// (Strongarm Tactics), asked one seat at a time in turn order — where this
+// seat stands in the round and what the seats before it discarded
+// (`each_player`, public the moment it happened).
+function discardSelectContext(info) {
+  const parts = [];
+  if (info?.card_name) parts.push(`${info.card_name}:`);
+  const round = Array.isArray(info?.each_player) ? info.each_player : null;
+  if (round && round.length > 1) {
+    const at = round.findIndex((entry) => entry.seat === seat);
+    const before = round.slice(0, Math.max(0, at)).map((entry) => entry.discarded.length
+      ? `${entry.name} discarded ${entry.discarded.join(", ")}`
+      : `${entry.name} discarded nothing`);
+    const after = round.slice(at + 1).map((entry) => entry.name);
+    parts.push(
+      `each player discards in turn order — you are ${at + 1} of ${round.length}.`
+      + (before.length ? ` ${before.join("; ")}.` : "")
+      + (after.length ? ` ${after.join(", ")} ${after.length === 1 ? "is" : "are"} next.` : ""),
+    );
+  }
+  return parts.join(" ");
+}
+
 function applyDiscardSelectPrompt(info) {
   const panel = q("activationPanel");
   const title = q("promptTitle");
@@ -5066,6 +5090,8 @@ function applyDiscardSelectPrompt(info) {
     title.textContent = target === 1 ? "Discard a Card" : `Discard ${target} Cards`;
     body.textContent = `Select ${target} card(s) from your hand to discard to ${destLabel}.`;
   }
+  const context = discardSelectContext(info);
+  if (context) body.textContent = `${context} ${body.textContent}`;
 
   const toggleRow = allowTop
     ? `<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn" id="discardDestToggle">` +
@@ -7886,6 +7912,17 @@ function applyOrderTriggersPrompt(info) {
   };
 }
 
+// A trigger another player controls whose target this seat chooses ("that
+// creature's controller may have target creature of their choice get -3/-3",
+// Death Match): the server names the controller (`controller_seat`,
+// `controller_name`) and the ability's words only then.
+function triggerTargetForAnotherText(info) {
+  if (!Number.isInteger(info?.controller_seat) || info.controller_seat === seat) return "";
+  const words = info.ability_text ? ` — “${info.ability_text}”` : ".";
+  return `${info.controller_name || "An opponent"}'s ${info.card_name || "ability"} triggered${words} `
+    + `You choose its target${info.up_to ? " (you may choose none)" : ""}.`;
+}
+
 function applyTriggerTargetPrompt(info) {
   const panel = q("activationPanel");
   panel.classList.remove("hidden");
@@ -7922,7 +7959,7 @@ function applyTriggerTargetPrompt(info) {
   if (kinds.has("permanent")) where.push("a highlighted permanent on the battlefield");
   if (kinds.has("player")) where.push("a highlighted player's life pill");
   q("promptTitle").textContent = "Choose a target";
-  q("promptBody").textContent =
+  q("promptBody").textContent = triggerTargetForAnotherText(info) ||
     `${info.card_name || "The ability"}: its triggered ability ` +
     (info.up_to ? "may name a target." : "needs a target.");
   const rows = [];
@@ -8844,8 +8881,18 @@ function applyChooseCardsInHandPrompt(info) {
   const anyNumber = Boolean(info.any_number);
   const verb = info.verb === "reveal" ? "reveal" : "choose";
 
-  title.textContent = `${info.card_name} — ${verb} cards in your hand`;
-  body.textContent = anyNumber
+  // "…may **put** any number of … cards from their hand **onto the
+  // battlefield**" (Tempting Wurm): the pick is the put, and the panel says
+  // where the cards go (`destination`) — it said "choose" and nothing more.
+  const putting = info.destination === "battlefield";
+  title.textContent = putting
+    ? `${info.card_name} — put cards from your hand onto the battlefield`
+    : `${info.card_name} — ${verb} cards in your hand`;
+  body.textContent = putting
+    ? (anyNumber
+      ? `You may put any number of these cards from your hand onto the battlefield (up to ${wanted}); putting none is legal.`
+      : `Put ${wanted} card${wanted === 1 ? "" : "s"} from your hand onto the battlefield.`)
+    : anyNumber
     ? `${verb === "reveal" ? "Reveal" : "Choose"} any number of the cards in your hand (up to ${wanted}).`
     : `${verb === "reveal" ? "Reveal" : "Choose"} ${wanted} card${wanted === 1 ? "" : "s"} in your hand.`;
   // Noxious Vapors: the pick is one card per printed slot, so the count is not
@@ -12875,7 +12922,11 @@ function renderActivationPrompt() {
     cancelBtn.disabled = false;
     customOkBtn.disabled = true;
     title.textContent = `Cast ${pending.cardName}`;
-    body.textContent = "As an additional cost, choose a creature type.";
+    // A type the targets are chosen by (Aphetto Dredging) is announced before
+    // them, not paid: the cost sentence is Caller of the Hunt's alone.
+    body.textContent = castTargetsFollowChosenType(pending.card, null)
+      ? "Choose a creature type first: the targets you choose next must be of that type."
+      : "As an additional cost, choose a creature type.";
     const options = pending.types
       .map((type) => {
         const label = escapeHtml(type.charAt(0).toUpperCase() + type.slice(1));
@@ -13293,7 +13344,7 @@ function renderActivationPrompt() {
         ...targetRequirementRowsHtml(pendingCastTarget.card, rolePermanentPicks(pendingCastTarget)),
         ...(mayStop
           ? [`<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn" id="roleSkipBtn">`
-            + `No ${escapeHtml(roleTargetNoun(currentRole(pendingCastTarget)))} — this target is optional</button></div>`]
+            + `${escapeHtml(roleSkipLabel(pendingCastTarget))}</button></div>`]
           : []),
       ].join("");
       const skipBtn = document.getElementById("roleSkipBtn");
@@ -16454,8 +16505,55 @@ function confirmCastCreatureType(word) {
   // Back through the cost stage, not straight into the targets: a card may
   // print this choice *and* a price the caster picks a permanent for, and the
   // answer just recorded is what stops this re-opening the same prompt.
-  if (startCastCostPrompt(card, castAction)) return;
-  continueCastAfterCost(card, castAction);
+  const proceed = () => {
+    if (startCastCostPrompt(card, castAction)) return;
+    continueCastAfterCost(card, castAction);
+  };
+  // "Return up to three target creature cards **of the creature type of your
+  // choice**" (Aphetto Dredging): the targets depend on the word, so the
+  // picker must offer the list for *this* word, not the one the hand card was
+  // sent with (the default type's).
+  if (castTargetsFollowChosenType(card, word)) {
+    refetchCastSpecForChosenType(card, word).then(proceed);
+    return;
+  }
+  proceed();
+}
+
+// Whether the hand card's target list was built for a different creature type
+// than the one just chosen: the spec announces a type *and* targets by it
+// (`chosen_creature_type` beside `valid_targets`, W2G1's wire), and the word
+// it was built for is not this one. A type that is only a cost (Caller of the
+// Hunt) carries no such list.
+function castTargetsFollowChosenType(card, word) {
+  const spec = targetSpecOf(card);
+  if (!spec?.announces_creature_type || !("chosen_creature_type" in spec)) return false;
+  if (!spec.kind || spec.kind === "none") return false;
+  return spec.chosen_creature_type !== word;
+}
+
+// Ask the server for the card's announcement with the word chosen
+// (`card_target_spec … chosen_creature_type=`), and put that spec on the card
+// the cascade is about to read. A failed fetch leaves the old list, which the
+// engine still refuses a wrong-type pick from (a 400), never accepts.
+async function refetchCastSpecForChosenType(card, word) {
+  if (!sessionId || seat === null) return;
+  try {
+    const params = new URLSearchParams({
+      card_name: normalizeCardName(card),
+      seat: String(seat),
+      chosen_creature_type: word,
+    });
+    if (pendingCastFromZone) params.set("from_zone", pendingCastFromZone);
+    const handIndex = pendingCastHandCard?.handIndex;
+    if (Number.isInteger(handIndex)) params.set("hand_index", String(handIndex));
+    const resp = await fetch(`/api/sessions/${sessionId}/card_target_spec?${params}`);
+    if (!resp.ok) return;
+    const payload = await resp.json();
+    if (payload?.target_spec) card.target_spec = payload.target_spec;
+  } catch {
+    /* keep the hand card's spec; the server holds the announcement to the word */
+  }
 }
 
 function startCastCostPrompt(card, castAction = "cast") {
@@ -16988,16 +17086,65 @@ function finishRoleWalkEarly() {
   confirmRoleTargets();
 }
 
+/** How many more roles the options tree can still answer from here: one per
+ * level of `next` (the server builds the tree per table, so "any number of
+ * target opponents" at a three-seat table is two levels deep, not seven). */
+function roleTreeDepth(options) {
+  if (!Array.isArray(options) || !options.length) return 0;
+  return 1 + Math.max(...options.map((o) => roleTreeDepth(o?.next)));
+}
+
+/** "2 of 2" for an owed walk; "1 of up to 2 — opponent 1" for a chain of
+ * optional roles, whose printed count (seven for Wheel and Deal, twelve for
+ * Kaboom!) is the most any table could fill and says nothing about this one. */
+function roleWalkStepLabel(p) {
+  const at = p.roleChosen.length;
+  const role = p.roles[at];
+  const label = role?.role && roleChoosesAPlayer(role) ? ` — ${String(role.role).replace(/_/g, " ")}` : "";
+  if (!rolesMayEndAt(p.roles, at)) return `${at + 1} of ${p.roles.length}`;
+  const reach = at + roleTreeDepth(p.roleOptions);
+  return `${at + 1} of up to ${Math.max(reach, at + 1)}${label}; you may stop`;
+}
+
+/** What the "stop here" button of an optional role says. A chain of optional
+ * seat roles (Wheel and Deal, Kaboom!) is "any number of" players — the
+ * button names how many are chosen, zero included; a single optional role
+ * (Primal Might's "up to one") keeps its "this target is optional". */
+function roleSkipLabel(p) {
+  const role = currentRole(p);
+  const noun = roleTargetNoun(role);
+  const chosen = p.roleChosen.length;
+  if (p.roles.length - chosen > 1 && roleChoosesAPlayer(role)) {
+    return chosen === 0
+      ? `No ${costNounPlural(noun)} — cast it naming none`
+      : `Stop here — ${chosen} ${chosen === 1 ? noun : costNounPlural(noun)} chosen`;
+  }
+  return `No ${noun} — this target is optional`;
+}
+
 function roleTargetsHint() {
   const p = pendingCastTarget;
   if (!p || p.targetKind !== "roles") return "";
   const role = p.roles[p.roleChosen.length];
   if (!role) return `${p.cardName}: every target chosen.`;
-  const step = `${p.roleChosen.length + 1} of ${p.roles.length}`;
-  const noun = roleTargetNoun(role);
+  const step = roleWalkStepLabel(p);
+  const perOpponent = perOpponentRoleNoun(p, role);
+  const noun = perOpponent || roleTargetNoun(role);
   // "Choose any target", not "Choose the any target".
-  const article = /^any\b/.test(noun) ? "" : "the ";
+  const article = perOpponent || /^any\b/.test(noun) ? "" : "the ";
   return `Choose ${article}${noun} for ${p.cardName} (${step}).${roleGraveyardOrderNote(p)}`;
+}
+
+/** "For each opponent, … target permanent that player controls" (Blatant
+ * Thievery): role n is the n-th opponent's (`per_opponent`), and every option
+ * at this level is on that opponent's battlefield, so the hint names them —
+ * "a permanent Bob controls" — rather than the role's "opponent 1's target". */
+function perOpponentRoleNoun(p, role) {
+  if (!Number.isInteger(role?.per_opponent)) return "";
+  const seats = [...new Set((p.roleOptions || []).map((o) => o?.seat).filter(Number.isInteger))];
+  if (seats.length !== 1) return "";
+  const name = currentState?.players?.[seats[0]]?.name || "that opponent";
+  return `a permanent ${name} controls`;
 }
 
 // "Return two target cards from an opponent's graveyard" (the Advocates) is a
@@ -17187,7 +17334,11 @@ function confirmRoleTargets() {
   // that has left. Same shape, third alternative.
   // …nor can a slot answered by a **spell on the stack**, which has no
   // permanent id at all: the fourth alternative, by its top-first stack index.
-  const needsRoleRefs = roleChosen.some(
+  // …and a **cast** that names no role at all — every role optional ("any
+  // number of target opponents", Wheel and Deal; Kaboom!), the walk ended at
+  // its first — is said as an empty role list, which the server reads as "no
+  // target" rather than a bare cast it would aim at a default seat.
+  const needsRoleRefs = (!activating && roleChosen.length === 0) || roleChosen.some(
     (t) => t.zone === "graveyard" || t.zone === "player" || t.zone === "stack",
   );
   const roleRefs = roleChosen.map((t) => {

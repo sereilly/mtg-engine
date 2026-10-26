@@ -13,7 +13,9 @@ an answer the resolver will refuse.
 from __future__ import annotations
 
 from engine.face_down import hidden_card_of
-from engine.oracle_types import CLAIMABLE_EXILED_CARDS
+from engine.legality import _iter_instruction_tree
+from engine.oracle import compile_card_oracle
+from engine.oracle_types import CLAIMABLE_EXILED_CARDS, DISCARDED_CARDS_BY_SEAT
 from engine.search_filters import search_matches, search_slots, searched_seat
 
 from .prompt_registry import PromptContext, prompt_renderer
@@ -638,7 +640,7 @@ def _discard(ctx: PromptContext, choices: list) -> dict:
     """
     choice = choices[0]
     discarder = ctx.game.players[choice.player_index]
-    return {
+    rendered = {
         "player_seat": choice.player_index,
         "count": choice.data["count"],
         # "Up to" — the count is a ceiling, not a floor, so the client lets the
@@ -648,6 +650,29 @@ def _discard(ctx: PromptContext, choices: list) -> dict:
         "cards": [ctx.serialize_card(card) for card in discarder.hand],
         "eligible": ctx.game.live_discard_candidates(choice),
     }
+    # What made this seat discard, when a resolution did — the prompt said
+    # only "Discard a Card", so the second and third seats of "Each player
+    # discards a card" (Strongarm Tactics), asked one at a time in turn order,
+    # were not told which spell, or what the seats before them had discarded
+    # (public the moment it happened). Absent for a discard nothing on the
+    # stack armed (a cleanup step's hand size), whose payload is unchanged.
+    source = getattr(choice.data.get("_stack_item"), "card", None)
+    if source is not None:
+        rendered["card_name"] = source.name
+    # "Each player discards …": every seat the round is about, in turn order,
+    # with what each has discarded so far (``DISCARDED_CARDS_BY_SEAT``, the
+    # record the sentence behind reads; seeded empty for every seat).
+    by_seat = (choice.data.get("_results") or {}).get(DISCARDED_CARDS_BY_SEAT)
+    if isinstance(by_seat, dict) and len(by_seat) > 1:
+        rendered["each_player"] = [
+            {
+                "seat": seat,
+                "name": ctx.game.players[seat].name,
+                "discarded": [card.name for card in by_seat.get(seat) or ()],
+            }
+            for seat in ctx.game.apnap_seats() if seat in by_seat
+        ]
+    return rendered
 
 
 @prompt_renderer("hand_to_library")
@@ -1104,7 +1129,38 @@ def _choose_cards_in_hand(ctx: PromptContext, choices: list) -> dict:
         "choices": [
             {"hand_index": index, "name": owner.hand[index].name} for index in live
         ],
+        **_pick_destination(choice),
     }
+
+
+#: Where a pick out of a hand puts the cards, by the kind of the step behind
+#: it that reads the pick (its ``cards_from`` is the pick's ``result_key``).
+#: "Each opponent may put any number of … cards from their hand **onto the
+#: battlefield**." (Tempting Wurm.) The pick itself only records; the put is
+#: the next step, so the prompt said "choose" and never said where the cards
+#: were going.
+_PICK_DESTINATIONS = {
+    "put_chosen_hand_cards_onto_battlefield": "battlefield",
+}
+
+
+def _pick_destination(choice) -> dict:
+    """``{"destination": zone}`` for a hand pick whose cards the resolving
+    object's next step moves, read off its compiled program; ``{}`` for a
+    pick nothing moves (Sylvan Library), whose payload is unchanged."""
+    key = (choice.data.get("_payload") or {}).get("result_key")
+    item = choice.data.get("_stack_item")
+    if not key or item is None:
+        return {}
+    roots = [getattr(item, "ability_instruction", None)]
+    if roots[0] is None:
+        roots = list(compile_card_oracle(item.card).instructions)
+    for root in roots:
+        for step in _iter_instruction_tree(root):
+            if (getattr(step, "payload", None) or {}).get("cards_from") == key:
+                zone = _PICK_DESTINATIONS.get(step.kind)
+                return {"destination": zone} if zone else {}
+    return {}
 
 
 @prompt_renderer("library_end_choice")

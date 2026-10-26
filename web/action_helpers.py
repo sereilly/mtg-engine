@@ -125,8 +125,18 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
         if req.target_permanent_indices is not None
         else (req.permanent_index if req.permanent_index is not None else req.target_permanent_index)
     )
+    # **An empty roles announcement is "no target", not a bare cast.** "Any
+    # number of target opponents" (Wheel and Deal) and "any number of target
+    # players or planeswalkers" (Kaboom!) may name none (CR 601.2c), and
+    # ``target_role_refs: []`` is how a client says so — the walk ended before
+    # its first optional role. Without this the default seat below rode the
+    # cast as its first target: a Kaboom! cast naming nobody went on the stack
+    # aimed at the opponent. A walk whose first role is owed is still refused
+    # by the engine's own gate ("requires N targets").
+    names_no_role = req.target_role_refs is not None and len(req.target_role_refs) == 0
     target = (
         req.target_seat if req.target_seat is not None
+        else None if names_no_role
         else _default_target(game, seat, card_name, req)
     )
     # A roles announcement whose slots are not all permanents (Donate's "target

@@ -85,6 +85,20 @@ def _trigger_target(ctx: PromptContext, choices: list) -> dict:
         "card_name": choice.data.get("card_name", ""),
         "candidates": candidates,
     }
+    # A seat that does not control the trigger and is asked for its target
+    # anyway: "Whenever a creature enters, **that creature's controller** may
+    # have target creature of their choice get -3/-3" (Death Match). The
+    # prompt said "Death Match: its triggered ability needs a target" to a
+    # player who controls no Death Match. Who controls it and what it says
+    # ride beside the candidates — only then, so every other trigger's
+    # payload is the one it always was.
+    trigger = choice.data.get("_trigger_item")
+    controller = getattr(trigger, "caster_index", None)
+    if isinstance(controller, int) and controller != choice.player_index:
+        payload["controller_seat"] = controller
+        payload["controller_name"] = ctx.game.players[controller].name
+        if getattr(trigger, "ability_text", None):
+            payload["ability_text"] = trigger.ability_text
     # "Up to two target creatures" (Basri's Acolyte, Cho-Arrim Bruiser): how
     # many the answer may name. Sent for ``modal_mode_targets``' reason — the
     # client cannot derive a ceiling smaller than the candidate list — and

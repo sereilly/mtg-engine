@@ -378,6 +378,8 @@ _ROLES_FUNCTIONS = [
     # The walk's start and its step read which tree to walk and whether the
     # walk may end before an optional role (kg/slots).
     "roleWalkOf", "rolesMayEndAt", "finishRoleWalkEarly",
+    # The hint's step label and a per-opponent role's noun (ONS W2G3).
+    "roleWalkStepLabel", "roleTreeDepth", "perOpponentRoleNoun",
 ]
 
 _ROLES_PRELUDE = r'''
