@@ -741,11 +741,19 @@ class BecomeThatType:
     for are the same; the only difference is whether this sentence asks the
     question (CR 608.2d) or reads an answer an earlier one recorded, and that is
     a step the lowering puts in front — never a second effect.
+
+    ``subtype`` is the third place the word can come from: **printed** in the
+    sentence. "…each creature you control becomes **a black Shade** …"
+    (Shade's Breath.) The same CR 205.1a set over the same creature types,
+    with no question asked at all — so no choosing step goes in front and the
+    record carries the word itself. None for every "that type" and "of your
+    choice" spelling, which is every node built before this field.
     """
 
     subject: Recipient
     duration: Duration = field(default_factory=Duration)
     of_your_choice: bool = False
+    subtype: str | None = None
 
 
 @dataclass(frozen=True)

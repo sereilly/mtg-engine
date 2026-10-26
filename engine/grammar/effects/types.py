@@ -30,8 +30,8 @@ from ..back_references import _parse_that_object
 from ..lexer import SELF
 from ..readers import _SELF_NOUNS
 from ..stream import TokenStream
-from ..vocabulary import (CARD_TYPES, COLOR_WORDS, LAND_TYPES, SUBTYPE_INDEX,
-                          TYPE_LINE_SUPERTYPES, match_longest,
+from ..vocabulary import (CARD_TYPES, COLOR_WORDS, CREATURE_TYPES, LAND_TYPES,
+                          SUBTYPE_INDEX, TYPE_LINE_SUPERTYPES, match_longest,
                           singular as _singular_type)
 
 
@@ -96,6 +96,9 @@ def _parse_becomes(stream: TokenStream, subject: ast.Recipient) -> ast.Statement
         # skipping them instead would turn a turn-long colour change into the
         # Lace cycle's indefinite one.
         return ast.BecomeColor(subject, COLOR_WORDS[word], _parse_duration(stream))
+    typed = _parse_becomes_creature_type(stream, subject)
+    if typed is not None:
+        return typed
     animated = _parse_become_creature(stream, subject)
     if animated is not None:
         return animated
@@ -119,6 +122,54 @@ def _parse_becomes(stream: TokenStream, subject: ast.Recipient) -> ast.Statement
     if copied is not None:
         return copied
     raise stream.error("expected a colour or a creature body after 'becomes'")
+
+
+def _parse_becomes_creature_type(
+    stream: TokenStream, subject: ast.Recipient
+) -> "ast.Statement | None":
+    """"…becomes **a black Shade** …" (Shade's Breath.) A printed creature
+    type, optionally behind a printed colour, with no P/T and no card type —
+    so neither the animation (which needs a body) nor the gained card type
+    (which needs a card-type word) is the sentence.
+
+    Two characteristics in one noun phrase, and each is a *set* (CR 105.2's
+    "becomes" is a colour replacement; CR 205.1a's subtype set replaces the
+    creature types and nothing else), so the phrase is two effects about one
+    subject: the colour change the colour branch above builds and the
+    creature-type set the Mistforms' node carries, here with its word printed
+    (:attr:`ast.BecomeThatType.subtype`). A conjunction rather than a fused
+    node, for the reason the predicate list gives — the duration is
+    distributed over both, fronted or trailing.
+
+    Non-consuming on refusal: "a 3/3 Shade creature" is the animation's, "an
+    artifact" the gained type's, and a word after the type that continues the
+    noun ("a Shade creature") belongs to neither of these two effects.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("a", "an"):
+        return None
+    color = None
+    word = stream.peek_word()
+    if word in COLOR_WORDS:
+        color = COLOR_WORDS[word]
+        stream.advance()
+    matched = match_longest(stream.words_from(0), 0, SUBTYPE_INDEX)
+    if matched is None or matched[0] not in CREATURE_TYPES:
+        stream.reset(mark)
+        return None
+    stream.advance(matched[1])
+    following = stream.peek_word()
+    if following in CARD_TYPES or (
+        following is not None
+        and match_longest(stream.words_from(0), 0, SUBTYPE_INDEX) is not None
+    ):
+        stream.reset(mark)
+        return None
+    duration = _parse_duration(stream)
+    typed = ast.BecomeThatType(subject, duration, subtype=matched[0])
+    if color is None:
+        return typed
+    return ast.Conjunction((ast.BecomeColor(subject, color, duration), typed))
 
 
 def _parse_becomes_aura_enchantment(

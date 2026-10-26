@@ -538,7 +538,20 @@ def _lower_become_that_type(
       later is not changed — the card's 2004-10-04 ruling).
     """
     prelude: tuple[OracleInstruction, ...] = ()
-    if node.of_your_choice:
+    # "…becomes a black **Shade**" (Shade's Breath, ``node.subtype``): the
+    # word is printed, so nothing is asked and nothing in front has to have
+    # recorded one — the record carries the word itself (``subtype``) where
+    # the two choice spellings carry the scratchpad key it is read from.
+    word_source: dict[str, object] = {
+        "subtype_from": CHOSEN_CREATURE_TYPE_THIS_WAY
+    }
+    if node.subtype is not None:
+        if node.of_your_choice:
+            raise LoweringError(
+                "a creature type is printed or chosen, not both", node=node
+            )
+        word_source = {"subtype": node.subtype}
+    elif node.of_your_choice:
         prelude = (
             OracleInstruction(
                 "choose_creature_type", "",
@@ -556,7 +569,7 @@ def _lower_become_that_type(
             node=node,
         )
     payload: dict[str, object] = {
-        "subtype_from": CHOSEN_CREATURE_TYPE_THIS_WAY,
+        **word_source,
         "duration": "until_end_of_turn",
     }
     subject = node.subject

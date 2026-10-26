@@ -246,6 +246,55 @@ def _with_keyword_loss_conjunct(
     return ast.Conjunction((_share_trailing_duration(statement, joined), joined))
 
 
+def _with_grant_conjunct(
+    stream: TokenStream,
+    statement: ast.Statement,
+    source: "ast.TargetSpec | None",
+) -> ast.Statement:
+    """``… and gains <keyword or quoted ability>`` trailing a ``becomes``
+    clause whose subject is a permanent.
+
+    "Until end of turn, each creature you control becomes a black Shade **and
+    gains "{B}: This creature gets +1/+1 until end of turn.""** (Shade's
+    Breath.) The two-member spelling of what the predicate list below reads
+    with commas (Defiling Tears' "becomes black, gets +1/-1, and gains …"),
+    joined across the two families that may not import each other —
+    ``effects/types.py`` and ``effects/characteristics.py`` — for the keyword
+    loss joiner's reason. ``_parse_gets`` reads its own "and gains"; the
+    colour and type verb had nobody to read it, and the sentence refused on a
+    quote it never reached.
+
+    The verb alone does not commit: "gains" also opens "gains control of …"
+    and "gains 3 life", neither of which a permanent's noun phrase can be the
+    subject of, so the production is asked and anything but a keyword or a
+    quoted-ability grant rewinds the "and" with it.
+    """
+    if source is None:
+        return statement
+    mark = stream.mark()
+    if not stream.accept_word("and"):
+        stream.reset(mark)
+        return statement
+    if not stream.at_word("gains", "gain"):
+        stream.reset(mark)
+        return statement
+    try:
+        joined = _parse_gains(stream, source)
+    except GrammarError:
+        stream.reset(mark)
+        return statement
+    if not isinstance(joined, (ast.GainKeyword, ast.GainAbilityText)):
+        stream.reset(mark)
+        return statement
+    members = (
+        statement.effects if isinstance(statement, ast.Conjunction)
+        else (statement,)
+    )
+    return ast.Conjunction(tuple(
+        _share_trailing_duration(member, joined) for member in members
+    ) + (joined,))
+
+
 def _share_trailing_duration(
     statement: ast.Statement, joined: ast.Statement
 ) -> ast.Statement:
