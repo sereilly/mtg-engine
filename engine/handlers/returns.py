@@ -18,8 +18,12 @@ Split out of ``zones.py`` at the 2,000-line cap's split round. A return to the
 
 from __future__ import annotations
 
+import dataclasses
 from typing import TYPE_CHECKING
 
+from ..announced_creature_type import (GRAVEYARD_ANNOUNCED_CREATURE_TYPE,
+                                       announced_word,
+                                       with_announced_creature_type)
 from ..game_types import first_target_id
 from ..models import Permanent
 from ..oracle_types import named_no_target
@@ -143,11 +147,23 @@ def _return_graveyard_card_to_owners_hand(
 #: "first creature card" scan, which reads none of them.
 _GRAVEYARD_NARROWING_KEYS = (
     "graveyard_subtypes", "graveyard_colors", "supertypes", "graveyard_mana_value",
+    # Aphetto Dredging's announced type, still a flag only when the resolution
+    # was handed no word — which the matcher answers with no card at all.
+    GRAVEYARD_ANNOUNCED_CREATURE_TYPE,
 )
 
 
 @effect_handler("return_creature_from_graveyard_to_hand")
 def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    # "…creature cards **of the creature type of your choice**" (Aphetto
+    # Dredging): each chosen card is re-checked under the type the cast
+    # announced (CR 608.2b), which rides the stack object's choices — the one
+    # substitution the picker and the cast gates made with the same word.
+    announced = with_announced_creature_type(
+        instruction.payload, announced_word(context.choices),
+    )
+    if announced is not instruction.payload:
+        instruction = dataclasses.replace(instruction, payload=announced)
     if instruction.payload.get("any_graveyard"):
         return _return_graveyard_card_to_owners_hand(game, instruction, context)
     caster = context.caster

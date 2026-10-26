@@ -278,7 +278,7 @@ class CastAnnouncementMixin:
         divided_targets, from_zone, mode_index, no_target_answers_x,
         optional_paid, role_seats, target_permanent_ids,
         target_permanent_index, target_player_index, target_stack_item,
-        x_value,
+        x_value, chosen_creature_type=None,
     ):
         """CR 601.2c, asked once per announced mode (CR 601.2b chooses the
         modes first): the per-kind target gate, whether any legal target exists
@@ -315,6 +315,7 @@ class CastAnnouncementMixin:
                 # The cast's own announcement only: a "choose one or more"
                 # mode names its targets on the mode, which has one seat.
                 target_role_seats=None if chosen_modes else role_seats,
+                chosen_creature_type=chosen_creature_type,
             )
             if not target_ok:
                 self.log.append(target_reason)
@@ -379,6 +380,7 @@ class CastAnnouncementMixin:
                 # it owed a target at all ("X target …" at an announced X).
                 target_stack_item=mode_stack_item,
                 x_value=x_value,
+                chosen_creature_type=chosen_creature_type,
             )
             if named_refusal is not None:
                 self.log.append(named_refusal)

@@ -33,6 +33,7 @@ import re
 
 from .ai_weighed_cast import SPELL_TYPES
 from .ai_target_sides import (
+    announced_roles_loop_side,
     best_counted_target_seat,
     entry_trigger_target_side,
     role_target_sides,
@@ -53,7 +54,7 @@ from .mixins.stack import (
     permanent_matches_enchant_noun,
 )
 from .target_restrictions import forbidden_target
-from .target_roles import OPTIONAL_ROLE
+from .target_roles import OPTIONAL_ROLE, PER_OPPONENT_ROLE
 from .models import CardDefinition
 from .oracle import compile_card_oracle
 from .oracle_types import cost_target_count
@@ -421,9 +422,18 @@ def _choose_role_targets(
         mode_index=_announced_mode(card), from_zone=_cast_zone(card),
     )
     options = announced.get("valid_targets") or []
+    sides = role_target_sides(card, offers)
+    # "Choose any number of target players or planeswalkers. For each of them,
+    # … deals damage …" (Kaboom!): every role is aimed where the loop's body
+    # says, seats included (``ai_target_sides.announced_roles_loop_side``) —
+    # read as sideless, the walk named the caster's own seat first.
+    looped = announced_roles_loop_side(card)
+    if looped is not None and not any(sides):
+        sides = (looped,) * len(spec_roles(announced))
     picks = _role_chain(
-        options, role_target_sides(card, offers), 0, caster_index, card, game,
+        options, sides, 0, caster_index, card, game,
         optional=optional_role_levels(spec_roles(announced)),
+        best_first=per_opponent_role_levels(spec_roles(announced)),
     )
     if not picks:
         return ()
@@ -493,9 +503,20 @@ def optional_role_levels(roles) -> frozenset:
     )
 
 
+def per_opponent_role_levels(roles) -> frozenset:
+    """The positions of *roles* that are one opponent's permanents
+    (``target_roles.PER_OPPONENT_ROLE``, Blatant Thievery's "target permanent
+    that player controls")."""
+    return frozenset(
+        position for position, role in enumerate(roles or ())
+        if isinstance(role, dict) and PER_OPPONENT_ROLE in role
+    )
+
+
 def _role_chain(
     options: list[dict], sides, level: int, caster_index: int,
     card: CardDefinition, game: Game, *, optional: frozenset = frozenset(),
+    best_first: frozenset = frozenset(),
 ) -> "list[dict] | None":
     """One pick per role from *options* down, each on the side its role wants
     (``sides[level]``) — or None when no such chain exists.
@@ -519,7 +540,7 @@ def _role_chain(
     if not options:
         return []
     want = sides[level] if level < len(sides) else None
-    if options[0].get("kind") == "player":
+    if options[0].get("kind") == "player" and want not in ("you", "opponent"):
         candidates = [_preferred_role_option(options, caster_index, card, game)]
     elif options[0].get("kind") == "stack":
         # A spell role is answered with a spell somebody else controls: every
@@ -534,21 +555,44 @@ def _role_chain(
             != caster_index
         ]
     elif want in ("you", "opponent"):
+        # A seat option is on its own side, as a permanent is on its
+        # controller's — a level offering both (a player-or-planeswalker role)
+        # is narrowed as one board.
         candidates = [
             option for option in options
-            if option.get("kind") != "permanent"
+            if option.get("kind") not in ("permanent", "player")
             or (option.get("seat") == caster_index) == (want == "you")
         ]
     else:
         candidates = options
+    if level in best_first:
+        # **One opponent's permanents, and one of them is the spell's**
+        # (Blatant Thievery: "only one permanent from each player"). Every
+        # candidate is on the board the role is for, so which one is the whole
+        # decision — and the enumeration's order is the battlefield's, which
+        # puts the lands first: the seat took a Swamp from a table of
+        # creatures. The most valuable first (``ai_rehearsal.permanent_worth``,
+        # what a permanent is worth to whoever controls it), stable.
+        candidates = sorted(
+            candidates,
+            key=lambda option: -_role_option_worth(game, option),
+        )
     for pick in candidates:
         rest = _role_chain(
             pick.get("next") or [], sides, level + 1, caster_index, card, game,
-            optional=optional,
+            optional=optional, best_first=best_first,
         )
         if rest is not None:
             return [pick, *rest]
     return [] if level in optional else None
+
+
+def _role_option_worth(game: Game, option: dict) -> float:
+    """What the permanent a role option names is worth, 0 for anything else."""
+    if option.get("kind") != "permanent":
+        return 0.0
+    permanent = game.permanent_at(option.get("seat"), option.get("index"))
+    return permanent_worth(permanent) if permanent is not None else 0.0
 
 
 def _choose_several_targets(

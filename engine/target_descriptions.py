@@ -21,7 +21,8 @@ here.
 from __future__ import annotations
 
 from .oracle_types import SPELL_OR_OBJECT_TARGET
-from .target_roles import OPTIONAL_ROLE, ROLES_TARGET_KIND, role_dependency
+from .target_roles import (OPTIONAL_ROLE, PER_OPPONENT_ROLE, ROLES_TARGET_KIND,
+                           role_dependency)
 
 
 # An instruction's type_filter, as a target kind. Filters naming more than one
@@ -447,6 +448,11 @@ def roles_spec(targets: dict) -> dict | None:
         # flag ``_slot_roles_spec`` sets for an "up to one" slot.
         if entry.get(OPTIONAL_ROLE):
             described[OPTIONAL_ROLE] = True
+        # "For each opponent, … target permanent **that player** controls"
+        # (Blatant Thievery, ``target_roles.per_opponent_roles``): which
+        # opponent this role is for, the seat test the enumerator applies.
+        if entry.get(PER_OPPONENT_ROLE) is not None:
+            described[PER_OPPONENT_ROLE] = int(entry[PER_OPPONENT_ROLE])
         roles.append(described)
     if len(roles) < 2:
         # One role is not a roles description — it is an ordinary one-target

@@ -546,6 +546,47 @@ def recolor_targets_until_eot(game: Game, instruction: OracleInstruction, contex
     return True, "resolved"
 
 
+@effect_handler("recolor_each_until_eot")
+def recolor_each_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Until end of turn, **each creature you control** becomes a black Shade
+    …" (Shade's Breath.)
+
+    ``recolor_targets_until_eot``'s write over a *described* set: nothing was
+    announced, so the board is walked now and the members lock in (CR 611.2c —
+    a creature that enters later is not recoloured, Standardize's ruling for
+    the type half of the same shape). The printed noun phrase is asked through
+    ``subject_matches`` with the caster as observer, the one reader of what it
+    means, so "you control" here and on the type set beside it are one
+    question.
+    """
+    from ..subject_filters import subject_matches
+
+    written = _colour_to_write(game, instruction, context)
+    if written is None:
+        return True, "resolved"
+    filters = instruction.payload.get("filter") or {}
+    observer = (
+        game.players.index(context.caster) if context.caster in game.players else None
+    )
+    affected = [
+        perm for perm in game.all_permanents()
+        if subject_matches(
+            game, perm, filters, observer=observer, source=context.source_permanent
+        )
+    ]
+    if not affected:
+        game.log.append(f"{context.card.name}: nothing to recolour")
+        return True, "resolved"
+    for perm in affected:
+        change_color(perm, written, until_eot=True)
+        game.log.append(
+            f"{perm.card.name} became {_colour_override_word(written)} until end "
+            f"of turn ({context.card.name})"
+        )
+    game._recompute_continuous_effects()
+    return True, "resolved"
+
+
 def _colour_override_value(printed):
     """What a "becomes <colour>" payload writes into the layer-5 channel.
 

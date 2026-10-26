@@ -56,7 +56,7 @@ from ...models import CardDefinition
 from ...oracle import compile_card_oracle
 from ...oracle_types import _COLOR_WORD_TO_SYMBOL
 from ...targeting import graveyard_target_spec, derive_cast_spec
-from ...target_roles import ROLE_SEATS
+from ...target_roles import ANNOUNCED_TARGET_CONTROLLERS, ROLE_SEATS
 from .cast_additional_costs import (_optional_cost_announcement,
                                     _optional_cost_totals, _taken_offers,
                                     optional_cost_taken)
@@ -397,6 +397,17 @@ class SpellCastingMixin:
         if morph_cost is not None:
             card = face_down_card(held)
         classification = classify_card(card)
+        # The roles announcement's seats **by slot** where several roles may
+        # each be answered by a player ("Choose any number of target players
+        # or planeswalkers", Kaboom!), even when one was named: the scalar
+        # cannot say which slot its seat answers
+        # (``target_roles.several_seat_roles``).
+        if role_seats is None:
+            role_seats = self.several_seat_role_seats(
+                card, mode_index=mode_index, target_role_refs=target_role_refs,
+                target_permanent_ids=target_permanent_ids,
+                target_player_index=target_player_index,
+            )
         # **An Aura announced by id alone** (CR 601.2c, CR 400.7). The id names
         # the object and its battlefield, so it is the whole announcement; the
         # slot every gate and the attachment below still read is derived from
@@ -684,8 +695,15 @@ class SpellCastingMixin:
         # (idiom 9): a picker's list is only true if the engine declines what is
         # not on it, and a silently-corrected answer would make the spell's own
         # P/T disagree with what the player chose.
+        #
+        # The same announcement with no price behind it, for a spell whose
+        # *targets* are of the type chosen (Aphetto Dredging: "the creature
+        # type before the targets", its ruling). Made here, before the target
+        # gates below judge what was named under it.
         chosen_type_word: str | None = None
-        if any(cost.choose_creature_type for cost in cast_costs):
+        if any(
+            cost.choose_creature_type for cost in cast_costs
+        ) or self._cast_type_narrows_graveyard_targets(card):
             from ...grammar.vocabulary import CREATURE_TYPES
 
             if chosen_creature_type is not None:
@@ -926,6 +944,9 @@ class SpellCastingMixin:
             target_permanent_index=target_permanent_index,
             target_player_index=target_player_index,
             target_stack_item=target_stack_item, x_value=x_value,
+            # CR 601.2b's type, under which CR 601.2c's targets were chosen
+            # (Aphetto Dredging); None for every cast that announces none.
+            chosen_creature_type=chosen_type_word,
         )
         if mode_refusal is not None:
             return mode_refusal
@@ -1373,6 +1394,15 @@ class SpellCastingMixin:
             )
             if from_zone == "graveyard":
                 self._rebase_graveyard_targets(spell_item, source_seat, hand_index)
+            # "For each opponent, … target permanent that player controls"
+            # (Blatant Thievery): who controlled each named permanent as it was
+            # targeted, for CR 608.2b to ask again (``target_roles.
+            # ANNOUNCED_TARGET_CONTROLLERS``). Absent for every other cast.
+            controllers = self.announced_target_controllers(
+                card, target_permanent_ids, mode_index=mode_index,
+            )
+            if controllers is not None:
+                spell_item.choices[ANNOUNCED_TARGET_CONTROLLERS] = controllers
             self._stack_push(spell_item)
             self.log.append(f"{card.name} added to stack")
             if any(cost.choose_number is not None for cost in cast_costs):

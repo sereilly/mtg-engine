@@ -567,15 +567,23 @@ def _chosen_creature_type(
     game: Game, instruction: OracleInstruction, context: OracleExecutionContext,
     name: str,
 ) -> str | None:
-    """The creature type the choosing step in front recorded (CR 608.2d), or
-    None — logged — when nobody chose one.
+    """The creature type the record prints (``subtype``), or the one the
+    choosing step in front recorded (CR 608.2d), or None — logged — when
+    nobody chose one.
 
     An unanswered choice sets nothing: a creature that became a type nobody
     picked is the wrong creature, and the catalog bound is CR 205.3m's.
     """
     from ..grammar.vocabulary import CREATURE_TYPES
 
-    chosen = context.results.get(str(instruction.payload.get("subtype_from") or ""))
+    # "…becomes a black **Shade**" (Shade's Breath): the word is printed on
+    # the record itself, so there is no choice to read back — the same
+    # catalog bound applies to it all the same.
+    printed = instruction.payload.get("subtype")
+    chosen = (
+        printed if printed is not None
+        else context.results.get(str(instruction.payload.get("subtype_from") or ""))
+    )
     word = str(chosen or "").strip().lower()
     if word not in CREATURE_TYPES:
         game.log.append(f"{name}: no creature type was chosen, so nothing changes")

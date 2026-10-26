@@ -26,6 +26,7 @@ from __future__ import annotations
 import dataclasses
 import re
 
+from ...announced_creature_type import with_announced_creature_type
 from ...auras import aura_enchant_clause
 from ...handlers._filters import graveyard_card_matches
 from ...models import CardDefinition, Permanent
@@ -43,7 +44,7 @@ from ...enchant_targets import (_ENCHANT_LAND_SUBTYPES,
 from ...targeting import (derive_cast_spec, role_is_stack, spec_roles,
                           targets_mana_value_x)
 from ...target_descriptions import ANNOUNCED_SEAT
-from ...target_roles import role_is_seat, roles_may_end_at
+from ...target_roles import live_roles, role_is_seat, roles_may_end_at
 from ...cost_x_definitions import defines_cast_x
 from ...divided_damage import (
     CARD_DIVIDED, EACH, EVENLY, FIXED, card_shares, divided_description,
@@ -483,8 +484,14 @@ class CastTargetValidationMixin:
             else None
         )
         if target_permanent_ids:
+            # A slot a seat **or** a permanent may answer ("target player or
+            # planeswalker", Kaboom!, Lunge) holds a permanent where its id
+            # names one, and is filled from the seat channels only where it
+            # does not — read as a seat, a planeswalker named there was lost
+            # and the announcement refused as short.
             return [
-                seat_at(index) if index in player_slots
+                seat_at(index)
+                if index in player_slots and not isinstance(permanent_id, int)
                 else target_stack_item if index in stack_slots
                 else (
                     self.permanent_by_id(permanent_id)
@@ -529,6 +536,7 @@ class CastTargetValidationMixin:
         target_permanent_ids: list[int | None] | None = None,
         optional_cost_payments: dict | None = None,
         target_role_seats: "list | None" = None,
+        chosen_creature_type: str | None = None,
     ) -> tuple[bool, str]:
         """Return (True, 'valid') if all required targets exist, else (False, reason).
 
@@ -552,6 +560,12 @@ class CastTargetValidationMixin:
         named more than one player (``target_roles.ROLE_SEATS``); the roles gate
         below fills each player slot from it, and every seat in it is held to
         the same name-protection question the scalar is.
+
+        *chosen_creature_type* is CR 601.2b's type, for a spell whose graveyard
+        targets are "of the creature type of your choice" (Aphetto Dredging):
+        each named card is judged under that word
+        (``announced_creature_type.with_announced_creature_type``), and a cast
+        that announced none names no card of it.
         """
         # Protection from this spell's *name* (Runed Halo, CR 702.16i): the
         # player can't be chosen as a target, which under CR 601.2c makes the
@@ -766,6 +780,10 @@ class CastTargetValidationMixin:
         # the enumeration behind it from recursing: the per-candidate probe
         # inside ``_enumerate_targets(for_cast=True)`` re-enters this function
         # with one slot, never a list.
+        # …one owed role per opponent at this table for a per-opponent
+        # announcement (Blatant Thievery, ``target_roles.live_roles``): the
+        # spec the picker walked, so the count below is the opponents'.
+        cast_spec = live_roles(self, caster_index, cast_spec) or {}
         roles = spec_roles(cast_spec)
         if roles:
             chosen = self._named_role_targets(
@@ -1088,6 +1106,14 @@ class CastTargetValidationMixin:
             # offers for the derived spec — the picker's list and the re-check
             # are one answer (idiom #9).
             caster = self.players[caster_index]
+            # "…creature cards of the creature type of your choice" (Aphetto
+            # Dredging): every card below is judged under the word the cast
+            # announced, through the same matcher the picker asked.
+            primary = dataclasses.replace(
+                primary, payload=with_announced_creature_type(
+                    primary.payload, chosen_creature_type,
+                ),
+            )
             any_graveyard = bool(primary.payload.get("any_graveyard"))
             sources = list(self.players) if any_graveyard else [caster]
             # The pile the caller pointed at: the named seat's when the phrase

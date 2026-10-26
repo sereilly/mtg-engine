@@ -36,8 +36,8 @@ from . import ast
 from .lexer import SELF, WORD
 from .conjuncts import (_with_attack_conjunct, _with_cant_be_conjunct,
                         _with_damage_conjunct, _with_gained_type_conjunct,
-                        _with_keyword_loss_conjunct, _with_predicate_list,
-                        _with_untap_conjunct)
+                        _with_grant_conjunct, _with_keyword_loss_conjunct,
+                        _with_predicate_list, _with_untap_conjunct)
 from .imperatives import parse_imperative
 from .nouns import parse_object_filter
 from .player_verbs import parse_player_subject_verb
@@ -518,9 +518,15 @@ def parse_subject_verb(
             # "…becomes black**, gets +1/-1, and gains** "{B}: Regenerate this
             # creature."" (Defiling Tears.) The listed spelling of the same
             # join, read outside it: a sentence prints one or the other.
-            return _with_predicate_list(stream, _with_keyword_loss_conjunct(
+            # "…becomes a black Shade **and gains** "{B}: …"" (Shade's
+            # Breath.) The two-member join of the same list, one verb over.
+            return _with_predicate_list(stream, _with_grant_conjunct(
                 stream,
-                _parse_becomes(stream, source_spec),
+                _with_keyword_loss_conjunct(
+                    stream,
+                    _parse_becomes(stream, source_spec),
+                    source_target,
+                ),
                 source_target,
             ), source_target)
         # "This creature**'s power becomes** the toughness of target creature

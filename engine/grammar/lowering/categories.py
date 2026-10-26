@@ -500,6 +500,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # "{2}: This creature becomes colorless until end of turn." (Raging
     # Spirit.) The source-subject twin of the row above.
     "recolor_self_until_eot": "recolor",
+    # "Until end of turn, each creature you control becomes a black Shade …"
+    # (Shade's Breath.) The described-set twin: the same turn-long colour over
+    # a set the board decides as the effect begins (CR 611.2c).
+    "recolor_each_until_eot": "recolor",
     # "…becomes the color of your choice" — the colour arrives with the answer
     # rather than with the text (CR 608.2d), which is a payload difference and
     # not a category one.

@@ -30,7 +30,7 @@ from .targeting import (
     spec_offers_a_player,
     spec_roles,
 )
-from .target_roles import ROLES_TARGET_KIND
+from .target_roles import ANNOUNCED_TARGET_CONTROLLERS, ROLES_TARGET_KIND
 from .cost_pickers import spec_is_a_cost
 from .legality import (
     _UNFIZZLABLE_TARGET_KINDS,
@@ -423,6 +423,15 @@ class ResolutionTargetsMixin:
                     )
                     if entry.get("kind") == "permanent"
                 }
+        # "…target permanent **that player** controls", one per opponent
+        # (Blatant Thievery): who controlled each one as it was named
+        # (``target_roles.ANNOUNCED_TARGET_CONTROLLERS``) — a permanent that
+        # changed controller since is no longer that player's, and the ruling
+        # says it is not taken.
+        announced_controllers = (
+            (getattr(item, "choices", None) or {}).get(ANNOUNCED_TARGET_CONTROLLERS)
+            if holder is item else None
+        ) or {}
         for position, permanent_id in enumerate(
             target_ids(getattr(holder, "target_permanent_id", None))
         ):
@@ -439,6 +448,11 @@ class ResolutionTargetsMixin:
                     target, card, caster_index=item.caster_index,
                 )
             )
+            if legal and permanent_id in announced_controllers:
+                legal = (
+                    self.controller_index_of(target)
+                    == announced_controllers[permanent_id]
+                )
             if legal and described:
                 if offered is None:
                     offered = self._described_cast_target_slots(

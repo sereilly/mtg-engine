@@ -451,17 +451,9 @@ def test_w1g4_each_player_choosing_compiles_to_one_step_per_record(set_pool):
 
 
 # --- Aphetto Dredging ------------------------------------------------------------
-
-
-def test_w1g4_aphetto_dredging_refuses_rather_than_dropping_its_narrowing(set_pool):
-    """"Return up to three target creature cards **of the creature type of your
-    choice** from your graveyard to your hand." The type is announced before
-    the targets (2004-10-04 ruling), which nothing here performs yet — and at
-    ingest the phrase was dropped, so the spell returned any three creature
-    cards while reporting supported. Refused, with the reason naming the
-    narrowing, until the announcement exists."""
-    program = _w1g4_compile(set_pool("ONS")["Aphetto Dredging"])
-    assert not program.supported
+# Refused here until the cast-time announcement existed; it does now (W2G1),
+# and the card's tests are in W2G1's section below, which drives the type
+# before the targets through the picker, the cast gates and the resolution.
 
 # ==== end W1G4 ======================================================
 
@@ -1273,3 +1265,448 @@ def test_w1g13_kamahls_summons_a_seat_nobody_asks_reveals_every_creature(set_poo
     assert [len(_w1g13_tokens(game, seat)) for seat in range(3)] == [0, 2, 0]
 
 # ==== end W1G13 ======================================================
+
+
+# ==== W2G1 ==========================================================
+# W2G1's tests go between this line and the "end W2G1" line.
+
+from engine import Game as _W2G1Game, PlayerState as _W2G1PlayerState
+from tests.helpers import _mk_card as _w2g1_mk_card
+from tests.helpers import resolve_stack as _w2g1_resolve_stack
+
+# --- Aphetto Dredging ---------------------------------------------------------
+# "Return up to three target creature cards of the creature type of your choice
+# from your graveyard to your hand." The type is announced before the targets
+# (the card's 2004-10-04 ruling), and every reader of the targets — the picker,
+# the cast gates and the handler — judges them under that word.
+
+
+def _w2g1_yard_card(name, subtype):
+    return _w2g1_mk_card(
+        name=name, mana_cost="{1}{B}", type_line=f"Creature - {subtype}",
+        colors=("B",),
+    )
+
+
+def _w2g1_dredging_table(set_pool):
+    ons = set_pool("ONS")
+    yard = [
+        _w2g1_yard_card("Goblin A", "Goblin"),
+        _w2g1_yard_card("Elf A", "Elf Warrior"),
+        _w2g1_yard_card("Goblin B", "Goblin"),
+        _w2g1_yard_card("Goblin C", "Goblin Rogue"),
+        _w2g1_yard_card("Elf B", "Elf"),
+        ons["Swamp"],
+    ]
+    game = _W2G1Game(players=[
+        _W2G1PlayerState(name="A", hand=[ons["Aphetto Dredging"]],
+                         graveyard=yard, library=[ons["Swamp"]] * 5),
+        _W2G1PlayerState(name="B", library=[ons["Swamp"]] * 5),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.active_player_index = 0
+    game.current_turn_phase = game.current_step = "precombat_main"
+    return game
+
+
+def _w2g1_names(cards):
+    return sorted(card.name for card in cards)
+
+
+def test_w2g1_aphetto_dredging_offers_only_cards_of_the_announced_type(set_pool):
+    """The picker asks the type first and lists what that type admits: the
+    default is the type most of the caster's graveyard shares (three Goblins
+    against two Elves), and re-asked with "elf" the list is the two Elves."""
+    game = _w2g1_dredging_table(set_pool)
+    card = game.players[0].hand[0]
+
+    spec = game.cast_target_spec(0, card)
+    assert spec["announces_creature_type"] is True
+    assert spec["default_creature_type"] == spec["chosen_creature_type"] == "goblin"
+    assert [t["name"] for t in spec["valid_targets"]] == [
+        "Goblin A", "Goblin B", "Goblin C",
+    ]
+
+    elves = game.cast_target_spec(0, card, chosen_creature_type="elf")
+    assert elves["chosen_creature_type"] == "elf"
+    assert [t["name"] for t in elves["valid_targets"]] == ["Elf A", "Elf B"]
+    assert elves["max_targets"] == 3
+
+
+def test_w2g1_aphetto_dredging_returns_the_named_cards_of_that_type(set_pool):
+    game = _w2g1_dredging_table(set_pool)
+    alice = game.players[0]
+
+    result = game.cast_from_hand(
+        0, "Aphetto Dredging", chosen_creature_type="elf",
+        target_player_index=0, target_permanent_index=[1, 4],
+    )
+    assert result.supported, result.details
+    _w2g1_resolve_stack(game)
+
+    assert _w2g1_names(alice.hand) == ["Elf A", "Elf B"]
+    assert _w2g1_names(alice.graveyard) == [
+        "Aphetto Dredging", "Goblin A", "Goblin B", "Goblin C", "Swamp",
+    ]
+    assert "A chose elf to cast Aphetto Dredging" in game.log
+
+
+def test_w2g1_aphetto_dredging_refuses_a_card_of_another_type(set_pool):
+    """A Goblin named under "elf" is not a legal target (CR 601.2c): the cast
+    is refused before anything moves, and the card stays in hand."""
+    game = _w2g1_dredging_table(set_pool)
+    alice = game.players[0]
+
+    refused = game.cast_from_hand(
+        0, "Aphetto Dredging", chosen_creature_type="elf",
+        target_player_index=0, target_permanent_index=[1, 0],
+    )
+    assert not refused.supported
+    assert refused.details == "no valid target for Aphetto Dredging"
+    assert _w2g1_names(alice.hand) == ["Aphetto Dredging"]
+    assert not game.stack
+
+    not_a_type = game.cast_from_hand(
+        0, "Aphetto Dredging", chosen_creature_type="swamp",
+        target_player_index=0, target_permanent_index=[1],
+    )
+    assert not not_a_type.supported
+    assert "is not a creature type" in not_a_type.details
+
+
+def test_w2g1_aphetto_dredging_a_card_gone_in_response_is_skipped(set_pool):
+    """CR 608.2b: one of the two named Elves leaves the graveyard before the
+    spell resolves; the other still returns, and nothing of another type is
+    taken in its place."""
+    game = _w2g1_dredging_table(set_pool)
+    alice = game.players[0]
+
+    assert game.queue_from_hand(
+        0, "Aphetto Dredging", chosen_creature_type="elf",
+        target_player_index=0, target_permanent_index=[1, 4],
+    ).supported
+    assert [item.card.name for item in game.stack] == ["Aphetto Dredging"]
+    (elf_a,) = [card for card in alice.graveyard if card.name == "Elf A"]
+    alice.graveyard.remove(elf_a)
+    alice.exile.append(elf_a)
+    _w2g1_resolve_stack(game)
+
+    assert _w2g1_names(alice.hand) == ["Elf B"]
+    assert {"Goblin A", "Goblin B", "Goblin C"} <= {c.name for c in alice.graveyard}
+
+
+# --- Blatant Thievery ---------------------------------------------------------
+# "For each opponent, gain control of target permanent that player controls."
+# One target per opponent, each among that opponent's permanents (CR 601.2c;
+# "You gain control of only one permanent from each player", 2004-10-04), and
+# "If a permanent changes controller after being targeted but before this spell
+# resolves, you won't gain control of that permanent" (2004-10-04).
+
+from engine.control import change_control as _w2g1_change_control
+from engine.models import Permanent as _W2G1Permanent
+
+
+def _w2g1_permanent(name, type_line="Creature - Bear"):
+    permanent = _W2G1Permanent(card=_w2g1_mk_card(
+        name=name, mana_cost="{1}{G}", type_line=type_line, colors=("G",),
+    ))
+    permanent.metadata["summoning_sickness_turn"] = -99
+    return permanent
+
+
+def _w2g1_thievery_table(set_pool, boards, *, caster=0):
+    """One seat per entry of *boards* (its permanents' names); the caster
+    holds Blatant Thievery."""
+    ons = set_pool("ONS")
+    players = []
+    for seat, names in enumerate(boards):
+        players.append(_W2G1PlayerState(
+            name="ABCD"[seat],
+            hand=[ons["Blatant Thievery"]] if seat == caster else [],
+            battlefield=[
+                _w2g1_permanent(name, "Artifact" if "Rock" in name else "Creature - Bear")
+                for name in names
+            ],
+            library=[ons["Island"]] * 5,
+        ))
+    game = _W2G1Game(players=players)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.active_player_index = caster
+    game.current_turn_phase = game.current_step = "precombat_main"
+    game._sync_control()
+    return game
+
+
+def _w2g1_named(game, name):
+    (permanent,) = [p for p in game.all_permanents() if p.card.name == name]
+    return permanent
+
+
+def _w2g1_ids(game, *names):
+    return [_w2g1_named(game, name).permanent_id for name in names]
+
+
+def _w2g1_boards(game):
+    return [
+        sorted(p.card.name for p in game.controlled_by(seat))
+        for seat in range(len(game.players))
+    ]
+
+
+def test_w2g1_blatant_thievery_takes_one_permanent_from_each_opponent(set_pool):
+    """Three seats: the picker asks for opponent B's permanent, then opponent
+    C's, and the spell takes both, for good (CR 611.2a)."""
+    game = _w2g1_thievery_table(
+        set_pool, [["A Bear"], ["B Bear", "B Rock"], ["C Bear"]],
+    )
+    spec = game.cast_target_spec(0, game.players[0].hand[0])
+    assert [role["role"] for role in spec["roles"]] == [
+        "opponent 1's target", "opponent 2's target",
+    ]
+    assert [(o["seat"], o["name"]) for o in spec["valid_targets"]] == [
+        (1, "B Bear"), (1, "B Rock"),
+    ]
+    assert all(
+        [(n["seat"], n["name"]) for n in o["next"]] == [(2, "C Bear")]
+        for o in spec["valid_targets"]
+    )
+
+    result = game.queue_from_hand(
+        0, "Blatant Thievery", target_permanent_ids=_w2g1_ids(game, "B Rock", "C Bear"),
+    )
+    assert result.supported, result.details
+    _w2g1_resolve_stack(game)
+    assert _w2g1_boards(game) == [["A Bear", "B Rock", "C Bear"], ["B Bear"], []]
+    game.resolve_cleanup_step(0)
+    assert _w2g1_boards(game) == [["A Bear", "B Rock", "C Bear"], ["B Bear"], []]
+
+
+def test_w2g1_blatant_thievery_owes_a_target_for_every_opponent(set_pool):
+    """CR 601.2c: one target for each opponent, each that opponent's — so a
+    cast naming one, naming two of one opponent's, naming them out of turn
+    order or naming none is refused before anything is paid; and with an
+    opponent who controls nothing there is no legal announcement at all."""
+    game = _w2g1_thievery_table(
+        set_pool, [["A Bear"], ["B Bear", "B Rock"], ["C Bear"]],
+    )
+    for named, refusal in (
+        (("B Rock",), "Blatant Thievery requires 2 targets"),
+        (("B Rock", "B Bear"), "no valid target for Blatant Thievery"),
+        (("C Bear", "B Bear"), "no valid target for Blatant Thievery"),
+        ((), "Blatant Thievery requires 2 targets"),
+    ):
+        refused = game.queue_from_hand(
+            0, "Blatant Thievery", target_permanent_ids=_w2g1_ids(game, *named) or None,
+        )
+        assert not refused.supported and refused.details == refusal, named
+        assert not game.stack and len(game.players[0].hand) == 1
+
+    empty = _w2g1_thievery_table(set_pool, [["A Bear"], ["B Bear"], []])
+    assert empty.cast_target_spec(0, empty.players[0].hand[0])["valid_targets"] == []
+    assert not empty.queue_from_hand(
+        0, "Blatant Thievery", target_permanent_ids=_w2g1_ids(empty, "B Bear"),
+    ).supported
+
+
+def test_w2g1_blatant_thievery_skips_a_permanent_that_changed_controller(set_pool):
+    """The ruling: C's Bear changes controller in response and is not taken;
+    B's Bear still is. When every target has changed controller the spell is
+    countered by the rules (CR 608.2b)."""
+    game = _w2g1_thievery_table(set_pool, [["A Bear"], ["B Bear"], ["C Bear"]])
+    assert game.queue_from_hand(
+        0, "Blatant Thievery", target_permanent_ids=_w2g1_ids(game, "B Bear", "C Bear"),
+    ).supported
+    _w2g1_change_control(_w2g1_named(game, "C Bear"), 1, source=None)
+    game._sync_control()
+    _w2g1_resolve_stack(game)
+    assert _w2g1_boards(game) == [["A Bear", "B Bear"], ["C Bear"], []]
+
+    game = _w2g1_thievery_table(set_pool, [["A Bear"], ["B Bear"], ["C Bear"]])
+    assert game.queue_from_hand(
+        0, "Blatant Thievery", target_permanent_ids=_w2g1_ids(game, "B Bear", "C Bear"),
+    ).supported
+    _w2g1_change_control(_w2g1_named(game, "B Bear"), 2, source=None)
+    _w2g1_change_control(_w2g1_named(game, "C Bear"), 1, source=None)
+    game._sync_control()
+    _w2g1_resolve_stack(game)
+    assert _w2g1_boards(game) == [["A Bear"], ["C Bear"], ["B Bear"]]
+    assert "Blatant Thievery was countered by the rules and moved to graveyard" in game.log
+
+
+def test_w2g1_blatant_thievery_counts_the_opponents_still_in_the_game(set_pool):
+    """Four seats, the third has left the game (CR 800.4a): two opponents,
+    two targets — B's and D's — counted in turn order from the caster."""
+    game = _w2g1_thievery_table(
+        set_pool, [["A Bear"], ["B Bear"], ["C Bear"], ["D Bear"]],
+    )
+    game.players[2].lost = True
+    game.remove_from_battlefield(_w2g1_named(game, "C Bear"))
+    game._sync_control()
+    spec = game.cast_target_spec(0, game.players[0].hand[0])
+    assert len(spec["roles"]) == 2
+    assert [(o["seat"], [n["seat"] for n in o["next"]]) for o in spec["valid_targets"]] == [
+        (1, [3]),
+    ]
+    assert game.queue_from_hand(
+        0, "Blatant Thievery", target_permanent_ids=_w2g1_ids(game, "B Bear", "D Bear"),
+    ).supported
+    _w2g1_resolve_stack(game)
+    assert _w2g1_boards(game)[0] == ["A Bear", "B Bear", "D Bear"]
+
+
+def test_w2g1_blatant_thievery_opponents_are_in_turn_order_from_the_caster(set_pool):
+    """Cast by the second seat of three: its opponents are the third seat, then
+    the first (CR 101.4)."""
+    game = _w2g1_thievery_table(
+        set_pool, [["A Bear"], ["B Bear"], ["C Bear"]], caster=1,
+    )
+    spec = game.cast_target_spec(1, game.players[1].hand[0])
+    assert [(o["seat"], [n["seat"] for n in o["next"]]) for o in spec["valid_targets"]] == [
+        (2, [0]),
+    ]
+    assert game.queue_from_hand(
+        1, "Blatant Thievery", target_permanent_ids=_w2g1_ids(game, "C Bear", "A Bear"),
+    ).supported
+    _w2g1_resolve_stack(game)
+    assert _w2g1_boards(game) == [[], ["A Bear", "B Bear", "C Bear"], []]
+
+# --- Kaboom! --------------------------------------------------------------------
+# "Choose any number of target players or planeswalkers. For each of them,
+# reveal cards from the top of your library until you reveal a nonland card,
+# Kaboom! deals damage equal to that card's mana value to that player or
+# planeswalker, then you put the revealed cards on the bottom of your library in
+# any order." Handled one at a time in turn order from the active player, each
+# player's group before the next (2022-09-09); an all-land library deals zero
+# (2004-10-04).
+
+from engine.named_counters import add_counters as _w2g1_add_counters
+from engine.named_counters import counters_on as _w2g1_counters_on
+
+
+def _w2g1_walker(name):
+    walker = _W2G1Permanent(card=_w2g1_mk_card(
+        name=name, mana_cost="{3}{R}", type_line="Legendary Planeswalker - Chandra",
+        colors=("R",),
+    ))
+    _w2g1_add_counters(walker, "loyalty", 5)
+    return walker
+
+
+def _w2g1_kaboom_table(set_pool, library, *, seats=3, caster=0, walkers=()):
+    """*seats* players; the caster (also the active player) holds Kaboom! over
+    *library* (top first); each seat in *walkers* controls a planeswalker."""
+    ons = set_pool("ONS")
+    players = []
+    for seat in range(seats):
+        players.append(_W2G1PlayerState(
+            name="ABCD"[seat],
+            hand=[ons["Kaboom!"]] if seat == caster else [],
+            battlefield=(
+                [_w2g1_walker(f"{'ABCD'[seat]} Walker")] if seat in walkers else []
+            ),
+            library=(
+                [ons[name] for name in library] if seat == caster
+                else [ons["Island"]] * 5
+            ),
+        ))
+    game = _W2G1Game(players=players)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.active_player_index = caster
+    game.current_turn_phase = game.current_step = "precombat_main"
+    game._sync_control()
+    return game
+
+
+def test_w2g1_kaboom_handles_each_target_in_turn_order(set_pool):
+    """B, then B's planeswalker, then C — the active player's turn order, a
+    player before the permanents they control: Shock (1) to B, Clone (4) to
+    the planeswalker, Swat (3) to C, each revealed pile to the bottom."""
+    game = _w2g1_kaboom_table(
+        set_pool,
+        ["Island", "Shock", "Swamp", "Clone", "Mountain", "Swat"],
+        walkers=(1,),
+    )
+    walker = _w2g1_named(game, "B Walker")
+    result = game.queue_from_hand(0, "Kaboom!", target_role_refs=[
+        {"seat": 1}, {"permanent_id": walker.permanent_id}, {"seat": 2},
+    ])
+    assert result.supported, result.details
+    _w2g1_resolve_stack(game)
+
+    assert [player.life for player in game.players] == [20, 19, 17]
+    assert _w2g1_counters_on(walker, "loyalty") == 1
+    assert len(game.players[0].library) == 6, "every revealed card goes back"
+    assert [line for line in game.log if line.startswith("A revealed")] == [
+        "A revealed 2 card(s) and stopped on Shock (mana value 1)",
+        "A revealed 2 card(s) and stopped on Clone (mana value 4)",
+        "A revealed 2 card(s) and stopped on Swat (mana value 3)",
+    ]
+
+
+def test_w2g1_kaboom_offers_one_order_per_set_of_targets(set_pool):
+    """The picker's walk: any number of targets, the caster's own seat
+    included, each set once in turn order — so C is never offered before B,
+    and stopping anywhere is a legal announcement."""
+    game = _w2g1_kaboom_table(set_pool, ["Shock"] * 4, walkers=(1,))
+    spec = game.cast_target_spec(0, game.players[0].hand[0])
+    first = sorted((o["kind"], o["seat"]) for o in spec["valid_targets"])
+    assert first == [("permanent", 1), ("player", 0), ("player", 1), ("player", 2)]
+    after_c = next(o for o in spec["valid_targets"] if o["seat"] == 2)
+    assert after_c["next"] == []
+    after_b = next(
+        o for o in spec["valid_targets"] if o["kind"] == "player" and o["seat"] == 1
+    )
+    assert sorted((o["kind"], o["seat"]) for o in after_b["next"]) == [
+        ("permanent", 1), ("player", 2),
+    ]
+    after_walker = next(o for o in spec["valid_targets"] if o["kind"] == "permanent")
+    assert [(o["kind"], o["seat"]) for o in after_walker["next"]] == [("player", 2)]
+
+
+def test_w2g1_kaboom_starts_with_the_active_players_group(set_pool):
+    """Cast by the second seat of three: its own turn, so the third seat's
+    group comes before the first's — the first reveal goes to C."""
+    game = _w2g1_kaboom_table(
+        set_pool, ["Shock", "Clone"], caster=1,
+    )
+    assert game.queue_from_hand(
+        1, "Kaboom!", target_role_refs=[{"seat": 2}, {"seat": 0}],
+    ).supported
+    _w2g1_resolve_stack(game)
+    assert [player.life for player in game.players] == [16, 20, 19]
+
+
+def test_w2g1_kaboom_zero_targets_and_an_all_land_library(set_pool):
+    """No target is a legal announcement that does nothing; and an all-land
+    library deals zero damage (the 2004-10-04 ruling), its cards still
+    revealed and put on the bottom."""
+    game = _w2g1_kaboom_table(set_pool, ["Shock"] * 3, seats=2)
+    assert game.queue_from_hand(0, "Kaboom!").supported
+    _w2g1_resolve_stack(game)
+    assert [player.life for player in game.players] == [20, 20]
+
+    game = _w2g1_kaboom_table(set_pool, ["Island", "Swamp"], seats=2)
+    assert game.queue_from_hand(0, "Kaboom!", target_role_refs=[{"seat": 1}]).supported
+    _w2g1_resolve_stack(game)
+    assert [player.life for player in game.players] == [20, 20]
+    assert [card.name for card in game.players[0].library] == ["Island", "Swamp"]
+
+
+def test_w2g1_kaboom_a_target_gone_in_response_is_skipped(set_pool):
+    """B leaves the game before Kaboom! resolves (CR 800.4a): B is no longer a
+    legal target, so nothing is revealed for B, and C still takes the first
+    card's damage."""
+    game = _w2g1_kaboom_table(set_pool, ["Island", "Clone", "Shock"])
+    assert game.queue_from_hand(
+        0, "Kaboom!", target_role_refs=[{"seat": 1}, {"seat": 2}],
+    ).supported
+    game.players[1].lost = True
+    _w2g1_resolve_stack(game)
+    assert game.players[2].life == 16
+    assert [line for line in game.log if line.startswith("A revealed")] == [
+        "A revealed 2 card(s) and stopped on Clone (mana value 4)",
+    ]
+# ==== end W2G1 ======================================================

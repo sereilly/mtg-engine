@@ -397,7 +397,12 @@ def accept_or_planeswalker(
         # "target **opponent** or planeswalker" (Eternal Flame) is the same
         # union with the caster's own seat struck out of it, which is a
         # narrowing the recipient already carries.
-        and recipient.kind in ("target_player", "target_opponent")
+        #
+        # "…deals damage … to **that player or planeswalker**" (Kaboom!): the
+        # back-reference to one of a union announced earlier, which the damage
+        # lowering honours only inside the loop over those targets
+        # (``LOOP_BOUND_TARGET``) and refuses everywhere else.
+        and recipient.kind in ("target_player", "target_opponent", "that_player")
         and stream.accept_phrase("or", "planeswalker")
     ):
         return dataclasses.replace(recipient, or_planeswalker=True)

@@ -469,17 +469,53 @@ class EntryChoicesMixin:
         Stated as policy rather than left to the first word of a catalog
         (idiom 8): a type nobody controls makes every reader of the choice inert,
         which is legal and is not a choice any player would make.
+
+        **A type that narrows the spell's targets** ("Return up to three
+        target creature cards of the creature type of your choice from your
+        graveyard", Aphetto Dredging) names a board of its own: the caster's
+        graveyard, whose creature cards are what the word decides. So the
+        default there is the type most of them share (printed, CR 613.1 —
+        nothing outside the battlefield is retyped), which is the most the
+        spell could return; an empty pile falls back to the reading above.
         """
+        from ..layer_bridge import printed_shape
+
+        if card is not None and self._cast_type_narrows_graveyard_targets(card):
+            pile: dict[str, int] = {}
+            for held in self.players[caster_index].graveyard:
+                types, subtypes = printed_shape(held)
+                if "creature" not in types:
+                    continue
+                for word in subtypes:
+                    pile[word] = pile.get(word, 0) + 1
+            if pile:
+                return max(sorted(pile), key=lambda word: pile[word])
         counts = self._creature_type_counts()
         if counts:
             return max(sorted(counts), key=lambda word: counts[word])
-        from ..layer_bridge import printed_shape
 
         if card is not None:
             types, printed = printed_shape(card)
             if "creature" in types and printed:
                 return sorted(printed)[0]
         return "human"
+
+    def _cast_type_narrows_graveyard_targets(self, card) -> bool:
+        """Whether the creature type *card*'s cast announces narrows the
+        cards it targets (``announced_creature_type``) — read off the target
+        spec the card's own program derives, the description every reader of
+        those targets holds."""
+        from ..announced_creature_type import narrows_by_announced_type
+        from ..oracle import compile_card_oracle
+        from ..targeting import derive_cast_spec
+
+        # A permanent spell targets nothing (CR 115.1); only an instant's or a
+        # sorcery's own targets can be chosen under its announcement.
+        if getattr(card, "primary_type", None) not in ("instant", "sorcery"):
+            return False
+        return narrows_by_announced_type(
+            derive_cast_spec(card, compile_card_oracle(card))
+        )
 
     def _nameable_cards(
         self, chooser_index: int, *, exclude: str | None = None

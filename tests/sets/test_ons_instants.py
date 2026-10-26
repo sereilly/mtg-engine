@@ -1684,3 +1684,99 @@ def test_w1g11_false_cure_makes_each_life_gain_cost_double_this_turn(set_pool):
 # W1G13's tests go between this line and the "end W1G13" line.
 
 # ==== end W1G13 ======================================================
+
+
+# ==== W2G1 ==========================================================
+# W2G1's tests go between this line and the "end W2G1" line.
+
+# Shade's Breath: "Until end of turn, each creature you control becomes a
+# black Shade and gains "{B}: This creature gets +1/+1 until end of turn."" —
+# a colour set (layer 5), a creature-type set with its word printed (layer 4,
+# CR 205.1a) and a quoted grant (layer 6), each over the creatures the caster
+# controls as it resolves (CR 611.2c), all ending at cleanup.
+
+from engine import Game as _W2G1Game, PlayerState as _W2G1PlayerState
+from engine.layer_bridge import computed_types as _w2g1_computed_types
+from engine.models import Permanent as _W2G1Permanent
+from tests.helpers import _mk_card as _w2g1_mk_card
+from tests.helpers import resolve_stack as _w2g1_resolve_stack
+
+
+def _w2g1_creature(name, subtype, color="R"):
+    permanent = _W2G1Permanent(card=_w2g1_mk_card(
+        name=name, mana_cost=f"{{1}}{{{color}}}", type_line=f"Creature - {subtype}",
+        colors=(color,),
+    ))
+    permanent.metadata["summoning_sickness_turn"] = -99
+    return permanent
+
+
+def _w2g1_breath_table(set_pool, mine, theirs):
+    ons = set_pool("ONS")
+    game = _W2G1Game(players=[
+        _W2G1PlayerState(name="A", hand=[ons["Shade's Breath"]],
+                         battlefield=list(mine), library=[ons["Swamp"]] * 5),
+        _W2G1PlayerState(name="B", battlefield=list(theirs),
+                         library=[ons["Swamp"]] * 5),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.active_player_index = 0
+    game.current_turn_phase = game.current_step = "precombat_main"
+    game._sync_control()
+    game._recompute_continuous_effects()
+    return game
+
+
+def test_w2g1_shades_breath_makes_each_of_your_creatures_a_black_shade(set_pool):
+    """Both of the caster's creatures become black Shades — their printed
+    colour and creature types replaced, not joined — and each gains the
+    pump, which then works; the opponent's creature is untouched."""
+    goblin = _w2g1_creature("Red Goblin", "Goblin Warrior")
+    soldier = _w2g1_creature("White Soldier", "Human Soldier", "W")
+    elf = _w2g1_creature("Their Elf", "Elf", "G")
+    game = _w2g1_breath_table(set_pool, [goblin, soldier], [elf])
+
+    assert game.cast_from_hand(0, "Shade's Breath").supported
+    _w2g1_resolve_stack(game)
+
+    for perm in (goblin, soldier):
+        assert perm.effective_colors == {"B"}
+        assert _w2g1_computed_types(perm) == ({"creature"}, {"shade"})
+        assert "{B}: This creature gets +1/+1" in perm.effective_card.oracle_text
+    assert _w2g1_computed_types(elf) == ({"creature"}, {"elf"})
+    assert elf.effective_colors == {"G"}
+    assert "{B}" not in (elf.effective_card.oracle_text or "")
+
+    before = (goblin.effective_power, goblin.effective_toughness)
+    assert game.activate_permanent_ability(0, "Red Goblin").supported
+    _w2g1_resolve_stack(game)
+    assert (goblin.effective_power, goblin.effective_toughness) == (
+        before[0] + 1, before[1] + 1,
+    )
+
+
+def test_w2g1_shades_breath_ends_at_cleanup_and_skips_a_later_arrival(set_pool):
+    """CR 611.2c: a creature that arrives after the spell resolves keeps its
+    colour and type; and every change wears off in the cleanup step."""
+    goblin = _w2g1_creature("Red Goblin", "Goblin")
+    game = _w2g1_breath_table(set_pool, [goblin], [])
+    assert goblin.effective_colors == {"R"}
+
+    assert game.cast_from_hand(0, "Shade's Breath").supported
+    _w2g1_resolve_stack(game)
+    late = _w2g1_creature("Late Wolf", "Wolf", "G")
+    game.players[0].battlefield.append(late)
+    game._sync_control()
+    game._recompute_continuous_effects()
+    assert _w2g1_computed_types(late) == ({"creature"}, {"wolf"})
+    assert late.effective_colors == {"G"}
+    assert "{B}" not in (late.effective_card.oracle_text or "")
+    assert _w2g1_computed_types(goblin) == ({"creature"}, {"shade"})
+
+    game.resolve_cleanup_step(0)
+    assert _w2g1_computed_types(goblin) == ({"creature"}, {"goblin"})
+    assert goblin.effective_colors == {"R"}
+    assert "{B}" not in (goblin.effective_card.oracle_text or "")
+
+# ==== end W2G1 ======================================================

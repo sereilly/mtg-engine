@@ -87,7 +87,11 @@ def role_is_seat(role: dict | None) -> bool:
 #: whole into the resolution context, so no construction site has to remember
 #: a new field.
 #:
-#: **Present only where the scalar cannot say it** — two or more seat roles.
+#: **Present only where the scalar cannot say it** — two or more seat roles
+#: named, or (``several_seat_roles``) a spec several of whose roles a seat may
+#: answer, whichever one the announcement named it in ("Choose any number of
+#: target players or planeswalkers", Kaboom!: one player named, and the
+#: scalar could not say which of twelve slots it answers).
 #: An announcement with one seat role records nothing here and is read off
 #: ``target_player_index`` exactly as it always was, which is every roles card
 #: the pool held before this one; where the list is present the scalar still
@@ -270,11 +274,88 @@ ROLE_RELATION_TESTS = {
         and role_seat_of(candidate, game) is not None
         and role_seat_of(candidate, game) > role_seat_of(earlier, game)
     ),
+    # "Choose **any number of target players or planeswalkers**. For each of
+    # them, …" (Kaboom!.) The same canonical order over a union of seats and
+    # permanents, and the order the card's ruling handles them in
+    # (:data:`LATER_IN_TURN_ORDER_ROLE`, :func:`turn_order_key`).
+    "later_in_turn_order_role": lambda earlier, candidate, game: (
+        game is not None
+        and turn_order_key(earlier, game) is not None
+        and turn_order_key(candidate, game) is not None
+        and turn_order_key(candidate, game) > turn_order_key(earlier, game)
+    ),
 }
 
 #: The relation key :data:`ROLE_RELATION_TESTS` reads for "a later seat than
 #: the role before it" (Wheel and Deal's canonical order).
 LATER_SEAT_ROLE = "later_seat_role"
+
+#: The relation key for "**later in turn order** than the role before it":
+#: "Choose any number of target players or planeswalkers. For each of them, …"
+#: (Kaboom!). The card's ruling (2022-09-09) handles the targets "one at a
+#: time in turn order", each player's group — the player and the permanents
+#: they control — starting with the active player's; so the announcement's
+#: canonical order *is* that order (:func:`turn_order_key`), the roles walk
+#: offers each set of targets once rather than once per ordering, and a loop
+#: over the roles in slot order is the ruling's order. Within one player's
+#: group the order is fixed — the player, then their planeswalkers by
+#: permanent id — where the ruling lets the caster choose it.
+LATER_IN_TURN_ORDER_ROLE = "later_in_turn_order_role"
+
+
+def turn_order_key(obj, game) -> "tuple[int, int, int] | None":
+    """Where *obj* — a player, or a permanent — comes in the turn-order
+    handling of :data:`LATER_IN_TURN_ORDER_ROLE`: its player's place from the
+    active player (CR 101.4), the player before their permanents, and a
+    permanent's id among them. None for anything else."""
+    seat = role_seat_of(obj, game)
+    players = list(getattr(game, "players", ()) or ())
+    if seat is None or not players:
+        return None
+    group = (seat - int(getattr(game, "active_player_index", 0) or 0)) % len(players)
+    if any(player is obj for player in players):
+        return (group, 0, 0)
+    return (group, 1, int(getattr(obj, "permanent_id", 0) or 0))
+
+
+#: How many roles "**any number of** target players or planeswalkers" is
+#: announced through — a bound on any table, for
+#: :data:`ANY_NUMBER_OF_SEAT_ROLES`' reason: four seats and eight
+#: planeswalkers among them.
+ANY_NUMBER_OF_TARGET_ROLES = 12
+
+
+def any_number_of_players_or_planeswalkers_roles() -> dict:
+    """The ``roles`` description "any number of target players or
+    planeswalkers" lowers to: :data:`ANY_NUMBER_OF_TARGET_ROLES` optional
+    roles, each later in turn order than the one before it
+    (:data:`LATER_IN_TURN_ORDER_ROLE`)."""
+    roles: list[dict] = []
+    for index in range(ANY_NUMBER_OF_TARGET_ROLES):
+        role: dict = {
+            "role": f"target {index + 1}", "kind": "player_or_planeswalker",
+            OPTIONAL_ROLE: True,
+        }
+        if index:
+            role[LATER_IN_TURN_ORDER_ROLE] = f"target {index}"
+        roles.append(role)
+    return {"kind": ROLES_TARGET_KIND, "roles": roles}
+
+
+#: The damage recipient "**that player or planeswalker**" inside a loop over
+#: announced targets (Kaboom!): whichever object the iteration is scoped to —
+#: the permanent its role named, else the player. A payload value rather than
+#: a description, because the loop's own announcement is the only one: the
+#: step chooses nothing.
+ITERATION_TARGET = "iteration_target"
+
+
+def several_seat_roles(roles) -> bool:
+    """Whether more than one of *roles* may be answered by a player — so the
+    one scalar seat a stack object carries cannot say which slot it is, and an
+    announcement records its seats per role (:data:`ROLE_SEATS`) even when it
+    named one."""
+    return len(role_seat_positions(roles)) > 1
 
 #: How many seat roles "**any number of** target opponents" is announced
 #: through: one optional role per possible opponent, each after the last
@@ -301,6 +382,86 @@ def any_number_of_opponents_roles() -> dict:
             role[LATER_SEAT_ROLE] = f"opponent {index}"
         roles.append(role)
     return {"kind": ROLES_TARGET_KIND, "roles": roles}
+
+
+#: The role key "a permanent **the n-th opponent** controls", its value n
+#: (0-based): "For each opponent, gain control of target permanent **that
+#: player** controls." (Blatant Thievery.) One printed instance of the word per
+#: opponent (CR 601.2c), so the announcement names one object per opponent —
+#: "You gain control of only one permanent from each player" (the card's
+#: 2004-10-04 ruling). Positional, so the walk offers role *n* only the
+#: permanents of the opponent it is for and no two roles can name one
+#: opponent's: the opponents are counted in turn order from the caster
+#: (CR 101.4) among the players still in the game (CR 800.4a), by
+#: :func:`per_opponent_seat` — the one reader the picker, the gates and the
+#: announcement record share.
+#:
+#: **Not optional, and not all of them owed.** A spec derived from the card
+#: alone has :data:`ANY_NUMBER_OF_SEAT_ROLES` of them, a bound on any table;
+#: the roles past the caster's live opponents are **void** at this table —
+#: dropped by :func:`live_roles`, which is asked wherever a game is in hand
+#: (the cast spec, the cast gate) — and every one that is left is owed: an
+#: opponent with nothing the noun phrase admits is a spell with no legal
+#: announcement (CR 601.2c), which "optional role" could not have said.
+PER_OPPONENT_ROLE = "per_opponent"
+
+#: The ``choices`` key a per-opponent announcement records **who controlled
+#: each permanent it named**, by permanent id — read back as the object
+#: resolves: "If a permanent changes controller after being targeted but
+#: before this spell resolves, you won't gain control of that permanent"
+#: (Blatant Thievery's 2004-10-04 ruling; CR 608.2b — "that player controls"
+#: is no longer true of it). Recorded because nothing else can answer it: the
+#: role's opponent is counted among the players still in the game, and one who
+#: leaves in response (CR 800.4a) renumbers every opponent after them.
+ANNOUNCED_TARGET_CONTROLLERS = "announced_target_controllers"
+
+
+def per_opponent_roles(described: dict, *, kind: str = "object") -> dict:
+    """The ``roles`` description "for each opponent, … target <noun> that
+    player controls" lowers to: :data:`ANY_NUMBER_OF_SEAT_ROLES` roles, the
+    n-th a *described* object the n-th opponent controls
+    (:data:`PER_OPPONENT_ROLE`)."""
+    roles: list[dict] = []
+    for index in range(ANY_NUMBER_OF_SEAT_ROLES):
+        roles.append({
+            "role": f"opponent {index + 1}'s target", "kind": kind,
+            "filter": dict(described), PER_OPPONENT_ROLE: index,
+        })
+    return {"kind": ROLES_TARGET_KIND, "roles": roles}
+
+
+def per_opponent_seat(game, caster_index: int, index: int) -> int | None:
+    """The seat of *caster_index*'s *index*-th opponent (0-based), counted in
+    turn order from the caster (CR 101.4) among the players still in the game
+    (CR 800.4a), or None where there are not that many."""
+    players = list(getattr(game, "players", ()) or ())
+    count = len(players)
+    live = [
+        (caster_index + step) % count for step in range(1, count)
+        if not getattr(players[(caster_index + step) % count], "lost", False)
+    ]
+    return live[index] if 0 <= index < len(live) else None
+
+
+def live_roles(game, caster_index: int, spec: dict | None) -> dict | None:
+    """*spec* with its per-opponent roles past *caster_index*'s live opponents
+    dropped (:data:`PER_OPPONENT_ROLE`), or *spec* itself where it has none.
+
+    They are always trailing — the n-th opponent exists only if the
+    (n-1)-th does — so what is left is an ordinary roles spec of exactly one
+    owed role per opponent, and every pure reader of a roles spec (the walk,
+    the count, ``roles_may_end_at``) is right about it unchanged.
+    """
+    roles = spec_roles(spec)
+    if not any(PER_OPPONENT_ROLE in role for role in roles):
+        return spec
+    kept = [
+        role for role in roles
+        if PER_OPPONENT_ROLE not in role
+        or per_opponent_seat(game, caster_index, int(role[PER_OPPONENT_ROLE]))
+        is not None
+    ]
+    return {**spec, "roles": kept}
 
 
 def role_dependency(role: dict) -> tuple[str | None, str | None]:

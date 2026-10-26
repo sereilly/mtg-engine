@@ -31,7 +31,7 @@ from .. import ast
 from ..errors import LoweringError
 from ._common import (_describe_several_targets, _describe_targets,
                       _is_enchanted, _is_source, _names_several_targets,
-                      _restrictions_beyond)
+                      _restrictions_beyond, testable_filter_payload)
 from ._events import binds_block_pair
 
 #: What a recolour can be told about the **spell** it targets, and the whole of
@@ -318,6 +318,32 @@ def _lower_become_color(
             return (
                 OracleInstruction(
                     "recolor_self_until_eot", "", {"target_color": node.color}
+                ),
+            )
+        if (
+            isinstance(node.subject, ast.TargetSpec)
+            and node.subject.quantifier in ("each", "all")
+            and not node.subject.targeted
+        ):
+            # "Until end of turn, **each creature you control** becomes a black
+            # Shade …" (Shade's Breath.) A *described* set rather than a chosen
+            # one, so nothing is announced and the board is read as the effect
+            # begins (CR 611.2c fixes the set then — a creature arriving later
+            # stays its own colour). The same turn-long channel the targeted
+            # kind writes, over the set ``set_each_creature_type`` walks for
+            # the type half of the same phrase, through the same
+            # ``subject_matches`` reader: one meaning of the noun phrase for
+            # both characteristics it changes.
+            described = testable_filter_payload(
+                node.subject.filter,
+                refusal="nothing tests this narrowing of the recoloured set",
+                node=node,
+                require_narrowing=True,
+            )
+            return (
+                OracleInstruction(
+                    "recolor_each_until_eot", "",
+                    {"target_color": node.color, "filter": described},
                 ),
             )
         if not isinstance(node.subject, ast.TargetSpec) or not node.subject.targeted:

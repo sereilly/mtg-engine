@@ -1051,13 +1051,16 @@ def build_card_target_spec(
     from_zone: str = "hand",
     hand_index: int | None = None,
     optional_cost_payments: str | None = None,
+    chosen_creature_type: str | None = None,
 ) -> dict:
     """One card's cast-time announcement, for a client that is about to make it.
 
     The same spec a hand card carries in the polled state, asked for a card the
     state does not carry one for — the Debug Menu's free cast, whose card comes
     from a session-less catalog search — and asked *again* mid-announcement,
-    once CR 601.2b's optional prices have been part-answered.
+    once CR 601.2b's optional prices have been part-answered, or once its
+    creature type has been chosen (a spell whose targets are of that type,
+    ``announced_creature_type``).
     """
     return {
         "name": card.name,
@@ -1066,6 +1069,7 @@ def build_card_target_spec(
             optional_cost_payments=parse_optional_cost_payments(
                 optional_cost_payments
             ),
+            chosen_creature_type=chosen_creature_type,
         ),
         "modes": _serialize_modes(card, session.game, seat),
         # Whether more than one of those modes may be chosen (CR 700.2d). The

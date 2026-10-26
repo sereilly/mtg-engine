@@ -151,6 +151,82 @@ class RoleTargetsMixin:
             if isinstance(pid, int)
         ]
 
+    def announced_target_controllers(
+        self, card: CardDefinition, target_permanent_ids, *, mode_index=None,
+    ) -> "dict | None":
+        """Who controls each permanent a **per-opponent** announcement names,
+        by permanent id, as it is named — or None for every other cast.
+
+        "If a permanent changes controller after being targeted but before
+        this spell resolves, you won't gain control of that permanent."
+        (Blatant Thievery's 2004-10-04 ruling.) CR 608.2b asks it again as the
+        spell resolves (``legality_resolution``), against this record rather
+        than against the opponent the role is counted for now: a player
+        leaving in response (CR 800.4a) renumbers every opponent behind them
+        (``target_roles.ANNOUNCED_TARGET_CONTROLLERS``).
+        """
+        from .game_types import target_ids
+        from .oracle import compile_card_oracle
+        from .target_roles import PER_OPPONENT_ROLE
+        from .targeting import derive_cast_spec
+
+        if card.primary_type not in ("instant", "sorcery"):
+            return None
+        spec = derive_cast_spec(card, compile_card_oracle(card), mode_index=mode_index)
+        if not any(PER_OPPONENT_ROLE in role for role in spec_roles(spec)):
+            return None
+        recorded: dict = {}
+        for permanent_id in target_ids(target_permanent_ids):
+            if not isinstance(permanent_id, int):
+                continue
+            permanent = self.permanent_by_id(permanent_id)
+            if permanent is not None:
+                recorded[permanent_id] = self.controller_index_of(permanent)
+        return recorded
+
+    def several_seat_role_seats(
+        self, card: CardDefinition, *, mode_index=None, target_role_refs=None,
+        target_permanent_ids=None, target_player_index=None,
+    ) -> "list | None":
+        """Every seat a roles announcement named, **by slot** — the
+        ``target_roles.ROLE_SEATS`` list — for a spell whose roles several may
+        each be answered by a player ("Choose any number of target players or
+        planeswalkers", Kaboom!), even where one seat was named; None for
+        every other cast, which records the list only where it named two
+        (``activation._role_announcement_stamps``).
+
+        Read off the role refs where the caller sent them, and otherwise off
+        the positional ids: the slot the scalar seat answers is the one slot
+        of the announced length that names no permanent. More than one such
+        slot with only the scalar to fill them is no announcement this can
+        read, and records nothing.
+        """
+        from .game_types import target_ids
+        from .oracle import compile_card_oracle
+        from .target_roles import several_seat_roles
+        from .targeting import derive_cast_spec
+
+        if card.primary_type not in ("instant", "sorcery"):
+            return None
+        spec = derive_cast_spec(card, compile_card_oracle(card), mode_index=mode_index)
+        if not several_seat_roles(spec_roles(spec)):
+            return None
+        if target_role_refs:
+            return [
+                ref.get("seat")
+                if isinstance(ref, dict) and isinstance(ref.get("seat"), int)
+                and not isinstance(ref.get("seat"), bool) else None
+                for ref in target_role_refs
+            ]
+        ids = target_ids(target_permanent_ids)
+        unnamed = [slot for slot, value in enumerate(ids) if not isinstance(value, int)]
+        if not isinstance(target_player_index, int) or len(unnamed) != 1:
+            return None
+        return [
+            target_player_index if slot == unnamed[0] else None
+            for slot in range(len(ids))
+        ]
+
     def role_object_at(self, candidate: dict):
         """The object a role candidate names — a permanent, or a card in a
         graveyard — or None when the slot no longer holds one.

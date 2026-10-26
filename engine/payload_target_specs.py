@@ -17,6 +17,7 @@ out of ``engine/targeting.py`` at the 2,000-line cap.
 
 from __future__ import annotations
 
+from .announced_creature_type import GRAVEYARD_ANNOUNCED_CREATURE_TYPE
 from .target_descriptions import (ANNOUNCED_SEAT, GRAVEYARD_TARGET_KIND,
                                   SINGLE_GRAVEYARD, _from_targets_payload,
                                   _narrowing_flags)
@@ -399,6 +400,14 @@ def _graveyard_return_spec(payload: dict) -> dict:
     # just offered.
     if payload.get("graveyard_subtypes"):
         spec["graveyard_subtypes"] = list(payload["graveyard_subtypes"])
+    # "…creature cards **of the creature type of your choice**" (Aphetto
+    # Dredging): the type the caster announces before the targets (CR 601.2b),
+    # carried as the flag, for the subtype's reason directly above — the
+    # picker substitutes the word it is asked under
+    # (``Game.cast_target_spec(chosen_creature_type=)``), and a spec that
+    # dropped the flag would offer every creature card in the pile.
+    if payload.get(GRAVEYARD_ANNOUNCED_CREATURE_TYPE):
+        spec[GRAVEYARD_ANNOUNCED_CREATURE_TYPE] = True
     # "target **green** card" (Revive) and "target **basic** land card"
     # (Groundskeeper). Handed over in the key names ``graveyard_card_matches``
     # reads, for the subtype's reason directly above: the handler re-checks the

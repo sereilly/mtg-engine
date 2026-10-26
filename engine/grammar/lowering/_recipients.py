@@ -35,6 +35,8 @@ from ._common import (_describe_several_targets, _is_source, _is_you,
                       _names_several_targets, _targets_payload,
                       testable_filter_payload)
 from ._delays import _BOUND_OBJECT_DELAYED_EVENTS
+from ._record_keys import LOOP_BOUND_TARGET
+from ...target_roles import ITERATION_TARGET
 from ._events import (DAMAGED_PERMANENT_CONTROLLER, EVENT_SUBJECT_CONTROLLER,
                       EVENT_SUBJECT_PLAYER, LOOP_BOUND_PLAYER,
                       _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_OBJECTS,
@@ -207,6 +209,20 @@ def lower_damage_recipient(
             # a trigger that targets nothing the slot is whatever the context
             # was carrying.
             payload["recipient"] = "biter_controller"
+        elif recipient.kind == "that_player" and recipient.or_planeswalker:
+            # "Choose any number of target players or planeswalkers. For each
+            # of them, … Kaboom! deals damage … to **that player or
+            # planeswalker** …" (Kaboom!.) The object the loop over those
+            # targets is on — a seat or a permanent, scoped per iteration by
+            # ``handlers/control_flow.for_each`` — and only there: anywhere
+            # else the words name nothing any loop bound.
+            if LOOP_BOUND_TARGET not in produced:
+                raise LoweringError(
+                    '"that player or planeswalker" names the object a loop over '
+                    "announced targets is on, and no such loop binds it here",
+                    node=node,
+                )
+            payload["recipient"] = ITERATION_TARGET
         elif recipient.kind == "that_player" and LOOP_BOUND_PLAYER in produced:
             # "For each player, this enchantment deals 1 damage to **that
             # player** unless they pay {B} or {3}." (Lim-Dûl's Hex.) The loop

@@ -61,7 +61,8 @@ from engine.targeting import (derive_activation_spec,
                               derive_cast_spec,
                               spec_roles,
                               usable_activated_abilities)
-from engine.target_roles import ROLE_SEATS, recorded_role_seats, role_is_seat
+from engine.target_roles import (ROLE_SEATS, recorded_role_seats, role_is_seat,
+                                roles_may_end_at)
 from engine.target_descriptions import roles_spec
 from tests.engine.test_player_target_census import SCENARIOS, kickers, table
 
@@ -259,6 +260,16 @@ class _Sweep:
             if probe is None:
                 continue
             roles = spec_roles(picker(probe, handle))
+            # "**Any number of** target opponents" (Wheel and Deal), "…target
+            # players or planeswalkers" (Kaboom!): a chain of optional roles
+            # longer than any table, which an announcement ends wherever it
+            # likes. Asked at the length this table can fill with seats — one
+            # per player — rather than with a seat in every one of a dozen
+            # slots: Kaboom!'s twelve are 3^12 assignments a table, which no
+            # announcement could make and the sweep never finished.
+            seats_here = len(probe.players)
+            if len(roles) > seats_here and roles_may_end_at(roles, seats_here):
+                roles = roles[:seats_here]
             seat_slots = [slot for slot, role in enumerate(roles) if role_is_seat(role)]
             if not seat_slots:
                 continue

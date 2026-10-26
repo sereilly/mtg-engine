@@ -211,6 +211,10 @@ _W2G4_DRIVEN_ELSEWHERE = {
         "test_w2g4_every_other_recolouring_instruction_is_stamped_when_it_resolves",
     "animate_self_until_eot":
         "test_w2g4_every_other_recolouring_instruction_is_stamped_when_it_resolves",
+    # "Until end of turn, each creature you control becomes a black Shade …"
+    # (Shade's Breath, Onslaught — measured while this row was written).
+    "recolor_each_until_eot":
+        "test_w2g1_a_described_set_recolour_is_stamped_when_it_resolves",
 }
 
 
@@ -644,6 +648,30 @@ def test_w2g4_every_other_recolouring_instruction_is_stamped_when_it_resolves(
     assert game.confirm_color_set_choice(0, ["W"])
     _w2g4_settle(game, None)
     assert _w2g4_colours(game, shyft) == ["W"]
+
+
+@pytest.mark.cr("613.7b", "611.2c")
+def test_w2g1_a_described_set_recolour_is_stamped_when_it_resolves(
+    catalog_by_name, set_pool,
+):
+    """Shade's Breath's colour half — "each creature you control becomes
+    black" until end of turn, over the set the board holds as it resolves —
+    under a Thran Lens that was already out ("All permanents are colorless"):
+    the later effect decides, the creature that arrives afterwards is not in
+    the set (CR 611.2c) and stays the Lens's colourless, and at cleanup the
+    Lens decides again."""
+    card = catalog_by_name.__getitem__
+    game = _w2g4_table()
+    bears = _w2g4_enter(game, card("Grizzly Bears"))
+    _w2g4_enter(game, card("Thran Lens"))
+    assert _w2g4_colours(game, bears) == []
+
+    _w2g4_cast(game, set_pool("ONS")["Shade's Breath"])
+    assert _w2g4_colours(game, bears) == ["B"]
+    late = _w2g4_enter(game, card("Goblin Raider"))
+    assert _w2g4_colours(game, late) == []
+    game.resolve_cleanup_step(0)
+    assert _w2g4_colours(game, bears) == []
 
 
 def _w2g4_instructions(value, seen=None):
