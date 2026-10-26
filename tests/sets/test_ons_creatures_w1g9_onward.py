@@ -1247,3 +1247,90 @@ def test_w1g13_tempting_wurm_an_aura_with_nothing_to_enchant_stays_in_hand(set_p
     assert ons["Pacifism"] in bob.hand
 
 # ==== end W1G13 ======================================================
+
+# ==== W2G6 ==========================================================
+# Gravespawn Sovereign, the card the reanimation agreement ratchet names at
+# Onslaught's promotion (tests/engine/test_targeting.py). Supported on
+# arrival and never given a test until then.
+from engine import Game as _W2G6Game
+from engine import PlayerState as _W2G6PlayerState
+from engine.models import Permanent as _W2G6Permanent
+from engine.targeting import derive_activation_spec as _w2g6_derive_activation_spec
+from engine.oracle import compile_card_oracle as _w2g6_compile
+from tests.helpers import resolve_stack as _w2g6_resolve_stack
+
+
+def _w2g6_sovereign_table(set_pool, catalog_by_name, *, zombies=4):
+    """The Sovereign and *zombies* other Zombies on seat 0's board, a Hill
+    Giant and a Swamp in its graveyard, a Serra Angel, a Lightning Bolt and a
+    Forest in the opponent's."""
+    ons = set_pool("ONS")
+    game = _W2G6Game(players=[
+        _W2G6PlayerState(
+            name="A", graveyard=[catalog_by_name["Hill Giant"], catalog_by_name["Swamp"]],
+            library=[ons["Swamp"]] * 5,
+        ),
+        _W2G6PlayerState(
+            name="B",
+            graveyard=[
+                catalog_by_name["Serra Angel"], catalog_by_name["Lightning Bolt"],
+                catalog_by_name["Forest"],
+            ],
+            library=[ons["Swamp"]] * 5,
+        ),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    tribe = []
+    for card in [ons["Gravespawn Sovereign"]] + [ons["Gluttonous Zombie"]] * zombies:
+        perm = _W2G6Permanent(card=card)
+        game._put_permanent_onto_battlefield(0, perm, None)
+        perm.metadata["summoning_sickness_turn"] = -99
+        tribe.append(perm)
+    return game, tribe
+
+
+def test_w2g6_gravespawn_sovereign_reanimates_from_either_graveyard(set_pool, catalog_by_name):
+    """"Tap five untapped Zombies you control: Put target creature card from
+    a graveyard onto the battlefield under your control." The program says
+    which graveyard - any (no ``own_graveyard_only``) - and the picker offers
+    the creature cards in both and nothing else; the opponent's Angel comes
+    back under the Sovereign's controller, five Zombies tapped for it."""
+    (ability,) = _w2g6_compile(set_pool("ONS")["Gravespawn Sovereign"]).activated_abilities
+    spec = _w2g6_derive_activation_spec(ability)
+    assert spec["kind"] == "graveyard_creature" and not spec.get("own_graveyard_only")
+
+    game, tribe = _w2g6_sovereign_table(set_pool, catalog_by_name)
+    offered = game.activation_target_spec(0, game.battlefield_index_of(tribe[0]))
+    assert sorted((entry["seat"], entry["name"]) for entry in offered["valid_targets"]) == [
+        (0, "Hill Giant"), (1, "Serra Angel"),
+    ]
+    assert game.activate_permanent_ability(
+        0, "Gravespawn Sovereign", target_player_index=1, target_permanent_index=0,
+    ).supported
+    assert all(perm.tapped for perm in tribe)
+    _w2g6_resolve_stack(game)
+    assert "Serra Angel" in [perm.card.name for perm in game.controlled_by(0)]
+    assert [card.name for card in game.players[1].graveyard] == ["Lightning Bolt", "Forest"]
+
+
+def test_w2g6_gravespawn_sovereign_refuses_a_noncreature_card_and_four_zombies(
+    set_pool, catalog_by_name,
+):
+    """Naming the Forest card is refused before the cost is paid, and with
+    four Zombies in all the cost cannot be paid: nothing is tapped either
+    way."""
+    game, tribe = _w2g6_sovereign_table(set_pool, catalog_by_name)
+    assert not game.activate_permanent_ability(
+        0, "Gravespawn Sovereign", target_player_index=1, target_permanent_index=2,
+    ).supported
+    assert not any(perm.tapped for perm in tribe)
+
+    game, tribe = _w2g6_sovereign_table(set_pool, catalog_by_name, zombies=3)
+    assert not game.activate_permanent_ability(
+        0, "Gravespawn Sovereign", target_player_index=1, target_permanent_index=0,
+    ).supported
+    assert not any(perm.tapped for perm in tribe)
+    assert game.stack == []
+
+# ==== end W2G6 ======================================================
