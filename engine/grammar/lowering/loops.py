@@ -40,7 +40,7 @@ writes it and the loop here that reads it still spell it once.
 from __future__ import annotations
 
 from ...oracle_types import (CHOSEN_TARGET_PERMANENTS, COUNTERS_REMOVED,
-                             OracleInstruction)
+                             DREW_COUNT, OracleInstruction)
 from ...subject_filters import OBJECT_ONLY_FILTER_KEYS, untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
@@ -319,6 +319,34 @@ def _lower_for_each_counter_removed(
                 "iterator": {"repeat_from_result": COUNTERS_REMOVED},
                 "effect": inner,
             },
+        ),
+    )
+
+
+def _lower_for_each_card_drawn(
+    node: ast.ForEach,
+    inner: tuple[OracleInstruction, ...],
+    produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """"Draw X cards. **For each card drawn this way,** discard a card unless
+    you sacrifice a permanent." (Read the Runes.)
+
+    :func:`_lower_for_each_counter_removed`'s twin one record over: a loop
+    whose iterator is how many cards the draw in front of it *really* drew
+    (``DREW_COUNT`` — an empty library or a replacement draws fewer), one
+    repetition per card, so each toll is its own offer. Refused without a
+    draw in front of it, as every "this way" window is.
+    """
+    if DREW_COUNT not in produced:
+        raise LoweringError(
+            "'cards drawn this way' needs a draw in front of it", node=node
+        )
+    if not inner:
+        raise LoweringError("a per-card loop with no effect in it", node=node)
+    return (
+        OracleInstruction(
+            "for_each", "",
+            {"iterator": {"repeat_from_result": DREW_COUNT}, "effect": inner},
         ),
     )
 

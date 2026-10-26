@@ -76,6 +76,7 @@ from .lowering._destroy_sweeps import one_sweep_kind
 from .lowering.sequences import _lower_steps
 from .lowering.loops import (
     _lower_for_each,
+    _lower_for_each_card_drawn,
     _lower_for_each_cost_paid,
     _lower_for_each_counters_placed,
     _lower_for_each_counter_removed,
@@ -640,6 +641,10 @@ def lower_statement(
             return _lower_for_each_counter_removed(
                 statement, repeated(), produced
             )
+        # "For each **card drawn this way**" (Read the Runes) — the same count
+        # off the scratchpad, one step over: what the draw in front recorded.
+        if isinstance(statement.iterator, ast.CardsDrawnThisWay):
+            return _lower_for_each_card_drawn(statement, repeated(), produced)
         # "For each **card less than two a player draws this way**" (Truce) —
         # the sixth iterator: a per-seat shortfall against a record an earlier
         # step of this same effect wrote, so it is refused without that

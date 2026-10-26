@@ -214,6 +214,20 @@ class CountersRemovedThisWay:
 
 
 @dataclass(frozen=True)
+class CardsDrawnThisWay:
+    """"Draw X cards. **For each card drawn this way,** discard a card unless
+    you sacrifice a permanent." (Read the Runes.)
+
+    :class:`CountersRemovedThisWay`'s shape — an iterator that is a *number*
+    read off this resolution's scratchpad, not a set — over how many cards the
+    draw in front of it really drew (``oracle_types.DREW_COUNT``): an empty
+    library or a replacement can make that fewer than were asked for. One
+    repetition per card, nothing bound. The lowering refuses the loop without
+    a draw in front of it.
+    """
+
+
+@dataclass(frozen=True)
 class EachAdditionalCostPaid:
     """"**For each additional {1}{R} you paid**, destroy another target
     artifact." (Primitive Justice, Taste of Paradise.)

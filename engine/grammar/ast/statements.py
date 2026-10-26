@@ -39,7 +39,7 @@ from typing import Union
 
 from .conditions import Condition
 from .conditions import DiedThisTurn, DiedThisWay
-from .loops import (ChosenThisWay, CountersPlacedThisWay,
+from .loops import (CardsDrawnThisWay, ChosenThisWay, CountersPlacedThisWay,
                     CountersRemovedThisWay, EachAdditionalCostPaid,
                     EachLifeLost, EachShortOfThisWay, ExiledThisWay,
                     TappedThisWay)
@@ -769,7 +769,8 @@ class ForEach:
     iterator: (ObjectFilter | PlayerRef | DiedThisTurn | DiedThisWay
                 | ExiledThisWay | TappedThisWay | ChosenThisWay | EachLifeLost
                 | EachShortOfThisWay | EachAdditionalCostPaid
-                | CountersPlacedThisWay | CountersRemovedThisWay)
+                | CountersPlacedThisWay | CountersRemovedThisWay
+                | CardsDrawnThisWay)
     effect: "Statement"
 
 

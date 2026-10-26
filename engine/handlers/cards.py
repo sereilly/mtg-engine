@@ -174,6 +174,10 @@ def draw_controller_cards(game: Game, instruction: OracleInstruction, context: O
         else resolve_amount(instruction.payload.get("amount", 0), context.x_value)
     )
     drawn = game._draw_with_replacements(caster, count)
+    # "Draw X cards. **For each card drawn this way**, …" (Read the Runes.)
+    # How many really arrived — the targeted draw's record above, for the
+    # controller's own; declared in ``lowering/_records._PRODUCES``.
+    context.results[DREW_COUNT] = drawn
     game.log.append(f"{card.name} drew {drawn} card")
     return True, "resolved"
 

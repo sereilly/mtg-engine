@@ -202,6 +202,7 @@ from .records import (
     StartedTheTurnState,
 )
 from .loops import (
+    CardsDrawnThisWay,
     ChosenThisWay,
     CountersPlacedThisWay,
     CountersRemovedThisWay,
@@ -645,6 +646,7 @@ __all__ = [
     "EachLifeLost",
     "CountersPlacedThisWay",
     "CountersRemovedThisWay",
+    "CardsDrawnThisWay",
     "EachAdditionalCostPaid",
     "AdditionalCostWasPaid",
     "WasKicked",

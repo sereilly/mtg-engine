@@ -339,6 +339,10 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # asked for once a replacement or an empty library has had its say — see
     # ``oracle_types.DREW_COUNT``.
     "draw_target_cards": DREW_COUNT,
+    # "Draw X cards. **For each card drawn this way,** discard a card unless
+    # you sacrifice a permanent." (Read the Runes.) The same number for the
+    # controller's own draw, which recorded none.
+    "draw_controller_cards": DREW_COUNT,
     # "Target player discards two cards, **then draws as many cards as they
     # discarded this way**." (Forget.) The chosen-discard prompt is the same
     # one ``discard_controller_cards`` arms, so it records the same key — what

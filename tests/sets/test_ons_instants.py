@@ -523,6 +523,98 @@ def test_w1g7_wirewood_pride_counts_every_elf(set_pool):
 # ==== W1G10 ==========================================================
 # W1G10's tests go between this line and the "end W1G10" line.
 
+# --- W1G10: control and the stack, on instants --------------------------------
+from engine import Game as _w1g10_Game
+from engine.models import Permanent as _w1g10_Permanent
+from engine.models import PlayerState as _w1g10_PlayerState
+from tests.helpers import resolve_stack as _w1g10_resolve_stack
+
+
+def _w1g10_runes_game(set_pool, *, library: int = 8, interactive: bool = False):
+    game = _w1g10_Game(players=[
+        _w1g10_PlayerState(
+            name=f"P{seat + 1}", life=20,
+            library=[set_pool("LEA")["Island"]] * library,
+        )
+        for seat in range(2)
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0} if interactive else set()
+    game.start_turn(0)
+    for name in ("Grizzly Bears", "Forest"):
+        game._put_permanent_onto_battlefield(
+            0, _w1g10_Permanent(card=set_pool("LEA")[name]), None
+        )
+    game.players[0].hand.extend(
+        [set_pool("ONS")["Shock"], set_pool("ONS")["Read the Runes"]]
+    )
+    return game
+
+
+def _w1g10_drain(game) -> None:
+    """Resolve, then answer each owed offer with its default (a headless seat's
+    offers are drained once the stack is empty)."""
+    _w1g10_resolve_stack(game)
+    for _ in range(20):
+        if not game.pending_choices:
+            return
+        game.auto_resolve_pending_choices()
+    raise AssertionError([c.kind for c in game.pending_choices])
+
+
+def test_w1g10_read_the_runes_draws_then_discards_one_per_card(set_pool):
+    """"Draw X cards. For each card drawn this way, discard a card unless you
+    sacrifice a permanent." X = 3: three cards arrive first (the ruling: "You
+    draw the cards, then …"), then three tolls; the headless seat keeps its
+    permanents and discards three (never forced to sacrifice)."""
+    game = _w1g10_runes_game(set_pool)
+    assert game.queue_from_hand(0, "Read the Runes", x_value=3).supported
+    _w1g10_drain(game)
+    me = game.players[0]
+    assert "Read the Runes drew 3 card" in game.log
+    assert len(me.hand) == 1, [c.name for c in me.hand]
+    assert sorted(c.name for c in me.graveyard if c.name != "Read the Runes") == [
+        "Island", "Island", "Shock",
+    ]
+    assert [p.card.name for p in game.controlled_by(0)] == ["Grizzly Bears", "Forest"]
+    assert game.log.index("Read the Runes drew 3 card") < min(
+        i for i, line in enumerate(game.log) if "discarded" in line
+    )
+
+
+def test_w1g10_read_the_runes_a_sacrifice_buys_off_one_discard(set_pool):
+    """The toll answered both ways by a seat that is asked: the first is paid
+    with a permanent (the Forest), the other two are discards."""
+    game = _w1g10_runes_game(set_pool, interactive=True)
+    assert game.queue_from_hand(0, "Read the Runes", x_value=3).supported
+    answered = 0
+    for _ in range(30):
+        if not game.stack and not game.pending_choices:
+            break
+        if not game.pending_choices:
+            game.resolve_top_of_stack()
+            continue
+        choice = game.pending_choices[0]
+        if choice.kind == "optional_pay":
+            assert game._resolve_optional_pay(choice, answered == 0, None)
+            answered += 1
+        else:
+            game.auto_resolve_pending_choices(kinds=(choice.kind,))
+    assert answered == 3
+    me = game.players[0]
+    assert [p.card.name for p in game.controlled_by(0)] == ["Grizzly Bears"], game.log
+    assert "Forest" in [c.name for c in me.graveyard]
+    assert len(me.hand) == 2, [c.name for c in me.hand]
+
+
+def test_w1g10_read_the_runes_counts_the_cards_really_drawn(set_pool):
+    """"…drawn **this way**": X = 4 from a two-card library draws two, and
+    asks two tolls, not four."""
+    game = _w1g10_runes_game(set_pool, library=2)
+    assert game.queue_from_hand(0, "Read the Runes", x_value=4).supported
+    _w1g10_drain(game)
+    assert sum("declined Read the Runes" in line for line in game.log) == 2, game.log
+
 # ==== end W1G10 ======================================================
 
 

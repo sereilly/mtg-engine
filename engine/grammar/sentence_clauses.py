@@ -95,7 +95,8 @@ def _parse_leading_for_each(
     parse_body,
     stream: TokenStream,
 ) -> ("ast.DiedThisWay | ast.ExiledThisWay | ast.TappedThisWay "
-     "| ast.ChosenThisWay | ast.EachLifeLost | ast.PlayerRef | None"):
+     "| ast.ChosenThisWay | ast.EachLifeLost | ast.PlayerRef "
+     "| ast.CardsDrawnThisWay | None"):
     """``For each <objects> that died this way,`` — the set a later clause
     repeats over, in the leading printed position.
 
@@ -154,6 +155,15 @@ def _parse_leading_for_each(
                 ) and stream.accept_punct(","):
                     return ast.CountersPlacedThisWay(counter=kind.text)
     stream.reset(placed)
+    # "**For each card drawn this way,** discard a card unless you sacrifice a
+    # permanent." (Read the Runes.) The draw's twin of the counters-removed
+    # window above: a count of what the sentence in front of it drew, with
+    # nothing bound. Read before the noun phrase below, which would take
+    # "card" for a quantified object and fail the line on the participle.
+    drawn = stream.mark()
+    if stream.accept_phrase("card", "drawn", "this", "way") and stream.accept_punct(","):
+        return ast.CardsDrawnThisWay()
+    stream.reset(drawn)
     paid = stream.mark()
     symbols = accept_additional_cost_paid(stream)
     if symbols is not None and stream.accept_punct(","):
