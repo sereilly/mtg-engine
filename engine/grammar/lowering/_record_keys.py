@@ -94,6 +94,15 @@ CREATED_TOKENS = CREATED_TOKENS_RESULT_KEY
 #: innermost binder, so it is checked before the event tables above.
 LOOP_BOUND_PLAYER = "loop_bound_player"
 
+#: Beside :data:`LOOP_BOUND_PLAYER` for a loop over **announced targets** that
+#: may be players or planeswalkers: "Choose any number of target players or
+#: planeswalkers. For each of them, … deals damage … to **that player or
+#: planeswalker** …" (Kaboom!). Inside it the words name the object the
+#: iteration is on, a seat or a permanent — ``handlers/control_flow.for_each``
+#: scopes each iteration to its role's object — and nowhere else do they name
+#: anything.
+LOOP_BOUND_TARGET = "loop_bound_target"
+
 #: The same marker for a loop over **objects** rather than seats: added to
 #: *produced* while lowering the body of "for each <noun> destroyed / exiled /
 #: tapped / chosen this way", where ``handlers/control_flow.for_each`` binds

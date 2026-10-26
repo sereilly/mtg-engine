@@ -397,6 +397,17 @@ class SpellCastingMixin:
         if morph_cost is not None:
             card = face_down_card(held)
         classification = classify_card(card)
+        # The roles announcement's seats **by slot** where several roles may
+        # each be answered by a player ("Choose any number of target players
+        # or planeswalkers", Kaboom!), even when one was named: the scalar
+        # cannot say which slot its seat answers
+        # (``target_roles.several_seat_roles``).
+        if role_seats is None:
+            role_seats = self.several_seat_role_seats(
+                card, mode_index=mode_index, target_role_refs=target_role_refs,
+                target_permanent_ids=target_permanent_ids,
+                target_player_index=target_player_index,
+            )
         # **An Aura announced by id alone** (CR 601.2c, CR 400.7). The id names
         # the object and its battlefield, so it is the whole announcement; the
         # slot every gate and the attachment below still read is derived from

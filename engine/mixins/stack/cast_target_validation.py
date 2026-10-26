@@ -484,8 +484,14 @@ class CastTargetValidationMixin:
             else None
         )
         if target_permanent_ids:
+            # A slot a seat **or** a permanent may answer ("target player or
+            # planeswalker", Kaboom!, Lunge) holds a permanent where its id
+            # names one, and is filled from the seat channels only where it
+            # does not — read as a seat, a planeswalker named there was lost
+            # and the announcement refused as short.
             return [
-                seat_at(index) if index in player_slots
+                seat_at(index)
+                if index in player_slots and not isinstance(permanent_id, int)
                 else target_stack_item if index in stack_slots
                 else (
                     self.permanent_by_id(permanent_id)

@@ -292,7 +292,11 @@ def _role_scoped(
         return _graveyard_role_scoped(
             game, context, announced, payload, role, remembered, wrapper=wrapper,
         )
-    if role_is_seat(entry):
+    # A role a seat **or** a permanent may answer ("target player or
+    # planeswalker", Kaboom!'s and Lunge's) is a permanent role wherever its
+    # slot names a permanent: the seat arm would read a player off a slot that
+    # holds none.
+    if role_is_seat(entry) and not _named_a_permanent(announced, payload, role):
         seat = resolve_role_player(game, announced, payload, role)
         if seat is None or game.players[seat].lost:
             return context if wrapper else None
@@ -354,6 +358,19 @@ def _named_a_seat(announced: OracleExecutionContext, payload: dict, role: str) -
         isinstance(ids, list) and slot < len(ids) and isinstance(ids[slot], int)
     )
     return not named_permanent and isinstance(recorded[slot], int)
+
+
+def _named_a_permanent(announced: OracleExecutionContext, payload: dict, role: str) -> bool:
+    """Whether the announcement answered *role* with a permanent: its slot of
+    the positional id list holds one."""
+    from ..target_roles import payload_role_slot
+
+    slot = payload_role_slot(payload, role)
+    ids = announced.target_permanent_id
+    return (
+        slot is not None and isinstance(ids, list) and 0 <= slot < len(ids)
+        and isinstance(ids[slot], int)
+    )
 
 
 def _graveyard_role_scoped(
@@ -1225,6 +1242,15 @@ class _Seat:
     index: int
 
 
+@dataclasses.dataclass(frozen=True)
+class _RoleTurn:
+    """One turn of a loop over an announcement's **roles** — "Choose any number
+    of target players or planeswalkers. For each of them, …" (Kaboom!): the
+    role whose object this iteration is about."""
+
+    role: str
+
+
 #: One turn of a **counted** loop — "for each 1 life you lost" (Oath of
 #: Lim-Dûl). A sentinel rather than None, because None is a legitimate absent
 #: object elsewhere in this file and the two must not collapse: one is "run the
@@ -1333,7 +1359,20 @@ def for_each(game: Game, instruction: OracleInstruction, context: OracleExecutio
     # body that removed more counters must not lengthen its own loop.
     repeat_result = filters.get("repeat_from_result")
     seat_set = filters.get("players")
-    if repeat_result is not None:
+    # "Choose any number of target players or planeswalkers. **For each of
+    # them,** …" (Kaboom!) — the objects the announcement named, a seat or a
+    # permanent each, one iteration per role in slot order: the turn order the
+    # card's ruling handles them in, which the announcement's own canonical
+    # order is (``target_roles.LATER_IN_TURN_ORDER_ROLE``).
+    from ..target_roles import spec_roles
+
+    announced_roles = (
+        spec_roles(instruction.payload.get("targets"))
+        if filters.get("announced_roles") else None
+    )
+    if announced_roles is not None:
+        matched = [_RoleTurn(str(role.get("role"))) for role in announced_roles]
+    elif repeat_result is not None:
         times = int(context.results.get(str(repeat_result), 0) or 0)
         matched = [_A_REPETITION] * max(0, times)
     elif repeat_cost is not None:
@@ -1419,6 +1458,24 @@ def for_each(game: Game, instruction: OracleInstruction, context: OracleExecutio
             # A counted repetition names no object, so nothing rebinds: the
             # body means what it would mean written once, run again.
             _run(game, steps, context)
+            return
+        if isinstance(item, _RoleTurn):
+            # Scoped to the role's object exactly as a step spending that role
+            # is (``_role_scoped``): its permanent, or its player, in the
+            # target channels. A role that named nothing — an "any number"
+            # announcement stops where it likes — or whose object CR 608.2b
+            # found illegal has no iteration at all.
+            described = instruction.payload.get("targets") or {}
+            scoped = _role_scoped(
+                game,
+                OracleInstruction(
+                    instruction.kind, "", {"targets": {**described, "role": item.role}},
+                ),
+                context,
+            )
+            if scoped is None or scoped is context:
+                return
+            _run(game, steps, scoped)
             return
         if isinstance(item, _Seat):
             # The seat this iteration is about becomes "that player" for the

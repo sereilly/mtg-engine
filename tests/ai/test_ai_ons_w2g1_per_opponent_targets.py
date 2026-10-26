@@ -60,3 +60,44 @@ def test_the_ai_names_each_opponents_most_valuable_permanent(set_pool):
     assert game.queue_from_hand(0, "Blatant Thievery", target_permanent_ids=ids).supported
     resolve_stack(game)
     assert sorted(p.card.name for p in game.controlled_by(0)) == ["B Giant", "C Elf"]
+
+
+# "Choose any number of target players or planeswalkers. For each of them, …
+# Kaboom! deals damage … to that player or planeswalker" — every role a seat or
+# a planeswalker, so the side the walk reads is the loop body's
+# (``ai_target_sides.announced_roles_loop_side``): sideless, the chain named the
+# caster's own seat first and burned it.
+
+
+def test_the_ai_aims_kaboom_at_the_opponent_and_their_planeswalker(set_pool):
+    from engine.named_counters import add_counters, counters_on
+
+    ons = set_pool("ONS")
+    walker = _permanent("B Walker", "Legendary Planeswalker - Chandra")
+    add_counters(walker, "loyalty", 5)
+    mine = _permanent("A Walker", "Legendary Planeswalker - Chandra")
+    add_counters(mine, "loyalty", 5)
+    game = Game(players=[
+        PlayerState(name="A", hand=[ons["Kaboom!"]], battlefield=[mine],
+                    library=[ons["Island"], ons["Clone"], ons["Shock"]]),
+        PlayerState(name="B", battlefield=[walker], library=[ons["Island"]] * 5),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.active_player_index = 0
+    game.current_turn_phase = game.current_step = "precombat_main"
+    game._sync_control()
+
+    chosen = _choose_role_targets(game, 0, game.players[0].hand[0])
+    assert chosen not in (None, ())
+    seat, indices, ids, _stack = chosen
+    assert seat == 1
+    assert ids == [None, walker.permanent_id]
+
+    assert game.queue_from_hand(
+        0, "Kaboom!", target_player_index=seat, target_permanent_index=indices,
+        target_permanent_ids=ids,
+    ).supported
+    resolve_stack(game)
+    assert game.players[0].life == 20 and counters_on(mine, "loyalty") == 5
+    assert game.players[1].life == 16 and counters_on(walker, "loyalty") == 4

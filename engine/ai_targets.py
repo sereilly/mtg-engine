@@ -33,6 +33,7 @@ import re
 
 from .ai_weighed_cast import SPELL_TYPES
 from .ai_target_sides import (
+    announced_roles_loop_side,
     best_counted_target_seat,
     entry_trigger_target_side,
     role_target_sides,
@@ -421,8 +422,16 @@ def _choose_role_targets(
         mode_index=_announced_mode(card), from_zone=_cast_zone(card),
     )
     options = announced.get("valid_targets") or []
+    sides = role_target_sides(card, offers)
+    # "Choose any number of target players or planeswalkers. For each of them,
+    # … deals damage …" (Kaboom!): every role is aimed where the loop's body
+    # says, seats included (``ai_target_sides.announced_roles_loop_side``) —
+    # read as sideless, the walk named the caster's own seat first.
+    looped = announced_roles_loop_side(card)
+    if looped is not None and not any(sides):
+        sides = (looped,) * len(spec_roles(announced))
     picks = _role_chain(
-        options, role_target_sides(card, offers), 0, caster_index, card, game,
+        options, sides, 0, caster_index, card, game,
         optional=optional_role_levels(spec_roles(announced)),
         best_first=per_opponent_role_levels(spec_roles(announced)),
     )
@@ -531,7 +540,7 @@ def _role_chain(
     if not options:
         return []
     want = sides[level] if level < len(sides) else None
-    if options[0].get("kind") == "player":
+    if options[0].get("kind") == "player" and want not in ("you", "opponent"):
         candidates = [_preferred_role_option(options, caster_index, card, game)]
     elif options[0].get("kind") == "stack":
         # A spell role is answered with a spell somebody else controls: every
@@ -546,9 +555,12 @@ def _role_chain(
             != caster_index
         ]
     elif want in ("you", "opponent"):
+        # A seat option is on its own side, as a permanent is on its
+        # controller's — a level offering both (a player-or-planeswalker role)
+        # is narrowed as one board.
         candidates = [
             option for option in options
-            if option.get("kind") != "permanent"
+            if option.get("kind") not in ("permanent", "player")
             or (option.get("seat") == caster_index) == (want == "you")
         ]
     else:

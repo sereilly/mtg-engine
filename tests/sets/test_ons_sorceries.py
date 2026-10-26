@@ -1571,4 +1571,142 @@ def test_w2g1_blatant_thievery_opponents_are_in_turn_order_from_the_caster(set_p
     ).supported
     _w2g1_resolve_stack(game)
     assert _w2g1_boards(game) == [[], ["A Bear", "B Bear", "C Bear"], []]
+
+# --- Kaboom! --------------------------------------------------------------------
+# "Choose any number of target players or planeswalkers. For each of them,
+# reveal cards from the top of your library until you reveal a nonland card,
+# Kaboom! deals damage equal to that card's mana value to that player or
+# planeswalker, then you put the revealed cards on the bottom of your library in
+# any order." Handled one at a time in turn order from the active player, each
+# player's group before the next (2022-09-09); an all-land library deals zero
+# (2004-10-04).
+
+from engine.named_counters import add_counters as _w2g1_add_counters
+from engine.named_counters import counters_on as _w2g1_counters_on
+
+
+def _w2g1_walker(name):
+    walker = _W2G1Permanent(card=_w2g1_mk_card(
+        name=name, mana_cost="{3}{R}", type_line="Legendary Planeswalker - Chandra",
+        colors=("R",),
+    ))
+    _w2g1_add_counters(walker, "loyalty", 5)
+    return walker
+
+
+def _w2g1_kaboom_table(set_pool, library, *, seats=3, caster=0, walkers=()):
+    """*seats* players; the caster (also the active player) holds Kaboom! over
+    *library* (top first); each seat in *walkers* controls a planeswalker."""
+    ons = set_pool("ONS")
+    players = []
+    for seat in range(seats):
+        players.append(_W2G1PlayerState(
+            name="ABCD"[seat],
+            hand=[ons["Kaboom!"]] if seat == caster else [],
+            battlefield=(
+                [_w2g1_walker(f"{'ABCD'[seat]} Walker")] if seat in walkers else []
+            ),
+            library=(
+                [ons[name] for name in library] if seat == caster
+                else [ons["Island"]] * 5
+            ),
+        ))
+    game = _W2G1Game(players=players)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.active_player_index = caster
+    game.current_turn_phase = game.current_step = "precombat_main"
+    game._sync_control()
+    return game
+
+
+def test_w2g1_kaboom_handles_each_target_in_turn_order(set_pool):
+    """B, then B's planeswalker, then C — the active player's turn order, a
+    player before the permanents they control: Shock (1) to B, Clone (4) to
+    the planeswalker, Swat (3) to C, each revealed pile to the bottom."""
+    game = _w2g1_kaboom_table(
+        set_pool,
+        ["Island", "Shock", "Swamp", "Clone", "Mountain", "Swat"],
+        walkers=(1,),
+    )
+    walker = _w2g1_named(game, "B Walker")
+    result = game.queue_from_hand(0, "Kaboom!", target_role_refs=[
+        {"seat": 1}, {"permanent_id": walker.permanent_id}, {"seat": 2},
+    ])
+    assert result.supported, result.details
+    _w2g1_resolve_stack(game)
+
+    assert [player.life for player in game.players] == [20, 19, 17]
+    assert _w2g1_counters_on(walker, "loyalty") == 1
+    assert len(game.players[0].library) == 6, "every revealed card goes back"
+    assert [line for line in game.log if line.startswith("A revealed")] == [
+        "A revealed 2 card(s) and stopped on Shock (mana value 1)",
+        "A revealed 2 card(s) and stopped on Clone (mana value 4)",
+        "A revealed 2 card(s) and stopped on Swat (mana value 3)",
+    ]
+
+
+def test_w2g1_kaboom_offers_one_order_per_set_of_targets(set_pool):
+    """The picker's walk: any number of targets, the caster's own seat
+    included, each set once in turn order — so C is never offered before B,
+    and stopping anywhere is a legal announcement."""
+    game = _w2g1_kaboom_table(set_pool, ["Shock"] * 4, walkers=(1,))
+    spec = game.cast_target_spec(0, game.players[0].hand[0])
+    first = sorted((o["kind"], o["seat"]) for o in spec["valid_targets"])
+    assert first == [("permanent", 1), ("player", 0), ("player", 1), ("player", 2)]
+    after_c = next(o for o in spec["valid_targets"] if o["seat"] == 2)
+    assert after_c["next"] == []
+    after_b = next(
+        o for o in spec["valid_targets"] if o["kind"] == "player" and o["seat"] == 1
+    )
+    assert sorted((o["kind"], o["seat"]) for o in after_b["next"]) == [
+        ("permanent", 1), ("player", 2),
+    ]
+    after_walker = next(o for o in spec["valid_targets"] if o["kind"] == "permanent")
+    assert [(o["kind"], o["seat"]) for o in after_walker["next"]] == [("player", 2)]
+
+
+def test_w2g1_kaboom_starts_with_the_active_players_group(set_pool):
+    """Cast by the second seat of three: its own turn, so the third seat's
+    group comes before the first's — the first reveal goes to C."""
+    game = _w2g1_kaboom_table(
+        set_pool, ["Shock", "Clone"], caster=1,
+    )
+    assert game.queue_from_hand(
+        1, "Kaboom!", target_role_refs=[{"seat": 2}, {"seat": 0}],
+    ).supported
+    _w2g1_resolve_stack(game)
+    assert [player.life for player in game.players] == [16, 20, 19]
+
+
+def test_w2g1_kaboom_zero_targets_and_an_all_land_library(set_pool):
+    """No target is a legal announcement that does nothing; and an all-land
+    library deals zero damage (the 2004-10-04 ruling), its cards still
+    revealed and put on the bottom."""
+    game = _w2g1_kaboom_table(set_pool, ["Shock"] * 3, seats=2)
+    assert game.queue_from_hand(0, "Kaboom!").supported
+    _w2g1_resolve_stack(game)
+    assert [player.life for player in game.players] == [20, 20]
+
+    game = _w2g1_kaboom_table(set_pool, ["Island", "Swamp"], seats=2)
+    assert game.queue_from_hand(0, "Kaboom!", target_role_refs=[{"seat": 1}]).supported
+    _w2g1_resolve_stack(game)
+    assert [player.life for player in game.players] == [20, 20]
+    assert [card.name for card in game.players[0].library] == ["Island", "Swamp"]
+
+
+def test_w2g1_kaboom_a_target_gone_in_response_is_skipped(set_pool):
+    """B leaves the game before Kaboom! resolves (CR 800.4a): B is no longer a
+    legal target, so nothing is revealed for B, and C still takes the first
+    card's damage."""
+    game = _w2g1_kaboom_table(set_pool, ["Island", "Clone", "Shock"])
+    assert game.queue_from_hand(
+        0, "Kaboom!", target_role_refs=[{"seat": 1}, {"seat": 2}],
+    ).supported
+    game.players[1].lost = True
+    _w2g1_resolve_stack(game)
+    assert game.players[2].life == 16
+    assert [line for line in game.log if line.startswith("A revealed")] == [
+        "A revealed 2 card(s) and stopped on Clone (mana value 4)",
+    ]
 # ==== end W2G1 ======================================================

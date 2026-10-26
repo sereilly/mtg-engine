@@ -91,6 +91,63 @@ def _parse_any_number_of_target_opponents_each(
     return ast.ForEach(ast.PlayerRef("any_number_of_target_opponents"), effect)
 
 
+def _parse_choose_targets_for_each(
+    stream: TokenStream, parse_body,
+) -> "ast.ForEach | None":
+    """``Choose any number of target players or planeswalkers. For each of
+    them, <step>, <step>, then <step>.`` (Kaboom!.)
+
+    Two sentences and one loop: the first is CR 601.2c's announcement (any
+    number of objects of CR 115.4's union, zero included) and names nothing on
+    its own, the second is performed once per object it chose — "them" — in
+    turn order (the card's 2022-09-09 ruling). Read whole, for the paragraph
+    rule: apart, the first is a choice nothing reads and the second a pronoun
+    nothing binds.
+
+    The body's steps are ordinary statements joined by commas and a final
+    "then", read one at a time by the caller's body reader; "that player or
+    planeswalker" inside them is the loop's object
+    (``lowering`` honours it only under ``LOOP_BOUND_TARGET``). Returns None
+    with the cursor untouched.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase(
+        "choose", "any", "number", "of", "target", "players", "or",
+        "planeswalkers",
+    ):
+        stream.reset(mark)
+        return None
+    if not (
+        stream.accept_punct(".")
+        and stream.accept_phrase("for", "each", "of", "them")
+        and stream.accept_punct(",")
+    ):
+        stream.reset(mark)
+        return None
+    steps: list = []
+    while True:
+        try:
+            step = parse_body(stream)
+        except GrammarError:
+            stream.reset(mark)
+            return None
+        steps.extend(step.steps if isinstance(step, ast.Sequence) else (step,))
+        joined = stream.mark()
+        if stream.accept_punct(","):
+            stream.accept_word("then")
+            if not (stream.exhausted or stream.at_punct(".")):
+                continue
+        stream.reset(joined)
+        break
+    if not (stream.exhausted or stream.at_punct(".")):
+        stream.reset(mark)
+        return None
+    effect = steps[0] if len(steps) == 1 else ast.Sequence(tuple(steps))
+    return ast.ForEach(
+        ast.PlayerRef("any_number_of_target_players_or_planeswalkers"), effect,
+    )
+
+
 def parse_leading_iteration(
     stream: TokenStream,
     *,
@@ -132,6 +189,12 @@ def parse_leading_iteration(
     )
     if any_number is not None:
         return any_number
+    # "**Choose any number of target players or planeswalkers. For each of
+    # them,** …" (Kaboom!.) The same announced loop with its announcement in a
+    # sentence of its own, and over CR 115.4's union rather than seats alone.
+    chosen_each = _parse_choose_targets_for_each(stream, parse_body)
+    if chosen_each is not None:
+        return chosen_each
     # "**For each colored mana symbol in the milled card's mana cost,** add one
     # mana of that color." (Charmed Pendant.) A rate over a card the ability's
     # own cost consumed, read whole and before the counts below — "colored

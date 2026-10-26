@@ -125,6 +125,20 @@ def _accept_reveal_until_from_top(
         stream.reset(mark)
         return None
     at_stop = stream.mark()
+    # "…until you reveal a nonland card**,** Kaboom! deals damage equal to
+    # that card's mana value …, then you put the revealed cards on the bottom
+    # of your library in any order." (Kaboom!.) The bare run below with its
+    # sentence ended by a comma instead of a full stop, because the card
+    # prints its three steps as one sentence: the comma is the sentence loop's
+    # boundary like the stop is, and only the bare run — whose fate a later
+    # clause prints — can end on one.
+    if stream.at_punct(","):
+        if possessive == "your" and names_the_revealed_cards_placed(stream):
+            return ast.RevealUntil(
+                "you", filt, destination="revealed", rest="revealed",
+            )
+        stream.reset(mark)
+        return None
     if not stream.accept_punct("."):
         stream.reset(mark)
         return None

@@ -1147,6 +1147,29 @@ def ability_role_target_sides(card: CardDefinition, ability) -> tuple[str | None
     )
 
 
+def announced_roles_loop_side(card: CardDefinition) -> str | None:
+    """The side every role of a loop over an announcement's roles is picked
+    from — "Choose any number of target players or planeswalkers. For each of
+    them, … deals damage … to that player or planeswalker" (Kaboom!) — read off
+    what the loop's body does to its object (:func:`_effect_side`, the denial
+    winning); None for a card with no such loop.
+
+    The roles are seat-or-permanent unions, which :func:`_sides_of_roles`
+    leaves sideless (a seat role's side is ``_preferred_role_option``'s), and
+    the body spends no role by name — the loop scopes it — so neither reading
+    above can see that every one of these targets is hit.
+    """
+    for instruction in compile_card_oracle(card).instructions:
+        payload = instruction.payload or {}
+        if instruction.kind != "for_each" or not (
+            payload.get("iterator") or {}
+        ).get("announced_roles"):
+            continue
+        sides = {_effect_side(step) for step in payload.get("effect") or ()} - {None}
+        return "opponent" if "opponent" in sides else "you" if "you" in sides else None
+    return None
+
+
 def _sides_of_roles(roles, run, slot_sides) -> tuple[str | None, ...]:
     """The side each of *roles* is picked from, read off the steps of *run*
     that spend it — the body :func:`role_target_sides` and

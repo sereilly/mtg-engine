@@ -63,6 +63,8 @@ from ..oracle_types import OracleInstruction
 from . import ast
 from .errors import LoweringError
 from .lowering._events import LOOP_BOUND_OBJECT, LOOP_BOUND_PLAYER
+from .lowering._record_keys import LOOP_BOUND_TARGET
+from .lowering.loops import ANY_NUMBER_OF_TARGETS_LOOP
 from .lowering._record_keys import BOARD_LOOP_OBJECT
 from .lowering._prevented_riders import _guard_is_the_arms_own_precondition
 from .lowering._roles import (plan_another_target_roles,
@@ -660,8 +662,14 @@ def lower_statement(
         # where the same words under the bare trigger refuse for want of a
         # frozen seat.
         if isinstance(statement.iterator, ast.PlayerRef):
+            # …and over announced players **or planeswalkers** (Kaboom!), whose
+            # body may name the iteration's object as either.
+            bound = {LOOP_BOUND_PLAYER} | (
+                {LOOP_BOUND_TARGET}
+                if statement.iterator.kind == ANY_NUMBER_OF_TARGETS_LOOP else set()
+            )
             return _lower_for_each_player(statement, lower_statement(
-                statement.effect, produced | {LOOP_BOUND_PLAYER},
+                statement.effect, produced | bound,
                 event=event, event_subject=event_subject, whole_effect=False,
             ))
         # "**For each attacking red creature,** …" (Heroism, Tidal Flats) — the

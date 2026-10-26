@@ -42,7 +42,9 @@ from __future__ import annotations
 from ...oracle_types import (CHOSEN_TARGET_PERMANENTS, COUNTERS_REMOVED,
                              DREW_COUNT, OracleInstruction)
 from ...subject_filters import OBJECT_ONLY_FILTER_KEYS, untestable_filter_keys
-from ...target_roles import any_number_of_opponents_roles, per_opponent_roles
+from ...target_roles import (any_number_of_opponents_roles,
+                             any_number_of_players_or_planeswalkers_roles,
+                             per_opponent_roles)
 from .. import ast
 from ..errors import LoweringError
 from ._common import _filter_payload
@@ -100,6 +102,22 @@ def _lower_for_each_player(
                 node=node,
             )
         payload["targets"] = any_number_of_opponents_roles()
+    if node.iterator.kind == ANY_NUMBER_OF_TARGETS_LOOP:
+        # "**Choose any number of target players or planeswalkers. For each of
+        # them,** …" (Kaboom!.) The set is the announcement's (CR 601.2c), as
+        # it is one branch up — but its objects may be seats or permanents, so
+        # the loop walks the **roles** that named something, scoped to each
+        # one's object in slot order, which is the turn order the card's
+        # ruling handles them in
+        # (``target_roles.any_number_of_players_or_planeswalkers_roles``).
+        # The body announces nothing of its own, for the reason above.
+        if any("targets" in (step.payload or {}) for step in inner):
+            raise LoweringError(
+                "a loop over announced targets announces nothing else",
+                node=node,
+            )
+        payload["iterator"] = {"announced_roles": True}
+        payload["targets"] = any_number_of_players_or_planeswalkers_roles()
     return (OracleInstruction("for_each", "", payload),)
 
 
@@ -178,11 +196,17 @@ def _per_opponent_targets(
 #: set a loop walks when the announcement named it.
 ANY_NUMBER_OF_TARGET_OPPONENTS = "any_number_of_target_opponents"
 
+#: "Choose **any number of target players or planeswalkers**. For each of
+#: them, …" (Kaboom!) — the announced set a loop walks when its objects may be
+#: seats or permanents.
+ANY_NUMBER_OF_TARGETS_LOOP = "any_number_of_target_players_or_planeswalkers"
+
 #: The player references that name a *set* of seats a loop can walk. The same
-#: two ``handlers/offers._offered_seats`` enumerates, plus the announced set
+#: two ``handlers/offers._offered_seats`` enumerates, plus the announced sets
 #: above, and deliberately no more: a reference naming one seat is not a loop.
 _LOOPED_SEAT_SETS = frozenset({
     "each_player", "each_opponent", ANY_NUMBER_OF_TARGET_OPPONENTS,
+    ANY_NUMBER_OF_TARGETS_LOOP,
 })
 
 
