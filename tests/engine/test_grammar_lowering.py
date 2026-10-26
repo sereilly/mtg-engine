@@ -4019,15 +4019,29 @@ def test_text_change_reads_the_swapped_vocabulary_as_payload(line, card, mode):
 
 
 def test_a_text_change_the_engine_cannot_perform_is_not_claimed():
-    """``mark_text_modified`` substitutes land types and colour words. A card
-    naming a third vocabulary would reach it as a mode it ignores."""
+    """``mark_text_modified`` substitutes land types, colour words and — since
+    Artificial Evolution (ONS W1G5) — creature types. A card naming a fourth
+    vocabulary would reach it as a mode it ignores, so it refuses; the
+    creature-type sentence compiles with the two words it asks as it resolves
+    in front of the change."""
     result = compile_line(
         "Change the text of target spell or permanent by replacing all "
-        "instances of one creature type with another.",
+        "instances of one keyword with another.",
         card_name="Test",
     )
 
     assert not result.parsed
+
+    creature = compile_line(
+        "Change the text of target spell or permanent by replacing all "
+        "instances of one creature type with another.",
+        card_name="Test",
+    )
+    assert creature.usable
+    assert [ins.kind for ins in creature.instructions] == [
+        "choose_creature_type", "choose_creature_type", "mark_text_modified",
+    ]
+    assert creature.instructions[-1].payload["mode"] == "creature_type"
 
 
 def test_text_change_describes_no_target():
