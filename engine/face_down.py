@@ -58,7 +58,7 @@ import dataclasses
 import re
 from typing import TYPE_CHECKING
 
-from .copies import FACE_DOWN_AS_IT_LEFT
+from .copies import FACE_DOWN_AS_IT_LEFT, face_up_copiable_card
 from .models import CardDefinition
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -261,6 +261,24 @@ def morph_cost(card) -> str | None:
         if cost is not None:
             return cost
     return None
+
+
+def face_up_morph_cost(permanent) -> str | None:
+    """The morph cost a face-down *permanent* would have **if it were face
+    up** (CR 702.37e), or None.
+
+    Read off its face-up copiable values (``copies.face_up_copiable_card``,
+    CR 708.10) rather than off the card it hides: a Clone that copied a morph
+    creature and was turned face down (Backslide) hides a Clone, which prints
+    no morph, but face up it would be the creature it copied — morph and all.
+    A face-down spell, or a permanent with no copy effect, answers off the
+    hidden card exactly as before.
+    """
+    if hidden_card_of(permanent) is None:
+        return None
+    if getattr(permanent, "metadata", None) is None:
+        return morph_cost(hidden_card_of(permanent))
+    return morph_cost(face_up_copiable_card(permanent))
 
 
 def morph_alternative_cost(card) -> "AlternativeCost | None":
@@ -483,18 +501,17 @@ def _morph_offer(game: "Game", permanent: "Permanent"):
     controller: turn it face up for its morph cost (CR 702.37e).
 
     "If the permanent wouldn't have a morph cost if it were face up, it can't
-    be turned face up this way" — read off the hidden card's own text, which
-    is what it would have face up. A permanent Illusionary Mask put face down
-    has no morph cost unless its card prints one, and then this is its way up
-    too: the rule is about the card, not about how it came to be face down.
+    be turned face up this way" — read off what it would be face up
+    (:func:`face_up_morph_cost`): the hidden card's own text, or what a copy
+    effect on it would make it (CR 708.10). A permanent Illusionary Mask put
+    face down has no morph cost unless its card prints one, and then this is
+    its way up too: the rule is about the card, not about how it came to be
+    face down.
     """
     from .mana_payment import mana_cost_from_symbols
     from .special_actions import SpecialActionOffer
 
-    real = hidden_card_of(permanent)
-    if real is None:
-        return None
-    printed = morph_cost(real)
+    printed = face_up_morph_cost(permanent)
     if printed is None:
         return None
     controller = game.controller_index_of(permanent)
@@ -505,15 +522,14 @@ def _morph_offer(game: "Game", permanent: "Permanent"):
 
 def _take_morph(game: "Game", seat: int, permanent: "Permanent") -> None:
     """Turn *permanent* face up, its morph cost already paid by the seam."""
-    turn_face_up(game, permanent, how=f"for its morph cost {morph_cost(hidden_card_of(permanent))}")
+    turn_face_up(game, permanent, how=f"for its morph cost {face_up_morph_cost(permanent)}")
 
 
 def _morph_entry_extras(game: "Game", permanent: "Permanent") -> dict:
     """What the client needs to show the offer: the price (CR 702.37e shows
     it to all players as the action is taken; before then the offer is the
     controller's alone, which is who this entry is listed for)."""
-    real = hidden_card_of(permanent)
-    printed = morph_cost(real) if real is not None else None
+    printed = face_up_morph_cost(permanent)
     return {"morph_cost": printed} if printed else {}
 
 
@@ -544,6 +560,7 @@ __all__ = [
     "cast_announces_morph",
     "forget_face_down_departure",
     "face_down_card",
+    "face_up_morph_cost",
     "hidden_card",
     "hidden_card_of",
     "is_face_down",

@@ -276,7 +276,18 @@ else — the permanent is the same object, so counters, damage, Auras, control
 changes, P/T effects and tapped state all stay. Morph (CR 702.37) is an
 `AlternativeCost` the keyword line produces (`keyword="morph"`, {3}), turned
 face down by the cast path at the announcement, and a CR 116.2b special
-action (`turn_face_up`) on `engine/special_actions.py`'s permanent seam.
+action (`turn_face_up`) on `engine/special_actions.py`'s permanent seam,
+offered for the morph cost the permanent *would* have face up
+(`face_down.face_up_morph_cost`, over `copies.face_up_copiable_card` — a
+face-down Clone of a morph creature has one, CR 708.10). Effects act on the
+same two seams (`engine/handlers/face_down.py`): "turn … face down / face
+up" is the `TurnFace` node (`turn_target_face_down`, `turn_target_face_up`,
+`turn_self_face_down`); "face-down" and "with a morph ability" are the
+`face_down_only` / `with_morph_ability` subject-filter keys, carried onto the
+picker spec so CR 608.2b re-asks them; "Face-down creatures get +1/+1" is a
+`lord_buffs` qualifier asked as P/T is read; and a look at a face-down
+permanent (CR 708.5's exception) is the `face_down_look` notification prompt,
+owed by the looker alone and never a log line.
 
 A printed keyword is part of an object's copiable values, so it is *seeded*
 by layer 1 rather than granted afterwards; grants and removals are continuous

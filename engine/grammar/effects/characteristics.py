@@ -773,3 +773,34 @@ def _parse_switch_pt(stream: TokenStream) -> ast.SwitchPT:
     stream.expect_word("and")
     stream.expect_word("toughness")
     return ast.SwitchPT(subject, _parse_duration(stream))
+
+
+def parse_turn_face(stream: TokenStream) -> "ast.TurnFace | None":
+    """``Turn <permanent> face down.`` / ``… face up.`` (Backslide, Skittish
+    Valesk; Break Open, Ixidor, Reality Sculptor's ability.)
+
+    CR 708.2a and 708.8 — the face-down status (CR 110.5) turned by an effect.
+    The object is the ordinary recipient, so its noun phrase ("target face-down
+    creature an opponent controls", "target creature with a morph ability",
+    "this creature") is read by the one noun-phrase reader and the lowering
+    decides what may carry it. Declines without consuming when the words after
+    the object are not "face up" / "face down", so a "turn …" sentence of some
+    other shape keeps whatever reading (or refusal) it has.
+    """
+    if not stream.at_word("turn"):
+        return None
+    mark = stream.mark()
+    stream.advance()
+    try:
+        subject = parse_recipient(stream)
+    except GrammarError:
+        subject = None
+    if subject is None or not stream.accept_word("face"):
+        stream.reset(mark)
+        return None
+    if stream.accept_word("down"):
+        return ast.TurnFace(subject, face_up=False)
+    if stream.accept_word("up"):
+        return ast.TurnFace(subject, face_up=True)
+    stream.reset(mark)
+    return None

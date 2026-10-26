@@ -78,6 +78,11 @@ if TYPE_CHECKING:
 #: below run on every characteristic read (``engine/late_modules.py``).
 _late_grammar = LateModules(f"{__package__}.grammar")
 
+#: ``engine.face_down``, for the "face-down" qualifier below: it registers a
+#: special action as it loads, so a top-level import here would move it
+#: earlier in the package's load order (``engine/late_modules.py``).
+_late = LateModules(__package__)
+
 #: The three animation records layer 4 reads, one per duration
 #: (:func:`collect_own_type_effects`).
 _ANIMATION_RECORDS = (
@@ -149,6 +154,9 @@ _QUALIFIER_HOLDS = {
     "blocking": lambda perm, observer: perm.blocking_attacker_index is not None,
     "tapped": lambda perm, observer: bool(perm.tapped),
     "untapped": lambda perm, observer: not perm.tapped,
+    # CR 110.5 / 708.2: "Face-down creatures get +1/+1" (Ixidor) — asked as P/T
+    # is read, so a creature turned face up loses the bonus at once.
+    "face-down": lambda perm, observer: _late.face_down.is_face_down(perm),
 }
 
 # The derivation table and the code that evaluates it must not be two lists: a

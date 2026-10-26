@@ -525,6 +525,19 @@ register_choice(
 )
 
 register_choice(
+    "face_down_look",
+    resolve=lambda game, choice, r: game._dismiss_face_down_look(choice),
+    default=lambda game, choice: game._dismiss_face_down_look(choice),
+    action="dismiss_face_down_look",
+    prompt_key="face_down_look",
+    # "Look at target face-down creature" (Aven Soulgazer, Spy Network): a
+    # notification like ``hand_reveal`` above — nothing waits on it. Unlike
+    # it, never shown to a seatless viewer: what a face-down permanent is
+    # belongs to its controller and to this looker alone (CR 708.5).
+    blocked_detail=None,
+)
+
+register_choice(
     "draw_up_to",
     resolve=lambda game, choice, r: game._resolve_draw_up_to(choice, r["number"]),
     default=lambda game, choice: game._default_draw_up_to(choice),

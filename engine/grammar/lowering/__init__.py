@@ -129,6 +129,7 @@ from .characteristics import (
     _lower_switch_pt,
     _lower_pump,
     _lower_change_text,
+    _lower_turn_face,
 )
 from .colors import _lower_become_color
 from .types import (
@@ -325,6 +326,8 @@ from .library import (
     _lower_look_top_pick,
     _lower_exile_graveyard,
     _lower_look_at_hand,
+    _lower_look_at_face_down,
+    _lower_look_at_player_cards,
     _lower_put_library_top_into_hand,
     _lower_graveyard_top_to_library,
     _lower_look_at_library_top,
@@ -547,6 +550,7 @@ __all__ = [
     "_lower_become_copy",
     "_lower_change_land_type",
     "_lower_become_that_type",
+    "_lower_turn_face",
     "_lower_change_supertype",
     "_lower_become_aura",
     "_lower_gain_type",
@@ -659,6 +663,8 @@ __all__ = [
     "_lower_reveal_random_from_hand",
     "_lower_reveal_hand_and_choose",
     "_lower_look_at_hand",
+    "_lower_look_at_face_down",
+    "_lower_look_at_player_cards",
     "_lower_bin_revealed_card",
     "_lower_graveyard_top_opponent_chooses",
     "_lower_reveal_library_opponent_chooses",

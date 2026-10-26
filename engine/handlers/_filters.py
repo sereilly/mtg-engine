@@ -33,9 +33,15 @@ from ..oracle_types import DISCARDED_CARDS_BY_SEAT, SACRIFICED_CARDS_BY_SEAT
 from ..models import Permanent
 from ..object_colors import is_multicolored
 from ..counted_names import card_answers_to_name
+from ..late_modules import LateModules
 from ..search_filters import card_has_type, name_key
 from ._chosen import (CHOSEN_CARD_TYPE, COLOR_CHOSEN_THIS_WAY_KEY,
                       NAMED_FROM_KEY, _CHOSEN_SUBTYPE_KEYS)
+
+#: ``engine.face_down`` registers a special action as it loads, so it is
+#: reached late rather than imported here — a module-level import would move
+#: it earlier in the package's load order (``engine/late_modules.py``).
+_late = LateModules(__package__.rpartition(".")[0])
 
 
 def _zone_card_colors(card, *, game=None, owner=None) -> tuple[str, ...]:
@@ -1051,6 +1057,23 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
 
         if not has_nonmana_activated_ability(perm.effective_card):
             return False
+    # "target **face-down** creature" (Nosy Goblin, Break Open, Aven
+    # Soulgazer). CR 110.5's status, read off the object: a face-down
+    # permanent's card is the blank 2/2 (``engine/face_down.py``). Nosy
+    # Goblin's 2004-10-04 ruling is this test asked again at resolution: "If
+    # the target is turned face up before the ability resolves, the creature
+    # is no longer a legal target and is not destroyed."
+    if payload.get("face_down_only") and not _late.face_down.is_face_down(perm):
+        return False
+    # "target creature **with a morph ability**" (Backslide). Asked of what the
+    # permanent says now — a face-down one says nothing (CR 708.2a), a Clone
+    # copying a morph creature says Morph (CR 707.2), and one under Humility
+    # has lost it (CR 613.1f) — through the reader that charges the cost.
+    if (
+        payload.get("with_morph_ability")
+        and _late.face_down.morph_cost(perm.effective_card) is None
+    ):
+        return False
     # "an **untapped** creature" (Enthralling Hold). The twin of ``tapped_only``
     # and a separate key for the reason stated on ``to_payload``.
     if payload.get("untapped_only") and perm.tapped:

@@ -82,6 +82,11 @@ QUALIFIER_FIELDS: dict[str, tuple[str, bool]] = {
     "blocking": ("blocking", True),
     "tapped": ("tapped", True),
     "untapped": ("tapped", False),
+    # "**Face-down** creatures get +1/+1." (Ixidor, Reality Sculptor.) CR
+    # 110.5's other status beside tapped/untapped, and a qualifier for
+    # tapped's reason: a creature is turned face up between recomputes (a
+    # special action, CR 702.37e), and the bonus has to stop the moment it is.
+    "face-down": ("face_down", True),
 }
 
 def grantable_quoted_ability(text: str) -> bool:

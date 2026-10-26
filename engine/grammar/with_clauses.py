@@ -284,6 +284,15 @@ def accept_with_clause(stream: TokenStream, d, parse_filter) -> bool | None:
         ):
             d.with_nonmana_activated_ability = True
             return True
+        # "target creature **with a morph ability**" (Backslide). CR 702.37a's
+        # keyword named as an ability, read whole for the reason the Tsabo's
+        # Web phrase above is: "morph" alone is no keyword the list below
+        # knows, and the words are the whole narrowing.
+        if stream.accept_phrase("a", "morph", "ability") or stream.accept_phrase(
+            "morph", "abilities",
+        ):
+            d.with_morph_ability = True
+            return True
         stream.reset(counter_probe)
         # "with mana value X" (Spell Blast). Two words, so it is tried
         # before the keyword list — "mana" alone is not a keyword, but

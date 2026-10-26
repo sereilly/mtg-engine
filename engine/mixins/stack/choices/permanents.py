@@ -901,3 +901,56 @@ class PermanentChoicesMixin:
         pick = min(live, key=lambda perm: int(perm.metadata.get("loyalty_counters", 0)))
         if not self._resolve_loyalty_recipient(choice, self.permanent_id_of(pick)):
             self.discard_pending_choice(choice)
+
+    # -- Face-down permanents looked at (CR 708.5; Aven Soulgazer, Spy Network)
+
+    def arm_face_down_look(
+        self, viewer_index: int, permanents, *, source_name: str,
+    ) -> None:
+        """Show *viewer_index* what the face-down *permanents* are.
+
+        CR 708.5 lets only a face-down permanent's controller look at it; an
+        effect that says "look at" is the exception, and what it shows is the
+        looker's alone (Spy Network, 2004-10-04: "Only you get to look. You
+        can't show them to others."). So the cards ride a prompt owed by the
+        looker — the one channel ``web/prompts.visible_choices`` sends to that
+        seat and nobody else — addressed by ``permanent_id``, and never a log
+        line. A notification like ``hand_reveal``: nothing waits on it, and a
+        newer look replaces an older one rather than queueing behind it.
+
+        The seat learns nothing that outlasts the prompt: there is no record of
+        what a seat has been shown, so ``ai_rehearsal.conceal_from`` redeals
+        the looked-at card on the looker's own rehearsal copies — the limit the
+        hidden-hand looks (Glasses of Urza) already have.
+        """
+        self.clear_pending_choices("face_down_look", viewer_index)
+        self.arm_pending_choice(
+            "face_down_look", viewer_index,
+            permanent_ids=[permanent.permanent_id for permanent in permanents],
+            source_name=source_name,
+        )
+
+    def live_face_down_look(self, choice: PendingChoice) -> list:
+        """The looked-at permanents that are still face down on the battlefield.
+
+        One that has been turned face up or has left is public now (CR 708.8,
+        708.9), so the look has nothing left to show about it — and dropping it
+        here is what keeps the prompt from pointing at a permanent id that no
+        longer names anything.
+        """
+        from ....face_down import is_face_down
+
+        live = []
+        for permanent_id in choice.data.get("permanent_ids") or ():
+            permanent = self.permanent_by_id(permanent_id)
+            if permanent is not None and is_face_down(permanent):
+                live.append(permanent)
+        return live
+
+    def dismiss_face_down_look(self, viewer_index: int) -> bool:
+        """The looker has seen the face-down cards; take the prompt down."""
+        return self.resolve_pending_choice("face_down_look", viewer_index)
+
+    def _dismiss_face_down_look(self, choice: PendingChoice) -> bool:
+        self.discard_pending_choice(choice)
+        return True

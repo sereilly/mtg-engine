@@ -12,6 +12,7 @@ an answer the resolver will refuse.
 
 from __future__ import annotations
 
+from engine.face_down import hidden_card_of
 from engine.oracle_types import CLAIMABLE_EXILED_CARDS
 from engine.search_filters import search_matches, search_slots, searched_seat
 
@@ -700,6 +701,32 @@ def _hand_reveal(ctx: PromptContext, choices: list) -> dict:
         "target_seat": choice.data["target_index"],
         "target_name": revealed.name,
         "cards": [ctx.serialize_card(card) for card in revealed.hand],
+    }
+
+
+@prompt_renderer("face_down_look")
+def _face_down_look(ctx: PromptContext, choices: list) -> dict:
+    """"Look at target face-down creature." (Aven Soulgazer, Spy Network.)
+
+    What each looked-at face-down permanent is, for the looker alone —
+    ``visible_choices`` sends a prompt only to the seat that owes it, and this
+    kind is not ``spectator_visible`` (CR 708.5). Addressed by ``permanent_id``
+    so the client can point at the face-down card on the board; one turned
+    face up or gone since is public now and is left out
+    (``Game.live_face_down_look``). Answered by ``dismiss_face_down_look``.
+    """
+    choice = choices[0]
+    return {
+        "viewer_seat": choice.player_index,
+        "source_name": choice.data.get("source_name", ""),
+        "permanents": [
+            {
+                "id": permanent.permanent_id,
+                "controller_seat": ctx.game.controller_index_of(permanent),
+                "card": ctx.serialize_card(hidden_card_of(permanent)),
+            }
+            for permanent in ctx.game.live_face_down_look(choice)
+        ],
     }
 
 

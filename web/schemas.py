@@ -159,6 +159,7 @@ ActionKind = Literal[
     "assign_attacker_piles",
     "assign_camouflage_piles",
     "dismiss_hand_reveal",
+    "dismiss_face_down_look",
     "coin_flip_choose",
     "mulligan_take",
     "mulligan_keep",

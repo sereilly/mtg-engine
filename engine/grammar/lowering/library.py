@@ -60,6 +60,7 @@ from ._common import (
     _is_target,
     _restrictions_beyond,
     _targets_only,
+    testable_filter_payload,
 )
 from ._events import (
     _DAMAGED_PLAYER_EVENTS,
@@ -139,6 +140,68 @@ def _lower_look_at_hand(
         # Glasses of Urza's payload stays byte-identical.
         payload["random_card"] = True
     return (OracleInstruction("look_at_target_hand", "", payload),)
+
+
+def _lower_look_at_face_down(node: ast.LookAtFaceDown) -> tuple[OracleInstruction, ...]:
+    """"Look at target face-down creature." (Aven Soulgazer.)
+
+    The target the picker offers and the handler re-asks (CR 608.2b): a
+    creature turned face up in response is no longer "face-down" and the look
+    shows nothing. The noun phrase is carried through
+    ``testable_filter_payload`` for the handler's ``subject_matches``, and it
+    must say "face-down" — a face-up permanent is public already, and a look
+    at one is no effect at all.
+    """
+    spec = node.subject
+    if not _is_target(spec) or not spec.filter.face_down:
+        raise LoweringError("only a target face-down permanent is looked at", node=node)
+    described = testable_filter_payload(
+        spec.filter,
+        refusal="nothing tests this narrowing of the face-down creature",
+        node=node,
+    )
+    payload = _targets_only(spec)
+    payload.update(described)
+    return (OracleInstruction("look_at_target_face_down", "", payload),)
+
+
+#: Each part of a listed look (:class:`ast.LookAtPlayerCards`) as the step it
+#: lowers to, every one reading the same targeted player off the resolution.
+_LOOK_PART_STEPS = {
+    "hand": ("look_at_target_hand", {}),
+    # One card, and nothing to do with it: Visions' look with the count at one
+    # and no shuffle offered — the private prompt shows it to the looker.
+    "library_top": ("look_at_target_library_top", {"amount": 1, "may_shuffle": False}),
+    # CR 708.5's exception, over every face-down creature the player controls.
+    "face_down_creatures": ("look_at_face_down_creatures", {}),
+}
+
+
+def _lower_look_at_player_cards(
+    node: ast.LookAtPlayerCards,
+) -> tuple[OracleInstruction, ...]:
+    """"Look at target player's hand, the top card of that player's library,
+    and any face-down creatures they control." (Spy Network.)
+
+    One step per printed part, in printed order, all about the one player the
+    sentence targets: the first step carries the target description the picker
+    reads (CR 601.2c names one player), and the rest read the same
+    ``context.target`` without describing it again — a second description
+    would read as a second target. Each step shows the looker alone what it
+    looked at (the 2004-10-04 ruling: "Only you get to look").
+    """
+    if node.player.kind not in ("target_player", "target_opponent"):
+        raise LoweringError(
+            f"no handler looks at {node.player.kind!r}'s hidden cards", node=node
+        )
+    steps = []
+    for index, part in enumerate(node.parts):
+        kind, payload = _LOOK_PART_STEPS[part]
+        payload = dict(payload)
+        if index == 0:
+            payload.update(_targets_only(node.player))
+        steps.append(OracleInstruction(kind, "", payload))
+    return tuple(steps)
 
 
 def _lower_separate_library_top_into_piles(

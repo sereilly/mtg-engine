@@ -20,7 +20,8 @@ from engine import Game, PlayerState
 from engine.card_loader import load_catalog
 from engine.copies import become_copy
 from engine.face_down import (FACE_DOWN_NAME, face_down_card, hidden_card_of,
-                              is_face_down, may_look_at, morph_cost)
+                              is_face_down, may_look_at, morph_cost,
+                              turn_face_up)
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
 from engine.special_actions import (available_permanent_special_actions,
@@ -342,12 +343,19 @@ def test_708_9_leaving_the_battlefield_reveals_the_card_and_lki_is_face_down(ons
             assert p1.life == 22
 
 
-@pytest.mark.cr("708.10", "707.2", "613.2b")
+@pytest.mark.cr("708.10", "707.2", "613.2b", "702.37e")
 def test_708_10_copies_of_and_by_a_face_down_permanent(ons):
     """A Clone entering as a copy of a face-down creature copies the face-down
     values — a nameless 2/2 (CR 707.2). A face-down permanent that becomes a
     copy keeps its face-down characteristics, and is the copy once turned
-    face up (CR 708.10)."""
+    face up (CR 708.10).
+
+    Which also decides whether its morph turns it up (W1G2): CR 702.37e asks
+    "what the permanent's morph cost would be **if it were face up**", and
+    face up this Whipcorder would be a Craw Wurm, which has none — "If the
+    permanent wouldn't have a morph cost if it were face up, it can't be
+    turned face up this way." So the special action is refused, and an
+    effect that turns it face up (Ixidor, Break Open) makes it the Wurm."""
     face_down = _face_down_on_battlefield(ons["Krosan Colossus"])
     game, _p1, p2 = _duel([], [face_down], opponent_hand=[_CATALOG["Clone"]],
                           enforce=False)
@@ -369,7 +377,9 @@ def test_708_10_copies_of_and_by_a_face_down_permanent(ons):
     assert whipcorder.effective_card.name == FACE_DOWN_NAME
     game.priority_player_index = 0
     p1.mana_pool.update({"W": 1})
-    assert take_permanent_special_action(game, 0, whipcorder, "turn_face_up") is None
+    assert take_permanent_special_action(game, 0, whipcorder, "turn_face_up") is not None
+    assert is_face_down(whipcorder) and p1.mana_pool["W"] == 1, "refused, nothing paid"
+    assert turn_face_up(game, whipcorder, how="an effect")
     assert whipcorder.effective_card.name == "Craw Wurm"
     assert (whipcorder.effective_power, whipcorder.effective_toughness) == (6, 4)
 

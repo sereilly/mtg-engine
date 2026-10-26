@@ -1767,3 +1767,8 @@ def _action_order_triggers_confirm(session, req, seat_type):
 @action_handler("dismiss_hand_reveal")
 def _action_dismiss_hand_reveal(session, req, seat_type):
     session.game.dismiss_hand_reveal(req.seat)
+
+
+@action_handler("dismiss_face_down_look")
+def _action_dismiss_face_down_look(session, req, seat_type):
+    session.game.dismiss_face_down_look(req.seat)

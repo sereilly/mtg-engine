@@ -46,8 +46,9 @@ from tests.helpers import resolve_stack as _w1g1_resolve_stack
 
 _W1G1_CATALOG = {card.name: card for card in _w1g1_load_catalog()}
 
-#: Every Onslaught card printing morph. The first 41 compile supported; the
-#: last five have a second line another wave-1 group owns (W1G2, W1G5, W1G7,
+#: Every Onslaught card printing morph. The first 41 compile supported — and
+#: Skittish Valesk, whose second line W1G2 built, at the end of the first
+#: tuple; the rest have a second line another wave-1 group owns (W1G5, W1G7,
 #: W1G10) and are cast face down and turned face up all the same.
 _W1G1_MORPHS = (
     "Aphetto Alchemist", "Ascending Aven", "Battering Craghorn",
@@ -61,11 +62,11 @@ _W1G1_MORPHS = (
     "Silent Specter", "Skirk Commando", "Snapping Thragg", "Snarling Undorak",
     "Spined Basher", "Spitting Gourna", "Thrashing Mudspawn",
     "Towering Baloth", "Treespring Lorian", "Venomspout Brackus",
-    "Voidmage Prodigy", "Whipcorder",
+    "Voidmage Prodigy", "Whipcorder", "Skittish Valesk",
 )
 _W1G1_OTHER_GROUPS_LINES = (
     "Birchlore Rangers", "Mistform Shrieker", "Quicksilver Dragon",
-    "Riptide Entrancer", "Skittish Valesk",
+    "Riptide Entrancer",
 )
 
 
@@ -474,5 +475,327 @@ def test_w1g1_ironfist_crusher_blocks_any_number_only_face_up(set_pool):
 
 # ==== W1G2 ==========================================================
 # W1G2's tests go between this line and the "end W1G2" line.
+
+# Face-down permanents acted on by an effect (CR 708) — on W1G1's model: turned
+# face down (Skittish Valesk), turned face up without paying (Ixidor), a
+# face-down creature's anthem (Ixidor), destroyed only while face down (Nosy
+# Goblin) and looked at by one seat alone (Aven Soulgazer).
+
+from engine import Game as _W1G2Game, PlayerState as _W1G2PlayerState
+from engine import targeting as _w1g2_targeting
+from engine.card_loader import load_catalog as _w1g2_load_catalog
+from engine.face_down import (face_down_card as _w1g2_face_down_card,
+                              hidden_card_of as _w1g2_hidden_card_of,
+                              is_face_down as _w1g2_is_face_down,
+                              morph_cost as _w1g2_morph_cost)
+from engine.mana_payment import mana_cost_from_symbols as _w1g2_symbols
+from engine.models import Permanent as _W1G2Permanent
+from engine.oracle import compile_card_oracle as _w1g2_compile
+from engine.pt import add_plus1_counters as _w1g2_add_plus1
+from engine.special_actions import (
+    take_permanent_special_action as _w1g2_take_special_action)
+from tests.helpers import resolve_stack as _w1g2_resolve_stack
+
+_W1G2_CATALOG = {card.name: card for card in _w1g2_load_catalog()}
+
+
+def _w1g2_game(mine=(), theirs=(), *, enforce=False):
+    p1 = _W1G2PlayerState(name="A", battlefield=list(mine),
+                          library=[_W1G2_CATALOG["Island"]] * 10)
+    p2 = _W1G2PlayerState(name="B", battlefield=list(theirs),
+                          library=[_W1G2_CATALOG["Island"]] * 10)
+    game = _W1G2Game(players=[p1, p2])
+    game.enforce_mana_costs = enforce
+    game.interactive_seats = set()
+    game.active_player_index = 0
+    game.current_turn_phase = game.current_step = "precombat_main"
+    game._sync_control()
+    game._recompute_continuous_effects()
+    return game, p1, p2
+
+
+def _w1g2_permanent(card, *, face_down=False):
+    permanent = _W1G2Permanent(card=_w1g2_face_down_card(card) if face_down else card)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    return permanent
+
+
+def _w1g2_pool_for(cost: str) -> dict:
+    pool = {}
+    for symbol, count in _w1g2_symbols(cost).items():
+        key = "C" if symbol == "generic" else symbol
+        pool[key] = pool.get(key, 0) + count
+    return pool
+
+
+def _w1g2_turn_up_for_morph(game, seat, permanent):
+    """CR 702.37e, its morph cost paid exactly out of a pool holding nothing
+    else."""
+    game.priority_player_index = seat
+    game.players[seat].mana_pool.update(
+        _w1g2_pool_for(_w1g2_morph_cost(_w1g2_hidden_card_of(permanent)))
+    )
+    refusal = _w1g2_take_special_action(game, seat, permanent, "turn_face_up")
+    assert refusal is None, refusal
+    assert sum(game.players[seat].mana_pool.values()) == 0
+
+
+def _w1g2_activation_offers(game, seat, permanent):
+    """What the activation picker offers for *permanent*'s one activated
+    ability, as ``(seat, battlefield index)`` pairs."""
+    (ability,) = _w1g2_compile(permanent.effective_card).activated_abilities
+    spec = _w1g2_targeting.derive_activation_spec(ability)
+    assert spec is not None, permanent.card.name
+    return [
+        (entry["seat"], entry["index"])
+        for entry in game._enumerate_targets(
+            seat, permanent.card, spec, for_cast=False,
+            ability_instruction=ability.instruction, source_permanent=permanent,
+        )
+    ]
+
+
+# --- Skittish Valesk -------------------------------------------------------
+
+
+def test_w1g2_skittish_valesk_turns_itself_face_down_on_a_lost_flip(set_pool, monkeypatch):
+    """"At the beginning of your upkeep, flip a coin. If you lose the flip,
+    turn this creature face down." A won flip leaves the 5/5 face up; a lost
+    one makes it the face-down 2/2 (CR 708.2a) — the same permanent, its
+    +1/+1 counter still on it — and its own morph cost {5}{R} turns it face up
+    again (CR 702.37e)."""
+    valesk_card = set_pool("ONS")["Skittish Valesk"]
+    assert _w1g2_compile(valesk_card).supported
+    valesk = _w1g2_permanent(valesk_card)
+    game, _p1, _p2 = _w1g2_game([valesk])
+    _w1g2_add_plus1(valesk, 1)
+    identity = valesk.permanent_id
+
+    monkeypatch.setattr("engine.handlers.control_flow.flip_coin", lambda *a: True)
+    game.resolve_upkeep(0)
+    _w1g2_resolve_stack(game)
+    assert not _w1g2_is_face_down(valesk)
+    assert (valesk.effective_power, valesk.effective_toughness) == (6, 6)
+
+    monkeypatch.setattr("engine.handlers.control_flow.flip_coin", lambda *a: False)
+    game.resolve_upkeep(0)
+    _w1g2_resolve_stack(game)
+    assert _w1g2_is_face_down(valesk) and valesk.permanent_id == identity
+    assert (valesk.effective_power, valesk.effective_toughness) == (3, 3), "a 2/2 with its counter"
+    assert valesk.card.name != "Skittish Valesk"
+    assert any("Skittish Valesk was turned face down" in line for line in game.log)
+
+    # Face down it has no text (CR 708.2a): the next upkeep flips nothing.
+    flips = []
+    monkeypatch.setattr(
+        "engine.handlers.control_flow.flip_coin", lambda *a: flips.append(1) or False,
+    )
+    game.resolve_upkeep(0)
+    _w1g2_resolve_stack(game)
+    assert flips == [] and _w1g2_is_face_down(valesk)
+
+    _w1g2_turn_up_for_morph(game, 0, valesk)
+    assert valesk.card is valesk_card and valesk.permanent_id == identity
+    assert (valesk.effective_power, valesk.effective_toughness) == (6, 6)
+
+
+def test_w1g2_skittish_valesk_cast_face_down_flips_only_once_turned_up(set_pool, monkeypatch):
+    """Cast face down for {3} out of the pool (W1G1's morph), it is a 2/2 with
+    no upkeep trigger; turned face up it flips, loses, and is face down again —
+    one permanent all the while."""
+    valesk_card = set_pool("ONS")["Skittish Valesk"]
+    game, p1, _p2 = _w1g2_game(enforce=True)
+    p1.hand.append(valesk_card)
+    p1.mana_pool.update({"C": 3})
+    assert game.queue_from_hand(0, "Skittish Valesk", alternative_cost=True).supported
+    _w1g2_resolve_stack(game)
+    (valesk,) = p1.battlefield
+    assert _w1g2_is_face_down(valesk)
+    valesk.metadata["summoning_sickness_turn"] = -99
+    flips = []
+    monkeypatch.setattr(
+        "engine.handlers.control_flow.flip_coin", lambda *a: flips.append(1) or False,
+    )
+    game.resolve_upkeep(0)
+    _w1g2_resolve_stack(game)
+    assert flips == [] and _w1g2_is_face_down(valesk)
+    _w1g2_turn_up_for_morph(game, 0, valesk)
+    game.resolve_upkeep(0)
+    _w1g2_resolve_stack(game)
+    assert flips == [1] and _w1g2_is_face_down(valesk) and p1.battlefield == [valesk]
+
+
+# --- Ixidor, Reality Sculptor ----------------------------------------------
+
+
+def test_w1g2_ixidor_buffs_every_face_down_creature_and_stops_when_one_turns_up(set_pool):
+    """"Face-down creatures get +1/+1." Every face-down creature on the table,
+    either seat's, is a 3/3; Ixidor and a face-up creature are not buffed; a
+    creature turned face up loses the bonus at once (CR 611.3a — asked as P/T
+    is read); and the bonus leaves with Ixidor."""
+    ons = set_pool("ONS")
+    ixidor = _w1g2_permanent(ons["Ixidor, Reality Sculptor"])
+    mine_down = _w1g2_permanent(ons["Exalted Angel"], face_down=True)
+    theirs_down = _w1g2_permanent(ons["Krosan Colossus"], face_down=True)
+    bears = _w1g2_permanent(_W1G2_CATALOG["Grizzly Bears"])
+    game, _p1, _p2 = _w1g2_game([ixidor, mine_down], [theirs_down, bears])
+    assert (mine_down.effective_power, mine_down.effective_toughness) == (3, 3)
+    assert (theirs_down.effective_power, theirs_down.effective_toughness) == (3, 3)
+    assert (bears.effective_power, bears.effective_toughness) == (2, 2)
+    assert (ixidor.effective_power, ixidor.effective_toughness) == (3, 4)
+
+    _w1g2_turn_up_for_morph(game, 0, mine_down)
+    assert (mine_down.effective_power, mine_down.effective_toughness) == (4, 5)
+    assert (theirs_down.effective_power, theirs_down.effective_toughness) == (3, 3)
+
+    game.remove_from_battlefield(ixidor)
+    game._recompute_continuous_effects()
+    assert (theirs_down.effective_power, theirs_down.effective_toughness) == (2, 2)
+
+
+def test_w1g2_ixidor_turns_a_face_down_creature_face_up_without_its_morph_cost(set_pool):
+    """"{2}{U}: Turn target face-down creature face up." Its 2004-10-04
+    ruling: "its controller does not have to pay its Morph cost". The
+    opponent's face-down Krosan Colossus ({6}{G}{G} to morph) is turned face
+    up for Ixidor's {2}{U} and nothing else, and the reveal is public. The
+    picker offers the face-down creatures, both seats', and nothing else."""
+    ons = set_pool("ONS")
+    ixidor = _w1g2_permanent(ons["Ixidor, Reality Sculptor"])
+    colossus = _w1g2_permanent(ons["Krosan Colossus"], face_down=True)
+    bears = _w1g2_permanent(_W1G2_CATALOG["Grizzly Bears"])
+    mine_down = _w1g2_permanent(_W1G2_CATALOG["Grizzly Bears"], face_down=True)
+    game, p1, _p2 = _w1g2_game([ixidor, mine_down], [colossus, bears], enforce=True)
+
+    assert sorted(_w1g2_activation_offers(game, 0, ixidor)) == [(0, 1), (1, 0)]
+
+    p1.mana_pool.update({"U": 1, "C": 2})
+    result = game.activate_permanent_ability(
+        0, "Ixidor, Reality Sculptor", target_player_index=1,
+        target_permanent_ids=[colossus.permanent_id],
+    )
+    assert result.supported, result.details
+    _w1g2_resolve_stack(game)
+    assert sum(p1.mana_pool.values()) == 0
+    assert not _w1g2_is_face_down(colossus) and colossus.card.name == "Krosan Colossus"
+    assert (colossus.effective_power, colossus.effective_toughness) == (9, 9)
+    assert any("it is Krosan Colossus" in line for line in game.log)
+
+
+def test_w1g2_ixidor_turns_up_a_face_down_creature_with_no_morph_cost(set_pool):
+    """A face-down permanent with no morph ability — a Grizzly Bears put face
+    down by another rule (Illusionary Mask's) — cannot be turned face up by
+    the special action (CR 702.37e), and Ixidor turns it face up all the same:
+    the ability is the permission."""
+    ons = set_pool("ONS")
+    ixidor = _w1g2_permanent(ons["Ixidor, Reality Sculptor"])
+    bears_down = _w1g2_permanent(_W1G2_CATALOG["Grizzly Bears"], face_down=True)
+    game, _p1, _p2 = _w1g2_game([ixidor, bears_down])
+    game.priority_player_index = 0
+    assert _w1g2_take_special_action(game, 0, bears_down, "turn_face_up") is not None
+    result = game.activate_permanent_ability(
+        0, "Ixidor, Reality Sculptor", target_player_index=0,
+        target_permanent_ids=[bears_down.permanent_id],
+    )
+    assert result.supported, result.details
+    _w1g2_resolve_stack(game)
+    assert bears_down.card.name == "Grizzly Bears" and not _w1g2_is_face_down(bears_down)
+
+
+# --- Nosy Goblin -----------------------------------------------------------
+
+
+def test_w1g2_nosy_goblin_destroys_a_face_down_creature(set_pool):
+    """"{T}, Sacrifice this creature: Destroy target face-down creature." The
+    picker offers the face-down creature and not the face-up one, a face-up
+    target is refused before the cost is paid, and the destroyed permanent
+    goes to its owner's graveyard as the card it was (CR 708.9)."""
+    goblin = _w1g2_permanent(set_pool("ONS")["Nosy Goblin"])
+    angel = _w1g2_permanent(set_pool("ONS")["Exalted Angel"], face_down=True)
+    bears = _w1g2_permanent(_W1G2_CATALOG["Grizzly Bears"])
+    game, p1, p2 = _w1g2_game([goblin], [angel, bears])
+    assert _w1g2_activation_offers(game, 0, goblin) == [(1, 0)]
+    refused = game.activate_permanent_ability(
+        0, "Nosy Goblin", target_player_index=1, target_permanent_ids=[bears.permanent_id],
+    )
+    assert not refused.supported and game.is_on_battlefield(goblin)
+    result = game.activate_permanent_ability(
+        0, "Nosy Goblin", target_player_index=1, target_permanent_ids=[angel.permanent_id],
+    )
+    assert result.supported, result.details
+    _w1g2_resolve_stack(game)
+    assert not game.is_on_battlefield(angel) and game.is_on_battlefield(bears)
+    assert [c.name for c in p2.graveyard] == ["Exalted Angel"]
+    assert [c.name for c in p1.graveyard] == ["Nosy Goblin"]
+
+
+def test_w1g2_nosy_goblin_misses_a_creature_turned_face_up_in_response(set_pool):
+    """The 2004-10-04 ruling: "If the target is turned face up before the
+    ability resolves, the creature is no longer a legal target and is not
+    destroyed." The ability is on the stack and the Goblin paid for it; the
+    Angel's controller turns it face up for {2}{W}{W} in response (a special
+    action, CR 116.2b) — and the ability does nothing (CR 608.2b)."""
+    goblin = _w1g2_permanent(set_pool("ONS")["Nosy Goblin"])
+    angel = _w1g2_permanent(set_pool("ONS")["Exalted Angel"], face_down=True)
+    game, p1, p2 = _w1g2_game([goblin], [angel])
+    result = game.queue_permanent_ability(
+        0, "Nosy Goblin", target_player_index=1, target_permanent_ids=[angel.permanent_id],
+    )
+    assert result.supported, result.details
+    assert len(game.stack) == 1 and [c.name for c in p1.graveyard] == ["Nosy Goblin"]
+
+    _w1g2_turn_up_for_morph(game, 1, angel)
+    assert angel.card.name == "Exalted Angel"
+    _w1g2_resolve_stack(game)
+    assert game.is_on_battlefield(angel) and p2.graveyard == []
+
+
+# --- Aven Soulgazer --------------------------------------------------------
+
+
+def test_w1g2_aven_soulgazer_shows_a_face_down_creature_to_its_controller_alone(set_pool):
+    """"{2}{W}: Look at target face-down creature." The looked-at card rides a
+    prompt owed by the Soulgazer's controller (CR 708.5's exception) and by
+    nobody else; the log, which every seat reads, says a look happened and
+    never what it saw. The creature stays face down."""
+    ons = set_pool("ONS")
+    soulgazer = _w1g2_permanent(ons["Aven Soulgazer"])
+    colossus = _w1g2_permanent(ons["Krosan Colossus"], face_down=True)
+    bears = _w1g2_permanent(_W1G2_CATALOG["Grizzly Bears"])
+    game, _p1, _p2 = _w1g2_game([soulgazer], [colossus, bears])
+    assert _w1g2_activation_offers(game, 0, soulgazer) == [(1, 0)]
+    result = game.activate_permanent_ability(
+        0, "Aven Soulgazer", target_player_index=1,
+        target_permanent_ids=[colossus.permanent_id],
+    )
+    assert result.supported, result.details
+    _w1g2_resolve_stack(game)
+    look = game.pending_choice_of("face_down_look", 0)
+    assert look is not None and look.data["permanent_ids"] == [colossus.permanent_id]
+    assert [_w1g2_hidden_card_of(p).name for p in game.live_face_down_look(look)] == [
+        "Krosan Colossus"
+    ]
+    assert game.pending_choice_of("face_down_look", 1) is None
+    assert _w1g2_is_face_down(colossus)
+    assert not any("Krosan Colossus" in line for line in game.log)
+    assert any("looked at 1 face-down creature(s)" in line for line in game.log)
+    assert game.dismiss_face_down_look(0)
+    assert game.pending_choice_of("face_down_look", 0) is None
+
+
+def test_w1g2_aven_soulgazer_sees_nothing_of_a_creature_turned_face_up_in_response(set_pool):
+    """Turned face up before the look resolves, the target is no longer a
+    face-down creature (CR 608.2b): nothing private is left to show."""
+    ons = set_pool("ONS")
+    soulgazer = _w1g2_permanent(ons["Aven Soulgazer"])
+    angel = _w1g2_permanent(ons["Exalted Angel"], face_down=True)
+    game, _p1, _p2 = _w1g2_game([soulgazer], [angel])
+    assert game.queue_permanent_ability(
+        0, "Aven Soulgazer", target_player_index=1,
+        target_permanent_ids=[angel.permanent_id],
+    ).supported
+    assert len(game.stack) == 1
+    _w1g2_turn_up_for_morph(game, 1, angel)
+    _w1g2_resolve_stack(game)
+    assert game.pending_choice_of("face_down_look", 0) is None
 
 # ==== end W1G2 ======================================================

@@ -598,6 +598,22 @@ class ObjectFilter:
     # of the same name, which both matchers answer: a permanent's off its
     # computed colours (layer 5) and a card's off its printed ones (CR 202.2).
     multicolored: bool = False
+    # "target **face-down** creature" (Nosy Goblin, Break Open), "**Face-down**
+    # creatures get +1/+1" (Ixidor). CR 110.5 makes face up / face down one of
+    # a permanent's four statuses, so it is a fact about the object the way
+    # "tapped" is — but its own field rather than a ``tapped``-style tri-state,
+    # because nothing prints "face-up" as a narrowing and a word with one value
+    # is a flag. Emitted as ``face_down_only`` (the ``colored`` →
+    # ``colored_only`` spelling): a filter key named ``face_down`` would read as
+    # the exile handlers' "exile it face down" rider wherever a payload is
+    # merged flat.
+    face_down: bool = False
+    # "target creature **with a morph ability**" (Backslide). CR 702.37a's
+    # keyword, asked of what the object says *now* (``effective_card``): a
+    # face-down creature has no text and so no morph ability (CR 708.2a — which
+    # is how Backslide cannot turn a creature face down twice, CR 708.2b), and a
+    # Clone copying a morph creature has the ability it copied (CR 707.2).
+    with_morph_ability: bool = False
     # "…that isn't the target of an ability from another creature named ~"
     # (Goblin Artisans). A restriction on the object's *situation* rather than
     # on the object: it asks what else on the stack is pointing at it. The

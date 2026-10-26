@@ -37,7 +37,16 @@ def _client_reads(js: str, key: str) -> bool:
 #: the one entry, and its client is ``renderOutsideGamePickModal`` in
 #: ``app.js``. Before it, Torment's ``madness_cast`` (W1G1), whose client is
 #: ``applyMadnessCastPrompt``.
-_AWAITING_CLIENT: dict[str, str] = {}
+_AWAITING_CLIENT: dict[str, str] = {
+    # Onslaught W1G2 (Aven Soulgazer, Spy Network): "look at target face-down
+    # creature". The client reads ``state.face_down_look`` — ``viewer_seat``,
+    # ``source_name`` and ``permanents`` (each ``{id, controller_seat, card}``,
+    # ``card`` the hidden card's preview) — shows the cards to the looker
+    # beside the face-down permanents they are (by ``id``), and sends
+    # ``{seat, action: "dismiss_face_down_look"}`` when the looker closes it.
+    # A notification like ``hand_reveal``: it blocks nothing.
+    "face_down_look": "dismiss_face_down_look",
+}
 
 
 def test_every_prompt_has_a_client_renderer():

@@ -504,6 +504,36 @@ def _glasses_of_urza():
 
 
 @scenario(
+    "face_down_look", "(Aven Soulgazer is Onslaught's, measured — its instruction)",
+    answer=lambda g, c: {},
+    wire=lambda g, c: {},
+    then=lambda g: _assert(g.pending_choice_of("face_down_look", 0) is None),
+)
+def _face_down_look():
+    """"Look at target face-down creature." No shipped card prints it — the
+    first is Onslaught's Aven Soulgazer, a measured set this pool-wide census
+    does not load — so it is driven over the instruction the card lowers to,
+    aimed at a face-down Grizzly Bears, the way ``graveyard_pile_choice`` is."""
+    from engine.face_down import face_down_card
+    from engine.game_types import OracleExecutionContext
+    from engine.oracle_types import OracleInstruction
+
+    hidden = Permanent(card=face_down_card(card("Grizzly Bears")))
+    hidden.metadata["summoning_sickness_turn"] = -99
+    game = duel(boards=(("Craw Wurm",), (hidden,)))
+    source = on_board(game, 0, "Craw Wurm")
+    instruction = OracleInstruction("look_at_target_face_down", "", {
+        "type_filter": "creature", "face_down_only": True,
+    })
+    context = OracleExecutionContext(
+        caster=game.players[0], target=game.players[1], card=source.card,
+        source_permanent=source, target_permanent_id=[hidden.permanent_id],
+    )
+    game._execute_oracle_instruction(instruction, context)
+    return game
+
+
+@scenario(
     "draw_up_to", "Truce",
     answer=lambda g, c: {"number": 1},
     wire=lambda g, c: {"number": 1},

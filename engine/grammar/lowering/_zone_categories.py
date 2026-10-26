@@ -142,6 +142,12 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     "discard_all_matching_cards": "zones",
     "look_at_target_hand": "zones",
     "look_at_target_library_top": "zones",
+    # "Look at target face-down creature." (Aven Soulgazer) and "…any
+    # face-down creatures they control" (Spy Network): the look family beside
+    # the two above — a hidden object shown to one seat, CR 708.5's exception
+    # — so the same category.
+    "look_at_target_face_down": "zones",
+    "look_at_face_down_creatures": "zones",
     # "…You may put that card on the bottom of that player's library"
     # (Coral Fighters): the same look with the one offer that moves a card.
     "look_at_library_top_then_bottom": "zones",

@@ -20,7 +20,7 @@ from engine.color_changes import spell_color_change
 from engine.cost_modifiers import spell_cost_tax
 from engine.divided_damage import DIVIDED_TARGETS, divided_entry
 from engine.entry_choices import chosen_as_entered
-from engine.face_down import hidden_card_of, is_face_down, morph_cost
+from engine.face_down import face_up_morph_cost, hidden_card_of, is_face_down
 from engine.faces import combined_oracle_text, face_cards, is_face, whole_card
 from engine.legality import activation_target_obligation
 from engine.models import Permanent, PlayerState
@@ -284,7 +284,10 @@ def hidden_card_view(obj) -> dict | None:
     view["mana_cost"] = real.mana_cost
     view["power"] = _printed_stat(real, "power")
     view["toughness"] = _printed_stat(real, "toughness")
-    printed = morph_cost(real)
+    # What turning it face up would cost (CR 702.37e: "what the permanent's
+    # morph cost would be if it were face up") — a copy effect on it counts
+    # (CR 708.10), so a face-down Clone of a morph creature shows that cost.
+    printed = face_up_morph_cost(obj)
     if printed is not None:
         view["morph_cost"] = printed
     return view

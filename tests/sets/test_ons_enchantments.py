@@ -27,6 +27,64 @@ log), not instruction kinds alone.
 # ==== W1G2 ==========================================================
 # W1G2's tests go between this line and the "end W1G2" line.
 
+# A face-down creature leaving the battlefield and coming back (CR 708.9,
+# CR 400.7) through Astral Slide's exile-and-return, with the creature cast
+# face down by morph rather than put face down by Illusionary Mask (W1G3's
+# section drives the Mask's).
+
+from engine import Game as _W1G2Game, PlayerState as _W1G2PlayerState
+from engine.face_down import is_face_down as _w1g2_is_face_down
+from engine.models import Permanent as _W1G2Permanent
+from tests.helpers import resolve_stack as _w1g2_resolve_stack
+
+
+def test_w1g2_astral_slide_exiles_a_morph_creature_face_up_and_it_returns_face_up(set_pool):
+    """Astral Slide (2008-08-01): "If a face-down card is exiled, it turns
+    face-up and remains face-up when it returns to the battlefield." A Krosan
+    Colossus cast face down for {3} is exiled by the Slide's trigger — exile
+    holds the Colossus, revealed (CR 708.9), and the log names it only then —
+    and the next end step returns it a new, face-up 9/9 (CR 400.7)."""
+    ons = set_pool("ONS")
+    alice = _W1G2PlayerState(
+        name="Alice", hand=[ons["Krosan Colossus"]], library=[ons["Plains"]] * 5,
+    )
+    bob = _W1G2PlayerState(name="Bob", hand=[ons["Lay Waste"]], library=[ons["Plains"]] * 5)
+    game = _W1G2Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.active_player_index = 0
+    slide = _W1G2Permanent(card=ons["Astral Slide"])
+    game._put_permanent_onto_battlefield(1, slide, None)
+    game._sync_control()
+
+    assert game.queue_from_hand(0, "Krosan Colossus", alternative_cost=True).supported
+    _w1g2_resolve_stack(game)
+    (hidden,) = game.controlled_by(0)
+    assert _w1g2_is_face_down(hidden)
+    assert not any("Krosan Colossus" in line for line in game.log)
+
+    # Bob cycles Lay Waste; the Slide's "you may exile target creature" aims
+    # at the face-down Colossus (its only creature on the table).
+    assert game.activate_from_hand(1, "Lay Waste").supported
+    assert game.stack[-1].card.name == "Astral Slide"
+    assert game.resolve_top_of_stack()
+    for seat in (0, 1):
+        offer = game.pending_choice_of("optional_pay", seat)
+        if offer is not None:
+            assert game._resolve_optional_pay(offer, True, None)
+    game.auto_resolve_pending_choices()
+    assert not game.is_on_battlefield(hidden)
+    assert [c.name for c in alice.exile] == ["Krosan Colossus"]
+    assert any("it is Krosan Colossus" in line for line in game.log)
+    _w1g2_resolve_stack(game)
+
+    game.resolve_end_step(0)
+    _w1g2_resolve_stack(game)
+    (back,) = game.controlled_by(0)
+    assert back.permanent_id != hidden.permanent_id
+    assert not _w1g2_is_face_down(back) and back.card is ons["Krosan Colossus"]
+    assert (back.effective_power, back.effective_toughness) == (9, 9)
+
 # ==== end W1G2 ======================================================
 
 
@@ -156,20 +214,10 @@ def _w1g3_shipped(name):
     return found[name]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Astral Slide 2008-08-01: 'If a face-down card is exiled, it turns "
-        "face-up and remains face-up when it returns to the battlefield' "
-        "(CR 708.9). On this base Illusionary Mask's face-down creature is a "
-        "blank CardDefinition with the real card in metadata, and every road "
-        "off the battlefield moves the blank: exile holds a text-less 2/2 and "
-        "the return is one. Face-down state is W1G1's (ONS wave 1); this goes "
-        "green when its model sends the real card where a face-down permanent "
-        "goes, and its strict marker then fails so whoever lands second "
-        "removes it."
-    ),
-)
+# Astral Slide 2008-08-01: "If a face-down card is exiled, it turns face-up
+# and remains face-up when it returns to the battlefield" (CR 708.9). Was a
+# strict xfail until W1G1's face-down model sent the real card wherever a
+# face-down permanent goes; W1G2 drove it and removed the marker.
 def test_w1g3_astral_slide_exiles_a_face_down_creature_face_up(set_pool):
     grizzly = _w1g3_shipped("Grizzly Bears")
     mask = _w1g3_shipped("Illusionary Mask")

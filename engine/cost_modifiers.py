@@ -231,6 +231,11 @@ def _matches(modifier: CostModifier, card, colors) -> bool:
         word.lower() for word in (card.keywords or ())
     }:
         return False
+    # "Face-down creature spells …" (Dream Chisel): the taxed card is the
+    # face-down blank (CR 708.4) — and narrows every subject, as the keyword
+    # does.
+    if modifier.face_down and getattr(card, "face_down_of", None) is None:
+        return False
     return any(
         _subject_matches(colour, card_types, card, colors)
         for colour, card_types in (

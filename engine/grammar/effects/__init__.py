@@ -77,6 +77,7 @@ from .counters import (
 from .characteristics import (
     _parse_double,
     _parse_switch_pt,
+    parse_turn_face,
     _parse_gets,
     _parse_gains,
     _parse_loses,
@@ -449,6 +450,7 @@ __all__ = [
     "_parse_spend_mana_as_though",
     "_parse_double",
     "_parse_switch_pt",
+    "parse_turn_face",
     "_parse_fight",
     "_parse_look_at_hand",
     "_parse_reveal_top",

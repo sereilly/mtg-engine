@@ -328,9 +328,19 @@ def _narrowing_flags(source: dict) -> dict:
     # readers. ``with_keywords`` had no root form at all, which is why it needs
     # one here rather than a second one. ``any_states`` is absent for the same
     # reason as ``without_keywords``.
+    #
+    # ``face_down_only`` and ``with_morph_ability`` (Onslaught: Nosy Goblin,
+    # Break Open, Ixidor, Aven Soulgazer; Backslide) for the same reason: each
+    # is CR 110.5's status or CR 702.37a's keyword read off the candidate
+    # alone, and without them the picker offered a face-up creature to "target
+    # face-down creature" and a Grizzly Bears to "target creature with a morph
+    # ability" — and CR 608.2b, which re-asks this spec, could not call a
+    # target turned face up in response illegal (Nosy Goblin's 2004-10-04
+    # ruling).
     for key in (
         "exclude_colors", "exclude_types", "with_keywords",
         "untapped_only", "not_attacking",
+        "face_down_only", "with_morph_ability",
     ):
         value = source.get(key)
         if value:
