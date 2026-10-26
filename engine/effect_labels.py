@@ -1433,6 +1433,14 @@ TRIGGERED_LABELS: dict[str, str] = {
     # there needs a second label for the kind to disambiguate
     # (`test_the_by_condition_table_only_holds_genuine_ambiguities`).
     "repeat_process_while": "triggered_repeated",
+    # --- Onslaught, at its promotion rehearsal ---------------------------
+    # Leery Fogbeast: "Whenever this creature becomes blocked, prevent all
+    # combat damage that would be dealt this turn." The first trigger to reach
+    # the unnarrowed Fog (every shipped printing is a spell, or the activated
+    # row's `activated_prevent`), and the bucket its narrowed twin
+    # `prevent_all_combat_damage_to_matching` already takes above. Shown by
+    # the guard's second assertion only once the activated half was green.
+    "prevent_all_combat_damage": "triggered_prevent",
 }
 
 # The one instruction kind whose label depends on what triggered it: `may` wraps
