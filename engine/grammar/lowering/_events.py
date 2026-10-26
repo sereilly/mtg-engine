@@ -308,6 +308,9 @@ _EVENT_STAMPED_TARGET_OBJECTS: frozenset[str] = frozenset({
 # empty context.
 _EVENT_QUANTITIES: dict[str, str] = {
     "you_gain_life": "life_gained",
+    # The same number for any seat's gain, announced from the same seam to a
+    # delayed ability (False Cure's "for each 1 life they gained").
+    "player_gains_life": "life_gained",
     # The mirror, from the state-based sweep that announces it: "for each 1
     # life you lost" (Oath of Lim-Dûl) counts the drop the sweep measured, not
     # the amount an effect set out to take — a life loss that a replacement

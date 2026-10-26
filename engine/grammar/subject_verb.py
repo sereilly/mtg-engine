@@ -57,6 +57,7 @@ from .effects import (
     parse_cant_cast_spell_types,
     parse_cant_play_from_zone,
     parse_cant_play_lands,
+    parse_owner_shuffles_target_into_library,
     _parse_gain_control,
     _parse_assigns_combat_damage_as_unblocked,
     _parse_assigns_no_combat_damage,
@@ -176,6 +177,20 @@ def parse_subject_verb(
         # SELF branch above keeps ``"this"`` because a card naming itself is not
         # a pronoun (see that rebinder's docstring).
         source_spec = ast.TargetSpec("it", ast.ObjectFilter(is_source=True))
+    elif stream.at_word("the") and stream.peek_word(1) == "owner" and (
+        stream.peek_word(2) == "of"
+    ):
+        # "**The owner of target nonland permanent** shuffles it into their
+        # library, then draws two cards." (Oblation.) A subject naming a seat
+        # *by an object the sentence targets*, which no player reference reads:
+        # the production reads the subject and its verb together, and the seat
+        # it names — the target's owner — is left as this sentence's subject,
+        # so the clause after ", then" is that player's.
+        moved = parse_owner_shuffles_target_into_library(stream)
+        if moved is None:
+            raise stream.error("expected a subject")
+        stream.last_subject = ast.PlayerRef("owner")
+        return moved
     else:
         # "**That creature** deals damage equal to its power to …" (Hunter's
         # Edge): a back-reference to the object the *previous sentence* chose.

@@ -38,6 +38,7 @@ from ._common import (
     _describe_targets,
     _restrictions_beyond,
     search_slot,
+    search_subtype_restriction,
 )
 from ._events import _back_reference_payload
 
@@ -259,7 +260,7 @@ def _lower_search_library(
         # admitted by the gate above but left out here is a search that narrows
         # nothing while the card reports supported — the dropped-rider bug the
         # deletion probe exists to catch, and did.
-        restrictions["subtypes"] = list(filt.subtypes)
+        restrictions.update(search_subtype_restriction(filt))
     if filt.colors:
         # "a **blue** instant card" (Merchant Scroll). The card's own colour
         # (CR 202.2), which a card in a library has and a computed

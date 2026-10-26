@@ -36,6 +36,7 @@ from .ai_valuation import (
     is_mana_ability,
     source_becomes_an_aura,
     source_toughness_change,
+    waits_on_a_later_draw,
 )
 from .activation_permissions import activation_permission_denial
 from .activation_prohibitions import activation_prohibition
@@ -750,16 +751,21 @@ def _activation_candidate(
         ability_index=ability_index,
         chosen_keyword=chosen_keyword,
     )
-    if ability_index is not None or _sets_only_what_its_source_is(
-        ability.instruction
+    # A land's ability, an ability whose whole effect is what its own source
+    # is until end of turn (a Mistform's "becomes the creature type of your
+    # choice"), and an ability whose whole effect is a replacement armed for a
+    # later draw this turn (the Words, Mangara's Tome —
+    # ``ai_valuation.waits_on_a_later_draw``): each proposed only where carrying
+    # it out on a copy of the game leaves the seat ahead once the turn is over.
+    # The flat heuristic score above rates the last two 2.5 like any other
+    # effect: the seat paid {1} every main phase for a type nothing on the board
+    # asks about, and armed every Word in every main phase after its own draw —
+    # mana spent on a replacement no draw that turn would meet.
+    if (
+        ability_index is not None
+        or _sets_only_what_its_source_is(ability.instruction)
+        or waits_on_a_later_draw(ability.instruction)
     ):
-        # A land's ability: proposed only where carrying it out on a copy of
-        # the game leaves the seat ahead once the turn is over. …and an ability
-        # whose whole effect is what its own source is until end of turn (a
-        # Mistform's "becomes the creature type of your choice"), which the
-        # flat score above prices like any other: the seat paid {1} every main
-        # phase for a type nothing on the board asks about, and — with no type
-        # of its own worth naming — for no change at all.
         worth = _land_ability_worth(game, player_index, candidate)
         if worth is None:
             return None

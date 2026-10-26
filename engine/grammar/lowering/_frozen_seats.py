@@ -245,6 +245,11 @@ OPPONENT_CHOSE_MODE = "mode_chosen_by_opponent"
 
 _EVENT_SUBJECT_PLAYERS: frozenset[str] = frozenset({
     "upkeep_each",
+    # "Until end of turn, whenever a player gains life, **that player** loses
+    # 2 life …" (False Cure.) The seat that gained the life, frozen by the
+    # life-gain seam as it announces the delayed event — any seat's gain, so
+    # which one varies per firing.
+    "player_gains_life",
     # "Whenever a permanent is returned to a player's hand, **that player**
     # discards a card." (Warped Devotion.) The seat whose hand it is — the
     # permanent's owner (CR 400.3), never its controller and never whoever

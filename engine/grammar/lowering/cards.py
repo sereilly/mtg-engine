@@ -11,7 +11,8 @@ a library — in `hand.py`.
 """
 
 from ...oracle_types import (COUNTERED_SPELL_CONTROLLER, DISCARDED_BY_SEAT,
-                             LAST_TARGET_CONTROLLER, MILLED_THIS_WAY,
+                             LAST_TARGET_CONTROLLER, LAST_TARGET_OWNER,
+                             MILLED_THIS_WAY,
                              OTHER_THAN_EVENT_SUBJECT_PLAYER,
                              PER_OBJECT_SEAT_RECORDS,
                              X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT,
@@ -297,6 +298,23 @@ def _lower_draw(
                 "firing event chose, and nothing here recorded one",
                 node=node,
             )
+    # "The owner of target nonland permanent shuffles it into their library,
+    # **then draws two cards**." (Oblation.) CR 108.3's seat, read off the
+    # record the step that moved the permanent froze — the life lowering's
+    # Path of Peace reading of the same possessive one family over, and for
+    # its reason: the owner and the controller differ for every stolen
+    # permanent, and this used to fall through to ``draw_target_cards`` with
+    # no record at all, which draws for whichever seat the resolution's target
+    # was — the controller's. No step recorded one, the sentence names nobody
+    # and refuses.
+    if node.player.kind == "owner":
+        if LAST_TARGET_OWNER not in produced:
+            raise LoweringError(
+                '"its owner" names the object an earlier step of this effect '
+                "chose, and no step here recorded one",
+                node=node,
+            )
+        controller_record = LAST_TARGET_OWNER
     kind = (
         "draw_controller_cards" if node.player.kind == "you" else "draw_target_cards"
     )

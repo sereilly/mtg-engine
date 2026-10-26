@@ -313,6 +313,12 @@ DELAYED_EVENTS: dict[str, str] = {
     # same as regenerating a permanent"). ``engine/regeneration.py`` is the one
     # place either happens, which is why the announcement is there.
     "source_regenerates": "the shield branch of engine/regeneration.py",
+    # "Until end of turn, whenever a player gains life, that player loses 2
+    # life for each 1 life they gained." (False Cure.) Announced from the one
+    # life-gain seam, ``Game._gain_life``, after CR 614 has had the amount —
+    # the same place and the same number ``you_gain_life`` is announced with —
+    # carrying the gainer's seat ("that player") and how much arrived.
+    "player_gains_life": "the life-gain seam in mixins/effects.py",
 }
 
 

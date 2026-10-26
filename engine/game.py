@@ -656,9 +656,13 @@ class Game(
     # next draw; cleared at end of turn alongside lamp_draw_replacements.
     outside_game_draw_replacements: set = field(default_factory=set)
     # "The next time you would draw a card this turn, instead <effect>."
-    # (Mangara's Tome.) The general form of the two above: each entry is
-    # {"player_index", "instruction", "source"} and the next draw that seat
-    # makes this turn runs the instruction instead. Cleared at end of turn
+    # (Mangara's Tome; Onslaught's Words print "<effect> instead".) The
+    # general form of the two above: each entry is {"player_index",
+    # "instruction", "source"} — plus "announced", the target the activation
+    # named when the effect names one (Words of War, CR 115.1c) — and a later
+    # draw that seat makes this turn runs the instruction instead: one entry
+    # per draw, the drawing player choosing which (CR 616.1e,
+    # ``replacements/draws._armed_draw_instances``). Cleared at end of turn
     # beside them.
     #
     # On the game and not on the permanent that armed it, unlike Soul Echo's

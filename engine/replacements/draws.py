@@ -254,13 +254,78 @@ def _armed_draw_replacement(game, payload: dict):
     there would leave the charge armed for the rest of the turn.
 
     Oldest first, because two activations are two effects and the player who
-    armed them expects them spent in the order they were paid for.
+    armed them expects them spent in the order they were paid for — which is
+    what a seat nobody asks gets; an interactive one is asked which
+    (:func:`_armed_draw_instances`).
     """
+    entries = _seat_armed_entries(game, payload)
+    return entries[0] if entries else None
+
+
+def _seat_armed_entries(game, payload: dict) -> list:
+    """The drawing seat's armed one-shots, oldest first. Pure."""
     seat = game.players.index(payload["player"])
-    for entry in getattr(game, "armed_draw_replacements", ()):
-        if entry.get("player_index") == seat:
-            return entry
-    return None
+    return [
+        entry for entry in getattr(game, "armed_draw_replacements", ())
+        if entry.get("player_index") == seat
+    ]
+
+
+def _armed_entry_identity(entry: dict) -> tuple:
+    """What tells two armed one-shots apart for the player choosing between
+    them: the card that armed them, the effect, and what it was announced at.
+    Two Words of Worship are one choice; Worship and War are two, and so are
+    two Words of War aimed at different targets."""
+    source = entry.get("source")
+    announced = entry.get("announced") or {}
+    target = announced.get("target")
+    return (
+        getattr(getattr(source, "card", None), "name", None),
+        repr(entry.get("instruction")),
+        tuple(announced.get("target_permanent_id") or ()),
+        getattr(target, "name", None),
+    )
+
+
+def _armed_entry_label(game, entry: dict) -> str:
+    """The ``effect_order`` option for one armed one-shot: the card that armed
+    it, and what its effect was announced at when it names a target."""
+    source = entry.get("source")
+    name = getattr(getattr(source, "card", None), "name", None) or "Armed replacement"
+    announced = entry.get("announced") or {}
+    aimed = None
+    for permanent_id in announced.get("target_permanent_id") or ():
+        permanent = game.permanent_by_id(permanent_id) if permanent_id is not None else None
+        if permanent is not None:
+            aimed = permanent.card.name
+            break
+    if aimed is None and announced.get("target") is not None:
+        aimed = getattr(announced["target"], "name", None)
+    label = f"{name} (at {aimed})" if aimed else name
+    return label[:80]
+
+
+def _armed_draw_instances(game, payload: dict) -> list:
+    """Each armed one-shot this draw could spend, as a CR 616.1 instance:
+    ``(position among the seat's entries, label)``, the oldest of every set of
+    equal ones (:func:`_armed_entry_identity`). Pure.
+
+    "If multiple Words have been used prior to drawing a card, then you can
+    choose which one to apply (and use up) each time you draw a card." (Each
+    Word, 2004-10-04.) Each activation is its own replacement effect, so CR
+    616.1e puts the choice to the drawing player through the ``effect_order``
+    prompt every contention already uses; the position is stable while the
+    draw waits on the answer, because nothing is armed or spent in between.
+    """
+    seen: set = set()
+    instances = []
+    for position, entry in enumerate(_seat_armed_entries(game, payload)):
+        identity = _armed_entry_identity(entry)
+        if identity in seen:
+            continue
+        seen.add(identity)
+        instances.append((str(position), _armed_entry_label(game, entry)))
+    return instances
 
 
 def _applies_armed_draw_replacement(game, payload: dict) -> bool:
@@ -268,9 +333,12 @@ def _applies_armed_draw_replacement(game, payload: dict) -> bool:
 
 
 @replacement_effect(
-    "draw", DRAW_ARMED_REPLACEMENT, applies=_applies_armed_draw_replacement
+    "draw", DRAW_ARMED_REPLACEMENT, applies=_applies_armed_draw_replacement,
+    instances=_armed_draw_instances,
 )
-def _run_armed_draw_replacement(game, payload: dict) -> ReplacementOutcome | None:
+def _run_armed_draw_replacement(
+    game, payload: dict, instance: str | None = None,
+) -> ReplacementOutcome | None:
     """Mangara's Tome: "The next time you would draw a card this turn, instead
     put the top card of the exiled pile into its owner's hand."
 
@@ -286,20 +354,37 @@ def _run_armed_draw_replacement(game, payload: dict) -> ReplacementOutcome | Non
     is what lets it read a pile recorded there (CR 610.3) — and it runs even
     when that permanent has left the battlefield, because the effect is the
     resolved ability's rather than the object's (CR 611.2).
+
+    *instance* is the one CR 616.1e chose (:func:`_armed_draw_instances`);
+    None is the oldest. An effect whose target was announced with the
+    activation acts on that target (``handlers/cards.arm_draw_replacement``);
+    one gone by now is an instruction that cannot be carried out and is
+    ignored (CR 614.6), and the draw stays replaced.
     """
     from ..game_types import OracleExecutionContext
 
     player = payload["player"]
-    entry = _armed_draw_replacement(game, payload)
-    game.armed_draw_replacements.remove(entry)
+    entries = _seat_armed_entries(game, payload)
+    entry = entries[0]
+    if instance is not None and 0 <= int(instance) < len(entries):
+        entry = entries[int(instance)]
+    game.armed_draw_replacements = [
+        armed for armed in game.armed_draw_replacements if armed is not entry
+    ]
     source = entry.get("source")
     card = getattr(source, "card", None)
-    game._execute_oracle_instruction(
-        entry["instruction"],
-        OracleExecutionContext(
+    announced = entry.get("announced")
+    if announced is None:
+        context = OracleExecutionContext(
             caster=player, target=player, card=card, source_permanent=source
-        ),
-    )
+        )
+    else:
+        context = OracleExecutionContext(
+            caster=player, target=announced.get("target"), card=card,
+            source_permanent=source,
+            target_permanent_id=announced.get("target_permanent_id"),
+        )
+    game._execute_oracle_instruction(entry["instruction"], context)
     payload["drawn"] = draws_behind(
         game, player, int(payload["count"]) - 1, queued_excludes(payload)
     )

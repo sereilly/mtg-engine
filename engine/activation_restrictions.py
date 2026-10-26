@@ -77,6 +77,8 @@ from .activation_conditions import (
     _source_card_is_in_your_graveyard,
     _readable_counted_pile,
     _counted_pile_holds,
+    _readable_opponent_board,
+    _opponent_board_holds,
 )
 from .activation_tallies import (
     _PRINTED_FREQUENCY,
@@ -912,6 +914,23 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
         # The printed sentence, because the number is what the player needs:
         # "only if there are seven or more cards in your graveyard".
         denial_from_payload=lambda match: f"only if {match.group('pile')}",
+    ),
+    # "Activate only if **an opponent controls more lands than you**."
+    # (Weathered Wayfarer.) The threshold row's shape over a board instead of
+    # a pile: the clause is read by the grammar's condition reader — Land
+    # Tax's and Tithe's words, answered by their evaluator — and admitted only
+    # when it comes back as a count of what "an opponent" controls, so the
+    # noun and the comparison are payload and the next card printing "…
+    # controls more creatures than you" costs nothing. Anchored on "an
+    # opponent controls", which keeps it off the "you / defending player
+    # controls" row above.
+    ActivationRestriction(
+        re.compile(r"^activate only if (?P<board>an opponent controls .+)$"),
+        _opponent_board_holds,
+        "that clause's board condition is not met",
+        reads_payload=True,
+        payload_readable=_readable_opponent_board,
+        denial_from_payload=lambda match: f"only if {match.group('board')}",
     ),
     # "Activate only if three or more creature cards are above this card."
     # (Ashen Ghoul.) The one clause in the pool that asks about a graveyard's

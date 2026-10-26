@@ -280,18 +280,39 @@ def arm_draw_replacement(game: Game, instruction: OracleInstruction, context: Or
     (CR 610.3), which survives the object.
 
     Two activations arm two replacements, and the draw seam spends them one at
-    a time, oldest first: each is its own effect, and CR 614.1 gives each its
-    own event.
+    a time: each is its own effect, and CR 614.1 gives each its own event. Which
+    of several the next draw spends is the drawing player's choice (CR 616.1e;
+    the Words' ruling, 2004-10-04: "you can choose which one to apply (and use
+    up) each time you draw a card") — ``replacements/draws.py`` asks it.
+
+    **A target the effect names was announced with the activation** (CR
+    115.1c; Words of War's "any target", ``instruction_targets``'
+    ``_WRAPPER_SINGLE_STEP_KEYS``), and is carried here, as this resolution
+    has it after CR 608.2b's check, for the effect to act on at the draw. An
+    effect that names none keeps the drawing player as its context's target,
+    which is what it always had.
     """
+    from ..targeting import derive_instruction_spec
+
     inner = instruction.payload.get("instruction")
     if inner is None:  # pragma: no cover - the lowering refuses an empty effect
         return True, "resolved"
     caster = context.caster
-    game.armed_draw_replacements.append({
+    entry = {
         "player_index": game.players.index(caster),
         "instruction": inner,
         "source": context.source_permanent,
-    })
+    }
+    spec = derive_instruction_spec((inner,))
+    if spec is not None and spec.get("kind") != "none":
+        entry["announced"] = {
+            "target": context.target,
+            "target_permanent_id": (
+                list(context.target_permanent_id)
+                if context.target_permanent_id is not None else None
+            ),
+        }
+    game.armed_draw_replacements.append(entry)
     game.log.append(
         f"{context.card.name}: {caster.name}'s next draw this turn is replaced"
     )

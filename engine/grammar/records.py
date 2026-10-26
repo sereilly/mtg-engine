@@ -676,6 +676,27 @@ def accept_each_life_lost(stream: "TokenStream") -> "ast.EachLifeLost | None":
     return None
 
 
+def accept_each_life_gained(stream: "TokenStream") -> "ast.EachLifeGained | None":
+    """``for each <N> life they gained`` — the firing event's life gain as a
+    count, or None with nothing consumed. (False Cure: "…that player loses 2
+    life **for each 1 life they gained**.")
+
+    :func:`accept_each_life_lost`'s twin over the other event. "They" and
+    "you" are both read: the pronoun names whoever gained the life, which is
+    the seat the event froze whichever word the card prints for it — and the
+    lowering holds the clause to an event that records a gain.
+    """
+    mark = stream.mark()
+    if stream.accept_phrase("for", "each"):
+        per = accept_printed_number(stream)
+        if per is not None and stream.accept_word("life") and stream.accept_word(
+            "they", "you"
+        ) and stream.accept_word("gained"):
+            return ast.EachLifeGained(per=per)
+    stream.reset(mark)
+    return None
+
+
 # ---------------------------------------------------------------------------
 # "…each player **who <did something>**" — a seat narrowed by a record
 # ---------------------------------------------------------------------------

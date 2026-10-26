@@ -329,6 +329,17 @@ def _parse_create_delayed_trigger(stream: TokenStream, parse_statement) -> "ast.
             subject = _parse_land_tapped_for_mana(stream)
             if subject is not None:
                 event, once, duration = "land_tapped_for_mana", False, None
+        if event is None:
+            # "Until end of turn, **whenever a player gains life**, that player
+            # loses 2 life for each 1 life they gained." (False Cure.) The
+            # land-tap opener's shape over the life-gain seam: no bound object,
+            # any seat's gain, and the window printed once in front of the
+            # sentence — so it is left unstated here for the leading-duration
+            # reader to fill, and a sentence that reaches the lowering still
+            # without one refuses (a repeating ability nothing ever lifts).
+            stream.reset(after_whenever)
+            if stream.accept_phrase("a", "player", "gains", "life"):
+                event, once, duration = "player_gains_life", False, None
     else:
         for phrase, kind, kind_once, kind_duration, kind_binds in _DELAYED_OPENERS:
             if stream.accept_phrase(*phrase):
