@@ -1174,6 +1174,93 @@ def test_w1g9_a_second_protected_recipient_refuses_elsewhere():
         card_name="Probe",
     )
     assert not line.instructions
+
+
+def _w1g9_orgg_fight(set_pool, *, blocked=True):
+    """Butcher Orgg (seat 0) attacks into Wall of Stone, Grizzly Bears and Hill
+    Giant; the Wall blocks it unless *blocked* is False. Returns the game at
+    the combat damage step, damage not yet dealt."""
+    ons, lea = set_pool("ONS"), set_pool("LEA")
+    game = _w1g9_table()
+    orgg = _w1g9_enter(game, 0, ons["Butcher Orgg"])
+    wall = _w1g9_enter(game, 1, lea["Wall of Stone"])
+    bears = _w1g9_enter(game, 1, lea["Grizzly Bears"])
+    giant = _w1g9_enter(game, 1, lea["Hill Giant"])
+    assert _w1g9_attack(game, [orgg])[0]
+    assert _w1g9_block(game, [(wall, [orgg])] if blocked else [])[0]
+    game._set_phase_and_step("combat", "combat_damage")
+    return game, orgg, wall, bears, giant
+
+
+def test_w1g9_butcher_orgg_divides_past_its_blocker(set_pool):
+    """"You may assign this creature's combat damage divided as you choose
+    among defending player and/or any number of creatures they control." Six
+    damage, blocked by a 0/8 Wall: 2 to the Bears and 3 to the Giant (neither
+    blocking) and 1 to the player. Combat damage all of it (CR 510.2)."""
+    from engine.combat_assignment import DIVIDED_AMONG_DEFENDERS_LOG
+
+    game, orgg, wall, bears, giant = _w1g9_orgg_fight(set_pool)
+    ok, _ = game.resolve_combat_damage(0, divided_among_defenders={
+        orgg.permanent_id: {bears.permanent_id: 2, giant.permanent_id: 3, "player": 1},
+    })
+    assert ok
+    _w1g9_settle(game)
+    assert not game.is_on_battlefield(bears) and not game.is_on_battlefield(giant)
+    assert wall.damage_marked == 0
+    assert game.players[1].life == 19
+    assert f"Butcher Orgg {DIVIDED_AMONG_DEFENDERS_LOG}" in game.log
+
+
+def test_w1g9_butcher_orgg_divides_when_unblocked_and_declines_by_saying_nothing(set_pool):
+    """Ruling (2004-10-04): "You can use the ability to divide damage even if
+    it is not blocked." Unblocked, all six onto the Wall; declined (no
+    division announced), a blocked Orgg assigns to its blocker as CR 510.1c
+    says."""
+    game, orgg, wall, _bears, _giant = _w1g9_orgg_fight(set_pool, blocked=False)
+    assert game.resolve_combat_damage(0, divided_among_defenders={
+        orgg.permanent_id: {wall.permanent_id: 6},
+    })[0]
+    assert wall.damage_marked == 6 and game.players[1].life == 20
+
+    game, orgg, wall, _bears, _giant = _w1g9_orgg_fight(set_pool)
+    assert game.resolve_combat_damage(0)[0]
+    assert wall.damage_marked == 6 and game.players[1].life == 20
+
+
+def test_w1g9_butcher_orgg_division_is_held_to_the_rulings(set_pool):
+    """CR 510.1e: an illegal division is refused with nothing dealt — all six
+    must be divided, each recipient takes at least 1 ("minimum 1 point per
+    player or creature"), at least one is chosen, and only the defending
+    player and their creatures may be."""
+    for build in (
+        lambda o, w, b, g: {o.permanent_id: {"player": 5}},
+        lambda o, w, b, g: {o.permanent_id: {"player": 6, b.permanent_id: 0}},
+        lambda o, w, b, g: {o.permanent_id: {o.permanent_id: 6}},
+        lambda o, w, b, g: {o.permanent_id: {}},
+        lambda o, w, b, g: {w.permanent_id: {"player": 6}},
+    ):
+        game, orgg, wall, bears, giant = _w1g9_orgg_fight(set_pool)
+        ok, why = game.resolve_combat_damage(
+            0, divided_among_defenders=build(orgg, wall, bears, giant)
+        )
+        assert not ok, why
+        assert game.players[1].life == 20 and wall.damage_marked == 0
+        assert not game.combat_damage_resolved
+
+
+def test_w1g9_butcher_orgg_with_its_blocker_gone_has_nothing_to_divide(set_pool):
+    """Ruling (2004-10-04): "If it is blocked but then all of its blockers are
+    removed before combat damage is assigned, then it won't be able to deal
+    combat damage and you won't be able to use its ability.\""""
+    game, orgg, wall, bears, _giant = _w1g9_orgg_fight(set_pool)
+    game.remove_from_battlefield(wall)
+    game._set_phase_and_step("combat", "combat_damage")
+    ok, why = game.resolve_combat_damage(0, divided_among_defenders={
+        orgg.permanent_id: {bears.permanent_id: 6},
+    })
+    assert not ok and "nothing left blocking it" in why
+    assert game.resolve_combat_damage(0)[0]
+    assert game.is_on_battlefield(bears) and game.players[1].life == 20
 # ==== end W1G9 ======================================================
 
 

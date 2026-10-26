@@ -129,6 +129,11 @@ COMBAT_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # turn-based action, exactly as it reads the mark. Same category, so
     # GRAMMAR_CATEGORIES is unchanged.
     "may_assign_as_unblocked": "combat_restrictions",
+    # "You may assign this creature's combat damage divided as you choose among
+    # defending player and/or any number of creatures they control." (Butcher
+    # Orgg.) The same CR 510.1 offer with the recipients widened rather than
+    # moved, read by the damage step off the compiled program. Same category.
+    "may_divide_combat_damage_among_defenders": "combat_restrictions",
     # "Attacking doesn't cause creatures you control to tap this combat…"
     # (Johan.) A restriction on what declaring an attacker does, so it files
     # with the other CR 506/508 clauses and GRAMMAR_CATEGORIES is unchanged.

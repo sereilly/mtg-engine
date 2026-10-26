@@ -60,6 +60,7 @@ from .effects import (
     _parse_force_chosen_creature_to_attack,
     _parse_add_mana,
     _parse_ante,
+    _parse_assign_divided_among_defenders,
     _parse_attach,
     _parse_note_mana_spent,
     _parse_change_base_pt,
@@ -186,6 +187,14 @@ def parse_imperative_verb(
             return both
     if stream.at_word("attach"):
         return _parse_attach(stream)
+    # "You may **assign this creature's combat damage divided as you choose
+    # among defending player and/or any number of creatures they control**."
+    # (Butcher Orgg.) Declines without consuming, so no other "assign" reading
+    # is claimed here.
+    if stream.at_word("assign"):
+        divided = _parse_assign_divided_among_defenders(stream)
+        if divided is not None:
+            return divided
     if stream.at_word("exchange"):
         # One printed verb, two effect families: "exchange **control** of …"
         # acts on permanents (`board`) and "exchange **life totals** with …"

@@ -263,6 +263,7 @@ from .requirements import (
 )
 from .combat import (
     parse_block_count_grant,
+    _parse_assign_divided_among_defenders,
     _parse_assigns_combat_damage_as_unblocked,
     _parse_assigns_no_combat_damage,
     _parse_attacking_doesnt_tap,
@@ -481,6 +482,7 @@ __all__ = [
     "parse_cant_play_from_zone",
     "parse_cant_play_lands",
     "parse_land_type_swap",
+    "_parse_assign_divided_among_defenders",
     "_parse_assigns_combat_damage_as_unblocked",
     "_parse_assigns_no_combat_damage",
     "_parse_attacks_this_turn_if_able",

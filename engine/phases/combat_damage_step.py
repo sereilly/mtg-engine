@@ -31,9 +31,14 @@ interrupted.
 from ..combat_assignment import (AS_THOUGH_UNBLOCKED_LOG,
                                  DEFENDER_ANNOUNCED_THIS_STEP,
                                  DEFENDER_ASSIGNS_AS_UNBLOCKED,
+                                 DIVIDED_AMONG_DEFENDERS_LOG,
                                  MUST_ASSIGN_AS_UNBLOCKED,
                                  combat_damage_assigned_by,
-                                 may_assign_as_unblocked)
+                                 divided_among_defenders_events,
+                                 divided_among_defenders_refusal,
+                                 divided_announcement_refusal,
+                                 may_assign_as_unblocked,
+                                 still_legal_divisions)
 from ..damage_events import deal_damage, lifelink_life_gained
 from ..models import Permanent
 from ..damage_redirects import end_simultaneous_redirects
@@ -985,6 +990,7 @@ class CombatDamageStepMixin:
         has_first_strike_pass: bool,
         unblocked_ids: frozenset[int] = frozenset(),
         sent_past_blockers: list | None = None,
+        divided_among: dict | None = None,
     ) -> tuple[bool, str, list[tuple[int, int, int, int]], list[tuple[int, int, Permanent]]]:
         """CR 510.1: work out where each attacker's combat damage goes, dealing
         none of it.
@@ -1035,6 +1041,26 @@ class CombatDamageStepMixin:
             # defending player or planeswalker even if the blocking creatures
             # are no longer there at that time."
             is_blocked = bool(blockers) or bool(attacker.blocked)
+            # "You may assign this creature's combat damage divided as you
+            # choose among defending player and/or any number of creatures they
+            # control." (Butcher Orgg.) The offer taken, announced by the
+            # attacker's id (``divided_among``), and read first: blocked or not
+            # (ruling 2004-10-04), its whole damage goes where the division
+            # says. Held to CR 510.1e by ``combat_assignment``'s gate before a
+            # point is recorded; not naming the creature is the offer declined.
+            division = (divided_among or {}).get(attacker.permanent_id)
+            if division is not None:
+                refusal = divided_among_defenders_refusal(
+                    self, attacker_idx, attacker, division
+                )
+                if refusal is not None:
+                    return False, refusal, [], []
+                creatures_hit, player_hit = divided_among_defenders_events(
+                    self, attacker_idx, attacker, division
+                )
+                to_blockers.extend(creatures_hit)
+                to_players.extend(player_hit)
+                continue
             # "X target blocked creatures **assign their combat damage this
             # turn as though they weren't blocked**." (Outmaneuver.) The
             # CR 510.1b rewrite with no "may" in front of it, so it is read
@@ -1161,6 +1187,7 @@ class CombatDamageStepMixin:
         blocker_damage: dict[int, int] | None = None,
         blocker_damage_split: dict[int, dict[int, int]] | None = None,
         as_though_unblocked=None,
+        divided_among_defenders=None,
     ) -> tuple[bool, str]:
         """One combat damage pass (:meth:`_deal_combat_damage_pass`), as one
         window for CR 603.3b (``putting_triggers_on_stack``): what the
@@ -1174,6 +1201,7 @@ class CombatDamageStepMixin:
             return self._deal_combat_damage_pass(
                 controller_index, attacker_damage, blocker_damage,
                 blocker_damage_split, as_though_unblocked,
+                divided_among_defenders,
             )
 
     def _deal_combat_damage_pass(
@@ -1183,6 +1211,7 @@ class CombatDamageStepMixin:
         blocker_damage: dict[int, int] | None = None,
         blocker_damage_split: dict[int, dict[int, int]] | None = None,
         as_though_unblocked=None,
+        divided_among_defenders=None,
     ) -> tuple[bool, str]:
         """One combat damage pass — the first-strike step or the regular one
         (CR 510.4). Both halves of the step are here: work out the assignment
@@ -1211,6 +1240,10 @@ class CombatDamageStepMixin:
         announcement, "nothing to add". ``{}`` used to mean "every blocked
         attacker assigns nothing", which no rule lets a blocked creature do;
         it was the wire's way of making combat damage vanish.
+
+        ``divided_among_defenders`` is Butcher Orgg's offer taken: attacker
+        ``permanent_id`` → ``{"player": n, <creature permanent_id>: n, …}``,
+        held to the rulings by ``combat_assignment`` before anything is dealt.
         """
         if self.current_turn_phase != "combat" or self.current_step != "combat_damage":
             return False, "combat damage can only be resolved during combat_damage"
@@ -1253,6 +1286,14 @@ class CombatDamageStepMixin:
         ok, message = self._validate_unblocked_announcement(attacker_damage, unblocked_ids)
         if not ok:
             return False, message
+        divided_among = {
+            int(pid): split for pid, split in (divided_among_defenders or {}).items()
+        }
+        refusal = divided_announcement_refusal(
+            self, attacker_damage, unblocked_ids, divided_among
+        )
+        if refusal is not None:
+            return False, refusal
 
         has_first_strike_pass = self._first_strike_pass_pending()
         run_first_pass = has_first_strike_pass and not self.combat_first_strike_done
@@ -1261,7 +1302,7 @@ class CombatDamageStepMixin:
         ok, message, attacker_damage_events, defender_damage_events = (
             self._assign_attacker_combat_damage(
                 attacker_damage, run_first_pass, has_first_strike_pass,
-                unblocked_ids, sent_past_blockers,
+                unblocked_ids, sent_past_blockers, divided_among,
             )
         )
         if not ok:
@@ -1291,6 +1332,11 @@ class CombatDamageStepMixin:
                 f"{attacker.card.name} assigns its combat damage "
                 f"{AS_THOUGH_UNBLOCKED_LOG}"
             )
+        # …and a creature whose damage was divided among defending player and
+        # their creatures (Butcher Orgg), for the same two readers.
+        for attacker in assigned_this_pass:
+            if attacker.permanent_id in divided_among:
+                self.log.append(f"{attacker.card.name} {DIVIDED_AMONG_DEFENDERS_LOG}")
 
         # ------------------------------------------------------------------
         # Nothing below can be refused, and everything below can be suspended.
@@ -1616,6 +1662,7 @@ class CombatDamageStepMixin:
         blocker_damage: dict[int, int] | None = None,
         blocker_damage_split: dict[int, dict[int, int]] | None = None,
         as_though_unblocked=None,
+        divided_among_defenders=None,
     ) -> tuple[bool, str]:
         """Every combat damage pass this combat still owes (CR 510.4).
 
@@ -1636,6 +1683,9 @@ class CombatDamageStepMixin:
             and controller_index == active
             and not self.combat_damage_resolved
         )
+        divided = {
+            int(pid): split for pid, split in (divided_among_defenders or {}).items()
+        }
 
         # One announcement, two steps. ``attacker_damage`` is keyed by
         # battlefield slot and says how much goes to which blocker *as the
@@ -1672,11 +1722,25 @@ class CombatDamageStepMixin:
                 if ok:
                     ok, message, _to_blockers, _to_players = (
                         self._assign_attacker_combat_damage(
-                            attacker_damage, False, True, unblocked_ids
+                            attacker_damage, False, True, unblocked_ids,
+                            divided_among=divided,
                         )
                     )
                 if not ok:
                     return False, message
+        if (
+            in_step and divided and not attacker_damage
+            and self._first_strike_pass_pending() and not self.combat_first_strike_done
+        ):
+            # A division alone, checked whole before the first strikers deal
+            # (CR 510.1e) for the reason the block above checks a division
+            # among blockers.
+            self._prune_combat_state()
+            ok, message, _to_blockers, _to_players = self._assign_attacker_combat_damage(
+                {}, False, True, frozenset(), divided_among=divided,
+            )
+            if not ok:
+                return False, message
 
         def restated() -> dict[int, dict[int, int]]:
             """The announcement, as it reads on the board the first-strike step
@@ -1726,6 +1790,12 @@ class CombatDamageStepMixin:
                 blocker_damage=blocker_damage,
                 blocker_damage_split=blocker_damage_split,
                 as_though_unblocked=as_though_unblocked,
+                # Butcher Orgg's divisions, restated for the second step on
+                # the board the first one left (CR 510.4).
+                divided_among_defenders=(
+                    still_legal_divisions(self, divided)
+                    if progress["first_step_dealt"] else divided
+                ),
             )
             report["last"] = result
             if not result[0]:

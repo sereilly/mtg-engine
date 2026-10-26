@@ -544,6 +544,14 @@ class GameActionRequest(BaseModel):
     # damage is assigned 'as though it weren't blocked'", 2018-04-27). There
     # the other answer is that attacker's entry in `banding_damage`.
     as_though_unblocked_ids: list[int] | None = None
+    # "You may assign this creature's combat damage divided as you choose among
+    # defending player and/or any number of creatures they control." (Butcher
+    # Orgg.) Sent with `assign_combat_damage`: attacker `id` → that attacker's
+    # whole combat damage, `{"player": n, "<creature id>": n, …}`, each share at
+    # least 1 and the shares adding up to all of it. Not naming the attacker
+    # is the offer declined. The attackers that have the offer, their damage
+    # and the legal recipients are the state's `divided_assignment` block.
+    divided_among_defenders: dict[int, dict[str, int]] | None = None
     # Banding (CR 702.22k): how a shared blocker's damage is routed among the band
     # members it blocks — maps blocker battlefield index to the chosen attacker index.
     blocker_damage: dict[int, int] | None = None

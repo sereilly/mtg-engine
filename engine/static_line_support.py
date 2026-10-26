@@ -102,6 +102,11 @@ _GRAMMAR_STATIC_CREATURE_KINDS = frozenset(
         # say it is a static rather than the one-turn mark Outmaneuver's
         # identical verb writes, and neither is a thing a text table can see.
         "may_assign_as_unblocked",
+        # "You may assign this creature's combat damage divided as you choose
+        # among defending player and/or any number of creatures they control."
+        # (Butcher Orgg.) Lone Wolf's offer with its recipients widened, read
+        # by the combat damage step at the same moment for the same reason.
+        "may_divide_combat_damage_among_defenders",
         # "As long as the top card of your graveyard is a creature card, this
         # creature has the full text of that card…" (Volrath's Shapeshifter.)
         # A CR 613 layer 1a contribution, derived from the zone on every read

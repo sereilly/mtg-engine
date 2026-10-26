@@ -99,6 +99,7 @@ from .combat_prompts import (
     _build_band_blocker_assignment_info,
     _build_banding_assignment_info,
     _build_camouflage_info,
+    _build_divided_assignment_info,
     _build_multiblock_assignment_info,
     _build_raging_river_info,
     _build_unblocked_assignment_info,
@@ -1364,6 +1365,10 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         # weren't blocked": the active player's attackers the damage dialog has
         # to ask about, single-blocked ones included.
         "unblocked_assignment": _build_unblocked_assignment_info(session, viewer_seat),
+        # "You may assign this creature's combat damage divided as you choose
+        # among defending player and/or any number of creatures they control"
+        # (Butcher Orgg): the attackers that may, and whom they may divide among.
+        "divided_assignment": _build_divided_assignment_info(session, viewer_seat),
         "raging_river": _build_raging_river_info(session, viewer_seat),
         "camouflage": _build_camouflage_info(session, viewer_seat),
         "island_sanctuary_pending": session.island_sanctuary_pending and viewer_seat == session.current_turn,

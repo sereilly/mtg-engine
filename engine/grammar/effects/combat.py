@@ -770,6 +770,49 @@ def _parse_assigns_combat_damage_as_unblocked(
     return ast.AssignsCombatDamageAsUnblocked(subject, duration)
 
 
+#: "…divided as you choose **among defending player and/or any number of
+#: creatures they control**." (Butcher Orgg.) The recipients the widened
+#: assignment may reach, as printed — CR 506.2's defending player and that
+#: seat's creatures, never a creature of the attacking player's or a third
+#: seat's. One fixed phrase rather than a noun-phrase list: no card prints
+#: another set, and a reader for "any number of <noun>" here would admit
+#: recipients the damage step has no gate for.
+_AMONG_DEFENDERS = (
+    "divided", "as", "you", "choose", "among", "defending", "player", "and",
+    "or", "any", "number", "of", "creatures", "they", "control",
+)
+
+
+def _parse_assign_divided_among_defenders(
+    stream: TokenStream,
+) -> "ast.DividesCombatDamageAmongDefenders | None":
+    """``assign this creature's combat damage divided as you choose among
+    defending player and/or any number of creatures they control``.
+    (Butcher Orgg, behind "You may".)
+
+    The imperative reading of "assign", which the subject-led readers above
+    never see: the sentence's subject is the player ("you may assign"), and
+    the creature is the possessor of the damage. Only the creature printing
+    it — "this creature's" — because the record it lowers to is read off the
+    attacker's own program at the damage step. Returns None with the cursor
+    untouched for any other reading.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("assign"):
+        return None
+    if not stream.accept_phrase("this", "creature", "'s", "combat", "damage"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase(*_AMONG_DEFENDERS):
+        stream.reset(mark)
+        return None
+    return ast.DividesCombatDamageAmongDefenders(
+        ast.TargetSpec(
+            "this", ast.ObjectFilter(card_types=("creature",), is_source=True)
+        )
+    )
+
+
 def _parse_assigns_no_combat_damage(
     stream: TokenStream, subject: ast.Recipient
 ) -> "ast.AssignsNoCombatDamage | None":

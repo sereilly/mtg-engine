@@ -6,6 +6,9 @@ divisions (CR 510.1d), and the Raging River / Camouflage pile assignments.
 from __future__ import annotations
 
 from fastapi import HTTPException
+
+from engine.combat_assignment import DEFENDING_PLAYER_SHARE
+
 from .action_registry import HUMAN_ONLY, action_handler
 from .combat_prompts import (
     _banding_assignment_pending,
@@ -155,10 +158,32 @@ def _action_assign_combat_damage(session, req, seat_type):
         # rule (an attacker, with the offer, the active player's to take, and
         # not also assigned among its blockers).
         as_though_unblocked=req.as_though_unblocked_ids,
+        # Butcher Orgg's offer taken, by attacker id: the engine holds each
+        # division to the rulings (CR 510.1e) and a refusal is a 400.
+        divided_among_defenders=_divisions_off_the_wire(req.divided_among_defenders),
     )
     if not ok:
         raise HTTPException(status_code=400, detail=details)
     session.game.note_priority_action_taken(req.seat)
+
+
+def _divisions_off_the_wire(raw) -> dict | None:
+    """``{attacker id: {"player" | creature id: amount}}`` with the JSON
+    string keys made ints — the defending player's share keeps its
+    ``"player"`` key (``combat_assignment.DEFENDING_PLAYER_SHARE``). A key that
+    is neither is a 400 rather than a 500."""
+    if not raw:
+        return None
+    try:
+        return {
+            int(attacker_id): {
+                (key if key == DEFENDING_PLAYER_SHARE else int(key)): int(amount)
+                for key, amount in shares.items()
+            }
+            for attacker_id, shares in raw.items()
+        }
+    except (TypeError, ValueError, AttributeError):
+        raise HTTPException(status_code=400, detail="unreadable division")
 
 @action_handler("assign_banding_damage", human_only=HUMAN_ONLY)
 def _action_assign_banding_damage(session, req, seat_type):
