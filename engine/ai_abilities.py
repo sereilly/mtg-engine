@@ -799,7 +799,10 @@ def _activation_candidate(
         ability_index is not None
         or _sets_only_what_its_source_is(ability.instruction)
         or waits_on_a_later_draw(ability.instruction)
-        or _gives_up_its_source(ability.cost)
+        or (
+            _gives_up_its_source(ability.cost)
+            and not _exists_to_be_given_up(permanent)
+        )
         or reaches_both_sides(ability.instruction)
     ):
         worth = _land_ability_worth(game, player_index, candidate)
@@ -828,6 +831,32 @@ def _gives_up_its_source(cost) -> bool:
         or getattr(cost, "exile_self", False)
         or getattr(cost, "return_self_to_hand", False)
     )
+
+
+def _exists_to_be_given_up(permanent) -> bool:
+    """Whether *permanent* is a one-shot: a noncreature, non-Aura permanent
+    with no triggered or static ability whose every activated ability gives
+    it up (`_gives_up_its_source`) — Mossfire Egg, Chromatic Sphere, Urza's
+    Bauble, Aeolipile, Bottle of Suleiman.
+
+    Such a permanent is worth nothing on the battlefield but the ability, and
+    the standing (``ai_rehearsal.permanent_worth``) prices every permanent at
+    least the card it is: rehearsed, the Egg's {R}{G} and card were worth less
+    than the Egg, and it was never cracked (sim_fingerprint ODY, ICE). Its
+    ability keeps the score it always had. A creature's body, an Aura's host
+    (Crown of Vigor, Crackling Club, Carapace) and any other line are what the
+    rehearsal weighs the sacrifice against."""
+    if permanent.is_creature or permanent.has_type("aura"):
+        return False
+    program = compile_card_oracle(permanent.effective_card)
+    if program.triggered_abilities or getattr(program, "static_lines", ()):
+        return False
+    if any(
+        instruction.kind == "derived_static_rule" for instruction in program.instructions
+    ):
+        return False
+    abilities = usable_activated_abilities(program)
+    return bool(abilities) and all(_gives_up_its_source(ability.cost) for ability in abilities)
 
 
 def _sets_only_what_its_source_is(instruction) -> bool:

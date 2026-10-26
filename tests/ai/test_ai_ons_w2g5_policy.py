@@ -489,3 +489,18 @@ def test_w2g5_nova_cleric_is_sacrificed_only_for_an_enchantment(set_pool, theirs
     game = _w2g5_board(set_pool, ["Nova Cleric", "Plains", "Plains", "Plains"], theirs)
     action = choose_activation_action(game, 0)
     assert (action is not None and action.permanent_name == "Nova Cleric") is sacrificed
+
+
+def test_w2g5_a_one_shot_permanent_is_still_cracked(set_pool):
+    """A permanent that exists to be sacrificed — "{2}, {T}, Sacrifice this
+    artifact: Add {R}{G}. Draw a card." (Mossfire Egg) — keeps the score it
+    always had (`ai_abilities._exists_to_be_given_up`): the standing prices it
+    at least a card, so a rehearsal would read the Egg as worth more than its
+    mana and its card, and it would never be cracked."""
+    game = _w2g5_board(set_pool, ["Forest", "Forest", "Mountain"], [])
+    egg = Permanent(card=set_pool("ODY")["Mossfire Egg"])
+    game.players[0].battlefield.append(egg)
+    game._sync_control()
+    egg.metadata["summoning_sickness_turn"] = -99
+    action = choose_activation_action(game, 0)
+    assert action is not None and action.permanent_name == "Mossfire Egg"
