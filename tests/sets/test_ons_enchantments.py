@@ -650,6 +650,29 @@ def test_w1g8_lavamancers_skill_grants_a_one_damage_pinger(set_pool):
     assert _w1g8_pinger_lines(game, seeker) == []
 
 
+def test_w1g8_lavamancers_skill_is_claimed_by_the_aura_module(set_pool):
+    """Both quoted grants are ``engine/auras.py``'s, each by the reader that
+    folds it onto the host — ``aura_granted_ability_lines`` for the plain one,
+    ``conditional_ability_lines_for`` for the Wizard one — so the Aura is
+    supported by the module that implements it, which is what
+    ``test_no_hollow_support``'s pool-wide guard asks once Onslaught ships
+    (it reads shipped sets only, so it cannot see this card while measured)."""
+    from engine.auras import aura_claim, aura_effect_claim
+    from engine.oracle import expand_ability_lines, normalize_creature_line
+
+    card = set_pool("ONS")["Lavamancer's Skill"]
+    lines = [
+        normalize_creature_line(line)
+        for line in expand_ability_lines(card.oracle_text).splitlines()
+    ]
+    assert aura_claim(lines, card.name) == "auras"
+    plain, conditional = lines[1], lines[2]
+    assert "aura_granted_ability_lines" in (aura_effect_claim(plain, card.name) or "")
+    assert "conditional_ability_lines_for" in (
+        aura_effect_claim(conditional, card.name) or ""
+    )
+
+
 def test_w1g8_lavamancers_skill_on_a_wizard_has_both_abilities(set_pool):
     """'As long as enchanted creature is a Wizard, it has "{T}: This creature
     deals 2 damage to target creature."' The ruling (2004-10-04): "If this
