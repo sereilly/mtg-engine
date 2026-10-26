@@ -361,11 +361,13 @@ def spec_roles(spec: dict | None) -> list[dict]:
 
 #: The flag a role carries when CR 601.2c lets the announcement leave it
 #: unanswered: "…it fights **up to one** target creature you don't control"
-#: (Primal Might's second slot, ``target_descriptions._slot_roles_spec``). Read
-#: through :func:`roles_may_end_at` / :func:`role_announcement` by the walk and
-#: the gates (``engine/legality_roles.py``, the cast and activation gates), and
-#: by the AI's role choosers and the browser's role picker, which offer to stop
-#: there.
+#: (Primal Might's second slot, ``target_descriptions._slot_roles_spec``) — and
+#: every role of "**any number of** target opponents" (Wheel and Deal,
+#: :func:`any_number_of_opponents_roles`), a chain of trailing optional roles
+#: from the first. Read through :func:`roles_may_end_at` /
+#: :func:`role_announcement` by the walk and the gates
+#: (``engine/legality_roles.py``, the cast and activation gates), and by the
+#: AI's role choosers and the browser's role picker, which offer to stop there.
 OPTIONAL_ROLE = "optional_role"
 
 

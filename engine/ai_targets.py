@@ -509,7 +509,10 @@ def _role_chain(
     left unanswered where it cannot: "…then it fights **up to one** target
     creature you don't control" with nothing on the other side to fight is
     still a pump the gate accepts, and a chain that refused it would leave
-    Primal Might in hand. Only the walk's last role is ever optional
+    Primal Might in hand. Only trailing roles are ever optional — Primal
+    Might's last, or every role of Wheel and Deal's "any number of target
+    opponents", which this walk answers at every level it can (so it names
+    every opponent; stopping early is a choice it does not weigh)
     (``target_descriptions._slot_roles_spec``), so stopping there is the
     announcement ending.
     """
