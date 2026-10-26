@@ -626,7 +626,21 @@ def _enter_choice(ctx: PromptContext, choices: list) -> dict:
     # picker cannot show a word the answer path would decline (idiom 9); with
     # no such list the catalog bounds the answer, which is every other arming.
     printed_options = [str(option) for option in (data.get("entry_choice_options") or ())]
+    # Whose permanent is entering, when that is not the seat being asked: "As
+    # this creature enters, **an opponent chooses** a creature type." (Callous
+    # Oppressor.) The prompt is the opponent's, and a prompt that read "as it
+    # enters, choose a creature type" asked them about a creature that is not
+    # theirs as though it were. Absent for every arming its own controller
+    # answers, whose payload is unchanged.
+    entering = data.get("permanent")
+    controller = ctx.game.controller_or_last_known(entering) if entering is not None else None
+    for_another = (
+        {"controller_seat": controller, "controller_name": ctx.game.players[controller].name}
+        if isinstance(controller, int) and controller != choices[0].player_index
+        else {}
+    )
     return {
+        **for_another,
         "card_name": data["card_name"],
         "needs_color": needs_color,
         "opponents": [
@@ -760,6 +774,13 @@ def _creature_type_choice(ctx: PromptContext, choices: list) -> dict:
         # of the text, "replacement" the word written in its place. Absent for
         # every other card, whose payload is unchanged.
         rendered["word_role"] = data["word_role"]
+    if data.get("excluded"):
+        # What the offer leaves out and why the list lacks it — a printed
+        # "other than Wall" (Unnatural Selection), and for Artificial
+        # Evolution's second question the word its first one named ("It
+        # can't change a word to the same word"). The client says so; the
+        # list above already holds the rule. Absent when nothing is excluded.
+        rendered["excluded"] = [str(word) for word in data["excluded"]]
     if data.get("slot") is not None:
         # "**Each player** chooses a creature type." (Harsh Mercy.) CR 101.4b:
         # a player knows the choices made before theirs, so the earlier seats'

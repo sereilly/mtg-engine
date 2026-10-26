@@ -6863,6 +6863,42 @@ function renderAbilityWordPrompt(card, options, then) {
   });
 }
 
+// What a `creature_type_choice` prompt says, from what the server sent with it.
+// The body used to be Extinction's own sentence ("every creature of the type
+// you name is destroyed") for every card that asks — Artificial Evolution's two
+// questions read the same as each other and as a sweep, and the second and
+// later seats of an each-player round (Harsh Mercy, Patriarch's Bidding) could
+// not see what the seats before them had named, which CR 101.4b says they know.
+//
+//   - `word_role`: "replaced" (the word taken out of the text) or
+//     "replacement" (the word written in its place), for a text change that
+//     asks twice;
+//   - `chosen_so_far`: the words the earlier seats of an each-player round
+//     named, in turn order (present, possibly empty, only in such a round).
+function creatureTypeChoiceWording(info) {
+  const cardName = info.card_name || "An effect";
+  const cap = (word) => word.charAt(0).toUpperCase() + word.slice(1);
+  let title = "Choose a creature type";
+  let body = `${cardName}: choose a creature type.`;
+  if (info.word_role === "replaced") {
+    title = "Choose the creature type to replace";
+    body = `${cardName}: first, the creature type whose every instance in the text is replaced.`;
+  } else if (info.word_role === "replacement") {
+    title = "Choose the replacement creature type";
+    body = `${cardName}: now the creature type written in its place.`;
+  }
+  if (Array.isArray(info.excluded) && info.excluded.length) {
+    body += ` It can't be ${info.excluded.map(cap).join(" or ")}.`;
+  }
+  if (Array.isArray(info.chosen_so_far)) {
+    // An each-player round, asked one seat at a time in turn order.
+    body += info.chosen_so_far.length
+      ? ` Each player chooses; chosen so far: ${info.chosen_so_far.map(cap).join(", ")}.`
+      : " Each player chooses, in turn order — you are first.";
+  }
+  return { title, body };
+}
+
 function applyCreatureTypeChoicePrompt(info) {
   const panel = q("activationPanel");
   const title = q("promptTitle");
@@ -6880,9 +6916,9 @@ function applyCreatureTypeChoicePrompt(info) {
   cancelBtn.disabled = true;
   customOkBtn.disabled = true;
 
-  const cardName = info.card_name || "an effect";
-  title.textContent = "Choose a creature type";
-  body.textContent = `${cardName}: every creature of the type you name is destroyed.`;
+  const wording = creatureTypeChoiceWording(info);
+  title.textContent = wording.title;
+  body.textContent = wording.body;
   // A select rather than the button column the card-type prompt uses: that one
   // offers the four the card printed, this one offers CR 205.3m's whole
   // catalog.
@@ -7415,6 +7451,16 @@ function enterChoiceSelectHtml(field, options, selected) {
   );
 }
 
+// "As this creature enters, an opponent chooses a creature type." (Callous
+// Oppressor.) The server names the permanent's controller (`controller_seat`,
+// `controller_name`) only when the seat asked is someone else, and the prompt
+// says whose creature it is and that the choice is the viewer's to make for it.
+function enterChoiceForAnotherText(info, phrase) {
+  if (!Number.isInteger(info?.controller_seat) || info.controller_seat === seat) return "";
+  const owner = info.controller_name || "An opponent";
+  return `${owner}'s ${info.card_name || "permanent"} is entering the battlefield, and an opponent chooses for it: you choose ${phrase}.`;
+}
+
 function applyEnterChoicePrompt(info) {
   const panel = q("activationPanel");
   const title = q("promptTitle");
@@ -7453,7 +7499,7 @@ function applyEnterChoicePrompt(info) {
       ? `${asked.slice(0, -1).join(", ")} and ${asked[asked.length - 1]}`
       : asked[0] || "";
   title.textContent = `Choose ${phrase}`;
-  body.textContent = `${cardName}: as it enters, choose ${phrase}.`;
+  body.textContent = enterChoiceForAnotherText(info, phrase) || `${cardName}: as it enters, choose ${phrase}.`;
 
   // The fields are built once per prompt and left alone after that: this
   // function runs on every poll, and replacing an <input> a player is typing
