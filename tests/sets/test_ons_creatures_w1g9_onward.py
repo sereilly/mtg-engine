@@ -1339,17 +1339,29 @@ def test_w2g3_a_single_blocked_orgg_waits_and_declining_assigns_to_its_blocker(s
 
 
 def test_w2g3_a_seat_nobody_sits_in_is_not_stopped(set_pool):
-    """The default for a seat nobody asks is the offer declined (the AI never
-    takes it), so an AI or headless combat resolves as the step is entered —
-    nothing waits on a prompt nobody would answer."""
+    """A seat nobody asks is answered as the step resolves, so an AI or
+    headless combat resolves as the step is entered — nothing waits on a
+    prompt nobody would answer.
+
+    *What* it answers is the AI's chooser's
+    (``ai_combat.choose_combat_damage_announcement``, whose valuation
+    ``tests/ai/test_ai_ons_w2g5_policy.py``'s Orgg tests hold): this test once
+    read the offer declined (the player at 14), which held until the chooser
+    learned to take the division. Taken or declined, all six are dealt now."""
     game, _orgg, _wall, _bears = _w2g3_orgg_at_damage(set_pool, interactive=())
     assert game.combat_damage_resolved
-    assert game.players[1].life == 14
+    taken = any(_W2G3_DIVIDED_LOG in line for line in game.log)
+    life = game.players[1].life
+    assert (14 <= life < 20) if taken else life == 14
     assert game.divided_assignments_to_ask() == []
 
     game, _orgg, wall, _bears = _w2g3_orgg_at_damage(set_pool, interactive=(1,), block=True)
     assert game.combat_damage_resolved, "a person defending is not the one asked"
-    assert wall.damage_marked == 6
+    # Declined, the blocking Wall takes all six; taken, the split is the
+    # chooser's (the printed text divides among the defending player and any
+    # creatures they control, blocking or not).
+    if not any(_W2G3_DIVIDED_LOG in line for line in game.log):
+        assert wall.damage_marked == 6
 
 
 def test_w2g3_a_first_strike_combat_asks_again_for_the_second_step(set_pool):
