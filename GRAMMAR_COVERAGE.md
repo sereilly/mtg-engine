@@ -51,7 +51,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | TOR | 143 | 261 | 86.2% | 86.2% | 68.2% | 138 |
 | JUD | 143 | 241 | 91.3% | 90.9% | 65.6% | 131 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| ONS *(measured)* | 335 | 541 | 79.5% | 78.9% | 58.8% | 270 |
+| ONS *(measured)* | 335 | 541 | 81.0% | 80.4% | 60.3% | 278 |
 | **All (shipped)** | **8027** | **11886** | **90.7%** | **90.1%** | **62.4%** | **6277** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -64,7 +64,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 730 | 381 | expected a subject |  |
+| 722 | 373 | expected a subject |  |
 | 176 | 90 | unrecognized effect verb |  |
 | 131 | 69 | unconsumed text |  |
 | 70 | 51 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -3615,6 +3615,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Put target land on top of its owner's library.`
 - **Fallow Wurm**
   - `When this creature enters, sacrifice it unless you discard a land card.`
+- **False Cure**
+  - `Until end of turn, whenever a player gains life, that player loses 2 life for each 1 life they gained.`
 - **False Dawn**
   - `Until end of turn, spells and abilities you control that would add colored mana instead add that much white mana. Until end of turn, you may spend white mana as though it were mana of any color.`
   - `Draw a card.`
@@ -7389,6 +7391,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Obelisk of Undoing**
   - `{6}, {T}: Return target permanent you both own and control to your hand.`
   - `{6}, {T}: Return target permanent you both own and control to your hand.`
+- **Oblation**
+  - `The owner of target nonland permanent shuffles it into their library, then draws two cards.`
 - **Obliterate**
   - `Destroy all artifacts, creatures, and lands. They can't be regenerated.`
 - **Obsessive Search**
@@ -12277,6 +12281,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{U}: Put this creature on top of its owner's library.`
 - **Weakstone**
   - `Attacking creatures get -1/-0.`
+- **Weathered Wayfarer**
+  - `{W}, {T}: Search your library for a land card, reveal it, put it into your hand, then shuffle. Activate only if an opponent controls more lands than you.`
 - **Weatherseed Elf**
   - `{T}: Target creature gains forestwalk until end of turn. (It can't be blocked as long as defending player controls a Forest.)`
 - **Weatherseed Treefolk**
@@ -12517,8 +12523,18 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Destroy target Wall. It can't be regenerated. Word of Blasting deals damage equal to that Wall's mana value to the Wall's controller.`
 - **Word of Undoing**
   - `Return target creature and all white Auras you own attached to it to their owners' hands.`
+- **Words of War**
+  - `{1}: The next time you would draw a card this turn, this enchantment deals 2 damage to any target instead.`
+- **Words of Waste**
+  - `{1}: The next time you would draw a card this turn, each opponent discards a card instead.`
+- **Words of Wilding**
+  - `{1}: The next time you would draw a card this turn, create a 2/2 green Bear creature token instead.`
+- **Words of Wind**
+  - `{1}: The next time you would draw a card this turn, each player returns a permanent they control to its owner's hand instead.`
 - **Words of Wisdom**
   - `You draw two cards, then each other player draws a card.`
+- **Words of Worship**
+  - `{1}: The next time you would draw a card this turn, you gain 5 life instead.`
 - **Workhorse**
   - `Remove a +1/+1 counter from this creature: Add {C}.`
 - **Worldgorger Dragon**
