@@ -711,6 +711,55 @@ def offer_buys_own_drawback(game: Game, player_index: int, entry: dict) -> bool:
 _SEAT_SET_OFFERS = frozenset({"each_player", "each_opponent"})
 
 
+def _accept_copies_this_spell(steps) -> bool:
+    """Whether an offer's accept branch copies the resolving spell, at any
+    depth of the offers nested inside it."""
+    for step in steps or ():
+        if getattr(step, "kind", None) == "copy_this_spell":
+            return True
+        payload = getattr(step, "payload", None) or {}
+        if step.kind == "may" and _accept_copies_this_spell(
+            (*(payload.get("action") or ()), *(payload.get("then") or ()))
+        ):
+            return True
+    return False
+
+
+def copy_offer_turns_on_its_taker(game: Game, player_index: int, entry: dict) -> bool:
+    """Whether a seat nobody asks would, by taking "…**they may copy this
+    spell** and may choose a new target for that copy", aim the copy at itself.
+
+    The Onslaught Chains (Chain of Smog: "Target player discards two cards.
+    That player may copy this spell …"). The copy offer is free, so the
+    standing policy takes it as a gift — and the copy-target default is to keep
+    the original's target (``_default_copy_spell_target``), which for the
+    player the spell was aimed at is **that same player**: the AI discarded its
+    own hand two cards at a time and was offered the copy again by every copy,
+    without end. A copy whose kept target is the taker's own seat or a
+    permanent it controls is declined; every other copy offer keeps the
+    standing policy. Re-aiming the copy cleverly is a valuation this does not
+    make (the default's own docstring says where one belongs).
+    """
+    if not _accept_copies_this_spell(entry.get("_on_accept")):
+        return False
+    context = entry.get("_context")
+    if context is None:
+        return False
+    from .game_types import first_target_id
+
+    held = first_target_id(getattr(context, "target_permanent_id", None))
+    if held is not None:
+        permanent = game.permanent_by_id(held)
+        return (
+            permanent is not None
+            and game.controller_index_of(permanent) == player_index
+        )
+    target = getattr(context, "target", None)
+    return target is not None and target in game.players and (
+        game.players.index(target) == player_index
+    )
+
+
 def chained_toll_declined(game: Game, player_index: int, entry: dict) -> bool:
     """Whether a seat nobody asked declines one link of an "unless **any
     player** pays" chain (`handlers/offers.unless_player_pays`).

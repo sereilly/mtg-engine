@@ -763,7 +763,14 @@ def parse_player_subject_verb(
             # lower to a per-seat draw prompt rather than to an offer with a
             # draw inside it, and rebinding here takes the shape those
             # collapses match on away from them.
-            if isinstance(action, ast.Draw) and (
+            #
+            # "…that permanent's controller may **sacrifice a land of their
+            # choice**" (Chain of Vapor, Chain of Silence) and "…that player
+            # … may **discard a card**" (Chain of Plasma) are the same elided
+            # subject on the two other deeds a player performs: left as "you",
+            # the offered player said yes and the *caster* sacrificed their
+            # own land or discarded their own card.
+            if isinstance(action, (ast.Draw, ast.Sacrifice, ast.Discard)) and (
                 isinstance(action.player, ast.PlayerRef)
                 and action.player.kind == "you"
                 and isinstance(source_spec, ast.PlayerRef)
