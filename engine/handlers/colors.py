@@ -23,7 +23,8 @@ from typing import TYPE_CHECKING
 from ..color_changes import change_color, recolor_spell
 from ..oracle_types import (BLOCK_PAIR_SUBJECT, CHOSEN_COLOR_THIS_WAY,
                             SPELL_OR_OBJECT_TARGET, SUBJECT_FROM_TRIGGER)
-from ..text_changes import LAND_TYPE_WORDS, change_color_word, change_land_word
+from ..text_changes import (LAND_TYPE_WORDS, change_color_word,
+                            change_creature_word, change_land_word)
 from ._targets import (attached_host, block_pair_permanents,
                        resolve_target_permanent, resolve_target_permanents,
                        described_target_predicate)
@@ -77,10 +78,8 @@ def mark_text_modified(game: Game, instruction: OracleInstruction, context: Orac
     ):
         game.log.append(f"{card.name}: no legal permanent to change the text of")
         return True, "resolved"
-    if target_perm is not None:
-        target_perm.metadata["text_modified"] = True
-
     mode = instruction.payload.get("mode")
+
     new_symbol = (context.choices.get("new_color") or "").upper()
     old_symbol = (context.choices.get("old_color") or "").upper()
     # "…**until end of turn**." (Whim of Volrath.) Absent for every card printed
@@ -150,6 +149,15 @@ def mark_text_modified(game: Game, instruction: OracleInstruction, context: Orac
                 )
         return True, "resolved"
 
+    # Artificial Evolution: "…replacing all instances of one creature type with
+    # another. The new creature type can't be Wall." The words were chosen as
+    # the spell resolved, by the two steps in front (the card's ruling: "You
+    # choose the words to change on resolution"), and both restrictions on the
+    # answer are asked again here rather than trusted to the prompt.
+    if mode == "creature_type":
+        _change_creature_type_word(game, instruction, context, target_perm)
+        return True, "resolved"
+
     # Sleight of Mind: replace one color word with another in the target's text.
     # Recorded as an ordered layer-3 contribution and applied once, by
     # Permanent.effective_card. It does NOT recolor the permanent.
@@ -163,6 +171,52 @@ def mark_text_modified(game: Game, instruction: OracleInstruction, context: Orac
 
     game.log.append(f"{card.name} applied a text change effect")
     return True, "resolved"
+
+
+def _change_creature_type_word(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext,
+    target_perm,
+) -> None:
+    """Record Artificial Evolution's word swap on *target_perm* (CR 612, layer
+    3), from the two words the resolution recorded.
+
+    Nothing is recorded — and the log says so — when there is no permanent,
+    when either word is missing or no creature type, when they are the same
+    word ("It can't change a word to the same word"), or when the new word is
+    one the card forbids ("The new creature type can't be Wall"). A word that is
+    nowhere on the permanent is legal (another ruling: it "can target a card
+    with no appropriate words on it") and simply changes nothing.
+
+    A creature type an *effect* set (a Mistform's own ability, Unnatural
+    Selection) is layer 4 and is applied after this whatever its timestamp
+    (CR 613.1), which is the card's first ruling: "changing the card's text
+    won't affect or alter the new creature type".
+    """
+    card = context.card
+    payload = instruction.payload
+    if target_perm is None:
+        game.log.append(f"{card.name}: no permanent to change the text of")
+        return
+    old = str(context.results.get(str(payload.get("old_type_from") or "")) or "").lower()
+    new = str(context.results.get(str(payload.get("new_type_from") or "")) or "").lower()
+    excluded = {str(word).lower() for word in (payload.get("excluded_new") or ())}
+    if new in excluded or not change_creature_word(
+        target_perm, old, new, label=card.name,
+        duration=payload.get("duration"),
+    ):
+        game.log.append(
+            f"{card.name}: no two different creature types were chosen, so "
+            f"{target_perm.card.name}'s text is unchanged"
+        )
+        return
+    game.log.append(
+        f"{card.name} changed {old} to {new} in {target_perm.card.name}'s text"
+    )
+    # A lord's rewritten "Other Elf creatures" reaches a different set, and a
+    # rewritten type line is a different creature to every type-scoped static
+    # (CR 613.8a): both re-derived for the whole board.
+    game._refresh_dynamic_creatures()
+    game._recalculate_lord_buffs()
 
 
 @effect_handler("recolor_target_from_text")

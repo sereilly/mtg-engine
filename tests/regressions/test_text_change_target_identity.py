@@ -32,6 +32,7 @@ from engine.card_loader import load_catalog
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle, compiled_units
 from engine.oracle_types import OracleInstruction
+from tests.helpers import _mk_card
 
 KIND = "mark_text_modified"
 
@@ -102,11 +103,18 @@ def test_a_text_change_announced_by_id_rewrites_the_permanent_it_named(pool, nam
     game = Game(players=[PlayerState(name="A", life=20), PlayerState(name="B", life=20)])
     game.enforce_mana_costs = False
     game.active_player_index = 0
-    first = Permanent(card=pool["Grizzly Bears"])
-    # A white enchantment its controller controls, with no cumulative upkeep
-    # and a colour word and a land word nowhere in it — every one of the six
-    # may legally name it (Balduvian Shaman's is the narrowest phrase).
-    named = Permanent(card=pool["Castle"])
+    # Two white enchantments their controller controls, with no cumulative
+    # upkeep — every one of the seven may legally name either (Balduvian
+    # Shaman's is the narrowest phrase) — and each carrying both a colour word
+    # and a land word, so whichever one a handler rewrites is marked: the mark
+    # is written with the record (``text_changes._record``), and a target that
+    # carried no word would read unmarked whether it was named or not.
+    warded = _mk_card(
+        "Ward of the White Plains", "{W}", "Enchantment",
+        "White creatures you control have plainswalk.", colors=("W",),
+    )
+    first = Permanent(card=warded)
+    named = Permanent(card=warded)
     for perm in (first, named):
         game._put_permanent_onto_battlefield(0, perm, None)
 

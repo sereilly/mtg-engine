@@ -36,8 +36,9 @@ from .. import ast
 from ..errors import LoweringError
 from ...subject_filters import untestable_filter_keys
 from ._common import (_check_grantable, _describe_several_targets,
-                      _describe_targets, _filter_payload, _is_source,
-                      _is_target, _names_several_targets)
+                      _describe_targets, _filter_payload, _is_enchanted,
+                      _is_source, _is_target, _names_several_targets,
+                      _restrictions_beyond, testable_filter_payload)
 from ._events import _EVENT_SUBJECT_OBJECTS
 from ..vocabulary import BASIC_LAND_WORDS
 
@@ -515,14 +516,38 @@ def _lower_become_that_type(
     * **until end of turn.** The only window with a sweep behind this record
       (the cleanup step ends a gained type by its ``duration``); any other,
       and the absent one, would be a creature type that never comes off.
+
+    "…becomes **the creature type of your choice**" (``of_your_choice``) is
+    the same set with the question asked by this sentence: the
+    ``choose_creature_type`` step goes in front (CR 608.2d), exactly as
+    ``split_creature_type_choice`` puts it in front of "creatures of the
+    creature type of your choice", and the set reads the record it writes. No
+    exclusion: the Mistforms print no "other than Wall".
+
+    Four subjects, one record each, and which permanents get one is the whole
+    difference between them — so each is its own kind, the arrangement
+    ``set_card_types_self`` / ``set_card_types_target`` and the colour
+    family's ``recolor_self_…`` / ``recolor_enchanted_…`` already have:
+
+    * **this creature** (the Mistforms) — the ability's source, which nobody
+      chooses and the picker therefore offers nothing for;
+    * **enchanted creature** (Mistform Mask) — the Aura's host (CR 303.4);
+    * **target creature** (Unnatural Selection, Trickery Charm's mode);
+    * **each creature** (Standardize) — every creature on the battlefield as
+      the spell resolves (CR 611.2c: the set is fixed then, so one that enters
+      later is not changed — the card's 2004-10-04 ruling).
     """
-    if CHOSEN_CREATURE_TYPE_THIS_WAY not in produced:
+    prelude: tuple[OracleInstruction, ...] = ()
+    if node.of_your_choice:
+        prelude = (
+            OracleInstruction(
+                "choose_creature_type", "",
+                {"result_key": CHOSEN_CREATURE_TYPE_THIS_WAY},
+            ),
+        )
+    elif CHOSEN_CREATURE_TYPE_THIS_WAY not in produced:
         raise LoweringError(
             "'that type' names a type no step of this effect chose", node=node
-        )
-    if not _is_target(node.subject):
-        raise LoweringError(
-            "a chosen creature type is set on one target creature", node=node
         )
     if node.duration.kind not in ("until_end_of_turn", "this_turn"):
         raise LoweringError(
@@ -534,6 +559,56 @@ def _lower_become_that_type(
         "subtype_from": CHOSEN_CREATURE_TYPE_THIS_WAY,
         "duration": "until_end_of_turn",
     }
+    subject = node.subject
+    if _is_source(subject) or _is_enchanted(subject):
+        # The record replaces *creature* types, so the phrase has to name a
+        # creature — "this permanent becomes …" would hand a noncreature a
+        # creature type (CR 205.3d) — and nothing else: a narrowing on a phrase
+        # nobody chooses ("this tapped creature") would have to be re-asked at
+        # resolution, and nothing here asks it.
+        if tuple(subject.filter.card_types) != ("creature",) or (
+            _restrictions_beyond(
+                subject.filter,
+                frozenset({"card_types", "is_source", "is_enchanted"}),
+            )
+        ):
+            raise LoweringError(
+                "a creature type is set on the source or its host when the "
+                "phrase names a creature and nothing more",
+                node=node,
+            )
+        kind = (
+            "set_self_creature_type" if _is_source(subject)
+            else "set_enchanted_creature_type"
+        )
+        return prelude + (OracleInstruction(kind, "", payload),)
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier in ("each", "all")
+        and not subject.targeted
+    ):
+        described = testable_filter_payload(
+            subject.filter,
+            refusal="nothing tests this narrowing of the creatures whose type "
+            "is set",
+            node=node,
+            require_narrowing=True,
+        )
+        if described.get("type_filter") != "creature":
+            raise LoweringError(
+                "a creature type is set on creatures", node=node
+            )
+        return prelude + (
+            OracleInstruction(
+                "set_each_creature_type", "", {**payload, "filter": described}
+            ),
+        )
+    if not _is_target(subject):
+        raise LoweringError(
+            "a chosen creature type is set on the source, its host, one "
+            "target creature or each creature",
+            node=node,
+        )
     _describe_targets(payload, node.subject)
     described = (payload.get("targets") or {}).get("filter") or {}
     if described.get("type_filter") != "creature":
@@ -550,7 +625,9 @@ def _lower_become_that_type(
             + ", ".join(sorted(untestable)),
             node=node,
         )
-    return (OracleInstruction("set_target_creature_type", "", payload),)
+    return prelude + (
+        OracleInstruction("set_target_creature_type", "", payload),
+    )
 
 
 def _lower_become_copy(

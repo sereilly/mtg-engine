@@ -43,9 +43,26 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 # Key under which a permanent's ordered text changes live.
 TEXT_CHANGE_EFFECTS = "text_change_effects"
 
-# The two kinds of word a text-changing effect in this pool names.
+# The kinds of word a text-changing effect in this pool names.
 COLOR_WORD = "color_word"
 LAND_WORD = "land_word"
+#: A creature type (CR 205.3m) — Artificial Evolution. Its own kind because
+#: its words have their own written forms (a plural that is not always "-s")
+#: and because a creature type is the one vocabulary here that card *names*
+#: are made of (CR 612.2: "Relentless Rats" keeps its name).
+CREATURE_WORD = "creature_word"
+
+#: The two words of "replacing all instances of **one creature type with
+#: another**" (Artificial Evolution): the word replaced and its replacement,
+#: each chosen as the spell resolves (the card's 2004-10-04 ruling, "You choose
+#: the words to change on resolution") by a ``choose_creature_type`` step whose
+#: ``result_key`` names one of these — resolution scratchpad records, the
+#: ``oracle_types.CHOSEN_CREATURE_TYPE_THIS_WAY`` shape — and both read by the
+#: ``mark_text_modified`` step behind them. Two keys rather than that one
+#: twice, because the second answer must not overwrite the first: "It can't
+#: change a word to the same word" is asked by comparing them.
+TEXT_CHANGE_OLD_CREATURE_TYPE = "text_change_old_creature_type"
+TEXT_CHANGE_NEW_CREATURE_TYPE = "text_change_new_creature_type"
 
 COLOR_WORDS: dict[str, str] = {
     "W": "white", "U": "blue", "B": "black", "R": "red", "G": "green",
@@ -64,6 +81,44 @@ def _plural(land_type: str) -> str:
     contains, so the plural rule would silently never fire.
     """
     return land_type if land_type == "plains" else f"{land_type}s"
+
+
+#: Creature types whose plural is the word itself ("Other Merfolk get +1/+1",
+#: "all Djinn"), beside the ``-folk`` family, which is read off the ending.
+_INVARIANT_CREATURE_PLURALS = frozenset({
+    "aurochs", "bison", "deer", "djinn", "elk", "fish", "kithkin", "kor",
+    "moose", "samurai", "sheep", "squid", "viashino",
+})
+
+#: Creature types English pluralises irregularly.
+_IRREGULAR_CREATURE_PLURALS = {
+    "child": "children", "cyclops": "cyclopes", "fungus": "fungi",
+    "homunculus": "homunculi", "mouse": "mice", "ox": "oxen",
+    "pegasus": "pegasi",
+}
+
+
+def creature_type_plural(word: str) -> str:
+    """The plural a card prints for the creature type *word* — "Elves",
+    "Wolves", "Sphinxes", "Harpies", "Merfolk", "Goblins".
+
+    Only what a text change needs: the form "replacing all instances" of a
+    creature type has to reach beside the singular, and the form its
+    replacement is written in. A form no card prints costs nothing — the
+    pattern simply never matches.
+    """
+    word = word.lower()
+    if word in _IRREGULAR_CREATURE_PLURALS:
+        return _IRREGULAR_CREATURE_PLURALS[word]
+    if word in _INVARIANT_CREATURE_PLURALS or word.endswith("folk"):
+        return word
+    if word.endswith(("lf", "rf")):
+        return word[:-1] + "ves"
+    if word.endswith("y") and word[-2:-1] not in ("a", "e", "i", "o", "u"):
+        return word[:-1] + "ies"
+    if word.endswith(("s", "x", "z", "ch", "sh")):
+        return word + "es"
+    return word + "s"
 
 
 def _forms(kind: str, old: str, new: str) -> tuple[tuple[str, str], ...]:
@@ -96,6 +151,16 @@ def _forms(kind: str, old: str, new: str) -> tuple[tuple[str, str], ...]:
             (f"non{old}", f"non{new}"),
             (old, new),
         )
+    if kind == CREATURE_WORD:
+        # The singular and the plural: "Other **Elf** creatures" and "**Elves**
+        # you control" are both instances of the word. An old word that is its
+        # own plural (Merfolk) is read as the singular — the type line's
+        # reading, and the one that changes what the creature is — for the
+        # reason "Plains" is below.
+        pairs = {old: new}
+        if creature_type_plural(old) != old:
+            pairs[creature_type_plural(old)] = creature_type_plural(new)
+        return tuple(sorted(pairs.items(), key=lambda item: (-len(item[0]), item[0])))
     pairs = {f"{old}walk": f"{new}walk"}
     if _plural(old) != old:
         pairs[_plural(old)] = _plural(new)
@@ -133,6 +198,15 @@ def _record(
         # that print no duration.
         record["duration"] = duration
     effects.append(record)
+    # "This permanent's text was changed", written by the writer and only when
+    # a change is recorded. ``mark_text_modified`` wrote it as soon as it found
+    # its target, whatever the change then recorded, and the AI's rehearsal
+    # reads a permanent's fields (``ai_rehearsal.position_digest``): a text
+    # change that rewrote nothing read as a change, so an AI seat cast Magical
+    # Hack, Sleight of Mind, Mind Bend, Crystal Spray, Whim of Volrath and
+    # Alter Reality at its own Island with no words named — a card spent for
+    # nothing, every game it drew one.
+    perm.metadata["text_modified"] = True
 
 
 def change_color_word(
@@ -170,6 +244,28 @@ def change_land_word(
     if old not in basics or new not in basics:
         return False
     _record(perm, LAND_WORD, old, new, label=label, duration=duration)
+    return True
+
+
+def change_creature_word(
+    perm: Permanent, old_type: str, new_type: str, *, label: str = "",
+    duration: str | None = None,
+) -> bool:
+    """Artificial Evolution: replace one creature type with another in
+    *perm*'s text (CR 612) — its rules text and its type line, so a lord's
+    "Other Elf creatures" and the creature's own "— Elf" both change.
+
+    Returns False, recording nothing, when either word is no creature type
+    (CR 205.3m) or the two are the same word (the card's ruling: "It can't
+    change a word to the same word").
+    """
+    from .grammar.vocabulary import CREATURE_TYPES
+
+    old = (old_type or "").strip().lower()
+    new = (new_type or "").strip().lower()
+    if old not in CREATURE_TYPES or new not in CREATURE_TYPES or old == new:
+        return False
+    _record(perm, CREATURE_WORD, old, new, label=label, duration=duration)
     return True
 
 
@@ -304,7 +400,15 @@ def apply_text_changes(
         # The name is deliberately absent: CR 612.2 forbids a text change from
         # rewriting a card name even when the name contains the word.
         type_line = one_pass(type_line, replacements)
-        oracle_text = one_pass(oracle_text, replacements)
+        if change["kind"] == CREATURE_WORD:
+            # …and a creature type is what card names are *made of*, so the
+            # names written inside the rules text are kept too: the card's own
+            # ("Reckless One's power …") and any "named …" phrase ("cards named
+            # Relentless Rats"). Only for this kind, so a colour or land-type
+            # change folds byte for byte as it always has.
+            oracle_text = _one_pass_outside_names(oracle_text, replacements, card.name)
+        else:
+            oracle_text = one_pass(oracle_text, replacements)
         keywords = tuple(one_pass(word, replacements) for word in keywords)
 
     changed = dataclasses.replace(
@@ -312,6 +416,92 @@ def apply_text_changes(
     )
     _CHANGED_CARDS[key] = changed
     return changed
+
+
+#: "…cards **named Relentless Rats**", "…a card named Hall of Gemstone": the
+#: name a "named" phrase spells runs to the next punctuation.
+_NAMED_PHRASE = re.compile(r"\bnamed [^.,;:()\"\n]+")
+
+
+def _name_spans(text: str, name: str) -> list[tuple[int, int]]:
+    """Where *text* spells a card name (CR 612.2): *name* itself, and whatever
+    a "named" phrase names."""
+    spans = [match.span() for match in _NAMED_PHRASE.finditer(text)]
+    if name:
+        spans += [match.span() for match in re.finditer(re.escape(name), text)]
+    return sorted(spans)
+
+
+def _one_pass_outside_names(
+    text: str, replacements: Mapping[str, str], name: str,
+) -> str:
+    """:func:`one_pass` over *text* except where it spells a card name."""
+    if not text:
+        return text
+    spans = _name_spans(text, name)
+    if not spans:
+        return one_pass(text, replacements)
+    pieces: list[str] = []
+    cursor = 0
+    for start, end in spans:
+        # Overlapping spans (the name inside a "named" phrase) are one
+        # protected stretch.
+        start = max(start, cursor)
+        if end <= cursor:
+            continue
+        pieces.append(one_pass(text[cursor:start], replacements))
+        pieces.append(text[start:end])
+        cursor = end
+    pieces.append(one_pass(text[cursor:], replacements))
+    return "".join(pieces)
+
+
+#: Every written form of every creature type, longest first, as one
+#: alternation — what :func:`creature_types_written` scans with. Built on first
+#: use: the catalog is the vocabulary package's, read once.
+_CREATURE_FORMS: list = []
+
+
+def _creature_forms() -> "tuple[re.Pattern, dict[str, str]]":
+    if not _CREATURE_FORMS:
+        from .grammar.vocabulary import CREATURE_TYPES
+
+        forms: dict[str, str] = {}
+        for word in sorted(CREATURE_TYPES):
+            forms.setdefault(creature_type_plural(word), word)
+        for word in CREATURE_TYPES:
+            forms[word] = word
+        ordered = sorted(forms, key=lambda form: (-len(form), form))
+        pattern = re.compile(
+            r"\b(" + "|".join(re.escape(form) for form in ordered) + r")\b",
+            re.IGNORECASE,
+        )
+        _CREATURE_FORMS.append((pattern, forms))
+    return _CREATURE_FORMS[0]
+
+
+def creature_types_written(card: "CardDefinition") -> tuple[str, ...]:
+    """The creature types written on *card* — its type line first, then its
+    rules text outside any card name — in the order they appear, each once,
+    singular.
+
+    Exactly the words a creature-type text change could rewrite (the same
+    forms :func:`_forms` reaches), so a default "word to replace" read from here
+    is one that changes something.
+    """
+    pattern, forms = _creature_forms()
+    text = card.oracle_text or ""
+    found: list[str] = []
+    for source, spans in (
+        (card.type_line or "", []), (text, _name_spans(text, card.name)),
+    ):
+        for match in pattern.finditer(source):
+            if any(start <= match.start() < end for start, end in spans):
+                continue
+            word = forms[match.group(0).lower()]
+            if word not in found:
+                found.append(word)
+    return tuple(found)
 
 
 # ---------------------------------------------------------------------------
@@ -365,12 +555,34 @@ def changed_words(perm: Permanent) -> list[dict]:
             {"from": form_old, "to": form_new}
             for form_old, form_new in _forms(LAND_WORD, old, new)
         )
+    # Creature words (Artificial Evolution): the vocabulary is the whole
+    # catalog, so the net map is taken over the words the changes name rather
+    # than over every creature type — the same fold, run from each "from" word.
+    creature_changes = [
+        change for change in text_changes(perm) if change.get("kind") == CREATURE_WORD
+    ]
+    starts: list[str] = []
+    for change in creature_changes:
+        if change["from"] not in starts:
+            starts.append(change["from"])
+    for word in starts:
+        current = word
+        for change in creature_changes:
+            if current == change["from"]:
+                current = change["to"]
+        if current != word:
+            edits.extend(
+                {"from": form_old, "to": form_new}
+                for form_old, form_new in _forms(CREATURE_WORD, word, current)
+            )
     return edits
 
 
 __all__ = [
-    "COLOR_WORD", "COLOR_WORDS", "LAND_TYPE_WORDS", "LAND_WORD",
-    "TEXT_CHANGE_EFFECTS", "apply_text_changes", "change_color_word",
-    "change_land_word", "changed_words", "has_text_changes", "one_pass",
-    "text_changes",
+    "COLOR_WORD", "COLOR_WORDS", "CREATURE_WORD", "LAND_TYPE_WORDS", "LAND_WORD",
+    "TEXT_CHANGE_EFFECTS", "TEXT_CHANGE_NEW_CREATURE_TYPE",
+    "TEXT_CHANGE_OLD_CREATURE_TYPE", "apply_text_changes", "change_color_word",
+    "change_creature_word", "change_land_word", "changed_words",
+    "creature_type_plural", "creature_types_written", "has_text_changes",
+    "one_pass", "text_changes",
 ]

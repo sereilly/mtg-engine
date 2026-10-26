@@ -478,6 +478,93 @@ def test_w1g4_shared_triumph_pumps_every_creature_of_the_chosen_type(set_pool):
 # ==== W1G5 ==========================================================
 # W1G5's tests go between this line and the "end W1G5" line.
 
+# --- W1G5: Mistform Mask (CR 303.4, CR 205.1a) ------------------------------
+from engine import Game as _W1G5Game
+from engine import PlayerState as _W1G5PlayerState
+from engine.aura_attachment import attach_aura as _w1g5_attach_aura
+from engine.layer_bridge import computed_types as _w1g5_computed_types
+from engine.models import Permanent as _W1G5Permanent
+from engine.oracle import compile_card_oracle as _w1g5_compile
+from engine.targeting import derive_activation_spec as _w1g5_activation_spec
+from tests.helpers import resolve_stack as _w1g5_resolve_stack
+
+
+def _w1g5_masked(set_pool, catalog_by_name, *, host_seat=0, interactive=(0,)):
+    """Mistform Mask (seat 0's) on a Grizzly Bears controlled by *host_seat*,
+    with an Elvish Champion on seat 1's side."""
+    game = _W1G5Game(players=[_W1G5PlayerState(name="A"), _W1G5PlayerState(name="B")])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    bears = _W1G5Permanent(card=catalog_by_name["Grizzly Bears"])
+    mask = _W1G5Permanent(card=set_pool("ONS")["Mistform Mask"])
+    champion = _W1G5Permanent(card=catalog_by_name["Elvish Champion"])
+    game.players[host_seat].battlefield.append(bears)
+    game.players[0].battlefield.append(mask)
+    game.players[1].battlefield.append(champion)
+    _w1g5_attach_aura(mask, bears)
+    game._recompute_continuous_effects()
+    return game, mask, bears
+
+
+def test_w1g5_mistform_mask_sets_the_enchanted_creatures_type(set_pool, catalog_by_name):
+    """"{1}: Enchanted creature becomes the creature type of your choice until
+    end of turn." The Aura's host, which nobody targets (no picker): the Bears
+    made an Elf are no longer a Bear and take Elvish Champion's +1/+1 and
+    forestwalk; cleanup ends it."""
+    game, mask, bears = _w1g5_masked(set_pool, catalog_by_name)
+    ability = _w1g5_compile(mask.card).activated_abilities[0]
+    assert _w1g5_activation_spec(ability) is None
+
+    assert game.activate_permanent_ability(0, "Mistform Mask").supported
+    assert game.confirm_creature_type_choice(0, "elf")
+    _w1g5_resolve_stack(game)
+    assert set(_w1g5_computed_types(bears)[1]) == {"elf"}
+    assert (bears.effective_power, bears.effective_toughness) == (3, 3)
+    assert game._has_keyword(bears, "forestwalk")
+    assert "Grizzly Bears became an Elf until end of turn (Mistform Mask)" in game.log
+
+    game.resolve_cleanup_step(0)
+    assert set(_w1g5_computed_types(bears)[1]) == {"bear"}
+    assert (bears.effective_power, bears.effective_toughness) == (2, 2)
+
+
+def test_w1g5_mistform_mask_on_an_opponents_creature_is_its_controllers_choice(
+    set_pool, catalog_by_name,
+):
+    """"Your choice" is the ability's controller's (CR 109.5) — the Mask's, not
+    the creature's: the prompt is armed for seat 0 though the Bears are seat
+    1's."""
+    game, _mask, bears = _w1g5_masked(set_pool, catalog_by_name, host_seat=1)
+    assert game.activate_permanent_ability(0, "Mistform Mask").supported
+    (owed,) = game.pending_choices
+    assert (owed.kind, owed.player_index) == ("creature_type_choice", 0)
+    assert game.confirm_creature_type_choice(0, "goblin")
+    _w1g5_resolve_stack(game)
+    assert set(_w1g5_computed_types(bears)[1]) == {"goblin"}
+
+
+def test_w1g5_mistform_mask_destroyed_in_response_still_changes_its_host(
+    set_pool, catalog_by_name,
+):
+    """The ability exists apart from its source (CR 113.7a): the Mask gone in
+    response, the creature it was on — last known — still becomes the type."""
+    game, mask, bears = _w1g5_masked(set_pool, catalog_by_name, interactive=())
+    assert game.queue_permanent_ability(0, "Mistform Mask").supported
+    game.remove_from_battlefield(mask)
+    _w1g5_resolve_stack(game)
+    # Nobody asked: the default joins seat 0's other creatures — it has none
+    # but the Bears, so nothing is chosen and nothing changes…
+    assert set(_w1g5_computed_types(bears)[1]) == {"bear"}
+
+    game, mask, bears = _w1g5_masked(set_pool, catalog_by_name)
+    assert game.queue_permanent_ability(0, "Mistform Mask").supported
+    game.remove_from_battlefield(mask)
+    game.resolve_top_of_stack(pause_for_choices=True)
+    assert game.confirm_creature_type_choice(0, "zombie")
+    _w1g5_resolve_stack(game)
+    # …and asked, the answer lands on the host the Mask was last attached to.
+    assert set(_w1g5_computed_types(bears)[1]) == {"zombie"}
+
 # ==== end W1G5 ======================================================
 
 

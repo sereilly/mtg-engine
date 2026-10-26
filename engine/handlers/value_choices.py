@@ -618,6 +618,13 @@ def choose_creature_type(game: Game, instruction: OracleInstruction, context: Or
         str(word).strip().lower()
         for word in (instruction.payload.get("excluded") or ())
     )
+    # "It can't change a word to the same word." (Artificial Evolution's
+    # ruling.) The word an earlier step of this resolution recorded, named by
+    # its key, joins the printed exclusion — so the prompt cannot offer it and
+    # the resolver refuses it. Absent for every other card.
+    excluded_from = instruction.payload.get("excluded_from")
+    if excluded_from and context.results.get(str(excluded_from)):
+        excluded = excluded + (str(context.results[str(excluded_from)]).lower(),)
     # **Whose creatures the word should name is what the rest of the card does
     # with it** — "Creatures of the creature type of your choice get +0/+4"
     # (Defensive Maneuvers) wants the chooser's own most common type, where
@@ -630,13 +637,35 @@ def choose_creature_type(game: Game, instruction: OracleInstruction, context: Or
         resolution_creature_type_preference(context.card)
         if context.card is not None else None
     ) or (None, "battlefield")
+    # "join" (a type set on the source or its Aura's host, the Mistforms):
+    # the permanent changing type is no voter for its own new type.
+    ignoring: tuple = ()
+    if side == "join":
+        from ._targets import attached_host
+
+        source = context.source_permanent
+        ignoring = tuple(
+            perm for perm in (source, attached_host(game, source))
+            if perm is not None
+        )
     default = best_creature_type(
-        game, seat, side=side, zone=zone, excluded=excluded,
+        game, seat, side=side, zone=zone, excluded=excluded, ignoring=ignoring,
     )
+    if instruction.payload.get("written_on_target"):
+        # "…replacing all instances of **one creature type** …" (Artificial
+        # Evolution): the word to replace. Any creature type may be named, but
+        # the one a seat nobody asks names is the first written on the target —
+        # its type line before its rules text — the one word sure to change
+        # something; ``None`` when nothing is written there.
+        default = _first_creature_type_written_on_target(game, context, excluded)
     context.results[key] = default
     game.arm_creature_type_choice(
         seat, card_name=card_name, result_key=key, context=context,
         default=default, excluded=excluded,
+        word_role=(
+            "replaced" if instruction.payload.get("written_on_target")
+            else "replacement" if excluded_from else None
+        ),
     )
     game.log.append(
         f"{card_name}: {game.players[seat].name} chooses a creature type"
@@ -652,6 +681,28 @@ def choose_creature_type(game: Game, instruction: OracleInstruction, context: Or
     ):
         game.log.append(f"{card_name}: chose {default or 'no creature type'}")
     return True, "resolved"
+
+
+def _first_creature_type_written_on_target(
+    game: Game, context: OracleExecutionContext, excluded: tuple[str, ...],
+) -> str | None:
+    """The first creature type written on the permanent this resolution
+    targeted (``text_changes.creature_types_written``, read off its current
+    text), skipping *excluded*; None with no such permanent or word."""
+    from ..text_changes import creature_types_written
+    from ._targets import resolve_target_permanent
+
+    target = resolve_target_permanent(
+        game, context, predicate=lambda perm: True,
+        fallback_on_invalid_choice=False,
+    )
+    if target is None:
+        return None
+    return next(
+        (word for word in creature_types_written(target.effective_card)
+         if word not in excluded),
+        None,
+    )
 
 
 def _best_creature_type_to_sweep(
@@ -680,7 +731,7 @@ def _best_creature_type_to_sweep(
 
 
 def _creature_type_census(
-    game: Game, zone: str, seat: int,
+    game: Game, zone: str, seat: int, ignoring: tuple = (),
 ) -> list[tuple[int, frozenset[str]]]:
     """``(seat that holds it, its creature types)`` for every object a
     creature-type default counts in *zone*.
@@ -697,6 +748,9 @@ def _creature_type_census(
 
     Only **creature** types (CR 205.3m): an animated Forest's "forest" is a
     subtype of the permanent and no answer to "choose a creature type".
+
+    *ignoring* is permanents left out of a battlefield count — the creature
+    whose own type is being chosen (side ``"join"``).
     """
     from ..grammar.vocabulary import CREATURE_TYPES
     from ..layer_bridge import computed_types, printed_shape
@@ -705,7 +759,7 @@ def _creature_type_census(
     found: list[tuple[int, frozenset[str]]] = []
     if zone == "battlefield":
         for owner, perm in game.permanents_with_controller():
-            if not perm.is_creature:
+            if not perm.is_creature or any(perm is other for other in ignoring):
                 continue
             words = frozenset(
                 str(subtype).lower() for subtype in computed_types(perm)[1]
@@ -731,7 +785,7 @@ def _creature_type_census(
 def best_creature_type(
     game: Game, seat: int, *, side: str | None = None,
     zone: str = "battlefield", excluded: tuple[str, ...] = (),
-    covered: tuple[str, ...] = (),
+    covered: tuple[str, ...] = (), ignoring: tuple = (),
 ) -> str | None:
     """The creature type *seat* names when nobody asks it, for what the
     choice is about to do.
@@ -749,7 +803,12 @@ def best_creature_type(
       other player, you gain control of all creatures of that type" (Peer
       Pressure): among the types *seat* holds strictly more of than every other
       seat, the one the others hold most of — the type the steal takes most
-      with.
+      with;
+    * ``"join"`` — a type *set* on one creature of the seat's own (the
+      Mistforms, Mistform Mask): ``"you"`` counted without *ignoring* (that
+      creature), so it joins the tribe the seat's lords and chosen-type
+      anthems pump rather than voting for the type it already has. ``None``
+      when the seat has no other creature — no type is worth the change.
 
     *covered* is what earlier seats already chose this way (CR 101.4b: each
     player knows the choices made before theirs): an object with one of those
@@ -763,7 +822,7 @@ def best_creature_type(
     """
     counts: dict[str, dict[int, int]] = {}
     covered_words = {str(word).lower() for word in covered if word}
-    for owner, words in _creature_type_census(game, zone, seat):
+    for owner, words in _creature_type_census(game, zone, seat, ignoring):
         if covered_words & words:
             continue
         for word in words:
@@ -791,7 +850,7 @@ def best_creature_type(
         if not eligible:
             return None
         return max(eligible, key=others)
-    if side == "you":
+    if side in ("you", "join"):
         mine = [word for word in sorted(counts) if own(word) > 0]
         if not mine:
             return None

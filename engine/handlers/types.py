@@ -538,7 +538,6 @@ def set_target_creature_type(game: Game, instruction: OracleInstruction, context
     608.2b), with no fallback: a target that stopped being a creature in
     response is not given a creature type, and no bystander is.
     """
-    from ..grammar.vocabulary import CREATURE_TYPES
     from ..subject_filters import subject_matches
 
     name = context.card.name if context.card is not None else "Effect"
@@ -557,29 +556,153 @@ def set_target_creature_type(game: Game, instruction: OracleInstruction, context
     if target is None:
         game.log.append(f"{name}: no valid creature to change the type of")
         return True, "resolved"
+    word = _chosen_creature_type(game, instruction, context, name)
+    if word is None:
+        return True, "resolved"
+    _set_creature_type(game, (target,), word, name=name, instruction=instruction)
+    return True, "resolved"
+
+
+def _chosen_creature_type(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext,
+    name: str,
+) -> str | None:
+    """The creature type the choosing step in front recorded (CR 608.2d), or
+    None — logged — when nobody chose one.
+
+    An unanswered choice sets nothing: a creature that became a type nobody
+    picked is the wrong creature, and the catalog bound is CR 205.3m's.
+    """
+    from ..grammar.vocabulary import CREATURE_TYPES
+
     chosen = context.results.get(str(instruction.payload.get("subtype_from") or ""))
     word = str(chosen or "").strip().lower()
     if word not in CREATURE_TYPES:
         game.log.append(f"{name}: no creature type was chosen, so nothing changes")
-        return True, "resolved"
-    gain_types(
-        target,
-        subtypes=[word],
-        source=name,
-        duration=str(instruction.payload.get("duration") or "until_end_of_turn"),
-        # CR 205.1a: a subtype *set* replaces the subtypes "from the
-        # appropriate set" — the creature types, and nothing else the
-        # permanent is. Read by ``layer_bridge.collect_own_type_effects``.
-        replaces_creature_types=True,
-    )
+        return None
+    return word
+
+
+def _set_creature_type(
+    game: Game, perms, word: str, *, name: str, instruction: OracleInstruction,
+) -> None:
+    """CR 205.1a's subtype set on each of *perms*: one layer-4 record apiece,
+    each with its own timestamp (CR 613.7b) and the instruction's duration.
+
+    The one writer of the record for all four subjects (a target, the source,
+    an Aura's host, every creature), so the record's shape — the key the layer
+    bridge reads and the duration the cleanup step ends it by — is decided in
+    one place.
+    """
+    duration = str(instruction.payload.get("duration") or "until_end_of_turn")
+    for perm in perms:
+        gain_types(
+            perm,
+            subtypes=[word],
+            source=name,
+            duration=duration,
+            # CR 205.1a: a subtype *set* replaces the subtypes "from the
+            # appropriate set" — the creature types, and nothing else the
+            # permanent is. Read by ``layer_bridge.collect_own_type_effects``.
+            replaces_creature_types=True,
+        )
     # A creature that changed type is one a type-scoped static now reaches or
-    # no longer does ("Other Goblins get +1/+1", "All Zombies are …"), and
-    # where each applies is decided for the whole board (CR 613.8a).
+    # no longer does ("Other Goblins get +1/+1", "All Zombies are …", "This
+    # creature has defender as long as it's a Wall"), and where each applies is
+    # decided for the whole board (CR 613.8a).
     game._refresh_dynamic_creatures()
     game._recalculate_lord_buffs()
-    game.log.append(
-        f"{target.card.name} became a {word.title()} until end of turn ({name})"
+    article = "an" if word[:1] in "aeiou" else "a"
+    for perm in perms:
+        game.log.append(
+            f"{perm.card.name} became {article} {word.title()} until end of turn "
+            f"({name})"
+        )
+
+
+@effect_handler("set_self_creature_type")
+def set_self_creature_type(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"{1}: **This creature** becomes the creature type of your choice until
+    end of turn." (Mistform Dreamer, Skyreaver, Stalker, Wall, Shrieker.)
+
+    ``set_target_creature_type``'s set on the ability's own source, which
+    nobody chooses. A source that has left the battlefield is not followed: a
+    Mistform bounced in response and cast again is a new object (CR 400.7) the
+    ability never named, so nothing changes. A source that is no longer a
+    creature takes no creature type (CR 205.3d).
+    """
+    name = context.card.name if context.card is not None else "Effect"
+    source = context.source_permanent
+    if source is None or not game.is_on_battlefield(source):
+        game.log.append(f"{name}: has left the battlefield, so nothing changes")
+        return True, "resolved"
+    if not source.is_creature:
+        game.log.append(f"{name}: is not a creature, so takes no creature type")
+        return True, "resolved"
+    word = _chosen_creature_type(game, instruction, context, name)
+    if word is None:
+        return True, "resolved"
+    _set_creature_type(game, (source,), word, name=name, instruction=instruction)
+    return True, "resolved"
+
+
+@effect_handler("set_enchanted_creature_type")
+def set_enchanted_creature_type(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"{1}: **Enchanted creature** becomes the creature type of your choice
+    until end of turn." (Mistform Mask.)
+
+    The set on the Aura's host: an Aura's activated ability acts on what it is
+    attached to (CR 303.4), which the activator does not choose. Read through
+    ``attached_host`` with last-known information, for Dream Coat's reason —
+    the ability exists independently of its source (CR 113.7a), so a Mask
+    destroyed in response still changes the creature it was on.
+    """
+    from ._targets import attached_host
+
+    name = context.card.name if context.card is not None else "Effect"
+    host = attached_host(game, context.source_permanent)
+    if host is None or not host.is_creature:
+        game.log.append(f"{name}: enchants no creature, so nothing changes")
+        return True, "resolved"
+    word = _chosen_creature_type(game, instruction, context, name)
+    if word is None:
+        return True, "resolved"
+    _set_creature_type(game, (host,), word, name=name, instruction=instruction)
+    return True, "resolved"
+
+
+@effect_handler("set_each_creature_type")
+def set_each_creature_type(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Choose a creature type other than Wall. **Each creature** becomes that
+    type until end of turn." (Standardize.)
+
+    One record per creature on the battlefield as the effect begins — CR
+    611.2c fixes the set then, and the card's ruling (2004-10-04) says it: "This
+    spell only affects creatures on the battlefield when it resolves." So a
+    creature that enters afterwards is not changed, which a board-wide static
+    would get wrong. The printed noun phrase is asked through
+    ``subject_matches``, the one reader of what it means.
+    """
+    from ..subject_filters import subject_matches
+
+    name = context.card.name if context.card is not None else "Effect"
+    word = _chosen_creature_type(game, instruction, context, name)
+    if word is None:
+        return True, "resolved"
+    filters = instruction.payload.get("filter") or {}
+    observer = (
+        game.players.index(context.caster) if context.caster in game.players else None
     )
+    affected = tuple(
+        perm for perm in game.all_permanents()
+        if subject_matches(
+            game, perm, filters, observer=observer, source=context.source_permanent
+        )
+    )
+    if not affected:
+        game.log.append(f"{name}: no creature to change the type of")
+        return True, "resolved"
+    _set_creature_type(game, affected, word, name=name, instruction=instruction)
     return True, "resolved"
 
 

@@ -891,6 +891,12 @@ def _lower_change_text(node: ast.ChangeText) -> tuple[OracleInstruction, ...]:
     union = frozenset({"also_spell"})
     if _filter_payload(node.subject.filter, carried_separately=union):
         _describe_targets(payload, node.subject, carried_separately=union)
+    if node.mode == "creature_type":
+        return _lower_creature_type_text_change(node, payload)
+    if node.excluded_new:
+        raise LoweringError(
+            "only a creature-type text change restricts its new word", node=node
+        )
     return (OracleInstruction("mark_text_modified", "", payload),)
 
 
@@ -936,3 +942,53 @@ def _lower_turn_face(node: ast.TurnFace) -> tuple[OracleInstruction, ...]:
     payload = _targets_only(spec)
     payload.update(described)
     return (OracleInstruction(f"turn_target_face_{direction}", "", payload),)
+
+
+def _lower_creature_type_text_change(
+    node: ast.ChangeText, payload: dict[str, object],
+) -> tuple[OracleInstruction, ...]:
+    """"Change the text of target spell or permanent by replacing all instances
+    of **one creature type with another**. The new creature type can't be
+    Wall." (Artificial Evolution.)
+
+    The colour and land-type modes take their words from the cast announcement;
+    this one is chosen **as the spell resolves** — the card's ruling
+    (2004-10-04): "You choose the words to change on resolution." So the two
+    words are two ``choose_creature_type`` steps in front of the change, each
+    writing its own record (``text_changes.TEXT_CHANGE_OLD_CREATURE_TYPE`` /
+    ``…_NEW_…``), on the prompt every other creature-type choice uses:
+
+    * the word replaced — any creature type (another ruling: it "can target a
+      card with no appropriate words on it"), defaulting to one written on the
+      target (``written_on_target``);
+    * its replacement — never the word replaced ("It can't change a word to the
+      same word": ``excluded_from``) and never a printed exclusion
+      ("…can't be Wall": ``excluded``).
+
+    The change re-reads both records and re-checks both restrictions, so a word
+    that reached the scratchpad another way is held to the same rules.
+    """
+    from ...text_changes import (TEXT_CHANGE_NEW_CREATURE_TYPE,
+                                 TEXT_CHANGE_OLD_CREATURE_TYPE)
+
+    excluded = list(node.excluded_new)
+    old_step = OracleInstruction(
+        "choose_creature_type", "",
+        {"result_key": TEXT_CHANGE_OLD_CREATURE_TYPE, "written_on_target": True},
+    )
+    new_step = OracleInstruction(
+        "choose_creature_type", "",
+        {
+            "result_key": TEXT_CHANGE_NEW_CREATURE_TYPE,
+            **({"excluded": excluded} if excluded else {}),
+            "excluded_from": TEXT_CHANGE_OLD_CREATURE_TYPE,
+        },
+    )
+    change = dict(payload)
+    change["old_type_from"] = TEXT_CHANGE_OLD_CREATURE_TYPE
+    change["new_type_from"] = TEXT_CHANGE_NEW_CREATURE_TYPE
+    if excluded:
+        change["excluded_new"] = excluded
+    return (
+        old_step, new_step, OracleInstruction("mark_text_modified", "", change),
+    )

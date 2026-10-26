@@ -123,6 +123,14 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "turn_target_face_down": "characteristics",
     "turn_target_face_up": "characteristics",
     "turn_self_face_down": "characteristics",
+    # "…becomes the creature type of your choice until end of turn" said of
+    # the ability's source (the Mistforms), of an Aura's host (Mistform Mask)
+    # and of every creature (Standardize). The same CR 205.1a set landing on a
+    # different set of permanents, so the same family and GRAMMAR_CATEGORIES is
+    # unchanged.
+    "set_self_creature_type": "characteristics",
+    "set_enchanted_creature_type": "characteristics",
+    "set_each_creature_type": "characteristics",
     # "{0}: This permanent becomes an enchantment." (Opal Acrolith.) The same
     # layer-4 family as the gain above it — CR 205.1a replacing rather than
     # CR 205.1b joining — so the same category.

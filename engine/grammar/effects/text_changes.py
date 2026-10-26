@@ -25,12 +25,18 @@ from ..stream import TokenStream
 
 # Vocabularies a printed text change can swap, one literal phrase per mode
 # (CR 612.1). Closed on purpose: `mark_text_modified` substitutes exactly these
-# two, and a card naming a third — a creature type, a card name — is a text
-# change the engine does not perform. Listing the phrases keeps that card
-# failing here instead of reaching the handler as a mode it will ignore.
+# three, and a card naming a fourth — a card name, a keyword — is a text change
+# the engine does not perform. Listing the phrases keeps that card failing here
+# instead of reaching the handler as a mode it will ignore.
+#
+# "…replacing all instances of **one creature type** with another."
+# (Artificial Evolution.) The third vocabulary: CR 205.3m's creature types, the
+# words chosen as the spell resolves (the card's 2004-10-04 ruling) rather than
+# announced with it.
 _TEXT_CHANGE_MODES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("land_type", ("basic", "land", "type")),
     ("color_word", ("color", "word")),
+    ("creature_type", ("creature", "type")),
 )
 
 
@@ -80,11 +86,44 @@ def _parse_change_text(stream: TokenStream) -> ast.ChangeText:
             # a sentence offering something this cannot substitute refuses here
             # rather than reaching the handler as a mode it will ignore.
             alternative = _accept_text_change_alternative(stream, mode)
+            duration = _parse_duration(stream)
             return ast.ChangeText(
                 subject, alternative if alternative is not None else mode,
-                _parse_duration(stream),
+                duration,
+                excluded_new=(
+                    _accept_new_creature_type_exclusion(stream)
+                    if mode == "creature_type" else ()
+                ),
             )
     raise stream.error("no text substitution replaces this")
+
+
+def _accept_new_creature_type_exclusion(stream: TokenStream) -> tuple[str, ...]:
+    """``. The new creature type can't be <type>`` — the creature types the
+    replacement word may not be, or ``()`` with the cursor untouched.
+
+    Artificial Evolution's second sentence ("The new creature type can't be
+    Wall."), read here because it is a restriction on *this* sentence's choice
+    and means nothing standing alone. The word must be a creature type
+    (CR 205.3m); anything else leaves the sentence unread, so the line
+    refuses rather than dropping a restriction on its answer.
+    """
+    from ..vocabulary import CREATURE_TYPES
+
+    mark = stream.mark()
+    if not (
+        stream.accept_punct(".")
+        and stream.accept_phrase("the", "new", "creature", "type", "can't", "be")
+    ):
+        stream.reset(mark)
+        return ()
+    token = stream.peek()
+    word = str(token.text).lower() if token is not None else ""
+    if word not in CREATURE_TYPES:
+        stream.reset(mark)
+        return ()
+    stream.advance()
+    return (word,)
 
 
 def _accept_text_change_alternative(

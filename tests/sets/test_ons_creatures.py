@@ -149,10 +149,10 @@ def test_w1g1_the_census_was_right_about_these_morph_cards(set_pool):
     Charging Slateback, Ironfist Crusher, Nameless One: each other line is
     read by a text-keyed table the grammar probe does not ask) — and the
     morph line never holds back the ones whose other line is another group's:
-    each is supported once that group lands, and until then refused naming
-    its other line. Written as that invariant rather than as "stays
-    unsupported", which was true only until the first of those groups merged
-    (Birchlore Rangers, with W1G7's Elves, at the chain's fifth link)."""
+    each is supported once that group lands (Birchlore Rangers with W1G7's
+    Elves, Mistform Shrieker with W1G5's type change), and until then refused
+    naming its other line. Written as that invariant rather than as "stays
+    unsupported", which was true only until the first of those groups merged."""
     ons = set_pool("ONS")
     assert [n for n in _W1G1_MORPHS if not _w1g1_compile(ons[n]).supported] == []
     for name in _W1G1_OTHER_GROUPS_LINES:

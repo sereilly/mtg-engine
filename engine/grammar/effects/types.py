@@ -70,6 +70,15 @@ def _parse_becomes(stream: TokenStream, subject: ast.Recipient) -> ast.Statement
     # belongs to is the lowering's question, asked of what the effect produced.
     if stream.accept_phrase("that", "type"):
         return ast.BecomeThatType(subject, _parse_duration(stream))
+    # "…becomes **the creature type of your choice** until end of turn." (the
+    # Mistforms, Mistform Mask, Trickery Charm.) The same subtype set with the
+    # choice made by this sentence itself — Alchor's Tomb's "the color of your
+    # choice" one characteristic over — so it lands on the same node, flagged,
+    # and the lowering puts the choosing step in front.
+    if stream.accept_phrase("the", "creature", "type", "of", "your", "choice"):
+        return ast.BecomeThatType(
+            subject, _parse_duration(stream), of_your_choice=True
+        )
     token = stream.peek()
     word = str(token.text).lower() if token is not None else ""
     # "…becomes **colorless** until end of turn." (Raging Spirit, Ersatz
