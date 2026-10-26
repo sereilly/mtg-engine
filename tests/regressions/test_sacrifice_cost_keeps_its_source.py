@@ -30,6 +30,7 @@ import pytest
 
 from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_paths
+from engine.faces import compilation_units
 from engine.mixins.deaths import DeathsMixin
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
@@ -95,7 +96,7 @@ def _first_cost_victim(game, name, index):
 def _census() -> tuple[int, list[str]]:
     """(examined, the abilities whose cost took their own source)."""
     pool: dict = {}
-    for card in load_cards(manifest_set_paths(include_measured=True)):
+    for card in compilation_units(load_cards(manifest_set_paths(include_measured=True))):
         pool.setdefault(card.name, card)
     examined = 0
     offenders: list[str] = []
