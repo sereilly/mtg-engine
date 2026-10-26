@@ -504,3 +504,38 @@ def test_w2g5_a_one_shot_permanent_is_still_cracked(set_pool):
     egg.metadata["summoning_sickness_turn"] = -99
     action = choose_activation_action(game, 0)
     assert action is not None and action.permanent_name == "Mossfire Egg"
+
+
+# ==== The seeded games the pile was measured in ===============================
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize(("pinned", "exercised"), [
+    (
+        ["Birchlore Rangers", "Wirewood Pride", "Crown of Vigor", "Silklash Spider",
+         "Elvish Warrior", "Wirewood Elf", "Elvish Vanguard"],
+        ["Birchlore Rangers: tapped"],
+    ),
+    (["Slice and Dice", "Butcher Orgg", "Risky Move"], ["Butcher Orgg divides"]),
+    (
+        ["Meddle", "Riptide Entrancer", "Wheel and Deal"],
+        ["Riptide Entrancer was sacrificed", "cast Wheel and Deal ->"],
+    ),
+])
+def test_w2g5_seeded_onslaught_games_use_the_policy(pinned, exercised):
+    """Each piece is exercised in the seeded ONS games it was measured in
+    (seed 11, eight games, the cards pinned) — floors of one, never counts —
+    and nothing rehearsed raises. On the base each of these lines was absent:
+    no Rangers mana, no Orgg division, no Entrancer steal, no Wheel and Deal
+    cast (scratch/ons/w2g5/counts_base.txt)."""
+    from engine.ai_simulator import run_ai_simulation
+    from engine.card_loader import manifest_set_path
+
+    report = run_ai_simulation(
+        manifest_set_path("ONS", include_measured=True), games=8, seed=11,
+        required_cards=pinned,
+    )
+    assert report.games_completed == 8
+    assert not report.rehearsals_raised and report.issues == []
+    for line in exercised:
+        assert any(line in logged for logged in report.log_lines), line

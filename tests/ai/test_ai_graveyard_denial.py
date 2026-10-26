@@ -281,9 +281,16 @@ def test_an_exile_that_pays_its_owner_is_not_cast_into_only_an_opponents_pile():
 #: The cards a bare announcement of **one** targeted graveyard card sent to the
 #: AI's own pile from chair 0 — the handler's seat-order scan.
 _ONE_TARGET_WRONG_BEFORE = {
-    "Coffin Purge", "Cremate", "Crypt Creeper", "Grave Robbers", "Headstone",
+    "Coffin Purge", "Cremate", "Grave Robbers", "Headstone",
     "Scavenging Ooze", "Steamclaw",
 }
+#: Crypt Creeper stood in the set above until ONS W2G5. Its ability
+#: ("Sacrifice this creature: Exile target card from a graveyard") gives up its
+#: source, and such an activation is now proposed only where a rehearsal says
+#: the trade leaves the seat ahead (`ai_abilities._gives_up_its_source`): a 1/1
+#: for a card exiled from the census board's graveyard does not, so the sweep no
+#: longer reaches the Creeper's target choice — with the old defaults or the new.
+_HELD_BY_THE_REHEARSAL = {"Crypt Creeper"}
 #: …and the four whose pile was the prompt's default ("from a single
 #: graveyard"). On a tree where those cards are *announced* rather than picked
 #: at resolution, the prompt is no longer on their road and they are not in
