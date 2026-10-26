@@ -37,8 +37,7 @@ from ..combat_assignment import (AS_THOUGH_UNBLOCKED_LOG,
                                  divided_among_defenders_events,
                                  divided_among_defenders_refusal,
                                  divided_announcement_refusal,
-                                 may_assign_as_unblocked,
-                                 still_legal_divisions)
+                                 may_assign_as_unblocked, still_legal_divisions)
 from ..damage_events import deal_damage, lifelink_life_gained
 from ..models import Permanent
 from ..damage_redirects import end_simultaneous_redirects
@@ -1041,13 +1040,10 @@ class CombatDamageStepMixin:
             # defending player or planeswalker even if the blocking creatures
             # are no longer there at that time."
             is_blocked = bool(blockers) or bool(attacker.blocked)
-            # "You may assign this creature's combat damage divided as you
-            # choose among defending player and/or any number of creatures they
-            # control." (Butcher Orgg.) The offer taken, announced by the
-            # attacker's id (``divided_among``), and read first: blocked or not
-            # (ruling 2004-10-04), its whole damage goes where the division
-            # says. Held to CR 510.1e by ``combat_assignment``'s gate before a
-            # point is recorded; not naming the creature is the offer declined.
+            # Butcher Orgg's offer taken (``divided_among``, by attacker id),
+            # read first: blocked or not (ruling 2004-10-04) its whole damage
+            # goes where the division says, held to CR 510.1e by
+            # ``combat_assignment``'s gate. Not named is the offer declined.
             division = (divided_among or {}).get(attacker.permanent_id)
             if division is not None:
                 refusal = divided_among_defenders_refusal(
@@ -1241,9 +1237,8 @@ class CombatDamageStepMixin:
         attacker assigns nothing", which no rule lets a blocked creature do;
         it was the wire's way of making combat damage vanish.
 
-        ``divided_among_defenders`` is Butcher Orgg's offer taken: attacker
-        ``permanent_id`` → ``{"player": n, <creature permanent_id>: n, …}``,
-        held to the rulings by ``combat_assignment`` before anything is dealt.
+        ``divided_among_defenders`` is Butcher Orgg's offer taken: attacker id →
+        ``{"player": n, <creature id>: n, …}`` (``combat_assignment``'s gate).
         """
         if self.current_turn_phase != "combat" or self.current_step != "combat_damage":
             return False, "combat damage can only be resolved during combat_damage"
@@ -1332,8 +1327,7 @@ class CombatDamageStepMixin:
                 f"{attacker.card.name} assigns its combat damage "
                 f"{AS_THOUGH_UNBLOCKED_LOG}"
             )
-        # …and a creature whose damage was divided among defending player and
-        # their creatures (Butcher Orgg), for the same two readers.
+        # …and a division among defending player and creatures (Butcher Orgg).
         for attacker in assigned_this_pass:
             if attacker.permanent_id in divided_among:
                 self.log.append(f"{attacker.card.name} {DIVIDED_AMONG_DEFENDERS_LOG}")
@@ -1732,9 +1726,7 @@ class CombatDamageStepMixin:
             in_step and divided and not attacker_damage
             and self._first_strike_pass_pending() and not self.combat_first_strike_done
         ):
-            # A division alone, checked whole before the first strikers deal
-            # (CR 510.1e) for the reason the block above checks a division
-            # among blockers.
+            # A division alone, checked whole before first strikers deal (CR 510.1e).
             self._prune_combat_state()
             ok, message, _to_blockers, _to_players = self._assign_attacker_combat_damage(
                 {}, False, True, frozenset(), divided_among=divided,
@@ -1790,8 +1782,7 @@ class CombatDamageStepMixin:
                 blocker_damage=blocker_damage,
                 blocker_damage_split=blocker_damage_split,
                 as_though_unblocked=as_though_unblocked,
-                # Butcher Orgg's divisions, restated for the second step on
-                # the board the first one left (CR 510.4).
+                # Butcher Orgg's divisions, restated for a second step (CR 510.4).
                 divided_among_defenders=(
                     still_legal_divisions(self, divided)
                     if progress["first_step_dealt"] else divided

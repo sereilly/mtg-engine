@@ -761,8 +761,9 @@ def _multiplier_source_answers(source, source_class: str) -> bool:
     counts while animated — and never a spell or a card in another zone,
     whose damage source is its printed ``CardDefinition`` (no
     ``permanent_id``). A creature's ability is the creature dealing damage
-    (CR 120.1 has the source of the ability deal it), so a Prodigal Sorcerer's
-    ping is doubled; a burn spell is not.
+    (CR 113.7a: "This creature deals 1 damage to any target" causes the
+    source to do it), so a Prodigal Sorcerer's ping is doubled; a burn spell
+    is not.
     """
     if source_class == "source":
         return True
