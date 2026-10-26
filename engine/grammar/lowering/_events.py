@@ -192,7 +192,9 @@ EVENT_SUBJECT_LAST_KNOWN_EVENTS: frozenset[str] = frozenset({
 })
 
 
-def dealer_is_event_subject(source, event: str | None) -> bool:
+def dealer_is_event_subject(
+    source, event: str | None, *, causative: bool = False,
+) -> bool:
     """Whether a damage sentence's printed dealer is the object the firing
     event was about — "**that creature** deals …" under a trigger whose fire
     site froze that creature.
@@ -211,10 +213,18 @@ def dealer_is_event_subject(source, event: str | None) -> bool:
     the trigger subject's filter. Reading that pronoun here moved Mogg
     Bombers' damage onto the creature that entered; the program differential
     caught it.
+
+    **…except as the object of a causative "have"** (*causative*, the node's
+    ``DealDamage.causative``): "Whenever a Beast you control enters, you may
+    **have it** deal 4 damage to target opponent" (Aether Charge). The sentence
+    opens on the offer, so there is no nearer antecedent than the condition's
+    object, and the rebound pronoun is the Beast. Without this the Charge
+    dealt the damage — the wrong colour for a protection or a Circle (CR
+    120.7), the one misreading among the pool's "have … deal" printings.
     """
     return (
         isinstance(source, ast.TargetSpec)
-        and source.quantifier == "that"
+        and (source.quantifier == "that" or (causative and source.quantifier == "it"))
         and not source.targeted
         and not source.filter.is_source
         and not source.filter.is_enchanted

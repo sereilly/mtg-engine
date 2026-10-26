@@ -51,6 +51,8 @@ from .phrases import (
     _accept_life_alternative,
     _accept_mana_alternatives,
     _parse_mana_payment,
+    mark_causative,
+    refuse_uncaused_dealer,
 )
 from .seat_comparisons import accept_player_comparison
 from .stream import TokenStream
@@ -717,7 +719,10 @@ def parse_player_subject_verb(
             except GrammarError:
                 stream.reset(mark_add)
         try:
-            action = parse_optional_action(stream)
+            # A printed dealer is offered only through "have" (read by the
+            # damage production with its "have" and marked there), never as
+            # "<seat> may it deal …" (``phrases.refuse_uncaused_dealer``).
+            action = refuse_uncaused_dealer(parse_optional_action(stream))
             # "…**they** may copy this spell…" — the copy's controller is
             # the sentence's own subject (CR 707.10a), which is not the
             # resolving spell's controller here. Bound at the one place
@@ -800,7 +805,10 @@ def parse_player_subject_verb(
         stream.advance()
         if stream.accept_word("have"):
             try:
-                return ast.May(source_spec, action=parse_optional_action(stream))
+                return ast.May(
+                    source_spec,
+                    action=mark_causative(parse_optional_action(stream)),
+                )
             except GrammarError:
                 pass
         stream.reset(mark_may)

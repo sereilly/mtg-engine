@@ -42,7 +42,8 @@ from .rebinding import rebind_counter_pronoun_to_bound_target
 from .sentence_rebinding import rebind_alternative_pronoun_to_choice_target
 from .durations import _parse_duration
 from .phrases import (_accept_conjoined_life_cost, _accept_life_only_offer,
-                      _parse_mana_payment)
+                      _parse_mana_payment, mark_causative,
+                      refuse_uncaused_dealer)
 from .effects import (_parse_damage_becomes_counter_removal,
                       _parse_destroy_chosen_that_didnt_attack,
                       _parse_untap_chosen_by_paying,
@@ -713,9 +714,17 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
             if stream.at_word("choose") and stream.peek_word(1) == "to":
                 if stream.peek_word(2) == "have":
                     stream.advance(2)
-            stream.accept_word("have")
+            causative = stream.accept_word("have")
             try:
                 action = _parse_optional_action(stream)
+                # The consumed "have" is the dealer's antecedent rule
+                # (``ast.DealDamage.causative``): kept on the node, since the
+                # words behind it read like any "it deals" — and without it a
+                # printed dealer is no offer at all ("you may it deal …").
+                action = (
+                    mark_causative(action) if causative
+                    else refuse_uncaused_dealer(action)
+                )
                 return ast.May(ast.PlayerRef("you"), action=action)
             except GrammarError:
                 stream.reset(mark)

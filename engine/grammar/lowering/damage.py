@@ -265,8 +265,39 @@ def _with_foreign_dealer(
     kinds that name their own dealers and are not this function's business;
     neither is "it", which is the source wherever the pool prints it bare
     (Mogg Bombers: "sacrifice this creature and it deals 3 damage …").
+
+    **Except "have it deal"** (``node.causative``): "Whenever a Beast you
+    control enters, you may have it deal 4 damage …" (Aether Charge). Under a
+    consumed causative "have" a pronoun the trigger rebound to its condition's
+    object *is* that object, which the fire site froze — ``biter:
+    "event_subject"``, the key Bomb Squad's "that creature" already rides. A
+    shape that cannot carry it refuses rather than dealing as the ability's
+    source.
     """
     source = node.source
+    if (
+        node.causative
+        and isinstance(source, ast.TargetSpec)
+        and source.quantifier == "it"
+        and not source.filter.is_source
+        and not _is_enchanted(source)
+        and not any("biter" in instruction.payload for instruction in lowered)
+    ):
+        if (
+            len(lowered) != 1
+            or lowered[0].kind != "deal_damage"
+            or not dealer_is_event_subject(source, event, causative=True)
+        ):
+            raise LoweringError(
+                "the object a causative \"have it deal\" names is not a dealer "
+                "this damage can carry",
+                node=node,
+            )
+        return (
+            dataclasses.replace(
+                lowered[0], payload={**lowered[0].payload, "biter": "event_subject"}
+            ),
+        )
     if (
         not isinstance(source, ast.TargetSpec)
         or source.filter.is_source

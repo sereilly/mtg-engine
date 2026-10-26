@@ -94,6 +94,40 @@ def is_pt_counter(kind: str) -> bool:
     """
     return pt_counter_deltas(kind) is not None
 
+
+def mark_causative(statement):
+    """*statement* with its damage dealer marked as the object of a causative
+    "have" the caller consumed in front of it (``ast.DealDamage.causative``:
+    "you may **have it** deal 4 damage", Aether Charge); anything else
+    unchanged. The one marker the three "have" readers apply — ``statements``'
+    "you may have", ``player_verbs``' "<seat> may have" and
+    ``effects.damage``'s "have <source> deal" — so they cannot come to mark
+    three different things."""
+    if isinstance(statement, ast.DealDamage):
+        return dataclasses.replace(statement, causative=True)
+    return statement
+
+
+def refuse_uncaused_dealer(statement):
+    """*statement*, or a ``GrammarError`` when it is an offered damage sentence
+    that names its dealer without the causative "have".
+
+    "You may **have** it deal 4 damage" is how every offer of someone else's
+    damage is printed; "you may it deal 4 damage" is not a sentence, and the
+    verb table's uninflected "deal" (there for the causative) let the "may"
+    readers take it — so deleting "have" from Aether Charge left the clause's
+    parse unchanged, which the deletion probe reported as a word nothing read.
+    Asked by both readers of an offer's action without a "have" in front."""
+    if (
+        isinstance(statement, ast.DealDamage)
+        and statement.source is not None
+        and not statement.causative
+    ):
+        raise GrammarError(
+            "an offered damage sentence names its dealer through \"have\""
+        )
+    return statement
+
 # Zone names a destination clause can end in (CR 400.1).
 
 

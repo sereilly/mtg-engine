@@ -2059,3 +2059,54 @@ def test_w1g13_death_match_declined_does_nothing(set_pool):
     assert alices.effective_toughness == 3
 
 # ==== end W1G13 ======================================================
+
+
+# ==== W2G4 ==========================================================
+# W2G4's tests go between this line and the "end W2G4" line.
+
+# --- W2G4: the engine pile ---------------------------------------------------
+from engine import Game as _w2g4_Game
+from engine.models import Permanent as _w2g4_Permanent
+from engine.models import PlayerState as _w2g4_PlayerState
+
+from tests.helpers import resolve_stack as _w2g4_resolve_stack
+
+
+def _w2g4_charge_against(set_pool, circle):
+    """Aether Charge on Alice's side, *circle* armed on Bob's (answering any
+    source of its colour), then a Beast enters under Alice."""
+    ons, lea = set_pool("ONS"), set_pool("LEA")
+    alice, bob = _w2g4_PlayerState(name="Alice"), _w2g4_PlayerState(name="Bob")
+    game = _w2g4_Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game._put_permanent_onto_battlefield(0, _w2g4_Permanent(card=ons["Aether Charge"]), None)
+    game._put_permanent_onto_battlefield(1, _w2g4_Permanent(card=lea[circle]), None)
+    game._sync_control()
+    assert game.activate_permanent_ability(1, circle).supported
+    _w2g4_resolve_stack(game)
+    game._put_permanent_onto_battlefield(
+        0, _w2g4_Permanent(card=ons["Ravenous Baloth"]), None,
+    )
+    _w2g4_resolve_stack(game)
+    # The "you may" is Alice's to answer; the headless default takes it.
+    game.auto_resolve_pending_choices()
+    _w2g4_resolve_stack(game)
+    return game, bob
+
+
+def test_w2g4_aether_charge_has_the_beast_deal_the_damage(set_pool):
+    """"Whenever a Beast you control enters, you may have **it** deal 4 damage
+    to target opponent or planeswalker." The Beast is the source (CR 120.7),
+    so a green Circle stops it and a red one — the Charge's colour — does
+    not. The damage parse used to drop the causative "have", leaving a bare
+    "it" read like Mogg Bombers' own-source pronoun: the red Charge dealt it."""
+    game, bob = _w2g4_charge_against(set_pool, "Circle of Protection: Green")
+    assert bob.life == 20
+    assert "Circle of Protection prevented 4 damage to Bob from a G source" in game.log
+
+    game, bob = _w2g4_charge_against(set_pool, "Circle of Protection: Red")
+    assert bob.life == 16
+    assert "Ravenous Baloth dealt 4 damage" in game.log
+
+# ==== end W2G4 ======================================================
