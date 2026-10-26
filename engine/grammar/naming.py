@@ -529,7 +529,8 @@ def parse_secretly_chooses_number(
     ends in — so the second is consumed here rather than left to read as a
     statement of its own.
 
-    No floor is printed, and CR 107.1 gives one: the ruling (2004-10-04) "You
+    No floor is printed, and CR 107.1b gives one ("You can't choose a negative
+    number"), which the ruling (2004-10-04) restates: "You
     have to choose zero or a positive number. It must be an integer number."
     Every word is required, "secretly" first of all — without it the numbers
     are named in turn, each in sight of the last (CR 101.4b), which is

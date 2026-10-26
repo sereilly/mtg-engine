@@ -513,7 +513,14 @@ step, so the next seat is asked only once the one before has answered, and runs
 `then` once after the last answer — each player choosing a creature type
 (`handlers/value_choices.each_player_chooses_creature_type`), the each-seat
 discards (`handlers/discards`), and the each-seat hand picks and reveals
-(`handlers/hand._ask_each_seat_to_pick_from_hand`).
+(`handlers/hand._ask_each_seat_to_pick_from_hand`). **A secret number is not
+asked in turn**: "each player **secretly** chooses a number" (Goblin Game,
+Menacing Ogre) is the card setting 101.4b aside, so `secretly_choose_numbers`
+arms every seat's `secret_number` at once and the answer that completes the map
+logs the reveal. Two decisions by two different players in one sentence are the
+same loop over one seat with the second as its `then` — Blackmail's revealer
+picks the three cards to show, then the caster picks among them
+(`handlers/reveal._reveal_shown_cards_and_choose`).
 
 **Every damage call in `engine/handlers` and the combat damage step satisfy
 both and ask** (held by `tests/engine/test_kg_damage_handler_asks.py`); a
