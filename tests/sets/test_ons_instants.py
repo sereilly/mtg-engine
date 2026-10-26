@@ -524,6 +524,8 @@ def test_w1g7_wirewood_pride_counts_every_elf(set_pool):
 # W1G10's tests go between this line and the "end W1G10" line.
 
 # --- W1G10: control and the stack, on instants --------------------------------
+import pytest as _w1g10_pytest
+
 from engine import Game as _w1g10_Game
 from engine.models import Permanent as _w1g10_Permanent
 from engine.models import PlayerState as _w1g10_PlayerState
@@ -693,6 +695,94 @@ def test_w1g10_chain_of_plasma_the_damaged_creatures_controller_discards(set_poo
     assert placed["Hill Giant"].damage_marked == 3
     assert [c.name for c in game.players[1].graveyard] == ["Lightning Bolt"], game.log
     assert [c.name for c in game.players[0].hand] == ["Shock"], "the caster kept its card"
+
+
+# --- W1G10: Wheel and Deal ------------------------------------------------------
+#
+# "Any number of target opponents each discard their hands, then draw seven
+# cards. Draw a card." Announced as a chain of optional opponent seat roles
+# (`target_roles.any_number_of_opponents_roles`); the rulings (2004-10-04):
+# "You can choose to target zero opponents." "You can't target yourself."
+
+
+def _w1g10_wheel_table(set_pool):
+    game = _w1g10_Game(players=[
+        _w1g10_PlayerState(
+            name=f"P{seat + 1}", life=20,
+            library=[set_pool("LEA")["Island"]] * 12,
+        )
+        for seat in range(3)
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game.players[0].hand.append(set_pool("ONS")["Wheel and Deal"])
+    game.players[1].hand.extend(
+        [set_pool("LEA")["Lightning Bolt"], set_pool("LEA")["Mountain"]]
+    )
+    game.players[2].hand.append(set_pool("LEA")["Forest"])
+    return game
+
+
+@_w1g10_pytest.mark.parametrize("named, wheeled", [
+    ([1, 2], {1, 2}), ([2], {2}), ([], set()),
+])
+def test_w1g10_wheel_and_deal_wheels_exactly_the_named_opponents(set_pool, named, wheeled):
+    game = _w1g10_wheel_table(set_pool)
+    before = [len(player.hand) for player in game.players]
+    assert game.queue_from_hand(
+        0, "Wheel and Deal", target_role_refs=[{"seat": seat} for seat in named],
+    ).supported
+    _w1g10_resolve_stack(game)
+    for seat in (1, 2):
+        if seat in wheeled:
+            assert len(game.players[seat].hand) == 7, game.log
+            assert len(game.players[seat].graveyard) == before[seat]
+        else:
+            assert len(game.players[seat].hand) == before[seat]
+            assert game.players[seat].graveyard == []
+    # "Draw a card" — the caster, whoever was named (the spell itself went to
+    # the graveyard from the hand).
+    assert len(game.players[0].hand) == before[0] - 1 + 1, game.log
+
+
+@_w1g10_pytest.mark.parametrize("named", [[0], [1, 1], [2, 1]])
+def test_w1g10_wheel_and_deal_refuses_itself_a_repeat_and_a_reordering(set_pool, named):
+    """Not yourself; each opponent once (CR 115.3); and the set is announced
+    once, in seat order, rather than once per ordering."""
+    game = _w1g10_wheel_table(set_pool)
+    assert not game.queue_from_hand(
+        0, "Wheel and Deal", target_role_refs=[{"seat": seat} for seat in named],
+    ).supported
+    assert "Wheel and Deal" in [c.name for c in game.players[0].hand]
+    assert game.stack == []
+
+
+def test_w1g10_wheel_and_deal_skips_an_opponent_that_became_illegal(
+    set_pool, catalog_by_name,
+):
+    """CR 608.2b: of two named opponents, the one that gained shroud is not
+    affected and the rest of the spell happens; with that one alone named, the
+    whole spell is countered — the draw included."""
+    mask = catalog_by_name["Ivory Mask"]
+    game = _w1g10_wheel_table(set_pool)
+    assert game.queue_from_hand(
+        0, "Wheel and Deal", target_role_refs=[{"seat": 1}, {"seat": 2}],
+    ).supported
+    game._put_permanent_onto_battlefield(2, _w1g10_Permanent(card=mask), None)
+    _w1g10_resolve_stack(game)
+    assert len(game.players[1].hand) == 7 and len(game.players[2].hand) == 1, game.log
+
+    game = _w1g10_wheel_table(set_pool)
+    hand_before = len(game.players[0].hand)
+    assert game.queue_from_hand(
+        0, "Wheel and Deal", target_role_refs=[{"seat": 2}],
+    ).supported
+    game._put_permanent_onto_battlefield(2, _w1g10_Permanent(card=mask), None)
+    _w1g10_resolve_stack(game)
+    assert len(game.players[2].hand) == 1
+    assert len(game.players[0].hand) == hand_before - 1, "countered: no card drawn"
+    assert any("every target is illegal" in line for line in game.log), game.log
 
 # ==== end W1G10 ======================================================
 

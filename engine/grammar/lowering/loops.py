@@ -42,6 +42,7 @@ from __future__ import annotations
 from ...oracle_types import (CHOSEN_TARGET_PERMANENTS, COUNTERS_REMOVED,
                              DREW_COUNT, OracleInstruction)
 from ...subject_filters import OBJECT_ONLY_FILTER_KEYS, untestable_filter_keys
+from ...target_roles import any_number_of_opponents_roles
 from .. import ast
 from ..errors import LoweringError
 from ._common import _filter_payload
@@ -73,18 +74,38 @@ def _lower_for_each_player(
         )
     if not inner:
         raise LoweringError("a per-player loop with no effect in it", node=node)
-    return (
-        OracleInstruction(
-            "for_each", "",
-            {"iterator": {"players": node.iterator.kind}, "effect": inner},
-        ),
-    )
+    payload: dict[str, object] = {
+        "iterator": {"players": node.iterator.kind}, "effect": inner,
+    }
+    if node.iterator.kind == ANY_NUMBER_OF_TARGET_OPPONENTS:
+        # "**Any number of target opponents** each discard their hands, then
+        # draw seven cards." (Wheel and Deal.) The set is the one the
+        # announcement named (CR 601.2c), so the loop carries the
+        # announcement: a chain of optional opponent roles
+        # (``target_roles.any_number_of_opponents_roles``), read by the picker,
+        # both gates and CR 608.2b's re-check like every roles announcement.
+        # The body must announce nothing of its own — "that player" in it is
+        # the loop's seat, and a second description would be a second
+        # announcement the card does not print.
+        if any("targets" in (step.payload or {}) for step in inner):
+            raise LoweringError(
+                "a loop over announced opponents announces nothing else",
+                node=node,
+            )
+        payload["targets"] = any_number_of_opponents_roles()
+    return (OracleInstruction("for_each", "", payload),)
 
+
+#: "**Any number of target opponents** each …" (Wheel and Deal) — the seat
+#: set a loop walks when the announcement named it.
+ANY_NUMBER_OF_TARGET_OPPONENTS = "any_number_of_target_opponents"
 
 #: The player references that name a *set* of seats a loop can walk. The same
-#: two ``handlers/offers._offered_seats`` enumerates, and deliberately no
-#: more: a reference naming one seat is not a loop.
-_LOOPED_SEAT_SETS = frozenset({"each_player", "each_opponent"})
+#: two ``handlers/offers._offered_seats`` enumerates, plus the announced set
+#: above, and deliberately no more: a reference naming one seat is not a loop.
+_LOOPED_SEAT_SETS = frozenset({
+    "each_player", "each_opponent", ANY_NUMBER_OF_TARGET_OPPONENTS,
+})
 
 
 def _lower_for_each_matching(

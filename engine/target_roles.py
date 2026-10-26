@@ -257,7 +257,50 @@ ROLE_RELATION_TESTS = {
         and role_seat_of(earlier, game) is not None
         and role_seat_of(earlier, game) == game.controller_index_of(candidate)
     ),
+    # "**Any number of target opponents** each discard their hands …" (Wheel
+    # and Deal.) One printed instance of the word, so each opponent at most
+    # once (CR 115.3) — which the walk's taken-set already enforces — and the
+    # same *set* of opponents is one announcement rather than one per
+    # ordering, which is what this relation is for: each seat role after the
+    # first names a later seat than the one before it (:data:`LATER_SEAT_ROLE`,
+    # ``later_in_same_graveyard_role``'s canonical order one zone over).
+    "later_seat_role": lambda earlier, candidate, game: (
+        game is not None
+        and role_seat_of(earlier, game) is not None
+        and role_seat_of(candidate, game) is not None
+        and role_seat_of(candidate, game) > role_seat_of(earlier, game)
+    ),
 }
+
+#: The relation key :data:`ROLE_RELATION_TESTS` reads for "a later seat than
+#: the role before it" (Wheel and Deal's canonical order).
+LATER_SEAT_ROLE = "later_seat_role"
+
+#: How many seat roles "**any number of** target opponents" is announced
+#: through: one optional role per possible opponent, each after the last
+#: (:data:`LATER_SEAT_ROLE`), so an announcement names any subset of the
+#: opponents, the empty one included (the card's ruling: "You can choose to
+#: target zero opponents"). A spec is derived from the card alone, without a
+#: table to count, so the count is a bound: seven opponents, an eight-seat
+#: game — twice the four seats the web app seats (``web/session_store``). A
+#: game with more opponents than this could not name the rest.
+ANY_NUMBER_OF_SEAT_ROLES = 7
+
+
+def any_number_of_opponents_roles() -> dict:
+    """The ``roles`` description "any number of target opponents" lowers to:
+    :data:`ANY_NUMBER_OF_SEAT_ROLES` optional opponent roles, each a later seat
+    than the one before it."""
+    roles: list[dict] = []
+    for index in range(ANY_NUMBER_OF_SEAT_ROLES):
+        role: dict = {
+            "role": f"opponent {index + 1}", "kind": "player",
+            "opponents_only": True, OPTIONAL_ROLE: True,
+        }
+        if index:
+            role[LATER_SEAT_ROLE] = f"opponent {index}"
+        roles.append(role)
+    return {"kind": ROLES_TARGET_KIND, "roles": roles}
 
 
 def role_dependency(role: dict) -> tuple[str | None, str | None]:
