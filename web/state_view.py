@@ -999,13 +999,17 @@ def _zone_cast_options(session: Session, player_index: int) -> list[dict]:
             })
         entry["ways"] = ways
         entry["castable_now"] = any(way["castable_now"] for way in ways)
-        if entry["owner_seat"] != player_index:
+        if entry["owner_seat"] != player_index or zone == "library":
             # A card in **another player's** pile that a grant opens to this
             # seat (Shaman's Trance's "cast spells from other players'
             # graveyards", Grinning Totem's exiled card): that pile is
             # serialized for its owner, so its cards carry no cast spec — and
             # the cast prompts read the targets, X and costs off the spec. So
-            # the card rides here as *this* seat would cast it.
+            # the card rides here as *this* seat would cast it. The top of the
+            # seat's own **library** rides here too (Future Sight, Conspicuous
+            # Snoop, Radha): a library is never serialized card by card, even
+            # to its owner, so this is the one place a click on the pile can
+            # find the card's cast spec.
             entry["card"] = _serialize_card(card, game, player_index, from_zone=zone)
     return entries
 

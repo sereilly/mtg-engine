@@ -832,6 +832,20 @@
       </div>
     </div>
 
+    <!-- "Look at target face-down creature" (Aven Soulgazer, Spy Network):
+         what the looked-at face-down permanents are, shown to the looker
+         alone (CR 708.5) until they close it. -->
+    <div id="faceDownLookModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="faceDownLookTitle">
+      <div class="modal-box">
+        <h2 id="faceDownLookTitle" class="modal-title">Face-down creatures</h2>
+        <p id="faceDownLookSubtitle" class="modal-subtitle">Only you can see these.</p>
+        <div id="faceDownLookGrid" class="library-card-grid"></div>
+        <div class="modal-footer">
+          <button id="faceDownLookContinueBtn" type="button">Continue</button>
+        </div>
+      </div>
+    </div>
+
     <div id="lampDrawModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="lampDrawTitle">
       <div class="modal-box">
         <h2 id="lampDrawTitle" class="modal-title">Aladdin's Lamp</h2>

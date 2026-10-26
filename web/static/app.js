@@ -3899,6 +3899,18 @@ function getHandRevealInfo(state = currentState) {
   return info;
 }
 
+// "Look at target face-down creature" (Aven Soulgazer, Spy Network): the
+// server sends the look to the looker alone (`web/prompt_cards.py`'s
+// `face_down_look`, never spectator-visible — CR 708.5), with each looked-at
+// permanent by `id`, its controller's seat and the card it hides. A
+// notification like `hand_reveal`: nothing waits on it.
+function getFaceDownLookInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.face_down_look;
+  if (!info || info.viewer_seat !== seat) return null;
+  return info;
+}
+
 // ---------------------------------------------------------------------------
 // Prompt board targeting
 // ---------------------------------------------------------------------------
@@ -11493,6 +11505,72 @@ function renderHandRevealModal(info) {
   }
 }
 
+// The face-down cards a look shows (`getFaceDownLookInfo`), each captioned
+// with whose face-down creature it is — the board shows them as 2/2s, and the
+// caption is what ties a card here to one of them. A permanent turned face up
+// or gone since is public and the server leaves it out, so the list can be
+// empty. Continue sends `dismiss_face_down_look`.
+function faceDownLookCaption(entry, state = currentState) {
+  const controller = Number.isInteger(entry?.controller_seat) ? entry.controller_seat : null;
+  const whose = controller === seat
+    ? "Your"
+    : `${state?.players?.[controller]?.name || "Opponent"}'s`;
+  return `${whose} face-down creature`;
+}
+
+function renderFaceDownLookModal(info) {
+  const modal = document.getElementById("faceDownLookModal");
+  if (!modal) return;
+  if (!info) {
+    modal.classList.add("hidden");
+    return;
+  }
+  const entries = Array.isArray(info.permanents) ? info.permanents : [];
+  const title = document.getElementById("faceDownLookTitle");
+  if (title) title.textContent = info.source_name ? `${info.source_name}: face-down creatures` : "Face-down creatures";
+  const subtitle = document.getElementById("faceDownLookSubtitle");
+  if (subtitle) {
+    subtitle.textContent = entries.length === 0
+      ? "Nothing you looked at is still face down."
+      : `What ${entries.length === 1 ? "it is" : "they are"} — only you can see this (CR 708.5). Click Continue when done.`;
+  }
+  modal.classList.remove("hidden");
+
+  const grid = document.getElementById("faceDownLookGrid");
+  if (grid) {
+    grid.innerHTML = entries
+      .map((entry, i) => {
+        const card = entry?.card || {};
+        const name = card.name || "Face-down creature";
+        const inner = card.image_uri
+          ? `<img src="${escapeHtml(card.image_uri)}" alt="${escapeHtml(name)}" loading="lazy" />`
+          : `<div class="library-card-text-placeholder">${escapeHtml(name)}</div>`;
+        return `<div class="library-card-choice" data-face-down-look-index="${i}">${inner}`
+          + `<div class="library-card-choice-name">${escapeHtml(name)}</div>`
+          + `<div class="library-card-choice-name">${escapeHtml(faceDownLookCaption(entry))}</div></div>`;
+      })
+      .join("");
+    grid.querySelectorAll("[data-face-down-look-index]").forEach((el) => {
+      const card = entries[Number(el.dataset.faceDownLookIndex)]?.card;
+      el.addEventListener("mouseenter", () => card && showCardPreview(card));
+      el.addEventListener("mouseleave", () => clearCardPreview());
+    });
+  }
+
+  const continueBtn = document.getElementById("faceDownLookContinueBtn");
+  if (continueBtn && !continueBtn.dataset.bound) {
+    continueBtn.dataset.bound = "1";
+    continueBtn.addEventListener("click", async () => {
+      modal.classList.add("hidden");
+      try {
+        await sendAction({ seat, action: "dismiss_face_down_look" });
+      } catch (e) {
+        updateActionHint(e.message, true);
+      }
+    });
+  }
+}
+
 function renderReorderLibraryModal(info) {
   const modal = document.getElementById("reorderLibraryModal");
   if (!modal) return;
@@ -12824,9 +12902,7 @@ function renderActivationPrompt() {
         // CR 118.9d: a cost increase applies to an alternative cost too, so
         // under Sphere of Resistance a pitched card and a life still owe {1}.
         // The server's label (`mana_owed`), absent on an untaxed board.
-        const owedNote = offer.mana_owed
-          ? ` — plus ${renderSymbolsInline(offer.mana_owed)} in mana that is still owed (cost increases apply to it, CR 118.9d)`
-          : "";
+        const owedNote = alternativeOfferOwedNote(offer);
         const buttons = [
           `<button type="button" class="prompt-choice-btn${declined ? " selected" : ""}"`
           + ` data-alt-choice="decline">Pay ${escapeHtml(pending.card.mana_cost || "its mana cost")}</button>`,
@@ -16121,6 +16197,18 @@ function castOffersAreLive(offers) {
   ));
 }
 
+// What an alternative cost's offer says about the mana it takes. The server's
+// `mana_owed` is **all** the mana that cast is charged — the cost's own mana
+// plus any CR 118.9d increase — so it is said as the whole, never as "plus":
+// a morph's "cast it face down … for {3}" owes {3}, and "plus {3}" read as a
+// second {3} on top (a {6} face-down cast). For a cost with no mana of its own
+// (Force of Will's life and card) it is exactly the tax, and "in all" is still
+// true. Empty when nothing is owed.
+function alternativeOfferOwedNote(offer) {
+  if (!offer?.mana_owed) return "";
+  return ` — ${renderSymbolsInline(offer.mana_owed)} in mana in all (cost increases apply to it, CR 118.9d)`;
+}
+
 function startCastOfferPrompt(card, castAction = "cast") {
   const cardName = normalizeCardName(card);
   if (!cardName) return false;
@@ -19171,7 +19259,60 @@ function previewEntryChoiceLines(card) {
     .map((choice) => `${choice.label}: ${choice.value ?? ""}`);
 }
 
+// CR 708: what the preview of a face-down permanent or spell shows. Its
+// controller is sent the card it hides (`hidden_card`, CR 708.5), so the
+// preview is that card — name, art, text — with the face-down 2/2's own
+// tapped/sick/counter state, and a line saying the rest of the table sees a
+// 2/2 with nothing on it. Anyone else is sent the blank 2/2 alone: the
+// preview stays that, a card back with no name or text. A stack item's
+// fields ride its card (`faceDownStackItem`, battlefield-canvas.js).
+function faceDownPreviewCard(card) {
+  if (!card || typeof card !== "object" || card.face_down !== true) return card;
+  const hidden = card.hidden_card && typeof card.hidden_card === "object" ? card.hidden_card : null;
+  if (!hidden) {
+    return {
+      ...card,
+      name: "Face-down creature",
+      type: "Creature",
+      oracle_text: "",
+      image_uri: null,
+      large_image_uri: null,
+      face_down_preview: "hidden",
+    };
+  }
+  return {
+    ...card,
+    name: hidden.name,
+    type: hidden.type || "",
+    oracle_text: hidden.oracle_text || "",
+    image_uri: hidden.image_uri || null,
+    large_image_uri: hidden.large_image_uri || null,
+    art_crop: hidden.art_crop || null,
+    // Its printed text's keywords are not the face-down 2/2's (it has none,
+    // CR 708.2a); the live keywords list below is the permanent's own.
+    face_down_preview: "controller",
+    face_down_morph_cost: hidden.morph_cost || null,
+  };
+}
+
+function faceDownPreviewLines(card) {
+  if (!card || typeof card !== "object" || !card.face_down_preview) return [];
+  const pt = typeof card.power === "number" && typeof card.toughness === "number"
+    ? `${card.power}/${card.toughness}` : "2/2";
+  if (card.face_down_preview === "hidden") {
+    return [`Face down: a ${pt} creature with no name, text, subtypes or mana cost (CR 708.2a).`];
+  }
+  const lines = [
+    `Face down — only you can see what it is (CR 708.5). Everyone else sees a ${pt} creature with no name or text.`,
+  ];
+  if (card.face_down_morph_cost) {
+    lines.push(`Turn it face up any time you have priority: Morph ${card.face_down_morph_cost}.`);
+  }
+  return lines;
+}
+
 function showCardPreview(card) {
+  card = faceDownPreviewCard(card);
   _cancelPendingPreviewHide();
   q("cardPreviewOverlay")?.classList.remove("hidden");
   const largeImageUri = normalizeLargeImageUri(card);
@@ -19194,6 +19335,7 @@ function showCardPreview(card) {
   if (typeof card === "object" && card?.is_commander) {
     sections.push("👑 Commander - this is the designated commander card");
   }
+  for (const line of faceDownPreviewLines(card)) sections.push(renderSymbolsInline(line));
   if (keywordLabel) sections.push(renderSymbolsInline(keywordLabel));
   // Above the rules text, beside the keywords: "the chosen color" in the text
   // below reads against the line that says which colour that is.
@@ -20179,6 +20321,42 @@ function startZoneWayCostPrompt(card, way) {
   renderActivationPrompt();
   updateActionHint(`Choose what pays ${cardName}'s ${keyword.toLowerCase()} cost.`);
   return true;
+}
+
+// The viewer's own library entry in `castable_from_zones`: CR 601.3 opens a
+// library at its top card alone (Future Sight's "play lands and cast spells",
+// Conspicuous Snoop's Goblins, Radha's lands), so the server lists at most
+// index 0, judged with its ways and prices like any other pile's.
+function libraryTopCastEntry(state = currentState) {
+  return (state?.castable_from_zones || []).find(
+    (entry) => entry.zone === "library" && (entry.owner_seat ?? seat) === seat && entry.index === 0,
+  ) || null;
+}
+
+// A click on a library pile. The viewer's own pile casts or plays its top card
+// through the zone cast every other pile uses (`beginZoneCast`) when the
+// server lists it; the entry carries the card as this seat would cast it
+// (`castable_from_zones[].card`, with its target spec — a library is not
+// serialized card by card). Any other pile showing a card (a revealed top, or
+// the owner's private look) previews it; a face-down pile does nothing.
+function libraryPileClicked(info) {
+  const entry = info.seat === seat ? libraryTopCastEntry() : null;
+  if (!entry) {
+    if (info.topCard) {
+      showCardPreview(info.topCard);
+      if (info.seat === seat) {
+        updateActionHint(`${info.topCard.name} can't be cast or played from the top of your library.`);
+      }
+    }
+    return;
+  }
+  if (pendingCastTarget || pendingCastHandCard) {
+    updateActionHint("Finish the current cast before starting another.", true);
+    return;
+  }
+  const card = entry.card || info.topCard;
+  if (!card) return;
+  beginZoneCast(card, "library", entry);
 }
 
 async function beginZoneCast(card, zone, entry = null, way = null, { madnessSlot = null } = {}) {
@@ -22832,6 +23010,7 @@ function renderState(state, { skipStaleCheck = false } = {}) {
   renderReorderLibraryModal(reorderLibraryInfo);
   renderScryModal(getScryInfo(state));
   renderHandRevealModal(getHandRevealInfo(state));
+  renderFaceDownLookModal(getFaceDownLookInfo(state));
   renderDrawChoiceModals(state);
   attemptPendingActivation();
 
@@ -23480,7 +23659,11 @@ function initBattlefieldCanvas() {
     },
 
     onZonePileClick(info) {
-      if (!info || info.kind === "library") return;
+      if (!info) return;
+      if (info.kind === "library") {
+        libraryPileClicked(info);
+        return;
+      }
       // The viewer's own command zone holding exactly one castable commander:
       // the window would offer a single click, so the pile click IS that click.
       if (info.kind === "command" && info.seat === seat) {
@@ -24204,7 +24387,24 @@ const SPECIAL_ACTION_LABELS = {
   // Lost in Thought). Without a label the button was dropped, and the offer
   // was one no person could take.
   ignore_attached_static_until_eot: (name) => `Ignore ${name} until end of turn`,
+  // CR 702.37e — turn a face-down permanent with a morph ability face up by
+  // paying its morph cost (CR 116.2b). Without a label the offer was dropped,
+  // and no person could ever turn a morph up.
+  turn_face_up: (name, entry) => turnFaceUpActionLabel(entry),
 };
+
+// "Turn Exalted Angel face up — Morph {2}{W}{W}". The entry's `name` is the
+// face-down 2/2's ("Face-down creature"); the card it hides is on the
+// viewer's own payload for that permanent (`hidden_card`, CR 708.5 — the
+// offer is only ever listed for the controller, who is sent it). The price is
+// the server's `morph_cost` (CR 702.37e), never re-read from the card text.
+function turnFaceUpActionLabel(entry) {
+  const own = currentState?.players?.[seat]?.battlefield || [];
+  const permanent = own.find((perm) => perm?.id === entry?.permanent_id) || null;
+  const hidden = permanent?.hidden_card?.name || "this face-down creature";
+  const cost = entry?.morph_cost || permanent?.hidden_card?.morph_cost || "";
+  return cost ? `Turn ${hidden} face up — Morph ${cost}` : `Turn ${hidden} face up`;
+}
 
 // The price a CR 116.2d offer names, chosen before the action is sent: which
 // graveyard cards pay "exile three cards from their graveyard"
@@ -24284,7 +24484,9 @@ function renderSpecialActions(state, hasPriority) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "secondary-btn";
-    button.textContent = label(entry.name);
+    // Through the symbol renderer (which escapes the rest), so a price such as
+    // a morph cost reads as mana symbols.
+    button.innerHTML = renderSymbolsInline(label(entry.name, entry));
     button.title = "A special action (CR 116): it does not use the stack.";
     button.addEventListener("click", () => {
       // Whichever address the entry carries: a hand slot for CR 116.2e and a
