@@ -152,8 +152,93 @@ def object_creature_types(game, obj, seat=None) -> frozenset[str]:
     return card_creature_types(game, getattr(obj, "card", obj), seat)
 
 
+# ---------------------------------------------------------------------------
+# "Share a creature type" — the relation (CR 205.3m), the twin of
+# ``object_colors.share_a_color`` one characteristic over.
+# ---------------------------------------------------------------------------
+
+
+def creature_types(game, obj, seat=None) -> frozenset[str]:
+    """The **creature** types of any object — CR 205.3m's list, and nothing
+    else on the subtype line.
+
+    :func:`object_creature_types` answers with every subtype the object has,
+    which is right for "is it a Goblin?" and wrong for a relation: an animated
+    Forest's "forest" and an Equipment's "equipment" are subtypes, but they are
+    not creature types, and two Forests do not "share a creature type". So the
+    answer is narrowed to the creature-type vocabulary (``data/vocabulary/``),
+    never to a list spelled here.
+
+    Through the layers for a permanent (a Mistform that became a Goblin is a
+    Goblin; a face-down creature is a blank with none, CR 708.2) and through
+    :func:`card_creature_types` for a card (Conspiracy's second sentence), so
+    every reader of the relation reads one set.
+    """
+    from .grammar.vocabulary import CREATURE_TYPES
+
+    return frozenset(
+        str(word).lower() for word in object_creature_types(game, obj, seat)
+    ) & CREATURE_TYPES
+
+
+def share_a_creature_type(one, other) -> bool:
+    """Whether two creature-type sets share a creature type.
+
+    A non-empty **intersection**, for ``share_a_color``'s reason exactly: an
+    object with no creature type shares one with nothing — not even with
+    another typeless object — and a creature of several types shares with
+    anything having one of them. Takes anything iterable over lowercase type
+    words, so a set out of :func:`creature_types`, a list a resolver carried in
+    a payload and a frozenset a record kept all ask the one question.
+    """
+    return bool(frozenset(one or ()) & frozenset(other or ()))
+
+
+def shares_a_creature_type_with_each(types, anchors) -> bool:
+    """Whether *types* shares a creature type with **each** of *anchors*.
+
+    "…a creature card from your hand that shares a creature type with **each
+    creature tapped this way**" (Cryptic Gateway). Each anchor is asked on its
+    own, so the shared type may differ from one anchor to the next — the card's
+    ruling (2022-12-08): an Elf Warrior shares Elf with an Elf Wizard and
+    Warrior with a Human Warrior, and qualifies for both.
+
+    One anchor is the plain relation, which is why every reader goes through
+    this form. **No anchor is no match**: "each of nothing" is vacuously true,
+    and a resolver that lost its record would otherwise admit every object —
+    the direction a dropped narrowing must never fail in.
+    """
+    anchor_sets = [frozenset(anchor or ()) for anchor in anchors]
+    if not anchor_sets:
+        return False
+    mine = frozenset(types or ())
+    return all(mine & anchor for anchor in anchor_sets)
+
+
+def shared_creature_type_count(type_sets) -> int:
+    """The size of the largest group of *type_sets* that all share **one**
+    creature type.
+
+    "…three or more creatures **that share a creature type**" (Graxiplon). The
+    group must have a type in common among all of its members — a Goblin
+    Warrior, a Goblin and an Elf Warrior are not three that share one, though
+    each pair of them does — so this counts, per creature type, how many of the
+    objects have it, and takes the greatest. An object with no creature type
+    belongs to no group.
+    """
+    tally: dict[str, int] = {}
+    for types in type_sets:
+        for word in frozenset(types or ()):
+            tally[word] = tally.get(word, 0) + 1
+    return max(tally.values(), default=0)
+
+
 __all__ = [
     "card_creature_types",
     "creature_type_override_for_seat",
+    "creature_types",
     "object_creature_types",
+    "share_a_creature_type",
+    "shared_creature_type_count",
+    "shares_a_creature_type_with_each",
 ]

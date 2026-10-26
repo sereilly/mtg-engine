@@ -567,6 +567,39 @@ def _parse_postmodifiers(
             ) or stream.accept_phrase("shares", "a", "color", "with", "it"):
                 d.shares_color_with_it = True
                 continue
+            # "…creatures **that share a creature type with it**" (Mana
+            # Echoes, the Crowns), "…**with the sacrificed creature**" (Endemic
+            # Plague), "…a creature card **that shares a creature type with
+            # each creature tapped this way**" (Cryptic Gateway). CR 205.3m's
+            # relation, the colour arm above one characteristic over, with the
+            # far end recorded as printed (``ObjectFilter
+            # .shares_creature_type_with``) — which object it names is the
+            # lowering's. Only these three far ends: any other phrase after
+            # "with" is put back whole, so the line fails on its own words.
+            elif (
+                stream.at_word("share", "shares")
+                and stream.peek_word(1) == "a"
+                and stream.peek_word(2) == "creature"
+                and stream.peek_word(3) == "type"
+                and stream.peek_word(4) == "with"
+            ):
+                relation_at = stream.mark()
+                for _ in range(5):
+                    stream.advance()
+                if stream.accept_word("it"):
+                    d.shares_creature_type_with = "it"
+                    continue
+                if stream.accept_phrase("the", "sacrificed", "creature"):
+                    d.shares_creature_type_with = "sacrificed_for_cost"
+                    continue
+                if stream.accept_phrase(
+                    "each", "creature", "tapped", "this", "way"
+                ):
+                    d.shares_creature_type_with = "tapped_for_cost"
+                    continue
+                stream.reset(relation_at)
+                stream.reset(probe)
+                break
             # "…**that doesn't have cumulative upkeep**" (Balduvian Shaman).
             # The relative-clause spelling of "without <keyword>", which
             # `with_clauses` reads — the same restriction and the same field,

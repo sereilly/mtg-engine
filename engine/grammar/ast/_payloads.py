@@ -216,6 +216,11 @@ def object_filter_payload(self: "ObjectFilter") -> dict[str, object]:
         # so the phrase refuses unless a lowering lifts it out and names the
         # cost record the colours are read from.
         payload["colors_of_sacrificed_for_cost"] = True
+    if self.shares_creature_type_with:
+        # Emitted for the two reasons above: the key is outside every testable
+        # set, so the phrase refuses unless a lowering lifts it out and names
+        # the object "it" or "the sacrificed creature" is.
+        payload["shares_creature_type_with"] = self.shares_creature_type_with
     if self.excluded_basic_lands:
         payload["exclude_basic_lands"] = True
     if self.not_enchanted:

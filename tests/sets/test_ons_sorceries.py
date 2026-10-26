@@ -475,6 +475,135 @@ def test_w1g4_aphetto_dredging_refuses_rather_than_dropping_its_narrowing(set_po
 # ==== W1G6 ==========================================================
 # W1G6's tests go between this line and the "end W1G6" line.
 
+# "Share a creature type" (CR 205.3m) — Endemic Plague: the relation measured
+# against the creature the cast's own cost sacrificed, as it last existed on
+# the battlefield (CR 608.2h).
+
+from engine import Game as _W1G6Game, PlayerState as _W1G6PlayerState
+from engine.models import Permanent as _W1G6Permanent
+from tests.helpers import resolve_stack as _w1g6_resolve_stack
+
+
+def _w1g6_card(set_pool, name):
+    for code in ("ONS", "LEA"):
+        pool = set_pool(code)
+        if name in pool:
+            return pool[name]
+    raise KeyError(name)
+
+
+def _w1g6_duel(set_pool, *, hand=(), interactive=()):
+    me = _W1G6PlayerState(
+        name="Me", hand=[_w1g6_card(set_pool, n) for n in hand],
+        library=[_w1g6_card(set_pool, "Swamp")] * 6,
+    )
+    opp = _W1G6PlayerState(name="Opp", library=[_w1g6_card(set_pool, "Forest")] * 6)
+    game = _W1G6Game(players=[me, opp])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    return game
+
+
+def _w1g6_put(game, set_pool, seat, name):
+    perm = _W1G6Permanent(card=_w1g6_card(set_pool, name))
+    game._put_permanent_onto_battlefield(seat, perm, None)
+    perm.metadata["summoning_sickness_turn"] = -99
+    return perm
+
+
+def test_w1g6_endemic_plague_destroys_every_creature_sharing_a_type_with_the_sacrificed_one(set_pool):
+    """"As an additional cost to cast this spell, sacrifice a creature. Destroy
+    all creatures that share a creature type with the sacrificed creature."
+    The Elf Warrior paid for it: the Elf Druid shares Elf and the Goblin
+    Warrior shares Warrior — on either side of the table — and the Human
+    Soldier, the Bear and the Elemental share nothing, so they stay."""
+    game = _w1g6_duel(set_pool, hand=["Endemic Plague"])
+    paid = _w1g6_put(game, set_pool, 0, "Elvish Warrior")
+    elf = _w1g6_put(game, set_pool, 0, "Wirewood Elf")
+    human = _w1g6_put(game, set_pool, 0, "Glory Seeker")
+    goblin = _w1g6_put(game, set_pool, 1, "Goblin Sky Raider")
+    elemental = _w1g6_put(game, set_pool, 1, "Silvos, Rogue Elemental")
+    bear = _w1g6_put(game, set_pool, 1, "Grizzly Bears")
+    game._recompute_continuous_effects()
+
+    spec = game.cast_target_spec(0, _w1g6_card(set_pool, "Endemic Plague"))
+    assert spec["sacrifice_cost"] and spec["own_only"]
+    assert game.queue_from_hand(
+        0, "Endemic Plague", cost_permanent_ids=[paid.permanent_id],
+    ).supported
+    assert [card.name for card in game.players[0].graveyard] == ["Elvish Warrior"]
+    _w1g6_resolve_stack(game)
+
+    assert not game.is_on_battlefield(elf), game.log
+    assert not game.is_on_battlefield(goblin), game.log
+    for survivor in (human, elemental, bear):
+        assert game.is_on_battlefield(survivor), (survivor.card.name, game.log)
+    assert "Endemic Plague destroyed Wirewood Elf, Goblin Sky Raider" in game.log
+
+
+def test_w1g6_endemic_plague_cannot_be_regenerated_from(set_pool):
+    """"They can't be regenerated." Silvos's regeneration shield is up, and the
+    Elemental the Plague is measured against takes it anyway — while the
+    Goblin, which shares no type with an Air Elemental, is untouched."""
+    game = _w1g6_duel(set_pool, hand=["Endemic Plague"])
+    paid = _w1g6_put(game, set_pool, 0, "Air Elemental")
+    silvos = _w1g6_put(game, set_pool, 1, "Silvos, Rogue Elemental")
+    goblin = _w1g6_put(game, set_pool, 1, "Goblin Sky Raider")
+    game._recompute_continuous_effects()
+    assert game.queue_permanent_ability(1, "Silvos, Rogue Elemental").supported
+    _w1g6_resolve_stack(game)
+    assert any("regenerat" in line.lower() for line in game.log), game.log
+
+    assert game.queue_from_hand(
+        0, "Endemic Plague", cost_permanent_ids=[paid.permanent_id],
+    ).supported
+    _w1g6_resolve_stack(game)
+
+    assert not game.is_on_battlefield(silvos), game.log
+    assert "Silvos, Rogue Elemental" in [c.name for c in game.players[1].graveyard]
+    assert game.is_on_battlefield(goblin)
+
+
+def test_w1g6_endemic_plague_reads_the_type_the_sacrificed_creature_last_had(set_pool):
+    """The sacrificed creature is gone by resolution, so its creature types are
+    the ones it last had on the battlefield (CR 608.2h). Imagecrafter made the
+    sacrificed Grizzly Bears a Goblin until end of turn — which *replaced* Bear
+    (CR 205.1a) — so the Goblin dies and the other Grizzly Bears lives."""
+    game = _w1g6_duel(set_pool, hand=["Endemic Plague"], interactive=[0])
+    _w1g6_put(game, set_pool, 0, "Imagecrafter")
+    paid = _w1g6_put(game, set_pool, 0, "Grizzly Bears")
+    goblin = _w1g6_put(game, set_pool, 1, "Goblin Sky Raider")
+    other_bears = _w1g6_put(game, set_pool, 1, "Grizzly Bears")
+    game._recompute_continuous_effects()
+    assert game.queue_permanent_ability(
+        0, "Imagecrafter", target_permanent_ids=[paid.permanent_id],
+    ).supported
+    game.resolve_top_of_stack(pause_for_choices=True)
+    assert game.confirm_creature_type_choice(0, "Goblin") is True
+    _w1g6_resolve_stack(game)
+    assert not paid.has_type("bear") and paid.has_type("goblin")
+
+    assert game.queue_from_hand(
+        0, "Endemic Plague", cost_permanent_ids=[paid.permanent_id],
+    ).supported
+    _w1g6_resolve_stack(game)
+
+    assert not game.is_on_battlefield(goblin), game.log
+    assert game.is_on_battlefield(other_bears), game.log
+
+
+def test_w1g6_endemic_plague_cannot_be_cast_without_a_creature_to_sacrifice(set_pool):
+    """Endemic Plague (2013-04-15): "You must sacrifice exactly one creature to
+    cast this spell; you cannot cast it without sacrificing a creature." With
+    no creature of its caster's on the battlefield the cast is refused and the
+    opponent's creatures are untouched."""
+    game = _w1g6_duel(set_pool, hand=["Endemic Plague"])
+    goblin = _w1g6_put(game, set_pool, 1, "Goblin Sky Raider")
+    result = game.queue_from_hand(0, "Endemic Plague")
+    assert not result.supported, result
+    assert [card.name for card in game.players[0].hand] == ["Endemic Plague"]
+    assert game.is_on_battlefield(goblin)
+
 # ==== end W1G6 ======================================================
 
 

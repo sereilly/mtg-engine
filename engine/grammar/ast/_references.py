@@ -669,6 +669,18 @@ class ObjectFilter:
     #: answer differs: that one needs the firing event and this one the cast's
     #: cost record, and a lowering written for either refuses the other by name.
     colors_of_sacrificed_for_cost: bool = False
+    #: "…that **share a creature type with** <referent>" (CR 205.3m; the
+    #: Onslaught relation). The far end as printed, never resolved here:
+    #: ``"it"`` (the pronoun — Mana Echoes' entering creature, or the enchanted
+    #: creature once ``subject_verb`` rebinds it to ``"attached_host"`` in "Enchanted
+    #: creature and other creatures that share a creature type with it", the
+    #: Crowns), ``"sacrificed_for_cost"`` ("with the sacrificed creature",
+    #: Endemic Plague) and ``"tapped_for_cost"`` ("with each creature tapped
+    #: this way", Cryptic Gateway — the "each" form). Which object each one is,
+    #: and whether this position has one at all, is the lowering's to decide;
+    #: ``to_payload`` emits the referent under a key outside every testable set,
+    #: so a lowering not written for it refuses the phrase by name.
+    shares_creature_type_with: str | None = None
     # "…**other than a basic land**" / "…**except for basic lands**" (Eye of
     # Singularity prints both, one on each line). One field for two spellings,
     # because they name the same set: a permanent that is a land with the Basic
