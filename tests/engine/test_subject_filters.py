@@ -818,6 +818,11 @@ _COVERED_ELSEWHERE = {
     # --- TOR W1G2 ---
     "power_vs_count":
         "test_tor_w1g2_a_power_bound_counts_the_observer_s_own_pile",
+    # --- ONS W1G6 ---
+    "shares_creature_type_with_attached_host":
+        "test_ons_w1g6_sharing_a_type_with_the_host_reads_the_last_host_once_the_aura_left",
+    "shares_creature_type_with_each":
+        "test_ons_w1g6_sharing_a_type_with_each_anchor_asks_every_anchor",
 }
 
 
@@ -2687,3 +2692,55 @@ def test_face_down_and_a_morph_ability_are_asked_of_the_permanent_as_it_is_now(p
     assert subject_matches(game, up, morph) and not subject_matches(game, up, face_down)
     assert subject_matches(game, clone, morph)
     assert {"face_down_only", "with_morph_ability"} <= OBJECT_ONLY_FILTER_KEYS
+
+
+def test_ons_w1g6_sharing_a_type_with_the_host_reads_the_last_host_once_the_aura_left(pool):
+    """"Enchanted creature and other creatures **that share a creature type
+    with it**" (the Crowns). Relative to the ability's source's host: an Elf
+    Druid shares Elf with an enchanted Elf Warrior and a Human Soldier shares
+    nothing; with no source, or a source attached to nothing, nothing matches.
+    Once the Aura has been sacrificed (its own cost), the host it was last
+    attached to is still the far end (CR 608.2h)."""
+    from engine.aura_attachment import attach_aura
+
+    host = Permanent(card=pool["Elvish Warrior"])
+    elf = Permanent(card=pool["Wirewood Elf"])
+    human = Permanent(card=pool["Glory Seeker"])
+    crown = Permanent(card=pool["Crown of Vigor"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[host, elf, human, crown]),
+        PlayerState(name="P2"),
+    ])
+    attach_aura(crown, host)
+    described = {"type_filter": "creature", "shares_creature_type_with_attached_host": True}
+    assert subject_matches(game, elf, described, source=crown)
+    assert subject_matches(game, host, described, source=crown)
+    assert not subject_matches(game, human, described, source=crown)
+    assert not subject_matches(game, elf, described)
+    assert not subject_matches(game, elf, described, source=human)
+    assert "shares_creature_type_with_attached_host" not in OBJECT_ONLY_FILTER_KEYS
+
+    game.remove_from_battlefield(crown)
+    assert not game.is_on_battlefield(crown)
+    assert subject_matches(game, elf, described, source=crown)
+    assert not subject_matches(game, human, described, source=crown)
+
+
+def test_ons_w1g6_sharing_a_type_with_each_anchor_asks_every_anchor(pool):
+    """The relation once a resolution has named its far ends: one list of
+    creature types per object, every one of which must be shared. An Elf
+    Warrior shares with an Elf Wizard *and* a Human Warrior; an Elf Druid shares
+    with the first only. Readable off the candidate alone, for a permanent and
+    a card in a hand alike."""
+    from engine.handlers._filters import _card_matches_filter
+
+    described = {
+        "type_filter": "creature",
+        "shares_creature_type_with_each": [["elf", "wizard"], ["human", "warrior"]],
+    }
+    game = Game(players=[PlayerState(name="P1"), PlayerState(name="P2")])
+    assert subject_matches(game, Permanent(card=pool["Elvish Warrior"]), described)
+    assert not subject_matches(game, Permanent(card=pool["Wirewood Elf"]), described)
+    assert _card_matches_filter(pool["Elvish Warrior"], described)
+    assert not _card_matches_filter(pool["Wirewood Elf"], described)
+    assert "shares_creature_type_with_each" in OBJECT_ONLY_FILTER_KEYS

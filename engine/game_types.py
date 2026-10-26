@@ -83,6 +83,11 @@ CHOICE_KEYS = (
     # last-known information — a board scan would name whichever creature its
     # controller happens to have tapped since.
     "tapped_for_cost",
+    # …and **every** permanent that tap cost tapped, as a list, for a phrase
+    # that names each of them: "…a creature card from your hand that shares a
+    # creature type with **each creature tapped this way**" (Cryptic Gateway).
+    # Read by ``handlers/_chosen.shared_creature_type_anchors``.
+    "tapped_set_for_cost",
     # The cards a printed **discard** cost ate, same channel and same reason:
     # "If the discarded card was a land card" (Land's Edge) is asked when the
     # card is already in a graveyard, which CR 400.7 makes a different object.
