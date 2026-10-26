@@ -778,6 +778,26 @@ def harms_its_own_source(instruction: OracleInstruction | None) -> bool:
     )
 
 
+#: The effects that do nothing as they resolve but **arm a replacement for a
+#: later draw this turn** (CR 614.1): "The next time you would draw a card
+#: this turn, <effect> instead." (the Words, Mangara's Tome), its Ring of
+#: Ma'rûf spelling, and Aladdin's Lamp's. Their whole worth is that draw —
+#: armed in a main phase after the seat's draw step, with nothing to draw
+#: with, the mana is spent on nothing.
+DRAW_REPLACEMENT_ARMINGS = frozenset({
+    "arm_draw_replacement",
+    "arm_outside_game_draw_replacement",
+    "arm_lamp_draw_replacement",
+})
+
+
+def waits_on_a_later_draw(instruction: OracleInstruction | None) -> bool:
+    """Whether an ability's effect is only an armed draw replacement
+    (:data:`DRAW_REPLACEMENT_ARMINGS`) — worth what the draw it waits for is
+    worth, which only a rehearsal of the turn can say."""
+    return instruction is not None and instruction.kind in DRAW_REPLACEMENT_ARMINGS
+
+
 def source_toughness_change(instruction: OracleInstruction | None) -> int | None:
     """The toughness change an effect makes to its own source, when that is the
     whole of the effect — every step a ``pump_self`` with printed numbers — or
@@ -1022,6 +1042,7 @@ def library_top_setups(card: CardDefinition, x_value: "int | None" = None) -> tu
 
 
 __all__ = [
+    "DRAW_REPLACEMENT_ARMINGS",
     "MANA_ABILITY_KINDS",
     "SOURCE_HAMPER_KINDS",
     "SOURCE_REMOVAL_KINDS",
@@ -1046,4 +1067,5 @@ __all__ = [
     "source_toughness_change",
     "spell_hand_pick_entries",
     "spell_hand_pick_entry_filters",
+    "waits_on_a_later_draw",
 ]

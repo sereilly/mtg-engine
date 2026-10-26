@@ -36,6 +36,7 @@ from .ai_valuation import (
     is_mana_ability,
     source_becomes_an_aura,
     source_toughness_change,
+    waits_on_a_later_draw,
 )
 from .activation_permissions import activation_permission_denial
 from .activation_prohibitions import activation_prohibition
@@ -736,9 +737,14 @@ def _activation_candidate(
         ability_index=ability_index,
         chosen_keyword=chosen_keyword,
     )
-    if ability_index is not None:
-        # A land's ability: proposed only where carrying it out on a copy of
-        # the game leaves the seat ahead once the turn is over.
+    # A land's ability, and an ability whose whole effect is a replacement
+    # armed for a later draw this turn (the Words, Mangara's Tome —
+    # ``ai_valuation.waits_on_a_later_draw``): proposed only where carrying it
+    # out on a copy of the game leaves the seat ahead once the turn is over.
+    # The heuristic score rates the arming 2.5 like any other effect, so every
+    # Word was armed in every main phase after its controller's draw — mana
+    # spent on a replacement no draw that turn would meet.
+    if ability_index is not None or waits_on_a_later_draw(ability.instruction):
         worth = _land_ability_worth(game, player_index, candidate)
         if worth is None:
             return None
