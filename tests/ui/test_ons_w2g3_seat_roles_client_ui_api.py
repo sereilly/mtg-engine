@@ -176,7 +176,7 @@ def test_w2g3_a_cast_walk_naming_nothing_sends_an_empty_role_list():
 
 
 @needs_node
-def test_w2g3_aphetto_dredging_walks_the_list_for_the_word_chosen(set_pool):
+def test_w2g3_aphetto_dredging_walks_the_list_for_the_word_chosen(set_pool, monkeypatch):
     sid, game = _table(set_pool, ["Aphetto Dredging"])
     ons = set_pool("ONS")
     game.players[0].graveyard[:] = [ons["Elvish Warrior"], ons["Goblin Sledder"], ons["Wirewood Elf"]]
@@ -190,7 +190,13 @@ def test_w2g3_aphetto_dredging_walks_the_list_for_the_word_chosen(set_pool):
         {"spec": spec},
     )
     assert follows == [True, False, False]
-    # What the refetch asks for, and that it narrows to the word.
+    # What the refetch asks for, and that it narrows to the word. The route's
+    # own lookup is the shipped catalog, which a measured set is not in: the
+    # card is registered there for this test, as the promotion will register
+    # it (W2G1's wire test does the same).
+    import web.runtime as runtime
+
+    monkeypatch.setitem(runtime.CARD_BY_NAME, "aphetto dredging", ons["Aphetto Dredging"])
     refetched = client.get(f"/api/sessions/{sid}/card_target_spec", params={
         "card_name": "Aphetto Dredging", "seat": 0, "hand_index": 0,
         "chosen_creature_type": "goblin",
