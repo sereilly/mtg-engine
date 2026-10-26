@@ -342,13 +342,24 @@ class SpellCastingMixin:
         # activation path's own, where each caller used to make it for itself
         # (the wire did, onto one seat).
         role_seats: "list | None" = None
+        # …and a role answered by a **card in a graveyard** ("Destroy target
+        # non-Zombie creature. … Return up to one target Zombie card from your
+        # graveyard to your hand.", Cruel Revival): the stamp the translation
+        # takes for that slot, positional in role order with ``None`` in every
+        # other slot, as an activation's has always been
+        # (``target_graveyard_card``). Taken here, at CR 601.2c and before any
+        # cost moves a card, so the slot still means what the caster chose.
+        # None for every cast that names no graveyard role.
+        role_graveyard_stamps: "list | None" = None
         if target_role_refs:
             (
-                target_permanent_ids, _role_indices, _role_stamps,
+                target_permanent_ids, _role_indices, role_graveyard_stamps,
                 role_seat, role_seats,
             ) = self._role_announcement_stamps(target_role_refs)
             if role_seat is not None:
                 target_player_index = role_seat
+            if not any(stamp is not None for stamp in role_graveyard_stamps):
+                role_graveyard_stamps = None
 
         # CR 601.2a, 601.3: where the spell is cast from, and under what.
         located = self._spell_source(
@@ -940,6 +951,7 @@ class SpellCastingMixin:
             from_zone=from_zone, mode_index=mode_index,
             no_target_answers_x=no_target_answers_x,
             optional_paid=optional_paid, role_seats=role_seats,
+            role_graveyard_stamps=role_graveyard_stamps,
             target_permanent_ids=target_permanent_ids,
             target_permanent_index=target_permanent_index,
             target_player_index=target_player_index,
@@ -1292,6 +1304,10 @@ class SpellCastingMixin:
                     target_player_index=target_player_index,
                     target_permanent_index=target_permanent_index,
                     target_permanent_id=as_target_ids(target_permanent_ids),
+                    # A roles announcement's graveyard slots (see the top of
+                    # this method); None for every other cast, whose graveyard
+                    # target is stamped as the item is pushed.
+                    target_graveyard_card=role_graveyard_stamps,
                     x_value=resolved_x_value,
                     target_stack_item=target_stack_item_val,
                     chosen_mode_index=mode_index,

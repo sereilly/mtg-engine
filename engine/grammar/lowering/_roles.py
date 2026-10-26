@@ -947,7 +947,7 @@ def describe_graveyard_card_roles(instructions) -> "tuple | None":
         return None
     cards_spec = derive_instruction_spec((cards_step,)) or {}
     if cards_spec.get("kind") != GRAVEYARD_TARGET_KIND:
-        return None
+        return _object_then_graveyard_card_roles(steps)
     other_spec = derive_instruction_spec((other_step,)) or {}
     other_described = (other_step.payload or {}).get("targets")
     other_is_object = (
@@ -1042,6 +1042,99 @@ def describe_graveyard_card_roles(instructions) -> "tuple | None":
         ),
         dataclasses.replace(
             other_step, payload={**other_step.payload, "targets": other_targets},
+        ),
+    )
+
+
+def _object_then_graveyard_card_roles(steps) -> "tuple | None":
+    """:func:`describe_graveyard_card_roles`' pair printed the other way round
+    — a permanent first, then **one card in a graveyard** — as ordered roles,
+    or None for every other pair of steps.
+
+    "Destroy target non-Zombie creature. It can't be regenerated. Return **up
+    to one target Zombie card from your graveyard** to your hand." (Cruel
+    Revival.) Two printed instances of "target", one announcement (CR 601.2c),
+    and provably two objects by the zone argument above: a back-reference
+    never changes zone. Handed back, the line was read off its first
+    description alone — a picker asking for the creature and never for the
+    card — and the return then scanned the graveyard at resolution and took
+    the first Zombie card it met, for a caster who had named none and might
+    have chosen another or nothing at all (CR 115.6). Found by Onslaught's
+    promotion rehearsal (``tests/engine/test_up_to_names_nobody_census.py``).
+
+    **"Up to one" is an optional role** (``target_roles.OPTIONAL_ROLE``), which
+    the walk may stop before; this pair can carry one because the card is the
+    *last* role, the only place a skippable slot can sit. The card's step
+    spends its role or, left unanswered, is skipped (``control_flow._role_scoped``)
+    — never a scan.
+
+    Narrow, so it claims nothing it has not proved: the first step a plain
+    "target" object description the walk can enumerate, the second a printed
+    one-card graveyard target ("target" or "up to one"); anything else is
+    handed back as before.
+    """
+    from ...subject_filters import untestable_filter_keys
+    from ...target_roles import OPTIONAL_ROLE
+    from ...targeting import GRAVEYARD_TARGET_KIND, derive_instruction_spec
+
+    object_step, cards_step = steps
+    object_described = (object_step.payload or {}).get("targets")
+    if not (
+        isinstance(object_described, dict)
+        and object_described.get("kind") == "object"
+        and object_described.get("quantifier") == "target"
+    ):
+        return None
+    cards_described = (cards_step.payload or {}).get("targets")
+    if not (
+        isinstance(cards_described, dict)
+        and cards_described.get("kind") == "card"
+        and cards_described.get("quantifier") in ("target", "up_to")
+    ):
+        return None
+    cards_spec = derive_instruction_spec((cards_step,)) or {}
+    if cards_spec.get("kind") != GRAVEYARD_TARGET_KIND:
+        return None
+    if (cards_spec.get("max_targets") or 1) != 1 or cards_described.get("count", 1) != 1:
+        raise LoweringError(
+            "several graveyard cards behind another target are a walk this "
+            "builder does not order"
+        )
+    card_name = _graveyard_card_noun(cards_spec)
+    narrowing = object_described.get("filter") or {}
+    object_name = _sequence_role_name(object_described, {card_name})
+    if (
+        object_name is None
+        or untestable_filter_keys(narrowing)
+        or narrowing.get("controller") in _UNENUMERABLE_CONTROLLERS
+    ):
+        raise LoweringError(
+            "a line announcing a card in a graveyard beside another target "
+            "announces both (CR 601.2c), and the roles walk cannot enumerate "
+            "the other slot"
+        )
+    object_role = {
+        key: value for key, value in object_described.items()
+        if key not in _ROLE_STRUCTURAL_KEYS
+    }
+    object_role.update({"role": object_name, "count": 1, "filter": narrowing})
+    (card_role,) = _graveyard_step_roles(cards_spec, names=(card_name,))
+    if cards_described.get("quantifier") == "up_to":
+        card_role[OPTIONAL_ROLE] = True
+    roles = [object_role, card_role]
+    object_targets = {
+        **object_described, "kind": "roles", "roles": roles, "role": object_name,
+    }
+    cards_targets = {
+        **cards_described, "kind": "roles", "roles": roles, "role": card_name,
+        "role_group": [card_name],
+    }
+    return (
+        dataclasses.replace(
+            object_step, payload={**object_step.payload, "targets": object_targets},
+        ),
+        dataclasses.replace(
+            cards_step, payload={**cards_step.payload, "targets": cards_targets},
         ),
     )
 

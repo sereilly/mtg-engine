@@ -896,6 +896,7 @@ class StackResolutionMixin:
                 divided_targets=item.choices.get("divided_targets"),
                 choices=item.choices,
                 trigger_context=item.trigger_context,
+                target_graveyard_card=item.target_graveyard_card,
             )
             self.log.append(f"{item.card.name} (copy) resolved")
             return
@@ -932,6 +933,7 @@ class StackResolutionMixin:
             trigger_context=item.trigger_context,
             owner_index=item.owner_index,
             leaves_to_exile=leaves_stack_to_exile(item),
+            target_graveyard_card=item.target_graveyard_card,
         )
         return
     def _resolve_card(
@@ -980,6 +982,11 @@ class StackResolutionMixin:
         # sorcery is about, ahead of whatever seat rode in
         # ``target_player_index``. None for every other spell.
         stack_target_seat: int | None = None,
+        # The announcement's graveyard stamps, for a roles spell whose slots
+        # sit in two zones (Cruel Revival's creature and Zombie card): the
+        # channel an ability's context already carries, which the role scope
+        # reads its card from (``handlers/_targets.resolve_role_graveyard_card``).
+        target_graveyard_card=None,
     ) -> None:
         caster = self.players[caster_index]
         owner_seat = caster_index if owner_index is None else owner_index
@@ -1338,6 +1345,7 @@ class StackResolutionMixin:
                 cast_from_zone=cast_from_zone,
                 choices=choices,
                 trigger_context=trigger_context,
+                target_graveyard_card=target_graveyard_card,
             )
 
         # ``finish`` may run twice: once at the end of the resolution, and — if

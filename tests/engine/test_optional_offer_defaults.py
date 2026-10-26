@@ -536,6 +536,20 @@ def test_every_offer_with_a_rider_names_a_reviewed_action_kind(catalog):
         # so a seat nobody asks takes the offer - driven, a hasty attacker
         # for the turn.
         "reanimate_creature",
+        # Astral Slide (ONS), read at its promotion rehearsal: "Whenever a
+        # player cycles a card, you may exile target creature. If you do,
+        # return that card to the battlefield under its owner's control at the
+        # beginning of the next end step." Targeted, so the empty cases are the
+        # two rules above - driven: with no creature on the battlefield the
+        # trigger is removed as it is put on the stack (CR 603.3d), and with
+        # its target gone in response it is removed at resolution (CR 608.2b);
+        # either way no delayed return is armed, and the rider reads the
+        # record the exile writes (`exiled_cards`), so it has nothing to
+        # return unless a card went. Not a self-payment, so a seat nobody asks
+        # takes the offer - driven, with a creature on each side the default
+        # target is the opponent's, which comes back at the end step a new
+        # object (CR 400.7).
+        "exile_target_permanent",
         # Empty, and the rider behind it is itself a no-op — the same shape as
         # the two rows this round added, with nothing at stake. Ice Cauldron
         # grants permission over an empty pile; Flash offers a cost computed

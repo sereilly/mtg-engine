@@ -42,13 +42,17 @@ from engine.models import CardDefinition, Permanent
 from engine.named_counters import add_counters
 from engine.oracle import compile_card_oracle
 from engine.oracle_types import NAMED_NO_TARGET
-from engine.targeting import derive_instruction_spec
+from engine.card_loader import load_cards, manifest_set_paths
+from engine.targeting import derive_instruction_spec, spec_roles
 from tests.helpers import resolve_stack
 
 #: Floors, because a sweep that reaches nothing passes. On the day: 28 units
 #: (11 spells, 10 activated abilities, 7 triggered), every one driven.
 _MIN_UNITS = 26
 _MIN_TRIGGERS_DECLINED = 6
+#: "Up to" units whose announcement also owes a target, across both manifest
+#: roles: one on the day (Cruel Revival).
+_MIN_OWED = 1
 
 _LIBRARY = (
     "Forest", "Craw Wurm", "Plains", "Counterspell", "Mox Pearl", "Swamp",
@@ -84,6 +88,18 @@ def _pool(catalog):
     return pool
 
 
+@pytest.fixture(scope="module")
+def _both_roles_pool():
+    """Shipped **and** measured cards, first printing winning — for the
+    owed-target arm alone, whose one card (Cruel Revival) was in a measured
+    set when the arm was written: asked of the shipped pool it examined
+    nothing until the promotion, and a floor could not be held."""
+    pool: dict = {}
+    for unit in compilation_units(load_cards(manifest_set_paths(include_measured=True))):
+        pool.setdefault(unit.name, unit)
+    return pool
+
+
 def _units(pool) -> list:
     """``(card, where, position, instruction, ability)`` for every supported
     "up to" in the pool: a spell, an activated ability, a triggered one."""
@@ -107,13 +123,98 @@ def _units(pool) -> list:
     return found
 
 
-def _table(pool, card, *, open_board: bool, interactive=(), in_hand: bool = False) -> Game:
+def _target_quantifiers(value) -> set:
+    """Every printed quantifier (``target``, ``up_to``, …) of a ``targets``
+    description under *value*, walked as :func:`_target_is_up_to` walks."""
+    found: set = set()
+    if isinstance(value, dict):
+        targets = value.get("targets")
+        if isinstance(targets, dict) and targets.get("quantifier"):
+            found.add(targets["quantifier"])
+        for nested in value.values():
+            found |= _target_quantifiers(nested)
+    elif isinstance(value, (list, tuple)):
+        for entry in value:
+            found |= _target_quantifiers(entry)
+    elif getattr(value, "payload", None) is not None:
+        found |= _target_quantifiers(value.payload)
+    return found
+
+
+def _owes_a_target_beside(card, where, step) -> bool:
+    """Whether the unit's announcement **owes** a printed "target" beside its
+    "up to" — a second instance of the word that may not be answered with
+    nobody (CR 601.2c).
+
+    "Destroy target non-Zombie creature. It can't be regenerated. Return up to
+    one target Zombie card from your graveyard to your hand." (Cruel Revival,
+    the first such unit, at Onslaught's promotion rehearsal.) This census asks
+    whether an announcement naming nobody changes nothing, and that is not an
+    announcement such a spell can make: on the walled table it is rightly not
+    cast at all, and a bare cast beside legal targets is answered — or refused
+    — by the owed slot. What it *can* be asked is the same question of the
+    "up to" slot alone: the owed target named, nobody in the other
+    (:func:`test_an_up_to_beside_an_owed_target_names_nobody_in_its_own_slot`).
+    Read off the printed quantifiers, so the arm sees the shape whether or not
+    the lowering made the two slots one roles announcement; of a modal spell,
+    per mode, since only one mode is announced (CR 700.2)."""
+    if where != "spell":
+        return {"target", "up_to"} <= _target_quantifiers((step,))
+    program = compile_card_oracle(card)
+    announcements = (
+        [(mode.instruction,) for mode in program.modes if mode.instruction is not None]
+        if program.modes else [tuple(program.instructions)]
+    )
+    return any(
+        {"target", "up_to"} <= _target_quantifiers(instructions)
+        for instructions in announcements
+    )
+
+
+def _up_to_bait(card, where, step) -> list:
+    """A card the unit's "up to" slot may name **in a graveyard**, when the
+    printed slot narrows by a creature type the fixed piles do not hold —
+    "up to one target **Zombie** card from your graveyard" — read off the
+    up-to step's own payload (``graveyard_subtypes``), so the slot the census
+    holds to nobody has something it could have named."""
+    instructions = (
+        compile_card_oracle(card).instructions if where == "spell" else (step,)
+    )
+    wanted: list[str] = []
+
+    def walk(value) -> None:
+        if isinstance(value, dict):
+            targets = value.get("targets")
+            if isinstance(targets, dict) and targets.get("quantifier") == "up_to":
+                for subtype in value.get("graveyard_subtypes") or ():
+                    if subtype not in wanted:
+                        wanted.append(subtype)
+            for nested in value.values():
+                walk(nested)
+        elif isinstance(value, (list, tuple)):
+            for entry in value:
+                walk(entry)
+        elif getattr(value, "payload", None) is not None:
+            walk(value.payload)
+
+    walk(tuple(instructions))
+    return [
+        _fixture(f"Open {subtype.title()} Card", f"Creature — {subtype.title()}", shroud=False)
+        for subtype in wanted
+    ]
+
+
+def _table(
+    pool, card, *, open_board: bool, interactive=(), in_hand: bool = False,
+    bait=(),
+) -> Game:
     yard = _YARD if open_board else ()
     game = Game(players=[
         PlayerState("A", library=[pool[n] for n in _LIBRARY],
-                    hand=[card] if in_hand else [], graveyard=[pool[n] for n in yard]),
+                    hand=[card] if in_hand else [],
+                    graveyard=[pool[n] for n in yard] + list(bait)),
         PlayerState("B", library=[pool[n] for n in _LIBRARY],
-                    graveyard=[pool[n] for n in yard]),
+                    graveyard=[pool[n] for n in yard] + list(bait)),
     ])
     game.enforce_mana_costs = False
     game.interactive_seats = set(interactive)
@@ -123,11 +224,13 @@ def _table(pool, card, *, open_board: bool, interactive=(), in_hand: bool = Fals
     return game
 
 
-def _snapshot(game, source_card):
-    """Everything an effect could have changed, bar the source itself."""
+def _snapshot(game, source_card, named=()):
+    """Everything an effect could have changed, bar the source itself — and
+    bar the permanents *named* for an owed target, whose effect is the
+    announcement's to have (:func:`_owes_a_target_beside`)."""
     board = {}
     for seat, perm in game.permanents_with_controller():
-        if perm.card is source_card:
+        if perm.card is source_card or perm.permanent_id in named:
             continue
         board[perm.permanent_id] = (
             perm.card.name, seat, perm.tapped, perm.damage_marked,
@@ -351,13 +454,19 @@ def _drive(pool, unit, *, open_board: bool):
 
 
 def test_an_up_to_with_nothing_legal_to_name_changes_nothing(_pool):
-    """The walled table: nobody is the only announcement, on every unit."""
+    """The walled table: nobody is the only announcement, on every unit —
+    but a unit that **owes** a target beside its "up to"
+    (:func:`_owes_a_target_beside`), which has no announcement naming nobody
+    to make; its "up to" is held to nobody by the owed-target test below."""
     units = _units(_pool)
+    owing = [unit for unit in units if _owes_a_target_beside(unit[0], unit[1], unit[3])]
     examined = 0
     findings: list[str] = []
     for unit in units:
         card, where = unit[0], unit[1]
         label = f"{card.name} [{where}]"
+        if unit in owing:
+            continue
         changed, offered, item = _drive(_pool, unit, open_board=False)
         if offered:
             findings.append(f"{label}: the table is not walled — the picker offers {len(offered)}")
@@ -375,7 +484,7 @@ def test_an_up_to_with_nothing_legal_to_name_changes_nothing(_pool):
 
     assert len(units) >= _MIN_UNITS, f"only {len(units)} \"up to\" units found"
     assert not findings, "\n".join(findings)
-    assert examined == len(units)
+    assert examined == len(units) - len(owing)
 
 
 def test_a_bare_up_to_announcement_beside_legal_targets_changes_nothing(_pool):
@@ -387,7 +496,7 @@ def test_a_bare_up_to_announcement_beside_legal_targets_changes_nothing(_pool):
     findings: list[str] = []
     for unit in _units(_pool):
         card, where = unit[0], unit[1]
-        if where == "trigger":
+        if where == "trigger" or _owes_a_target_beside(card, where, unit[3]):
             continue
         changed, offered, item = _drive(_pool, unit, open_board=True)
         label = f"{card.name} [{where}]"
@@ -405,6 +514,95 @@ def test_a_bare_up_to_announcement_beside_legal_targets_changes_nothing(_pool):
     assert not findings, "\n".join(findings)
 
 
+def _role_ref(game, entry) -> "dict | None":
+    """The wire's role address for one picker entry."""
+    if entry.get("kind") == "permanent":
+        return {"permanent_id": game.permanent_id_of(
+            game.permanent_at(entry["seat"], entry["index"])
+        )}
+    if entry.get("kind") == "graveyard":
+        return {"graveyard_seat": entry["seat"], "graveyard_index": entry["index"]}
+    if entry.get("kind") == "player":
+        return {"seat": entry["seat"]}
+    return None
+
+
+def _announce_the_owed_target(game, card) -> "tuple[bool, set]":
+    """Cast *card* naming its **owed** target — the picker's first legal entry
+    for each mandatory slot, in role order — and nobody for its "up to".
+    ``(accepted, ids named)``."""
+    from engine.target_roles import OPTIONAL_ROLE
+
+    picker = game.cast_target_spec(0, card, optional_cost_payments={})
+    roles = spec_roles(picker)
+    options = picker.get("valid_targets") or []
+    if not options:
+        return False, set()
+    if not roles:
+        # One owed slot and an "up to" the announcement has no slot for:
+        # the shape before the lowering made the two one roles announcement.
+        ref = _role_ref(game, options[0])
+        named = {ref["permanent_id"]} if ref and "permanent_id" in ref else set()
+        accepted = game.queue_from_hand(
+            0, card.name, target_permanent_ids=sorted(named),
+        ).supported
+        return accepted, named
+    refs: list[dict] = []
+    level = 0
+    while options and level < len(roles) and not roles[level].get(OPTIONAL_ROLE):
+        ref = _role_ref(game, options[0])
+        if ref is None:
+            return False, set()
+        refs.append(ref)
+        options = options[0].get("next") or []
+        level += 1
+    named = {ref["permanent_id"] for ref in refs if "permanent_id" in ref}
+    return game.queue_from_hand(0, card.name, target_role_refs=refs).supported, named
+
+
+def test_an_up_to_beside_an_owed_target_names_nobody_in_its_own_slot(_both_roles_pool):
+    """The census's question asked of the one slot it is about, for a unit
+    whose announcement also **owes** a target (:func:`_owes_a_target_beside`):
+    the owed target named, nobody for the "up to" — and nothing but the owed
+    target's own effect happens, with a card the "up to" could have named in
+    reach (:func:`_up_to_bait`).
+
+    Cruel Revival: "Destroy target non-Zombie creature. … Return up to one
+    target Zombie card from your graveyard to your hand." Validated backwards:
+    on the tree before its two slots were one roles announcement
+    (``lowering/_roles._object_then_graveyard_card_roles``), the "up to" was
+    never announced, the return scanned the graveyard at resolution, and this
+    reads "named nobody for its 'up to' and changed [['Open Zombie Card'] left
+    seat 0's graveyard]".
+    """
+    pool = _both_roles_pool
+    examined = 0
+    findings: list[str] = []
+    for unit in _units(pool):
+        card, where, _position, step, _ability = unit
+        if not _owes_a_target_beside(card, where, step):
+            continue
+        label = f"{card.name} [{where}]"
+        if where != "spell" or compile_card_oracle(card).modes:
+            findings.append(f"{label}: an owed target beside an 'up to' this arm does not drive")
+            continue
+        bait = _up_to_bait(card, where, step)
+        game = _table(pool, card, open_board=True, in_hand=True, bait=bait)
+        accepted, named = _announce_the_owed_target(game, card)
+        if not accepted:
+            findings.append(f"{label}: naming its owed target and nobody else was refused")
+            continue
+        examined += 1
+        before = _snapshot(game, card, named)
+        _drain(game)
+        changed = _changed(before, _snapshot(game, card, named))
+        if changed:
+            findings.append(f"{label}: named nobody for its 'up to' and changed {changed}")
+
+    assert examined >= _MIN_OWED, f"only {examined} owed-target units driven"
+    assert not findings, "\n".join(findings)
+
+
 def test_a_seat_asked_for_an_up_to_target_may_answer_nobody(_pool):
     """The open table, for the announcement that is *asked*: a triggered
     ability's controller is offered its legal targets, the prompt says zero is
@@ -414,7 +612,7 @@ def test_a_seat_asked_for_an_up_to_target_may_answer_nobody(_pool):
     findings: list[str] = []
     for unit in _units(_pool):
         card, where, position, step, ability = unit
-        if where != "trigger":
+        if where != "trigger" or _owes_a_target_beside(card, where, step):
             continue
         label = card.name
         game = _table(_pool, card, open_board=True, interactive={0})

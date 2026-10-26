@@ -822,6 +822,32 @@ ACTIVATED_LABELS: dict[str, str] = {
     # bucket above — how many, and by which description, is not the question
     # the bucket answers.
     "exile_all_matching": "activated_destruction",
+    # --- Onslaught, at its promotion rehearsal ---------------------------
+    # Four kinds the set's activated abilities are the first to reach in the
+    # activated position, each a leaf and each settled against a shipped
+    # neighbour rather than its grammar family (the defaults were
+    # `activated_zones`, `activated_characteristics`, `activated_destruction`
+    # and `activated_zones`):
+    #
+    # Aven Soulgazer: "{2}{W}: Look at target face-down creature." A card is
+    # seen by one player and stays where it was, which is
+    # `look_at_target_hand`'s bucket; that the card is a face-down permanent
+    # rather than a hand is where it is looked at, not what the ability does.
+    "look_at_target_face_down": "activated_look",
+    # Ixidor, Reality Sculptor: "{2}{U}: Turn target face-down creature face
+    # up." The permanent becomes the card it is (CR 708.8) - every
+    # characteristic at once - and the report's one word for a permanent
+    # changing what it is, `gain_type`'s and the recolours', is
+    # `activated_pump`.
+    "turn_target_face_up": "activated_pump",
+    # Nova Cleric: "{2}{W}, {T}, Sacrifice this creature: Destroy all
+    # enchantments." The one-card-type sweep of
+    # `destroy_all_artifacts_creatures_enchantments` above, and its bucket.
+    "destroy_all_enchantments": "activated_destruction",
+    # Rummaging Wizard: "{2}{U}: Surveil 1." Scry's twin with a graveyard for
+    # the bottom (CR 701.25a), so scry's `activated_look`, as the triggered
+    # table already files the upkeep surveil beside its scry.
+    "surveil": "activated_look",
 }
 
 # Instruction kind -> label, for an ability the grammar reads in the **triggered**
@@ -1407,6 +1433,14 @@ TRIGGERED_LABELS: dict[str, str] = {
     # there needs a second label for the kind to disambiguate
     # (`test_the_by_condition_table_only_holds_genuine_ambiguities`).
     "repeat_process_while": "triggered_repeated",
+    # --- Onslaught, at its promotion rehearsal ---------------------------
+    # Leery Fogbeast: "Whenever this creature becomes blocked, prevent all
+    # combat damage that would be dealt this turn." The first trigger to reach
+    # the unnarrowed Fog (every shipped printing is a spell, or the activated
+    # row's `activated_prevent`), and the bucket its narrowed twin
+    # `prevent_all_combat_damage_to_matching` already takes above. Shown by
+    # the guard's second assertion only once the activated half was green.
+    "prevent_all_combat_damage": "triggered_prevent",
 }
 
 # The one instruction kind whose label depends on what triggered it: `may` wraps

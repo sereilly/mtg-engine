@@ -410,7 +410,7 @@ class CastTargetValidationMixin:
     def _named_role_targets(
         self, caster_index: int, target_player_index, target_permanent_index,
         target_permanent_ids, roles=(), target_stack_item=None,
-        role_seats=None,
+        role_seats=None, graveyard_stamps=None,
     ) -> list:
         """The objects a roles announcement named, in role order.
 
@@ -456,7 +456,20 @@ class CastTargetValidationMixin:
         both slots are one seat, which the walk's CR 115.3 distinctness then
         refuses — so the card could not be announced at all. A slot the list
         leaves empty, or names a seat that does not exist for, stays None.
+
+        **A role whose object is a card in a graveyard is filled from
+        *graveyard_stamps***, the stamps the cast took off its
+        ``target_role_refs`` (``casting._cast_onto_stack``), positional in role
+        order: "Return up to one target Zombie card from your graveyard"
+        beside "Destroy target non-Zombie creature" (Cruel Revival). The id
+        list carries ``None`` in that slot, so without the stamp the slot read
+        as unanswered and a card named for it was ignored rather than judged.
         """
+        stamps = list(graveyard_stamps or ())
+
+        def stamp_at(index: int):
+            return stamps[index] if index < len(stamps) else None
+
         player_slots = {
             index for index, role in enumerate(roles)
             if isinstance(role, dict) and role_is_seat(role)
@@ -495,7 +508,7 @@ class CastTargetValidationMixin:
                 else target_stack_item if index in stack_slots
                 else (
                     self.permanent_by_id(permanent_id)
-                    if permanent_id is not None else None
+                    if permanent_id is not None else stamp_at(index)
                 )
                 for index, permanent_id in enumerate(target_permanent_ids)
             ]
@@ -537,6 +550,7 @@ class CastTargetValidationMixin:
         optional_cost_payments: dict | None = None,
         target_role_seats: "list | None" = None,
         chosen_creature_type: str | None = None,
+        target_role_stamps: "list | None" = None,
     ) -> tuple[bool, str]:
         """Return (True, 'valid') if all required targets exist, else (False, reason).
 
@@ -789,7 +803,7 @@ class CastTargetValidationMixin:
             chosen = self._named_role_targets(
                 caster_index, target_player_index, target_permanent_index,
                 target_permanent_ids, roles, target_stack_item,
-                role_seats=target_role_seats,
+                role_seats=target_role_seats, graveyard_stamps=target_role_stamps,
             )
             # "…fights **up to one** target creature you don't control"
             # (Primal Might): an announcement may stop short of an optional

@@ -109,14 +109,26 @@ def test_a_text_change_announced_by_id_rewrites_the_permanent_it_named(pool, nam
     # and a land word, so whichever one a handler rewrites is marked: the mark
     # is written with the record (``text_changes._record``), and a target that
     # carried no word would read unmarked whether it was named or not.
+    #
+    # …and a **creature-type** word, for the changer that rewrites one of
+    # those ("replacing all instances of one creature type with another",
+    # Artificial Evolution): its words are asked as it resolves, and a seat
+    # nobody asks replaces the first creature type written on the target with
+    # its own commonest other type — the Soldier here with the Goblin beside
+    # the Wards. Without both the default names no word and nothing is marked.
     warded = _mk_card(
         "Ward of the White Plains", "{W}", "Enchantment",
-        "White creatures you control have plainswalk.", colors=("W",),
+        "White Soldier creatures you control have plainswalk.", colors=("W",),
     )
     first = Permanent(card=warded)
     named = Permanent(card=warded)
     for perm in (first, named):
         game._put_permanent_onto_battlefield(0, perm, None)
+    game._put_permanent_onto_battlefield(
+        0, Permanent(card=_mk_card(
+            name="Ward Goblin", mana_cost="{R}", type_line="Creature — Goblin",
+        )), None,
+    )
 
     card = pool[name]
     if card.primary_type in ("instant", "sorcery"):

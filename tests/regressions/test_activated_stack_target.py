@@ -39,8 +39,8 @@ import engine.legality as legality
 from engine import Game
 from engine.card_loader import load_catalog
 from engine.legality import targeting_instruction
-from engine.models import Permanent, PlayerState
-from engine.oracle import compiled_units
+from engine.models import CardDefinition, Permanent, PlayerState
+from engine.oracle import compile_card_oracle, compiled_units
 from engine.targeting import derive_activation_spec
 
 _SPELL_VICTIMS = (
@@ -91,9 +91,45 @@ def _stack_abilities(catalog):
                 yield card, index, ability, spec
 
 
+def _tap_cost_creatures(card) -> list:
+    """Creatures to pay a "Tap N untapped <type> you control" cost with, one
+    set per such ability of *card*, read off each ability's own cost
+    (``tap_count`` and the subtype in ``tap_filter``) rather than named.
+
+    Shieldmage Elder (ONS) is why: "Tap two untapped Wizards you control:
+    Prevent all damage target spell would deal this turn." Its picker offered
+    every spell on the stack and the activation was refused - not for its
+    target but for its cost ("not enough untapped creatures to tap for its
+    cost"), because the one Wizard on this table was the Elder itself. A
+    refusal of the cost read as the gate refusing what the picker offers, at
+    Onslaught's promotion rehearsal; with a second Wizard beside it the Elder
+    is activated at each spell its picker lists."""
+    fixtures = []
+    for ability in compile_card_oracle(card).activated_abilities:
+        cost = ability.cost
+        count = int(getattr(cost, "tap_count", 0) or 0)
+        wanted = getattr(cost, "tap_filter", None) or {}
+        if count <= 0 or not wanted:
+            continue
+        subtype = wanted.get("subtype_filter")
+        type_line = f"Creature — {subtype.title()}" if subtype else "Creature — Beast"
+        for number in range(count):
+            name = f"Cost {subtype or 'creature'} {number + 1}".title()
+            fixtures.append(CardDefinition(
+                name=name, mana_cost="{1}", cmc=1.0, type_line=type_line,
+                oracle_text="", colors=(), color_identity=(), keywords=(),
+                produced_mana=(),
+                raw={"name": name, "type_line": type_line,
+                     "power": "1", "toughness": "1"},
+            ))
+    return fixtures
+
+
 def _table(card, by_name):
     """Seat 1 controls *card*, ready to activate, with what a cost may want
-    (two cards in hand, a creature to sacrifice). Returns ``(game, source)``."""
+    (two cards in hand, a creature to sacrifice, the creatures a "tap N
+    untapped <type>" cost taps — ``_tap_cost_creatures``). Returns
+    ``(game, source)``."""
     island = by_name["Island"]
     game = Game(players=[
         PlayerState(name=f"P{seat}", library=[island] * 8) for seat in range(2)
@@ -104,6 +140,10 @@ def _table(card, by_name):
         game._put_permanent_onto_battlefield(
             seat, Permanent(card=by_name[name]), None
         )
+    for fixture in _tap_cost_creatures(card):
+        tapper = Permanent(card=fixture)
+        game._put_permanent_onto_battlefield(1, tapper, None)
+        tapper.metadata["summoning_sickness_turn"] = -99
     source = Permanent(card=card)
     game._put_permanent_onto_battlefield(1, source, None)
     source.metadata["summoning_sickness_turn"] = -99
