@@ -588,15 +588,14 @@ def _lower_prevent_all(
             # Read before the ``targets`` description below, which would put a
             # stack-scoped filter through ``_filter_payload`` and refuse the
             # line at "no handler reads a filter scoped to the stack".
-            if not spec.filter.card_types:
-                # "target **instant or sorcery** spell". Without a type this
-                # reads "target spell", which is a strictly wider card — and
-                # the handler tests the chosen spell against this union at
-                # resolution (CR 608.2b), so an empty one would admit every
-                # spell on the stack.
-                raise LoweringError(
-                    "this spell shield names no kind of spell", node=node
-                )
+            # "target **instant or sorcery** spell" names a union the handler
+            # re-tests at resolution (CR 608.2b); "Prevent all damage **target
+            # spell** would deal this turn" (Shieldmage Elder) names none, and
+            # every spell on the stack is the printed answer. The bare head
+            # noun is what records the stack zone (``ObjectFilter.zone``), so a
+            # phrase with no type and no zone never reaches this branch, and
+            # every other narrowing refuses below. Emitted only when printed,
+            # so Hidden Retreat's payload is byte-identical.
             if _restrictions_beyond(
                 spec.filter, frozenset({"card_types", "zone"})
             ):
@@ -614,7 +613,10 @@ def _lower_prevent_all(
             return (
                 OracleInstruction(
                     "prevent_damage_by_target_spell_until_eot", "",
-                    {"card_types": list(spec.filter.card_types)},
+                    (
+                        {"card_types": list(spec.filter.card_types)}
+                        if spec.filter.card_types else {}
+                    ),
                 ),
             )
         if several:

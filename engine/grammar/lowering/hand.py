@@ -388,7 +388,7 @@ def _lower_discard(
             f"no {node.player.kind!r} discard handler carries a narrowing", node=node
         )
     if node.whole_hand:
-        return discard_whole_hand(node, event)
+        return discard_whole_hand(node, event, produced)
     if node.player.kind == "each_player":
         return each_player_discard(node)
     if node.player.kind == "you":

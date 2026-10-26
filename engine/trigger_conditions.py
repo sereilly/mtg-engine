@@ -148,6 +148,13 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # prints them as a *rider* on its own control-gaining sentence, which the
     # rider parser reads and this row must not claim.
     ("lose_control_of_source",      r"when you lose control of (?:this|it|the) ?.*"),
+    # "**When you gain control of this enchantment from another player**, …"
+    # (Risky Move.) The other end of the same CR 613 layer-2 change, fired from
+    # the same seam (``ControlSeamMixin._sync_control``) for the seat that
+    # *gains* the permanent — "from another player" is every such move, since
+    # the seam only fires when the permanent goes from one seat to another.
+    ("gain_control_of_source",
+     r"when you gain control of (?:this|it|the) ?\w* from another player"),
     ("attached_creature_dies",      r"when(?:ever)? (?:equipped|enchanted) creature dies"),
     # CR 701.26a's event with the one-shot trigger word (Blight: "**When**
     # enchanted land becomes tapped, destroy it"). Here for the reason

@@ -165,6 +165,11 @@ def _parse_choose_untargeted_permanent(stream: TokenStream) -> "ast.ChoosePerman
     ):
         stream.reset(mark)
         return None
+    # "Choose a creature you control **and an opponent**." (Risky Move.) Two
+    # of CR 608.2d's choices in one sentence — the permanent, then a seat —
+    # read as the two nodes each half already is, in printed order, so the
+    # sentence behind them reads each record by its own name.
+    and_opponent = stream.accept_phrase("and", "an", "opponent")
     after_filter = stream.mark()
     if not stream.accept_punct("."):
         stream.reset(mark)
@@ -174,13 +179,26 @@ def _parse_choose_untargeted_permanent(stream: TokenStream) -> "ast.ChoosePerman
         window == ("shares", "a", "color", "with", "that", "permanent")
         for window in zip(*(words[offset:] for offset in range(6)))
     )
+    # "…that opponent **gains control of that creature**." (Risky Move.) The
+    # second binder, and only beside the opponent it hands the permanent to:
+    # a chosen permanent nothing hands to anybody is a choice that performs
+    # nothing.
+    head = chosen.filter.card_types[0] if len(chosen.filter.card_types) == 1 else "permanent"
+    if and_opponent:
+        binds = any(
+            window == ("gains", "control", "of", "that", head)
+            for window in zip(*(words[offset:] for offset in range(5)))
+        )
     # The sentence boundary goes back, for the reason the targeted form's
     # ``reset(after_filter)`` gives: the sentence loop is what consumes it.
     stream.reset(after_filter)
     if not binds:
         stream.reset(mark)
         return None
-    return ast.ChoosePermanent(ast.PlayerRef("you"), chosen)
+    picked = ast.ChoosePermanent(ast.PlayerRef("you"), chosen)
+    if and_opponent:
+        return ast.Sequence((picked, ast.ChooseOpponent()))
+    return picked
 
 
 def _parse_choose_target(stream: TokenStream, parse_statement) -> "ast.ChooseTarget | None":

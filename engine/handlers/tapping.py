@@ -490,6 +490,20 @@ def _tap_or_untap_all_matching(
         context.results[TAPPED_THIS_WAY_OBJECTS] = [
             perm.permanent_id for perm in matched
         ]
+    else:
+        # "Untap all creatures **and gain control of them** until end of turn.
+        # **They** gain haste until end of turn." (Insurrection.) The untap
+        # half of the record above, read through the ``permanents_from``
+        # channel by the steal and the grant behind it. ``matched`` for the
+        # record's reason: CR 611.2c fixed the set as the effect began, and the
+        # card's ruling ("You untap all creatures, control all creatures, and
+        # give all creatures haste") takes a creature that was already untapped
+        # too. The literal is declared in
+        # ``grammar/lowering/_record_keys.UNTAPPED_THIS_WAY_OBJECTS``, which the
+        # handler layer does not import from.
+        context.results["untapped_this_way_objects"] = tuple(
+            perm.permanent_id for perm in matched
+        )
     verb = "tapped" if make_tapped else "untapped"
     if changed:
         game.log.append(

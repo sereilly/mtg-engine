@@ -24,7 +24,10 @@ production this calls declines without consuming, so the caller's chain keeps
 every reading it had.
 """
 
+import dataclasses
+
 from . import ast
+from .errors import GrammarError
 from .cost_records import accept_mana_per_colored_symbol
 from .effects import (_parse_for_each_destroy_unless_paid,
                       _parse_have_source_deal_damage)
@@ -36,6 +39,56 @@ from .sentence_clauses import (_parse_leading_controller_of_each,
                                _parse_leading_recorded_count)
 from .stream import TokenStream
 from .subject_verb import parse_subject_verb
+
+
+#: The verbs a seat loop's distributive subject may govern, each of which reads
+#: its seat off the loop's binding once its elided "you" is rebound.
+_LOOP_SEAT_DEEDS = (ast.Discard, ast.Draw)
+
+
+def _parse_any_number_of_target_opponents_each(
+    stream: TokenStream, parse_optional_action,
+) -> "ast.ForEach | None":
+    """``Any number of target opponents each <verb> …[, then <verb> …]``.
+
+    The head names the iterator; each verb phrase behind it is read by the
+    imperative reader — which hands its elided subject "you" — and rebound to
+    the loop's "that player", the seat each iteration binds. Only the deeds a
+    seat loop body is known to read its seat for (:data:`_LOOP_SEAT_DEEDS`) are
+    admitted: any other verb refuses the whole sentence rather than being
+    performed by the caster. Returns None with the cursor untouched.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase(
+        "any", "number", "of", "target", "opponents", "each"
+    ):
+        stream.reset(mark)
+        return None
+    steps: list = []
+    while True:
+        try:
+            step = parse_subject_verb(
+                stream, ast.PlayerRef("that_player"),
+                parse_optional_action=parse_optional_action,
+            )
+        except GrammarError:
+            stream.reset(mark)
+            return None
+        if not (
+            isinstance(step, _LOOP_SEAT_DEEDS)
+            and isinstance(step.player, ast.PlayerRef)
+            and step.player.kind in ("you", "that_player")
+        ):
+            stream.reset(mark)
+            return None
+        steps.append(dataclasses.replace(step, player=ast.PlayerRef("that_player")))
+        joined = stream.mark()
+        if stream.accept_punct(",") and stream.accept_word("then"):
+            continue
+        stream.reset(joined)
+        break
+    effect = steps[0] if len(steps) == 1 else ast.Sequence(tuple(steps))
+    return ast.ForEach(ast.PlayerRef("any_number_of_target_opponents"), effect)
 
 
 def parse_leading_iteration(
@@ -69,6 +122,16 @@ def parse_leading_iteration(
     have_deal = _parse_have_source_deal_damage(stream)
     if have_deal is not None:
         return have_deal
+    # "**Any number of target opponents each** discard their hands, then draw
+    # seven cards." (Wheel and Deal.) A loop over the seats the announcement
+    # named (CR 601.2c: zero or more opponents, each once), with its subject
+    # printed in front of the verbs the way "the controller of each of those
+    # artifacts" is (Seeds of Innocence, below).
+    any_number = _parse_any_number_of_target_opponents_each(
+        stream, parse_optional_action
+    )
+    if any_number is not None:
+        return any_number
     # "**For each colored mana symbol in the milled card's mana cost,** add one
     # mana of that color." (Charmed Pendant.) A rate over a card the ability's
     # own cost consumed, read whole and before the counts below — "colored

@@ -169,9 +169,11 @@ def parse_player_ref(stream: TokenStream) -> ast.PlayerRef | None:
     #
     # **The accusative "them" is deliberately not here**, and the asymmetry is
     # the grammar's rather than English's. "They" only ever opens a predicate,
-    # and no plural set of *cards* is ever a sentence subject in this pool — so
-    # the nominative has one possible referent and belongs in the shared
-    # reader. "Them" sits after a verb or a preposition, which is exactly where
+    # and a plural set of *cards* as a sentence subject is the one exception
+    # the sentence loop rebinds after the fact ("Untap all creatures and gain
+    # control of them … **They** gain haste", Insurrection —
+    # ``sentence_rebinding.rebind_they_to_previous_set``) — so here the
+    # nominative has one possible referent and belongs in the shared reader. "Them" sits after a verb or a preposition, which is exactly where
     # a set of cards an earlier clause produced also sits: "Create three …
     # tokens. Exile **them**" (Waylay), "…reveal **them**, put **them** into
     # your hand" (Cultivate). Claiming it here took Waylay's tokens for a seat

@@ -478,6 +478,26 @@ class SpellChoicesMixin:
 
     # -- "You may choose a new target for that copy" (CR 707.10) ------------
 
+    def _copy_already_holds(self, copy_item, candidate: dict) -> bool:
+        """Whether *candidate* (one entry of the copy-target offer) is the
+        target *copy_item* holds now — read through the one reader of a stack
+        object's announcement, as ``_default_copy_spell_target`` reads it."""
+        from ....stack_targets import chosen_targets
+
+        held = chosen_targets(self, copy_item) or ()
+        if candidate.get("kind") == "player":
+            return any(
+                slot.kind == "player" and getattr(slot, "seat", None) == candidate.get("seat")
+                for slot in held
+            ) or (
+                not held and copy_item.target_player_index == candidate.get("seat")
+            )
+        return any(
+            slot.kind == "permanent"
+            and slot.permanent_id == candidate.get("permanent_id")
+            for slot in held
+        )
+
     def arm_copy_spell_target(self, player_index: int, copy_item) -> None:
         """Offer the copy's controller the re-aiming CR 707.10 gives them.
 
@@ -523,7 +543,17 @@ class SpellChoicesMixin:
                 "permanent_id": self.permanent_id_of(perm),
                 "name": perm.card.name,
             })
-        if len(offered) < 2:
+        # **One answer only when the one candidate is what the copy already
+        # holds.** "Destroy target noncreature permanent. Then that
+        # permanent's controller may copy this spell …" (Chain of Acid): the
+        # copy keeps the original's target, which this very spell destroyed —
+        # so a board with one other noncreature permanent offers one
+        # candidate, and it is not the copy's current target. Skipping the
+        # prompt there left the copy aimed at a card in a graveyard, countered
+        # on resolution (CR 608.2b) with nobody ever asked.
+        if len(offered) < 2 and not (
+            offered and not self._copy_already_holds(copy_item, offered[0])
+        ):
             return
         self.arm_pending_choice(
             "copy_spell_target", player_index,

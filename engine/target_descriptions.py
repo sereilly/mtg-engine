@@ -441,6 +441,12 @@ def roles_spec(targets: dict) -> dict | None:
         if relation is not None:
             described["relation"] = relation
             described["depends_on"] = depends_on
+        # "**Any number of** target opponents" (Wheel and Deal,
+        # ``target_roles.any_number_of_opponents_roles``): a role the
+        # description itself marks optional stays optional in the spec, the
+        # flag ``_slot_roles_spec`` sets for an "up to one" slot.
+        if entry.get(OPTIONAL_ROLE):
+            described[OPTIONAL_ROLE] = True
         roles.append(described)
     if len(roles) < 2:
         # One role is not a roles description — it is an ordinary one-target

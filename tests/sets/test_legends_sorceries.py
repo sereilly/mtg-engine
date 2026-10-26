@@ -1577,15 +1577,19 @@ def test_a_non_interactive_payer_answers_every_prompt_itself(
     assert players[0].life == 20
 
 
-def test_a_non_interactive_payer_with_floating_mana_keeps_the_original_target(
+def test_a_non_interactive_payer_declines_a_copy_aimed_at_its_own_creature(
     set_pool, catalog_by_name
 ):
-    """With the mana already floating the default pays — and the copy's target
-    default is the one answer that changes nothing (CR 707.10's offer is
-    optional, so declining is a real answer and it is this one).
+    """The copy's target default is the one answer that changes nothing
+    (CR 707.10's offer is optional, so keeping the target is a real answer) —
+    and for Chain Lightning the kept target is always the payer's own seat or
+    permanent. So a seat nobody asks does not pay {R}{R} for a copy that would
+    finish its own 4/4 (``ai_prompts.copy_offer_turns_on_its_taker``, ONS
+    W1G10: the Chains' copy offers made a headless target hurt itself, and
+    Chain of Smog's without end).
 
-    Aimed at a 4/4 that survives the first 3 damage, so "kept" is observable:
-    the copy lands on the same creature and finishes it.
+    This used to assert the opposite — the floating mana spent and the Angel
+    killed by its controller's own copy.
     """
     leg = set_pool("LEG")
     p1 = PlayerState(name="P1", life=20)
@@ -1603,9 +1607,11 @@ def test_a_non_interactive_payer_with_floating_mana_keeps_the_original_target(
     game.resolve_stack()
     game.check_state_based_actions()
 
-    assert p2.mana_pool.get("R", 0) == 0, "the floating mana was spent"
-    assert p1.life == 20, "the default is to keep the target, not to re-aim"
-    assert p2.battlefield == [], game.log
+    assert p2.mana_pool.get("R", 0) == 2, "the floating mana was not spent"
+    assert p1.life == 20
+    assert [p.card.name for p in p2.battlefield] == ["Serra Angel"], game.log
+    assert p2.battlefield[0].damage_marked == 3
+    assert not any("copied Chain Lightning" in line for line in game.log), game.log
 
 
 # ---------------------------------------------------------------------------

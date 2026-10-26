@@ -839,6 +839,7 @@ class OptionalPayChoicesMixin:
         # controller too, and paying is only right for the seat the unpaid
         # branch hurts (`ai_prompts.chained_toll_declined`).
         from ....ai_prompts import (chained_toll_declined,
+                                    copy_offer_turns_on_its_taker,
                                     offer_buys_own_drawback)
 
         if floating is not None and chained_toll_declined(
@@ -857,6 +858,17 @@ class OptionalPayChoicesMixin:
             self.log.append(
                 f"{player.name} declined {entry['card_name']} "
                 "(it buys a drawback to their own permanent)"
+            )
+        # …and a copy of a spell aimed at the seat taking it (the Onslaught
+        # Chains): the copy keeps its target by default, so the gift would be
+        # the spell again, at its taker (`ai_prompts.copy_offer_turns_on_its_taker`).
+        elif floating is not None and copy_offer_turns_on_its_taker(
+            self, choice.player_index, entry
+        ):
+            floating = None
+            self.log.append(
+                f"{player.name} declined {entry['card_name']} "
+                "(the copy would be aimed at them)"
             )
         # **A trade this policy can price on both sides is weighed, not
         # refused or taken by rule** (`ai_prompts.offer_trade_is_worth_taking`:

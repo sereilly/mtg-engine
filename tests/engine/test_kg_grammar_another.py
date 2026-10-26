@@ -64,7 +64,13 @@ _TRIGGER_KEYS = frozenset({
 })
 #: Trigger kinds whose regex row prints "another" as fixed text (a wording
 #: without it does not match), enforced by the kind's event filter.
-_TRIGGER_KINDS_REQUIRING_THE_WORD = frozenset({"counters_put_on_creature"})
+_TRIGGER_KINDS_REQUIRING_THE_WORD = frozenset({
+    "counters_put_on_creature",
+    # "When you gain control of this enchantment **from another player**"
+    # (Risky Move, ONS W1G10): the word is the kind's whole meaning — the
+    # control seam fires it only when the permanent moves between two seats.
+    "gain_control_of_source",
+})
 #: "this creature **or another** creature you control" — a union with the
 #: source: the phrase keeps its exclusion and the condition puts the source
 #: back by identity (``<stem>_includes_source``), which

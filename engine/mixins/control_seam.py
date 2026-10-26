@@ -427,6 +427,21 @@ class ControlSeamMixin:
             # a keyword of *permanents*, and an artifact that changes hands owes
             # a fresh one exactly as a creature does.
             forget_controllers_upkeep(permanent)
+            # "**When you gain control of this enchantment from another
+            # player**, …" (Risky Move.) The gaining end of the event whose
+            # losing end fires above, from the same one place a permanent
+            # changes hands — so every control-changing effect, an upkeep
+            # hand-over and a steal alike, announces it. Fired **after** the
+            # move, for the seat that now holds it: "you" is the new
+            # controller, and this seam only runs between two different seats,
+            # which is what "from another player" asks.
+            for trig in matching_triggers(
+                permanent.effective_card,
+                condition_kinds={"gain_control_of_source"},
+            ):
+                self._enqueue_triggered_batch(
+                    [make_trigger_event(derived, permanent, trig)]
+                )
 
     # ------------------------------------------------------------------
     # The control seam (CR 613 layer 2)

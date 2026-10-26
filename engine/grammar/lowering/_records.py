@@ -92,6 +92,7 @@ from ._record_keys import (CHOSEN_CAST_DAMAGE, CHOSEN_DAMAGE_SOURCE,
                            DAMAGE_RECIPIENT, EXTRA_TURN_GRANTED,
                            OTHER_CHOSEN_PERMANENT, PUT_FROM_HAND_PERMANENTS,
                            REMOVED_FROM_COMBAT_PERMANENTS,
+                           UNTAPPED_THIS_WAY_OBJECTS,
                            _BASE_PT_SET_PERMANENTS, _COUNTERS_PLACED_THIS_WAY,
                            _PERMANENTS_GIVEN_COUNTERS, _REANIMATED_PERMANENTS)
 
@@ -338,6 +339,10 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # asked for once a replacement or an empty library has had its say — see
     # ``oracle_types.DREW_COUNT``.
     "draw_target_cards": DREW_COUNT,
+    # "Draw X cards. **For each card drawn this way,** discard a card unless
+    # you sacrifice a permanent." (Read the Runes.) The same number for the
+    # controller's own draw, which recorded none.
+    "draw_controller_cards": DREW_COUNT,
     # "Target player discards two cards, **then draws as many cards as they
     # discarded this way**." (Forget.) The chosen-discard prompt is the same
     # one ``discard_controller_cards`` arms, so it records the same key — what
@@ -643,6 +648,13 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # the destroy family's reason. The count is the primary — it is what a step
     # of this kind has always written.
     "tap_all_matching": (TAPPED_THIS_WAY, TAPPED_THIS_WAY_OBJECTS),
+    # "Untap all creatures **and gain control of them** until end of turn.
+    # **They** gain haste until end of turn." (Insurrection.) The set the
+    # untap sweep's noun phrase named — every member, untapped or not — under
+    # its own sweep key (``_record_keys.UNTAPPED_THIS_WAY_OBJECTS``), not the
+    # targeted untap's: filed beside the chosen objects it would make every
+    # later "those creatures" ambiguous (Reins of Power).
+    "untap_all_matching": UNTAPPED_THIS_WAY_OBJECTS,
     # "Each player may tap any number of untapped white creatures they control.
     # **For each creature tapped this way, that player** chooses…" (Raiding
     # Party.) Three records, because the sentence behind it asks three

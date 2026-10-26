@@ -1740,6 +1740,240 @@ def test_w1g9_butcher_orgg_with_its_blocker_gone_has_nothing_to_divide(set_pool)
 # ==== W1G10 ==========================================================
 # W1G10's tests go between this line and the "end W1G10" line.
 
+# --- W1G10: control and the stack, on creatures -----------------------------
+#
+# Quicksilver Dragon is Meddle's sentence with Silver Wyvern's identity in the
+# condition ("…and that target is **this creature**"); each card is put on the
+# battlefield face up through the engine's own entry point (W1G1 owns the
+# face-down half of the morphs).
+from engine import Game as _w1g10_Game
+from engine.models import Permanent as _w1g10_Permanent
+from engine.models import PlayerState as _w1g10_PlayerState
+from engine.oracle import compile_card_oracle as _w1g10_compile
+from engine.targeting import derive_activation_spec as _w1g10_activation_spec
+from tests.helpers import resolve_stack as _w1g10_resolve_stack
+
+
+def _w1g10_game(seats: int = 2):
+    game = _w1g10_Game(players=[
+        _w1g10_PlayerState(name=f"P{seat + 1}", life=20) for seat in range(seats)
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    return game
+
+
+def _w1g10_put(game, seat: int, card):
+    perm = _w1g10_Permanent(card=card)
+    perm.metadata["summoning_sickness_turn"] = -99
+    game._put_permanent_onto_battlefield(seat, perm, None)
+    return perm
+
+
+def _w1g10_dragon_board(set_pool, set_cards):
+    game = _w1g10_game()
+    dragon = _w1g10_put(game, 0, set_pool("ONS")["Quicksilver Dragon"])
+    bystander = _w1g10_put(game, 0, set_pool("LEA")["Grizzly Bears"])
+    giant = _w1g10_put(game, 1, set_pool("LEA")["Hill Giant"])
+    return game, dragon, bystander, giant
+
+
+def _w1g10_dragon_offered(game, set_pool, dragon):
+    card = set_pool("ONS")["Quicksilver Dragon"]
+    spec = _w1g10_activation_spec(_w1g10_compile(card).activated_abilities[0])
+    return [
+        entry["name"] for entry in game._enumerate_targets(
+            0, card, spec, for_cast=True,
+            source_permanent=dragon, ability_source=dragon,
+        )
+    ]
+
+
+def test_w1g10_quicksilver_dragon_redirects_a_spell_aimed_at_it(set_pool, set_cards):
+    """A Shock aimed at the Dragon is offered to the {U} ability, and resolves
+    at another creature instead (CR 115.7a)."""
+    game, dragon, bystander, giant = _w1g10_dragon_board(set_pool, set_cards)
+    game.players[1].hand.append(set_pool("ONS")["Shock"])
+    assert game.queue_from_hand(
+        1, "Shock", target_permanent_ids=[dragon.permanent_id]
+    ).supported
+    assert _w1g10_dragon_offered(game, set_pool, dragon) == ["Shock"]
+    assert game.queue_permanent_ability(
+        0, "Quicksilver Dragon", target_stack_index=0, ability_index=0,
+    ).supported
+    _w1g10_resolve_stack(game)
+
+    assert dragon.damage_marked == 0, game.log
+    # "another creature": never the Dragon itself, and the headless default is
+    # the first other creature the picker lists.
+    assert bystander.damage_marked + giant.damage_marked == 2, game.log
+    assert any("Shock now targets" in line for line in game.log), game.log
+
+
+def test_w1g10_quicksilver_dragon_ignores_a_spell_aimed_elsewhere(set_pool, set_cards):
+    """"…and that target is **this creature**": a Shock at the creature beside
+    it is not offered, and an activation naming it is refused before {U} is
+    spent — the clause read and dropped would re-aim every spell."""
+    game, dragon, bystander, _giant = _w1g10_dragon_board(set_pool, set_cards)
+    game.players[1].hand.append(set_pool("ONS")["Shock"])
+    game.queue_from_hand(1, "Shock", target_permanent_ids=[bystander.permanent_id])
+    assert _w1g10_dragon_offered(game, set_pool, dragon) == []
+    assert not game.queue_permanent_ability(
+        0, "Quicksilver Dragon", target_stack_index=0, ability_index=0,
+    ).supported
+    _w1g10_resolve_stack(game)
+    assert bystander.damage_marked == 2, game.log
+    assert dragon.damage_marked == 0
+
+
+def test_w1g10_quicksilver_dragon_leaves_a_two_target_spell_alone(set_pool, set_cards):
+    """"…has only one target" (CR 115.9a): a spell naming the Dragon and a
+    second object is not the Dragon's to re-aim."""
+    game, dragon, bystander, _giant = _w1g10_dragon_board(set_pool, set_cards)
+    game.players[1].hand.append(set_pool("USG")["Arc Lightning"])
+    # Dragon and bystander are seat 0's slots 0 and 1.
+    assert game.queue_from_hand(
+        1, "Arc Lightning", divided_targets=[(0, 0, 1), (0, 1, 2)],
+    ).supported
+    assert _w1g10_dragon_offered(game, set_pool, dragon) == []
+    _w1g10_resolve_stack(game)
+    assert dragon.damage_marked == 1, game.log
+
+
+def _w1g10_entrancer_swing(set_pool):
+    """A three-seat table: the Entrancer (seat 0) attacks seat 2 unblocked;
+    seat 1 and seat 2 each control a creature. Returns at the trigger's
+    target prompt, with seat 0 interactive."""
+    game = _w1g10_Game(players=[
+        _w1g10_PlayerState(
+            name=f"P{seat + 1}", life=20,
+            library=[set_pool("LEA")["Island"]] * 5,
+        )
+        for seat in range(3)
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    game.start_turn(0)
+    entrancer = _w1g10_put(game, 0, set_pool("ONS")["Riptide Entrancer"])
+    bears = _w1g10_put(game, 1, set_pool("LEA")["Grizzly Bears"])
+    giant = _w1g10_put(game, 2, set_pool("LEA")["Hill Giant"])
+    for perm in (entrancer, bears, giant):
+        perm.metadata["summoning_sickness_turn"] = -99
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(0, [0], defending_player_index=2)[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(2, {})[0]
+    game.advance_combat_phase()
+    assert game.players[2].life == 19
+    return game, entrancer, bears, giant
+
+
+def test_w1g10_riptide_entrancer_takes_the_damaged_players_creature(set_pool):
+    """"…you may sacrifice it. If you do, gain control of target creature
+    **that player** controls." At three seats the picker offers only the
+    damaged player's creature, refuses the other opponent's, and accepting
+    the offer sacrifices the Entrancer and takes the creature for good."""
+    game, entrancer, bears, giant = _w1g10_entrancer_swing(set_pool)
+    prompt = game.pending_choice_of("trigger_target", 0)
+    assert prompt is not None, game.log
+    assert [t["name"] for t in prompt.data["targets"]] == ["Hill Giant"]
+    assert not game.confirm_trigger_target(0, permanent_id=bears.permanent_id)
+    assert game.confirm_trigger_target(0, permanent_id=giant.permanent_id)
+
+    game.resolve_top_of_stack()
+    offer = game.pending_choice_of("optional_pay", 0)
+    assert offer is not None, game.log
+    assert game._resolve_optional_pay(offer, True, None)
+    game._settle()
+
+    assert not game.is_on_battlefield(entrancer)
+    assert "Riptide Entrancer" in [c.name for c in game.players[0].graveyard]
+    assert game.controller_index_of(giant) == 0, game.log
+    assert game.controller_index_of(bears) == 1
+    # "This effect lasts indefinitely": cleanup does not hand it back.
+    game.start_next_turn()
+    assert game.controller_index_of(giant) == 0, game.log
+
+
+def test_w1g10_riptide_entrancer_declined_keeps_everything(set_pool):
+    game, entrancer, bears, giant = _w1g10_entrancer_swing(set_pool)
+    assert game.confirm_trigger_target(0, permanent_id=giant.permanent_id)
+    game.resolve_top_of_stack()
+    offer = game.pending_choice_of("optional_pay", 0)
+    assert game._resolve_optional_pay(offer, False, None)
+    game._settle()
+    assert game.is_on_battlefield(entrancer)
+    assert game.controller_index_of(giant) == 2
+
+
+def _w1g10_shieldmage_board(set_pool):
+    """Shieldmage Elder and a second Wizard, both just arrived: tapping
+    untapped Wizards is not a {T} cost, so summoning sickness does not stop it
+    (the 2004-10-04 ruling: "including creatures that haven't been under your
+    control continuously")."""
+    game = _w1g10_Game(players=[
+        _w1g10_PlayerState(
+            name=f"P{seat + 1}", life=20,
+            library=[set_pool("LEA")["Island"]] * 5,
+        )
+        for seat in range(2)
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    elder = _w1g10_Permanent(card=set_pool("ONS")["Shieldmage Elder"])
+    game._put_permanent_onto_battlefield(0, elder, None)
+    wizard = _w1g10_Permanent(card=set_pool("LEA")["Prodigal Sorcerer"])
+    game._put_permanent_onto_battlefield(0, wizard, None)
+    return game, elder, wizard
+
+
+def test_w1g10_shieldmage_elder_prevents_a_spells_damage(set_pool):
+    """"Tap two untapped Wizards you control: Prevent all damage target spell
+    would deal this turn." — a Lightning Bolt aimed at its controller deals
+    nothing, and the two Wizards are what paid."""
+    game, elder, wizard = _w1g10_shieldmage_board(set_pool)
+    game.players[1].hand.append(set_pool("LEA")["Lightning Bolt"])
+    assert game.queue_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+    assert game.queue_permanent_ability(
+        0, "Shieldmage Elder", target_stack_index=0, ability_index=1,
+    ).supported
+    assert elder.tapped and wizard.tapped
+    _w1g10_resolve_stack(game)
+    assert game.players[0].life == 20, game.log
+
+
+def test_w1g10_shieldmage_elder_shield_follows_a_permanent_spell(set_pool):
+    """CR 400.7c (and the card's ruling): a shield on a creature spell keeps
+    preventing the damage of the permanent it becomes, for the rest of the
+    turn — and only this turn: after the cleanup the same ping lands."""
+    game, _elder, _wizard = _w1g10_shieldmage_board(set_pool)
+    game.players[1].hand.append(set_pool("LEA")["Prodigal Sorcerer"])
+    assert game.queue_from_hand(1, "Prodigal Sorcerer").supported
+    assert game.queue_permanent_ability(
+        0, "Shieldmage Elder", target_stack_index=0, ability_index=1,
+    ).supported
+    _w1g10_resolve_stack(game)
+    (theirs,) = game.controlled_by(1)
+    assert theirs.card.name == "Prodigal Sorcerer"
+    theirs.metadata["summoning_sickness_turn"] = -99
+    assert game.queue_permanent_ability(
+        1, "Prodigal Sorcerer", target_player_index=0, ability_index=0,
+    ).supported
+    _w1g10_resolve_stack(game)
+    assert game.players[0].life == 20, game.log
+
+    game.resolve_cleanup_step(0)
+    game.start_next_turn()
+    theirs.tapped = False
+    assert game.queue_permanent_ability(
+        1, "Prodigal Sorcerer", target_player_index=0, ability_index=0,
+    ).supported
+    _w1g10_resolve_stack(game)
+    assert game.players[0].life == 19, game.log
+
 # ==== end W1G10 ======================================================
 
 

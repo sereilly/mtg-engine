@@ -44,7 +44,7 @@ from ..stream import TokenStream
 from ..durations import _parse_duration
 from ..phrases import (_expect_counter_kind, _parse_can_attack_as_though,
                        _parse_keywords, _parse_per_each_objects,
-                       parse_keyword_list)
+                       _parse_that_object, parse_keyword_list)
 from ..where_x import parse_where_x_definition
 from ._life import accept_life_gain, accept_life_loss
 
@@ -264,7 +264,11 @@ def _parse_gains(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
                 # control of. Declining rather than raising keeps every other
                 # "gains …" reading below reachable, which is this branch's own
                 # rule.
-                what = parse_recipient(stream)
+                # "…that opponent gains control of **that creature**." (Risky
+                # Move.) The object an earlier sentence chose, read by the
+                # back-reference the imperative spelling reads first
+                # (``_parse_gain_control``), so the two positions agree.
+                what = _parse_that_object(stream) or parse_recipient(stream)
             except GrammarError:
                 what = None
             if isinstance(what, ast.TargetSpec):

@@ -242,7 +242,14 @@ def _parse_discard(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
     # hand" (Chandra, Heart of Fire), "that player discards **their** hand"
     # (Nicol Bolas) — so both spellings are one production. Which player it is
     # was read before this function was called; the pronoun only repeats them.
-    if stream.accept_phrase("your", "hand") or stream.accept_phrase("their", "hand"):
+    # "Any number of target opponents each discard **their hands**" (Wheel and
+    # Deal) is the same possessive after a distributive subject, so the plural
+    # noun is the same two words.
+    if (
+        stream.accept_phrase("your", "hand")
+        or stream.accept_phrase("their", "hand")
+        or stream.accept_phrase("their", "hands")
+    ):
         return ast.Discard(player, ast.AllOf(), whole_hand=True)
     # "…that player discards **all the cards in their hand**, then draws that
     # many cards." (Shocker.) The long spelling of the two words above — every

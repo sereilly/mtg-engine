@@ -38,7 +38,8 @@ from .. import ast
 from ..errors import LoweringError
 from ._amounts import count_spec, halved_count_spec
 from ._common import _amount_payload, _describe_targets, chargeable_card_filter
-from ._events import _DAMAGED_PLAYER_EVENTS, _DEFENDING_PLAYER_EVENTS
+from ._events import (LOOP_BOUND_PLAYER, _DAMAGED_PLAYER_EVENTS,
+                      _DEFENDING_PLAYER_EVENTS)
 from ._cost_records import SACRIFICED_FOR_COST
 from ._filters import hand_name_relation
 
@@ -177,6 +178,7 @@ def discard_all_matching(
 
 def discard_whole_hand(
     node: ast.Discard, event: str | None,
+    produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...]:
     """"Discard your hand" (Chandra, Heart of Fire), and every other seat the
     same emptying is printed for. One instruction with a ``who`` rather than a
@@ -194,6 +196,15 @@ def discard_whole_hand(
         return (
             OracleInstruction("discard_hand", "", {"who": "damaged_player"}),
         )
+    # "Any number of target opponents each discard **their hands**" (Wheel
+    # and Deal) — "that player" inside a loop over seats, which rebinds the
+    # resolution's target to each iteration's seat
+    # (``handlers/control_flow.for_each``). So the seat is the target slot's,
+    # the ``who`` the targeted branch below reads, with no ``targets``
+    # description of its own: the loop's announcement is the one the picker
+    # asks.
+    if node.player.kind == "that_player" and LOOP_BOUND_PLAYER in produced:
+        return (OracleInstruction("discard_hand", "", {"who": "target"}),)
     # "**Each player** discards their hand, then draws cards equal to the
     # greatest number of cards a player discarded this way." (Windfall.)
     # The same emptying offered to every living seat, so it is the same

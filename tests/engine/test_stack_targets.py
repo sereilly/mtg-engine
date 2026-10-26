@@ -735,6 +735,12 @@ _UNANNOUNCED_TRIGGER_TARGETS = frozenset({
     "Soltari Visionary#0", "Pandemonium#0", "Somnophore#0", "Sigil of Sleep#0",
     "Caustic Wasps#0", "Latulla's Orders#0", "Chandra's Incinerator#0",
     "Feline Sovereign#0",
+    # Onslaught, W1G10. "…gain control of target creature **that player**
+    # controls" (Riptide Entrancer) — Caustic Wasps' seat on a steal. Driven
+    # through a real combat damage step at three seats
+    # (tests/sets/test_ons_creatures_later_groups.py, W1G10) the damaged
+    # player's creature is the only one offered and is taken.
+    "Riptide Entrancer#0",
     # Odyssey's ingest. "…deal 1 damage to target creature **that player
     # controls**" — Caustic Wasps' shape. Driven through a real combat damage
     # step it targets a creature of the damaged player's and kills it.

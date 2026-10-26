@@ -247,6 +247,18 @@ def _lower_draw(
                     },
                 ),
             )
+        # "…, then **you** draw up to four cards." (Trade Secrets.) The
+        # effect's own controller, which needs no record: the handler asks the
+        # same ``draw_up_to`` prompt of the seat the resolution is performed
+        # by. Spelled ``drawer: "you"`` rather than a record so a reader of the
+        # payload can see whose ceiling it is.
+        if node.player.kind == "you":
+            return (
+                OracleInstruction(
+                    "draw_up_to_cards", "",
+                    {"amount": _amount_payload(node.count), "drawer": "you"},
+                ),
+            )
         # Every other drawer still refuses: read as an amount they would draw
         # the maximum, and a forced draw is a different card from an offered
         # one — on Truce, the difference is the whole of what the card does.

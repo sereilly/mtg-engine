@@ -221,9 +221,38 @@ def _lower_repeat_optional_process(
         raise LoweringError(
             "a repeated process with no effect in it", node=node
         )
+    payload: dict[str, object] = {"steps": steps}
+    # "**That opponent** may repeat this process as many times as they
+    # choose." (Trade Secrets.) The seat the round *targeted* decides, read by
+    # the handler off the announcement (``context.target``). Admitted only
+    # when the round really announces a player target: with none the words
+    # name nobody, and asking the controller instead would be a different
+    # card. Emitted only when printed, so Forbidden Ritual's payload is
+    # byte-identical.
+    if node.decider != "you":
+        if node.decider != "that_player" or not _names_target_player(node.round):
+            raise LoweringError(
+                "no player the process targeted decides whether it repeats",
+                node=node,
+            )
+        payload["decider"] = "target_player"
     return (
-        OracleInstruction("repeat_optional_process", "", {"steps": steps}),
+        OracleInstruction("repeat_optional_process", "", payload),
     )
+
+
+def _names_target_player(node) -> bool:
+    """Whether any part of *node* announces a player target (CR 601.2c)."""
+    if isinstance(node, ast.PlayerRef):
+        return node.kind in ("target_player", "target_opponent")
+    if dataclasses.is_dataclass(node) and not isinstance(node, type):
+        return any(
+            _names_target_player(getattr(node, field.name))
+            for field in dataclasses.fields(node)
+        )
+    if isinstance(node, (tuple, list)):
+        return any(_names_target_player(item) for item in node)
+    return False
 
 
 def _lower_repeat_process_request(

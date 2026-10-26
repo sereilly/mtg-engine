@@ -1071,6 +1071,267 @@ def test_w1g7_wirewood_pride_counts_every_elf(set_pool):
 # ==== W1G10 ==========================================================
 # W1G10's tests go between this line and the "end W1G10" line.
 
+# --- W1G10: control and the stack, on instants --------------------------------
+import pytest as _w1g10_pytest
+
+from engine import Game as _w1g10_Game
+from engine.models import Permanent as _w1g10_Permanent
+from engine.models import PlayerState as _w1g10_PlayerState
+from tests.helpers import resolve_stack as _w1g10_resolve_stack
+
+
+def _w1g10_runes_game(set_pool, *, library: int = 8, interactive: bool = False):
+    game = _w1g10_Game(players=[
+        _w1g10_PlayerState(
+            name=f"P{seat + 1}", life=20,
+            library=[set_pool("LEA")["Island"]] * library,
+        )
+        for seat in range(2)
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0} if interactive else set()
+    game.start_turn(0)
+    for name in ("Grizzly Bears", "Forest"):
+        game._put_permanent_onto_battlefield(
+            0, _w1g10_Permanent(card=set_pool("LEA")[name]), None
+        )
+    game.players[0].hand.extend(
+        [set_pool("ONS")["Shock"], set_pool("ONS")["Read the Runes"]]
+    )
+    return game
+
+
+def _w1g10_drain(game) -> None:
+    """Resolve, then answer each owed offer with its default (a headless seat's
+    offers are drained once the stack is empty)."""
+    _w1g10_resolve_stack(game)
+    for _ in range(20):
+        if not game.pending_choices:
+            return
+        game.auto_resolve_pending_choices()
+    raise AssertionError([c.kind for c in game.pending_choices])
+
+
+def test_w1g10_read_the_runes_draws_then_discards_one_per_card(set_pool):
+    """"Draw X cards. For each card drawn this way, discard a card unless you
+    sacrifice a permanent." X = 3: three cards arrive first (the ruling: "You
+    draw the cards, then …"), then three tolls; the headless seat keeps its
+    permanents and discards three (never forced to sacrifice)."""
+    game = _w1g10_runes_game(set_pool)
+    assert game.queue_from_hand(0, "Read the Runes", x_value=3).supported
+    _w1g10_drain(game)
+    me = game.players[0]
+    assert "Read the Runes drew 3 card" in game.log
+    assert len(me.hand) == 1, [c.name for c in me.hand]
+    assert sorted(c.name for c in me.graveyard if c.name != "Read the Runes") == [
+        "Island", "Island", "Shock",
+    ]
+    assert [p.card.name for p in game.controlled_by(0)] == ["Grizzly Bears", "Forest"]
+    assert game.log.index("Read the Runes drew 3 card") < min(
+        i for i, line in enumerate(game.log) if "discarded" in line
+    )
+
+
+def test_w1g10_read_the_runes_a_sacrifice_buys_off_one_discard(set_pool):
+    """The toll answered both ways by a seat that is asked: the first is paid
+    with a permanent (the Forest), the other two are discards."""
+    game = _w1g10_runes_game(set_pool, interactive=True)
+    assert game.queue_from_hand(0, "Read the Runes", x_value=3).supported
+    answered = 0
+    for _ in range(30):
+        if not game.stack and not game.pending_choices:
+            break
+        if not game.pending_choices:
+            game.resolve_top_of_stack()
+            continue
+        choice = game.pending_choices[0]
+        if choice.kind == "optional_pay":
+            assert game._resolve_optional_pay(choice, answered == 0, None)
+            answered += 1
+        else:
+            game.auto_resolve_pending_choices(kinds=(choice.kind,))
+    assert answered == 3
+    me = game.players[0]
+    assert [p.card.name for p in game.controlled_by(0)] == ["Grizzly Bears"], game.log
+    assert "Forest" in [c.name for c in me.graveyard]
+    assert len(me.hand) == 2, [c.name for c in me.hand]
+
+
+def test_w1g10_read_the_runes_counts_the_cards_really_drawn(set_pool):
+    """"…drawn **this way**": X = 4 from a two-card library draws two, and
+    asks two tolls, not four."""
+    game = _w1g10_runes_game(set_pool, library=2)
+    assert game.queue_from_hand(0, "Read the Runes", x_value=4).supported
+    _w1g10_drain(game)
+    assert sum("declined Read the Runes" in line for line in game.log) == 2, game.log
+
+
+# --- W1G10 drive: the instant Chains -----------------------------------------
+#
+# "…that permanent's controller may sacrifice a land of their choice" / "…may
+# discard a card": the offered player is the one who sacrifices or discards.
+# Before the fix the offered player said yes and the *caster* did it.
+
+
+def _w1g10_chain_table(set_pool):
+    game = _w1g10_Game(players=[
+        _w1g10_PlayerState(
+            name=f"P{seat + 1}", life=20,
+            library=[set_pool("LEA")["Island"]] * 8,
+        )
+        for seat in range(2)
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0, 1}
+    game.start_turn(0)
+    placed = {}
+    for seat, name in (
+        (0, "Grizzly Bears"), (0, "Forest"), (1, "Hill Giant"), (1, "Mountain"),
+    ):
+        perm = _w1g10_Permanent(card=set_pool("LEA")[name])
+        game._put_permanent_onto_battlefield(seat, perm, None)
+        placed[name] = perm
+    return game, placed
+
+
+def _w1g10_play_out(game, offers):
+    """Answer each optional offer from *offers* (True/False, in order; False
+    once exhausted) and every other prompt with its default."""
+    offers = list(offers)
+    asked = []
+    for _ in range(60):
+        if not game.stack and not game.pending_choices:
+            return asked
+        if not game.pending_choices:
+            game.resolve_top_of_stack()
+            continue
+        choice = game.pending_choices[0]
+        asked.append((choice.kind, choice.player_index))
+        if choice.kind == "optional_pay":
+            assert game._resolve_optional_pay(
+                choice, offers.pop(0) if offers else False, None
+            )
+        else:
+            game.auto_resolve_pending_choices(kinds=(choice.kind,))
+    raise AssertionError(asked)
+
+
+def test_w1g10_chain_of_vapor_the_bounced_permanents_controller_sacrifices(set_pool):
+    game, placed = _w1g10_chain_table(set_pool)
+    game.players[0].hand.append(set_pool("ONS")["Chain of Vapor"])
+    assert game.queue_from_hand(
+        0, "Chain of Vapor", target_permanent_ids=[placed["Hill Giant"].permanent_id]
+    ).supported
+    asked = _w1g10_play_out(game, [True, False])
+    assert ("sacrifice", 1) in asked and ("sacrifice", 0) not in asked, asked
+    assert "Hill Giant" in [c.name for c in game.players[1].hand]
+    assert "Mountain" in [c.name for c in game.players[1].graveyard], game.log
+    assert game.is_on_battlefield(placed["Forest"]), "the caster's land is not theirs to give"
+    assert "P2 sacrificed Mountain (Chain of Vapor)" in game.log
+
+
+def test_w1g10_chain_of_plasma_the_damaged_creatures_controller_discards(set_pool):
+    game, placed = _w1g10_chain_table(set_pool)
+    game.players[0].hand.extend(
+        [set_pool("ONS")["Chain of Plasma"], set_pool("ONS")["Shock"]]
+    )
+    game.players[1].hand.append(set_pool("LEA")["Lightning Bolt"])
+    assert game.queue_from_hand(
+        0, "Chain of Plasma", target_permanent_ids=[placed["Hill Giant"].permanent_id]
+    ).supported
+    _w1g10_play_out(game, [True, False])
+    assert placed["Hill Giant"].damage_marked == 3
+    assert [c.name for c in game.players[1].graveyard] == ["Lightning Bolt"], game.log
+    assert [c.name for c in game.players[0].hand] == ["Shock"], "the caster kept its card"
+
+
+# --- W1G10: Wheel and Deal ------------------------------------------------------
+#
+# "Any number of target opponents each discard their hands, then draw seven
+# cards. Draw a card." Announced as a chain of optional opponent seat roles
+# (`target_roles.any_number_of_opponents_roles`); the rulings (2004-10-04):
+# "You can choose to target zero opponents." "You can't target yourself."
+
+
+def _w1g10_wheel_table(set_pool):
+    game = _w1g10_Game(players=[
+        _w1g10_PlayerState(
+            name=f"P{seat + 1}", life=20,
+            library=[set_pool("LEA")["Island"]] * 12,
+        )
+        for seat in range(3)
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game.players[0].hand.append(set_pool("ONS")["Wheel and Deal"])
+    game.players[1].hand.extend(
+        [set_pool("LEA")["Lightning Bolt"], set_pool("LEA")["Mountain"]]
+    )
+    game.players[2].hand.append(set_pool("LEA")["Forest"])
+    return game
+
+
+@_w1g10_pytest.mark.parametrize("named, wheeled", [
+    ([1, 2], {1, 2}), ([2], {2}), ([], set()),
+])
+def test_w1g10_wheel_and_deal_wheels_exactly_the_named_opponents(set_pool, named, wheeled):
+    game = _w1g10_wheel_table(set_pool)
+    before = [len(player.hand) for player in game.players]
+    assert game.queue_from_hand(
+        0, "Wheel and Deal", target_role_refs=[{"seat": seat} for seat in named],
+    ).supported
+    _w1g10_resolve_stack(game)
+    for seat in (1, 2):
+        if seat in wheeled:
+            assert len(game.players[seat].hand) == 7, game.log
+            assert len(game.players[seat].graveyard) == before[seat]
+        else:
+            assert len(game.players[seat].hand) == before[seat]
+            assert game.players[seat].graveyard == []
+    # "Draw a card" — the caster, whoever was named (the spell itself went to
+    # the graveyard from the hand).
+    assert len(game.players[0].hand) == before[0] - 1 + 1, game.log
+
+
+@_w1g10_pytest.mark.parametrize("named", [[0], [1, 1], [2, 1]])
+def test_w1g10_wheel_and_deal_refuses_itself_a_repeat_and_a_reordering(set_pool, named):
+    """Not yourself; each opponent once (CR 115.3); and the set is announced
+    once, in seat order, rather than once per ordering."""
+    game = _w1g10_wheel_table(set_pool)
+    assert not game.queue_from_hand(
+        0, "Wheel and Deal", target_role_refs=[{"seat": seat} for seat in named],
+    ).supported
+    assert "Wheel and Deal" in [c.name for c in game.players[0].hand]
+    assert game.stack == []
+
+
+def test_w1g10_wheel_and_deal_skips_an_opponent_that_became_illegal(
+    set_pool, catalog_by_name,
+):
+    """CR 608.2b: of two named opponents, the one that gained shroud is not
+    affected and the rest of the spell happens; with that one alone named, the
+    whole spell is countered — the draw included."""
+    mask = catalog_by_name["Ivory Mask"]
+    game = _w1g10_wheel_table(set_pool)
+    assert game.queue_from_hand(
+        0, "Wheel and Deal", target_role_refs=[{"seat": 1}, {"seat": 2}],
+    ).supported
+    game._put_permanent_onto_battlefield(2, _w1g10_Permanent(card=mask), None)
+    _w1g10_resolve_stack(game)
+    assert len(game.players[1].hand) == 7 and len(game.players[2].hand) == 1, game.log
+
+    game = _w1g10_wheel_table(set_pool)
+    hand_before = len(game.players[0].hand)
+    assert game.queue_from_hand(
+        0, "Wheel and Deal", target_role_refs=[{"seat": 2}],
+    ).supported
+    game._put_permanent_onto_battlefield(2, _w1g10_Permanent(card=mask), None)
+    _w1g10_resolve_stack(game)
+    assert len(game.players[2].hand) == 1
+    assert len(game.players[0].hand) == hand_before - 1, "countered: no card drawn"
+    assert any("every target is illegal" in line for line in game.log), game.log
+
 # ==== end W1G10 ======================================================
 
 

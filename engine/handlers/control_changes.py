@@ -176,11 +176,21 @@ def gain_control_until_eot(game: Game, instruction: OracleInstruction, context: 
     # "target artifact **defending player controls**" (Kukemssa Pirates),
     # through the one reader of the phrase (CR 506.2/603.10).
     defending = defending_player_seat(game, context)
+    # "…gain control of target creature **that player** controls." (Riptide
+    # Entrancer.) The seat the firing event froze, through the one reader of
+    # the phrase — the same one the trigger's picker narrowed on. Asked only
+    # when printed: ``subject_matches`` refuses the key without a seat, so an
+    # unfrozen one takes nothing rather than somebody else's creature.
+    that_player = (
+        frozen_that_player_seat(game, context)
+        if filters.get("controller") == "that_player" else None
+    )
     target = resolve_target_permanent(
         game, context,
         predicate=lambda perm: subject_matches(
             game, perm, filters, observer=observer,
             source=context.source_permanent, defending=defending,
+            that_player=that_player,
         ),
         fallback_on_invalid_choice=False,
     )
@@ -479,6 +489,53 @@ def give_control_of_source_to_player(game: Game, instruction: OracleInstruction,
         game.log.append(f"{context.card.name}: control can't change")
         return True, "resolved"
     game.log.append(f"{recipient.name} gains control of {context.card.name}")
+    return True, "resolved"
+
+
+@effect_handler("give_control_of_chosen_to_player")
+def give_control_of_chosen_to_player(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Choose a creature you control and an opponent. Flip a coin. If you lose
+    the flip, **that opponent gains control of that creature**." (Risky Move.)
+
+    ``give_control_of_source_to_player``'s hand-over with the permanent and the
+    seat both *chosen on resolution* (CR 608.2d) by the steps in front of it —
+    the permanent read off the record named in ``permanents_from``, the seat
+    off the one key a chosen player is written to (``chosen_player``). Nothing
+    is targeted (the card's ruling: "This card does not target any creatures
+    or players"), so nothing is re-checked as a target.
+
+    Untimed (CR 611.2a; the ruling: "The change of control of creatures does
+    not end at end of turn or even when this card leaves the battlefield"), so
+    the contribution's source is the card and nothing sweeps it back. A
+    permanent that has left, or no seat chosen, hands nothing to anybody.
+    """
+    from ..control import change_control
+
+    card_name = getattr(context.card, "name", "Effect")
+    ids = recorded_permanent_ids(context, instruction.payload.get("permanents_from"))
+    chosen = game.permanent_by_id(ids[0]) if ids else None
+    if chosen is None or not game.is_on_battlefield(chosen):
+        game.log.append(f"{card_name}: the chosen permanent is gone")
+        return True, "resolved"
+    # The literal ``grammar/lowering/_record_keys.CHOSEN_PLAYER`` declares —
+    # the handler layer does not import from there (``_targets`` reads it the
+    # same way).
+    seat = (context.results or {}).get("chosen_player")
+    if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+        game.log.append(f"{card_name}: no opponent was chosen")
+        return True, "resolved"
+    recipient = game.players[seat]
+    if seat == game.controller_index_of(chosen):
+        game.log.append(
+            f"{chosen.card.name} is already controlled by {recipient.name}"
+        )
+        return True, "resolved"
+    if game.cant_gain_control(chosen, recipient):
+        game.log.append(f"{card_name}: {chosen.card.name} can't change controllers")
+        return True, "resolved"
+    change_control(chosen, seat, source=context.card, until_eot=False)
+    game._sync_control()
+    game.log.append(f"{recipient.name} gains control of {chosen.card.name}")
     return True, "resolved"
 
 

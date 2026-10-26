@@ -236,14 +236,44 @@ def _parse_conditional_retarget(stream: TokenStream) -> "ast.ChangeTarget | None
     if not stream.accept_phrase("if", "target", "spell", "has", "only", "one", "target"):
         stream.reset(mark)
         return None
-    if not stream.accept_phrase("and", "that", "target", "is", "a"):
+    if not stream.accept_phrase("and", "that", "target", "is"):
         stream.reset(mark)
         return None
-    noun = stream.peek_word()
-    if noun is None:
-        stream.reset(mark)
-        return None
-    stream.advance()
+    # "…and that target is **this creature**, change that spell's target to
+    # another creature." (Quicksilver Dragon.) Silver Wyvern's "that targets
+    # only this creature" in Meddle's arrangement: the current target is an
+    # *identity* — the ability's own source, which the picker answers by
+    # ``permanent_id`` (``current_target_type`` ``"source"``) — and the noun
+    # after "another" is the bound on the new one. The reference must be the
+    # spelled-out "this <noun>" (or the card's own name), never a bare "it",
+    # and the noun after "another" must be the one "this" printed: "this
+    # creature … another creature" is one restriction stated twice, exactly as
+    # Meddle's two nouns are.
+    current_type: str
+    noun: str | None
+    probe = stream.mark()
+    reference = accept_source_reference_spec(stream)
+    if reference is not None and reference.quantifier == "this":
+        current_type = "source"
+        # The word "this" was followed by, when it was the spelled-out
+        # reference; None for the card's own name, whose new-target noun is
+        # then held by the lowering's closed bound alone.
+        noun = (
+            stream.peek_word(-1)
+            if stream.pos - probe == 2 and stream.peek_word(-2) == "this"
+            else None
+        )
+    else:
+        stream.reset(probe)
+        if not stream.accept_word("a"):
+            stream.reset(mark)
+            return None
+        noun = stream.peek_word()
+        if noun is None:
+            stream.reset(mark)
+            return None
+        stream.advance()
+        current_type = noun
     if not stream.accept_punct(","):
         stream.reset(mark)
         return None
@@ -252,7 +282,8 @@ def _parse_conditional_retarget(stream: TokenStream) -> "ast.ChangeTarget | None
     ):
         stream.reset(mark)
         return None
-    if stream.peek_word() != noun:
+    new_noun = stream.peek_word()
+    if new_noun is None or (noun is not None and new_noun != noun):
         stream.reset(mark)
         return None
     stream.advance()
@@ -265,6 +296,6 @@ def _parse_conditional_retarget(stream: TokenStream) -> "ast.ChangeTarget | None
         ast.TargetSpec(
             "target", ast.ObjectFilter(target_count=1), targeted=True,
         ),
-        current_target_type=noun,
-        new_target=noun,
+        current_target_type=current_type,
+        new_target=new_noun,
     )

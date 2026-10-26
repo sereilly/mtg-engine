@@ -100,6 +100,32 @@ def add_directional_shield(
     perm.metadata[_COMBAT_SHIELD_DIRECTION_KEY] = record
 
 
+def carry_spell_shields_onto_permanent(item, perm) -> bool:
+    """CR 400.7c: "Prevention effects that apply to damage from a permanent
+    spell on the stack continue to apply to damage from the permanent that
+    spell becomes."
+
+    "Prevent all damage target spell would deal this turn" (Shieldmage Elder,
+    whose 2004-10-04 ruling says the same of a spell "that becomes a
+    permanent") hangs its shield off the *stack item*
+    (``shields.make_resolving_object_shield``), which is gone the moment the
+    spell resolves. So the shield is carried onto *perm* as the turn-long
+    directional "dealt by" marker the creature half of the same card arms —
+    every kind of damage, not combat only, ending at the cleanup that would
+    have ended the spell's own.
+
+    Returns whether anything was carried. Called by the one road a permanent
+    spell takes onto the battlefield (``ResolutionMixin._resolve_card``).
+    """
+    carried = False
+    for shield in shields_on(item):
+        if shield.kind != PREVENT_BY_RESOLVING_OBJECT or shield.spent:
+            continue
+        add_directional_shield(perm, COMBAT_SHIELD_BY, combat_only=False)
+        carried = True
+    return carried
+
+
 def clear_directional_shields(perm, lifetime: str) -> None:
     """Drop *perm*'s directional shields whose window is *lifetime*.
 

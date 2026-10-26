@@ -377,6 +377,9 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     # it: the other way keeps the permanent on the battlefield under somebody
     # else, which no zone-change row can see.
     "lose_control_of_source": "when you lose control of this artifact",
+    # Risky Move (ONS W1G10): the gaining end of the same CR 613 layer-2
+    # change, fired from the same seam for the seat that now holds it.
+    "gain_control_of_source": "when you gain control of this enchantment from another player",
     # Dance of Many: the same event asked about the token this permanent
     # created. Its own kind because the relation is what the fire site
     # dispatches on — the ability is the enchantment's and the event is the

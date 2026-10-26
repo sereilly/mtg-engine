@@ -31,10 +31,12 @@ from ._common import (_describe_targets, _filter_payload, _is_enchanted,
                       _is_source, _is_target,
                       _restrictions_beyond, testable_filter_payload)
 from ._events import (CHOSEN_PERMANENT, CHOSEN_PLAYER, EVENT_SUBJECT_CONTROLLER,
-                      EVENT_SUBJECT_PLAYER, _EVENT_STAMPED_TARGET_OBJECTS,
+                      EVENT_SUBJECT_PLAYER, _DAMAGED_PLAYER_EVENTS,
+                      _EVENT_STAMPED_TARGET_OBJECTS,
                       _EVENT_SUBJECT_CONTROLLERS,
                       _EVENT_SUBJECT_PLAYERS, _UNTAPPED_PERMANENTS)
 from ._delays import (_BOUND_OBJECT_DELAYED_EVENTS)
+from ._record_keys import UNTAPPED_THIS_WAY_OBJECTS
 
 
 
@@ -62,6 +64,13 @@ from ._delays import (_BOUND_OBJECT_DELAYED_EVENTS)
 #: picker really does carry them out: a fourth spelling refuses here instead of
 #: being dropped into a steal that offers every permanent on the board.
 _PICKER_ENFORCED_CONTROLLERS = frozenset({"you", "opponent", "defending_player"})
+
+#: The trigger events whose fire site freezes the seat a printed "**that
+#: player** controls" names: the damaged player (``_DAMAGED_PLAYER_EVENTS``)
+#: and every event about one seat (``_EVENT_SUBJECT_PLAYERS``). Both are read
+#: back by the one reader, ``handlers/_targets.frozen_that_player_seat``, and
+#: by the trigger picker beside it.
+_THAT_PLAYER_FREEZING_EVENTS = _DAMAGED_PLAYER_EVENTS | _EVENT_SUBJECT_PLAYERS
 
 
 def _linked_steal_filter(node: ast.GainControl, subject: ast.TargetSpec) -> dict:
@@ -238,6 +247,35 @@ def _lower_another_seat_gains_control(
     # over with a player in slot 0.
     if _is_target(subject) and node.gained_by.kind == "target_player":
         return (_lower_seat_gains_target_permanent(node, subject),)
+    # "Choose a creature you control and an opponent. Flip a coin. If you lose
+    # the flip, **that opponent gains control of that creature**." (Risky
+    # Move.) Both ends are back-references to picks this same resolution made
+    # (CR 608.2d) — the permanent a ``choose_permanent`` step recorded and the
+    # seat a ``choose_opponent`` step recorded — so both producers must have
+    # run, and the bound noun carries no narrowing the record could honour.
+    if (
+        subject.quantifier == "that"
+        and not subject.targeted
+        and node.gained_by.kind in _EVENT_GAINERS
+        and CHOSEN_PERMANENT in produced
+        and CHOSEN_PLAYER in produced
+    ):
+        if _restrictions_beyond(subject.filter, frozenset({"card_types"})):
+            raise LoweringError(
+                "a chosen permanent carries no narrowing the record could "
+                "honour", node=node,
+            )
+        if node.duration != "indefinite" or node.tap_when_lost or node.offered:
+            raise LoweringError(
+                "a chosen permanent handed to a chosen seat changes "
+                "controllers untimed", node=node,
+            )
+        return (
+            OracleInstruction(
+                "give_control_of_chosen_to_player", "",
+                {"permanents_from": CHOSEN_PERMANENT},
+            ),
+        )
     if not _is_source(subject):
         raise LoweringError(
             "only a permanent handing itself over is implemented", node=node
@@ -628,7 +666,18 @@ def _lower_gain_control(
         # every "gain control of target X <seat> controls" in the pool was
         # unsupported for a narrowing the picker was already carrying out.
         controller = described.get("controller")
-        if controller is not None and controller not in _PICKER_ENFORCED_CONTROLLERS:
+        # "Whenever this creature deals combat damage to a player, you may
+        # sacrifice it. If you do, gain control of target creature **that
+        # player** controls." (Riptide Entrancer.) The seat the firing event
+        # froze (CR 603.10) — which the trigger's picker narrows on
+        # (``trigger_targets._CONTROLLER_SPEC_FLAGS``' ``that_player_only``)
+        # and the handler re-asks through ``frozen_that_player_seat`` — so it
+        # is carried exactly where an event froze one, and refused under
+        # every other event, where the words name nobody and a steal would
+        # reach whichever board the picker happened to default to.
+        if controller == "that_player" and event in _THAT_PLAYER_FREEZING_EVENTS:
+            pass
+        elif controller is not None and controller not in _PICKER_ENFORCED_CONTROLLERS:
             raise LoweringError(
                 "the control change cannot test this restriction", node=node
             )
@@ -646,6 +695,27 @@ def _lower_gain_control(
         _describe_targets(described, subject, announced_x_bound=True)
         return (OracleInstruction("gain_control_of_target", "", described),)
     if node.duration == "until_end_of_turn":
+        # "Untap all creatures and gain control of **them** until end of turn."
+        # (Insurrection.) The plural of the bound object below — the set the
+        # untap sweep recorded, every member taken — and gated the same way:
+        # with no producer the word names nothing and the line refuses.
+        if subject.quantifier == "those":
+            if _restrictions_beyond(subject.filter, frozenset({"card_types"})):
+                raise LoweringError(
+                    "a bound set carries no narrowing the record could honour",
+                    node=node,
+                )
+            if UNTAPPED_THIS_WAY_OBJECTS not in produced or node.tap_when_lost:
+                raise LoweringError(
+                    "\"them\" names a set no untap of this effect recorded",
+                    node=node,
+                )
+            return (
+                OracleInstruction(
+                    "gain_control_until_eot", "",
+                    {"permanents_from": UNTAPPED_THIS_WAY_OBJECTS},
+                ),
+            )
         if subject.quantifier in ("that", "it"):
             # "Gain control of **that creature** until end of turn."
             # (Disharmony.) "Untap target creature an opponent controls and gain

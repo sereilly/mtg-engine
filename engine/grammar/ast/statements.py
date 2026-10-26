@@ -39,7 +39,7 @@ from typing import Union
 
 from .conditions import Condition
 from .conditions import DiedThisTurn, DiedThisWay
-from .loops import (ChosenThisWay, CountersPlacedThisWay,
+from .loops import (CardsDrawnThisWay, ChosenThisWay, CountersPlacedThisWay,
                     CountersRemovedThisWay, EachAdditionalCostPaid,
                     EachLifeLost, EachShortOfThisWay, ExiledThisWay,
                     TappedThisWay)
@@ -695,8 +695,13 @@ class RepeatOptionalProcess:
     So *round* is the whole preceding statement rather than one offer, and there
     is no ``restatement`` to check it against — the words name no act, only a
     number of times, so there is nothing a mismatched restatement could say.
+
+    *decider* is who is asked between rounds: ``"you"`` (Forbidden Ritual) or
+    ``"that_player"`` — "**That opponent** may repeat this process as many
+    times as they choose" (Trade Secrets), the player the round targeted.
     """
     round: "Statement"
+    decider: str = "you"
 
 
 @dataclass(frozen=True)
@@ -774,7 +779,8 @@ class ForEach:
     iterator: (ObjectFilter | PlayerRef | DiedThisTurn | DiedThisWay
                 | ExiledThisWay | TappedThisWay | ChosenThisWay | EachLifeLost
                 | EachShortOfThisWay | EachAdditionalCostPaid
-                | CountersPlacedThisWay | CountersRemovedThisWay)
+                | CountersPlacedThisWay | CountersRemovedThisWay
+                | CardsDrawnThisWay)
     effect: "Statement"
 
 

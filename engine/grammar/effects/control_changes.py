@@ -62,6 +62,14 @@ def _parse_gain_control(
     # chose, read by the same back-reference the destroy production uses so
     # the two cannot drift apart about what the phrase names.
     subject = _parse_that_object(stream) or parse_recipient(stream)
+    # "Untap all creatures and gain control of **them** until end of turn."
+    # (Insurrection.) The accusative plural names the set the clause in front
+    # of it produced — no player can be gained control of — so it is the
+    # ``those`` back-reference "Those creatures …" spells out (Reins of
+    # Power), read last, where every reader above has refused the word. The
+    # lowering admits it only behind a step that recorded the set.
+    if subject is None and stream.accept_word("them"):
+        subject = ast.TargetSpec("those", ast.ObjectFilter())
     if subject is None:
         raise stream.error("expected what to gain control of")
     # "…until end of turn" (Traitorous Greed). A lifetime of its own rather than

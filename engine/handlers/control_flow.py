@@ -1237,6 +1237,40 @@ _A_REPETITION = object()
 _END_OF_ITERATION = object()
 
 
+def _announced_target_seats(game: Game, context: OracleExecutionContext) -> list[int]:
+    """Every seat a roles announcement of opponents named, in slot order.
+
+    Two channels, the ones the cast path writes (``casting._cast_onto_stack``):
+    the per-role list (``target_roles.ROLE_SEATS``) where two or more seats were
+    named — a ``None`` there is a slot CR 608.2b blanked — and otherwise the
+    stack object's one seat. The object is the resolving one, found by card
+    identity as ``spell_copies.copy_this_spell`` finds "this spell"; the
+    context's ``target`` cannot answer, because a cast that named nobody still
+    resolves with the default opposing seat there. A seat that has left the
+    game is nobody (CR 800.4a).
+    """
+    from ..target_roles import recorded_role_seats
+
+    def live(seat) -> bool:
+        return (
+            isinstance(seat, int) and not isinstance(seat, bool)
+            and 0 <= seat < len(game.players) and not game.players[seat].lost
+        )
+
+    recorded = recorded_role_seats(context)
+    if recorded is not None:
+        return [seat for seat in recorded if live(seat)]
+    item = next(
+        (
+            entry for entry in reversed(getattr(game, "resolving_items", None) or ())
+            if entry.card is context.card
+        ),
+        None,
+    )
+    seat = getattr(item, "target_player_index", None)
+    return [seat] if live(seat) else []
+
+
 @effect_handler("for_each")
 def for_each(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"For each <objects>, <effect>." The matching set is snapshotted before
@@ -1324,6 +1358,13 @@ def for_each(game: Game, instruction: OracleInstruction, context: OracleExecutio
             if seat is not None else 0
         )
         matched = [_A_REPETITION] * max(0, times)
+    elif seat_set == "any_number_of_target_opponents":
+        # "**Any number of target opponents** each discard their hands, then
+        # draw seven cards." (Wheel and Deal.) The seats the announcement named
+        # (CR 601.2c), in seat order — the roles' canonical order — and only
+        # those still named after CR 608.2b's re-check blanked any slot that
+        # went illegal. None named is a legal announcement and runs nothing.
+        matched = [_Seat(index) for index in _announced_target_seats(game, context)]
     elif seat_set is not None:
         # Through the same reader every multi-seat offer uses, so "each player"
         # names the same seats in the same order here as it does there — CR
