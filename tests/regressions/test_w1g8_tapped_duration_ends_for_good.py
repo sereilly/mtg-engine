@@ -30,6 +30,7 @@ import pytest
 
 from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_paths
+from engine.faces import compilation_units
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.targeting import derive_activation_spec, usable_activated_abilities
@@ -69,7 +70,8 @@ def _pool() -> dict:
 
 def _census(pool) -> list[tuple[str, int]]:
     found = []
-    for name, card in sorted(pool.items()):
+    for card in compilation_units(sorted(pool.values(), key=lambda c: c.name)):
+        name = card.name
         program = compile_card_oracle(card)
         if not program.supported:
             continue
@@ -182,7 +184,8 @@ def _flat(instruction):
 
 def _steal_census(pool) -> list[tuple[str, int]]:
     found = []
-    for name, card in sorted(pool.items()):
+    for card in compilation_units(sorted(pool.values(), key=lambda c: c.name)):
+        name = card.name
         program = compile_card_oracle(card)
         if not program.supported:
             continue
