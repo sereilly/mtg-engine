@@ -306,11 +306,15 @@ def test_a_single_stopping_clause_is_read_without_whichever_comes_first(set_pool
             "you put a card into your hand.",
             "lowering", "no step in this effect that puts one there",
         ),
-        # A round that records nothing could never be seen to have stopped.
+        # A draw records its count since Onslaught's Read the Runes
+        # (draw_controller_cards produces DREW_COUNT), so this round is no
+        # longer refused as one that records nothing: it is refused by the
+        # clause it cannot see happen — a draw is not a step this reader
+        # counts as putting a card into a hand.
         (
             "Draw a card. Repeat this process until you put a card into your "
             "hand.",
-            "lowering", "records nothing",
+            "lowering", "no step in this effect that puts one there",
         ),
         # An offer anywhere but last would be answered after the question.
         (
