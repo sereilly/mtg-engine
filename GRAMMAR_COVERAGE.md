@@ -51,7 +51,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | TOR | 143 | 261 | 86.2% | 86.2% | 68.2% | 138 |
 | JUD | 143 | 241 | 91.3% | 90.9% | 65.6% | 131 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| ONS *(measured)* | 335 | 541 | 79.5% | 78.0% | 57.9% | 265 |
+| ONS *(measured)* | 335 | 541 | 79.5% | 78.9% | 58.8% | 270 |
 | **All (shipped)** | **8027** | **11886** | **90.7%** | **90.1%** | **62.4%** | **6277** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -77,7 +77,6 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 6 | 1 | a counted redirect off the source moves the damage onto one chosen target |  |
 | 6 | 1 | unsupported life-loss target 'owner' |  |
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
-| 5 | 5 | no grant handler expires at the duration 'while_source_tapped' |  |
 | 4 | 1 | the sacrifice prompt cannot test this restriction |  |
 | 4 | 1 | expected 'that' |  |
 | 4 | 1 | expected a destination zone after 'return' |  |
@@ -89,6 +88,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
 | 1 | 1 | expected what to gain control of |  |
+| 1 | 1 | the source-class shield is armed on its controller, not on a chosen recipient |  |
 
 ## Cards executing through the grammar
 
@@ -3513,6 +3513,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Everglades**
   - `When this land enters, sacrifice it unless you return an untapped Swamp you control to its owner's hand.`
   - `{T}: Add {C}{B}.`
+- **Everglove Courier**
+  - `{2}{G}, {T}: Target Elf creature gets +2/+2 and has trample for as long as this creature remains tapped.`
 - **Evincar's Justice**
   - `Evincar's Justice deals 2 damage to each creature and each player.`
 - **Eviscerator**
@@ -3855,6 +3857,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Flame Wave deals 4 damage to target player or planeswalker and each creature that player or that planeswalker's controller controls.`
 - **Flameshot**
   - `Flameshot deals 3 damage divided as you choose among one, two, or three target creatures.`
+- **Flamestick Courier**
+  - `{2}{R}, {T}: Target Goblin creature gets +2/+2 and has haste for as long as this creature remains tapped.`
 - **Flametongue Kavu**
   - `When this creature enters, it deals 4 damage to target creature.`
 - **Flaming Gambit**
@@ -4115,6 +4119,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever a permanent becomes tapped, put a wind counter on it.`
 - **Frightcrawler**
   - `Threshold — As long as there are seven or more cards in your graveyard, this creature gets +2/+2 and can't block.`
+- **Frightshroud Courier**
+  - `{2}{B}, {T}: Target Zombie creature gets +2/+2 and has fear for as long as this creature remains tapped. (It can't be blocked except by artifact creatures and/or black creatures.)`
 - **Frog Tongue**
   - `When this Aura enters, draw a card.`
 - **Frost Breath**
@@ -4310,6 +4316,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Ghost Town**
   - `{T}: Add {C}.`
   - `{0}: Return this land to its owner's hand. Activate only if it's not your turn.`
+- **Ghosthelm Courier**
+  - `{2}{U}, {T}: Target Wizard creature gets +2/+2 and has shroud for as long as this creature remains tapped. (It can't be the target of spells or abilities.)`
 - **Ghostly Pilferer**
   - `Whenever this creature becomes untapped, you may pay {2}. If you do, draw a card.`
   - `Whenever an opponent casts a spell from anywhere other than their hand, draw a card.`
@@ -7709,6 +7717,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Pearl Dragon**
   - `{1}{W}: This creature gets +0/+1 until end of turn.`
   - `{1}{W}: This creature gets +0/+1 until end of turn.`
+- **Pearlspear Courier**
+  - `{2}{W}, {T}: Target Soldier creature gets +2/+2 and has vigilance for as long as this creature remains tapped.`
 - **Peat Bog**
   - `{T}, Remove a depletion counter from this land: Add {B}{B}. If there are no depletion counters on this land, sacrifice it.`
 - **Pedantic Learning**
