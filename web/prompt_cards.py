@@ -617,6 +617,11 @@ def _opponent_picks_revealed(ctx: PromptContext, choices: list) -> dict:
         "legal_indices": list(range(len(cards)) if legal is None else legal),
         "fate": str(choice.data.get("fate", "graveyard")),
         "other_fate": choice.data.get("other_fate"),
+        # Where the cards were revealed from — a library (Thran Tome, Animal
+        # Magnetism), a graveyard (Phyrexian Grimoire), or a pile a search
+        # handed over ("held") — so the client's sentence says so rather than
+        # "from the top of their library" for every printing.
+        "from_zone": str(choice.data.get("from_zone", "library")),
     }
 
 

@@ -9379,6 +9379,33 @@ function applyPileChoicePrompt(info) {
   });
 }
 
+// What the opponent-picks prompt says: who revealed the cards and from where,
+// where the chosen one goes (`fate`), where the rest go (`other_fate`, when
+// the sentence moves them — Animal Magnetism's graveyard), and how many of
+// them may be chosen at all (`legal_indices`).
+function opponentPicksRevealedText(info) {
+  // In the words the prompt uses for the revealer's cards (the chooser is
+  // someone else: "their").
+  const destinations = {
+    graveyard: "into their graveyard",
+    hand: "into their hand",
+    exile: "into exile",
+    battlefield: "onto the battlefield under their control",
+  };
+  const revealer = info.revealer_seat === seat ? "You" : (info.revealer_name || "They");
+  const from = info.from_zone === "graveyard"
+    ? "from their graveyard"
+    : info.from_zone === "held" ? "" : "from the top of their library";
+  const goes = (zone) => destinations[zone] || `to the ${zone}`;
+  const total = (info.cards || []).length;
+  const legal = Array.isArray(info.legal_indices) ? info.legal_indices.length : total;
+  let text = `${revealer} revealed ${total === 1 ? "this" : "these"}${from ? ` ${from}` : ""}. `
+    + `The one you choose goes ${goes(info.fate || "graveyard")}.`;
+  if (info.other_fate) text += ` The rest go ${goes(info.other_fate)}.`;
+  if (legal < total) text += ` Only ${legal} of them can be chosen.`;
+  return text;
+}
+
 function applyOpponentPicksRevealedPrompt(info) {
   const panel = q("activationPanel");
   const title = q("promptTitle");
@@ -9395,22 +9422,26 @@ function applyOpponentPicksRevealedPrompt(info) {
   cancelBtn.disabled = true;
   customOkBtn.disabled = true;
 
-  const fate = info.fate === "graveyard" ? "graveyard" : info.fate;
   title.textContent = `${info.card_name} \u2014 choose a revealed card`;
-  body.textContent =
-    `${info.revealer_name} revealed these from the top of their library. ` +
-    `The one you choose goes into their ${fate}.`;
+  body.textContent = opponentPicksRevealedText(info);
+  // "An opponent chooses **a creature card** from among them" (Animal
+  // Magnetism): only `legal_indices` may be named \u2014 the list the resolver
+  // re-checks an answer against \u2014 so the rest are shown (they were revealed,
+  // CR 701.20) but disabled. A click on a land used to be a 400.
+  const legal = new Set((info.legal_indices || info.cards.map((_, i) => i)).map(Number));
   steps.innerHTML =
     '<div class="prompt-choice-column">' +
     info.cards
       .map(
         (name, index) =>
-          `<button type="button" class="prompt-choice-btn" data-revealed-pick="${index}">` +
-          `${escapeHtml(name)}</button>`
+          `<button type="button" class="prompt-choice-btn" data-revealed-pick="${index}"` +
+          (legal.has(index) ? "" : ` disabled title="Can't be chosen"`) +
+          `>${escapeHtml(name)}${legal.has(index) ? "" : " (can't be chosen)"}</button>`
       )
       .join("") +
     "</div>";
   steps.querySelectorAll("[data-revealed-pick]").forEach((btn) => {
+    if (btn.disabled) return;
     btn.addEventListener("click", async () => {
       await sendAction({
         seat,
@@ -10683,6 +10714,36 @@ function renderLookTopPickModal(info) {
   }
 }
 
+// What the revealed-hand pick says above the cards. "Revealed their hand" is
+// Duress's sentence; Blackmail ("Target player reveals three cards from their
+// hand and you choose one of them") reveals only part of it, and the server
+// says which slots (`shown_indices`) — the rest are cards the chooser never
+// saw, and the subtitle says how many were revealed out of how many held.
+function revealedHandPickSubtitle(info) {
+  const victim = info.victim_name || "The opponent";
+  const total = (info.cards || []).length;
+  const shown = Array.isArray(info.shown_indices) ? info.shown_indices.length : null;
+  const what = shown === null || shown >= total
+    ? `${victim} revealed their hand.`
+    : `${victim} revealed ${shown} of the ${total} cards in their hand; the face-down ones stay hidden.`;
+  return `${info.card_name || "Choose"}: ${what} Click a highlighted card; the dimmed ones can't be chosen.`;
+}
+
+// One card of the revealed-hand pick: its face, or — a slot the player kept
+// back (`hidden`, Blackmail) — a card back, never its name.
+function revealedHandPickTile(card, idx, legal) {
+  const hidden = !!card?.hidden;
+  const inner = hidden
+    ? `<img src="/images/card_back.webp" alt="Face-down card" loading="lazy" />`
+    : card.image_uri
+      ? `<img src="${escapeHtml(card.image_uri)}" alt="${escapeHtml(card.name)}" loading="lazy" />`
+      : `<div class="library-card-text-placeholder">${escapeHtml(card.name)}</div>`;
+  const cls = legal.has(idx) ? "library-card-choice" : "library-card-choice illegal";
+  const label = hidden ? "Not revealed" : card.name;
+  return `<div class="${cls}${hidden ? " face-down" : ""}" data-idx="${idx}">${inner}`
+    + `<div class="library-card-choice-name">${escapeHtml(label)}</div></div>`;
+}
+
 // Duress / Kitesail Freebooter: the whole revealed hand, with only the legal
 // picks clickable — the card revealed the hand (CR 701.20), so the rest are
 // shown but marked illegal rather than hidden.
@@ -10696,20 +10757,11 @@ function renderRevealedHandPickModal(info) {
   modal.classList.remove("hidden");
   const legal = new Set((info.legal_indices || []).map(Number));
   const subtitle = document.getElementById("revealedHandPickSubtitle");
-  if (subtitle) {
-    subtitle.textContent =
-      `${info.card_name || "Choose"}: ${info.victim_name || "the opponent"} revealed their hand. Click a highlighted card; the dimmed ones can't be chosen.`;
-  }
+  if (subtitle) subtitle.textContent = revealedHandPickSubtitle(info);
   const grid = document.getElementById("revealedHandPickGrid");
   if (grid) {
     grid.innerHTML = (info.cards || [])
-      .map((card, idx) => {
-        const inner = card.image_uri
-          ? `<img src="${escapeHtml(card.image_uri)}" alt="${escapeHtml(card.name)}" loading="lazy" />`
-          : `<div class="library-card-text-placeholder">${escapeHtml(card.name)}</div>`;
-        const cls = legal.has(idx) ? "library-card-choice" : "library-card-choice illegal";
-        return `<div class="${cls}" data-idx="${idx}">${inner}<div class="library-card-choice-name">${escapeHtml(card.name)}</div></div>`;
-      })
+      .map((card, idx) => revealedHandPickTile(card, idx, legal))
       .join("") || `<div class="modal-empty-note">Their hand is empty.</div>`;
     grid.querySelectorAll(".library-card-choice").forEach((el) => {
       el.addEventListener("click", async () => {
