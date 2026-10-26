@@ -278,7 +278,7 @@ class CastAnnouncementMixin:
         divided_targets, from_zone, mode_index, no_target_answers_x,
         optional_paid, role_seats, target_permanent_ids,
         target_permanent_index, target_player_index, target_stack_item,
-        x_value,
+        x_value, role_graveyard_stamps=None,
     ):
         """CR 601.2c, asked once per announced mode (CR 601.2b chooses the
         modes first): the per-kind target gate, whether any legal target exists
@@ -315,6 +315,10 @@ class CastAnnouncementMixin:
                 # The cast's own announcement only: a "choose one or more"
                 # mode names its targets on the mode, which has one seat.
                 target_role_seats=None if chosen_modes else role_seats,
+                # …and its graveyard slots, for the same reason.
+                target_role_stamps=(
+                    None if chosen_modes else role_graveyard_stamps
+                ),
             )
             if not target_ok:
                 self.log.append(target_reason)

@@ -421,12 +421,33 @@ def _choose_role_targets(
         mode_index=_announced_mode(card), from_zone=_cast_zone(card),
     )
     options = announced.get("valid_targets") or []
+    optional = optional_role_levels(spec_roles(announced))
     picks = _role_chain(
         options, role_target_sides(card, offers), 0, caster_index, card, game,
-        optional=optional_role_levels(spec_roles(announced)),
+        optional=optional,
     )
     if not picks:
         return ()
+    # A **card in a graveyard** answers a role ("…Return up to one target
+    # Zombie card from your graveyard to your hand", Cruel Revival) on no
+    # channel a ``CastAction`` carries: the positional id list below would
+    # read its graveyard slot as a *battlefield* slot and name whatever
+    # permanent sat there, which the cast gate refuses — and a seat that
+    # re-proposes a refused card every turn is what ``refused_casts`` counts.
+    # So the chain stops before it where every role from there on is optional
+    # (the announcement ends there, CR 601.2c), and is no chain this seat can
+    # announce where one is not. Naming the card needs the action to carry
+    # ``target_role_refs``, as an activation's does.
+    first_card = next(
+        (level for level, pick in enumerate(picks) if pick.get("kind") == "graveyard"),
+        None,
+    )
+    if first_card is not None:
+        if not all(level in optional for level in range(first_card, len(picks))):
+            return ()
+        picks = picks[:first_card]
+        if not picks:
+            return ()
     # A **player** role's answer is the seat itself (Donate's "target player"),
     # and it fills no slot in the positional id list — the seat travels on the
     # field every cast already carries, which is what the resolution reads back.

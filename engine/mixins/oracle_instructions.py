@@ -185,6 +185,9 @@ class OracleInstructionsMixin:
         # to — the same field a triggered ability's resolution already carries,
         # for CR 700.2e's "an opponent chooses one —" (see `_resolve_card`).
         trigger_context: dict | None = None,
+        # The announcement's graveyard stamps (``StackItem.target_graveyard_card``),
+        # for a roles spell with a graveyard slot — see ``_resolve_card``.
+        target_graveyard_card=None,
     ) -> None:
         instruction = self._select_executable_instruction(card, mode_index)
         if instruction is None:
@@ -242,6 +245,7 @@ class OracleInstructionsMixin:
                 stack_target=stack_target,
                 cast_from_zone=cast_from_zone,
                 trigger_context=trigger_context,
+                target_graveyard_card=target_graveyard_card,
                 # A spell's targets are its announcement's (CR 601.2c): the
                 # resolver has nobody to find that the cast did not name.
                 announced=True,

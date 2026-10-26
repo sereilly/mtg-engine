@@ -1684,3 +1684,129 @@ def test_w1g11_false_cure_makes_each_life_gain_cost_double_this_turn(set_pool):
 # W1G13's tests go between this line and the "end W1G13" line.
 
 # ==== end W1G13 ======================================================
+
+# ==== W2G6 ==========================================================
+# Cruel Revival's two targets, one announcement (CR 601.2c) - found by
+# Onslaught's promotion rehearsal (tests/engine/test_up_to_names_nobody_census.py):
+# its "up to one target Zombie card" was never announced and the return
+# scanned the graveyard at resolution.
+from engine import Game as _W2G6Game
+from engine import PlayerState as _W2G6PlayerState
+from engine.models import Permanent as _W2G6Permanent
+from tests.helpers import resolve_stack as _w2g6_resolve_stack
+
+
+def _w2g6_revival_table(set_pool, catalog_by_name):
+    """Seat 0 holds Cruel Revival with two Zombie cards and a Hill Giant in its
+    graveyard; seat 1 controls a Grizzly Bears and a Zombie, with a Zombie
+    card of its own in its graveyard."""
+    ons = set_pool("ONS")
+    zombie_cards = [ons["Gangrenous Goliath"], ons["Aphetto Vulture"]]
+    game = _W2G6Game(players=[
+        _W2G6PlayerState(
+            name="A", hand=[ons["Cruel Revival"]],
+            graveyard=[catalog_by_name["Hill Giant"], *zombie_cards],
+            library=[ons["Swamp"]] * 5,
+        ),
+        _W2G6PlayerState(
+            name="B", graveyard=[ons["Gluttonous Zombie"]],
+            library=[ons["Swamp"]] * 5,
+        ),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    bears = _W2G6Permanent(card=catalog_by_name["Grizzly Bears"])
+    game._put_permanent_onto_battlefield(1, bears, None)
+    rotter = _W2G6Permanent(card=ons["Gluttonous Zombie"])
+    game._put_permanent_onto_battlefield(1, rotter, None)
+    return game, bears, rotter
+
+
+def test_w2g6_cruel_revival_announces_both_of_its_targets(set_pool, catalog_by_name):
+    """"Destroy target non-Zombie creature. It can't be regenerated. Return up
+    to one target Zombie card from your graveyard to your hand." The picker is
+    one walk: the non-Zombie creature first, then the Zombie cards in the
+    caster's own graveyard - not the Hill Giant, not the opponent's Zombie card
+    - and the card named is the card that comes back, not the first one."""
+    game, bears, rotter = _w2g6_revival_table(set_pool, catalog_by_name)
+    spec = game.cast_target_spec(0, set_pool("ONS")["Cruel Revival"])
+    assert spec["kind"] == "roles"
+    (creature,) = spec["valid_targets"]
+    assert creature["name"] == "Grizzly Bears"
+    assert [(entry["seat"], entry["name"]) for entry in creature["next"]] == [
+        (0, "Gangrenous Goliath"), (0, "Aphetto Vulture"),
+    ]
+
+    assert game.queue_from_hand(0, "Cruel Revival", target_role_refs=[
+        {"permanent_id": bears.permanent_id},
+        {"graveyard_seat": 0, "graveyard_index": 2},
+    ]).supported
+    _w2g6_resolve_stack(game)
+    assert not game.is_on_battlefield(bears) and game.is_on_battlefield(rotter)
+    assert [card.name for card in game.players[0].hand] == ["Aphetto Vulture"]
+    assert "Returned Aphetto Vulture from graveyard to hand" in game.log
+
+
+def test_w2g6_cruel_revival_may_name_no_zombie_card(set_pool, catalog_by_name):
+    """CR 601.2c's "up to one" answered with none: the creature is destroyed
+    and no card comes back - the return does not go looking for one."""
+    game, bears, _rotter = _w2g6_revival_table(set_pool, catalog_by_name)
+    assert game.queue_from_hand(0, "Cruel Revival", target_role_refs=[
+        {"permanent_id": bears.permanent_id},
+    ]).supported
+    _w2g6_resolve_stack(game)
+    assert not game.is_on_battlefield(bears)
+    assert game.players[0].hand == []
+    assert [card.name for card in game.players[0].graveyard] == [
+        "Hill Giant", "Gangrenous Goliath", "Aphetto Vulture", "Cruel Revival",
+    ]
+
+
+def test_w2g6_cruel_revival_refuses_what_its_phrases_do_not_admit(set_pool, catalog_by_name):
+    """A Zombie for the creature, the Hill Giant or the opponent's Zombie card
+    for the card: each refused before anything is spent."""
+    for case in ("zombie creature", "non-zombie card", "their zombie card"):
+        game, bears, rotter = _w2g6_revival_table(set_pool, catalog_by_name)
+        refs = {
+            "zombie creature": [{"permanent_id": rotter.permanent_id}],
+            "non-zombie card": [
+                {"permanent_id": bears.permanent_id},
+                {"graveyard_seat": 0, "graveyard_index": 0},
+            ],
+            "their zombie card": [
+                {"permanent_id": bears.permanent_id},
+                {"graveyard_seat": 1, "graveyard_index": 0},
+            ],
+        }[case]
+        refused = game.queue_from_hand(0, "Cruel Revival", target_role_refs=refs)
+        assert not refused.supported, case
+        assert [card.name for card in game.players[0].hand] == ["Cruel Revival"], case
+        assert game.stack == [] and game.is_on_battlefield(bears), case
+
+
+def test_w2g6_cruel_revival_keeps_its_legal_half(set_pool, catalog_by_name):
+    """CR 608.2b, each half on its own: with the creature gone in response the
+    Zombie card still comes back; with the card gone the creature is still
+    destroyed. Only with both gone is the spell removed."""
+    def cast_at_both(game, bears):
+        return game.queue_from_hand(0, "Cruel Revival", target_role_refs=[
+            {"permanent_id": bears.permanent_id},
+            {"graveyard_seat": 0, "graveyard_index": 1},
+        ]).supported
+
+    game, bears, _rotter = _w2g6_revival_table(set_pool, catalog_by_name)
+    assert cast_at_both(game, bears)
+    game.remove_from_battlefield(bears)
+    _w2g6_resolve_stack(game)
+    assert [card.name for card in game.players[0].hand] == ["Gangrenous Goliath"]
+
+    game, bears, _rotter = _w2g6_revival_table(set_pool, catalog_by_name)
+    assert cast_at_both(game, bears)
+    yard = game.players[0].graveyard
+    game.players[0].exile.append(yard.pop(1))
+    _w2g6_resolve_stack(game)
+    assert not game.is_on_battlefield(bears)
+    assert game.players[0].hand == []
+    assert [card.name for card in yard] == ["Hill Giant", "Aphetto Vulture", "Cruel Revival"]
+
+# ==== end W2G6 ======================================================

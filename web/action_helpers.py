@@ -161,16 +161,20 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
                 role_refs.append({"stack": True})
                 continue
             if ref.graveyard_seat is not None:
-                # No **spell** in the pool names a slot in a graveyard — the one
-                # ability that does is activated, and its path stamps the pile
-                # itself (``_role_announcement_stamps``). Refused loudly rather
-                # than translated to a hole in the id list, which the
-                # announcement gate would decline as "no valid target" and
-                # leave a client author reading the wrong sentence.
-                raise HTTPException(
-                    status_code=400,
-                    detail="a cast cannot name a graveyard slot for a role",
-                )
+                # A role whose object is a **card in a graveyard** ("Destroy
+                # target non-Zombie creature. … Return up to one target Zombie
+                # card from your graveyard to your hand.", Cruel Revival — the
+                # first spell to print one). Forwarded as the address an
+                # activation's role sends, and stamped by the same translation
+                # (``_role_announcement_stamps``); the cast gate judges it
+                # through the roles walk (``_named_role_targets``). It was
+                # refused here while no spell printed the shape, rather than
+                # turned into a hole in the id list.
+                role_refs.append({
+                    "graveyard_seat": ref.graveyard_seat,
+                    "graveyard_index": ref.graveyard_index,
+                })
+                continue
             role_refs.append({"permanent_id": ref.permanent_id})
     # Cross-seat divided targets (Fireball): (seat, index|None) pairs; an index
     # of None is that player's face.
