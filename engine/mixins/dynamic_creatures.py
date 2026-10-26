@@ -513,41 +513,30 @@ class DynamicCreaturesMixin:
         remembered delta would have to be unwound at one.
 
         Three ways the contribution simply stops, none of them special-cased:
-        the source untaps, the source leaves the battlefield (its record leaves
-        with it), or the pumped permanent leaves (its id no longer resolves).
+        the source untaps (``Game.become_untapped`` ends its record), the
+        source leaves the battlefield (its record leaves with it), or the
+        pumped permanent leaves (its id no longer resolves).
+
+        The record is ``engine/source_tapped_effects.py``'s, shared with the
+        keyword half of the same sentence ("…gets +2/+2 and has vigilance for
+        as long as this creature remains tapped", the Couriers), which layer 6
+        reads in ``_recalculate_lord_buffs``. An entry with no P/T delta is
+        that half's alone.
         """
-        from ..handlers._filters import permanent_matches_filter
-        from ..handlers.pump import PUMP_WHILE_TAPPED_KEY
+        from ..source_tapped_effects import effects_while_tapped
 
         for source in all_permanents:
-            record = source.metadata.get(PUMP_WHILE_TAPPED_KEY)
-            if not record or not source.tapped:
-                continue
-            power = int(record.get("power", 0))
-            toughness = int(record.get("toughness", 0))
-            # One record, two subjects, and exactly one of them per record: a
-            # chosen permanent (`target_id`, Ashnod's Battle Gear) or a board
-            # scan (`filter`, Thran Weaponry). Asserted rather than guessed at,
-            # because a shared channel whose readers disagree about its shape is
-            # this repo's most-repeated defect — settle the arity and the
-            # element type in the same breath as the second producer.
-            if "filter" in record:
-                assert "target_id" not in record, (
-                    "a linked-tapped pump names one permanent or a class, "
-                    f"never both: {record!r}"
-                )
-                described = record.get("filter") or {}
-                for perm in all_permanents:
-                    if not perm.is_creature:
-                        continue
-                    if described and not permanent_matches_filter(perm, described):
-                        continue
-                    _add_static_pt(perm, power, toughness)
-                continue
-            target = self.permanent_by_id(record.get("target_id"))
-            if target is None:
-                continue
-            _add_static_pt(target, power, toughness)
+            for record in effects_while_tapped(source):
+                power = int(record.get("power", 0))
+                toughness = int(record.get("toughness", 0))
+                if not (power or toughness):
+                    continue
+                # Every entry names one permanent, a sweep's included (Thran
+                # Weaponry records one per creature, CR 611.2c).
+                target = self.permanent_by_id(record.get("target_id"))
+                if target is None:
+                    continue
+                _add_static_pt(target, power, toughness)
 
     def _characteristic_defined_count(
         self, player: PlayerState, permanent: Permanent, dynamic_pt

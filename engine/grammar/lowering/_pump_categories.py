@@ -81,6 +81,10 @@ PUMP_INSTRUCTION_CATEGORIES: dict[str, str] = {
     "grant_target_flying_until_eot": "pump",
     "grant_self_flying_until_eot": "pump",
     "grant_target_keyword_until_eot": "pump",
+    # "…and has vigilance **for as long as this creature remains tapped**."
+    # (the Couriers.) The keyword twin of `pump_target_while_source_tapped`:
+    # the same family, ending on a condition rather than at a step.
+    "grant_target_keyword_while_source_tapped": "pump",
     # "…target creature with the chosen ability loses it and another target
     # creature gains it." (Phyrexian Splicer.) One keyword leaving one creature
     # and landing on another — the same family as the grants above it, because

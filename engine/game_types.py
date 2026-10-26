@@ -83,6 +83,14 @@ CHOICE_KEYS = (
     # last-known information — a board scan would name whichever creature its
     # controller happens to have tapped since.
     "tapped_for_cost",
+    # Set on an ability still on the stack when its **source becomes
+    # untapped** (``source_tapped_effects.break_pending_durations``): a "for as
+    # long as this creature remains tapped" effect whose source untapped after
+    # activation never starts, "even if it becomes tapped again right away"
+    # (Old Man of the Sea, 2009-10-01; CR 611.2b). Not something the
+    # announcement chose, but the one record that rides the object from the
+    # untap to its resolution.
+    "source_untapped",
     # The cards a printed **discard** cost ate, same channel and same reason:
     # "If the discarded card was a land card" (Land's Edge) is asked when the
     # card is already in a graveyard, which CR 400.7 makes a different object.

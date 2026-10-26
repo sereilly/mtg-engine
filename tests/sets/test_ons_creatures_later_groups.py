@@ -805,6 +805,7 @@ from engine import Game as _w1g8_Game, PlayerState as _w1g8_PlayerState
 from engine.models import Permanent as _w1g8_Permanent
 from engine.oracle import compile_card_oracle as _w1g8_compile
 from engine.targeting import derive_cast_spec as _w1g8_derive_cast_spec
+from engine.type_changes import gain_types as _w1g8_gain_types
 from tests.helpers import _nosick as _w1g8_nosick, resolve_stack as _w1g8_resolve
 
 
@@ -881,6 +882,227 @@ def test_w1g8_true_believer_protects_whoever_controls_it(set_pool):
     game.take_control(believer, 1, source=believer)
     game._recompute_continuous_effects()
     assert _w1g8_offered_seats(game, 0, shock) == {0}
+
+
+# --- The Couriers: "…gets +2/+2 and has <keyword> for as long as this
+# creature remains tapped." Both halves are entries on the Courier
+# (`engine/source_tapped_effects.py`), ended whole when it becomes untapped.
+
+
+def _w1g8_courier(pool, courier, *targets, theirs=(), p1=None, p2=None):
+    """*courier* and *targets* (all able to tap and attack) for seat 0."""
+    mine = [_w1g8_perm(pool, courier)] + [_w1g8_perm(pool, name) for name in targets]
+    game, one, two = _w1g8_game(
+        mine, [_w1g8_perm(pool, name) for name in theirs], p1=p1, p2=p2,
+    )
+    return (game, *mine)
+
+
+def _w1g8_send(game, courier, target):
+    """Activate *courier* at *target* and resolve it."""
+    result = game.activate_permanent_ability(
+        game.controller_index_of(courier), courier.card.name,
+        target_player_index=game.controller_index_of(target),
+        target_permanent_ids=[target.permanent_id],
+    )
+    assert result.supported, result.details
+    _w1g8_resolve(game)
+
+
+def _w1g8_pt(game, perm):
+    game._recompute_continuous_effects()
+    return perm.effective_power, perm.effective_toughness
+
+
+def _w1g8_offered_ids(game, seat, card, spec, *, for_cast):
+    """The permanents (by id) the picker offers *seat* for *spec*."""
+    return {
+        game.players[found["seat"]].battlefield[found["index"]].permanent_id
+        for found in game._enumerate_targets(seat, card, spec, for_cast=for_cast)
+        if found["kind"] == "permanent"
+    }
+
+
+def test_w1g8_pearlspear_courier_lasts_exactly_while_it_stays_tapped(set_pool):
+    """'{2}{W}, {T}: Target Soldier creature gets +2/+2 and has vigilance for
+    as long as this creature remains tapped.' (CR 611.2b.) It survives
+    recomputes and the cleanup step, survives the target ceasing to be a
+    Soldier (the 2004-10-04 ruling: "once the effect is placed on the
+    creature, if its creature type changes the effect still continues"),
+    survives an untap step in which the Courier is kept tapped — and ends
+    the moment the Courier untaps, both halves at once, for good: tapping
+    the Courier again (an attack) gives nothing back."""
+    pool = set_pool("ONS")
+    game, courier, seeker = _w1g8_courier(pool, "Pearlspear Courier", "Glory Seeker")
+    _w1g8_send(game, courier, seeker)
+    assert courier.tapped
+    assert _w1g8_pt(game, seeker) == (4, 4)
+    assert game._has_keyword(seeker, "vigilance")
+
+    for _ in range(3):
+        game._recompute_continuous_effects()
+    assert _w1g8_pt(game, seeker) == (4, 4), "rebuilt, never compounded"
+    game.resolve_cleanup_step(0)
+    assert _w1g8_pt(game, seeker) == (4, 4) and game._has_keyword(seeker, "vigilance")
+
+    _w1g8_gain_types(
+        seeker, subtypes=["goblin"], source="test", duration="until_end_of_turn",
+        replaces_creature_types=True,
+    )
+    assert not seeker.has_type("soldier")
+    assert _w1g8_pt(game, seeker) == (4, 4) and game._has_keyword(seeker, "vigilance")
+
+    # "You may choose not to untap this creature": a human who keeps it
+    # tapped keeps the bonus.
+    courier_slot = game.players[0].battlefield.index(courier)
+    game.resolve_untap_step(0, keep_tapped_indices=[courier_slot])
+    assert courier.tapped
+    assert _w1g8_pt(game, seeker) == (4, 4) and game._has_keyword(seeker, "vigilance")
+
+    assert game.become_untapped(courier)
+    assert (seeker.effective_power, seeker.effective_toughness) == (2, 2), (
+        "the P/T half ends the moment the Courier untaps"
+    )
+    assert not game._has_keyword(seeker, "vigilance"), "and the keyword with it"
+
+    game.become_tapped(courier)
+    assert _w1g8_pt(game, seeker) == (2, 2)
+    assert not game._has_keyword(seeker, "vigilance"), (
+        "a for-as-long-as duration does not start again (CR 611.2b)"
+    )
+
+
+def test_w1g8_pearlspear_courier_second_activation_moves_the_bonus(set_pool):
+    """A second activation needs the Courier untapped, which ends the first
+    effect; the new target has the bonus and the old one does not."""
+    pool = set_pool("ONS")
+    game, courier, first, second = _w1g8_courier(
+        pool, "Pearlspear Courier", "Glory Seeker", "Glory Seeker",
+    )
+    _w1g8_send(game, courier, first)
+    assert _w1g8_pt(game, first) == (4, 4)
+    game.become_untapped(courier)
+    _w1g8_send(game, courier, second)
+    assert _w1g8_pt(game, first) == (2, 2) and not game._has_keyword(first, "vigilance")
+    assert _w1g8_pt(game, second) == (4, 4) and game._has_keyword(second, "vigilance")
+
+
+def test_w1g8_courier_untapped_in_response_does_nothing(set_pool):
+    """CR 611.2b: "If the 'for as long as' duration never starts, the effect
+    does nothing." Untapped in response — and tapped again right away, which
+    Old Man of the Sea's ruling (2009-10-01) says changes nothing — the
+    Courier's ability resolves into no effect at all."""
+    pool = set_pool("ONS")
+    game, courier, seeker = _w1g8_courier(pool, "Pearlspear Courier", "Glory Seeker")
+    result = game.queue_permanent_ability(
+        0, "Pearlspear Courier", target_player_index=0,
+        target_permanent_ids=[seeker.permanent_id],
+    )
+    assert result.supported, result.details
+    assert game.stack and courier.tapped
+    assert game.become_untapped(courier)
+    game.become_tapped(courier)
+    _w1g8_resolve(game)
+    assert _w1g8_pt(game, seeker) == (2, 2)
+    assert not game._has_keyword(seeker, "vigilance")
+    assert any("does nothing" in line for line in game.log)
+
+
+def test_w1g8_pearlspear_courier_names_only_a_soldier(set_pool):
+    """The picker offers Soldiers alone, and a non-Soldier named at
+    activation is refused before the Courier taps."""
+    from engine.targeting import derive_activation_spec
+
+    pool = set_pool("ONS")
+    game, courier, seeker, elf = _w1g8_courier(
+        pool, "Pearlspear Courier", "Glory Seeker", "Wirewood Elf",
+    )
+    (ability,) = _w1g8_compile(courier.card).activated_abilities
+    spec = derive_activation_spec(ability)
+    offered = _w1g8_offered_ids(game, 0, courier.card, spec, for_cast=False)
+    # The Courier is a Human Soldier itself, so it is a legal target too.
+    assert offered == {seeker.permanent_id, courier.permanent_id}
+    refused = game.activate_permanent_ability(
+        0, "Pearlspear Courier", target_player_index=0,
+        target_permanent_ids=[elf.permanent_id],
+    )
+    assert not refused.supported
+    assert not courier.tapped
+
+
+def test_w1g8_headless_untap_step_keeps_a_courier_holding_an_effect(set_pool):
+    """With no human to ask, the untap step keeps a Courier tapped while its
+    effect still reaches a creature (the Old Man of the Sea default), and
+    untaps it once the target has gone."""
+    pool = set_pool("ONS")
+    game, courier, seeker = _w1g8_courier(pool, "Pearlspear Courier", "Glory Seeker")
+    _w1g8_send(game, courier, seeker)
+    game.resolve_untap_step(0)
+    assert courier.tapped and _w1g8_pt(game, seeker) == (4, 4)
+
+    game.remove_from_battlefield(seeker)
+    game.resolve_untap_step(0)
+    assert not courier.tapped
+
+
+def test_w1g8_ghosthelm_courier_shrouds_a_wizard(set_pool):
+    """'…Target Wizard creature gets +2/+2 and has shroud…': while the
+    Courier stays tapped, the opponent's Shock cannot name the Wizard; once it
+    untaps, it can."""
+    pool = set_pool("ONS")
+    game, courier, wizard = _w1g8_courier(
+        pool, "Ghosthelm Courier", "Aphetto Grifter", p2={"hand": [pool["Shock"]]},
+    )
+    _w1g8_send(game, courier, wizard)
+    assert game._has_keyword(wizard, "shroud")
+    shock = pool["Shock"]
+    spec = _w1g8_derive_cast_spec(shock, _w1g8_compile(shock))
+    named = _w1g8_offered_ids(game, 1, shock, spec, for_cast=True)
+    assert wizard.permanent_id not in named and courier.permanent_id in named
+    refused = game.cast_from_hand(
+        1, "Shock", target_player_index=0, target_permanent_ids=[wizard.permanent_id],
+    )
+    assert not refused.supported
+
+    game.become_untapped(courier)
+    assert wizard.permanent_id in _w1g8_offered_ids(game, 1, shock, spec, for_cast=True)
+
+
+def test_w1g8_frightshroud_courier_gives_a_zombie_fear(set_pool):
+    """Fear (CR 702.36b): blocked only by artifact and/or black creatures."""
+    pool = set_pool("ONS")
+    game, courier, zombie = _w1g8_courier(
+        pool, "Frightshroud Courier", "Gangrenous Goliath",
+        theirs=("Glory Seeker", "Frightshroud Courier"),
+    )
+    white, black = game.players[1].battlefield
+    assert game._can_block_attacker(white, zombie)
+    _w1g8_send(game, courier, zombie)
+    assert _w1g8_pt(game, zombie) == (6, 6)
+    assert not game._can_block_attacker(white, zombie)
+    assert game._can_block_attacker(black, zombie)
+
+
+def test_w1g8_flamestick_courier_hastes_a_goblin_that_just_arrived(set_pool):
+    """Haste: a Goblin that came under its controller's control this turn
+    attacks."""
+    pool = set_pool("ONS")
+    game, courier, goblin = _w1g8_courier(pool, "Flamestick Courier", "Skirk Prospector")
+    goblin.metadata["summoning_sickness_turn"] = game.turn
+    assert not game.can_attack(goblin, 1)
+    _w1g8_send(game, courier, goblin)
+    assert game.can_attack(goblin, 1)
+    assert _w1g8_pt(game, goblin) == (3, 3)
+
+
+def test_w1g8_everglove_courier_gives_an_elf_trample(set_pool):
+    pool = set_pool("ONS")
+    game, courier, elf = _w1g8_courier(pool, "Everglove Courier", "Wirewood Elf")
+    assert not game._has_keyword(elf, "trample")
+    _w1g8_send(game, courier, elf)
+    assert game._has_keyword(elf, "trample") and _w1g8_pt(game, elf) == (3, 4)
+    game.become_untapped(courier)
+    assert not game._has_keyword(elf, "trample") and _w1g8_pt(game, elf) == (1, 2)
 
 # ==== end W1G8 ======================================================
 
