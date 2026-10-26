@@ -18,6 +18,7 @@ the comprehensive rules turn structure:
       │    ├─ its requirements block_requirements
       │    └─ its triggers     block_triggers
       ├─ Combat damage         combat_damage_step
+      │    └─ Orgg's wait      divided_damage_wait
       └─ End of combat         end_of_combat_step
     Postcombat main phase  postcombat_main_phase
     Ending phase           ending_phase
@@ -43,6 +44,7 @@ from .block_legality import BlockLegalityMixin
 from .block_requirements import BlockRequirementsMixin
 from .block_triggers import BlockTriggersMixin
 from .combat_damage_step import CombatDamageStepMixin
+from .divided_damage_wait import DividedDamageWaitMixin
 from .end_of_combat_step import EndOfCombatStepMixin
 from .postcombat_main_phase import PostcombatMainPhaseMixin
 from .ending_phase import EndingPhaseMixin
@@ -64,6 +66,7 @@ __all__ = [
     "BlockRequirementsMixin",
     "BlockTriggersMixin",
     "CombatDamageStepMixin",
+    "DividedDamageWaitMixin",
     "EndOfCombatStepMixin",
     "PostcombatMainPhaseMixin",
     "EndingPhaseMixin",

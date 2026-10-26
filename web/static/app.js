@@ -20860,8 +20860,11 @@ function renderCombatControls(state) {
     const prompt = document.createElement("div");
     prompt.className = "combat-summary";
     const offered = groups.filter((g) => g.offer);
-    const divided = groups.some((g) => !g.offer);
-    if (offered.length === 0) {
+    const divided = groups.some((g) => !g.offer && !g.divide);
+    const dividing = groups.filter((g) => g.divide);
+    if (dividing.length > 0) {
+      prompt.textContent = dividedAssignmentPanelText(dividing, divided || offered.length > 0);
+    } else if (offered.length === 0) {
       prompt.textContent = "An attacker is blocked by multiple creatures. Open the dialog to split its damage.";
     } else {
       const names = offered.map((g) => g.attackerCard?.name || "A creature").join(", ");
@@ -21008,6 +21011,14 @@ function autoAssignCombatDamage(groups) {
 // them", Thorn Elemental ruling, 2018-04-27), so there is no third state where
 // some goes each way, and the engine refuses one if it is sent.
 function validateCombatDamageGroup(group, mode = combatDamageDialogMode) {
+  // Butcher Orgg's offer: its own question and check (`validateDividedGroup`);
+  // declined, the ordinary assignment below — a division only with two or
+  // more blockers, and with fewer nothing to decide (CR 510.1b/c).
+  if (group.divide) {
+    const divided = validateDividedGroup(group);
+    if (divided) return divided;
+    if (group.blockers.length < 2) return { total: group.power, violation: null, valid: true };
+  }
   if (group.offer) {
     const answer = combatDamageOfferDraft[group.attackerIdx];
     if (answer === "unblocked") {
@@ -21394,12 +21405,335 @@ function getAttackerAssignGroups(state = currentState) {
   const pastBlockers = new Set(
     (getCombatState(state)?.assigns_past_blockers || []).map((idx) => Number(idx)),
   );
-  return getBlockedAttackerGroups(state, (attackerIdx) => (offers.has(attackerIdx) ? 1 : 2))
+  return withDividedAssignmentGroups(state, getBlockedAttackerGroups(state, (attackerIdx) => (offers.has(attackerIdx) ? 1 : 2))
     .filter((g) => !pastBlockers.has(g.attackerIdx))
     .filter(
       (g) => offers.has(g.attackerIdx) || !defenderAssignsAttackerDamage(state, g.attackerIdx),
     )
-    .map((g) => (offers.has(g.attackerIdx) ? { ...g, offer: offers.get(g.attackerIdx) } : g));
+    .map((g) => (offers.has(g.attackerIdx) ? { ...g, offer: offers.get(g.attackerIdx) } : g)));
+}
+
+// ---- Butcher Orgg: "You may assign this creature's combat damage divided as
+// you choose among defending player and/or any number of creatures they
+// control." ----
+//
+// The attackers the server says THIS seat may divide that way right now
+// (`state.divided_assignment`, the engine's `divided_assignments_to_ask` — the
+// same list that holds the combat damage step until this seat answers), by
+// attacker index: { attackerId, damage, defendingSeat, creatures: [{id, name}] }.
+function getDividedAssignmentOffers(state = currentState) {
+  const offers = new Map();
+  const info = state?.divided_assignment;
+  if (!info || seat === null || seat !== info.attacker_seat) return offers;
+  for (const entry of info.attackers || []) {
+    offers.set(Number(entry.attacker_index), {
+      attackerId: Number(entry.attacker_id),
+      damage: Math.max(0, Number(entry.damage) || 0),
+      defendingSeat: Number(entry.defending_seat),
+      creatures: (entry.creatures || []).map((c) => ({ id: Number(c.id), name: c.name || "" })),
+    });
+  }
+  return offers;
+}
+
+// The damage dialog's groups with every divided-assignment offer folded in:
+// an offered attacker the dialog already shows (a multi-block) carries
+// `divide`; one it does not — unblocked, or blocked by one creature, where
+// there was nothing to ask before this card — joins as a group of its own.
+// The offer is a "may", so each such group asks the question first and
+// "assign it normally" is the other answer (the default every seat that is
+// not asked gets: the AI never takes it).
+function withDividedAssignmentGroups(state, groups) {
+  const offers = getDividedAssignmentOffers(state);
+  if (offers.size === 0) return groups;
+  const byIdx = new Map(groups.map((g) => [g.attackerIdx, g]));
+  const blockedByIdx = new Map(
+    getBlockedAttackerGroups(state, () => 1).map((g) => [g.attackerIdx, g]),
+  );
+  const attackerBf = state.players?.[state.current_turn]?.battlefield || [];
+  for (const [attackerIdx, offer] of offers) {
+    const attackerCard = attackerBf[attackerIdx];
+    if (!attackerCard) continue;
+    const base = byIdx.get(attackerIdx) || blockedByIdx.get(attackerIdx) || {
+      attackerIdx,
+      attackerCard,
+      power: offer.damage,
+      deathtouch: cardHasKeyword(attackerCard, "deathtouch"),
+      trample: cardHasKeyword(attackerCard, "trample"),
+      blockers: [],
+    };
+    byIdx.set(attackerIdx, { ...base, power: offer.damage, divide: offer });
+  }
+  return [...byIdx.values()].sort((a, b) => a.attackerIdx - b.attackerIdx);
+}
+
+// Per combat damage step (CR 510.4: a second step is assigned afresh), the
+// answer and the shares for each offered attacker: { answer: "divide" |
+// "normal" | undefined, shares: { player: n, <creature id>: n } }. Absent
+// until the player picks — the dialog asks, it does not pre-answer.
+let combatDividedDraft = { key: "", byAttacker: {} };
+
+function dividedDraftFor(group) {
+  const key = getCombatDamagePassKey(currentState);
+  if (combatDividedDraft.key !== key) combatDividedDraft = { key, byAttacker: {} };
+  if (!combatDividedDraft.byAttacker[group.attackerIdx]) {
+    combatDividedDraft.byAttacker[group.attackerIdx] = { answer: undefined, shares: {} };
+  }
+  return combatDividedDraft.byAttacker[group.attackerIdx];
+}
+
+// The recipients a division may name: the defending player, then every
+// creature they control (the server's list, by id), each with the card the
+// board shows for it.
+function dividedRecipients(state, group) {
+  const offer = group.divide;
+  const defender = state.players?.[offer.defendingSeat];
+  const bf = defender?.battlefield || [];
+  const blocking = new Set(
+    group.blockers.map((b) => Number(b.card?.id)).filter((id) => Number.isInteger(id)),
+  );
+  const recipients = [{
+    key: "player",
+    label: seat === offer.defendingSeat ? "You" : (defender?.name || "Defending player"),
+    life: Number(defender?.life),
+    card: null,
+    lethal: null,
+    blocking: false,
+  }];
+  for (const creature of offer.creatures) {
+    const card = bf.find((c) => Number(c.id) === creature.id) || { name: creature.name };
+    let lethal = Math.max(0, (Number(card.toughness) || 0) - (Number(card.damage_marked) || 0));
+    if (group.deathtouch && lethal > 0) lethal = 1;
+    recipients.push({
+      key: String(creature.id),
+      label: creature.name || card.name || "",
+      card,
+      lethal,
+      blocking: blocking.has(creature.id),
+    });
+  }
+  return recipients;
+}
+
+// CR 510.1e over the card's rulings (2004-10-04), before anything is sent:
+// all of the damage, every named recipient at least 1 (an amount of 0 is a
+// recipient not named), and so never more recipients than damage. The server
+// holds the same rule (`combat_assignment.divided_among_defenders_refusal`).
+// Returns null for "normal", whose check is the ordinary one.
+function validateDividedGroup(group) {
+  const draft = dividedDraftFor(group);
+  const name = group.attackerCard?.name || "This creature";
+  if (draft.answer === "normal") return null;
+  if (draft.answer !== "divide") {
+    return {
+      total: 0,
+      violation: `Choose whether ${name} divides its combat damage.`,
+      valid: false,
+      unanswered: true,
+    };
+  }
+  let total = 0;
+  let named = 0;
+  for (const value of Object.values(draft.shares)) {
+    const amount = Math.max(0, Number(value) || 0);
+    total += amount;
+    if (amount > 0) named += 1;
+  }
+  let violation = null;
+  if (named === 0) violation = "Name at least one recipient.";
+  else if (total !== group.power) violation = `Divide all ${group.power} damage.`;
+  return { total, violation, valid: !violation, divided: true };
+}
+
+// The division announced for each offered attacker answered "divide":
+// `divided_among_defenders` on `assign_combat_damage`, keyed by the attacker's
+// id, each share by "player" or a creature's id (amounts of 0 left out).
+function collectDividedAmongDefenders(groups) {
+  const divided = {};
+  for (const g of groups) {
+    if (!g.divide || dividedDraftFor(g).answer !== "divide") continue;
+    const shares = {};
+    for (const [key, value] of Object.entries(dividedDraftFor(g).shares)) {
+      const amount = Math.max(0, Math.floor(Number(value) || 0));
+      if (amount > 0) shares[key] = amount;
+    }
+    divided[String(g.divide.attackerId)] = shares;
+  }
+  return divided;
+}
+
+// The combat panel's line while an offered attacker's question is open.
+function dividedAssignmentPanelText(dividing, othersToo) {
+  const names = dividing.map((g) => g.attackerCard?.name || "A creature").join(", ");
+  return `${names} may divide ${dividing.length === 1 ? "its" : "their"} combat damage among the defending player and their creatures. `
+    + "Open the dialog to choose" + (othersToo ? ", and to assign your other attackers' damage." : ".");
+}
+
+// Whether a group's attacker goes into `attacker_damage` at all: an offered
+// attacker that divides is announced in `divided_among_defenders` instead, and
+// one assigned normally with fewer than two blockers has nothing to divide
+// (CR 510.1b/c) — leaving it out is the engine's default for it.
+function dividedGroupSkipsAttackerDamage(group) {
+  if (!group.divide) return false;
+  return dividedDraftFor(group).answer === "divide" || group.blockers.length < 2;
+}
+
+// One offered attacker's section of the damage dialog: the question (two
+// buttons, neither selected), then the recipients' amounts when it divides or
+// its ordinary assignment when it does not.
+function renderDividedAssignmentSection(group, groups, mode, result, cardThumb) {
+  const draft = dividedDraftFor(group);
+  const section = document.createElement("div");
+  section.className = "cda-attacker cda-divided";
+  section.dataset.attackerIndex = String(group.attackerIdx);
+
+  const attackerSide = document.createElement("div");
+  attackerSide.className = "cda-attacker-side";
+  attackerSide.appendChild(cardThumb(group.attackerCard, group.blockers.length ? "blocked" : "unblocked"));
+  const dealing = document.createElement("div");
+  dealing.className = "cda-dealing";
+  dealing.textContent = `${group.power} damage to assign`;
+  attackerSide.appendChild(dealing);
+  section.appendChild(attackerSide);
+
+  const arrow = document.createElement("div");
+  arrow.className = "cda-arrow";
+  arrow.textContent = "→";
+  section.appendChild(arrow);
+
+  const targets = document.createElement("div");
+  targets.className = "cda-blockers";
+  const defenderName = seat === group.divide.defendingSeat
+    ? "you"
+    : (currentState?.players?.[group.divide.defendingSeat]?.name || "the defending player");
+  if (draft.answer === "divide") {
+    for (const r of dividedRecipients(currentState, group)) {
+      const col = document.createElement("div");
+      col.className = "cda-blocker cda-recipient" + ((Number(draft.shares[r.key]) || 0) > 0 ? " selected" : "");
+      col.dataset.recipient = r.key;
+      if (r.card) {
+        col.appendChild(cardThumb(r.card, `lethal: ${r.lethal}${r.blocking ? " · blocking" : ""}`));
+      } else {
+        const tile = document.createElement("div");
+        tile.className = "cda-card";
+        tile.innerHTML =
+          `<div class="cda-card-placeholder">${escapeHtml(r.label)}</div>` +
+          `<div class="cda-card-name">${escapeHtml(r.label)}</div>` +
+          (Number.isFinite(r.life) ? `<div class="cda-card-pt">life ${r.life}</div>` : "") +
+          `<div class="cda-card-sub">defending player</div>`;
+        col.appendChild(tile);
+      }
+      const input = document.createElement("input");
+      input.type = "number";
+      input.min = "0";
+      input.max = String(group.power);
+      input.className = "cda-input";
+      input.dataset.recipient = r.key;
+      input.value = String(Math.max(0, Number(draft.shares[r.key]) || 0));
+      input.addEventListener("input", () => {
+        draft.shares[r.key] = Math.max(0, Math.floor(Number(input.value) || 0));
+        renderCombatDamageDialogBody(groups, mode);
+      });
+      col.appendChild(input);
+      targets.appendChild(col);
+    }
+  } else if (group.blockers.length >= 2 && draft.answer === "normal") {
+    // Assigned normally among two or more blockers: the ordinary division.
+    for (const { blockerIdx, card, lethal } of group.blockers) {
+      const col = document.createElement("div");
+      col.className = "cda-blocker";
+      col.appendChild(cardThumb(card, `lethal: ${lethal}`));
+      const input = document.createElement("input");
+      input.type = "number";
+      input.min = "0";
+      input.max = String(group.power);
+      input.className = "cda-input";
+      input.value = String(Math.max(0, Number(combatDamageDraft?.[group.attackerIdx]?.[blockerIdx]) || 0));
+      input.addEventListener("input", () => {
+        if (!combatDamageDraft[group.attackerIdx]) combatDamageDraft[group.attackerIdx] = {};
+        combatDamageDraft[group.attackerIdx][blockerIdx] = Math.max(0, Math.floor(Number(input.value) || 0));
+        renderCombatDamageDialogBody(groups, mode);
+      });
+      col.appendChild(input);
+      targets.appendChild(col);
+    }
+  } else {
+    // Nothing to type: one blocker takes it all (CR 510.1c), or nobody blocks
+    // and the player it attacks does (CR 510.1b) — or the question is open.
+    const col = document.createElement("div");
+    col.className = "cda-blocker";
+    if (group.blockers.length === 1) {
+      col.appendChild(cardThumb(group.blockers[0].card, "blocking"));
+    } else {
+      const tile = document.createElement("div");
+      tile.className = "cda-card";
+      tile.innerHTML = `<div class="cda-card-placeholder">${escapeHtml(defenderName)}</div>` +
+        `<div class="cda-card-sub">defending player</div>`;
+      col.appendChild(tile);
+    }
+    targets.appendChild(col);
+  }
+  section.appendChild(targets);
+
+  const offerRow = document.createElement("div");
+  offerRow.className = "cda-offer";
+  const question = document.createElement("div");
+  question.className = "cda-offer-question";
+  question.textContent =
+    `${group.attackerCard?.name || "This creature"} may assign its combat damage divided as you choose ` +
+    `among ${defenderName === "you" ? "you" : defenderName} and/or any number of creatures ` +
+    `${defenderName === "you" ? "you control" : "they control"} (at least 1 to each one you name).`;
+  offerRow.appendChild(question);
+  const choices = document.createElement("div");
+  choices.className = "cda-offer-choices";
+  const normalLabel = group.blockers.length >= 2
+    ? "Assign it normally: divide it among the creatures blocking it"
+    : group.blockers.length === 1
+      ? `Assign it normally: all ${group.power} to ${group.blockers[0].card?.name || "its blocker"}`
+      : `Assign it normally: all ${group.power} to ${defenderName}`;
+  const choice = (value, label) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "cda-offer-btn secondary-btn" + (draft.answer === value ? " selected" : "");
+    btn.dataset.divide = value;
+    btn.dataset.attackerIndex = String(group.attackerIdx);
+    btn.setAttribute("aria-pressed", draft.answer === value ? "true" : "false");
+    btn.textContent = label;
+    btn.addEventListener("click", () => {
+      draft.answer = value;
+      // Dividing starts from the plainest legal division — all of it to the
+      // defending player — so there is something to adjust rather than a
+      // row of zeroes.
+      if (value === "divide" && Object.values(draft.shares).every((v) => !(Number(v) > 0))) {
+        draft.shares = { player: group.power };
+      }
+      renderCombatDamageDialogBody(groups, mode);
+    });
+    return btn;
+  };
+  choices.appendChild(choice("divide", `Divide its ${group.power} damage among ${defenderName} and creatures`));
+  choices.appendChild(choice("normal", normalLabel));
+  offerRow.appendChild(choices);
+  section.appendChild(offerRow);
+
+  const footer = document.createElement("div");
+  footer.className = "cda-attacker-footer";
+  const totalEl = document.createElement("span");
+  totalEl.className = "cda-total" + (result.valid ? "" : " cda-total-over");
+  totalEl.textContent = result.divided || (draft.answer === "normal" && group.blockers.length >= 2)
+    ? `Assigned ${result.total} / ${group.power}`
+    : draft.answer === "normal"
+      ? `Assigned ${group.power} / ${group.power}`
+      : `Assigned 0 / ${group.power}`;
+  footer.appendChild(totalEl);
+  if (result.violation) {
+    const warn = document.createElement("span");
+    warn.className = "cda-warning";
+    warn.textContent = result.violation;
+    footer.appendChild(warn);
+  }
+  section.appendChild(footer);
+  return section;
 }
 
 // The attackers the *defending player* assigns the combat damage of and still
@@ -21475,6 +21809,8 @@ function openDamageDialog(state = currentState, mode = "attacker") {
       // on the creatures blocking it.
       for (const g of groups) {
         if (g.offer) combatDamageOfferDraft[g.attackerIdx] = mode === "banding" ? "blockers" : "unblocked";
+        // Butcher Orgg's unasked answer is the offer declined.
+        if (g.divide) dividedDraftFor(g).answer = "normal";
       }
       renderCombatDamageDialogBody(groups, mode);
     };
@@ -21488,7 +21824,9 @@ function openDamageDialog(state = currentState, mode = "attacker") {
       // division for it: an entry in attacker_damage is the other answer, and
       // the engine refuses an attacker that is given both.
       const asThoughUnblockedIds = [];
+      const dividedAmongDefenders = collectDividedAmongDefenders(groups);
       for (const g of groups) {
+        if (dividedGroupSkipsAttackerDamage(g)) continue;
         if (g.offer && combatDamageOfferDraft[g.attackerIdx] === "unblocked") {
           asThoughUnblockedIds.push(g.offer.attackerId);
           continue;
@@ -21525,12 +21863,17 @@ function openDamageDialog(state = currentState, mode = "attacker") {
           });
           updateActionHint("Attackers' combat damage assigned.");
         } else {
-          await sendAction({
+          const announcement = {
             seat,
             action: "assign_combat_damage",
             attacker_damage: assignment,
             as_though_unblocked_ids: asThoughUnblockedIds,
-          });
+          };
+          // Butcher Orgg's offer taken, by attacker id; left out, declined.
+          if (Object.keys(dividedAmongDefenders).length) {
+            announcement.divided_among_defenders = dividedAmongDefenders;
+          }
+          await sendAction(announcement);
           updateActionHint("Combat damage resolved.");
         }
         combatDamageOfferDraft = {};
@@ -21594,16 +21937,21 @@ function renderCombatDamageDialogBody(groups, mode = combatDamageDialogMode) {
     titleEl.textContent = mode === "banding" ? "Assign Attackers' Damage (You Are Defending)" : "Assign Combat Damage";
   }
   const anyOffer = groups.some((g) => g.offer);
-  const offerNote = anyOffer
+  const offerNote = (anyOffer
     ? " A creature that may assign its combat damage as though it weren't blocked deals all of it one way or the other — choose for each."
-    : "";
+    : "")
+    + (groups.some((g) => g.divide)
+      ? " A creature that may divide its combat damage among the defending player and their creatures does so only if you choose to — blocked or not."
+      : "");
   if (subtitleEl) {
     subtitleEl.textContent =
       mode === "banding"
         ? "You (the defending player) assign this combat damage rather than the attacker — a creature with banding is blocking, or an effect you control says so (CR 702.22j). Choose how each attacker's damage is split among the creatures blocking it."
           + offerNote
-        : "Distribute each attacker's power among the creatures blocking it. The total assigned to a blocker's row cannot exceed the attacker's damage."
-          + offerNote;
+        : groups.every((g) => g.divide)
+          ? offerNote.trim()
+          : "Distribute each attacker's power among the creatures blocking it. The total assigned to a blocker's row cannot exceed the attacker's damage."
+            + offerNote;
   }
 
   const cardThumb = (card, sub) => {
@@ -21625,6 +21973,10 @@ function renderCombatDamageDialogBody(groups, mode = combatDamageDialogMode) {
   for (const group of groups) {
     const result = validateCombatDamageGroup(group, mode);
     if (!result.valid) allValid = false;
+    if (group.divide) {
+      body.appendChild(renderDividedAssignmentSection(group, groups, mode, result, cardThumb));
+      continue;
+    }
 
     const section = document.createElement("div");
     section.className = "cda-attacker";
