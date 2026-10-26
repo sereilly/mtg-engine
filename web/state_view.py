@@ -743,7 +743,9 @@ def _compute_graveyard_abilities(session: Session, player_index: int) -> list[di
     disabled: a bare activation is answered with the first legal target
     (``engine/bare_announcements.py``), a choice the player did not make.
     ``sacrifice_choices`` is the "Sacrifice a creature" a cost may name
-    (Necrosavant), by id, the list the engine's own candidate filter gives.
+    (Necrosavant), by id, the list the engine's own candidate filter gives;
+    ``tap_choices`` and ``tap_count`` the "Tap three untapped Clerics you
+    control" one may (Gangrenous Goliath), the same way.
     """
     game = session.game
     window = _casting_window(session, player_index)
@@ -792,6 +794,18 @@ def _compute_graveyard_abilities(session: Session, player_index: int) -> list[di
                         game, perm, ability.cost.sacrifice_filter, observer=player_index,
                     )
                 ]
+            if ability.cost.tap_filter is not None and ability.cost.tap_count:
+                # "**Tap three untapped Clerics you control**: Return this card
+                # from your graveyard to your hand." (Gangrenous Goliath.) Which
+                # three is the payer's (CR 601.2h through CR 602.2b), and the
+                # graveyard door takes the answer on ``cost_permanent_ids``; the
+                # candidates are the charger's own (``_tap_cost_candidates``),
+                # so the picker offers exactly what the cost may tap.
+                entry["tap_choices"] = [
+                    {"permanent_id": perm.permanent_id, "name": perm.card.name}
+                    for perm in game._tap_cost_candidates(ability.cost, player_index)
+                ]
+                entry["tap_count"] = int(ability.cost.tap_count)
             entries.append(entry)
     return entries
 

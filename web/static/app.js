@@ -12756,7 +12756,7 @@ function renderActivationPrompt() {
         : `Exile ${pending.count === 1 ? (/^[aeiou]/i.test(pending.noun) ? "an" : "a") : pending.count} ${pending.noun}${pending.count === 1 ? "" : "s"} from ${pileOwner} graveyard to ${purpose}. Choose which.`)
       : pending.announcesX
       ? `${verb} X ${pending.noun}(s) to ${purpose}. Choose which; X is how many you choose.`
-      : `${verb} ${pending.count} ${pending.noun}${pending.count === 1 ? "" : "s"} to ${purpose}. Choose which.`;
+      : `${verb} ${pending.count} ${pending.count === 1 ? pending.noun : costNounPlural(pending.noun)} to ${purpose}. Choose which.`;
     // Two permanents with one name are told apart by their position, so the
     // player can see that a click picked the second Forest and not the first.
     const seen = {};
@@ -15307,6 +15307,23 @@ function permanentCostVerbLabel(pending) {
   }
 }
 
+// The plural a cost picker's count puts on its noun: "Tap 2 Elves", not
+// "Elfs" (Birchlore Rangers) — the "-ves" plurals the engine's own singularizer
+// knows (`vocabulary.singular`: Elves, Dwarves, Wolves), "-y" and the sibilants;
+// every other noun takes an "s".
+function costNounPlural(noun) {
+  const word = String(noun || "");
+  const ves = { elf: "elves", dwarf: "dwarves", wolf: "wolves", werewolf: "werewolves", half: "halves" };
+  const lower = word.toLowerCase();
+  if (ves[lower]) {
+    const plural = ves[lower];
+    return word[0] === word[0].toUpperCase() ? plural[0].toUpperCase() + plural.slice(1) : plural;
+  }
+  if (/[^aeiou]y$/i.test(word)) return `${word.slice(0, -1)}ies`;
+  if (/(s|x|z|ch|sh)$/i.test(word)) return `${word}es`;
+  return `${word}s`;
+}
+
 // One picker of the chain, as the set picker holds it. By id, never by slot:
 // the set is chosen before anything taps or leaves, and the charger reads
 // `cost_permanent_ids`. A permanent an earlier step of the same chain already
@@ -15481,8 +15498,12 @@ function confirmPermanentCost() {
   renderActivationPrompt();
   if (pending.graveyardAbility) {
     // An ability that also names a target asks for it next, the cost riding
-    // along: both are announced together (CR 602.2b), in one body.
-    const costFields = { cost_permanent_id: picked[0] };
+    // along: both are announced together (CR 602.2b), in one body. A set
+    // ("Tap three untapped Clerics", Gangrenous Goliath) rides the list field
+    // the graveyard door reads; a single sacrifice its own.
+    const costFields = pending.verb === "tap"
+      ? { cost_permanent_ids: picked }
+      : { cost_permanent_id: picked[0] };
     if (pending.graveyardAbility.targets) {
       startGraveyardAbilityTargetPrompt(pending.graveyardAbility, costFields);
       return;
@@ -24895,6 +24916,36 @@ function sendGraveyardAbility(entry, fields = {}) {
   });
 }
 
+// "Tap three untapped Clerics you control: Return this card from your
+// graveyard to your hand." (Gangrenous Goliath.) Which ones tap is the
+// payer's (CR 601.2h): the server lists the charger's own candidates
+// (`tap_choices`) and how many (`tap_count`), and the set picker every other
+// cost uses asks; its Confirm sends the ids on `cost_permanent_ids`. The button
+// used to send a bare activation, and the engine tapped the first three it met.
+// Returns true when it opened (or refused for too few candidates).
+function openGraveyardTapCostPicker(entry) {
+  if (!Array.isArray(entry?.tap_choices)) return false;
+  const count = Math.max(1, Number(entry.tap_count || 1));
+  const options = entry.tap_choices.map((c) => ({ id: c.permanent_id, name: c.name }));
+  if (options.length < count) {
+    // CR 601.2h: a cost the board cannot cover is not paid with less.
+    SFX.onError();
+    updateActionHint(`${entry.name} has too few untapped permanents to tap for its cost.`, true);
+    return true;
+  }
+  pendingPermanentCost = {
+    card: null, cardName: entry.name, verb: "tap", noun: "permanent",
+    // The printed cost is the prompt's sentence ("Tap three untapped Clerics
+    // you control. Choose 3.").
+    costSentence: entry.cost_text || null,
+    count, anyNumber: false, announcesX: false, picked: [], remaining: [], chosen: [],
+    options, purpose: "activate", graveyardAbility: entry,
+  };
+  renderActivationPrompt();
+  updateActionHint(`Choose what ${entry.name} will tap to pay its cost.`);
+  return true;
+}
+
 function renderGraveyardAbilities(state, hasPriority) {
   const host = q("graveyardAbilities");
   if (!host) return;
@@ -24929,6 +24980,7 @@ function renderGraveyardAbilities(state, hasPriority) {
         updateActionHint(`Choose what ${entry.name} will sacrifice to pay its cost.`);
         return;
       }
+      if (openGraveyardTapCostPicker(entry)) return;
       if (entry.targets) {
         startGraveyardAbilityTargetPrompt(entry);
         return;
