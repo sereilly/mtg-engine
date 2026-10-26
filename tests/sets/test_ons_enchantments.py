@@ -574,6 +574,8 @@ def test_w1g7_elvish_guidance_counts_toward_the_planned_payment(set_pool):
 # read (``aura_grants``), so they leave with it and the second follows the
 # host's type through layer 4.
 
+import pytest as _w1g8_pytest
+
 from engine import Game as _w1g8_Game, PlayerState as _w1g8_PlayerState
 from engine.models import Permanent as _w1g8_Permanent
 from engine.oracle import compile_card_oracle as _w1g8_compile
@@ -690,6 +692,101 @@ def test_w1g8_lavamancers_skill_on_a_wizard_has_both_abilities(set_pool):
     assert _w1g8_pinger_lines(game, seeker) == [
         "{t}: this creature deals 1 damage to target creature."
     ]
+
+
+# --- The family's Auras that compiled on arrival and had never been run.
+
+
+def _w1g8_aura_game(pool, mine=(), theirs=(), *, hand=()):
+    one = _w1g8_PlayerState(
+        name="P1", battlefield=list(mine), hand=[pool[name] for name in hand],
+        library=[pool["Island"]] * 5,
+    )
+    two = _w1g8_PlayerState(
+        name="P2", battlefield=list(theirs), library=[pool["Island"]] * 5,
+    )
+    game = _w1g8_Game(players=[one, two])
+    game.enforce_mana_costs = False
+    game._settle()
+    return game, one, two
+
+
+def _w1g8_enchant(game, name, host):
+    result = game.cast_from_hand(
+        0, name, target_player_index=game.controller_index_of(host),
+        target_permanent_ids=[host.permanent_id],
+    )
+    assert result.supported, result.details
+    _w1g8_resolve(game)
+    game._recompute_continuous_effects()
+
+
+@_w1g8_pytest.mark.parametrize("sacrifice", [True, False])
+def test_w1g8_custody_battle_takes_the_creature_unless_a_land_goes(set_pool, sacrifice):
+    """'Enchanted creature has "At the beginning of your upkeep, target
+    opponent gains control of this creature unless you sacrifice a land."'
+    Cast on the opponent's creature: at *its controller's* upkeep the quoted
+    trigger names the Aura's caster, and that controller either sacrifices a
+    land and keeps it, or does not and loses it."""
+    pool = set_pool("ONS")
+    seeker = _w1g8_nosick(_w1g8_Permanent(card=pool["Glory Seeker"]))
+    island = _w1g8_nosick(_w1g8_Permanent(card=pool["Island"]))
+    game, _one, two = _w1g8_aura_game(
+        pool, theirs=[seeker, island], hand=["Custody Battle"],
+    )
+    _w1g8_enchant(game, "Custody Battle", seeker)
+    assert "target opponent gains control of this creature" in (
+        seeker.effective_card.oracle_text.lower()
+    )
+    game.start_turn(1)
+    _w1g8_resolve(game)
+    assert [choice.kind for choice in game.pending_choices] == ["optional_pay"]
+    assert game.confirm_optional_pay(1, accept=sacrifice)
+    _w1g8_resolve(game)
+    game._recompute_continuous_effects()
+    if sacrifice:
+        assert game.controller_index_of(seeker) == 1
+        assert [card.name for card in two.graveyard] == ["Island"]
+    else:
+        assert game.controller_index_of(seeker) == 0
+        assert game.is_on_battlefield(island)
+
+
+def test_w1g8_mythic_proportions_and_pacifism(set_pool):
+    """'+8/+8 and has trample', then 'can't attack or block' on the same
+    creature — and both leave with their Auras."""
+    pool = set_pool("ONS")
+    seeker = _w1g8_nosick(_w1g8_Permanent(card=pool["Glory Seeker"]))
+    attacker = _w1g8_nosick(_w1g8_Permanent(card=pool["Glory Seeker"]))
+    game, one, _two = _w1g8_aura_game(
+        pool, [seeker], [attacker], hand=["Mythic Proportions", "Pacifism"],
+    )
+    _w1g8_enchant(game, "Mythic Proportions", seeker)
+    assert (seeker.effective_power, seeker.effective_toughness) == (10, 10)
+    assert game._has_keyword(seeker, "trample")
+    assert game.can_attack(seeker, 1)
+    _w1g8_enchant(game, "Pacifism", seeker)
+    assert not game.can_attack(seeker, 1)
+    assert not game._can_block_attacker(seeker, attacker)
+    for aura in [p for p in one.battlefield if p.card.name in ("Pacifism", "Mythic Proportions")]:
+        game.remove_from_battlefield(aura)
+    game._settle()
+    game._recompute_continuous_effects()
+    assert (seeker.effective_power, seeker.effective_toughness) == (2, 2)
+    assert game.can_attack(seeker, 1) and game._can_block_attacker(seeker, attacker)
+
+
+def test_w1g8_seas_claim_makes_a_land_an_island(set_pool):
+    """'Enchanted land is an Island.' CR 305.7: it loses the Mountain's mana
+    ability and taps for {U}."""
+    pool = set_pool("ONS")
+    mountain = _w1g8_nosick(_w1g8_Permanent(card=pool["Mountain"]))
+    game, one, _two = _w1g8_aura_game(pool, [mountain], hand=["Sea's Claim"])
+    _w1g8_enchant(game, "Sea's Claim", mountain)
+    assert mountain.has_type("island") and not mountain.has_type("mountain")
+    # Asked for {R}, which it can no longer make, it makes its default.
+    assert game.tap_land_for_mana(0, "Mountain", chosen_color="R")
+    assert one.mana_pool.get("U") == 1 and one.mana_pool.get("R", 0) == 0
 
 # ==== end W1G8 ======================================================
 

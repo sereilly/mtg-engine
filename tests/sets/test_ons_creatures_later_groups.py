@@ -1207,6 +1207,40 @@ def test_w1g8_tribal_golem_attacks_the_turn_it_arrives_beside_a_goblin(set_pool)
     game._recompute_continuous_effects()
     assert not game.can_attack(golem, 1)
 
+
+def test_w1g8_kamahl_fist_of_krosa_animates_a_land_and_overruns(set_pool):
+    """'{G}: Target land becomes a 1/1 creature until end of turn. It's still
+    a land.' and '{2}{G}{G}{G}: Creatures you control get +3/+3 and gain
+    trample until end of turn.' The animated land is a creature the anthem
+    reaches; an opponent's creature is not; all of it ends at cleanup."""
+    pool = set_pool("ONS")
+    kamahl = _w1g8_perm(pool, "Kamahl, Fist of Krosa")
+    forest = _w1g8_perm(pool, "Forest")
+    seeker = _w1g8_perm(pool, "Glory Seeker")
+    theirs = _w1g8_perm(pool, "Glory Seeker")
+    game, _p1, _p2 = _w1g8_game([kamahl, forest, seeker], [theirs])
+    result = game.activate_permanent_ability(
+        0, "Kamahl, Fist of Krosa", ability_index=0, target_player_index=0,
+        target_permanent_ids=[forest.permanent_id],
+    )
+    assert result.supported, result.details
+    _w1g8_resolve(game)
+    assert forest.is_creature and forest.has_type("land")
+    assert _w1g8_pt(game, forest) == (1, 1)
+
+    assert game.activate_permanent_ability(
+        0, "Kamahl, Fist of Krosa", ability_index=1,
+    ).supported
+    _w1g8_resolve(game)
+    assert _w1g8_pt(game, kamahl) == (7, 6)
+    assert _w1g8_pt(game, forest) == (4, 4) and game._has_keyword(forest, "trample")
+    assert _w1g8_pt(game, seeker) == (5, 5)
+    assert _w1g8_pt(game, theirs) == (2, 2) and not game._has_keyword(theirs, "trample")
+
+    game.resolve_cleanup_step(0)
+    assert not forest.is_creature
+    assert _w1g8_pt(game, kamahl) == (4, 3) and not game._has_keyword(kamahl, "trample")
+
 # ==== end W1G8 ======================================================
 
 

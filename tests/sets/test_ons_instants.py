@@ -815,6 +815,234 @@ def test_w1g7_wirewood_pride_counts_every_elf(set_pool):
 
 # ==== W1G8 ==========================================================
 # W1G8's tests go between this line and the "end W1G8" line.
+#
+# The family's instants that compiled on arrival and had never been run:
+# abilities granted in quotes until end of turn (Psychic Trance, Run Wild,
+# Commando Raid), and Inspirit and the three Charms, every mode.
+
+from engine import Game as _w1g8_Game, PlayerState as _w1g8_PlayerState
+from engine.aura_attachment import attach_aura as _w1g8_attach_aura
+from engine.models import Permanent as _w1g8_Permanent
+from engine.oracle import compile_card_oracle as _w1g8_compile
+from engine.targeting import (
+    derive_cast_spec as _w1g8_derive_cast_spec,
+    usable_activated_abilities as _w1g8_usable,
+)
+from tests.helpers import (
+    _nosick as _w1g8_nosick, declare_attack as _w1g8_declare_attack,
+    resolve_stack as _w1g8_resolve,
+)
+
+
+def _w1g8_perm(pool, name):
+    return _w1g8_nosick(_w1g8_Permanent(card=pool[name]))
+
+
+def _w1g8_game(pool, mine=(), theirs=(), *, hand=(), their_hand=()):
+    one = _w1g8_PlayerState(
+        name="P1", battlefield=list(mine), hand=[pool[name] for name in hand],
+        library=[pool["Island"]] * 5,
+    )
+    two = _w1g8_PlayerState(
+        name="P2", battlefield=list(theirs),
+        hand=[pool[name] for name in their_hand], library=[pool["Island"]] * 5,
+    )
+    game = _w1g8_Game(players=[one, two])
+    game.enforce_mana_costs = False
+    game._settle()
+    return game, one, two
+
+
+def _w1g8_cast(game, name, target=None, *, mode=None):
+    kwargs = {} if mode is None else {"mode_index": mode}
+    if target is not None:
+        kwargs.update(
+            target_player_index=game.controller_index_of(target),
+            target_permanent_ids=[target.permanent_id],
+        )
+    result = game.cast_from_hand(0, name, **kwargs)
+    assert result.supported, result.details
+    _w1g8_resolve(game)
+    game._recompute_continuous_effects()
+
+
+def _w1g8_lines(game, perm):
+    game._recompute_continuous_effects()
+    return [
+        ability.source_line
+        for ability in _w1g8_usable(_w1g8_compile(perm.effective_card))
+    ]
+
+
+def _w1g8_offered(game, card, mode=None):
+    spec = _w1g8_derive_cast_spec(card, _w1g8_compile(card), mode_index=mode)
+    return {
+        game.players[found["seat"]].battlefield[found["index"]].permanent_id
+        for found in game._enumerate_targets(
+            0, card, spec, for_cast=True, mode_index=mode,
+        )
+        if found["kind"] == "permanent"
+    }
+
+
+def test_w1g8_psychic_trance_counters_a_spell_in_response(set_pool):
+    """'Until end of turn, Wizards you control gain "{T}: Counter target
+    spell."' Only the caster's Wizards gain it; one counters a Shock cast in
+    response; the line is gone after cleanup."""
+    pool = set_pool("ONS")
+    wizard = _w1g8_perm(pool, "Aphetto Grifter")
+    theirs = _w1g8_perm(pool, "Aphetto Grifter")
+    game, one, two = _w1g8_game(
+        pool, [wizard], [theirs], hand=["Psychic Trance"], their_hand=["Shock"],
+    )
+    _w1g8_cast(game, "Psychic Trance")
+    granted = "{T}: Counter target spell"
+    assert granted in _w1g8_lines(game, wizard)
+    assert granted not in _w1g8_lines(game, theirs)
+
+    assert game.queue_from_hand(1, "Shock", target_player_index=0).supported
+    index = _w1g8_lines(game, wizard).index(granted)
+    result = game.activate_permanent_ability(
+        0, "Aphetto Grifter", ability_index=index, target_stack_index=0,
+    )
+    assert result.supported, result.details
+    _w1g8_resolve(game)
+    assert one.life == 20 and wizard.tapped
+    assert [card.name for card in two.graveyard] == ["Shock"]
+    assert any("countered" in line for line in game.log)
+
+    game.resolve_cleanup_step(0)
+    assert granted not in _w1g8_lines(game, wizard)
+
+
+def test_w1g8_run_wild_grants_trample_and_a_regeneration_line(set_pool):
+    """'Until end of turn, target creature gains trample and "{G}: Regenerate
+    this creature."' The line costs {G}, its shield saves the creature, and
+    both grants end at cleanup."""
+    pool = set_pool("ONS")
+    seeker = _w1g8_perm(pool, "Glory Seeker")
+    game, one, _two = _w1g8_game(pool, [seeker], hand=["Run Wild"])
+    _w1g8_cast(game, "Run Wild", seeker)
+    assert game._has_keyword(seeker, "trample")
+    assert _w1g8_lines(game, seeker) == ["{G}: Regenerate this creature"]
+    game.enforce_mana_costs = True
+    one.mana_pool["G"] = 1
+    assert game.activate_permanent_ability(0, "Glory Seeker").supported
+    _w1g8_resolve(game)
+    assert one.mana_pool["G"] == 0
+    game._destroy_target_permanent(one, target_permanent_index=0)
+    _w1g8_resolve(game)
+    assert game.is_on_battlefield(seeker) and seeker.tapped
+
+    game.resolve_cleanup_step(0)
+    game._recompute_continuous_effects()
+    assert not game._has_keyword(seeker, "trample")
+    assert _w1g8_lines(game, seeker) == []
+
+
+def test_w1g8_commando_raid_bites_a_creature_of_the_damaged_player(set_pool):
+    """'Until end of turn, target creature you control gains "When this
+    creature deals combat damage to a player, you may have it deal damage
+    equal to its power to target creature that player controls."' The
+    granted trigger fires on combat damage, aims at the damaged player's
+    creature, and — taken — deals the attacker's power to it."""
+    pool = set_pool("ONS")
+    raider = _w1g8_perm(pool, "Glory Seeker")
+    victim = _w1g8_perm(pool, "Wirewood Elf")
+    game, _one, two = _w1g8_game(pool, [raider], [victim], hand=["Commando Raid"])
+    _w1g8_cast(game, "Commando Raid", raider)
+    _w1g8_declare_attack(game, 0)
+    for _ in range(8):
+        if game.pending_choices:
+            assert game.confirm_optional_pay(0, accept=True)
+            _w1g8_resolve(game)
+        elif game.stack:
+            _w1g8_resolve(game)
+        elif game.current_step == "end_of_combat":
+            break
+        else:
+            game.advance_combat_phase()
+    assert two.life == 18
+    assert not game.is_on_battlefield(victim), "2 damage to the 1/2 Elf"
+
+
+def test_w1g8_inspirit_untaps_and_pumps_until_end_of_turn(set_pool):
+    pool = set_pool("ONS")
+    seeker = _w1g8_perm(pool, "Glory Seeker")
+    seeker.tapped = True
+    game, _one, _two = _w1g8_game(pool, [seeker], hand=["Inspirit"])
+    _w1g8_cast(game, "Inspirit", seeker)
+    assert not seeker.tapped
+    assert (seeker.effective_power, seeker.effective_toughness) == (4, 6)
+    game.resolve_cleanup_step(0)
+    game._recompute_continuous_effects()
+    assert (seeker.effective_power, seeker.effective_toughness) == (2, 2)
+
+
+def test_w1g8_piety_charm_every_mode(set_pool):
+    """'• Destroy target Aura attached to a creature. • Target Soldier
+    creature gets +2/+2 until end of turn. • Creatures you control gain
+    vigilance until end of turn.' Each mode's picker holds its own noun."""
+    pool = set_pool("ONS")
+    soldier = _w1g8_perm(pool, "Glory Seeker")
+    elf = _w1g8_perm(pool, "Wirewood Elf")
+    theirs = _w1g8_perm(pool, "Wirewood Elf")
+    aura = _w1g8_Permanent(card=pool["Pacifism"])
+    game, _one, _two = _w1g8_game(
+        pool, [soldier, elf], [theirs, aura], hand=["Piety Charm"] * 3,
+    )
+    _w1g8_attach_aura(aura, theirs)
+    game._settle()
+    charm = pool["Piety Charm"]
+    assert _w1g8_offered(game, charm, 0) == {aura.permanent_id}
+    _w1g8_cast(game, "Piety Charm", aura, mode=0)
+    assert not game.is_on_battlefield(aura)
+    assert _w1g8_offered(game, charm, 1) == {soldier.permanent_id}
+    _w1g8_cast(game, "Piety Charm", soldier, mode=1)
+    assert (soldier.effective_power, soldier.effective_toughness) == (4, 4)
+    _w1g8_cast(game, "Piety Charm", mode=2)
+    assert game._has_keyword(soldier, "vigilance") and game._has_keyword(elf, "vigilance")
+    assert not game._has_keyword(theirs, "vigilance")
+
+
+def test_w1g8_vitality_charm_every_mode(set_pool):
+    pool = set_pool("ONS")
+    elf = _w1g8_perm(pool, "Wirewood Elf")
+    beast = _w1g8_perm(pool, "Graxiplon")
+    game, one, _two = _w1g8_game(pool, [elf, beast], hand=["Vitality Charm"] * 3)
+    _w1g8_cast(game, "Vitality Charm", mode=0)
+    (insect,) = [p for p in one.battlefield if p.card.name == "Insect Token"]
+    assert (insect.effective_power, insect.effective_toughness) == (1, 1)
+    _w1g8_cast(game, "Vitality Charm", elf, mode=1)
+    assert (elf.effective_power, elf.effective_toughness) == (2, 3)
+    assert game._has_keyword(elf, "trample")
+    charm = pool["Vitality Charm"]
+    assert _w1g8_offered(game, charm, 2) == {beast.permanent_id}, "Beasts only"
+    _w1g8_cast(game, "Vitality Charm", beast, mode=2)
+    game._destroy_target_permanent(
+        one, target_permanent_index=one.battlefield.index(beast)
+    )
+    _w1g8_resolve(game)
+    assert game.is_on_battlefield(beast), "regenerated"
+
+
+def test_w1g8_fever_charm_every_mode(set_pool):
+    pool = set_pool("ONS")
+    goblin = _w1g8_Permanent(card=pool["Skirk Prospector"])
+    wizard = _w1g8_perm(pool, "Aphetto Grifter")
+    seeker = _w1g8_perm(pool, "Glory Seeker")
+    game, _one, _two = _w1g8_game(
+        pool, [goblin], [wizard, seeker], hand=["Fever Charm"] * 3,
+    )
+    goblin.metadata["summoning_sickness_turn"] = game.turn
+    assert not game.can_attack(goblin, 1)
+    _w1g8_cast(game, "Fever Charm", goblin, mode=0)
+    assert game.can_attack(goblin, 1)
+    _w1g8_cast(game, "Fever Charm", goblin, mode=1)
+    assert (goblin.effective_power, goblin.effective_toughness) == (3, 1)
+    assert _w1g8_offered(game, pool["Fever Charm"], 2) == {wizard.permanent_id}
+    _w1g8_cast(game, "Fever Charm", wizard, mode=2)
+    assert not game.is_on_battlefield(wizard)
 
 # ==== end W1G8 ======================================================
 
