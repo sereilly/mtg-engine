@@ -1065,6 +1065,115 @@ def test_w1g9_tephraderm_tells_a_creatures_ability_from_an_artifacts(set_pool):
     assert tephraderm.damage_marked == 2
     assert not game.is_on_battlefield(sorcerer)
     assert game.players[0].life == 20
+
+
+def _w1g9_arm_glarecaster(game, *, at_player=None, at_permanent=None):
+    """Glarecaster on seat 0, its ability activated and resolved, aimed at
+    *at_player* (a seat) or *at_permanent*."""
+    game._set_phase_and_step("main", "precombat_main")
+    if at_permanent is not None:
+        result = game.activate_permanent_ability(
+            0, "Glarecaster", target_player_index=1,
+            target_permanent_ids=[at_permanent.permanent_id],
+        )
+    else:
+        result = game.activate_permanent_ability(
+            0, "Glarecaster", target_player_index=at_player,
+        )
+    assert result.supported
+    _w1g9_settle(game)
+
+
+def test_w1g9_glarecaster_moves_the_next_damage_to_you_once(set_pool):
+    """"{5}{W}: The next time damage would be dealt to this creature and/or you
+    this turn, that damage is dealt to any target instead." A Shock at its
+    controller is dealt to the opponent it named (CR 614.9); the next Shock
+    lands — the next time was spent, for both recipients."""
+    ons = set_pool("ONS")
+    game = _w1g9_table()
+    glarecaster = _w1g9_enter(game, 0, ons["Glarecaster"])
+    game.players[1].hand.extend([ons["Shock"], ons["Shock"]])
+    _w1g9_arm_glarecaster(game, at_player=1)
+    game.active_player_index = 1
+    game.cast_from_hand(1, "Shock", target_player_index=0)
+    _w1g9_settle(game)
+    assert (game.players[0].life, game.players[1].life) == (20, 18)
+    assert "2 damage to W1G9-0 is dealt to W1G9-1 instead (Glarecaster)" in game.log
+    game.cast_from_hand(
+        1, "Shock", target_player_index=0,
+        target_permanent_ids=[glarecaster.permanent_id],
+    )
+    _w1g9_settle(game)
+    assert glarecaster.damage_marked == 2, "spent for the creature too"
+    assert game.players[1].life == 18
+
+
+def test_w1g9_glarecaster_moves_every_chunk_dealt_at_the_same_time(set_pool):
+    """Ruling (2004-10-04): "if either you or this card would be dealt damage
+    from multiple sources at the same time, the redirection will apply to both
+    chunks of damage." Two unblocked attackers' combat damage (CR 510.2) is
+    moved whole onto the creature it named; a Hurricane hitting the
+    Glarecaster and its controller in one resolution is moved whole too."""
+    ons, lea = set_pool("ONS"), set_pool("LEA")
+    game = _w1g9_table()
+    _w1g9_enter(game, 0, ons["Glarecaster"])
+    seeker = _w1g9_enter(game, 1, ons["Glory Seeker"])
+    bears = _w1g9_enter(game, 1, lea["Grizzly Bears"])
+    giant = _w1g9_enter(game, 1, lea["Hill Giant"])
+    _w1g9_arm_glarecaster(game, at_permanent=giant)
+    game.active_player_index = 1
+    assert _w1g9_attack(game, [seeker, bears], seat=1, defender=0)[0]
+    assert _w1g9_block(game, [], seat=0)[0]
+    game._set_phase_and_step("combat", "combat_damage")
+    game.resolve_combat_damage(1)
+    _w1g9_settle(game)
+    assert game.players[0].life == 20
+    assert not game.is_on_battlefield(giant)
+
+    game = _w1g9_table()
+    glarecaster = _w1g9_enter(game, 0, ons["Glarecaster"])
+    game.players[1].hand.append(lea["Hurricane"])
+    _w1g9_arm_glarecaster(game, at_player=1)
+    game.active_player_index = 1
+    game.cast_from_hand(1, "Hurricane", x_value=2)
+    _w1g9_settle(game)
+    assert glarecaster.damage_marked == 0
+    assert (game.players[0].life, game.players[1].life) == (20, 14)
+
+
+def test_w1g9_glarecasters_next_time_ends_with_its_combat_damage_step(set_pool):
+    """A first-strike step and the regular step are two dealings (CR 510.4):
+    the first striker's damage is moved, the other attacker's lands."""
+    ons, lea = set_pool("ONS"), set_pool("LEA")
+    game = _w1g9_table()
+    _w1g9_enter(game, 0, ons["Glarecaster"])
+    striker = _w1g9_enter(game, 1, lea["White Knight"])
+    bears = _w1g9_enter(game, 1, lea["Grizzly Bears"])
+    _w1g9_arm_glarecaster(game, at_player=1)
+    game.active_player_index = 1
+    assert _w1g9_attack(game, [striker, bears], seat=1, defender=0)[0]
+    assert _w1g9_block(game, [], seat=0)[0]
+    game._set_phase_and_step("combat", "combat_damage")
+    game.resolve_combat_damage(1)
+    _w1g9_settle(game)
+    if game.combat_damage_resolved is False:
+        game.resolve_combat_damage(1)
+        _w1g9_settle(game)
+    assert game.players[1].life == 18, "the first striker's 2 moved"
+    assert game.players[0].life == 18, "the regular step is another time"
+
+
+def test_w1g9_a_second_protected_recipient_refuses_elsewhere():
+    """The "and/or" recipient has one reader; a sentence routed to any other
+    redirect lowering refuses rather than dropping it."""
+    from engine.grammar import compile_line
+
+    line = compile_line(
+        "{5}{W}: The next time damage would be dealt to this creature and/or "
+        "target player this turn, that damage is dealt to any target instead.",
+        card_name="Probe",
+    )
+    assert not line.instructions
 # ==== end W1G9 ======================================================
 
 

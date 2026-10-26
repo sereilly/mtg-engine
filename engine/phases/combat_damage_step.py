@@ -36,6 +36,7 @@ from ..combat_assignment import (AS_THOUGH_UNBLOCKED_LOG,
                                  may_assign_as_unblocked)
 from ..damage_events import deal_damage, lifelink_life_gained
 from ..models import Permanent
+from ..damage_redirects import end_simultaneous_redirects
 from ..prevention.static import end_simultaneous_damage
 from ..resumption import run_resumable
 
@@ -1569,6 +1570,8 @@ class CombatDamageStepMixin:
             # Phantom that paid one counter for being blocked by two creatures
             # pays again in the next step, not again in this one.
             end_simultaneous_damage(self)
+            # …and a shared "next time" one of its chunks opened (Glarecaster).
+            end_simultaneous_redirects(self)
 
             # CR 702.15b: apply lifelink life gain for damage dealt this step.
             for controller_index, amount in lifelink_gain.items():

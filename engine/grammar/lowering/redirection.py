@@ -95,6 +95,24 @@ def _lower_redirect_damage(node: ast.RedirectDamage) -> tuple[OracleInstruction,
       pointing at nothing, and CR 614.9 makes that a redirect that silently does
       nothing at all.
     """
+    if node.also_to is not None and not (
+        node.one_shot
+        and node.amount is None
+        and _is_source(node.to)
+        and node.dealt_by is None
+        and not node.from_chosen_source
+        and not node.spell_types
+        and not node.optional
+        and not node.to_damage_source
+    ):
+        # "…to this creature **and/or you** …" (Glarecaster) has one reader,
+        # the instance redirect off the ability's own source; every other
+        # branch below reads ``to`` alone and would drop the second recipient.
+        raise LoweringError(
+            "a second protected recipient is read only by the next-time "
+            "redirect off the ability's own source",
+            node=node,
+        )
     if node.spell_types:
         # "The next time **an instant or sorcery spell** would deal damage to
         # you this turn, that spell deals that damage to its controller

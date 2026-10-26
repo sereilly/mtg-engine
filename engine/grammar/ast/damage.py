@@ -406,6 +406,12 @@ class RedirectDamage:
     #: spell of which answers when its damage would be dealt. Empty for every
     #: other printing.
     spell_types: tuple[str, ...] = ()
+    #: "The next time damage would be dealt to this creature **and/or you**
+    #: this turn, …" (Glarecaster.) A second protected recipient beside ``to``,
+    #: and **one** "next time" over both: whichever is dealt damage first spends
+    #: it for the other too, and damage dealt to both at once is moved whole
+    #: (ruling 2004-10-04). ``None`` for every other printing.
+    also_to: Recipient | None = None
 
 
 @dataclass(frozen=True)

@@ -27,7 +27,8 @@ from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
 from ._common import (_REST_OF_TURN, _amount_payload, _describe_targets,
-                      _filter_payload, _is_source, _names_several_targets)
+                      _filter_payload, _is_source, _is_you,
+                      _names_several_targets)
 
 
 def _lower_next_damage_redirect(
@@ -276,6 +277,20 @@ def _lower_next_damage_redirect_from_source(
         {"uses": 1} if node.amount is None
         else {"amount": _amount_payload(node.amount)}
     )
+    if node.also_to is not None:
+        # "…to this creature **and/or you** this turn, …" (Glarecaster.) The
+        # ability's controller protected beside its source, under the one
+        # "next time" the two share: the handler arms a record on each and
+        # spends them together. Only "you", and only the instance form — a
+        # point pool split across two recipients is a sentence nothing prints,
+        # and a second recipient of any other kind has no record to hang off.
+        if node.amount is not None or not _is_you(node.also_to):
+            raise LoweringError(
+                "a second protected recipient is read only as the ability's "
+                "controller, under one next time",
+                node=node,
+            )
+        payload["also_protects"] = "you"
     _describe_targets(payload, spec)
     if spec.quantifier == "target":
         untestable = untestable_filter_keys(
