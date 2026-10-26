@@ -422,8 +422,8 @@ class RevealTopOpponentChooses:
     #: any of them.
     pick: "ObjectFilter | None" = None
     #: "…and **the rest into your graveyard**." (Animal Magnetism.) Where the
-    #: cards the chooser did not name go; None leaves them where CR 701.20b
-    #: left them, on top of the library (Thran Tome).
+    #: revealed cards the chooser did not name go; None leaves them where the
+    #: reveal left them (CR 701.20b), on top of the library (Thran Tome).
     rest_fate: "str | None" = None
 
 
