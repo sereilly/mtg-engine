@@ -417,6 +417,14 @@ class RevealTopOpponentChooses:
     fate: str = "graveyard"
     #: "…, then draw two cards." None for a printing that draws nothing.
     then_draw: "Amount | None" = None
+    #: "An opponent chooses **a creature card** from among them." (Animal
+    #: Magnetism.) What the chooser may name; None is "one of those cards",
+    #: any of them.
+    pick: "ObjectFilter | None" = None
+    #: "…and **the rest into your graveyard**." (Animal Magnetism.) Where the
+    #: cards the chooser did not name go; None leaves them where CR 701.20b
+    #: left them, on top of the library (Thran Tome).
+    rest_fate: "str | None" = None
 
 
 @dataclass(frozen=True)

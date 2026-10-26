@@ -469,14 +469,41 @@ def _accept_counted_reveal_top(
         stream.reset(mark)
         return None
     chooser = parse_player_ref(stream)
-    if chooser is None or not stream.accept_phrase(
-        "chooses", "one", "of", "those", "cards"
-    ):
+    if chooser is None:
         stream.reset(mark)
         return None
+    # "An opponent chooses **a creature card from among them**." (Animal
+    # Magnetism.) The pick narrowed by a printed noun phrase, where Thran Tome
+    # lets the opponent name any of the revealed cards. The filter is what the
+    # opponent is *offered*, so it rides the node rather than being checked
+    # after the answer.
+    pick: "ast.ObjectFilter | None" = None
+    if not stream.accept_phrase("chooses", "one", "of", "those", "cards"):
+        if not (stream.accept_word("chooses") and stream.accept_word("a", "an")):
+            stream.reset(mark)
+            return None
+        try:
+            pick = parse_object_filter(stream)
+        except GrammarError:
+            stream.reset(mark)
+            return None
+        if not (pick.is_card and stream.accept_phrase("from", "among", "them")):
+            stream.reset(mark)
+            return None
     if not stream.accept_punct("."):
         stream.reset(mark)
         return None
+    # "**Put that card onto the battlefield and the rest into your
+    # graveyard.**" (Animal Magnetism.) The chosen card's second fate, and the
+    # one place a library pile's *rest* moves: Thran Tome leaves the cards it
+    # did not choose where CR 701.20b left them, and this sentence names them.
+    if stream.accept_phrase("put", "that", "card", "onto", "the", "battlefield"):
+        if not stream.accept_phrase("and", "the", "rest", "into", "your", "graveyard"):
+            stream.reset(mark)
+            return None
+        return ast.RevealTopOpponentChooses(
+            count, chooser, fate="battlefield", pick=pick, rest_fate="graveyard",
+        )
     if not stream.accept_phrase("put", "that", "card", "into", "your", "graveyard"):
         stream.reset(mark)
         return None
@@ -495,7 +522,7 @@ def _accept_counted_reveal_top(
     else:
         stream.reset(probe)
     return ast.RevealTopOpponentChooses(
-        count, chooser, fate="graveyard", then_draw=drawn,
+        count, chooser, fate="graveyard", then_draw=drawn, pick=pick,
     )
 
 

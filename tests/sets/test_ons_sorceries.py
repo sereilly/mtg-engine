@@ -626,6 +626,141 @@ def test_w1g12_erratic_explosion_whose_target_left_does_not_reveal(set_pool):
     assert not any("stopped on" in line for line in game.log)
     assert _w1g12_names(game.players[0].graveyard) == ["Erratic Explosion"]
 
+
+_W1G12_MAGNETISM_LIBRARY = [
+    "Forest", "Wellwisher", "Island", "Krosan Colossus", "Mountain", "Swamp",
+]
+
+
+def test_w1g12_animal_magnetism_the_opponent_picks_the_creature_you_get(set_pool):
+    """"Reveal the top five cards of your library. An opponent chooses a
+    creature card from among them. Put that card onto the battlefield and the
+    rest into your graveyard." At three seats the caster names which opponent
+    chooses (CR 608.2d); Cara is offered only the two creature cards, a land is
+    refused, and her pick enters under Alice while the other four revealed
+    cards are binned — the sixth card, never revealed, stays."""
+    game = _w1g12_table(
+        set_pool, _W1G12_MAGNETISM_LIBRARY, hands={0: ["Animal Magnetism"]},
+        interactive={0, 1, 2}, seats=3,
+    )
+    assert game.cast_from_hand(0, "Animal Magnetism").supported
+    who = game.pending_choice_of("player_choice", 0)
+    assert who is not None and sorted(who.data["seats"]) == [1, 2]
+    assert game.resolve_pending_choice("player_choice", 0, seat=2)
+    pick = game.pending_choice_of("opponent_picks_revealed", 2)
+    assert pick is not None and pick.data["cards"] == _W1G12_MAGNETISM_LIBRARY[:5]
+    assert pick.data["legal_indices"] == [1, 3]
+    assert not game.confirm_opponent_picks_revealed(2, 0), "a land is not a creature card"
+    assert game.confirm_opponent_picks_revealed(2, 3)
+    _w1g12_resolve_stack(game)
+    entered = list(game.all_permanents())
+    assert [p.card.name for p in entered] == ["Krosan Colossus"]
+    assert game.controller_index_of(entered[0]) == 0
+    assert sorted(_w1g12_names(game.players[0].graveyard)) == [
+        "Animal Magnetism", "Forest", "Island", "Mountain", "Wellwisher",
+    ]
+    assert _w1g12_names(game.players[0].library) == ["Swamp"]
+
+
+def test_w1g12_animal_magnetism_an_ai_opponent_hands_over_the_weakest(set_pool):
+    """A seat nobody asks names the creature that serves the revealer least —
+    the cheapest, since the card it names is the one Alice gets (Thran Tome's
+    costliest-first is the policy for a pick that is *lost*). And with no
+    creature card among the five, nobody chooses anything and all five are
+    binned."""
+    game = _w1g12_table(
+        set_pool, _W1G12_MAGNETISM_LIBRARY, hands={0: ["Animal Magnetism"]},
+    )
+    assert game.cast_from_hand(0, "Animal Magnetism").supported
+    _w1g12_resolve_stack(game)
+    assert [p.card.name for p in game.all_permanents()] == ["Wellwisher"]
+    assert "Krosan Colossus" in _w1g12_names(game.players[0].graveyard)
+
+    lands = ["Forest", "Island", "Mountain", "Swamp", "Plains", "Forest"]
+    game = _w1g12_table(set_pool, lands, hands={0: ["Animal Magnetism"]})
+    assert game.cast_from_hand(0, "Animal Magnetism").supported
+    _w1g12_resolve_stack(game)
+    assert list(game.all_permanents()) == []
+    assert game.pending_choices == []
+    assert sorted(_w1g12_names(game.players[0].graveyard)) == sorted(
+        lands[:5] + ["Animal Magnetism"]
+    )
+    assert _w1g12_names(game.players[0].library) == ["Forest"]
+
+
+_W1G12_BOB_HAND = ["Akroma's Vengeance", "Plains", "Shock", "Krosan Colossus", "Island"]
+
+
+def test_w1g12_blackmail_the_target_shows_three_and_the_caster_takes_one(set_pool):
+    """"Target player reveals three cards from their hand and you choose one
+    of them. That player discards that card." Bob — the revealer — picks the
+    three he shows (CR 608.2c); Alice is offered only those, the two he kept
+    back go out face down (no name on the wire), Shock (unrevealed) is
+    refused, and the card she takes is discarded."""
+    from web.prompt_cards import _revealed_hand_pick as _w1g12_render
+    from web.prompt_registry import PromptContext as _w1g12_Ctx
+
+    game = _w1g12_table(
+        set_pool, ["Swamp"] * 5, hands={0: ["Blackmail"], 1: _W1G12_BOB_HAND},
+        interactive={0, 1},
+    )
+    assert game.cast_from_hand(0, "Blackmail", target_player_index=1).supported
+    shown = game.pending_choice_of("choose_cards_in_hand", 1)
+    assert shown is not None and shown.data["count"] == 3
+    assert game.pending_choice_of("revealed_hand_pick", 0) is None
+    assert game.confirm_choose_cards_in_hand(1, [0, 1, 4])
+    pick = game.pending_choice_of("revealed_hand_pick", 0)
+    assert pick is not None and pick.data["legal_indices"] == [0, 1, 4]
+    rendered = _w1g12_render(
+        _w1g12_Ctx(game=game, viewer_seat=0, serialize_card=lambda card: {"name": card.name},
+                   seat_type=lambda seat: "human"),
+        [pick],
+    )
+    assert [c["name"] for c in rendered["cards"]] == [
+        "Akroma's Vengeance", "Plains", "Face-down card", "Face-down card", "Island",
+    ]
+    assert not game.confirm_revealed_hand_pick(0, 2), "Shock was never revealed"
+    assert game.confirm_revealed_hand_pick(0, 0)
+    _w1g12_resolve_stack(game)
+    assert _w1g12_names(game.players[1].graveyard) == ["Akroma's Vengeance"]
+    assert _w1g12_names(game.players[1].hand) == [
+        "Plains", "Shock", "Krosan Colossus", "Island",
+    ]
+    assert _w1g12_names(game.players[0].graveyard) == ["Blackmail"]
+
+
+def test_w1g12_blackmail_against_a_two_card_hand_reveals_both(set_pool):
+    """The ruling (2004-10-04): "If the player has less than 3 cards, all of
+    them are revealed." Nobody asks Bob anything — both cards are shown and
+    Alice picks between them at once."""
+    game = _w1g12_table(
+        set_pool, ["Swamp"] * 5, hands={0: ["Blackmail"], 1: ["Shock", "Plains"]},
+        interactive={0, 1},
+    )
+    assert game.cast_from_hand(0, "Blackmail", target_player_index=1).supported
+    assert game.pending_choice_of("choose_cards_in_hand", 1) is None
+    pick = game.pending_choice_of("revealed_hand_pick", 0)
+    assert pick is not None and pick.data["legal_indices"] == [0, 1]
+    assert game.confirm_revealed_hand_pick(0, 1)
+    _w1g12_resolve_stack(game)
+    assert _w1g12_names(game.players[1].graveyard) == ["Plains"]
+    assert _w1g12_names(game.players[1].hand) == ["Shock"]
+
+
+def test_w1g12_blackmail_between_two_seats_nobody_asks(set_pool):
+    """A revealer nobody asks shows its three least costly cards (the lands
+    and the Shock), and a caster nobody asks takes the costliest of what was
+    shown — never Akroma's Vengeance, which Bob kept back."""
+    game = _w1g12_table(
+        set_pool, ["Swamp"] * 5, hands={0: ["Blackmail"], 1: _W1G12_BOB_HAND},
+    )
+    assert game.cast_from_hand(0, "Blackmail", target_player_index=1).supported
+    _w1g12_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    assert game.pending_choices == []
+    assert _w1g12_names(game.players[1].graveyard) == ["Shock"]
+    assert any("Bob revealed Plains, Island, Shock" in line for line in game.log)
+
 # ==== end W1G12 ======================================================
 
 

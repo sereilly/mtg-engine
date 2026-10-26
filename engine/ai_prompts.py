@@ -927,6 +927,14 @@ def order_hand_pick(
     from .handlers._filters import _card_matches_filter
 
     order = list(candidates)
+    if (payload or {}).get("shown_to_opponent"):
+        # "Target player reveals three cards from their hand and you choose
+        # one of them. That player discards that card." (Blackmail.) The cards
+        # shown are the ones an opponent then picks among for a discard, so a
+        # seat nobody asks shows its least costly — mana value, the ranking
+        # that opponent's own default pick reads (the costliest legal card).
+        hand = game.players[player_index].hand
+        return sorted(order, key=lambda slot: (int(hand[slot].cmc or 0), slot))
     key = str((payload or {}).get("result_key") or "chosen_hand_cards")
     consumer = hand_pick_entry_consumer(source_card, key) if source_card else None
     if consumer is None:

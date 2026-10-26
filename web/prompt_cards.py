@@ -548,10 +548,25 @@ def _revealed_hand_pick(ctx: PromptContext, choices: list) -> dict:
     The whole hand is sent — the card revealed it (CR 701.20), so hiding the
     unpickable cards would show the chooser less than the game does — with the
     legal indices marked so the client can offer only those.
+
+    **Unless only part of it was revealed** (Blackmail: "target player reveals
+    three cards from their hand and you choose one of them"). Then
+    ``shown_indices`` names the revealed slots and every other slot goes out
+    as a face-down stand-in (``hidden``, no name), so indices still address
+    the hand while nothing the revealer kept back is published (CR 400.2).
     """
     choice = choices[0]
     victim_seat = int(choice.data["victim_index"])
     victim = ctx.game.players[victim_seat]
+    shown = choice.data.get("shown_indices")
+    if shown is not None:
+        cards = [
+            ctx.serialize_card(card) if index in shown
+            else {"name": "Face-down card", "hidden": True, "image_uri": None}
+            for index, card in enumerate(victim.hand)
+        ]
+    else:
+        cards = [ctx.serialize_card(card) for card in victim.hand]
     return {
         "player_seat": choice.player_index,
         "card_name": choice.data.get("card_name"),
@@ -564,7 +579,8 @@ def _revealed_hand_pick(ctx: PromptContext, choices: list) -> dict:
         # ceiling only the engine knew about is a prompt the chooser cannot
         # leave.
         "up_to": bool(choice.data.get("up_to")),
-        "cards": [ctx.serialize_card(card) for card in victim.hand],
+        "cards": cards,
+        "shown_indices": None if shown is None else list(shown),
     }
 
 
@@ -574,18 +590,28 @@ def _opponent_picks_revealed(ctx: PromptContext, choices: list) -> dict:
 
     The names as the reveal showed them, in library order, because that is what
     CR 701.20 made public \u2014 and the revealer's seat beside them, since the
-    chooser is not the player whose card is about to be binned. Every card is a
-    legal answer, so no legality list rides along: the sentence narrows nothing.
+    chooser is not the player whose card is about to be binned.
+
+    ``legal_indices`` is the slots the sentence lets the chooser name: every
+    one for Thran Tome, which narrows nothing, and only the creature cards for
+    Animal Magnetism ("an opponent chooses **a creature card** from among
+    them") \u2014 the list the resolver re-checks an answer against, so a client
+    that greys out the rest offers exactly what the engine accepts.
+    ``other_fate`` is where the unchosen cards go, when the sentence moves them.
     """
     choice = choices[0]
     revealer_seat = int(choice.data.get("revealer_index", 0))
+    cards = list(choice.data.get("cards") or [])
+    legal = choice.data.get("legal_indices")
     return {
         "player_seat": choice.player_index,
         "card_name": choice.data.get("card_name", ""),
         "revealer_seat": revealer_seat,
         "revealer_name": ctx.game.players[revealer_seat].name,
-        "cards": list(choice.data.get("cards") or []),
+        "cards": cards,
+        "legal_indices": list(range(len(cards)) if legal is None else legal),
         "fate": str(choice.data.get("fate", "graveyard")),
+        "other_fate": choice.data.get("other_fate"),
     }
 
 
