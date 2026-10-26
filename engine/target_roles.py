@@ -87,7 +87,11 @@ def role_is_seat(role: dict | None) -> bool:
 #: whole into the resolution context, so no construction site has to remember
 #: a new field.
 #:
-#: **Present only where the scalar cannot say it** — two or more seat roles.
+#: **Present only where the scalar cannot say it** — two or more seat roles
+#: named, or (``several_seat_roles``) a spec several of whose roles a seat may
+#: answer, whichever one the announcement named it in ("Choose any number of
+#: target players or planeswalkers", Kaboom!: one player named, and the
+#: scalar could not say which of twelve slots it answers).
 #: An announcement with one seat role records nothing here and is read off
 #: ``target_player_index`` exactly as it always was, which is every roles card
 #: the pool held before this one; where the list is present the scalar still

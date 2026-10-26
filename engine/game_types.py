@@ -190,9 +190,15 @@ CHOICE_KEYS = (
     # controls", Cultural Exchange). A target rather than a choice beyond one,
     # and on this channel for ``divided_targets``' reason: it is the other
     # announcement that names several players, and ``target_player_index`` is
-    # one seat. Written only where there are two or more seat roles —
-    # ``target_roles.ROLE_SEATS`` names the key and says who reads it.
+    # one seat. Written where there are two or more seat roles, or several
+    # roles a seat may answer — ``target_roles.ROLE_SEATS`` names the key and
+    # says who reads it.
     "role_seats",
+    # Who controlled each permanent a **per-opponent** announcement named, by
+    # permanent id ("For each opponent, gain control of target permanent that
+    # player controls", Blatant Thievery), for CR 608.2b to ask again —
+    # ``target_roles.ANNOUNCED_TARGET_CONTROLLERS`` names the key.
+    "announced_target_controllers",
     # The word a "Choose flying, first strike, trample, or shadow" cost
     # announced (Phyrexian Splicer, CR 601.2b through CR 602.2b), carried by
     # the ability that announced it. The record on the source
