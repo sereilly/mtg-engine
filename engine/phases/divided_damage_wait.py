@@ -16,9 +16,11 @@ and read by the same two questions that one is
 (``_needs_manual_damage_assignment``, which stops the step, and
 ``_manual_assignment_has_declared_multiblock``, which tells the web layer a
 dialog can surface it). Like that one it turns on **who is sitting there**:
-a seat nobody asks keeps the default, which is the offer declined (the AI never
-takes it), so an AI or headless combat resolves without a stop nobody would
-answer.
+a seat nobody asks is answered as the step resolves, by the one chooser the
+simulator, the engine's auto-resolve and the web's AI seat share
+(``ai_combat.choose_combat_damage_announcement``, which takes the division
+where the creatures it kills are worth more than the damage to the player),
+so an AI or headless combat resolves without a stop nobody would answer.
 
 Kept beside the damage step rather than in it: that module is at the band
 under the 2,000-line cap, and this is a subject of its own — which attackers

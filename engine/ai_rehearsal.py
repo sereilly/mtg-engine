@@ -1423,17 +1423,26 @@ def _rehearse(
         # own card: the card spent and nothing else, or (a spell bought back,
         # CR 702.27a) not even that. The table then says which it is — a
         # card drawn in place of the one spent is a hand that differs.
+        #
+        # **A game that ended on both copies has no "end of the turn"** to
+        # read: CR 514's cleanup never runs on it, so every "until end of
+        # turn" record the cast left is still on the table and the digests
+        # differ by it alone. With the same standings — both copies over the
+        # same way — what the cast changed bought nothing that lasts: a +0/+0
+        # Wirewood Pride before an attack that was lethal without it read as a
+        # lasting change and was cast (ONS W1G7; seed 11, black, game 6).
+        ended = untouched["table"].is_game_over() and reading["table"].is_game_over()
         fleeting = (
             changed
             and (
                 abs(lasting) < _NO_SWING
                 or (leaves_hand and abs(lasting + CARD_WORTH) < _NO_SWING)
             )
-            and same_position(
+            and (ended or same_position(
                 _lasting_digest(untouched), _lasting_digest(reading),
                 spell_name=returned, caster=seat, spell_zone=zone or "hand",
                 spell_seat=spell_seat,
-            )
+            ))
         )
         if leaves_hand:
             # The card a cast is made with is spent by every cast, so it is

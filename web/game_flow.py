@@ -198,6 +198,8 @@ def _ai_step(session: Session) -> bool:
             # A land's non-mana ability by its index; None (the engine's
             # first) for everything else — see `ai_abilities._abilities_weighed`.
             ability_index=activation_action.ability_index,
+            # The X an "{X}…:" cost announces, when the policy sized one.
+            x_value=activation_action.x_value,
         )
         _auto_resolve_ai_pending(session)
 

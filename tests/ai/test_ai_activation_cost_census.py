@@ -84,8 +84,15 @@ REFUSED_BEFORE = frozenset({
 
 #: …and of those, the ones the rich board *can* pay for, which the gate must
 #: leave proposed: a graveyard to exile from, untapped creatures to tap.
+#:
+#: Zombie Assassin stood here until ONS W2G5. Its cost exiles the Assassin
+#: itself, and an activation that gives up its own source is now proposed
+#: only where a rehearsal says the trade leaves the seat ahead
+#: (`ai_abilities._gives_up_its_source`): a 3/2 for the zoo's small white
+#: creature does not. Not proposed is not refused, which
+#: `test_nothing_proposed_is_refused` still holds it to.
 PAID_ON_THE_RICH_BOARD = frozenset({
-    "Grim Lavamancer", "Bearscape", "Sarcatog", "Zombie Assassin",
+    "Grim Lavamancer", "Bearscape", "Sarcatog",
     "Soul Shepherd", "Necropolis", "Screams of the Damned", "Balduvian Dead",
     "Diversionary Tactics", "Opposition", "Tradewind Rider",
     "Kyren Negotiations", "Symbiotic Deployment", "Volrath's Gardens",

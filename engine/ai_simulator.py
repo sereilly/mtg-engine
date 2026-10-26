@@ -730,7 +730,11 @@ def _assert_expected(
     The decay this *is* exposed to is the decklist moving out from under it — an
     expectation for a card ``_build_deck`` no longer plays stops firing with
     nothing failing. ``tests/ai/test_ai_simulator.py`` holds the two in step.
+
+    A cast naming no seat (Wheel and Deal announced as none) has nothing here.
     """
+    if target_index is None:
+        return None
     before_target = before[target_index]
     after_target = after[target_index]
 
@@ -871,6 +875,7 @@ def _execute_foreign_activation(
         chosen_keyword=action.chosen_keyword,
         ability_index=action.ability_index,
         source_controller_index=action.source_controller_index,
+        x_value=action.x_value,
     )
     _resolve_pending_choices(game)
     report.interaction_count += 1
@@ -1150,6 +1155,7 @@ def _play_activations(
             # (its first is the mana ability the engine would otherwise take);
             # None, the engine's first, for everything else.
             ability_index=activation_action.ability_index,
+            x_value=activation_action.x_value,  # an "{X}…:" cost's, if sized
         )
         _resolve_pending_choices(game)
         report.interaction_count += 1

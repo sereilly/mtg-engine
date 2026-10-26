@@ -519,19 +519,25 @@ def test_a_licid_is_attached_where_its_aura_belongs(set_pool):
     assert not legal_attackers(calming, 1), "the enchanted creature can still attack"
 
 
-def test_an_x_cost_ability_is_not_proposed_and_a_defined_x_does_not_crash(set_pool):
+def test_an_x_cost_ability_is_sized_and_a_defined_x_does_not_crash(set_pool):
     """Two shapes the score below the side read used to ``int("x")`` on:
-    Crimson Hellkite's "{X}, {T}: … X damage" (the chooser announces no X, so
-    it is a tap for nothing and is not proposed), and Torture Chamber's
+    Crimson Hellkite's "{X}, {T}: … X damage" and Torture Chamber's
     "…damage equal to the number of pain counters removed this way" (a
     defined X, scored at the floor and aimed at the opponent). Either one,
-    untapped in a main phase, raised out of the chooser and killed the run."""
+    untapped in a main phase, raised out of the chooser and killed the run.
+
+    The Hellkite was not proposed at all while the chooser announced no X (a
+    tap for nothing). Since ONS W2G5 an X that sizes only the effect is
+    announced, sized by rehearsal (`ai_abilities._sized_x_activation`): X=2,
+    the Bear's toughness, paid in red as "Spend only red mana on X" asks."""
     lea = set_pool("LEA")
     hellkite = _w3g4_board(
         mine=[set_pool("MIR")["Crimson Hellkite"]] + [lea["Mountain"]] * 4,
         theirs=[_mk_creature_card("Their Bear", 2, 2)],
     )
-    assert choose_activation_action(hellkite, 0) is None
+    action = choose_activation_action(hellkite, 0)
+    assert action is not None and action.permanent_name == "Crimson Hellkite"
+    assert action.x_value == 2 and action.land_tap_colors == ("R", "R")
 
     chamber = _w3g4_board(
         mine=[set_pool("TMP")["Torture Chamber"], lea["Mountain"]],

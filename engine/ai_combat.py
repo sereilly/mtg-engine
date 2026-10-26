@@ -138,6 +138,151 @@ def choose_combat_damage_assignment(game) -> tuple[dict, list[int]]:
     )
 
 
+def choose_combat_damage_announcement(game) -> dict:
+    """Everything the active player's attackers announce about their combat
+    damage when nobody is asked, as the keywords
+    ``Game.resolve_all_combat_damage`` / ``resolve_combat_damage`` take:
+    `choose_combat_damage_assignment`'s division and "as though it weren't
+    blocked" answers, and **Butcher Orgg's offer** — "You may assign this
+    creature's combat damage divided as you choose among defending player
+    and/or any number of creatures they control" — where taking it is better
+    (`choose_divided_assignments`). An attacker whose damage is divided that
+    way is taken out of the other two answers (CR 510.1: one creature's
+    combat damage is assigned one way, `divided_announcement_refusal`).
+
+    The one function the three places that supply a default ask — the
+    simulator's driver (`run_ai_combat_phase`), the engine's own auto-resolve
+    (``phases/combat_phase``) and the web layer's AI seat — so the offer is
+    answered one way.
+    """
+    attacker_damage, as_though_unblocked = choose_combat_damage_assignment(game)
+    divided = choose_divided_assignments(game)
+    if divided:
+        slots = {
+            game.battlefield_index_of(game.permanent_by_id(permanent_id))
+            for permanent_id in divided
+        }
+        attacker_damage = {
+            slot: split for slot, split in attacker_damage.items() if slot not in slots
+        }
+        as_though_unblocked = [
+            permanent_id for permanent_id in as_though_unblocked
+            if permanent_id not in divided
+        ]
+    return {
+        "attacker_damage": attacker_damage,
+        "as_though_unblocked": as_though_unblocked,
+        "divided_among_defenders": divided or None,
+    }
+
+
+def choose_divided_assignments(game) -> "dict[int, dict]":
+    """``{attacker permanent_id: division}`` for each of the active player's
+    attackers that may divide its combat damage among the defending player and
+    the creatures they control (Butcher Orgg) and is better off doing so —
+    for a seat nobody asks. A person is asked (``divided_assignments_to_ask``
+    where the client has the dialog); an AI seat took the default, which is
+    the offer declined, for the life of the card (ONS W1G9).
+
+    Each division is `_division_among_defenders`', and only one the engine's
+    gate accepts (`combat_assignment.divided_among_defenders_refusal`) is
+    named — so the announcement is never the reason combat damage is refused.
+    """
+    from .combat_assignment import (divided_among_defenders_refusal,
+                                    may_divide_among_defenders)
+
+    active = game.active_player_index
+    if active in game.interactive_seats:
+        return {}
+    divided: dict[int, dict] = {}
+    for slot in sorted(game.combat_attackers):
+        attacker = game.permanent_at(active, slot)
+        if attacker is None or not may_divide_among_defenders(attacker):
+            continue
+        division = _division_among_defenders(game, slot, attacker)
+        if division is None:
+            continue
+        if divided_among_defenders_refusal(game, slot, attacker, division) is not None:
+            continue
+        divided[attacker.permanent_id] = division
+    return divided
+
+
+def _division_among_defenders(game, attacker_slot: int, attacker) -> "dict | None":
+    """How *attacker* divides its combat damage among the defending player and
+    their creatures, or None to leave it as it would otherwise be assigned.
+
+    **All of it to the player when that ends the game** (with what the
+    unblocked attackers beside it deal). Otherwise each creature the damage
+    can kill — blocking or not, which is the offer's whole point ("You can use
+    the ability to divide damage even if it is not blocked", ruling
+    2004-10-04) — is taken, most worth per point of lethal damage first, while
+    what it is worth (``ai_rehearsal.permanent_worth``) is more than the same
+    damage to the player's face (``ai_rehearsal.life_worth``, which makes the
+    last points dear); whatever is left goes to the player. A creature the
+    damage would not reach (protection, a shield) and a player it would not
+    reach are never named. None where the division is what the attacker would
+    do anyway (an unblocked attacker sending everything to the player), and
+    for an attack on a planeswalker, whose loyalty this has no price for.
+    """
+    from .ai_rehearsal import life_worth, permanent_worth
+    from .combat_assignment import DEFENDING_PLAYER_SHARE
+
+    if game.combat_attacked_planeswalkers.get(attacker_slot) is not None:
+        return None
+    defending = game.combat_attackers.get(attacker_slot)
+    if defending is None or not 0 <= defending < len(game.players):
+        return None
+    damage = combat_damage_assigned_by(attacker)
+    if damage <= 0:
+        return None
+    defender = game.players[defending]
+    active = game.active_player_index
+    face = not _would_be_prevented(game, attacker, defender, damage)
+    beside = sum(
+        combat_damage_assigned_by(other)
+        for slot, seat in game.combat_attackers.items()
+        if slot != attacker_slot and seat == defending
+        and game.combat_attacked_planeswalkers.get(slot) is None
+        and (other := game.permanent_at(active, slot)) is not None
+        and not other.blocked and not game._attacker_all_blockers(slot)
+    )
+    life = defender.life - beside
+    if face and damage >= life:
+        # Unblocked, that is where its damage goes anyway.
+        return {DEFENDING_PLAYER_SHARE: damage} if attacker.blocked else None
+    killable = []
+    for creature in game.controlled_by(defending):
+        if not creature.is_creature:
+            continue
+        lethal = _lethal_from(game, attacker, creature)
+        if lethal <= 0 or _would_be_prevented(game, attacker, creature, lethal):
+            continue
+        killable.append((permanent_worth(creature), lethal, creature))
+    killable.sort(key=lambda entry: (-entry[0] / entry[1], -entry[0]))
+    division: dict = {}
+    left = damage
+    for worth, lethal, creature in killable:
+        if lethal > left:
+            continue
+        to_face = life_worth(life) - life_worth(life - lethal) if face else 0.0
+        if worth <= to_face:
+            continue
+        division[creature.permanent_id] = lethal
+        left -= lethal
+    if left:
+        if face:
+            division[DEFENDING_PLAYER_SHARE] = left
+        elif division:
+            heaviest = max(division, key=lambda key: division[key])
+            division[heaviest] += left
+        else:
+            return None
+    if not attacker.blocked and set(division) == {DEFENDING_PLAYER_SHARE}:
+        return None
+    return division
+
+
 def _would_be_prevented(game, source, recipient, amount: int) -> bool:
     """Whether a prevention or redirection effect applies to *amount* combat
     damage from *source* to *recipient* (CR 615, CR 614.9) — a Circle of
@@ -580,11 +725,8 @@ def run_ai_combat_phase(game, seat: int, *, outcome: CombatOutcome | None = None
             # damage, the *default* division is the engine's own — the same one
             # the web layer's auto-resolve path uses, so an AI-vs-AI game and an
             # unattended human game split damage the same way.
-            attacker_damage, past_blockers = choose_combat_damage_assignment(game)
             game.resolve_all_combat_damage(
-                game.active_player_index,
-                attacker_damage=attacker_damage,
-                as_though_unblocked=past_blockers,
+                game.active_player_index, **choose_combat_damage_announcement(game),
             )
             outcome.manual_damage_splits += 1
             continue

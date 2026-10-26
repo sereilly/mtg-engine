@@ -61,6 +61,7 @@ from .ai_mana_sources import (
     _land_tap_options,
     _nonland_tap_options,
     _land_symbols,
+    tap_cost_mana_activations,
 )
 
 
@@ -94,7 +95,34 @@ def planned_tap_ability(game: Game, land: Permanent, color: str) -> int | None:
     return game.land_mana_ability_for(land, color)
 
 
-def tap_planned_lands(game: Game, seat: int, action):
+def planned_tap_costs(
+    game: Game, seat: int, slots, *, paying_for: "Permanent | None" = None,
+) -> "dict[int, object]":
+    """``{position: activation}`` for each position of a plan's *slots* that
+    names a mana ability paid by tapping other permanents
+    (`ai_mana_sources.tap_cost_mana_activations`): the activations the planner
+    counted, asked again of the same board, handed out in plan order — the
+    k-th time a plan names one source, its k-th activation. Disjoint by
+    construction, so whichever of them a plan used, each taps its own
+    permanents. *paying_for* is the plan's (the permanent whose ability the
+    payment is for), which the planner kept out of every such cost."""
+    waiting: dict[int, list] = {}
+    for activation in tap_cost_mana_activations(game, seat, paying_for=paying_for):
+        waiting.setdefault(id(activation.source), []).append(activation)
+    if not waiting:
+        return {}
+    bound: dict[int, object] = {}
+    for position, slot in enumerate(slots):
+        source = game.permanent_at(seat, slot)
+        queue = waiting.get(id(source)) if source is not None else None
+        if queue:
+            bound[position] = queue.pop(0)
+    return bound
+
+
+def tap_planned_lands(
+    game: Game, seat: int, action, *, paying_for: "Permanent | None" = None,
+):
     """Tap the mana sources *action*'s plan names into *seat*'s pool, each for
     the colour the plan counted on and through the mana ability that makes it
     — and return *action* **as it reads once that is done**.
@@ -124,15 +152,45 @@ def tap_planned_lands(game: Game, seat: int, action):
     before the first tap and read back afterwards (`_bind_action_slots`,
     `_rebound_action`); an executor announces what this returns, never the
     action it handed in. When nothing moved the same object comes back.
+
+    **A mana ability paid by tapping other permanents** (Birchlore Rangers)
+    is activated naming them by id (``cost_permanent_ids``, CR 601.2b), and
+    which ones is bound with everything else before the first tap
+    (`planned_tap_costs`) — the permanents the plan counted, never the
+    engine's board-order default, which taps the first Elves it finds
+    whatever they were about to do. *paying_for* is the permanent whose
+    ability the plan pays for, which the plan kept out of every such cost; an
+    activation's own source is that permanent when it is not given.
     """
     bound = _bind_action_slots(game, seat, action)
     before = _battlefield_order(game)
     planned = [game.permanent_at(seat, index) for index in action.land_tap_indices]
+    if paying_for is None:
+        own = bound.get("source")
+        paying_for = own if own is not None and game.controls(seat, own) else None
+    tap_costs = planned_tap_costs(
+        game, seat, action.land_tap_indices, paying_for=paying_for,
+    )
     for position, land in enumerate(planned):
         permanent_id = game.permanent_id_of(land)
         if permanent_id is None:
             continue
         color = planned_tap_color(action, position)
+        activation = tap_costs.get(position)
+        if activation is not None:
+            slot = game.battlefield_index_of(land)
+            if slot is None:
+                continue
+            game.activate_permanent_ability(
+                seat, land.card.name,
+                permanent_index=slot,
+                ability_index=activation.ability_index,
+                mana_color=color if color in ("W", "U", "B", "R", "G") else None,
+                cost_permanent_ids=[
+                    game.permanent_id_of(tapped) for tapped in activation.tapped
+                ],
+            )
+            continue
         source = _nonland_mana_source(game, seat, land, may_sacrifice=True)
         if source is not None:
             slot = game.battlefield_index_of(land)
@@ -448,7 +506,8 @@ class _ManaSource:
     slot: int
     options: "tuple[_TapOption, ...]"
     #: Reached for in this order: 0 a land, 1 a non-land source that only
-    #: taps, 2 a source that is sacrificed.
+    #: taps, 2 an activation whose cost taps other permanents (Birchlore
+    #: Rangers), 3 a source that is sacrificed.
     rank: int
     #: The symbol it makes unasked — what a generic pip is paid with.
     default: str
@@ -588,13 +647,36 @@ class _PaymentPlanner:
             if source is None:
                 continue
             entry = _ManaSource(
-                slot, _nonland_tap_options(source), 2 if source.sacrifices else 1,
+                slot, _nonland_tap_options(source), 3 if source.sacrifices else 1,
                 source.symbols[0],
             )
             if not source.sacrifices:
                 self.sources.append(entry)
             elif _may_sacrifice_for(self.spell, permanent):
                 self.sacrificed.append(entry)
+        # **Then a mana ability paid for by tapping other permanents** ("Tap
+        # two untapped Elves you control: Add one mana of any color", Birchlore
+        # Rangers): one source per activation the board can pay for, each with
+        # the permanents it taps already chosen (`tap_cost_mana_activations`,
+        # which the executor asks again of the same board). Ranked after every
+        # source that taps only itself — two creatures that will not attack or
+        # block are dearer than one land or one Llanowar Elves.
+        for activation in tap_cost_mana_activations(
+            game, self.seat, paying_for=paying_for,
+        ):
+            slot = next(
+                (
+                    index for index, permanent in enumerate(game.controlled_by(player))
+                    if permanent is activation.source
+                ),
+                None,
+            )
+            if slot is None or slot in without:
+                continue
+            self.sources.append(_ManaSource(
+                slot, _nonland_tap_options(activation.made), 2,
+                activation.made.symbols[0],
+            ))
         # The order the matching reaches for them in: lands before non-lands,
         # and within each the source with the fewest colours to offer first —
         # a Forest pays the {G} and the Taiga beside it is still there for

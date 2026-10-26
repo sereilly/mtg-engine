@@ -43,8 +43,10 @@ method, and the census test fails the day one does not.
 
 **The plan is the AI's** (``ai_payment._PaymentPlanner``): the exact matching
 (``mana_payment.plan_payment``) over what each land's tap makes through the
-tap seam (``board_payment.land_tap_yields``) and every non-land source whose
-whole cost is {T}, with the colour to ask each for. One planner and two
+tap seam (``board_payment.land_tap_yields``), every non-land source whose
+whole cost is {T}, and every mana ability whose cost taps other permanents
+(Birchlore Rangers — the ones it taps are named in the preview, as
+``cost_taps``), with the colour to ask each for. One planner and two
 payers, so a board the AI seat taps correctly is one a person's auto-tap
 does. **Never a source that is sacrificed**: the AI weighs giving up a Black
 Lotus and a button labelled "Auto-Tap" does not make that choice for a
@@ -70,7 +72,9 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from types import SimpleNamespace
 
-from engine.ai_payment import _PaymentPlanner, _paying_for, tap_planned_lands
+from engine.ai_payment import (
+    _PaymentPlanner, _paying_for, planned_tap_costs, tap_planned_lands,
+)
 from engine.ai_rehearsal import mid_resolution, scratch_copy
 from engine.models import Permanent
 from engine.restricted_mana import CAST
@@ -134,6 +138,18 @@ def unpaid_costs(game, announce):
     return result, asked
 
 
+def _paid_for(game, purpose):
+    """The permanent whose ability a payment of *purpose* is for, on *game* —
+    None for a cast. The purpose was noted on the scratch copy; the plan is
+    drawn, and the taps made, on the game."""
+    if purpose is None or purpose.kind == CAST:
+        return None
+    source = getattr(purpose, "source", None)
+    if isinstance(source, Permanent):
+        return game.permanent_by_id(source.permanent_id)
+    return source
+
+
 def planned_taps(game, seat: int, required: dict, purpose):
     """``(slots, colours)`` in tap order for a payment of *required*, or None
     when what *seat* could tap does not pay it. Read-only."""
@@ -142,11 +158,7 @@ def planned_taps(game, seat: int, required: dict, purpose):
         with _paying_for(purpose.card):
             planner = _PaymentPlanner(game, player)
     else:
-        source = getattr(purpose, "source", None)
-        if isinstance(source, Permanent):
-            # The purpose was noted on the copy; the plan is drawn on the game.
-            source = game.permanent_by_id(source.permanent_id)
-        planner = _PaymentPlanner(game, player, paying_for=source)
+        planner = _PaymentPlanner(game, player, paying_for=_paid_for(game, purpose))
     # A person's auto-tap never gives a permanent up (see the module's note).
     planner.sacrificed = []
     found = planner.plan(required)
@@ -175,20 +187,29 @@ def _sparing(planner, required: dict, found):
     return found
 
 
-def _describe(game, seat: int, slots, colours) -> list[dict]:
+def _describe(game, seat: int, slots, colours, *, paying_for=None) -> list[dict]:
     """The plan as the client is shown it: each permanent by its stable id,
-    with the colour it will be asked for."""
+    with the colour it will be asked for — and, for a mana ability paid by
+    tapping other permanents (Birchlore Rangers), the ones its cost taps
+    (``cost_taps``), the same ones ``tap_planned_lands`` will tap."""
+    costs = planned_tap_costs(game, seat, slots, paying_for=paying_for)
     described = []
-    for slot, colour in zip(slots, colours):
+    for position, (slot, colour) in enumerate(zip(slots, colours)):
         permanent = game.permanent_at(seat, slot)
         if permanent is None:
             continue
-        described.append({
+        entry = {
             "id": permanent.permanent_id,
             "name": permanent.card.name,
             "mana_color": colour,
             "land": bool(permanent.has_type("land")),
-        })
+        }
+        if position in costs:
+            entry["cost_taps"] = [
+                {"id": tapped.permanent_id, "name": tapped.card.name}
+                for tapped in costs[position].tapped
+            ]
+        described.append(entry)
     return described
 
 
@@ -217,10 +238,12 @@ def pay_from_board(game, seat: int, announce) -> None:
     else:
         return
     slots, colours = found
-    taps = _describe(game, seat, slots, colours)
+    paying_for = _paid_for(game, purpose)
+    taps = _describe(game, seat, slots, colours, paying_for=paying_for)
     tap_planned_lands(
         game, seat,
         SimpleNamespace(land_tap_indices=tuple(slots), land_tap_colors=tuple(colours)),
+        paying_for=paying_for,
     )
     if sink is not None:
         sink["cost"] = dict(required)

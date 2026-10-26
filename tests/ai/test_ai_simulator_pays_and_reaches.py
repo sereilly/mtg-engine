@@ -33,16 +33,13 @@ _RUNS = [
     )),
 ]
 
-#: A run seeded otherwise than 1337, and why. Lone Wolf's walk past its
-#: blocker came, on seed 1337, under its own controller's Fog — cast in its
-#: precombat main phase, the one cast a precombat rehearsal now plays the
-#: fight through and holds — where the damage reached neither the player nor
-#: the blockers and the chooser had nothing to decline for. With the Fog
-#: held, that Wolf attacks into two 1/1s and kills both, which is the other
-#: answer. Seed 3 reaches the walk where it is the game: blocked, with the
-#: defending player at five.
+#: A run seeded otherwise than 1337, and why. Lone Wolf ran on seed 3 from
+#: the precombat-Fog round (where seed 1337's walk came under its own
+#: controller's Fog) until ONS W2G5, when an activation that gives up its
+#: source began to be rehearsed: seed 3's first game diverges at G1 T7, where
+#: Scavenger Folk is no longer sacrificed for the opponent's Iron Star, and no
+#: longer reaches the kept damage. Seed 1337 reaches both answers again.
 _SEEDS = {
-    "Lone Wolf": 3,
     # Round 4 gave both seats priority outside their own main phases, and
     # seed 1337's first two ICE games no longer reach the Bottle's card (the
     # third does, ten times over). Seed 7 reaches it in two games, nine times.

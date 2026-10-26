@@ -169,6 +169,11 @@ class ActivationAction:
     # (`Game.announced_chosen_keyword`); the policy names one when the default's
     # walk has no chain on the boards it wants (`ai_abilities._keyword_walk_order`).
     chosen_keyword: str | None = None
+    # The X an "{X}{G}{G}: …" cost announces (CR 107.3a via CR 602.2b), sized
+    # by rehearsal (`ai_abilities._sized_x_activation`). None for an ability
+    # whose cost prints no {X} — every action this policy made before it
+    # announced one, since an ability with {X} in its cost was not proposed.
+    x_value: int | None = None
 
 
 @dataclass(frozen=True)

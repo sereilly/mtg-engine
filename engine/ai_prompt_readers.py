@@ -384,10 +384,11 @@ class OfferTrade:
     weigh — see :func:`offer_trade`."""
 
     #: "card" — a card out of the taker's own hand; "draw" — the taker's own
-    #: draw step.
+    #: draw step; "source" — the offer's own source, sacrificed.
     price: str
     #: "untap_source" — the offer's own source untaps; "land_card" — a land
-    #: card searched out of the taker's library.
+    #: card searched out of the taker's library; "target_permanent" — control
+    #: of the permanent the ability targets, for good.
     purchase: str
 
 
@@ -437,6 +438,15 @@ def offer_trade(steps) -> OfferTrade | None:
         )
     ):
         return OfferTrade(price="draw", purchase="land_card")
+    # "…you may sacrifice it. If you do, gain control of target creature that
+    # player controls." (Riptide Entrancer.) The price is the source and the
+    # purchase the trigger's target, both permanents a standing prices — so
+    # the "make no trades" default that declined it every time it connected
+    # (ONS W1G10; nine declines in one seeded game) is a weighing instead.
+    if leading.kind == "sacrifice_self" and all(
+        step.kind == "gain_control_of_target" for step in rest
+    ):
+        return OfferTrade(price="source", purchase="target_permanent")
     return None
 
 

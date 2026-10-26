@@ -673,10 +673,30 @@ def offer_trade_is_worth_taking(
       *payable* by a seat nobody asks: the pick behind the offer defaults to
       no card, and "If you do, untap this land" then untaps it regardless, so
       taking the offer here would be a free untap rather than a trade.
+    * **The source for the permanent it targets** (Riptide Entrancer's "you
+      may sacrifice it. If you do, gain control of target creature that
+      player controls"): taken when what changes sides is worth more than
+      what is sacrificed — the target counted twice, once off the opponent's
+      standing and once onto the seat's (``ai_rehearsal.permanent_worth``,
+      read as the board will be once the turn is over) — and never for a
+      target the seat already controls or that has gone.
     """
     trade = offer_trade(entry.get("_on_accept") or ())
     if trade is None:
         return None
+    if (trade.price, trade.purchase) == ("source", "target_permanent"):
+        from .ai_prompt_readers import _offer_target_permanent
+        from .ai_rehearsal import permanent_worth
+
+        target = _offer_target_permanent(game, entry.get("_context"))
+        if target is None or game.controller_index_of(target) in (None, player_index):
+            return False
+        source = entry.get("_source_permanent")
+        spent = (
+            permanent_worth(source, now=False)
+            if source is not None and game.is_on_battlefield(source) else 0.0
+        )
+        return 2.0 * permanent_worth(target, now=False) > spent
     player = game.players[player_index]
     if (trade.price, trade.purchase) == ("draw", "land_card"):
         lands = sum(

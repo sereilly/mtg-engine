@@ -542,15 +542,14 @@ class CombatPhaseMixin:
             # is supplied (here, `ai_combat.run_ai_combat_phase` and the web
             # layer's `_ai_assign_combat_damage`), so they cannot answer the
             # offer differently.
-            from ..ai_combat import choose_combat_damage_assignment
+            from ..ai_combat import choose_combat_damage_announcement
 
-            auto, past_blockers = choose_combat_damage_assignment(self)
+            # …and Butcher Orgg's division among defending player and their
+            # creatures, where a seat nobody asks takes it.
+            announced = choose_combat_damage_announcement(self)
 
             def deal_the_damage() -> None:
-                self.resolve_all_combat_damage(
-                    self.active_player_index, attacker_damage=auto,
-                    as_though_unblocked=past_blockers,
-                )
+                self.resolve_all_combat_damage(self.active_player_index, **announced)
 
             def leave_the_damage_step() -> None:
                 if not allow_damage_skip:
