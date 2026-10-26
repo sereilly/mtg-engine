@@ -516,6 +516,14 @@ def _host_criterion_filter(noun: str, criterion: str) -> dict | None:
             return None
         return described.to_payload()
 
+    # "As long as enchanted creature **is a Wizard**, …" (Lavamancer's Skill.)
+    # The predicate nominative's article is English, not a narrowing: "is a
+    # Wizard" abbreviates "is a Wizard creature", and the phrase the noun
+    # parser reads is "Wizard creature". Dropped only in front of a further
+    # word, so a bare "is a" still reaches the parser and refuses.
+    words = criterion.split()
+    if len(words) > 1 and words[0] in ("a", "an"):
+        criterion = " ".join(words[1:])
     bare = _described(noun)
     narrowed = _described(f"{criterion} {noun}")
     if bare is None or narrowed is None or narrowed == bare:

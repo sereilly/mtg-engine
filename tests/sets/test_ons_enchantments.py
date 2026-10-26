@@ -568,6 +568,128 @@ def test_w1g7_elvish_guidance_counts_toward_the_planned_payment(set_pool):
 
 # ==== W1G8 ==========================================================
 # W1G8's tests go between this line and the "end W1G8" line.
+#
+# Lavamancer's Skill: an Aura's quoted grant, and a second one behind "as long
+# as enchanted creature is a Wizard". Both are derived from the Aura on every
+# read (``aura_grants``), so they leave with it and the second follows the
+# host's type through layer 4.
+
+from engine import Game as _w1g8_Game, PlayerState as _w1g8_PlayerState
+from engine.models import Permanent as _w1g8_Permanent
+from engine.oracle import compile_card_oracle as _w1g8_compile
+from engine.targeting import (
+    usable_activated_abilities as _w1g8_usable_abilities,
+)
+from engine.type_changes import (
+    end_type_changes as _w1g8_end_type_changes, gain_types as _w1g8_gain_types,
+)
+from tests.helpers import _nosick as _w1g8_nosick, resolve_stack as _w1g8_resolve
+
+
+def _w1g8_pinger_lines(game, host):
+    """The host's activated lines that deal damage, as it says them now."""
+    game._recompute_continuous_effects()
+    return [
+        ability.source_line.lower()
+        for ability in _w1g8_usable_abilities(_w1g8_compile(host.effective_card))
+        if "damage" in ability.source_line.lower()
+    ]
+
+
+def _w1g8_ping(game, host, victim, amount):
+    """Activate the host's "deals *amount* damage" line at *victim*."""
+    abilities = _w1g8_usable_abilities(_w1g8_compile(host.effective_card))
+    (index,) = [
+        i for i, ability in enumerate(abilities)
+        if f"deals {amount} damage" in ability.source_line.lower()
+    ]
+    result = game.activate_permanent_ability(
+        game.controller_index_of(host), host.card.name, ability_index=index,
+        target_player_index=game.controller_index_of(victim),
+        target_permanent_ids=[victim.permanent_id],
+    )
+    assert result.supported, result.details
+    _w1g8_resolve(game)
+
+
+def test_w1g8_lavamancers_skill_grants_a_one_damage_pinger(set_pool):
+    """'Enchanted creature has "{T}: This creature deals 1 damage to target
+    creature."' Cast on a creature through the real cast path: its
+    controller can activate the line, the damage is the host's, and the
+    ability leaves with the Aura."""
+    pool = set_pool("ONS")
+    seeker = _w1g8_nosick(_w1g8_Permanent(card=pool["Glory Seeker"]))
+    victim = _w1g8_nosick(_w1g8_Permanent(card=pool["Glory Seeker"]))
+    one = _w1g8_PlayerState(
+        name="P1", battlefield=[seeker], hand=[pool["Lavamancer's Skill"]],
+    )
+    two = _w1g8_PlayerState(name="P2", battlefield=[victim])
+    game = _w1g8_Game(players=[one, two])
+    game.enforce_mana_costs = False
+    game._settle()
+    assert _w1g8_pinger_lines(game, seeker) == []
+
+    result = game.cast_from_hand(
+        0, "Lavamancer's Skill", target_permanent_ids=[seeker.permanent_id],
+    )
+    assert result.supported, result.details
+    _w1g8_resolve(game)
+    (skill,) = [p for p in game.controlled_by(0) if p.card.name == "Lavamancer's Skill"]
+    assert _w1g8_pinger_lines(game, seeker) == [
+        "{t}: this creature deals 1 damage to target creature."
+    ], "a Glory Seeker is no Wizard: one ability, not two"
+
+    _w1g8_ping(game, seeker, victim, 1)
+    assert victim.damage_marked == 1 and seeker.tapped
+    assert any("Glory Seeker" in line and "1 damage" in line for line in game.log)
+
+    game.remove_from_battlefield(skill)
+    game._settle()
+    assert _w1g8_pinger_lines(game, seeker) == []
+
+
+def test_w1g8_lavamancers_skill_on_a_wizard_has_both_abilities(set_pool):
+    """'As long as enchanted creature is a Wizard, it has "{T}: This creature
+    deals 2 damage to target creature."' The ruling (2004-10-04): "If this
+    card enchants a Wizard, the Wizard has both abilities and its controller
+    can use either one." The criterion is read through layer 4, so a creature
+    that *became* a Wizard has the second line — and loses it when the type
+    change ends."""
+    pool = set_pool("ONS")
+    seeker = _w1g8_nosick(_w1g8_Permanent(card=pool["Glory Seeker"]))
+    victim = _w1g8_nosick(_w1g8_Permanent(card=pool["Glory Seeker"]))
+    one = _w1g8_PlayerState(
+        name="P1", battlefield=[seeker], hand=[pool["Lavamancer's Skill"]],
+    )
+    two = _w1g8_PlayerState(name="P2", battlefield=[victim])
+    game = _w1g8_Game(players=[one, two])
+    game.enforce_mana_costs = False
+    game._settle()
+    _w1g8_gain_types(
+        seeker, subtypes=["wizard"], source="test", duration="until_end_of_turn",
+        replaces_creature_types=True,
+    )
+    assert game.cast_from_hand(
+        0, "Lavamancer's Skill", target_permanent_ids=[seeker.permanent_id],
+    ).supported
+    _w1g8_resolve(game)
+    assert sorted(_w1g8_pinger_lines(game, seeker)) == [
+        "{t}: this creature deals 1 damage to target creature.",
+        "{t}: this creature deals 2 damage to target creature.",
+    ]
+
+    _w1g8_ping(game, seeker, victim, 2)
+    assert not game.is_on_battlefield(victim), "2 damage kills the 2/2"
+
+    # The type change ends (the cleanup step's sweep, by its duration): no
+    # longer a Wizard, one line left.
+    _w1g8_end_type_changes(
+        seeker, lambda record: record.get("duration") == "until_end_of_turn"
+    )
+    assert not seeker.has_type("wizard")
+    assert _w1g8_pinger_lines(game, seeker) == [
+        "{t}: this creature deals 1 damage to target creature."
+    ]
 
 # ==== end W1G8 ======================================================
 
