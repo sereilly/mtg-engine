@@ -587,6 +587,361 @@ def test_w1g7_elvish_guidance_counts_toward_the_planned_payment(set_pool):
 # ==== W1G11 ==========================================================
 # W1G11's tests go between this line and the "end W1G11" line.
 
+# The Words: "{1}: The next time you would draw a card this turn, <effect>
+# instead." — Mangara's Tome's armed one-shot with "instead" printed behind
+# the effect (`grammar/statements.py`), each activation its own CR 616.1
+# candidate at the draw (`replacements/draws._armed_draw_instances`), so the
+# drawing player chooses which Word each draw spends (the Words' ruling,
+# 2004-10-04). Every test arms through `activate_permanent_ability` and draws
+# through the one draw seam, `Game._draw_with_replacements`. And Future
+# Sight: the top card revealed (CR 400.2) and played from (CR 601.3, CR
+# 305.1) — `engine/library_top.py`.
+
+from engine import Game as _W1G11Game, PlayerState as _W1G11PlayerState
+from engine.cast_permissions import playable_from_zones as _w1g11_playable_from_zones
+from engine.library_top import top_is_public as _w1g11_top_is_public
+from engine.models import Permanent as _W1G11Permanent
+from engine.oracle import compile_card_oracle as _w1g11_compile
+from engine.targeting import derive_activation_spec as _w1g11_activation_spec
+from tests.helpers import resolve_stack as _w1g11_resolve_stack
+
+
+def _w1g11_table(set_pool, *, hand=(), library=None, interactive=(), enforce=False):
+    """Alice (seat 0, active) and Bob, each with a library of basics."""
+    ons = set_pool("ONS")
+    alice = _W1G11PlayerState(
+        name="Alice",
+        library=list(library) if library is not None else [ons["Island"]] * 6,
+        hand=[ons[name] for name in hand],
+    )
+    bob = _W1G11PlayerState(
+        name="Bob", library=[ons["Mountain"]] * 6,
+        hand=[ons["Swamp"], ons["Forest"], ons["Island"]],
+    )
+    game = _W1G11Game(players=[alice, bob])
+    game.enforce_mana_costs = enforce
+    game.interactive_seats = set(interactive)
+    game.active_player_index = 0
+    return game
+
+
+def _w1g11_put(game, seat, card):
+    permanent = _W1G11Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    game._sync_control()
+    return permanent
+
+
+def _w1g11_arm(game, name, **announcement):
+    """Activate the Word *name* for seat 0 and resolve the activation."""
+    result = game.activate_permanent_ability(0, name, **announcement)
+    assert result.supported, result.details
+    _w1g11_resolve_stack(game)
+
+
+def test_w1g11_two_words_replace_two_draws_and_the_third_is_drawn(set_pool):
+    """Words of Worship twice, then a three-card draw: CR 121.2 makes it three
+    draws, the first two are each replaced by 5 life (each activation is its
+    own effect, CR 614.1 — and nothing is drawn for them, CR 121.6), and the
+    third is an ordinary draw."""
+    ons = set_pool("ONS")
+    game = _w1g11_table(set_pool)
+    _w1g11_put(game, 0, ons["Words of Worship"])
+    _w1g11_arm(game, "Words of Worship")
+    _w1g11_arm(game, "Words of Worship")
+    alice = game.players[0]
+
+    drawn = game._draw_with_replacements(alice, 3)
+
+    assert alice.life == 30
+    assert drawn == 1 and len(alice.hand) == 1
+    assert game.armed_draw_replacements == []
+    assert sum("gained 5 life from Words of Worship" in line for line in game.log) == 2
+
+
+def test_w1g11_the_drawing_player_chooses_which_word_each_draw_spends(set_pool):
+    """"If multiple Words have been used prior to drawing a card, then you can
+    choose which one to apply (and use up) each time you draw a card." (Each
+    Word, 2004-10-04.) Worship then War armed; Alice draws two and is asked
+    (CR 616.1e's ``effect_order``) — she spends War first, oldest-first
+    notwithstanding, so Bob takes 2 before Alice gains her 5 on the second
+    draw, which is no longer contested and is not asked."""
+    ons = set_pool("ONS")
+    game = _w1g11_table(set_pool, interactive={0, 1})
+    _w1g11_put(game, 0, ons["Words of Worship"])
+    _w1g11_put(game, 0, ons["Words of War"])
+    _w1g11_arm(game, "Words of Worship")
+    _w1g11_arm(game, "Words of War", target_player_index=1)
+    alice, bob = game.players
+
+    assert game._draw_with_replacements(alice, 2) == 0
+    offer = game.pending_choice_of("effect_order", 0)
+    assert offer is not None
+    options = offer.data["options"]
+    assert options == ["Words of Worship", "Words of War (at Bob)"]
+    assert (alice.life, bob.life, len(alice.hand)) == (20, 20, 0), "nothing yet"
+
+    assert game.resolve_pending_choice(
+        "effect_order", 0, option_index=options.index("Words of War (at Bob)")
+    )
+
+    assert game.pending_choice_of("effect_order", 0) is None
+    assert (alice.life, bob.life) == (25, 18)
+    assert len(alice.hand) == 0, "both draws were replaced"
+    war_at = next(i for i, line in enumerate(game.log) if "Words of War dealt 2" in line)
+    worship_at = next(
+        i for i, line in enumerate(game.log)
+        if "gained 5 life from Words of Worship" in line
+    )
+    assert war_at < worship_at
+
+
+def test_w1g11_two_equal_words_are_one_choice_and_a_headless_seat_spends_oldest(set_pool):
+    """Two Words of Worship are the same option twice, so the drawing player is
+    not asked between them; a seat nobody asks spends Worship (armed first)
+    before War, CR 616.1e's default."""
+    ons = set_pool("ONS")
+    game = _w1g11_table(set_pool, interactive={0})
+    _w1g11_put(game, 0, ons["Words of Worship"])
+    _w1g11_arm(game, "Words of Worship")
+    _w1g11_arm(game, "Words of Worship")
+    game._draw_with_replacements(game.players[0], 1)
+    assert game.pending_choice_of("effect_order", 0) is None
+    assert game.players[0].life == 25 and len(game.armed_draw_replacements) == 1
+
+    headless = _w1g11_table(set_pool)
+    _w1g11_put(headless, 0, ons["Words of Worship"])
+    _w1g11_put(headless, 0, ons["Words of War"])
+    _w1g11_arm(headless, "Words of Worship")
+    _w1g11_arm(headless, "Words of War", target_player_index=1)
+    headless._draw_with_replacements(headless.players[0], 1)
+    assert (headless.players[0].life, headless.players[1].life) == (25, 20)
+
+
+def test_w1g11_a_word_armed_on_an_opponents_turn_replaces_none_of_their_draws(set_pool):
+    """"The next time **you** would draw": the effect is its controller's
+    (CR 109.5). Armed during Bob's turn, Bob's draw is a draw; Alice's next
+    draw that turn is the one replaced."""
+    ons = set_pool("ONS")
+    game = _w1g11_table(set_pool)
+    _w1g11_put(game, 0, ons["Words of Worship"])
+    game.active_player_index = 1
+    _w1g11_arm(game, "Words of Worship")
+    alice, bob = game.players
+
+    game._draw_with_replacements(bob, 1)
+    assert len(bob.hand) == 4 and alice.life == 20
+    game._draw_with_replacements(alice, 1)
+    assert alice.life == 25 and len(alice.hand) == 0
+
+
+def test_w1g11_an_armed_word_ends_with_the_turn(set_pool):
+    """"…this turn": an unspent Word is gone at the next turn's start, and the
+    next draw Alice makes is a draw."""
+    ons = set_pool("ONS")
+    game = _w1g11_table(set_pool)
+    _w1g11_put(game, 0, ons["Words of Worship"])
+    _w1g11_arm(game, "Words of Worship")
+    assert len(game.armed_draw_replacements) == 1
+
+    game.begin_turn_bookkeeping(1)
+
+    assert game.armed_draw_replacements == []
+    game._draw_with_replacements(game.players[0], 1)
+    assert game.players[0].life == 20 and len(game.players[0].hand) == 1
+
+
+def test_w1g11_words_of_war_damages_the_target_announced_with_the_activation(set_pool):
+    """CR 115.1c: the ability prints "any target", so its target is chosen as
+    it is activated — the picker offers one — and the damage at the draw is
+    dealt to that target, by the enchantment (CR 120.7): Bob's 1/1 dies, and
+    the drawing player is not hit."""
+    ons = set_pool("ONS")
+    war = ons["Words of War"]
+    (ability,) = _w1g11_compile(war).activated_abilities
+    assert _w1g11_activation_spec(ability) == {"kind": "any"}
+
+    game = _w1g11_table(set_pool)
+    _w1g11_put(game, 0, war)
+    pioneer = _w1g11_put(game, 1, ons["Elvish Pioneer"])
+    _w1g11_arm(game, "Words of War", target_permanent_ids=[pioneer.permanent_id])
+    assert game.is_on_battlefield(pioneer), "nothing is dealt until the draw"
+
+    game._draw_with_replacements(game.players[0], 1)
+    assert "Words of War dealt 2 damage to Elvish Pioneer" in game.log
+    game.check_state_based_actions()  # CR 704.3: the draw was made outside a step
+
+    assert not game.is_on_battlefield(pioneer)
+    assert "Elvish Pioneer" in [card.name for card in game.players[1].graveyard]
+    assert game.players[0].life == 20 and len(game.players[0].hand) == 0
+
+
+def test_w1g11_words_of_war_whose_target_left_still_replaces_the_draw(set_pool):
+    """CR 614.6: the modified event's damage cannot be dealt to a creature
+    that has gone, and is ignored — the draw is still replaced, and nobody
+    else takes the 2."""
+    ons = set_pool("ONS")
+    game = _w1g11_table(set_pool)
+    _w1g11_put(game, 0, ons["Words of War"])
+    pioneer = _w1g11_put(game, 1, ons["Elvish Pioneer"])
+    _w1g11_arm(game, "Words of War", target_permanent_ids=[pioneer.permanent_id])
+    game.remove_from_battlefield(pioneer)
+
+    assert game._draw_with_replacements(game.players[0], 1) == 0
+
+    assert (game.players[0].life, game.players[1].life) == (20, 20)
+    assert len(game.players[0].hand) == 0
+    assert game.armed_draw_replacements == []
+
+
+def test_w1g11_words_of_wind_asks_each_player_in_turn_and_the_next_draw_waits(set_pool):
+    """"…each player returns a permanent they control to its owner's hand
+    instead." Each player chooses, one at a time in APNAP order (CR 101.4b: a
+    player knows the choices made before theirs) — Bob's prompt is armed only
+    once Alice has answered — and the second card of Alice's two-card draw
+    waits for the last answer (CR 614.11a)."""
+    ons = set_pool("ONS")
+    game = _w1g11_table(set_pool, interactive={0, 1})
+    _w1g11_put(game, 0, ons["Words of Wind"])
+    plains = _w1g11_put(game, 0, ons["Plains"])
+    _w1g11_put(game, 1, ons["Mountain"])
+    island = _w1g11_put(game, 1, ons["Island"])
+    _w1g11_arm(game, "Words of Wind")
+    alice, bob = game.players
+
+    assert game._draw_with_replacements(alice, 2) == 0
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("permanent_set_choice", 0)
+    ]
+    assert game.resolve_pending_choice(
+        "permanent_set_choice", 0, permanent_ids=[plains.permanent_id]
+    )
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("permanent_set_choice", 1)
+    ]
+    assert len(alice.hand) == 0, "the second draw waits on Bob"
+    assert game.resolve_pending_choice(
+        "permanent_set_choice", 1, permanent_ids=[island.permanent_id]
+    )
+
+    assert [p.card.name for p in game.controlled_by(0)] == ["Words of Wind"]
+    assert [p.card.name for p in game.controlled_by(1)] == ["Mountain"]
+    assert [card.name for card in alice.hand] == ["Plains", "Island"]
+    assert "Island" in [card.name for card in bob.hand]
+
+
+def test_w1g11_words_of_waste_makes_each_opponent_discard_before_the_next_draw(set_pool):
+    """"…each opponent discards a card instead." W1G13's each-seat discard,
+    asked of Bob inside Alice's draw: her second card is drawn only once Bob
+    has discarded."""
+    ons = set_pool("ONS")
+    game = _w1g11_table(set_pool, interactive={0, 1})
+    _w1g11_put(game, 0, ons["Words of Waste"])
+    _w1g11_arm(game, "Words of Waste")
+    alice, bob = game.players
+
+    game._draw_with_replacements(alice, 2)
+    assert game.pending_choice_of("discard", 1) is not None
+    assert len(alice.hand) == 0
+
+    game.auto_resolve_pending_choices()
+
+    assert len(bob.hand) == 2 and len(bob.graveyard) == 1
+    assert len(alice.hand) == 1
+    assert game.pending_choices == []
+
+
+def test_w1g11_words_of_wilding_makes_a_bear_instead_of_the_draw(set_pool):
+    ons = set_pool("ONS")
+    game = _w1g11_table(set_pool)
+    _w1g11_put(game, 0, ons["Words of Wilding"])
+    _w1g11_arm(game, "Words of Wilding")
+
+    game._draw_with_replacements(game.players[0], 1)
+
+    (bear,) = [p for p in game.controlled_by(0) if p.is_creature]
+    assert bear.card.name == "Bear Token" and bear.card.colors == ("G",)
+    assert (bear.effective_power, bear.effective_toughness) == (2, 2)
+    assert bear.has_type("bear")
+    assert len(game.players[0].hand) == 0
+
+
+def test_w1g11_a_cycled_cards_draw_meets_a_word(set_pool):
+    """W1G3's cycle event and a Word: Renewed Faith is cycled (its discard is
+    the cost, CR 702.29a), its "when you cycle" trigger still fires — the
+    cycling happened — and the draw the cycling ability makes is the one
+    Words of Worship replaces (CR 121.6)."""
+    ons = set_pool("ONS")
+    game = _w1g11_table(set_pool, hand=["Renewed Faith"])
+    _w1g11_put(game, 0, ons["Words of Worship"])
+    _w1g11_arm(game, "Words of Worship")
+    alice = game.players[0]
+
+    assert game.activate_from_hand(0, "Renewed Faith").supported
+    assert any("cycled Renewed Faith" in line for line in game.log)
+    assert game.stack[-1].ability_text.startswith("When you cycle this card")
+    _w1g11_resolve_stack(game)
+
+    assert alice.hand == [] and [c.name for c in alice.graveyard] == ["Renewed Faith"]
+    assert any("gained 5 life from Words of Worship" in line for line in game.log)
+    assert any("Renewed Faith drew 0 card" in line for line in game.log)
+    assert game.armed_draw_replacements == []
+
+
+def test_w1g11_future_sight_reveals_the_top_card_to_everyone(set_pool):
+    """"Play with the top card of your library revealed." Public (CR 400.2):
+    for its controller's library, and only while it stands."""
+    ons = set_pool("ONS")
+    game = _w1g11_table(set_pool)
+    sight = _w1g11_put(game, 0, ons["Future Sight"])
+    assert _w1g11_top_is_public(game, 0) and not _w1g11_top_is_public(game, 1)
+    game.remove_from_battlefield(sight)
+    assert not _w1g11_top_is_public(game, 0)
+
+
+def test_w1g11_future_sight_casts_and_plays_from_the_top_at_the_normal_price(set_pool):
+    """"You may play lands and cast spells from the top of your library."
+    Shock is cast off the top for its mana cost (2019-06-14: "pay its costs"),
+    the Mountain under it is played as the turn's land drop, and the Plains
+    under that cannot be — "you may play that land only if you have any
+    available land plays" (2019-06-14)."""
+    ons = set_pool("ONS")
+    game = _w1g11_table(
+        set_pool, enforce=True,
+        library=[ons["Shock"], ons["Mountain"], ons["Plains"], ons["Island"]],
+    )
+    _w1g11_put(game, 0, ons["Future Sight"])
+    assert _w1g11_playable_from_zones(game, 0)[0]["name"] == "Shock"
+
+    unpaid = game.cast_from_hand(0, "Shock", from_zone="library", target_player_index=1)
+    assert not unpaid.supported, "the top card is cast at its own price"
+    game.players[0].mana_pool["R"] = 1
+    shock = game.cast_from_hand(0, "Shock", from_zone="library", target_player_index=1)
+    assert shock.supported, shock.details
+    _w1g11_resolve_stack(game)
+    assert game.players[1].life == 18
+    assert game.players[0].library[0].name == "Mountain"
+
+    assert game.cast_from_hand(0, "Mountain", from_zone="library").supported
+    refused = game.cast_from_hand(0, "Plains", from_zone="library")
+    assert not refused.supported and "already played a land" in refused.details
+    assert [p.card.name for p in game.controlled_by(0)] == ["Future Sight", "Mountain"]
+    assert game.players[0].library[0].name == "Plains"
+
+
+def test_w1g11_future_sights_top_card_is_not_in_a_hand(set_pool):
+    """"The top card of your library isn't in your hand, so you can't … cycle
+    it" (2019-06-14). A cycler on top is castable as a spell and is not
+    cyclable."""
+    ons = set_pool("ONS")
+    game = _w1g11_table(set_pool, library=[ons["Renewed Faith"], ons["Island"]])
+    _w1g11_put(game, 0, ons["Future Sight"])
+
+    assert not game.activate_from_hand(0, "Renewed Faith").supported
+    assert game.players[0].library[0].name == "Renewed Faith"
+    assert _w1g11_playable_from_zones(game, 0)[0]["name"] == "Renewed Faith"
+
 # ==== end W1G11 ======================================================
 
 

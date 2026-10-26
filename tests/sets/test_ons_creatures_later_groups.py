@@ -815,6 +815,69 @@ def test_w1g7_gangrenous_goliath_taps_three_clerics_from_the_graveyard(set_pool)
 # ==== W1G11 ==========================================================
 # W1G11's tests go between this line and the "end W1G11" line.
 
+# Weathered Wayfarer's "Activate only if an opponent controls more lands than
+# you." — a row of `engine/activation_restrictions.py` reading the clause
+# through the grammar's condition reader (Land Tax's and Tithe's words) and
+# answering it with their evaluator, asked before any cost (CR 602.5).
+
+from engine import Game as _W1G11Game, PlayerState as _W1G11PlayerState
+from engine.activation_restrictions import (
+    activation_restriction_line as _w1g11_restriction_line,
+)
+from engine.models import Permanent as _W1G11Permanent
+from tests.helpers import resolve_stack as _w1g11_resolve_stack
+
+
+def _w1g11_wayfarer_table(set_pool, *, their_lands=0, my_lands=0):
+    ons = set_pool("ONS")
+    alice = _W1G11PlayerState(
+        name="Alice", library=[ons["Island"], ons["Plains"], ons["Shock"]],
+    )
+    bob = _W1G11PlayerState(name="Bob", library=[ons["Mountain"]] * 3)
+    game = _W1G11Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.active_player_index = 0
+    for seat, count, land in ((0, my_lands, "Plains"), (1, their_lands, "Mountain")):
+        for _ in range(count):
+            game._put_permanent_onto_battlefield(seat, _W1G11Permanent(card=ons[land]), None)
+    wayfarer = _W1G11Permanent(card=ons["Weathered Wayfarer"])
+    game._put_permanent_onto_battlefield(0, wayfarer, None)
+    wayfarer.metadata["summoning_sickness_turn"] = -99
+    game._sync_control()
+    return game, wayfarer
+
+
+def test_w1g11_weathered_wayfarer_is_refused_unless_an_opponent_has_more_lands(set_pool):
+    """Two lands each: "more" is strict, and the activation is refused before
+    its cost is paid — the Wayfarer stays untapped."""
+    assert _w1g11_restriction_line(
+        "Activate only if an opponent controls more lands than you."
+    )
+    game, wayfarer = _w1g11_wayfarer_table(set_pool, their_lands=2, my_lands=2)
+
+    refused = game.activate_permanent_ability(0, "Weathered Wayfarer")
+
+    assert not refused.supported
+    assert "only if an opponent controls more lands than you" in refused.details
+    assert not wayfarer.tapped and game.stack == []
+
+
+def test_w1g11_weathered_wayfarer_searches_out_a_land_when_behind(set_pool):
+    """Bob three lands to Alice's two: the search finds a land card, reveals it
+    and puts it into Alice's hand, and the Shock stays in the library."""
+    game, wayfarer = _w1g11_wayfarer_table(set_pool, their_lands=3, my_lands=2)
+    alice = game.players[0]
+
+    assert game.activate_permanent_ability(0, "Weathered Wayfarer").supported
+    assert wayfarer.tapped
+    _w1g11_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+
+    assert len(alice.hand) == 1 and "land" in alice.hand[0].type_line.lower()
+    assert "Shock" in [card.name for card in alice.library] and len(alice.library) == 2
+    assert any(line.startswith("Alice revealed") for line in game.log)
+
 # ==== end W1G11 ======================================================
 
 

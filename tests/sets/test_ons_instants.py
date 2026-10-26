@@ -834,6 +834,111 @@ def test_w1g7_wirewood_pride_counts_every_elf(set_pool):
 # ==== W1G11 ==========================================================
 # W1G11's tests go between this line and the "end W1G11" line.
 
+# Oblation: "The owner of target nonland permanent shuffles it into their
+# library, then draws two cards." Rishadan Pawnshop's move with its subject
+# printed (`effects/zones.parse_owner_shuffles_target_into_library`), and the
+# draw read off the record that move writes (`LAST_TARGET_OWNER`). False
+# Cure: a delayed ability for the turn over the one life-gain seam
+# (`Game._gain_life` announces `player_gains_life`), losing 2 per 1 gained.
+
+from engine import Game as _W1G11Game, PlayerState as _W1G11PlayerState
+from engine.control import change_control as _w1g11_change_control
+from engine.delayed_triggers import expire_delayed_triggers as _w1g11_expire_delayed
+from engine.models import Permanent as _W1G11Permanent
+from engine.oracle import compile_card_oracle as _w1g11_compile
+from engine.targeting import derive_cast_spec as _w1g11_cast_spec
+from tests.helpers import resolve_stack as _w1g11_resolve_stack
+
+
+def _w1g11_table(set_pool, *hand):
+    ons = set_pool("ONS")
+    alice = _W1G11PlayerState(
+        name="Alice", library=[ons["Island"]] * 6, hand=[ons[name] for name in hand],
+    )
+    bob = _W1G11PlayerState(name="Bob", library=[ons["Mountain"]] * 6)
+    game = _W1G11Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.active_player_index = 0
+    return game
+
+
+def _w1g11_put(game, seat, card):
+    permanent = _W1G11Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    game._sync_control()
+    _w1g11_resolve_stack(game)
+    return permanent
+
+
+def test_w1g11_oblation_sends_a_stolen_permanent_home_and_its_owner_draws(set_pool):
+    """The **owner** shuffles it into their library and draws two (CR 108.3):
+    Alice has taken Bob's Elvish Pioneer, and Oblation aimed at it puts it into
+    Bob's library and gives Bob the two cards — not Alice, who controls it."""
+    ons = set_pool("ONS")
+    game = _w1g11_table(set_pool, "Oblation")
+    pioneer = _w1g11_put(game, 1, ons["Elvish Pioneer"])
+    _w1g11_change_control(pioneer, 0, source="test")
+    game._sync_control()
+    assert game.controller_index_of(pioneer) == 0
+    alice, bob = game.players
+
+    result = game.cast_from_hand(0, "Oblation", target_permanent_ids=[pioneer.permanent_id])
+    assert result.supported, result.details
+    _w1g11_resolve_stack(game)
+
+    assert not game.is_on_battlefield(pioneer)
+    assert len(bob.library) + len(bob.hand) == 7, "six Mountains and the Pioneer"
+    assert len(bob.hand) == 2 and "Bob drew 2 cards" in game.log
+    assert alice.hand == [] and len(alice.library) == 6
+    assert "Oblation: Elvish Pioneer was shuffled into Bob's library" in game.log
+
+
+def test_w1g11_oblation_targets_a_nonland_permanent_only(set_pool):
+    """"target **nonland** permanent": the picker excludes lands, and a cast
+    naming one is refused before anything is paid."""
+    ons = set_pool("ONS")
+    oblation = ons["Oblation"]
+    assert _w1g11_cast_spec(oblation, _w1g11_compile(oblation)) == {
+        "kind": "permanent", "filter": {"exclude_types": ["land"]},
+    }
+    game = _w1g11_table(set_pool, "Oblation")
+    forest = _w1g11_put(game, 1, ons["Forest"])
+
+    refused = game.cast_from_hand(0, "Oblation", target_permanent_ids=[forest.permanent_id])
+
+    assert not refused.supported
+    assert game.is_on_battlefield(forest) and [c.name for c in game.players[0].hand] == ["Oblation"]
+
+
+def test_w1g11_false_cure_makes_each_life_gain_cost_double_this_turn(set_pool):
+    """"Until end of turn, whenever a player gains life, that player loses 2
+    life for each 1 life they gained." A delayed ability (CR 603.7) that
+    repeats for its stated duration (CR 603.7b): Bob's 3 costs him 6, and
+    Alice's own Renewed Faith (6) costs her 12 — "a player" is any seat. The
+    loss is a triggered ability on the stack (CR 603.3), so it can be
+    answered; and the turn over, a gain is only a gain."""
+    ons = set_pool("ONS")
+    game = _w1g11_table(set_pool, "False Cure", "Renewed Faith")
+    alice, bob = game.players
+    assert game.cast_from_hand(0, "False Cure").supported
+    _w1g11_resolve_stack(game)
+
+    game._gain_life(bob, 3, source_name="a test")
+    assert bob.life == 23 and len(game.stack) == 1, "the loss waits on the stack"
+    _w1g11_resolve_stack(game)
+    assert bob.life == 17
+
+    assert game.cast_from_hand(0, "Renewed Faith").supported
+    _w1g11_resolve_stack(game)
+    assert alice.life == 20 + 6 - 12
+    assert "False Cure: Alice lost 12 life (26 -> 14)" in game.log
+
+    _w1g11_expire_delayed(game)
+    game._gain_life(bob, 3, source_name="a test")
+    _w1g11_resolve_stack(game)
+    assert bob.life == 20
+
 # ==== end W1G11 ======================================================
 
 
