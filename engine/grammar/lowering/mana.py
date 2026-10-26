@@ -8,6 +8,8 @@ ability on a land being tapped (CR 605.1b) is resolved inline by
 never uses the stack.
 """
 
+import dataclasses
+
 from ...oracle_types import (CHOSEN_COLOR_THIS_WAY, COUNTERS_REMOVED,
                             MANA_LOST_COUNT, MANA_LOST_THIS_WAY,
                             OracleInstruction)
@@ -25,7 +27,8 @@ from ._common import (
 from ._events import (_DEFENDING_PLAYER_EVENTS, _EVENT_SUBJECT_PLAYERS,
                       _RECORDED_PERMANENTS)
 from ._amounts import recorded_count_spec, x_offset_amount
-from ._cost_records import SACRIFICED_FOR_COST, UNTAPPED_FOR_COST
+from ._cost_records import (SACRIFICED_FOR_COST, UNTAPPED_FOR_COST,
+                            shared_creature_type_referent)
 
 #: Which cost payment each printed back-reference names, and how to say so when
 #: the ability makes no such payment: ``{node value: (scratchpad key, printed
@@ -46,7 +49,8 @@ ANY_TYPE_FROM_RECORDS: dict[str, tuple[str, str, str]] = {
 
 
 def _lower_add_mana(
-    node: ast.AddMana, produced: frozenset[str] = frozenset()
+    node: ast.AddMana, event: str | None = None,
+    produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...]:
     """Emit the mana as structured pips rather than clause text.
 
@@ -375,6 +379,23 @@ def _lower_add_mana(
                 raise LoweringError(
                     "the mana multiplier counts the producer's own board", node=node
                 )
+            # "…the number of creatures you control **that share a creature
+            # type with it**" (Mana Echoes). A relation to the object the
+            # firing event was about, which no matcher can answer about a
+            # permanent alone — so it is lifted off here, given the referent
+            # the one reading of the phrase names for this position
+            # (``shared_creature_type_referent``), and put back for the count
+            # evaluator's resolution reader to turn into creature types.
+            per_each_filter = node.per_each
+            related: str | None = None
+            if per_each_filter.shares_creature_type_with is not None:
+                related = shared_creature_type_referent(
+                    per_each_filter.shares_creature_type_with, event=event,
+                    produced=produced, node=node,
+                )
+                per_each_filter = dataclasses.replace(
+                    per_each_filter, shares_creature_type_with=None
+                )
             if zone == "battlefield":
                 # "You control" is performed by the count's `owner`, which scans
                 # one seat's battlefield — so it is carried rather than tested,
@@ -390,7 +411,7 @@ def _lower_add_mana(
                 # word would inherit it.
                 carried = object_only_filter(
                     _filter_payload(
-                        node.per_each,
+                        per_each_filter,
                         carried_separately=frozenset({"on_the_battlefield"}),
                     ),
                     carried_separately=frozenset(
@@ -405,13 +426,15 @@ def _lower_add_mana(
                 # answer.
                 carried = card_only_filter({
                     key: value
-                    for key, value in node.per_each.to_payload().items()
+                    for key, value in per_each_filter.to_payload().items()
                     if key not in ("zone", "zone_owner", "is_card")
                 })
             if carried is None:
                 raise LoweringError(
                     "the mana multiplier cannot count this restriction", node=node
                 )
+            if related is not None:
+                carried = {**carried, "shares_creature_type_with": related}
             payload["per_each"] = {
                 "zone": zone, "owner": owner, "filter": carried,
             }

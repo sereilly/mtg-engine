@@ -68,6 +68,11 @@ EXILED_SET_FOR_COST = "exiled_set_for_cost"
 #: The scratchpad key a **mill** cost writes: the cards the payment put into
 #: the graveyard, as a list (Charmed Pendant's "the milled card's mana cost").
 MILLED_FOR_COST = "milled_for_cost"
+#: The scratchpad key a "Tap N untapped <noun> you control" cost writes: every
+#: permanent it tapped, as a list (Cryptic Gateway's "each creature tapped this
+#: way"). ``tapped_for_cost`` beside it on the payment path is the first of
+#: them, for a genitive that names one (Unerring Sling's "the tapped creature").
+TAPPED_SET_FOR_COST = "tapped_set_for_cost"
 
 _COST_PRODUCES: dict[type, str] = {
     ast.DiscardCost: DISCARDED_FOR_COST,
@@ -101,6 +106,13 @@ _COST_PRODUCES: dict[type, str] = {
     # a gate: the phrase is only meaningful on an ability whose own cost untaps
     # something, and `_lower_add_mana` refuses it without this key.
     ast.UntapPermanentCost: UNTAPPED_FOR_COST,
+    # "Tap two untapped creatures you control: You may put a creature card from
+    # your hand that shares a creature type with **each creature tapped this
+    # way** onto the battlefield." (Cryptic Gateway.) A gate like the untap
+    # row: the phrase names what this ability's own cost tapped, and
+    # :func:`shared_creature_type_referent` refuses it on an ability whose cost
+    # taps nothing.
+    ast.TapPermanentsCost: TAPPED_SET_FOR_COST,
 }
 
 
@@ -230,3 +242,58 @@ def optional_cost_key(symbols: str) -> str:
             f"no payment spends {symbols!r}, so nothing records paying it"
         )
     return mana_cost_label(parsed)
+
+
+def shared_creature_type_referent(
+    referent: str | None, *, event: str | None, produced: frozenset[str],
+    node=None,
+) -> str:
+    """The payload referent of "…that share a creature type with <far end>"
+    (``ast.ObjectFilter.shares_creature_type_with``) in this position — the
+    value ``handlers/_chosen.resolve_shared_creature_type`` resolves at
+    resolution — or a refusal naming why the far end names nothing here.
+
+    One reading for every family that carries the relation (the destroy sweep,
+    a count, a pick from a hand), so "it" and "the sacrificed creature" cannot
+    come to mean two things in two sentences:
+
+    * ``"it"`` is the object the firing event was about (Mana Echoes' entering
+      creature), so only under an event whose fire site freezes one;
+    * ``"sacrificed_for_cost"`` is the permanent this card's own cost
+      sacrificed (Endemic Plague). For a *spell* the cost is a different
+      printed line the clause cannot see, so there is no producer to demand —
+      ``CostObjectWas``' reason, above — and an unpaid channel names nothing at
+      resolution, which matches nothing;
+    * ``"tapped_for_cost"`` is every creature this ability's cost tapped
+      (Cryptic Gateway), gated on that cost being in front of the colon.
+
+    ``"attached_host"`` is a subject's reading ("Enchanted creature and other
+    creatures that share a creature type with it", the Crowns), answered by
+    ``subject_matches`` from the ability's source; no resolution-scoped reader
+    takes it.
+    """
+    from ._events import _EVENT_SUBJECT_OBJECTS
+
+    if referent == "it":
+        if event not in _EVENT_SUBJECT_OBJECTS:
+            raise LoweringError(
+                "\"shares a creature type with it\" names the object this "
+                "trigger's event was about, and this position records none",
+                node=node,
+            )
+        return "event_subject"
+    if referent == "sacrificed_for_cost":
+        return SACRIFICED_FOR_COST
+    if referent == "tapped_for_cost":
+        if TAPPED_SET_FOR_COST not in produced:
+            raise LoweringError(
+                "\"each creature tapped this way\" names what this ability's "
+                "cost tapped, and its cost taps nothing",
+                node=node,
+            )
+        return "tapped_for_cost"
+    raise LoweringError(
+        f"no resolution names the far end of 'shares a creature type with "
+        f"{referent}' here",
+        node=node,
+    )

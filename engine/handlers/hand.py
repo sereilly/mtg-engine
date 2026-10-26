@@ -28,7 +28,8 @@ from ..oracle_types import (HAND_CARDS_TO_LIBRARY, REVEALED_HAND_CARDS,
                             REVEALED_THIS_WAY)
 from ..search_filters import card_has_type
 from ._amounts import resolve_amount
-from ._chosen import _resolve_chosen_subtype
+from ._chosen import (SHARES_CREATURE_TYPE_WITH, _resolve_chosen_subtype,
+                      resolve_shared_creature_type)
 from ._filters import _card_matches_filter
 from ._targets import frozen_that_player_seat
 from .registry import effect_handler
@@ -313,6 +314,21 @@ def put_chosen_card_from_hand_onto_battlefield(game: Game, instruction: OracleIn
             **payload,
             "card_filter": _resolve_chosen_subtype(
                 dict(described), context.source_permanent
+            ),
+        }
+    # "…a creature card from your hand that shares a creature type with **each
+    # creature tapped this way**" (Cryptic Gateway). What the cost tapped, as
+    # the creature types each of those creatures has as this resolves — frozen
+    # onto the payload for the ``attach_to`` reason above, since the candidate
+    # rule, the prompt and the answer check re-run off it and none holds the
+    # cost record. No record leaves the key, and the card matcher refuses every
+    # card.
+    described = payload.get("card_filter") or {}
+    if described.get(SHARES_CREATURE_TYPE_WITH):
+        payload = {
+            **payload,
+            "card_filter": resolve_shared_creature_type(
+                dict(described), context, game,
             ),
         }
     if not put_from_hand_candidates(game, payload, player):

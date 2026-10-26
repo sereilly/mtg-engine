@@ -61,11 +61,17 @@ def pump_enchanted_creature(game: Game, instruction: OracleInstruction, context:
     source_permanent = context.source_permanent
     if source_permanent is None:
         return False, "ability not implemented"
-    # The **live** attachment record, through the one reader of it: an
-    # Equipment that has unattached stays on the battlefield with its last-known
-    # host still written on it, and a boost handed to that host is a boost the
-    # card no longer grants (CR 611.3b).
-    enchanted = attached_host(game, source_permanent, last_known=False)
+    # Through the one reader of the attachment record, which reads the **live**
+    # record while the source is on the battlefield — an Equipment that has
+    # unattached stays there with its last-known host still written on it, and
+    # a boost handed to that host is a boost the card no longer grants (CR
+    # 611.3b) — and last-known information only once the source has left
+    # (CR 608.2h). That second half is the whole of "Sacrifice this Aura:
+    # Enchanted creature gets +3/+3 until end of turn" (Briar Shield) and of
+    # the Crowns' "Enchanted creature and other creatures …": the cost took the
+    # Aura before the ability resolved, and read live, the ability fizzled
+    # with "aura not attached to a creature" every time it was activated.
+    enchanted = attached_host(game, source_permanent)
     if enchanted is None:
         return False, "aura not attached to a creature"
     # "…gets +X/+0 until end of turn, where X is the number of attacking

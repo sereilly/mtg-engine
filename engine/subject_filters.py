@@ -426,6 +426,20 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # key's reason. The bare ``superlative`` key — no set named — stays
     # untestable on purpose (``ast.Superlative``).
     "superlative_among",
+    # "Enchanted creature and other creatures **that share a creature type with
+    # it**" (the Crowns). CR 205.3m's relation to the permanent the ability's
+    # own source is attached to — the host as it is now, or the one it was last
+    # attached to once the source has left (an Aura sacrificed to pay for this
+    # very ability, CR 608.2h). A relation to the source like
+    # ``blocking_attached_host``, testable here and nowhere else, and answered
+    # no by a caller with no source or a source attached to nothing.
+    "shares_creature_type_with_attached_host",
+    # …and the relation once a resolution has named its far end
+    # (``handlers/_chosen.resolve_shared_creature_type``): one list of creature
+    # types per object, every one of which the candidate must share a type
+    # with. Readable off the candidate alone, so it sits in the pure half and
+    # in ``OBJECT_ONLY_FILTER_KEYS``; no lowering emits it.
+    "shares_creature_type_with_each",
 })
 
 #: The keys :func:`subject_matches` answers from the object alone. The other two
@@ -467,6 +481,8 @@ OBJECT_ONLY_FILTER_KEYS = TESTABLE_SUBJECT_FILTER_KEYS - {
     # Out for ``exclude_self``'s reason: the relation is to the ability's
     # *source*, and a caller with none has no combat to read it off.
     "in_combat_with_source",
+    # Out for the key above's reason: the far end is the source's host.
+    "shares_creature_type_with_attached_host",
 }
 
 
@@ -642,7 +658,12 @@ CARD_ONLY_FILTER_KEYS = frozenset(
      # tested there and not listed here, so every card phrase printing the
      # exemption refused at this gate for a question the matcher behind it
      # answers.
-     "exclude_basic_lands"}
+     "exclude_basic_lands",
+     # "…a creature card from your hand that shares a creature type with each
+     # creature tapped this way" (Cryptic Gateway), once resolved: the card's
+     # creature types are on its face (CR 205.3m), or Conspiracy's override for
+     # a card its seat owns, so ``_card_matches_filter`` answers it off the card.
+     "shares_creature_type_with_each"}
 )
 
 
@@ -1147,6 +1168,8 @@ def subject_matches(
         quality = protection_quality(str(protection))
         if quality is None or quality not in game._protection_qualities(obj):
             return False
+    if described.get("shares_creature_type_with_attached_host"):
+        described = _attached_host_creature_types(game, described, source)
     described = _resolve_chosen_color(described, source)
     described = _resolve_chosen_keyword(described, source)
     described = _resolve_chosen_subtype(described, source)
@@ -1462,10 +1485,18 @@ def subject_matches(
     # "target creature **other than enchanted creature**" (Kjeldoran Pride).
     # By identity off the live attachment record, not by value: a second copy of
     # the same creature card is a different permanent and a legal target.
+    #
+    # **The host it was last attached to once the source has left** (CR
+    # 608.2h): "Sacrifice this Aura: Enchanted creature and **other** creatures
+    # that share a creature type with it get +1/+1" (Crown of Vigor) is asked
+    # after the cost took the Aura, and a live read would exclude nobody — the
+    # host would be pumped twice. ``attached_host`` asks last-known information
+    # only of a source off the battlefield, so a picker asking about an Aura in
+    # play reads the live record exactly as before.
     if described.get("other_than_attached_host"):
         from .handlers._targets import attached_host
 
-        if source is not None and obj is attached_host(game, source, last_known=False):
+        if source is not None and obj is attached_host(game, source):
             return False
     # "all creatures **banded with it**" — the other members of the attacking
     # band the source is in (CR 702.22e), through the one reader of the band
@@ -1514,6 +1545,34 @@ def subject_matches(
     if described.get("exclude_self") and source is not None and obj is source:
         return False
     return True
+
+
+def _attached_host_creature_types(game, described: dict, source) -> dict:
+    """*described* with "share a creature type with enchanted creature"
+    turned into the host's creature types (``shares_creature_type_with_each``).
+
+    The host is the source's live attachment, or — for a source that has left,
+    an Aura sacrificed to pay for the ability now resolving — the permanent it
+    was last attached to (``handlers._targets.attached_host``). A host that has
+    *also* left by now (destroyed in response to the Crown) is still the far
+    end: "it" is the object as it last existed (CR 608.2h), and the creatures
+    sharing its types still share them. With no source or no host the key is
+    left in place, and the pure matcher refuses it: nothing shares a type with
+    nothing, and ignored the narrowing would reach every creature.
+    """
+    from .handlers._chosen import SHARED_CREATURE_TYPES_KEY
+    from .handlers._targets import attached_host
+    from .object_creature_types import creature_types
+
+    host = attached_host(game, source) if source is not None else None
+    if host is None and source is not None and not game.is_on_battlefield(source):
+        host = source.metadata.get("last_attached_to")
+    if host is None:
+        return described
+    resolved = dict(described)
+    resolved.pop("shares_creature_type_with_attached_host", None)
+    resolved[SHARED_CREATURE_TYPES_KEY] = [sorted(creature_types(game, host))]
+    return resolved
 
 
 __all__ = [

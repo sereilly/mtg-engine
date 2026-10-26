@@ -267,17 +267,27 @@ def resolve_color_chosen_in_resolution(described: dict, context) -> dict:
     return resolved
 
 
-def count_spec_in_resolution(spec: dict, context) -> dict:
+def count_spec_in_resolution(spec: dict, context, game=None) -> dict:
     """*spec* with its filter's resolution-scoped words resolved.
 
     The one place a count taken while an effect is applied turns "of that
     color" into a colour, asked by both readers that hold a resolution
     (:func:`count_from_payload` and :func:`per_recipient_amount`) so the
     sentence means one thing whichever channel carried it.
+
+    "…the number of creatures you control **that share a creature type with
+    it**" (Mana Echoes) is resolved here too, through
+    :func:`resolve_shared_creature_type` — *game* is what finds the event's
+    object by id where the fire site froze only that.
     """
     described = spec.get("filter")
     if not isinstance(described, dict):
         return spec
+    if described.get(SHARES_CREATURE_TYPE_WITH):
+        spec = {**spec, "filter": resolve_shared_creature_type(
+            described, context, game,
+        )}
+        described = spec["filter"]
     if described.get(NAMED_FROM_KEY):
         spec = {**spec, "filter": _resolve_named_from(described, context)}
         described = spec["filter"]
@@ -337,4 +347,96 @@ def _resolve_chosen_card_type(filt: dict, source) -> dict:
     resolved = dict(filt)
     resolved.pop(CHOSEN_CARD_TYPE, None)
     resolved.update(resolved_keys)
+    return resolved
+
+
+#: "…that **share a creature type with** <the object a resolution names>"
+#: (CR 205.3m). The payload key a lowering writes when the far end of the
+#: relation is known only as this effect resolves, with the referent as its
+#: value — one of :data:`SHARED_CREATURE_TYPE_REFERENTS`. Outside every testable
+#: set, so both matchers refuse a filter still carrying it.
+SHARES_CREATURE_TYPE_WITH = "shares_creature_type_with"
+
+#: The ordinary key :func:`resolve_shared_creature_type` writes in its place: one
+#: list of creature types per object the relation is measured against, every one
+#: of which a candidate must share a type with
+#: (``object_creature_types.shares_a_creature_type_with_each``). Readable off the
+#: candidate alone, so both pure matchers answer it.
+SHARED_CREATURE_TYPES_KEY = "shares_creature_type_with_each"
+
+#: Where each referent's objects are recorded:
+#:
+#: * ``event_subject`` — the object the firing event was about ("…that share a
+#:   creature type with **it**", Mana Echoes), frozen by the fire site as the
+#:   object itself (CR 608.2h's last-known information once it has left) or,
+#:   where only its id was frozen, found by that id;
+#: * ``sacrificed_for_cost`` — the permanent this spell's or ability's own cost
+#:   sacrificed ("…with **the sacrificed creature**", Endemic Plague), carried
+#:   on the stack object's choices as the object it was, so its types are the
+#:   ones it last had on the battlefield (CR 608.2h);
+#: * ``tapped_for_cost`` — every creature the cost tapped ("…with **each
+#:   creature tapped this way**", Cryptic Gateway), the "each" form.
+SHARED_CREATURE_TYPE_REFERENTS = frozenset(
+    {"event_subject", "sacrificed_for_cost", "tapped_for_cost"}
+)
+
+
+def shared_creature_type_anchors(game, context, referent) -> list:
+    """The objects *referent* names in this resolution — empty when there is
+    none, which every reader takes as "nothing shares a type with nothing"."""
+    from ..oracle_types import EVENT_SUBJECT_LAST_KNOWN
+
+    choices = getattr(context, "choices", None) or {}
+    if referent == "sacrificed_for_cost":
+        paid = choices.get("sacrificed_for_cost")
+        return [paid] if paid is not None else []
+    if referent == "tapped_for_cost":
+        tapped = choices.get("tapped_set_for_cost")
+        if tapped:
+            return list(tapped)
+        first = choices.get("tapped_for_cost")
+        return [first] if first is not None else []
+    if referent == "event_subject":
+        frozen = getattr(context, "trigger_context", None) or {}
+        subject = frozen.get(EVENT_SUBJECT_LAST_KNOWN)
+        if subject is None and game is not None:
+            subject = game.permanent_by_id(frozen.get("event_subject_permanent_id"))
+        return [subject] if subject is not None else []
+    return []
+
+
+def resolve_shared_creature_type(described: dict, context, game=None) -> dict:
+    """*described* with "share a creature type with <referent>" turned into the
+    creature types each named object has, under :data:`SHARED_CREATURE_TYPES_KEY`.
+
+    Read **as this resolves** (the Mana Echoes ruling of 2020-08-07: "The amount
+    of mana to add is determined only as the triggered ability … resolves"),
+    through ``object_creature_types.creature_types`` — the layers for a
+    permanent, so a creature a Mistform effect made a Goblin is one, and only
+    CR 205.3m's creature types, so an animated Forest's "forest" relates it to
+    nothing.
+
+    No object leaves the key where it is, and both matchers refuse it: a
+    narrowing with nothing to measure against matches nothing rather than
+    everything. An object **with** no creature type resolves to an empty list,
+    which matches nothing for the same reason, and correctly — it shares a type
+    with no one.
+    """
+    referent = described.get(SHARES_CREATURE_TYPE_WITH)
+    if not referent:
+        return described
+    from ..object_creature_types import creature_types
+
+    anchors = shared_creature_type_anchors(game, context, referent)
+    if not anchors:
+        return described
+    caster = getattr(context, "caster", None)
+    seat = None
+    if game is not None and caster in getattr(game, "players", ()):
+        seat = game.players.index(caster)
+    resolved = dict(described)
+    resolved.pop(SHARES_CREATURE_TYPE_WITH, None)
+    resolved[SHARED_CREATURE_TYPES_KEY] = [
+        sorted(creature_types(game, anchor, seat)) for anchor in anchors
+    ]
     return resolved

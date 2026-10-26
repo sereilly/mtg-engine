@@ -24,6 +24,7 @@ from ..models import Permanent
 from ..object_colors import share_a_color
 from ..oracle_types import (EVENT_SUBJECT_LAST_KNOWN, OracleInstruction,
                             PER_OBJECT_SEAT_RECORDS)
+from ._chosen import SHARES_CREATURE_TYPE_WITH, resolve_shared_creature_type
 from ._targets import frozen_that_player_seat
 from .registry import effect_handler
 
@@ -484,6 +485,28 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
             return True, "resolved"
         if instruction.payload.get("other_than_event_subject"):
             event_subject_id = tctx.get("event_subject_permanent_id")
+    # "Destroy all creatures that share a creature type **with the sacrificed
+    # creature**." (Endemic Plague.) The colour relation above one
+    # characteristic over (CR 205.3m), resolved through the one reader of it
+    # into the far end's creature types — the sacrificed creature as it last
+    # existed (CR 608.2h), so a Mistform that had become a Goblin takes the
+    # Goblins with it. Unresolved (nothing was sacrificed, nothing entered),
+    # the resolution ends with nothing destroyed, for the reason every
+    # relation around it ends: a dropped narrowing on a sweep takes the board.
+    if SHARES_CREATURE_TYPE_WITH in filters:
+        filters = resolve_shared_creature_type(filters, context, game)
+        if SHARES_CREATURE_TYPE_WITH in filters:
+            context.results["destroyed_this_way"] = 0
+            context.results["destroyed_this_way_objects"] = []
+            game.log.append(
+                f"{context.card.name}: nothing for 'shares a creature type "
+                "with' to name"
+            )
+            return True, "resolved"
+        if instruction.payload.get("other_than_event_subject"):
+            event_subject_id = (context.trigger_context or {}).get(
+                "event_subject_permanent_id"
+            )
     attached_to = instruction.payload.get("attached_to")
     host = None
     if attached_to is not None:

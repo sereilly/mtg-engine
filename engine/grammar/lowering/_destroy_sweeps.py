@@ -64,6 +64,7 @@ from ._common import (
     _filter_payload, _restrictions_beyond, split_color_choice,
     split_creature_type_choice,
 )
+from ._cost_records import shared_creature_type_referent
 from ._delays import _BOUND_OBJECT_DELAYED_EVENTS
 from ._events import (EVENT_SUBJECT_NAMES, LAST_TARGET_NAME,
                       _EVENT_SUBJECT_OBJECTS, _EVENT_SUBJECT_PLAYERS)
@@ -428,6 +429,38 @@ def lower_destroy_sweep(
             shared_payload["bypass_regeneration"] = True
         return (
             OracleInstruction("destroy_all_matching", "", shared_payload),
+        )
+    # "Destroy all creatures **that share a creature type with the
+    # sacrificed creature**. They can't be regenerated." (Endemic Plague.)
+    # The colour branch above one characteristic over (CR 205.3m), and a
+    # branch for its reason: the far end is an object only the resolution
+    # can name — the permanent the cast's cost ate (CR 601.2h, read as it
+    # last existed, CR 608.2h) or the object the firing event was about —
+    # so the key travels to the handler under the referent
+    # ``shared_creature_type_referent`` gives it, and falling through would
+    # leave the sweep with card types alone and take the board.
+    if filt.shares_creature_type_with is not None:
+        referent = shared_creature_type_referent(
+            filt.shares_creature_type_with, event=event, produced=produced,
+            node=node,
+        )
+        related_payload = _filter_payload(filt)
+        related_payload.pop("shares_creature_type_with", None)
+        # "**other** creatures that share a creature type with it" — other
+        # than the object the event was about, for the colour branch's
+        # reason; under any other far end the word keeps its own meaning.
+        other_than_subject = referent == "event_subject" and bool(
+            related_payload.pop("exclude_self", None)
+        )
+        if untestable_filter_keys(related_payload):
+            raise LoweringError("no sweep handler for this narrowing", node=node)
+        related_payload["shares_creature_type_with"] = referent
+        if other_than_subject:
+            related_payload["other_than_event_subject"] = True
+        if node.no_regen:
+            related_payload["bypass_regeneration"] = True
+        return (
+            OracleInstruction("destroy_all_matching", "", related_payload),
         )
     # "Destroy all creatures that were blocked by **target Wall** this
     # turn." (Glyph of Reincarnation.) The sibling of the branch above, and

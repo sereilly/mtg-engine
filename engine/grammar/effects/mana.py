@@ -26,7 +26,7 @@ multipliers and amounts. That module carries the reason the line is there.
 
 
 from .. import ast
-from ..amounts import parse_amount
+from ..amounts import parse_amount, parse_equal_to
 from ..errors import GrammarError
 from ..lexer import (MANA, render)
 from ..nouns import parse_object_filter
@@ -498,6 +498,25 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
                         amount_of_x=quantity,
                     )
                 stream.reset(x_mark)
+            # "…equal to **the number of creatures you control that share a
+            # creature type with it**." (Mana Echoes.) A count of a set on the
+            # board, which is what "Add {G} **for each** creature you control"
+            # (Gaea's Cradle) already says with the multiplier spelled the other
+            # way round — so it is that node, one pip and a ``per_each`` set,
+            # and every reader of the multiplier reads this sentence too. Read
+            # through the one "equal to …" production; only a plain board count
+            # is taken, because a count of a history or of a record is a number
+            # the multiplier cannot hold, and the cursor goes back for the
+            # readers below.
+            counted_mark = stream.mark()
+            counted = parse_equal_to(stream)
+            if isinstance(counted, ast.CountOf):
+                return ast.AddMana(
+                    ((symbol, 1),),
+                    source_text=_clause(),
+                    per_each=counted.filter,
+                )
+            stream.reset(counted_mark)
             if stream.accept_phrase("equal", "to", "the", "sacrificed") and stream.peek_word():
                 # The noun repeats what the cost already named ("artifact"), so
                 # it is consumed rather than re-read: the cost decided what was

@@ -36,7 +36,41 @@ from ..counted_names import card_answers_to_name
 from ..late_modules import LateModules
 from ..search_filters import card_has_type, name_key
 from ._chosen import (CHOSEN_CARD_TYPE, COLOR_CHOSEN_THIS_WAY_KEY,
-                      NAMED_FROM_KEY, _CHOSEN_SUBTYPE_KEYS)
+                      NAMED_FROM_KEY, SHARED_CREATURE_TYPES_KEY,
+                      SHARES_CREATURE_TYPE_WITH, _CHOSEN_SUBTYPE_KEYS)
+
+#: "…that share a creature type with **enchanted creature**" before
+#: ``subject_matches`` has asked the source for its host — the source-relative
+#: spelling of the relation, answered there and refused by both pure matchers.
+SHARES_CREATURE_TYPE_WITH_ATTACHED_HOST = "shares_creature_type_with_attached_host"
+
+
+def _unresolved_creature_type_relation(filt: dict) -> bool:
+    """Whether *filt* still names "share a creature type with <something>"
+    that nobody has turned into creature types yet.
+
+    Both pure matchers refuse such a filter, the direction every relative key
+    here takes: the far end of the relation is an object only a resolution
+    (``_chosen.resolve_shared_creature_type``) or the ability's source
+    (``subject_matches``) can name, and ignored the narrowing would admit every
+    creature on the board.
+    """
+    return bool(
+        filt.get(SHARES_CREATURE_TYPE_WITH)
+        or filt.get(SHARES_CREATURE_TYPE_WITH_ATTACHED_HOST)
+    )
+
+
+def _shares_with_each_anchor(types, filt: dict) -> bool:
+    """Whether *types* answers a resolved :data:`SHARED_CREATURE_TYPES_KEY`
+    (true when the filter carries none)."""
+    from ..object_creature_types import shares_a_creature_type_with_each
+
+    if SHARED_CREATURE_TYPES_KEY not in filt:
+        return True
+    return shares_a_creature_type_with_each(
+        types, filt.get(SHARED_CREATURE_TYPES_KEY) or ()
+    )
 
 #: ``engine.face_down`` registers a special action as it loads, so it is
 #: reached late rather than imported here — a module-level import would move
@@ -306,6 +340,20 @@ def _card_matches_filter(
             return False
 
         if not any(_class_holds(entry) for entry in any_classes):
+            return False
+    # "…a creature card from your hand **that shares a creature type with each
+    # creature tapped this way**" (Cryptic Gateway). Unresolved, refused for
+    # the chosen-subtype keys' reason at the top; resolved, asked of the card's
+    # creature types — Conspiracy's override for a card its seat owns, the
+    # printed line otherwise (``object_creature_types.creature_types``).
+    if _unresolved_creature_type_relation(filt):
+        return False
+    if SHARED_CREATURE_TYPES_KEY in filt:
+        from ..object_creature_types import creature_types
+
+        if not _shares_with_each_anchor(
+            creature_types(game, card, owner), filt
+        ):
             return False
     # "…with the same name as **that spell**" with no resolution behind it: the
     # name is in a trigger's context, and a reader holding one turns the key
@@ -700,6 +748,19 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     # every relative key above takes: ignored, it would be every creature.
     if payload.get("shares_color_with_it"):
         return False
+    # "…that share a creature type with <it / the sacrificed creature /
+    # enchanted creature>" (Mana Echoes, Endemic Plague, the Crowns). The same
+    # relation one characteristic over: unresolved it matches nothing, and
+    # resolved into each far end's creature types (CR 205.3m) it is asked of
+    # this permanent's own, through layer 4 — a creature that *became* a
+    # Goblin shares Goblin, and a face-down one (CR 708.2) shares nothing.
+    if _unresolved_creature_type_relation(payload):
+        return False
+    if SHARED_CREATURE_TYPES_KEY in payload:
+        from ..object_creature_types import creature_types
+
+        if not _shares_with_each_anchor(creature_types(None, perm), payload):
+            return False
     # "of the chosen type" (An-Zerrin Ruins) — the same recorded choice one
     # characteristic over, refused here for the identical reason: the record
     # lives on the *source*, this function is the pure half, and ignoring the

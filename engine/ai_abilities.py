@@ -671,7 +671,9 @@ def _activation_candidate(
     # hand onto the battlefield." With no such card in hand the ability's
     # whole effect is nothing, and the cost is still paid: Belbe's Portal
     # spent {3} every turn of NEM's simulation to log that it had no card.
-    if not _hand_entry_has_a_card(game, player_index, permanent, ability.instruction):
+    if not _hand_entry_has_a_card(
+        game, player_index, permanent, ability.instruction, cost=ability.cost,
+    ):
         return None
     # "{B}{B}{B}, Exile Balthor: Each player returns all black and all red
     # creature cards from their graveyard to the battlefield." The Portal's
@@ -1417,7 +1419,7 @@ def choose_hand_activation_action(
 
 
 def _hand_entry_has_a_card(
-    game: Game, player_index: int, source: Permanent, instruction
+    game: Game, player_index: int, source: Permanent, instruction, *, cost=None,
 ) -> bool:
     """Whether every "put a … card from your hand onto the battlefield" step of
     an ability (``ai_valuation.hand_entry_steps``) has a card to put.
@@ -1426,8 +1428,19 @@ def _hand_entry_has_a_card(
     "of the chosen type" resolved off the source the way the handler resolves
     it (``_resolve_chosen_subtype``), so the policy and the resolution cannot
     disagree about which cards the step admits.
+
+    "…a creature card from your hand that shares a creature type with **each
+    creature tapped this way**" (Cryptic Gateway) is resolved against the
+    creatures the activation's tap cost will tap — this policy names none, so
+    the engine's own deterministic pick (``_choose_tap_cost_permanents``) —
+    through the handler's own resolver. Unresolved, the matcher refuses every
+    card, and the Gateway was an artifact this seat never once activated.
     """
-    from .handlers._chosen import _resolve_chosen_subtype
+    from types import SimpleNamespace
+
+    from .handlers._chosen import (SHARES_CREATURE_TYPE_WITH,
+                                   _resolve_chosen_subtype,
+                                   resolve_shared_creature_type)
     from .handlers.hand import put_from_hand_candidates
 
     player = game.players[player_index]
@@ -1435,6 +1448,20 @@ def _hand_entry_has_a_card(
         described = _resolve_chosen_subtype(
             dict(payload.get("card_filter") or {}), source
         )
+        if described.get(SHARES_CREATURE_TYPE_WITH) and cost is not None and getattr(
+            cost, "tap_count", 0
+        ):
+            tapped = game._choose_tap_cost_permanents(
+                cost, game._tap_cost_candidates(cost, player_index), None,
+            )
+            described = resolve_shared_creature_type(
+                described,
+                SimpleNamespace(
+                    choices={"tapped_set_for_cost": tapped}, caster=player,
+                    trigger_context=None,
+                ),
+                game,
+            )
         if not put_from_hand_candidates(
             game, {**payload, "card_filter": described}, player
         ):

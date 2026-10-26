@@ -983,6 +983,7 @@ class AbilityActivationMixin:
                         "tapped_for_cost": (
                             tap_cost_permanents[0] if tap_cost_permanents else None
                         ),
+                        "tapped_set_for_cost": list(tap_cost_permanents),
                         "discarded_for_cost": (
                             list(discard_cost_cards)
                             + (
@@ -1148,6 +1149,11 @@ class AbilityActivationMixin:
                     "tapped_for_cost": (
                         tap_cost_permanents[0] if tap_cost_permanents else None
                     ),
+                    # "…a creature card that shares a creature type with
+                    # **each creature tapped this way**" (Cryptic Gateway):
+                    # the whole set, for a phrase that names every one of them
+                    # (``handlers/_chosen.shared_creature_type_anchors``).
+                    "tapped_set_for_cost": list(tap_cost_permanents),
                     # …and what its discard cost ate, for the same reason and
                     # on the same channel: "If the discarded card was a land
                     # card" (Land's Edge) is asked once the card is already in
