@@ -750,10 +750,15 @@ def test_viscerid_drone_eats_two_permanents_for_one_activation(set_pool):
 
     assert result.supported, result.details
     assert not game.is_on_battlefield(giant)
-    # Two permanents left to pay, and the Swamp is one of them.
-    assert [p.card.name for p in game.controlled_by(0)] == ["Grizzly Bears"], (
+    # Two permanents left to pay, and the Swamp is one of them. The creature
+    # half is the Bears, not the Drone: a seat that names no victim keeps the
+    # ability's own source for last (`sacrifice_preference_key`'s
+    # *paying_for*). This read "Grizzly Bears" while the default fed the
+    # smaller Drone to its own cost.
+    assert [p.card.name for p in game.controlled_by(0)] == ["Viscerid Drone"], (
         "the Swamp and one creature both paid"
     )
+    assert sorted(card.name for card in p1.graveyard) == ["Grizzly Bears", "Swamp"]
 
 
 def test_viscerid_drone_refuses_with_no_swamp_and_pays_nothing(set_pool):
