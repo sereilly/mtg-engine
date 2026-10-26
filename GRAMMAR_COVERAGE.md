@@ -51,7 +51,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | TOR | 143 | 261 | 86.2% | 86.2% | 68.2% | 138 |
 | JUD | 143 | 241 | 91.3% | 90.9% | 65.6% | 131 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| ONS *(measured)* | 335 | 541 | 73.4% | 71.2% | 51.4% | 236 |
+| ONS *(measured)* | 335 | 541 | 74.9% | 72.8% | 53.0% | 243 |
 | **All (shipped)** | **8027** | **11886** | **90.6%** | **90.1%** | **62.4%** | **6271** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -73,7 +73,6 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 21 | 15 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
 | 20 | 18 | expected 'unless defending player controls' |  |
 | 7 | 1 | no lowering for RawEffect |  |
-| 7 | 3 | expected a colour or a creature body after 'becomes' |  |
 | 6 | 1 | no handler for this battlefield entry |  |
 | 6 | 1 | a counted redirect off the source moves the damage onto one chosen target |  |
 | 6 | 1 | unsupported life-loss target 'owner' |  |
@@ -89,6 +88,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
+| 2 | 2 | expected 'a' |  |
 
 ## Cards executing through the grammar
 
@@ -600,6 +600,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Destroy target artifact. It can't be regenerated. Create X 1/1 green Saproling creature tokens, where X is that artifact's mana value.`
 - **Artifact Possession**
   - `Whenever enchanted artifact becomes tapped or a player activates an ability of enchanted artifact without {T} in its activation cost, this Aura deals 2 damage to that artifact's controller.`
+- **Artificial Evolution**
+  - `Change the text of target spell or permanent by replacing all instances of one creature type with another. The new creature type can't be Wall. (This effect lasts indefinitely.)`
 - **Ascendant Evincar**
   - `Other black creatures get +1/+1.`
   - `Nonblack creatures get -1/-1.`
@@ -6865,10 +6867,21 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of each player's upkeep, that player chooses a permanent for each card in their graveyard, then untaps those permanents.`
 - **Mistfolk**
   - `{U}: Counter target spell that targets this creature.`
+- **Mistform Dreamer**
+  - `{1}: This creature becomes the creature type of your choice until end of turn.`
+- **Mistform Mask**
+  - `{1}: Enchanted creature becomes the creature type of your choice until end of turn.`
 - **Mistform Mutant**
   - `{1}{U}: Choose a creature type other than Wall. Target creature becomes that type until end of turn.`
+- **Mistform Shrieker**
+  - `{1}: This creature becomes the creature type of your choice until end of turn.`
+- **Mistform Skyreaver**
+  - `{1}: This creature becomes the creature type of your choice until end of turn.`
 - **Mistform Stalker**
+  - `{1}: This creature becomes the creature type of your choice until end of turn.`
   - `{2}{U}{U}: This creature gets +2/+2 and gains flying until end of turn.`
+- **Mistform Wall**
+  - `{1}: This creature becomes the creature type of your choice until end of turn.`
 - **Mistmoon Griffin**
   - `When this creature dies, exile it, then return the top creature card of your graveyard to the battlefield.`
 - **Mnemonic Sliver**
@@ -10393,6 +10406,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Return target permanent to its owner's hand.`
 - **Stand or Fall**
   - `At the beginning of combat on your turn, for each defending player, separate all creatures that player controls into two piles and that player chooses one. Only creatures in the chosen piles can block this turn.`
+- **Standardize**
+  - `Choose a creature type other than Wall. Each creature becomes that type until end of turn.`
 - **Standing Stones**
   - `{1}, {T}, Pay 1 life: Add one mana of any color.`
 - **Standstill**
@@ -11467,6 +11482,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Creatures of the creature type of your choice get +X/+X until end of turn.`
 - **Trickery Charm**
   - `• Target creature gains flying until end of turn.`
+  - `• Target creature becomes the creature type of your choice until end of turn.`
   - `• Look at the top four cards of your library, then put them back in any order.`
 - **Trickster Mage**
   - `{U}, {T}, Discard a card: You may tap or untap target artifact, creature, or land.`
