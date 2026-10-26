@@ -424,13 +424,6 @@
   ]
  },
  {
-  "card": "Book Burning",
-  "clause": "any player may have book burning deal 6 damage to them. if no one does, target player mills six cards",
-  "ignored": [
-   "have"
-  ]
- },
- {
   "card": "Bottomless Vault",
   "clause": "if this land is tapped, put a storage counter on it",
   "ignored": [
@@ -470,7 +463,6 @@
   "card": "Breaking Point",
   "clause": "any player may have breaking point deal 6 damage to them. if no one does, destroy all creatures. creatures destroyed this way can't be regenerated",
   "ignored": [
-   "have",
    "all"
   ]
  },
@@ -486,13 +478,6 @@
   "clause": "change the base power and toughness of all creatures that dealt damage to it this turn to 0/2",
   "ignored": [
    "all"
-  ]
- },
- {
-  "card": "Browbeat",
-  "clause": "any player may have browbeat deal 5 damage to them. if no one does, target player draws three cards",
-  "ignored": [
-   "have"
   ]
  },
  {
@@ -1037,13 +1022,6 @@
   ]
  },
  {
-  "card": "Dwarven Vigilantes",
-  "clause": "you may have it deal damage equal to its power to target creature. if you do, this creature assigns no combat damage this turn",
-  "ignored": [
-   "have"
-  ]
- },
- {
   "card": "Dwell on the Past",
   "clause": "target player shuffles up to four target cards from their graveyard into their library",
   "ignored": [
@@ -1256,20 +1234,6 @@
   ]
  },
  {
-  "card": "Farrel's Mantle",
-  "clause": "its controller may have it deal damage equal to its power plus 2 to another target creature. if that player does, the attacking creature assigns no combat damage this turn",
-  "ignored": [
-   "have"
-  ]
- },
- {
-  "card": "Farrel's Zealot",
-  "clause": "you may have it deal 3 damage to target creature. if you do, this creature assigns no combat damage this turn",
-  "ignored": [
-   "have"
-  ]
- },
- {
   "card": "Feint",
   "clause": "tap all creatures blocking target attacking creature. prevent all combat damage that would be dealt this turn by that creature and each creature blocking it",
   "ignored": [
@@ -1452,13 +1416,6 @@
   "clause": "destroy all creatures that were blocked by target wall this turn. they can't be regenerated. for each creature that died this way, put a creature card from the graveyard of the player who controlled that creature the last time it became blocked by that wall onto the battlefield under its owner's control",
   "ignored": [
    "all"
-  ]
- },
- {
-  "card": "Goblin Arsonist",
-  "clause": "you may have it deal 1 damage to any target",
-  "ignored": [
-   "have"
   ]
  },
  {
@@ -2117,7 +2074,6 @@
   "card": "Kyren Sniper",
   "clause": "you may have this creature deal 1 damage to target player or planeswalker",
   "ignored": [
-   "have",
    "creature"
   ]
  },
@@ -2126,41 +2082,6 @@
   "clause": "that creature doesn't untap during its controller's next untap step",
   "ignored": [
    "controller's"
-  ]
- },
- {
-  "card": "Laccolith Grunt",
-  "clause": "you may have it deal damage equal to its power to target creature. if you do, this creature assigns no combat damage this turn",
-  "ignored": [
-   "have"
-  ]
- },
- {
-  "card": "Laccolith Rig",
-  "clause": "you may have it deal damage equal to its power to target creature. if you do, the first creature assigns no combat damage this turn",
-  "ignored": [
-   "have"
-  ]
- },
- {
-  "card": "Laccolith Titan",
-  "clause": "you may have it deal damage equal to its power to target creature. if you do, this creature assigns no combat damage this turn",
-  "ignored": [
-   "have"
-  ]
- },
- {
-  "card": "Laccolith Warrior",
-  "clause": "you may have it deal damage equal to its power to target creature. if you do, this creature assigns no combat damage this turn",
-  "ignored": [
-   "have"
-  ]
- },
- {
-  "card": "Laccolith Whelp",
-  "clause": "you may have it deal damage equal to its power to target creature. if you do, this creature assigns no combat damage this turn",
-  "ignored": [
-   "have"
   ]
  },
  {
@@ -2268,13 +2189,6 @@
   "clause": "target player reveals their hand, then you choose a card other than a basic land card from it. search that player's graveyard, hand, and library for all cards with the same name as the chosen card and exile them. then that player shuffles",
   "ignored": [
    "card"
-  ]
- },
- {
-  "card": "Longhorn Firebeast",
-  "clause": "any opponent may have it deal 5 damage to them. if a player does, sacrifice this creature",
-  "ignored": [
-   "have"
   ]
  },
  {
@@ -2693,7 +2607,6 @@
   "clause": "that player chooses target player who has more life than they do and is their opponent. the first player may have this enchantment deal 1 damage to the second player",
   "ignored": [
    "first",
-   "have",
    "enchantment"
   ]
  },
@@ -2828,13 +2741,6 @@
   "clause": "destroy target artifact if its mana value is 2 or less. if this spell was kicked, destroy that artifact if its mana value is 5 or less instead",
   "ignored": [
    "spell"
-  ]
- },
- {
-  "card": "Pandemonium",
-  "clause": "that creature's controller may have it deal damage equal to its power to any target of their choice",
-  "ignored": [
-   "have"
   ]
  },
  {
@@ -3481,7 +3387,6 @@
   "card": "Scalding Salamander",
   "clause": "you may have it deal 1 damage to each creature without flying defending player controls",
   "ignored": [
-   "have",
    "each"
   ]
  },
@@ -3799,7 +3704,6 @@
   "card": "Spark Mage",
   "clause": "you may have this creature deal 1 damage to target creature that player controls",
   "ignored": [
-   "have",
    "creature"
   ]
  },
