@@ -475,3 +475,17 @@ def test_w2g5_a_pump_that_changes_nothing_is_held(set_pool, life):
         hand=["Wirewood Pride"], life=(20, life),
     )
     assert choose_cast_action(game, 0) is None
+
+
+@pytest.mark.parametrize(("theirs", "sacrificed"), [
+    (["Grizzly Bears"], False),
+    (["Crusade", "Bad Moon", "Grizzly Bears"], True),
+])
+def test_w2g5_nova_cleric_is_sacrificed_only_for_an_enchantment(set_pool, theirs, sacrificed):
+    """"{2}{W}, {T}, Sacrifice this creature: Destroy all enchantments." —
+    the same gate as the Crown's. Ten Nova Clerics were sacrificed to destroy
+    nothing in thirty unpinned seeded ONS games on the base; now it waits for
+    an opponent's enchantment worth it."""
+    game = _w2g5_board(set_pool, ["Nova Cleric", "Plains", "Plains", "Plains"], theirs)
+    action = choose_activation_action(game, 0)
+    assert (action is not None and action.permanent_name == "Nova Cleric") is sacrificed
