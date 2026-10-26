@@ -16,22 +16,22 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 388 | 88.9% | 87.4% | 50.3% | 176 |
-| LEB | 292 | 389 | 88.9% | 87.4% | 50.4% | 177 |
-| 2ED | 292 | 389 | 88.9% | 87.4% | 50.4% | 177 |
+| LEA | 290 | 388 | 89.2% | 87.6% | 50.5% | 177 |
+| LEB | 292 | 389 | 89.2% | 87.7% | 50.6% | 178 |
+| 2ED | 292 | 389 | 89.2% | 87.7% | 50.6% | 178 |
 | ARN | 78 | 108 | 83.3% | 79.6% | 57.4% | 51 |
 | ATQ | 85 | 120 | 90.8% | 90.8% | 63.3% | 68 |
-| 3ED | 296 | 389 | 90.5% | 88.4% | 52.2% | 182 |
+| 3ED | 296 | 389 | 90.7% | 88.7% | 52.4% | 183 |
 | LEG | 310 | 431 | 89.6% | 88.4% | 58.7% | 217 |
 | DRK | 119 | 167 | 96.4% | 96.4% | 73.7% | 101 |
 | FEM | 102 | 191 | 99.0% | 99.0% | 75.9% | 99 |
-| 4ED | 368 | 520 | 93.5% | 92.5% | 55.8% | 253 |
+| 4ED | 368 | 520 | 93.7% | 92.7% | 56.0% | 254 |
 | ICE | 373 | 601 | 89.9% | 89.4% | 63.4% | 301 |
 | HML | 115 | 189 | 93.7% | 93.7% | 65.1% | 93 |
 | ALL | 144 | 251 | 90.4% | 90.0% | 70.5% | 132 |
 | MIR | 335 | 545 | 93.4% | 93.2% | 63.9% | 281 |
 | VIS | 167 | 278 | 89.6% | 89.6% | 61.5% | 138 |
-| 5ED | 434 | 631 | 94.9% | 94.3% | 61.2% | 320 |
+| 5ED | 434 | 631 | 95.1% | 94.5% | 61.3% | 321 |
 | WTH | 167 | 249 | 88.4% | 88.4% | 64.7% | 140 |
 | TMP | 335 | 478 | 92.7% | 92.3% | 65.7% | 271 |
 | STH | 143 | 215 | 88.4% | 88.4% | 62.8% | 124 |
@@ -51,8 +51,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | TOR | 143 | 261 | 86.2% | 86.2% | 68.2% | 138 |
 | JUD | 143 | 241 | 91.3% | 90.9% | 65.6% | 131 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| ONS *(measured)* | 335 | 541 | 74.9% | 72.8% | 53.0% | 243 |
-| **All (shipped)** | **8027** | **11886** | **90.6%** | **90.1%** | **62.4%** | **6271** |
+| ONS *(measured)* | 335 | 541 | 75.6% | 73.8% | 53.8% | 246 |
+| **All (shipped)** | **8027** | **11886** | **90.7%** | **90.1%** | **62.4%** | **6277** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
 
@@ -64,12 +64,12 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 744 | 390 | expected a subject |  |
+| 735 | 386 | expected a subject |  |
 | 185 | 99 | unrecognized effect verb |  |
 | 133 | 71 | unconsumed text |  |
 | 70 | 51 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
-| 31 | 8 | expected what this creature can't block, or a duration |  |
+| 30 | 7 | expected what this creature can't block, or a duration |  |
 | 21 | 15 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
 | 20 | 18 | expected 'unless defending player controls' |  |
 | 7 | 1 | no lowering for RawEffect |  |
@@ -92,7 +92,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 ## Cards executing through the grammar
 
-6271 cards, 7416 lines.
+6277 cards, 7422 lines.
 
 - **Abandon Hope**
   - `Look at target opponent's hand and choose X cards from it. That player discards those cards.`
@@ -1408,6 +1408,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Add X mana in any combination of {B} and/or {R}, where X is the sacrificed creature's mana value.`
 - **Burst of Energy**
   - `Untap target permanent.`
+- **Butcher Orgg**
+  - `You may assign this creature's combat damage divided as you choose among defending player and/or any number of creatures they control.`
 - **Bösium Strip**
   - `{3}, {T}: Until end of turn, you may cast instant and sorcery spells from the top of your graveyard. If a spell cast this way would be put into a graveyard, exile it instead.`
 - **Cabal Archon**
@@ -4342,6 +4344,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `All Mountains are Plains.`
 - **Glade Gnarr**
   - `Whenever a player casts a blue spell, this creature gets +2/+2 until end of turn.`
+- **Glarecaster**
+  - `{5}{W}: The next time damage would be dealt to this creature and/or you this turn, that damage is dealt to any target instead.`
 - **Glasses of Urza**
   - `{T}: Look at target player's hand.`
   - `{T}: Look at target player's hand.`
@@ -4703,6 +4707,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature becomes blocked, you may untap it and remove it from combat.`
 - **Gustcloak Runner**
   - `Whenever this creature becomes blocked, you may untap it and remove it from combat.`
+- **Gustcloak Savior**
+  - `Whenever a creature you control becomes blocked, you may untap that creature and remove it from combat.`
 - **Gustcloak Sentinel**
   - `Whenever this creature becomes blocked, you may untap it and remove it from combat.`
 - **Gustcloak Skirmisher**
@@ -10310,6 +10316,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Spiteful Bully**
   - `At the beginning of your upkeep, this creature deals 3 damage to target creature you control.`
 - **Spitfire Handler**
+  - `This creature can't block creatures with power greater than this creature's power.`
   - `{R}: This creature gets +1/+0 until end of turn.`
 - **Spitting Drake**
   - `{R}: This creature gets +1/+0 until end of turn. Activate only once each turn.`
@@ -10468,6 +10475,13 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever enchanted creature becomes tapped, this creature deals 2 damage to that creature's controller.`
 - **Stitch Together**
   - `Return target creature card from your graveyard to your hand.`
+- **Stone Giant**
+  - `{T}: Target creature you control with toughness less than this creature's power gains flying until end of turn. Destroy that creature at the beginning of the next end step.`
+  - `{T}: Target creature you control with toughness less than this creature's power gains flying until end of turn. Destroy that creature at the beginning of the next end step.`
+  - `{T}: Target creature you control with toughness less than this creature's power gains flying until end of turn. Destroy that creature at the beginning of the next end step.`
+  - `{T}: Target creature you control with toughness less than this creature's power gains flying until end of turn. Destroy that creature at the beginning of the next end step.`
+  - `{T}: Target creature you control with toughness less than this creature's power gains flying until end of turn. Destroy that creature at the beginning of the next end step.`
+  - `{T}: Target creature you control with toughness less than this creature's power gains flying until end of turn. Destroy that creature at the beginning of the next end step.`
 - **Stone Kavu**
   - `{R}: This creature gets +1/+0 until end of turn.`
   - `{W}: This creature gets +0/+1 until end of turn.`

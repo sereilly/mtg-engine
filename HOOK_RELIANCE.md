@@ -12,30 +12,30 @@ The measures are **ceilings**, the opposite direction to `GRAMMAR_COVERAGE.md`'s
 
 ## The headline
 
-**48 of 5529 supported cards (0.9%)** carry at least one name-keyed entry, across **53 entries** in 6 registries. The pool is 5529 cards, 100.0% supported.
+**47 of 5529 supported cards (0.9%)** carry at least one name-keyed entry, across **52 entries** in 6 registries. The pool is 5529 cards, 100.0% supported.
 
-Held at this rate, supporting the 26,113-card release line would need about **250 hand-written entries** covering **227 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
+Held at this rate, supporting the 26,113-card release line would need about **246 hand-written entries** covering **222 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
 
 ## By set
 
 | Set | Cards | Supported | Hooked cards | Rules lines | Hooked lines | Entries | Entries/100 supported |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 290 (100.0%) | 27 (9.3%) | 388 | 25 (6.4%) | 30 | 10.3 |
-| LEB | 292 | 292 (100.0%) | 27 (9.2%) | 389 | 25 (6.4%) | 30 | 10.3 |
-| 2ED | 292 | 292 (100.0%) | 27 (9.2%) | 389 | 25 (6.4%) | 30 | 10.3 |
+| LEA | 290 | 290 (100.0%) | 26 (9.0%) | 388 | 24 (6.2%) | 29 | 10.0 |
+| LEB | 292 | 292 (100.0%) | 26 (8.9%) | 389 | 24 (6.2%) | 29 | 9.9 |
+| 2ED | 292 | 292 (100.0%) | 26 (8.9%) | 389 | 24 (6.2%) | 29 | 9.9 |
 | ARN | 78 | 78 (100.0%) | 15 (19.2%) | 107 | 13 (12.1%) | 17 | 21.8 |
 | ATQ | 85 | 85 (100.0%) | 3 (3.5%) | 120 | 3 (2.5%) | 3 | 3.5 |
-| 3ED | 296 | 296 (100.0%) | 22 (7.4%) | 389 | 21 (5.4%) | 24 | 8.1 |
+| 3ED | 296 | 296 (100.0%) | 21 (7.1%) | 389 | 20 (5.1%) | 23 | 7.8 |
 | LEG | 310 | 310 (100.0%) | 2 (0.6%) | 430 | 2 (0.5%) | 2 | 0.6 |
 | DRK | 119 | 119 (100.0%) | 1 (0.8%) | 167 | 1 (0.6%) | 1 | 0.8 |
 | FEM | 102 | 102 (100.0%) | 0 (0.0%) | 190 | 0 (0.0%) | 0 | 0.0 |
-| 4ED | 368 | 368 (100.0%) | 16 (4.3%) | 520 | 15 (2.9%) | 17 | 4.6 |
+| 4ED | 368 | 368 (100.0%) | 15 (4.1%) | 520 | 14 (2.7%) | 16 | 4.3 |
 | ICE | 373 | 373 (100.0%) | 1 (0.3%) | 601 | 0 (0.0%) | 1 | 0.3 |
 | HML | 115 | 115 (100.0%) | 0 (0.0%) | 190 | 0 (0.0%) | 0 | 0.0 |
 | ALL | 144 | 144 (100.0%) | 0 (0.0%) | 251 | 0 (0.0%) | 0 | 0.0 |
 | MIR | 335 | 335 (100.0%) | 1 (0.3%) | 546 | 0 (0.0%) | 1 | 0.3 |
 | VIS | 167 | 167 (100.0%) | 0 (0.0%) | 279 | 0 (0.0%) | 0 | 0.0 |
-| 5ED | 434 | 434 (100.0%) | 8 (1.8%) | 631 | 7 (1.1%) | 9 | 2.1 |
+| 5ED | 434 | 434 (100.0%) | 7 (1.6%) | 631 | 6 (1.0%) | 8 | 1.8 |
 | WTH | 167 | 167 (100.0%) | 0 (0.0%) | 249 | 0 (0.0%) | 0 | 0.0 |
 | TMP | 335 | 335 (100.0%) | 1 (0.3%) | 485 | 0 (0.0%) | 1 | 0.3 |
 | STH | 143 | 143 (100.0%) | 0 (0.0%) | 215 | 0 (0.0%) | 0 | 0.0 |
@@ -55,8 +55,8 @@ Held at this rate, supporting the 26,113-card release line would need about **25
 | TOR | 143 | 143 (100.0%) | 0 (0.0%) | 256 | 0 (0.0%) | 0 | 0.0 |
 | JUD | 143 | 143 (100.0%) | 0 (0.0%) | 237 | 0 (0.0%) | 0 | 0.0 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
-| ONS *(measured)* | 335 | 288 (86.0%) | 0 (0.0%) | 467 | 0 (0.0%) | 0 | 0.0 |
-| **Whole pool (shipped, deduped)** | **5529** | **5529 (100.0%)** | **48 (0.9%)** | **8637** | **44 (0.5%)** | **53** | **1.0** |
+| ONS *(measured)* | 335 | 294 (87.8%) | 0 (0.0%) | 477 | 0 (0.0%) | 0 | 0.0 |
+| **Whole pool (shipped, deduped)** | **5529** | **5529 (100.0%)** | **47 (0.9%)** | **8637** | **43 (0.5%)** | **52** | **0.9** |
 
 *(measured)* — ONS are ingested for measurement and **not shipped**: `cards/manifest.json` lists them under `measured`, the engine's catalog does not load them, and no player can put one in a deck. They are reported here and excluded from the ALL row and from the ceilings, because a ratchet over a set nobody has implemented would fire on its composition rather than on anything anyone did. A measured set moves up to `sets` when it is fully supported.
 
@@ -66,7 +66,7 @@ Held at this rate, supporting the 26,113-card release line would need about **25
 
 | Registry | Cards | Entries |
 | --- | ---: | ---: |
-| `CARD_LINE_INSTRUCTIONS` | 43 | 44 |
+| `CARD_LINE_INSTRUCTIONS` | 42 | 43 |
 | `ON_LEAVE_BATTLEFIELD` | 5 | 5 |
 | `DRAW_STEP_MODIFIERS` | 1 | 1 |
 | `ON_SELF_RESOLVED` | 1 | 1 |
@@ -120,6 +120,5 @@ Held at this rate, supporting the 26,113-card release line would need about **25
 - **Sindbad** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Siren's Call** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Sorrow's Path** (`CARD_LINE_INSTRUCTIONS`) — 1 line
-- **Stone Giant** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Word of Command** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Ydwen Efreet** (`CARD_LINE_INSTRUCTIONS`) — 1 line
