@@ -976,6 +976,73 @@ def test_w1g10_riptide_entrancer_declined_keeps_everything(set_pool):
     assert game.is_on_battlefield(entrancer)
     assert game.controller_index_of(giant) == 2
 
+
+def _w1g10_shieldmage_board(set_pool):
+    """Shieldmage Elder and a second Wizard, both just arrived: tapping
+    untapped Wizards is not a {T} cost, so summoning sickness does not stop it
+    (the 2004-10-04 ruling: "including creatures that haven't been under your
+    control continuously")."""
+    game = _w1g10_Game(players=[
+        _w1g10_PlayerState(
+            name=f"P{seat + 1}", life=20,
+            library=[set_pool("LEA")["Island"]] * 5,
+        )
+        for seat in range(2)
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    elder = _w1g10_Permanent(card=set_pool("ONS")["Shieldmage Elder"])
+    game._put_permanent_onto_battlefield(0, elder, None)
+    wizard = _w1g10_Permanent(card=set_pool("LEA")["Prodigal Sorcerer"])
+    game._put_permanent_onto_battlefield(0, wizard, None)
+    return game, elder, wizard
+
+
+def test_w1g10_shieldmage_elder_prevents_a_spells_damage(set_pool):
+    """"Tap two untapped Wizards you control: Prevent all damage target spell
+    would deal this turn." — a Lightning Bolt aimed at its controller deals
+    nothing, and the two Wizards are what paid."""
+    game, elder, wizard = _w1g10_shieldmage_board(set_pool)
+    game.players[1].hand.append(set_pool("LEA")["Lightning Bolt"])
+    assert game.queue_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+    assert game.queue_permanent_ability(
+        0, "Shieldmage Elder", target_stack_index=0, ability_index=1,
+    ).supported
+    assert elder.tapped and wizard.tapped
+    _w1g10_resolve_stack(game)
+    assert game.players[0].life == 20, game.log
+
+
+def test_w1g10_shieldmage_elder_shield_follows_a_permanent_spell(set_pool):
+    """CR 400.7c (and the card's ruling): a shield on a creature spell keeps
+    preventing the damage of the permanent it becomes, for the rest of the
+    turn — and only this turn: after the cleanup the same ping lands."""
+    game, _elder, _wizard = _w1g10_shieldmage_board(set_pool)
+    game.players[1].hand.append(set_pool("LEA")["Prodigal Sorcerer"])
+    assert game.queue_from_hand(1, "Prodigal Sorcerer").supported
+    assert game.queue_permanent_ability(
+        0, "Shieldmage Elder", target_stack_index=0, ability_index=1,
+    ).supported
+    _w1g10_resolve_stack(game)
+    (theirs,) = game.controlled_by(1)
+    assert theirs.card.name == "Prodigal Sorcerer"
+    theirs.metadata["summoning_sickness_turn"] = -99
+    assert game.queue_permanent_ability(
+        1, "Prodigal Sorcerer", target_player_index=0, ability_index=0,
+    ).supported
+    _w1g10_resolve_stack(game)
+    assert game.players[0].life == 20, game.log
+
+    game.resolve_cleanup_step(0)
+    game.start_next_turn()
+    theirs.tapped = False
+    assert game.queue_permanent_ability(
+        1, "Prodigal Sorcerer", target_player_index=0, ability_index=0,
+    ).supported
+    _w1g10_resolve_stack(game)
+    assert game.players[0].life == 19, game.log
+
 # ==== end W1G10 ======================================================
 
 

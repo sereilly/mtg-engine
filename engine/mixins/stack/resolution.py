@@ -33,6 +33,7 @@ from ...handlers.control_flow import evaluate_condition
 from ...models import CardDefinition, Permanent
 from ...oracle import OracleInstruction, compile_card_oracle
 from ...modal_triggers import modal_trigger_modes
+from ...prevention.shields import carry_spell_shields_onto_permanent
 from ...resumption import run_resumable
 from ...state_triggers import release_latch
 from ...target_descriptions import ANNOUNCED_SEAT
@@ -1020,6 +1021,16 @@ class StackResolutionMixin:
             # reads the colour it arrives with — and with the effect's own
             # duration and timestamp (``color_changes``).
             carry_spell_color_change(choices, permanent)
+            # CR 400.7c, its prevention twin: "Prevention effects that apply to
+            # damage from a permanent spell on the stack continue to apply to
+            # damage from the permanent that spell becomes" — a shield hung on
+            # this cast's stack item ("Prevent all damage target spell would
+            # deal this turn", Shieldmage Elder) is carried before the entry,
+            # so an entry trigger's damage is already covered.
+            if self.resolving_items:
+                carry_spell_shields_onto_permanent(
+                    self.resolving_items[-1], permanent
+                )
             # "If this creature **was kicked**, it enters with …" / "When this
             # creature enters, **if it was kicked**, …" / "…if this creature
             # **wasn't kicked**, sacrifice it" (Skizzik, turns later). CR
