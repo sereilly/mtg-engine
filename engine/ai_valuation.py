@@ -798,6 +798,48 @@ def waits_on_a_later_draw(instruction: OracleInstruction | None) -> bool:
     return instruction is not None and instruction.kind in DRAW_REPLACEMENT_ARMINGS
 
 
+#: How a step's payload addresses **every player at once** ("Each player loses
+#: 1 life …"): the value lowering writes under whichever key the step reads
+#: its player from (``recipient``, ``who``, ``players``, ``whose``, ``actor``).
+EVERY_PLAYER = "each_player"
+
+
+def reaches_both_sides(instruction: OracleInstruction | None) -> bool:
+    """Whether some step of an ability's effect lands on **its activator's
+    side as well as the other** — on every player, or on every permanent a
+    noun phrase names with no seat in it — rather than on a side the chooser
+    aims: "{T}: Each player loses 1 life for each Zombie on the battlefield."
+    (Shepherd of Rot), "{B}: … deals 1 damage to each creature and each
+    player." (Pestilence), "Sacrifice this Aura: Enchanted creature and other
+    creatures that share a creature type with it get +1/+1 until end of turn."
+    (Crown of Vigor).
+
+    The flat score an activation is ranked by (`ai_scoring._score_activation`)
+    reads such an effect as aimed at an opponent — which is half of it. The
+    half that comes back is why it is worth activating from some positions
+    and not from others (Shepherd's life loss is a race only the seat ahead
+    wins), and only a rehearsal of the position says which.
+
+    Read off the payload's shape, never a kind list: a step addressed to
+    :data:`EVERY_PLAYER` under any key, or a **sweep** — a ``filter`` over
+    permanents with no ``controller`` in it and no ``targets`` beside it.
+    """
+    if instruction is None:
+        return False
+    for step in _effect_steps(instruction):
+        payload = getattr(step, "payload", None) or {}
+        if any(value == EVERY_PLAYER for value in payload.values()):
+            return True
+        described = payload.get("filter")
+        if (
+            isinstance(described, dict)
+            and "controller" not in described
+            and not payload.get("targets")
+        ):
+            return True
+    return False
+
+
 def source_toughness_change(instruction: OracleInstruction | None) -> int | None:
     """The toughness change an effect makes to its own source, when that is the
     whole of the effect — every step a ``pump_self`` with printed numbers — or
@@ -1043,6 +1085,7 @@ def library_top_setups(card: CardDefinition, x_value: "int | None" = None) -> tu
 
 __all__ = [
     "DRAW_REPLACEMENT_ARMINGS",
+    "EVERY_PLAYER",
     "MANA_ABILITY_KINDS",
     "SOURCE_HAMPER_KINDS",
     "SOURCE_REMOVAL_KINDS",
@@ -1063,6 +1106,7 @@ __all__ = [
     "hand_pick_entry_consumer",
     "offer_buys_a_drawback_to_its_source",
     "planned_mana_yield",
+    "reaches_both_sides",
     "returns_creature_to_hand",
     "source_toughness_change",
     "spell_hand_pick_entries",

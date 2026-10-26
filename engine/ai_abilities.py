@@ -34,6 +34,7 @@ from .ai_valuation import (
     hand_entry_steps,
     harms_its_own_source,
     is_mana_ability,
+    reaches_both_sides,
     source_becomes_an_aura,
     source_toughness_change,
     waits_on_a_later_draw,
@@ -761,10 +762,23 @@ def _activation_candidate(
     # effect: the seat paid {1} every main phase for a type nothing on the board
     # asks about, and armed every Word in every main phase after its own draw —
     # mana spent on a replacement no draw that turn would meet.
+    #
+    # **Two more shapes the flat score cannot price, rehearsed the same way.**
+    # A cost that gives up the source itself (`_gives_up_its_source`: "Sacrifice
+    # this Aura: … get +1/+1 until end of turn", Crown of Vigor) — the score
+    # reads the effect and never the permanent spent, so the Crowns were cast
+    # and sacrificed in the same main phase, a lasting +1/+1 traded for a
+    # fleeting one with nothing able to attack (ONS W1G6, W1G7: every Crown of
+    # Vigor cast in a seeded run). And an effect that comes back at its own
+    # activator (`ai_valuation.reaches_both_sides`: "Each player loses 1 life
+    # for each Zombie on the battlefield", Shepherd of Rot) — a race the seat
+    # behind loses, which the score rated 2.5 from any position.
     if (
         ability_index is not None
         or _sets_only_what_its_source_is(ability.instruction)
         or waits_on_a_later_draw(ability.instruction)
+        or _gives_up_its_source(ability.cost)
+        or reaches_both_sides(ability.instruction)
     ):
         worth = _land_ability_worth(game, player_index, candidate)
         if worth is None:
@@ -780,6 +794,18 @@ def _activation_candidate(
 _OWN_TYPE_SET_KINDS = frozenset({
     "set_self_creature_type", "set_enchanted_creature_type",
 })
+
+
+def _gives_up_its_source(cost) -> bool:
+    """Whether an activation's cost takes the permanent it is printed on off
+    the battlefield — sacrificed, exiled or returned to its owner's hand
+    (CR 602.1's cost, paid in full as it is activated). The source is the one
+    thing such an ability spends that its flat score never reads."""
+    return bool(
+        getattr(cost, "sacrifice_self", False)
+        or getattr(cost, "exile_self", False)
+        or getattr(cost, "return_self_to_hand", False)
+    )
 
 
 def _sets_only_what_its_source_is(instruction) -> bool:
