@@ -620,7 +620,13 @@ def _source_is_a_spell(game, source) -> bool:
     if not items:
         return False
     top = items[-1]
-    return top.card is source and top.ability_instruction is None
+    # ``getattr``: the damage seam asks this of every non-permanent source as
+    # it announces (``damage_events._announce``), so a stand-in for a cast
+    # that carries no ability field is read as the spell it stands for.
+    return (
+        getattr(top, "card", None) is source
+        and getattr(top, "ability_instruction", None) is None
+    )
 
 
 def _unblocked_attacker(source) -> bool:
