@@ -909,6 +909,73 @@ def test_w1g10_quicksilver_dragon_leaves_a_two_target_spell_alone(set_pool, set_
     _w1g10_resolve_stack(game)
     assert dragon.damage_marked == 1, game.log
 
+
+def _w1g10_entrancer_swing(set_pool):
+    """A three-seat table: the Entrancer (seat 0) attacks seat 2 unblocked;
+    seat 1 and seat 2 each control a creature. Returns at the trigger's
+    target prompt, with seat 0 interactive."""
+    game = _w1g10_Game(players=[
+        _w1g10_PlayerState(
+            name=f"P{seat + 1}", life=20,
+            library=[set_pool("LEA")["Island"]] * 5,
+        )
+        for seat in range(3)
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    game.start_turn(0)
+    entrancer = _w1g10_put(game, 0, set_pool("ONS")["Riptide Entrancer"])
+    bears = _w1g10_put(game, 1, set_pool("LEA")["Grizzly Bears"])
+    giant = _w1g10_put(game, 2, set_pool("LEA")["Hill Giant"])
+    for perm in (entrancer, bears, giant):
+        perm.metadata["summoning_sickness_turn"] = -99
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(0, [0], defending_player_index=2)[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(2, {})[0]
+    game.advance_combat_phase()
+    assert game.players[2].life == 19
+    return game, entrancer, bears, giant
+
+
+def test_w1g10_riptide_entrancer_takes_the_damaged_players_creature(set_pool):
+    """"…you may sacrifice it. If you do, gain control of target creature
+    **that player** controls." At three seats the picker offers only the
+    damaged player's creature, refuses the other opponent's, and accepting
+    the offer sacrifices the Entrancer and takes the creature for good."""
+    game, entrancer, bears, giant = _w1g10_entrancer_swing(set_pool)
+    prompt = game.pending_choice_of("trigger_target", 0)
+    assert prompt is not None, game.log
+    assert [t["name"] for t in prompt.data["targets"]] == ["Hill Giant"]
+    assert not game.confirm_trigger_target(0, permanent_id=bears.permanent_id)
+    assert game.confirm_trigger_target(0, permanent_id=giant.permanent_id)
+
+    game.resolve_top_of_stack()
+    offer = game.pending_choice_of("optional_pay", 0)
+    assert offer is not None, game.log
+    assert game._resolve_optional_pay(offer, True, None)
+    game._settle()
+
+    assert not game.is_on_battlefield(entrancer)
+    assert "Riptide Entrancer" in [c.name for c in game.players[0].graveyard]
+    assert game.controller_index_of(giant) == 0, game.log
+    assert game.controller_index_of(bears) == 1
+    # "This effect lasts indefinitely": cleanup does not hand it back.
+    game.start_next_turn()
+    assert game.controller_index_of(giant) == 0, game.log
+
+
+def test_w1g10_riptide_entrancer_declined_keeps_everything(set_pool):
+    game, entrancer, bears, giant = _w1g10_entrancer_swing(set_pool)
+    assert game.confirm_trigger_target(0, permanent_id=giant.permanent_id)
+    game.resolve_top_of_stack()
+    offer = game.pending_choice_of("optional_pay", 0)
+    assert game._resolve_optional_pay(offer, False, None)
+    game._settle()
+    assert game.is_on_battlefield(entrancer)
+    assert game.controller_index_of(giant) == 2
+
 # ==== end W1G10 ======================================================
 
 

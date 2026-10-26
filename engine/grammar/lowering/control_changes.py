@@ -31,7 +31,8 @@ from ._common import (_describe_targets, _filter_payload, _is_enchanted,
                       _is_source, _is_target,
                       _restrictions_beyond, testable_filter_payload)
 from ._events import (CHOSEN_PERMANENT, CHOSEN_PLAYER, EVENT_SUBJECT_CONTROLLER,
-                      EVENT_SUBJECT_PLAYER, _EVENT_STAMPED_TARGET_OBJECTS,
+                      EVENT_SUBJECT_PLAYER, _DAMAGED_PLAYER_EVENTS,
+                      _EVENT_STAMPED_TARGET_OBJECTS,
                       _EVENT_SUBJECT_CONTROLLERS,
                       _EVENT_SUBJECT_PLAYERS, _UNTAPPED_PERMANENTS)
 from ._delays import (_BOUND_OBJECT_DELAYED_EVENTS)
@@ -62,6 +63,13 @@ from ._delays import (_BOUND_OBJECT_DELAYED_EVENTS)
 #: picker really does carry them out: a fourth spelling refuses here instead of
 #: being dropped into a steal that offers every permanent on the board.
 _PICKER_ENFORCED_CONTROLLERS = frozenset({"you", "opponent", "defending_player"})
+
+#: The trigger events whose fire site freezes the seat a printed "**that
+#: player** controls" names: the damaged player (``_DAMAGED_PLAYER_EVENTS``)
+#: and every event about one seat (``_EVENT_SUBJECT_PLAYERS``). Both are read
+#: back by the one reader, ``handlers/_targets.frozen_that_player_seat``, and
+#: by the trigger picker beside it.
+_THAT_PLAYER_FREEZING_EVENTS = _DAMAGED_PLAYER_EVENTS | _EVENT_SUBJECT_PLAYERS
 
 
 def _linked_steal_filter(node: ast.GainControl, subject: ast.TargetSpec) -> dict:
@@ -628,7 +636,18 @@ def _lower_gain_control(
         # every "gain control of target X <seat> controls" in the pool was
         # unsupported for a narrowing the picker was already carrying out.
         controller = described.get("controller")
-        if controller is not None and controller not in _PICKER_ENFORCED_CONTROLLERS:
+        # "Whenever this creature deals combat damage to a player, you may
+        # sacrifice it. If you do, gain control of target creature **that
+        # player** controls." (Riptide Entrancer.) The seat the firing event
+        # froze (CR 603.10) — which the trigger's picker narrows on
+        # (``trigger_targets._CONTROLLER_SPEC_FLAGS``' ``that_player_only``)
+        # and the handler re-asks through ``frozen_that_player_seat`` — so it
+        # is carried exactly where an event froze one, and refused under
+        # every other event, where the words name nobody and a steal would
+        # reach whichever board the picker happened to default to.
+        if controller == "that_player" and event in _THAT_PLAYER_FREEZING_EVENTS:
+            pass
+        elif controller is not None and controller not in _PICKER_ENFORCED_CONTROLLERS:
             raise LoweringError(
                 "the control change cannot test this restriction", node=node
             )

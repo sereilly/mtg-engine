@@ -176,11 +176,21 @@ def gain_control_until_eot(game: Game, instruction: OracleInstruction, context: 
     # "target artifact **defending player controls**" (Kukemssa Pirates),
     # through the one reader of the phrase (CR 506.2/603.10).
     defending = defending_player_seat(game, context)
+    # "…gain control of target creature **that player** controls." (Riptide
+    # Entrancer.) The seat the firing event froze, through the one reader of
+    # the phrase — the same one the trigger's picker narrowed on. Asked only
+    # when printed: ``subject_matches`` refuses the key without a seat, so an
+    # unfrozen one takes nothing rather than somebody else's creature.
+    that_player = (
+        frozen_that_player_seat(game, context)
+        if filters.get("controller") == "that_player" else None
+    )
     target = resolve_target_permanent(
         game, context,
         predicate=lambda perm: subject_matches(
             game, perm, filters, observer=observer,
             source=context.source_permanent, defending=defending,
+            that_player=that_player,
         ),
         fallback_on_invalid_choice=False,
     )
