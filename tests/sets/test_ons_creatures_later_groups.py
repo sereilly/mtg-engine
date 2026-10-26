@@ -801,10 +801,13 @@ def test_w1g7_gangrenous_goliath_taps_three_clerics_from_the_graveyard(set_pool)
 # the Couriers' "for as long as this creature remains tapped", and Tribal
 # Golem's five grants, each "as long as you control a <type>".
 
+import pytest as _w1g8_pytest
+
 from engine import Game as _w1g8_Game, PlayerState as _w1g8_PlayerState
 from engine.models import Permanent as _w1g8_Permanent
 from engine.oracle import compile_card_oracle as _w1g8_compile
 from engine.targeting import derive_cast_spec as _w1g8_derive_cast_spec
+from engine.targeting import usable_activated_abilities as _w1g8_usable
 from engine.type_changes import gain_types as _w1g8_gain_types
 from tests.helpers import _nosick as _w1g8_nosick, resolve_stack as _w1g8_resolve
 
@@ -1103,6 +1106,106 @@ def test_w1g8_everglove_courier_gives_an_elf_trample(set_pool):
     assert game._has_keyword(elf, "trample") and _w1g8_pt(game, elf) == (3, 4)
     game.become_untapped(courier)
     assert not game._has_keyword(elf, "trample") and _w1g8_pt(game, elf) == (1, 2)
+
+
+# --- Tribal Golem: five conditional grants in one sentence, written out one
+# per pair by `line_rewrites.expand_distributed_condition_lines`, each held to
+# its own type.
+
+_W1G8_GOLEM_GRANTS = (
+    ("Graxiplon", "trample"),          # a Beast
+    ("Skirk Prospector", "haste"),     # a Goblin
+    ("Glory Seeker", "first strike"),  # a Soldier
+    ("Aphetto Grifter", "flying"),     # a Wizard
+)
+
+
+def _w1g8_golem_words(game, golem):
+    game._recompute_continuous_effects()
+    return {
+        word for _, word in _W1G8_GOLEM_GRANTS if game._has_keyword(golem, word)
+    }
+
+
+def _w1g8_golem_can_regenerate(game, golem):
+    game._recompute_continuous_effects()
+    return any(
+        "regenerate" in ability.source_line.lower()
+        for ability in _w1g8_usable(_w1g8_compile(golem.effective_card))
+    )
+
+
+@_w1g8_pytest.mark.parametrize("ally,word", _W1G8_GOLEM_GRANTS)
+def test_w1g8_tribal_golem_each_grant_follows_its_own_type(set_pool, ally, word):
+    """'This creature has trample as long as you control a Beast, haste as
+    long as you control a Goblin, first strike as long as you control a
+    Soldier, flying as long as you control a Wizard, …' Each word is there
+    exactly while a creature of its type is — that one word and no other —
+    and leaves with the creature (CR 611.3a)."""
+    pool = set_pool("ONS")
+    golem = _w1g8_perm(pool, "Tribal Golem")
+    friend = _w1g8_perm(pool, ally)
+    game, _p1, _p2 = _w1g8_game([golem])
+    assert _w1g8_golem_words(game, golem) == set()
+    game.players[0].battlefield.append(friend)
+    game._settle()
+    assert _w1g8_golem_words(game, golem) == {word}
+    game.remove_from_battlefield(friend)
+    assert _w1g8_golem_words(game, golem) == set()
+
+
+def test_w1g8_tribal_golem_counts_only_what_you_control_through_the_layers(set_pool):
+    """"…as long as **you** control a Zombie": an opponent's Zombie gives
+    nothing; a Glory Seeker made a Zombie (layer 4) does — and stops being
+    one's first strike source at the same moment."""
+    pool = set_pool("ONS")
+    golem = _w1g8_perm(pool, "Tribal Golem")
+    seeker = _w1g8_perm(pool, "Glory Seeker")
+    game, _p1, _p2 = _w1g8_game([golem, seeker], [_w1g8_perm(pool, "Gluttonous Zombie")])
+    assert not _w1g8_golem_can_regenerate(game, golem)
+    assert _w1g8_golem_words(game, golem) == {"first strike"}
+
+    _w1g8_gain_types(
+        seeker, subtypes=["zombie"], source="test", duration="until_end_of_turn",
+        replaces_creature_types=True,
+    )
+    assert _w1g8_golem_can_regenerate(game, golem)
+    assert _w1g8_golem_words(game, golem) == set(), "no longer a Soldier"
+
+
+def test_w1g8_tribal_golem_regenerates_while_you_control_a_zombie(set_pool):
+    """'…and "{B}: Regenerate this creature" as long as you control a Zombie.'
+    The granted line is activatable by the Golem's controller, paid for with
+    {B}, and its shield saves the Golem from a destroy (CR 701.19)."""
+    pool = set_pool("ONS")
+    golem = _w1g8_perm(pool, "Tribal Golem")
+    game, p1, _p2 = _w1g8_game([golem, _w1g8_perm(pool, "Gluttonous Zombie")])
+    assert _w1g8_golem_can_regenerate(game, golem)
+    game.enforce_mana_costs = True
+    p1.mana_pool["B"] = 1
+    result = game.activate_permanent_ability(0, "Tribal Golem")
+    assert result.supported, result.details
+    _w1g8_resolve(game)
+    assert p1.mana_pool["B"] == 0, "the {B} was paid"
+
+    game._destroy_target_permanent(
+        p1, target_permanent_index=p1.battlefield.index(golem)
+    )
+    _w1g8_resolve(game)
+    assert game.is_on_battlefield(golem), "regenerated"
+    assert golem.tapped
+
+
+def test_w1g8_tribal_golem_attacks_the_turn_it_arrives_beside_a_goblin(set_pool):
+    pool = set_pool("ONS")
+    golem = _w1g8_Permanent(card=pool["Tribal Golem"])
+    game, _p1, _p2 = _w1g8_game([golem, _w1g8_perm(pool, "Skirk Prospector")])
+    golem.metadata["summoning_sickness_turn"] = game.turn
+    game._recompute_continuous_effects()
+    assert game.can_attack(golem, 1)
+    game.remove_from_battlefield(game.players[0].battlefield[1])
+    game._recompute_continuous_effects()
+    assert not game.can_attack(golem, 1)
 
 # ==== end W1G8 ======================================================
 
