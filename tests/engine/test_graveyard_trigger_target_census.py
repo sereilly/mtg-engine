@@ -76,17 +76,70 @@ def _pool(catalog):
     return pool
 
 
+def _printed_subtypes(card) -> set[str]:
+    """The words right of a type line's dash, lowercased - how the census
+    finds a card of a tribe without naming one."""
+    _types, _dash, subtypes = (card.type_line or "").partition("—")
+    return {word.lower() for word in subtypes.split()}
+
+
 @pytest.fixture(scope="module")
-def _mercenaries(catalog):
-    """Two Mercenary cards for the one trigger that asks for the subtype
-    (Strongarm Thug), found rather than named so the fixture cannot rot."""
-    found = [
-        card for card in catalog
-        if "Mercenary" in (card.type_line or "") and "Creature" in card.type_line
-        and card.name != "Strongarm Thug"
-    ]
-    assert len(found) >= 2
-    return sorted(found, key=lambda card: card.name)[:2]
+def _tribes(_pool, catalog):
+    """Two cards of each subtype a census trigger narrows its graveyard target
+    to and the fixed piles do not hold two of - "target **Mercenary** card"
+    (Strongarm Thug), "target **Zombie** card" (Aphetto Vulture) - read off
+    each row's own spec (``graveyard_subtypes``) and found in the catalog
+    rather than named, so the fixture cannot rot and a tribe the next set
+    narrows by has a legal target here the day it ships.
+
+    It was two Mercenaries, found by a type-line test and with Strongarm Thug
+    excluded by name, until Onslaught's promotion rehearsal: Aphetto Vulture
+    ("When this creature dies, you may put target Zombie card from your
+    graveyard on top of your library.") met a table with no Zombie card in its
+    controller's pile, so CR 603.3d took the trigger off the stack and the
+    census read "nobody was asked" / "not on the stack" for a trigger that
+    asks (``test_w1g7_aphetto_vulture_puts_a_zombie_card_on_top`` drives it
+    on the real dies road, the Vulture naming itself among the Zombies). The
+    census's own subjects are excluded, so no card is both the source and a
+    card it may name."""
+    rows = _rows(_pool)
+    subjects = {card.name for card, _trigger, _spec, _targeted in rows}
+    held = [_printed_subtypes(_pool[name]) for name in _YARDS[0]]
+    wanted: list[str] = []
+    for _card, _trigger, spec, targeted in rows:
+        for subtype in spec.get("graveyard_subtypes") or ():
+            if (
+                targeted and subtype not in wanted
+                and sum(subtype in words for words in held) < 2
+            ):
+                wanted.append(subtype)
+    found = []
+    for subtype in wanted:
+        tribe = sorted(
+            (
+                card for card in catalog
+                if card.name not in subjects and subtype in _printed_subtypes(card)
+            ),
+            key=lambda card: card.name,
+        )
+        assert len(tribe) >= 2, subtype
+        found.extend(tribe[:2])
+    return found
+
+
+def test_every_narrowed_trigger_has_a_tribe_on_the_table(_pool, _tribes):
+    """The fixture above is derived, so it is held to finding what it derives
+    from: every subtype a targeted row narrows by is printed by at least two
+    cards in its controller's pile."""
+    pile = [_pool[name] for name in _YARDS[0]] + list(_tribes)
+    wanted = {
+        subtype
+        for _card, _trigger, spec, targeted in _rows(_pool) if targeted
+        for subtype in spec.get("graveyard_subtypes") or ()
+    }
+    assert "mercenary" in wanted
+    for subtype in wanted:
+        assert sum(subtype in _printed_subtypes(card) for card in pile) >= 2, subtype
 
 
 def _rows(pool) -> list:
@@ -129,11 +182,11 @@ def _stamps(item) -> list:
     return [stamp]
 
 
-def _table(pool, mercenaries, *, interactive=(), hand=()) -> Game:
+def _table(pool, tribes, *, interactive=(), hand=()) -> Game:
     game = Game(players=[
         PlayerState(
             "A", library=[pool[n] for n in _LIBRARY], hand=list(hand),
-            graveyard=[pool[n] for n in _YARDS[0]] + list(mercenaries),
+            graveyard=[pool[n] for n in _YARDS[0]] + list(tribes),
         ),
         PlayerState(
             "B", library=[pool[n] for n in _LIBRARY],
@@ -261,7 +314,7 @@ def test_the_pool_still_prints_what_this_census_is_about(_pool):
 
 
 def test_a_seat_that_can_be_asked_is_asked_and_its_answer_is_the_card_that_moves(
-    _pool, _mercenaries,
+    _pool, _tribes,
 ):
     """The prompt is armed as the trigger goes on the stack, lists what the
     engine's own enumeration lists — for an entry trigger, exactly what the
@@ -274,7 +327,7 @@ def test_a_seat_that_can_be_asked_is_asked_and_its_answer_is_the_card_that_moves
         if not targeted:
             continue
         label = f"{card.name} [{trigger.condition.kind}]"
-        game = _table(_pool, _mercenaries, interactive={0})
+        game = _table(_pool, _tribes, interactive={0})
         _fire(game, card, trigger)
         before = _yards(game)
         prompt = _prompt(game, trigger)
@@ -285,7 +338,7 @@ def test_a_seat_that_can_be_asked_is_asked_and_its_answer_is_the_card_that_moves
         offers = _offers(prompt)
         item = prompt.data["_trigger_item"]
         if trigger.condition.kind == "enters_battlefield":
-            probe = _table(_pool, _mercenaries, hand=[card])
+            probe = _table(_pool, _tribes, hand=[card])
             picker = probe.cast_target_spec(0, card, optional_cost_payments={})
             listed = sorted(
                 (entry["seat"], entry["index"]) for entry in picker.get("valid_targets") or ()
@@ -314,7 +367,7 @@ def test_a_seat_that_can_be_asked_is_asked_and_its_answer_is_the_card_that_moves
     assert not findings, "\n".join(findings)
 
 
-def test_a_seat_nobody_asks_takes_the_card_the_resolution_used_to_find(_pool, _mercenaries):
+def test_a_seat_nobody_asks_takes_the_card_the_resolution_used_to_find(_pool, _tribes):
     """The default is the pick each handler made before the choice moved to
     the push — the first card the phrase admits in the standing opposing
     seat's pile where the phrase reaches any graveyard, in the only pile on
@@ -327,7 +380,7 @@ def test_a_seat_nobody_asks_takes_the_card_the_resolution_used_to_find(_pool, _m
         if not targeted:
             continue
         label = f"{card.name} [{trigger.condition.kind}]"
-        game = _table(_pool, _mercenaries)
+        game = _table(_pool, _tribes)
         _fire(game, card, trigger)
         before = _yards(game)
         item = _object(game, trigger)
@@ -355,7 +408,7 @@ def test_a_seat_nobody_asks_takes_the_card_the_resolution_used_to_find(_pool, _m
 
 @pytest.mark.parametrize("interactive", [(), (0,)], ids=["defaulted", "answered"])
 def test_the_named_card_exiled_in_response_is_not_replaced_by_another(
-    _pool, _mercenaries, interactive,
+    _pool, _tribes, interactive,
 ):
     """CR 608.2b: "A target that's no longer in the zone it was in when it was
     targeted is illegal. … If all its targets … are now illegal, the spell or
@@ -368,7 +421,7 @@ def test_the_named_card_exiled_in_response_is_not_replaced_by_another(
         if not targeted:
             continue
         label = f"{card.name} [{trigger.condition.kind}]"
-        game = _table(_pool, _mercenaries, interactive=set(interactive))
+        game = _table(_pool, _tribes, interactive=set(interactive))
         _fire(game, card, trigger)
         prompt = _prompt(game, trigger)
         if prompt is not None:
@@ -400,7 +453,7 @@ def test_the_named_card_exiled_in_response_is_not_replaced_by_another(
 
 
 def test_a_card_named_at_the_cast_and_exiled_in_response_to_the_trigger_is_not_replaced(
-    _pool, _mercenaries,
+    _pool, _tribes,
 ):
     """The same rule on the cast road, which is the road the defect was
     measured on: the permanent is cast naming a card, resolves, and its
@@ -413,7 +466,7 @@ def test_a_card_named_at_the_cast_and_exiled_in_response_to_the_trigger_is_not_r
     for card, trigger, spec, targeted in _rows(_pool):
         if not targeted or trigger.condition.kind != "enters_battlefield":
             continue
-        probe = _table(_pool, _mercenaries, hand=[card])
+        probe = _table(_pool, _tribes, hand=[card])
         listed = [
             (entry["seat"], entry["index"])
             for entry in probe.cast_target_spec(0, card, optional_cost_payments={}).get("valid_targets") or ()
@@ -421,7 +474,7 @@ def test_a_card_named_at_the_cast_and_exiled_in_response_to_the_trigger_is_not_r
         if not listed:
             continue
         seat, slot = listed[0]
-        game = _table(_pool, _mercenaries, hand=[card])
+        game = _table(_pool, _tribes, hand=[card])
         named = game.players[seat].graveyard[slot]
         assert game.queue_from_hand(
             0, card.name, target_player_index=seat, target_permanent_index=slot,
@@ -444,7 +497,7 @@ def test_a_card_named_at_the_cast_and_exiled_in_response_to_the_trigger_is_not_r
     assert not findings, "\n".join(findings)
 
 
-def test_a_card_the_cast_named_stands_and_one_that_left_is_chosen_again(_pool, _mercenaries):
+def test_a_card_the_cast_named_stands_and_one_that_left_is_chosen_again(_pool, _tribes):
     """The cast road, where this engine names an entry trigger's target as the
     permanent is cast. A card the trigger could choose rides the object and
     nobody is asked twice. One that left the pile while the permanent spell
@@ -460,7 +513,7 @@ def test_a_card_the_cast_named_stands_and_one_that_left_is_chosen_again(_pool, _
         if "Aura" in (card.type_line or ""):
             continue
         label = card.name
-        probe = _table(_pool, _mercenaries, hand=[card])
+        probe = _table(_pool, _tribes, hand=[card])
         listed = [
             (entry["seat"], entry["index"])
             for entry in probe.cast_target_spec(0, card, optional_cost_payments={}).get("valid_targets") or ()
@@ -470,7 +523,7 @@ def test_a_card_the_cast_named_stands_and_one_that_left_is_chosen_again(_pool, _
         seat, slot = listed[0]
 
         # Named, and still there: it stands.
-        game = _table(_pool, _mercenaries, interactive={0}, hand=[card])
+        game = _table(_pool, _tribes, interactive={0}, hand=[card])
         named = game.players[seat].graveyard[slot]
         before = _yards(game)
         assert game.queue_from_hand(
@@ -490,7 +543,7 @@ def test_a_card_the_cast_named_stands_and_one_that_left_is_chosen_again(_pool, _
             stood += 1
 
         # Named, and exiled in response to the permanent spell.
-        game = _table(_pool, _mercenaries, interactive={0}, hand=[card])
+        game = _table(_pool, _tribes, interactive={0}, hand=[card])
         assert game.queue_from_hand(
             0, card.name, target_player_index=seat, target_permanent_index=slot,
         ).supported, label
@@ -521,7 +574,7 @@ def test_a_card_the_cast_named_stands_and_one_that_left_is_chosen_again(_pool, _
     assert not findings, "\n".join(findings)
 
 
-def test_a_slot_the_trigger_could_not_choose_is_set_aside_at_the_push(_pool, _mercenaries):
+def test_a_slot_the_trigger_could_not_choose_is_set_aside_at_the_push(_pool, _tribes):
     """Gravedigger cast naming a **Lightning Bolt** in its controller's pile —
     not a creature card, and only a script can name it, the picker never
     offers it. The trigger cannot choose it (CR 603.3d), so the announcement
@@ -532,7 +585,7 @@ def test_a_slot_the_trigger_could_not_choose_is_set_aside_at_the_push(_pool, _me
         t for t in compile_card_oracle(digger).triggered_abilities
         if t.condition.kind == "enters_battlefield"
     )
-    game = _table(_pool, _mercenaries, interactive={0}, hand=[digger])
+    game = _table(_pool, _tribes, interactive={0}, hand=[digger])
     bolt = _YARDS[0].index("Lightning Bolt")
 
     assert game.queue_from_hand(

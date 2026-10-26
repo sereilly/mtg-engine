@@ -352,11 +352,22 @@ def _another_seat_chooses(ability) -> bool:
     )
 
 
-_COLOR_OF_YOUR_CHOICE = "the color of your choice"
+#: The values a line can leave its controller to choose **as it resolves**
+#: (CR 608.2d), each by the phrase that prints it and the step the lowering
+#: puts in front of the effect that spends it (``lowering/_common``'s
+#: ``split_color_choice`` / ``split_creature_type_choice``). Both steps are the
+#: chosen-value family of ``INSTRUCTION_CATEGORIES`` - "a sentence that
+#: produces a value and no effect of its own, read back by the next sentence"
+#: - which ``test_a_resolution_choice_is_a_step_of_the_chosen_value_family``
+#: holds every row to.
+_RESOLUTION_CHOICES = (
+    ("the color of your choice", "choose_color"),
+    ("the creature type of your choice", "choose_creature_type"),
+)
 
 
 def _only_choice_is_made_on_resolution(ability, line: str) -> bool:
-    """Whether the one thing this line leaves to its controller is a colour the
+    """Whether everything this line leaves to its controller is a value the
     ability asks for **as it resolves** (CR 608.2d) - a choice no activation
     picker could offer, because nothing is announced.
 
@@ -369,20 +380,82 @@ def _only_choice_is_made_on_resolution(ability, line: str) -> bool:
     step in front of the sweep, the `color_choice` prompt
     `tests/engine/test_color_choice_timing.py` holds every such line to.
 
+    Onslaught's Mistforms ("{1}: This creature becomes the creature type of
+    your choice until end of turn."), Mistform Mask's enchanted creature,
+    Riptide Chronologist's untap and Walking Desecration's forced attack are
+    the same question one characteristic over, and reached it at Onslaught's
+    promotion rehearsal: none of the eight names a target, a self type change,
+    an untargeted untap and an untargeted attack requirement derive no spec
+    (``derive_activation_spec``'s None is "this ability targets nothing"), and
+    the program carries a `choose_creature_type` step in front of the effect
+    (the `creature_type_choice` prompt). When the guard was a colour alone it
+    named all eight; read through `_RESOLUTION_CHOICES` it excuses nine lines
+    across both manifest roles - Root Greevil and those eight - and nothing
+    else.
+
     Knight of Dawn and Caldera Kavu print the same phrase and never reached
     this question only because the step behind *their* choice has a spec that
     says "none" out loud. Derived from the program, like
     `_another_seat_chooses` above and for its reason; and narrow on purpose - a
-    line that also prints "target", or any other "... of your choice", is not
-    excused by a colour.
+    line that also prints "target", or any other "... of your choice" (a
+    source, a creature: an *object* chosen, which needs a picker), is not
+    excused by a value, and a phrase is excused only when the program carries
+    the step that asks it.
     """
     if re.search(r"\btargets?\b", line):
         return False
-    if "of your choice" in line.replace(_COLOR_OF_YOUR_CHOICE, ""):
-        return False
     steps = ability.instruction.payload.get("steps") or (ability.instruction,)
-    return _COLOR_OF_YOUR_CHOICE in line and any(
-        step.kind == "choose_color" for step in steps
+    kinds = {step.kind for step in steps}
+    rest = line
+    for phrase, kind in _RESOLUTION_CHOICES:
+        if kind in kinds:
+            rest = rest.replace(phrase, "")
+    return rest != line and "of your choice" not in rest
+
+
+def test_a_resolution_choice_is_a_step_of_the_chosen_value_family():
+    """Each step `_RESOLUTION_CHOICES` excuses a phrase by is one the engine
+    files as a value asked while the effect is applied - the category
+    ``choose_color`` and ``choose_creature_type`` share with ``choose_card_type``
+    - so a row cannot excuse a phrase by a step that *does* something."""
+    from engine.grammar.lowering.categories import INSTRUCTION_CATEGORIES
+
+    family = INSTRUCTION_CATEGORIES["choose_color"]
+    assert {
+        kind: INSTRUCTION_CATEGORIES.get(kind) for _phrase, kind in _RESOLUTION_CHOICES
+    } == {kind: family for _phrase, kind in _RESOLUTION_CHOICES}
+
+
+def test_a_value_chosen_on_resolution_excuses_its_phrase_and_nothing_else():
+    """The arm above, on invented cards, so it holds in both manifest roles.
+
+    A creature type chosen as the ability resolves is excused; the same line
+    with an *object* "of your choice" beside it is not, and neither is a line
+    whose program carries no step to ask the phrase."""
+    from tests.helpers import _mk_card
+
+    def only_ability(text):
+        card = _mk_card(
+            name="Invented Shapeshifter", mana_cost="{1}{U}",
+            type_line="Creature — Shapeshifter", oracle_text=text,
+        )
+        (ability,) = _abilities(card)
+        return ability, _QUOTED.sub("", _REMINDER.sub("", ability.source_line)).lower()
+
+    ability, line = only_ability(
+        "{1}: This creature becomes the creature type of your choice until end of turn."
+    )
+    assert ability.supported
+    assert derive_activation_spec(ability) is None
+    assert _only_choice_is_made_on_resolution(ability, line)
+    # The same ability read against a line that also prints an object choice.
+    assert not _only_choice_is_made_on_resolution(
+        ability, line + " the next time a source of your choice would deal damage"
+    )
+    # A program without the asking step does not excuse the phrase.
+    other, other_line = only_ability("{1}: This creature gets +1/+1 until end of turn.")
+    assert not _only_choice_is_made_on_resolution(
+        other, other_line + " the creature type of your choice"
     )
 
 

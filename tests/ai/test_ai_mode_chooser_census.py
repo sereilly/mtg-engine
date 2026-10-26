@@ -189,17 +189,70 @@ SPELLS = {
 SPARE = _mk_card(name="Bait Spare Card", type_line="Sorcery")
 
 
-def place(game, seat: int, key: str) -> Permanent:
-    """Put zoo unit *key* onto *seat*'s battlefield; the bait permanent."""
+_BAIT: dict = {}
+
+
+def subtype_bait(card) -> "tuple[dict, dict]":
+    """``(zoo units, graveyard units)``: one creature, and one creature card,
+    of each creature type a mode of *card* names in its target — "Fever Charm
+    deals 3 damage to target **Wizard** creature", "Destroy target
+    **Cleric**" and "Return target **Cleric** card from your graveyard to
+    your hand" (Misery Charm), "Target **Soldier** creature gets +2/+2"
+    (Piety Charm) — read off the modes' own cast specs (``subtype_filter``,
+    ``graveyard_subtypes``), the reading
+    ``tests/regressions/test_modal_mode_announcements.py``'s census board
+    makes.
+
+    Per card, so no other card's board is touched: the fixed zoo is Beasts, a
+    Wall and a Golem, and before Onslaught's promotion rehearsal no shipped
+    modal spell narrowed a target by creature type — the four Charms' modes
+    were "no census permanent is a legal target on the side it wants" for a
+    table with nothing of the tribe on it."""
+    cached = _BAIT.get(card.name)
+    if cached is not None:
+        return cached
+    zoo: dict = {}
+    grave: dict = {}
+    for index in range(len(compile_card_oracle(card).modes)):
+        spec = mode_spec(card, index)
+        wanted = (spec.get("filter") or {}).get("subtype_filter")
+        for subtype in (wanted if isinstance(wanted, (list, tuple)) else (wanted,)):
+            if subtype:
+                zoo.setdefault(f"{subtype} creature", _creature(
+                    f"Bait {subtype.title()}", type_line=f"Creature - {subtype.title()}",
+                ))
+        for subtype in spec.get("graveyard_subtypes") or ():
+            grave.setdefault(f"{subtype} card", _creature(
+                f"Bait Dead {subtype.title()}", type_line=f"Creature - {subtype.title()}",
+            ))
+    _BAIT[card.name] = (zoo, grave)
+    return zoo, grave
+
+
+def zoo(card) -> dict:
+    """The zoo *card*'s boards draw from: ``ZOO`` and its own subtype bait,
+    the bait last so every board the fixed zoo already built is built first."""
+    return {**ZOO, **subtype_bait(card)[0]}
+
+
+def graves(card) -> dict:
+    """``GRAVE`` and *card*'s own graveyard subtype bait, the same way."""
+    return {**GRAVE, **subtype_bait(card)[1]}
+
+
+def place(game, seat: int, key: str, units: "dict | None" = None) -> Permanent:
+    """Put zoo unit *key* (of *units*, default ``ZOO``) onto *seat*'s
+    battlefield; the bait permanent."""
+    units = ZOO if units is None else units
     if key == "aura":
         host = Permanent(card=_AURA_HOST)
         game._put_permanent_onto_battlefield(seat, host, seat)
         host.metadata["summoning_sickness_turn"] = -99
-        aura = Permanent(card=ZOO["aura"])
+        aura = Permanent(card=units["aura"])
         game._put_permanent_onto_battlefield(seat, aura, seat)
         attach_aura(aura, host)
         return aura
-    permanent = Permanent(card=ZOO[key])
+    permanent = Permanent(card=units[key])
     game._put_permanent_onto_battlefield(seat, permanent, seat)
     permanent.metadata["summoning_sickness_turn"] = -99
     permanent.tapped = key == "tapped creature"
@@ -225,10 +278,12 @@ def board(card, placements=(), *, window=None, grave=(), stack=None):
     game.enforce_mana_costs = True
     game.interactive_seats = set()
     placed = {}
+    units = zoo(card)
     for seat, key in placements:
-        placed[(seat, key)] = place(game, seat, key)
+        placed[(seat, key)] = place(game, seat, key, units)
+    pile_units = graves(card)
     for seat, key in grave:
-        game.players[seat].graveyard.append(GRAVE[key])
+        game.players[seat].graveyard.append(pile_units[key])
     if window == "combat":
         game.start_turn(OPP)
         game._close_current_priority_step()
@@ -369,7 +424,7 @@ def worth_casting(game, card, index) -> "str | None":
 def _zoo_keys_legal(card, index, seat, window=None, grave=(), stack=None) -> list:
     """Which zoo units mode *index* may target when they sit on *seat*."""
     keys = []
-    for key in ZOO:
+    for key in zoo(card):
         game, placed = board(card, [(seat, key)], window=window, grave=grave, stack=stack)
         bait = placed[(seat, key)]
         slot = (game.controller_index_of(bait), game.battlefield_index_of(bait))
@@ -759,10 +814,10 @@ def plan(card, index) -> dict:
                     (OPP,) if window == "combat" else (ME,) if window == "attack"
                     else (OPP, ME)
                 )
-                for key in ZOO
+                for key in zoo(card)
             ] + [
                 {**base, "grave": [(holder, key)]}
-                for holder in (OPP, ME) for key in GRAVE
+                for holder in (OPP, ME) for key in graves(card)
             ]
             measured = [(does_something(card, index, c), c) for c in candidates]
             # The boards it does its caster some good on, when there are any:
@@ -798,7 +853,7 @@ def plan(card, index) -> dict:
             program, (program.modes[index].instruction,)
         )) == {"opponent"}
         for owner in ((OPP,) if denies else (ME, OPP)):
-            for key in GRAVE:
+            for key in graves(card):
                 game, _ = board(card, grave=[(owner, key)])
                 if index in game.announceable_modes(ME, card):
                     candidates.append({**base, "grave": [(owner, key)]})
@@ -806,7 +861,7 @@ def plan(card, index) -> dict:
             return {"unbuildable": "no census graveyard card is a legal target"}
     elif shape == "roles":
         candidates = []
-        keys = list(ZOO)
+        keys = list(zoo(card))
         for first in keys:
             for second in keys:
                 if first == second:
