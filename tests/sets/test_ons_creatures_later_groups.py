@@ -451,6 +451,108 @@ def test_w1g4_bloodline_shaman_default_names_its_librarys_commonest_type(set_poo
 # ==== W1G6 ==========================================================
 # W1G6's tests go between this line and the "end W1G6" line.
 
+# "Share a creature type" (CR 205.3m) — Graxiplon: "This creature can't be
+# blocked unless defending player controls three or more creatures that share a
+# creature type." The group must hold one type in common among all of its
+# members; each pair sharing one is not enough.
+
+from engine import Game as _W1G6Game, PlayerState as _W1G6PlayerState
+from engine.models import Permanent as _W1G6Permanent
+from tests.helpers import resolve_stack as _w1g6_resolve_stack
+
+
+def _w1g6_card(set_pool, name):
+    for code in ("ONS", "LEA"):
+        pool = set_pool(code)
+        if name in pool:
+            return pool[name]
+    raise KeyError(name)
+
+
+def _w1g6_graxiplon_combat(set_pool, defenders, *, face_down=0):
+    """Graxiplon attacking a seat that controls *defenders* (and *face_down*
+    face-down creatures cast for their morph cost); the declare-blockers step,
+    nothing declared yet. Returns the game and the defenders by name."""
+    me = _W1G6PlayerState(name="Me", library=[_w1g6_card(set_pool, "Island")] * 6)
+    opp = _W1G6PlayerState(
+        name="Opp", hand=[_w1g6_card(set_pool, "Krosan Colossus")] * face_down,
+        library=[_w1g6_card(set_pool, "Forest")] * 6,
+    )
+    game = _W1G6Game(players=[me, opp])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    graxiplon = _W1G6Permanent(card=_w1g6_card(set_pool, "Graxiplon"))
+    game._put_permanent_onto_battlefield(0, graxiplon, None)
+    graxiplon.metadata["summoning_sickness_turn"] = -99
+    board = {}
+    for name in defenders:
+        perm = _W1G6Permanent(card=_w1g6_card(set_pool, name))
+        game._put_permanent_onto_battlefield(1, perm, None)
+        board[name] = perm
+    if face_down:
+        game.start_turn(1)
+        game._close_current_priority_step()
+        for _ in range(face_down):
+            assert game.queue_from_hand(1, "Krosan Colossus", alternative_cost=True).supported
+            _w1g6_resolve_stack(game)
+    game.stack.clear()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game._set_phase_and_step("combat", "declare_attackers")
+    slot = game.battlefield_index_of(graxiplon)
+    ok, why = game.declare_attackers(0, [slot], defending_player_index=1)
+    assert ok, why
+    game.advance_combat_phase()
+    assert game.current_step == "declare_blockers"
+    return game, graxiplon, board
+
+
+def _w1g6_block(game, graxiplon, blocker):
+    return game.declare_blockers(
+        1, {game.battlefield_index_of(blocker): game.battlefield_index_of(graxiplon)}
+    )
+
+
+def test_w1g6_graxiplon_cannot_be_blocked_by_a_board_whose_pairs_share_but_no_three_do(set_pool):
+    """A Goblin Warrior, a Goblin and an Elf Warrior: every pair of them shares
+    a creature type, but no one type is held by all three — so the defending
+    player does not control three creatures that share a creature type, and
+    no creature of theirs may block Graxiplon."""
+    game, graxiplon, board = _w1g6_graxiplon_combat(
+        set_pool, ["Goblin Sky Raider", "Skirk Prospector", "Elvish Warrior"],
+    )
+    assert game.is_unblockable(graxiplon)
+    for blocker in board.values():
+        ok, why = _w1g6_block(game, graxiplon, blocker)
+        assert not ok, (blocker.card.name, why)
+
+
+def test_w1g6_graxiplon_can_be_blocked_once_three_share_a_type_by_any_of_them(set_pool):
+    """A third Goblin makes three that share Goblin. The restriction is lifted
+    for every blocker, not just the Goblins: the Human Soldier, which shares
+    nothing, blocks it."""
+    game, graxiplon, board = _w1g6_graxiplon_combat(
+        set_pool,
+        ["Goblin Sky Raider", "Skirk Prospector", "Goblin Piledriver", "Glory Seeker"],
+    )
+    assert not game.is_unblockable(graxiplon)
+    ok, why = _w1g6_block(game, graxiplon, board["Glory Seeker"])
+    assert ok, why
+    assert [p.card.name for p in game.creatures_blocking(graxiplon)] == ["Glory Seeker"]
+    assert "Opp declared 1 blocker(s)" in game.log
+
+
+def test_w1g6_graxiplon_counts_no_face_down_creature_toward_a_group(set_pool):
+    """Two Goblins and two face-down creatures: a face-down creature has no
+    creature types (CR 708.2), so the face-down pair is no group of its own
+    and adds nothing to the Goblins' — Graxiplon stays unblockable."""
+    game, graxiplon, board = _w1g6_graxiplon_combat(
+        set_pool, ["Goblin Sky Raider", "Skirk Prospector"], face_down=2,
+    )
+    assert game.is_unblockable(graxiplon)
+    ok, why = _w1g6_block(game, graxiplon, board["Goblin Sky Raider"])
+    assert not ok, why
+
 # ==== end W1G6 ======================================================
 
 

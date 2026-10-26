@@ -154,6 +154,26 @@ _IF_YOU_CONTROL = re.compile(
     r"^(?P<rest>.+?) if (?P<who>you) control an? (?P<board>.+)$"
 )
 
+#: "This creature can't be blocked **unless defending player controls three or
+#: more creatures that share a creature type**." (Graxiplon.) The seat-scoped
+#: qualifier above printed with "unless", so the restriction applies while the
+#: clause is *false* (``negated``), with a printed count, and with a relation
+#: among the counted objects rather than a narrowing of each: the group has to
+#: hold **one** creature type in common (``object_creature_types
+#: .shared_creature_type_count``) — a Goblin Warrior, a Goblin and an Elf
+#: Warrior are not three that share one. The relation is part of the pattern
+#: rather than of the noun phrase because it is about the set, which no
+#: per-object filter can say.
+#:
+#: Only with the relation. A bare "unless defending player controls an Island"
+#: is the grammar's ``cant_attack_unless_defender_controls`` and the attack
+#: row's, and a general "unless" qualifier stripped here first would be a
+#: second reader of those lines disagreeing with the first.
+_UNLESS_DEFENDER_CONTROLS_SHARING = re.compile(
+    r"^(?P<rest>.+?) unless (?P<who>defending player) controls "
+    r"(?P<count>\w+) or more (?P<board>.+?) that share a creature type$"
+)
+
 #: The kinds whose enforcement site **asks** about a condition. A qualifier
 #: attached to any other kind would be a restriction applied unconditionally —
 #: silently, and in the direction of doing more than the card says — so the line
@@ -261,6 +281,26 @@ def restriction_condition_holds(
     from .subject_filters import subject_matches
 
     described = condition.get("subject") or {}
+    # "…unless defending player controls three or more creatures that share a
+    # creature type" (Graxiplon): a count and a relation over the seat's
+    # matching permanents, and an "unless" — the restriction applies while the
+    # count is *not* met. A seat nobody can name answers False here as above.
+    if condition.get("shared_creature_type_count") is not None:
+        seat = defender if condition.get("who") == "defending_player" else observer
+        if seat is None or not (0 <= seat < len(game.players)):
+            return False
+        from .object_creature_types import (creature_types,
+                                            shared_creature_type_count)
+
+        group = shared_creature_type_count(
+            creature_types(game, perm)
+            for perm in game.controlled_by(seat)
+            if subject_matches(
+                game, perm, described, observer=observer, source=source
+            )
+        )
+        met = group >= int(condition["shared_creature_type_count"])
+        return not met if condition.get("negated") else met
     if condition.get("who") == "anyone":
         return any(
             subject_matches(game, perm, described, observer=observer, source=source)
@@ -295,10 +335,22 @@ def combat_restriction_for(
     # asks about would be worse than one nobody reads, so the attachment is
     # gated on `CONDITIONAL_RESTRICTION_KINDS`.
     condition: dict | None = None
-    qualifier = _AS_LONG_AS.match(normalized_line) or _IF_YOU_CONTROL.match(
-        normalized_line
+    sharing = _UNLESS_DEFENDER_CONTROLS_SHARING.match(normalized_line)
+    qualifier = None if sharing is not None else (
+        _AS_LONG_AS.match(normalized_line)
+        or _IF_YOU_CONTROL.match(normalized_line)
     )
-    if qualifier is not None:
+    if sharing is not None:
+        board = _printed_noun(sharing.group("board"))
+        count = _NUMBER_WORDS.get(sharing.group("count"))
+        if board is None or count is None:
+            return None
+        condition = {
+            "who": "defending_player", "subject": board,
+            "shared_creature_type_count": count, "negated": True,
+        }
+        normalized_line = sharing.group("rest").strip()
+    elif qualifier is not None:
         board = _printed_noun(qualifier.group("board"))
         if board is None:
             return None
