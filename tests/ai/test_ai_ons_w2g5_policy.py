@@ -349,3 +349,45 @@ def test_w2g5_the_sized_activation_is_carried_out(set_pool):
     assert not report.refused_activations
     assert not any(p.is_creature for p in game.controlled_by(1))
     assert all(p.tapped for p in game.controlled_by(0) if p.has_type("land"))
+
+
+# ==== Wheel and Deal: how many opponents to name ==============================
+#
+# "Any number of target opponents each discard their hands, then draw seven
+# cards. Draw a card." The role walk answered every optional seat role it
+# could, so it named every opponent or the spell was not cast — and stopping
+# early, naming nobody included, was not weighed (W1G10;
+# `ai_targets._weighed_seat_prefix` rehearses each length).
+
+
+def _w2g5_wheel(set_pool, *, their_hand, their_library=30):
+    game = _w2g5_board(
+        set_pool, ["Island"] * 4, ["Grizzly Bears"], hand=["Wheel and Deal", "Island"],
+    )
+    island = _w2g5_card(set_pool, "Island")
+    game.players[1].hand = [island] * their_hand
+    game.players[1].library = [island] * their_library
+    return game
+
+
+@pytest.mark.parametrize(("their_hand", "their_library", "names"), [
+    (2, 30, None),  # five cards handed to the opponent: name nobody, draw one
+    (9, 30, 1),     # nine for seven: worth naming them
+    (2, 5, 1),      # seven from a library of five: they lose at their draw
+])
+def test_w2g5_wheel_and_deal_names_the_opponents_worth_naming(
+    set_pool, their_hand, their_library, names,
+):
+    from engine.ai_actions import cast_announcement
+    from engine.ai_payment import tap_planned_lands
+    from engine.ai_policy import choose_cast_action
+
+    game = _w2g5_wheel(set_pool, their_hand=their_hand, their_library=their_library)
+    action = choose_cast_action(game, 0)
+    assert action is not None and action.card_name == "Wheel and Deal"
+    assert action.target_player_index == names
+    action = tap_planned_lands(game, 0, action)
+    assert game.cast_from_hand(0, action.card_name, **cast_announcement(action)).supported
+    resolve_stack(game)
+    assert len(game.players[1].hand) == (their_hand if names is None else min(7, their_library))
+    assert [card.name for card in game.players[0].hand] == ["Island", "Island"]

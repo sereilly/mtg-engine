@@ -430,11 +430,21 @@ def _choose_role_targets(
     looped = announced_roles_loop_side(card)
     if looped is not None and not any(sides):
         sides = (looped,) * len(spec_roles(announced))
+    optional = optional_role_levels(spec_roles(announced))
     picks = _role_chain(
         options, sides, 0, caster_index, card, game,
-        optional=optional_role_levels(spec_roles(announced)),
+        optional=optional,
         best_first=per_opponent_role_levels(spec_roles(announced)),
     )
+    if picks is not None and _every_role_an_optional_seat(spec_roles(announced), optional):
+        # "**Any number of** target opponents each discard their hands, then
+        # draw seven cards." (Wheel and Deal.) The walk answers every role it
+        # can, so it named every opponent — and how many to name is the whole
+        # decision: an opponent holding two cards is handed five, one holding
+        # nine loses two, and naming nobody leaves the spell's own "Draw a
+        # card". Each length the chain can stop at, none included, is
+        # rehearsed, and the best is announced (`_weighed_seat_prefix`).
+        return _weighed_seat_prefix(game, caster_index, card, picks)
     if not picks:
         return ()
     # A **player** role's answer is the seat itself (Donate's "target player"),
@@ -492,6 +502,59 @@ def _names_x_targets(card: CardDefinition) -> bool:
         return False
     described = (slot[1].payload or {}).get("targets")
     return isinstance(described, dict) and described.get("quantifier") == "exactly"
+
+
+def _every_role_an_optional_seat(roles, optional: frozenset) -> bool:
+    """Whether every role of an announcement is a **player** a cast may leave
+    unnamed — "any number of target opponents" (Wheel and Deal), the chain of
+    optional seat roles ``target_roles.any_number_of_opponents_roles`` builds."""
+    roles = list(roles or ())
+    return bool(roles) and all(
+        position in optional and isinstance(role, dict) and role.get("kind") == "player"
+        for position, role in enumerate(roles)
+    )
+
+
+def _weighed_seat_prefix(game: Game, caster_index: int, card: CardDefinition, picks):
+    """`_choose_role_targets`' answer for a chain of optional seat roles: the
+    first *n* of the walk's *picks* (every seat it would name, in its order),
+    for the *n* whose cast leaves the caster furthest ahead — rehearsed one
+    length at a time (`_rehearse_announcement`), naming nobody included.
+
+    Ties go to the shorter announcement; a length nobody could rehearse is not
+    weighed, and with none weighable the walk's full answer stands, as it did.
+    The shape is the one every roles answer has: ``(seat, slots, ids, stack)``,
+    with no seat at all for a cast that names none (the engine reads an
+    announcement of no seat and no object as naming no opponent).
+    """
+    def shaped(chosen):
+        seats = [pick["seat"] for pick in chosen]
+        return (
+            seats[0] if seats else None,
+            [None] * len(chosen), [None] * len(chosen), None,
+        )
+
+    best, best_swing = None, None
+    for length in range(len(picks) + 1):
+        answer = shaped(picks[:length])
+        if length > 1 and len({pick["seat"] for pick in picks[:length]}) > 1:
+            # Two seats is two player roles on one field, which a cast's
+            # announcement cannot carry (`_choose_role_targets` skips it).
+            break
+        rehearsal = _rehearse_announcement(
+            game, caster_index, card,
+            _announcement(
+                card, target=answer[0], caster=caster_index,
+                permanent_index=answer[1], permanent_ids=answer[2],
+            ),
+        )
+        if rehearsal is None or not rehearsal.accepted:
+            continue
+        if best_swing is None or rehearsal.swing > best_swing + 1e-9:
+            best, best_swing = answer, rehearsal.swing
+    if best is None:
+        return shaped(picks) if picks else ()
+    return best
 
 
 def optional_role_levels(roles) -> frozenset:
