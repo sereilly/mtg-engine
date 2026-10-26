@@ -730,7 +730,13 @@ def _assert_expected(
     The decay this *is* exposed to is the decklist moving out from under it — an
     expectation for a card ``_build_deck`` no longer plays stops firing with
     nothing failing. ``tests/ai/test_ai_simulator.py`` holds the two in step.
+
+    A cast that names **no seat at all** has nothing here to check: every card
+    above names one, and "any number of target opponents" announced as none
+    (Wheel and Deal, `ai_targets._weighed_seat_prefix`) is not one of them.
     """
+    if target_index is None:
+        return None
     before_target = before[target_index]
     after_target = after[target_index]
 

@@ -433,3 +433,20 @@ def test_w2g5_butcher_orgg_sends_the_lethal_six_to_the_player(set_pool):
     game = _w2g5_orgg_attacks(set_pool, life=6)
     assert game.players[1].life <= 0
     assert not any("Butcher Orgg divides" in line for line in game.log)
+
+
+def test_w2g5_the_simulator_casts_a_wheel_naming_nobody(set_pool):
+    """The simulator's own cast executor over the "name nobody" board: the
+    cast resolves and the simulator's after-cast oracle, which indexed the
+    seats by the cast's target, has no seat to read and nothing to check."""
+    from engine import ai_simulator
+
+    game = _w2g5_wheel(set_pool, their_hand=2)
+    game.priority_driver = None
+    report = ai_simulator.SimulationReport(
+        games_requested=1, games_completed=0, interaction_count=0,
+    )
+    assert ai_simulator._play_one_cast(game, 0, report, 1, 1)
+    assert any("cast Wheel and Deal -> resolved" in line for line in report.log_lines)
+    assert report.issues == [] and not report.refused_casts
+    assert len(game.players[1].hand) == 2
