@@ -1553,8 +1553,10 @@ def _attached_host_creature_types(game, described: dict, source) -> dict:
 
     The host is the source's live attachment, or — for a source that has left,
     an Aura sacrificed to pay for the ability now resolving — the permanent it
-    was last attached to, provided that is still on the battlefield
-    (``handlers._targets.attached_host``). With no source or no host the key is
+    was last attached to (``handlers._targets.attached_host``). A host that has
+    *also* left by now (destroyed in response to the Crown) is still the far
+    end: "it" is the object as it last existed (CR 608.2h), and the creatures
+    sharing its types still share them. With no source or no host the key is
     left in place, and the pure matcher refuses it: nothing shares a type with
     nothing, and ignored the narrowing would reach every creature.
     """
@@ -1563,6 +1565,8 @@ def _attached_host_creature_types(game, described: dict, source) -> dict:
     from .object_creature_types import creature_types
 
     host = attached_host(game, source) if source is not None else None
+    if host is None and source is not None and not game.is_on_battlefield(source):
+        host = source.metadata.get("last_attached_to")
     if host is None:
         return described
     resolved = dict(described)

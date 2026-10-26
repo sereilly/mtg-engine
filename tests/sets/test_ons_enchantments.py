@@ -797,6 +797,33 @@ def test_w1g6_mana_echoes_adds_nothing_for_a_face_down_creature(set_pool):
     assert any(_w1g6_is_face_down(p) for p in game.all_permanents())
     assert _w1g6_colorless(game) == 0, game.log
 
+
+def test_w1g6_a_crown_s_kin_are_still_pumped_after_the_host_dies_in_response(set_pool):
+    """Crown of Vigor's sacrifice on the stack; in response the opponent
+    destroys the enchanted Elf Warrior. The ability still resolves: "it" is
+    the Elf Warrior as it last existed (CR 608.2h), so the Elf Druid and the
+    Goblin Warrior that shared its types get +1/+1, and the Human Soldier does
+    not."""
+    game = _w1g6_table(set_pool, hand=["Crown of Vigor"])
+    board = _w1g6_tribal_board(game, set_pool)
+    game.players[1].hand.append(_w1g6_card(set_pool, "Swat"))
+    before = {key: _w1g6_pt(perm) for key, perm in board.items()}
+    aura = _w1g6_enchant(game, "Crown of Vigor", board["host"])
+    assert game.queue_permanent_ability(0, "Crown of Vigor").supported
+    assert not game.is_on_battlefield(aura)
+    assert game.queue_from_hand(
+        1, "Swat", target_permanent_ids=[board["host"].permanent_id],
+    ).supported
+    assert game.resolve_top_of_stack()
+    game._check_between_resolutions()
+    assert not game.is_on_battlefield(board["host"]), game.log
+    _w1g6_resolve_stack(game)
+
+    for key in ("elf", "goblin"):
+        power, toughness = before[key]
+        assert _w1g6_pt(board[key]) == (power + 1, toughness + 1), (key, game.log)
+    assert _w1g6_pt(board["human"]) == before["human"]
+
 # ==== end W1G6 ======================================================
 
 
