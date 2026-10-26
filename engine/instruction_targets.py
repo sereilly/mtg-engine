@@ -338,12 +338,35 @@ _WRAPPER_STEP_KEYS = {
     "if_then": ("then", "else"),
 }
 
+#: The wrappers whose payload carries **one** instruction rather than a list,
+#: and under which key — kept apart from :data:`_WRAPPER_STEP_KEYS` because a
+#: reader of that table iterates the value it finds.
+#:
+#: "The next time you would draw a card this turn, <effect> instead." (the
+#: Words, Mangara's Tome.) The effect is armed by an *activated ability*, and
+#: CR 115.1c makes that ability targeted when its text says "target": "The
+#: target(s) are chosen as the ability is activated". So Words of War's "any
+#: target" is announced with the activation, held to CR 608.2b as the ability
+#: resolves, and handed to the armed effect, which runs at the draw against
+#: what was announced.
+#:
+#: ``create_delayed_trigger`` is deliberately absent: a delayed ability's
+#: targets are chosen as *it* goes on the stack (CR 603.3d), never by the
+#: ability that created it.
+_WRAPPER_SINGLE_STEP_KEYS = {
+    "arm_draw_replacement": ("instruction",),
+}
+
 
 def _nested_steps(instruction) -> tuple:
     """The instructions a wrapper carries, empty for anything else."""
     nested: tuple = ()
     for key in _WRAPPER_STEP_KEYS.get(instruction.kind, ()):
         nested += tuple(instruction.payload.get(key) or ())
+    for key in _WRAPPER_SINGLE_STEP_KEYS.get(instruction.kind, ()):
+        step = instruction.payload.get(key)
+        if step is not None:
+            nested += (step,)
     return nested
 
 
@@ -465,6 +488,14 @@ def _first_described_slot(instructions) -> "tuple[dict, object] | None":
             "repeat_process_on_request", "repeat_process_until",
         ):
             nested = _first_described_slot(instruction.payload.get("steps") or ())
+            if chosen(nested) is not None:
+                return nested
+            continue
+        if instruction.kind in _WRAPPER_SINGLE_STEP_KEYS:
+            # "{1}: The next time you would draw a card this turn, this
+            # enchantment deals 2 damage to **any target** instead." (Words of
+            # War.) See :data:`_WRAPPER_SINGLE_STEP_KEYS`.
+            nested = _first_described_slot(_nested_steps(instruction))
             if chosen(nested) is not None:
                 return nested
             continue

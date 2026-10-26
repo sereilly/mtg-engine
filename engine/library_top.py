@@ -12,8 +12,9 @@ battlefield), derived from its text while it is there:
   its controller alone — a different permission from the one above, and the
   weaker one.
 * "You may cast <filter> spells from the top of your library." / "…play lands
-  from the top of your library." (both cards.) CR 601.3's permission to begin
-  casting from somewhere other than the hand.
+  from the top of your library." (both cards.) / "You may play lands and cast
+  spells from the top of your library." (Future Sight, both at once.) CR
+  601.3's permission to begin casting from somewhere other than the hand.
 
 The third is the one with teeth, and it is deliberately **not** routed through
 ``engine/cast_permissions.py``: every grant there is an effect's, put on
@@ -86,6 +87,18 @@ _CAST_FROM_TOP = re.compile(
     r"^you may cast (?P<subject>.+?) spells from the top of your library$"
 )
 _PLAY_LANDS_FROM_TOP = "you may play lands from the top of your library"
+#: "You may play lands **and cast spells** from the top of your library."
+#: (Future Sight.) Both permissions in one clause and with no narrowing —
+#: Yawgmoth's Agenda's sentence one zone over
+#: (``cast_permissions._BOARD_GRAVEYARD_PLAY``). Read whole, as that one is:
+#: "play" covers a land (CR 305.1, which still charges the land drop — the
+#: card's 2019-06-14 ruling: "you may play that land only if you have any
+#: available land plays") and "cast" any spell (CR 601.3), each at its normal
+#: timing and for its normal costs (the 2019-06-14 ruling). A narrower
+#: printing is :data:`_CAST_FROM_TOP`'s or a different sentence.
+_PLAY_AND_CAST_FROM_TOP = (
+    "you may play lands and cast spells from the top of your library"
+)
 
 
 def _lines(card) -> list[str]:
@@ -105,7 +118,10 @@ def library_top_line(line: str) -> bool:
     matched as itself rather than split: splitting would claim half a line.
     """
     text = line.strip().lower().rstrip(".")
-    if text in (REVEALED_TEXT, PLAYERS_REVEALED_TEXT, LOOK_ANY_TIME_TEXT, _PLAY_LANDS_FROM_TOP):
+    if text in (
+        REVEALED_TEXT, PLAYERS_REVEALED_TEXT, LOOK_ANY_TIME_TEXT,
+        _PLAY_LANDS_FROM_TOP, _PLAY_AND_CAST_FROM_TOP,
+    ):
         return True
     if text == f"{LOOK_ANY_TIME_TEXT}, and {_PLAY_LANDS_FROM_TOP}":
         return True
@@ -286,6 +302,12 @@ def top_castable(game, player_index: int, card) -> bool:
             if states_permission(line, _PLAY_LANDS_FROM_TOP) and "land" in (
                 card.type_line or ""
             ).lower():
+                return True
+            # Future Sight: a land is played and anything else is cast, so the
+            # card on top is covered whatever it is. CR 601.3's other gates —
+            # timing, a prohibition, the land drop — are the play path's, asked
+            # there as for a card in hand (``cast_prohibitions``, CR 305.2).
+            if states_permission(line, _PLAY_AND_CAST_FROM_TOP):
                 return True
             match = _CAST_FROM_TOP.match(line)
             if match is None:

@@ -239,6 +239,7 @@ from .zones import (
     parse_put_library_top_into_hand,
     parse_graveyard_top_to_library,
     parse_exchange_zones,
+    parse_owner_shuffles_target_into_library,
     parse_player_exiles_top_of_library,
 )
 from .search import _parse_search_library
@@ -379,6 +380,7 @@ __all__ = [
     "_parse_pronoun_attach_rider",
     "_parse_exchange_control",
     "parse_exchange_zones",
+    "parse_owner_shuffles_target_into_library",
     "parse_player_exiles_top_of_library",
     "_parse_draw",
     "_parse_choose_cards_in_hand",

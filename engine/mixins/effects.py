@@ -919,6 +919,20 @@ class EffectsMixin:
             # the look-alike problem the battlefield reads already guard against.
             seat = next(i for i, p in enumerate(self.players) if p is target)
             emit(self, "you_gain_life", seat=seat, life_gained=amount)
+            # "Until end of turn, whenever a player gains life, that player
+            # loses 2 life for each 1 life they gained." (False Cure.) The
+            # delayed ability a resolved spell created (CR 603.7), announced
+            # from the same seam with the same number: the gainer's seat is
+            # "that player", the amount is what "they gained".
+            if self.delayed_triggers:
+                from ..delayed_triggers import fire_delayed_triggers
+
+                fire_delayed_triggers(
+                    self, "player_gains_life",
+                    trigger_context={
+                        "event_subject_player": seat, "life_gained": amount,
+                    },
+                )
 
     def _deal_damage_to_player(
         self, target: PlayerState, amount: int, source=None, *, then=None, restart=None,

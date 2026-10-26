@@ -345,6 +345,11 @@ def target_loses_life(game: Game, instruction: OracleInstruction, context: Oracl
             loss = amount * max(
                 0, int((context.results or {}).get(str(per_each["record"]), 0) or 0)
             )
+        elif per_each is not None and per_each.get("trigger_record") is not None:
+            # "…that player loses 2 life **for each 1 life they gained**."
+            # (False Cure.) The firing event's gain, through the one count
+            # evaluator ``target_gains_life`` reads Transcendence's loss with.
+            loss = amount * count_from_payload(game, context, per_each)
         elif per_each is not None:
             wanted = tuple(per_each.get("card_types") or ())
             loss = amount * sum(

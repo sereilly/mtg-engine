@@ -287,6 +287,15 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     # your hand" a production; its line is read here now, and its lowering
     # hands the pick to the draw interceptor that implements it
     # (`lowering/cards._lower_next_draw_replacement`).
+    #
+    # "The next time you would draw a card this turn, <effect> **instead**."
+    # (Onslaught's five Words.) The same replacement with the word printed
+    # behind the sentence it marks rather than in front of it — the pair
+    # ``conditional_instead`` reads for "if …, instead …" / "if …, … instead",
+    # and on its terms: the word is required exactly once, so neither spelling
+    # can be read with it missing or doubled. A sentence that does not end on
+    # the word right where its effect stops is no replacement this reads, and
+    # the line refuses rather than arming its effect as an ordinary one.
     if stream.at_word("the"):
         next_time = stream.mark()
         stream.advance()
@@ -296,6 +305,13 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
             stream.accept_punct(",")
             if stream.accept_word("instead"):
                 return ast.NextDrawReplacement(_parse_statement_body(stream))
+            effect = _parse_statement_body(stream)
+            if stream.accept_word("instead"):
+                return ast.NextDrawReplacement(effect)
+            raise stream.error(
+                "'the next time you would draw a card this turn' names no "
+                "'instead'"
+            )
         stream.reset(next_time)
         # "**The next instant or sorcery spell you cast this turn can't be
         # countered.**" (Overmaster, Insist.) The other "The next …" opener,

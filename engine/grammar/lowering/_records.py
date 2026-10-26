@@ -528,6 +528,11 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # controller at all (CR 108.4a), so the owner is the one seat the sentence
     # can name — Path of Peace's record, written as the card is taken.
     "exile_target_graveyard_card": ("exiled_cards", LAST_TARGET_OWNER),
+    # "The owner of target nonland permanent shuffles it into their library,
+    # then **draws two cards**." (Oblation.) Whose library the permanent went
+    # into, written as it moves — the owner (CR 400.3), the seat "then draws"
+    # is about, and Path of Peace's record for that question.
+    "shuffle_target_permanent_into_library": LAST_TARGET_OWNER,
     # "Remove a pupa counter from this Aura. **If you can't**, …" (Cocoon).
     # The removal records whether a counter was there to remove, and the
     # if-you-can't branch reads the record back, negated.

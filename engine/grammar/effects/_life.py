@@ -63,7 +63,8 @@ from ..distinct import parse_counted_objects
 from ..errors import GrammarError
 from ..nouns import parse_object_filter
 from ..phrases import _parse_for_each
-from ..records import (_parse_for_each_this_way, accept_each_life_lost,
+from ..records import (_parse_for_each_this_way, accept_each_life_gained,
+                       accept_each_life_lost,
                        accept_plus_per_cost_paid,
                        parse_for_each_discarded_this_way,
                        parse_for_each_sacrificed_this_way,
@@ -323,7 +324,14 @@ def accept_life_loss(
             # text and take the whole line down. A second inline reader here is
             # what made one printed idiom mean two things depending on the verb
             # in front of it.
-            per_each: object | None = _parse_for_each(stream, allow_this_way=True)
+            # "…that player loses 2 life **for each 1 life they gained**."
+            # (False Cure.) The firing event's gain as a count, read first for
+            # the gain production's reason with Transcendence's loss: the
+            # general reader below would take "1 life" for a quantified object
+            # and strand the rest.
+            per_each: object | None = accept_each_life_gained(stream)
+            if per_each is None:
+                per_each = _parse_for_each(stream, allow_this_way=True)
             if per_each is None:
                 for_each_mark = stream.mark()
                 if stream.accept_phrase("for", "each"):

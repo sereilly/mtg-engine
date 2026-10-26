@@ -67,6 +67,7 @@ from ._counted_life import (
 )
 from ._events import (
     _DEFENDING_PLAYER_EVENTS,
+    _EVENT_QUANTITIES,
     _EVENT_SUBJECT_CONTROLLERS,
     LOOP_BOUND_OBJECT,
     SWEPT_CONTROLLER_SEATS,
@@ -77,6 +78,12 @@ from ._events import (
     _back_reference_payload,
     damage_trigger_names_damaged_end,
 )
+
+
+#: The events whose firing is a **life gain** and that freeze how much
+#: (``_EVENT_QUANTITIES``' ``life_gained``): "whenever you gain life" (Vito)
+#: and "whenever a player gains life" (False Cure's delayed ability).
+_LIFE_GAINED_EVENTS = frozenset({"you_gain_life", "player_gains_life"})
 
 
 #: The recipients "loses <a fraction of> their life" has one answer per seat
@@ -511,6 +518,28 @@ def _lower_lose_life(
         raise LoweringError(
             "no life-loss handler counts the turn's death tally", node=node
         )
+    # "Until end of turn, whenever a player gains life, that player loses 2
+    # life **for each 1 life they gained**." (False Cure.) Transcendence's
+    # count one event over (``_counted_life``'s ``EachLifeLost`` branch): the
+    # printed 2 is the rate on ``amount`` and the count is the firing gain,
+    # frozen into the trigger's context by the life-gain seam — one loss of
+    # the product, not a loss per point. Refused under an event that records
+    # no gain and over any unit but 1, for that branch's reasons.
+    if isinstance(node.per_each, ast.EachLifeGained):
+        key = (
+            _EVENT_QUANTITIES.get(event or "")
+            if event in _LIFE_GAINED_EVENTS else None
+        )
+        if key is None:
+            raise LoweringError(
+                f"no event named {event!r} records the life this loss counts",
+                node=node,
+            )
+        if node.per_each.per != 1 or not isinstance(node.amount, ast.Fixed):
+            raise LoweringError(
+                "this loss is a printed rate per 1 life gained", node=node,
+            )
+        payload["per_each"] = {"trigger_record": key}
     # "Each player loses 1 life for each creature **they** control."
     # (Stronghold Discipline.) One number per losing seat, counted on that
     # seat's own battlefield — the per-recipient channel the halved loss above
@@ -581,7 +610,9 @@ def _lower_lose_life(
     # then whatever the branches below make of the subject, the gate each of
     # them already puts in front of its word ("defending player" only under an
     # event that froze one) included.
-    elif node.per_each is not None:
+    elif node.per_each is not None and not isinstance(
+        node.per_each, ast.EachLifeGained
+    ):
         filt = node.per_each
         if filt.zone != "graveyard" or not _counts_the_losers_own_pile(
             node.player, filt

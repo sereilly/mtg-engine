@@ -664,19 +664,80 @@ def _counted_pile_holds(
     than seven behind without undoing an activation that was legal when it
     began. Nothing re-asks the clause as the ability resolves.
     """
-    payload = _counted_pile_condition(match.group("pile"))
+    return _condition_holds_for_activator(
+        game, controller_index, source, _counted_pile_condition(match.group("pile")),
+    )
+
+
+def _condition_holds_for_activator(
+    game: "Game", controller_index: int, source, payload: "dict | None",
+) -> bool:
+    """*payload*, a lowered condition, asked of the game as it stands with the
+    activating seat as "you" — through ``handlers/control_flow.evaluate_condition``,
+    the one evaluator every printed "if" goes through. None (a clause nothing
+    could read) holds for nobody.
+
+    The two readers that hand it a payload each admit only a kind that is a fact
+    about the game as it stands (:func:`_counted_pile_condition`,
+    :func:`_opponent_board_condition`), which is why ``target`` can be the
+    activator: neither kind reads it.
+    """
     if payload is None or not 0 <= controller_index < len(game.players):
         return False
     from .game_types import OracleExecutionContext
     from .handlers.control_flow import evaluate_condition
 
     activator = game.players[controller_index]
-    # ``target`` is the activator only because the context needs one: the one
-    # kind :func:`_counted_pile_condition` admits never reads it.
     return evaluate_condition(
         game,
         OracleExecutionContext(
             caster=activator, target=activator, card=getattr(source, "card", None),
         ),
         payload,
+    )
+
+
+@lru_cache(maxsize=None)
+def _opponent_board_condition(phrase: str) -> "dict | None":
+    """"an opponent controls more lands than you" as the lowered condition
+    payload that answers it, or None when this cannot read it.
+
+    :func:`_counted_pile_condition`'s sibling, through the same reader and for
+    its reason: the identical words stand behind Land Tax's intervening "if"
+    and Tithe's, and a regex here would be a third answer to whose lands are
+    counted. Held to the ``controls`` kind with **"an opponent"** as its seat —
+    CR 602.5's restriction is a fact about the boards as they stand, and an
+    opponent is one of them existentially (``_conditions``' "an opponent"
+    reading, "more than you" included) — so a clause about a target, a
+    defending player or an event's player refuses rather than being asked of
+    nobody.
+    """
+    from .grammar import condition_payload_for
+
+    payload = condition_payload_for(phrase)
+    if (
+        payload is None
+        or payload.get("kind") != "controls"
+        or payload.get("who") != "opponent"
+    ):
+        return None
+    return payload
+
+
+def _readable_opponent_board(match: "re.Match[str]") -> bool:
+    """Whether the board clause about an opponent is one the condition
+    evaluator can answer."""
+    return _opponent_board_condition(match.group("board")) is not None
+
+
+def _opponent_board_holds(
+    game: "Game", controller_index: int, source, match: "re.Match[str]"
+) -> bool:
+    """"Activate only if an opponent controls more lands than you." (Weathered
+    Wayfarer.) Asked before any cost is paid (CR 602.5: a player can't *begin*
+    to activate it), against every living opponent's board, any one of them
+    enough — "an opponent" is an existential over seats."""
+    return _condition_holds_for_activator(
+        game, controller_index, source,
+        _opponent_board_condition(match.group("board")),
     )

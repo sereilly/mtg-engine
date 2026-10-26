@@ -354,6 +354,42 @@ def _parse_shuffle_graveyard_into_library(stream: TokenStream) -> ast.Statement 
     return ast.ShuffleGraveyardIntoLibrary(ast.PlayerRef("you"))
 
 
+def parse_owner_shuffles_target_into_library(
+    stream: TokenStream,
+) -> "ast.ShuffleTargetIntoLibrary | None":
+    """``The owner of target nonland permanent shuffles it into their
+    library`` at the cursor, or None with the cursor where it was. (Oblation.)
+
+    Rishadan Pawnshop's move (:class:`ast.ShuffleTargetIntoLibrary`) with the
+    sentence turned round: the object is still **chosen** (CR 601.2c — "target
+    nonland permanent") and still goes to its owner's library (CR 400.3), and
+    what the turn adds is a subject — the player who shuffles is that card's
+    owner, CR 108.3's seat, which "their library" then names. Both pronouns are
+    read rather than assumed: "it" is the target and "their" the owner, and a
+    sentence pairing the target with another player's library would be a
+    different card.
+
+    The node is Pawnshop's own, so nothing downstream learns a new shape; the
+    subject is what the caller leaves behind for the clause after ", then"
+    (``stream.last_subject``) — "…, then **draws two cards**" is the owner's
+    draw, read off the record the shuffle writes (``LAST_TARGET_OWNER``).
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("the", "owner", "of"):
+        return None
+    try:
+        chosen = parse_recipient(stream)
+    except GrammarError:
+        chosen = None
+    if (
+        not isinstance(chosen, ast.TargetSpec)
+        or not stream.accept_phrase("shuffles", "it", "into", "their", "library")
+    ):
+        stream.reset(mark)
+        return None
+    return ast.ShuffleTargetIntoLibrary(chosen, ast.PlayerRef("owner"))
+
+
 def _accept_player_shuffles(
     stream: TokenStream,
 ) -> "ast.ShuffleGraveyardIntoLibrary | None":

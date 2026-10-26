@@ -17,7 +17,7 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
-from ..oracle_types import HAND_CARDS_TO_LIBRARY
+from ..oracle_types import HAND_CARDS_TO_LIBRARY, LAST_TARGET_OWNER
 from ._amounts import resolve_amount
 from ._filters import graveyard_card_matches
 from ._targets import (_resolve_graveyard_slots, pile_owner_still_a_target,
@@ -369,6 +369,10 @@ def shuffle_target_permanent_into_library(game: Game, instruction: OracleInstruc
     owner = (
         game.players[owner_index] if owner_index is not None else context.caster
     )
+    # Whose library it went into, for "…, then **draws two cards**"
+    # (Oblation's owner) — written before the permanent leaves, for
+    # ``LAST_TARGET_OWNER``'s reason.
+    context.results[LAST_TARGET_OWNER] = game.players.index(owner)
     card = target_perm.card
     game.remove_from_battlefield(target_perm)
     game._remove_aura_effects(target_perm)

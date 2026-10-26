@@ -46,8 +46,14 @@ class ReplacementOutcome:
 
 Interceptor = Callable[[Any, dict], Optional[ReplacementOutcome]]
 Applicability = Callable[[Any, dict], bool]
+#: ``(game, event) -> [(instance key, option label), …]`` — see
+#: :func:`replacement_effect`'s ``instances``.
+Instances = Callable[[Any, dict], list]
 
 REPLACEMENTS: dict[str, list[Candidate]] = {}
+#: The registrations that stand for **several effects at once**, by key: each
+#: one's ``instances`` reader. See :func:`replacement_effect`.
+INSTANCED: dict[str, Instances] = {}
 
 # ---------------------------------------------------------------------------
 # Orders (CR 616.1's default choice)
@@ -391,8 +397,24 @@ def replacement_effect(
     prevents: bool = False,
     amount_role: str = "",
     label: str | None = None,
+    instances: Instances | None = None,
 ) -> Callable[[Interceptor], Interceptor]:
     """Register an interceptor for an event kind.
+
+    ``instances`` is for a registration that stands for **any number of
+    effects** — one per activation of an ability that arms one, where CR 616.1
+    counts each as an effect of its own ("If multiple Words have been used
+    prior to drawing a card, then you can choose which one to apply (and use
+    up) each time you draw a card", the Words, 2004-10-04). It reads
+    ``(game, event)`` and returns ``[(instance key, option label), …]``, oldest
+    first; :func:`replacement_candidates`, given the event, makes one CR 616.1
+    candidate of each, so CR 616.1e's ``effect_order`` prompt offers them
+    apart. Each instance's ``apply`` calls the interceptor with
+    ``instance=<key>``. The keys must be stable while the event is suspended
+    on the prompt — nothing happens in between — and equal effects should be
+    one instance, so the prompt never asks between two identical options. The
+    default for a seat nobody asks is the first, for ``choose_effect``'s tie
+    on one order.
 
     ``applies`` answers "would this effect apply to this event?" and is
     **required**: CR 616.1 has to count the effects in contention before running
@@ -446,6 +468,8 @@ def replacement_effect(
                       amount_role=amount_role)
         )
         registered.sort(key=lambda candidate: candidate.order)
+        if instances is not None:
+            INSTANCED[fn.__name__] = instances
         return fn
 
     return decorator
@@ -463,24 +487,51 @@ def _record(game, event: dict, interceptor: Interceptor) -> None:
         event[REPLACED] = True
 
 
-def replacement_candidates(kind: str) -> list[Candidate]:
+def replacement_candidates(
+    kind: str, game=None, event: dict | None = None,
+) -> list[Candidate]:
     """*kind*'s interceptors as CR 616.1 candidates, with the outcome bookkeeping
     already wired into ``apply``.
 
     The counterpart of ``prevention.registry.shield_candidates``: a damage event's
     contenders are both lists together, and neither caller should have to
     re-implement what applying one does to the event.
+
+    Given the *game* and the *event*, an ``instances`` registration
+    (:func:`replacement_effect`) is one candidate per instance it reports, keyed
+    ``<key>:<instance>``; without them it is the one candidate it always was,
+    whose interceptor then takes its own default instance.
     """
-    return [
-        Candidate(
-            key=c.key, order=c.order, applies=c.applies, label=c.label,
-            apply=lambda g, e, fn=c.apply: _record(g, e, fn),
-            prevents_or_redirects=c.prevents_or_redirects,
-            prevents=c.prevents,
-            amount_role=c.amount_role,
-        )
-        for c in REPLACEMENTS.get(kind, ())
-    ]
+    candidates: list[Candidate] = []
+    for c in REPLACEMENTS.get(kind, ()):
+        instances = INSTANCED.get(c.key)
+        if instances is None or game is None or event is None:
+            candidates.append(Candidate(
+                key=c.key, order=c.order, applies=c.applies, label=c.label,
+                apply=lambda g, e, fn=c.apply: _record(g, e, fn),
+                prevents_or_redirects=c.prevents_or_redirects,
+                prevents=c.prevents,
+                amount_role=c.amount_role,
+            ))
+            continue
+        if not c.applies(game, event):
+            continue
+        for instance, label in instances(game, event):
+            candidates.append(Candidate(
+                key=f"{c.key}:{instance}", order=c.order, label=label,
+                # Still armed: an instance's effect is spent by the event that
+                # applies it, and CR 616.1f re-asks the others afterwards.
+                applies=lambda g, e, ap=c.applies, rd=instances, inst=instance: (
+                    ap(g, e) and any(key == inst for key, _ in rd(g, e))
+                ),
+                apply=lambda g, e, fn=c.apply, inst=instance: _record(
+                    g, e, lambda g2, e2: fn(g2, e2, instance=inst)
+                ),
+                prevents_or_redirects=c.prevents_or_redirects,
+                prevents=c.prevents,
+                amount_role=c.amount_role,
+            ))
+    return candidates
 
 
 def was_replaced(game, event: dict) -> bool:
@@ -571,7 +622,7 @@ def apply_replacements(
     trace = apply_in_order(
         game,
         payload,
-        replacement_candidates(kind),
+        replacement_candidates(kind, game, payload),
         chooser_index=seat,
         stop=was_replaced,
         ask=None if restart is None else order_prompt_asker(kind, restart),

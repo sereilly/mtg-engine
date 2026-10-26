@@ -49,6 +49,7 @@ from typing import TYPE_CHECKING
 
 from ..game_types import first_target_id
 from ..oracle_types import CHOSEN_TARGET_PERMANENTS
+from ..resumption import ask_in_turn_order
 from ._amounts import count_from_payload
 from ._filters import permanent_matches_filter
 from ._targets import (described_target_predicate, resolve_target_permanent,
@@ -462,15 +463,20 @@ def choose_permanents(
     # for a handler's own loop: "controlled_by: chooser" then draws each seat's
     # candidates from that seat's own battlefield, which is what "a creature
     # **they** control" says.
+    #
+    # **One seat at a time** (CR 101.4b: "A player knows the choices made by
+    # the previous players when making their choice"), through the one
+    # ``resumption.ask_in_turn_order`` every other each-player decision is
+    # asked through: the next seat's prompt is armed only once the seat before
+    # it has answered. A loop that armed every seat's prompt at once had the
+    # nonactive player choose blind beside the active one (Curfew; Words of
+    # Wind's "each player returns a permanent they control"). A seat nobody
+    # asks answers as its prompt is armed (``default_at_arm``), so headless
+    # and AI play run straight through in the same order as before.
     if payload.get("chooser") == "each_player":
-        total = len(game.players)
-        active = game.active_player_index or 0
-        seats = sorted(
-            (i for i, p in enumerate(game.players) if not p.lost),
-            key=lambda i: ((i - active) % total, i),
-        )
         context.results.setdefault(payload["result_key"], [])
-        for seat in seats:
+
+        def ask(seat: int) -> None:
             _choose_permanents_for_one_seat(
                 game,
                 dataclasses.replace(
@@ -478,6 +484,8 @@ def choose_permanents(
                 ),
                 context,
             )
+
+        ask_in_turn_order(game, ask)
         return True, "resolved"
     return _choose_permanents_for_one_seat(game, instruction, context)
 
