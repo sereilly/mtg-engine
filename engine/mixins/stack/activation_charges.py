@@ -71,6 +71,17 @@ def _named_discard_positions(
     return named, None
 
 
+def _source_last(candidates: list, source) -> list:
+    """*candidates* in board order with the ability's own *source* moved to the
+    end — the order a counted or X sacrifice cost's default reads, for
+    ``DeathsMixin.sacrifice_preference_key``'s reason (a source paying for its
+    own ability usually makes it do nothing). Compared by identity."""
+    return [
+        *(perm for perm in candidates if perm is not source),
+        *(perm for perm in candidates if perm is source),
+    ]
+
+
 class ActivationChargesMixin:
     def _choose_activation_cost_payers(
         self, *, ability, announced_target_idx, controller, controller_index,
@@ -234,8 +245,9 @@ class ActivationChargesMixin:
             # and is refused with nothing spent (the cost gate above), never
             # clamped to what is there. A seat that announced nothing announced
             # zero, which is payable and sacrifices nothing. The payer's named
-            # permanents first, then the board in order, deduplicated by
-            # identity.
+            # permanents first, then the board in order with the ability's own
+            # source last (``sacrifice_preference_key``'s reason), deduplicated
+            # by identity.
             wanted = max(0, int(x_value or 0))
             candidates = self._sacrifice_cost_candidates(
                 ability.cost, controller_index, permanent, keep_source=True,
@@ -247,7 +259,7 @@ class ActivationChargesMixin:
                 )
                 if found is not None and any(c is found for c in candidates)
             ]
-            for perm in [*named, *candidates]:
+            for perm in [*named, *_source_last(candidates, permanent)]:
                 if len(sacrifice_cost_set) >= wanted:
                     break
                 if not any(perm is already for already in sacrifice_cost_set):
@@ -324,9 +336,10 @@ class ActivationChargesMixin:
                 # The payer's own picks first, then the deterministic default
                 # for the rest — the same arrangement the tap cost below makes,
                 # so a seat that names none is never blocked and a seat that
-                # names some has them honoured.
+                # names some has them honoured. The ability's own source is
+                # the board's last offer (``sacrifice_preference_key``).
                 chosen_victims: list = []
-                for perm in [*named, *candidates]:
+                for perm in [*named, *_source_last(candidates, permanent)]:
                     if len(chosen_victims) >= wanted:
                         break
                     if not any(perm is already for already in chosen_victims):
@@ -344,10 +357,11 @@ class ActivationChargesMixin:
                     # keeps precedence, because that is the one the sacrifice
                     # picker has always answered on.
                     else named[0] if named
-                    # A permanent whose death loses the game is kept for last, then
-                    # the smallest — one rule, shared with the cast-side additional
-                    # cost and the forced-sacrifice default (`default_sacrifice_pick`).
-                    else self.default_sacrifice_pick(candidates)
+                    # A permanent whose death loses the game is kept for last,
+                    # then the ability's own source, then the smallest — one
+                    # rule, shared with the cast-side additional cost and the
+                    # forced-sacrifice default (`default_sacrifice_pick`).
+                    else self.default_sacrifice_pick(candidates, paying_for=permanent)
                 )
 
         # "**Sacrifice enchanted creature**: …" (Betrothed of Fire). The host,
@@ -563,7 +577,8 @@ class ActivationChargesMixin:
                 if found is not None and any(c is found for c in candidates)
             ]
             sacrifice_also_permanent = (
-                named[-1] if named else self.default_sacrifice_pick(candidates)
+                named[-1] if named
+                else self.default_sacrifice_pick(candidates, paying_for=permanent)
             )
 
         # "**Tap enchanted land**: …" (Earthlore). The host, collected beside

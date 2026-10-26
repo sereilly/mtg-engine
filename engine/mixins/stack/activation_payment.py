@@ -331,7 +331,11 @@ class ActivationPaymentMixin:
             if len(found) < wanted:
                 return f"{name}: not enough {noun}s to sacrifice for its cost"
             if wanted == 1:
-                sacrifice_victim = self.default_sacrifice_pick(found)
+                # The charger's own default (``_choose_activation_cost_payers``), so
+                # the conjoined half below is asked beside the same victim.
+                sacrifice_victim = self.default_sacrifice_pick(
+                    found, paying_for=permanent,
+                )
         if cost.sacrifice_attached:
             host = permanent.metadata.get("attached_to")
             if host is None or not self.is_on_battlefield(host):
