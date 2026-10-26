@@ -51,7 +51,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | TOR | 143 | 261 | 86.2% | 86.2% | 68.2% | 138 |
 | JUD | 143 | 241 | 91.3% | 90.9% | 65.6% | 131 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| ONS *(measured)* | 335 | 541 | 78.2% | 76.7% | 56.7% | 259 |
+| ONS *(measured)* | 335 | 541 | 79.5% | 78.0% | 57.9% | 265 |
 | **All (shipped)** | **8027** | **11886** | **90.7%** | **90.1%** | **62.4%** | **6277** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -65,7 +65,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
 | 730 | 381 | expected a subject |  |
-| 179 | 93 | unrecognized effect verb |  |
+| 176 | 90 | unrecognized effect verb |  |
 | 131 | 69 | unconsumed text |  |
 | 70 | 51 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
@@ -88,7 +88,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
-| 2 | 2 | expected 'a' |  |
+| 1 | 1 | expected what to gain control of |  |
 
 ## Cards executing through the grammar
 
@@ -434,6 +434,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `As long as this card is in your graveyard and you control a Mountain, creatures you control have haste.`
 - **Angus Mackenzie**
   - `{G}{W}{U}, {T}: Prevent all combat damage that would be dealt this turn. Activate only before the combat damage step.`
+- **Animal Magnetism**
+  - `Reveal the top five cards of your library. An opponent chooses a creature card from among them. Put that card onto the battlefield and the rest into your graveyard.`
 - **Animal Sanctuary**
   - `{T}: Add {C}.`
   - `{2}, {T}: Put a +1/+1 counter on target Bird, Cat, Dog, Goat, Ox, or Snake.`
@@ -1033,6 +1035,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of the chosen player's upkeep, this artifact deals X damage to that player, where X is the number of cards in their hand minus 4.`
   - `At the beginning of the chosen player's upkeep, this artifact deals X damage to that player, where X is the number of cards in their hand minus 4.`
   - `At the beginning of the chosen player's upkeep, this artifact deals X damage to that player, where X is the number of cards in their hand minus 4.`
+- **Blackmail**
+  - `Target player reveals three cards from their hand and you choose one of them. That player discards that card.`
 - **Blanchwood Armor**
   - `Enchanted creature gets +1/+1 for each Forest you control.`
   - `Enchanted creature gets +1/+1 for each Forest you control.`
@@ -3456,6 +3460,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Create a 1/1 white Knight creature token with banding. (Any creatures with banding, and up to one without, can attack in a band. Bands are blocked as a group. If any creatures with banding you control are blocking or being blocked by a creature, you divide that creature's combat damage, not its controller, among any of the creatures it's being blocked by or is blocking.)`
 - **Errant Minion**
   - `At the beginning of the upkeep of enchanted creature's controller, that player may pay any amount of mana. This Aura deals 2 damage to that player. Prevent X of that damage, where X is the amount of mana that player paid this way.`
+- **Erratic Explosion**
+  - `Choose any target. Reveal cards from the top of your library until you reveal a nonland card. Erratic Explosion deals damage equal to that card's mana value to that permanent or player. Put the revealed cards on the bottom of your library in any order.`
 - **Erratic Portal**
   - `{1}, {T}: Return target creature to its owner's hand unless its controller pays {1}.`
 - **Ersatz Gnomes**
@@ -4464,6 +4470,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{W}, Sacrifice this creature: Prevent the next 2 damage that would be dealt to any target this turn.`
 - **Goblin Lyre**
   - `Sacrifice this artifact: Flip a coin. If you win the flip, this artifact deals damage to target opponent or planeswalker equal to the number of creatures you control. If you lose the flip, this artifact deals damage to you equal to the number of creatures that opponent or that planeswalker's controller controls.`
+- **Goblin Machinist**
+  - `{2}{R}: Reveal cards from the top of your library until you reveal a nonland card. This creature gets +X/+0 until end of turn, where X is that card's mana value. Put the revealed cards on the bottom of your library in any order.`
 - **Goblin Marshal**
   - `When this creature enters or dies, create two 1/1 red Goblin creature tokens.`
 - **Goblin Masons**
@@ -6649,6 +6657,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Counter target spell. If that spell is countered this way, put it on top of its owner's library instead of into that player's graveyard.`
   - `Counter target spell. If that spell is countered this way, put it on top of its owner's library instead of into that player's graveyard.`
   - `Counter target spell. If that spell is countered this way, put it on top of its owner's library instead of into that player's graveyard.`
+- **Menacing Ogre**
+  - `When this creature enters, each player secretly chooses a number. Then those numbers are revealed. Each player with the highest number loses that much life. If you are one of those players, put two +1/+1 counters on this creature.`
 - **Mental Discipline**
   - `{1}{U}, Discard a card: Draw a card.`
 - **Mental Note**
@@ -8882,6 +8892,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}{U}, {T}: Return target Wizard you control to its owner's hand.`
 - **Riptide Replicator**
   - `{4}, {T}: Create an X/X creature token of the chosen color and type, where X is the number of charge counters on this artifact.`
+- **Riptide Shapeshifter**
+  - `{2}{U}{U}, Sacrifice this creature: Choose a creature type. Reveal cards from the top of your library until you reveal a creature card of that type. Put that card onto the battlefield and shuffle the rest into your library.`
 - **Rise Again**
   - `Return target creature card from your graveyard to the battlefield.`
 - **Rishadan Brigand**
