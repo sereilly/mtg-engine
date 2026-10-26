@@ -536,6 +536,18 @@ def _activation_candidate(
             perms = [t for t in perms if t["seat"] == player_index]
         elif side == "opponent":
             perms = [t for t in perms if t["seat"] != player_index]
+        if _held_by_its_tapped_source(ability):
+            # "{2}{W}, {T}: Target Soldier creature gets +2/+2 and has
+            # vigilance for as long as this creature remains tapped." (the
+            # Couriers.) The one creature such a bonus cannot help in combat
+            # is the source: it holds the effect by staying tapped, and a
+            # tapped creature neither attacks nor blocks (CR 508.1a, 509.1a).
+            # Each Courier is its own printed type, so the strongest-target
+            # pick below named it nearly every time.
+            perms = [
+                t for t in perms
+                if game.permanent_at(t["seat"], t["index"]) is not permanent
+            ]
         if not perms:
             return None
         def _power(t):
@@ -890,6 +902,25 @@ def _madness_discard_index(
                 continue
         return index
     return None
+
+
+#: The kinds whose effect lasts only "for as long as this … remains tapped"
+#: (``engine/source_tapped_effects.py``).
+_HELD_WHILE_SOURCE_TAPPED = frozenset({
+    "pump_target_while_source_tapped",
+    "grant_target_keyword_while_source_tapped",
+})
+
+
+def _held_by_its_tapped_source(ability) -> bool:
+    """Whether *ability* taps its source to start an effect on a target that
+    lasts only while the source stays tapped."""
+    if not getattr(ability.cost, "requires_tap", False):
+        return False
+    return any(
+        step.kind in _HELD_WHILE_SOURCE_TAPPED
+        for step in _effect_steps(ability.instruction)
+    )
 
 
 def _activation_target_side(permanent: Permanent, instruction) -> str | None:
