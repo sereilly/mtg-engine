@@ -151,6 +151,39 @@ class RoleTargetsMixin:
             if isinstance(pid, int)
         ]
 
+    def announced_target_controllers(
+        self, card: CardDefinition, target_permanent_ids, *, mode_index=None,
+    ) -> "dict | None":
+        """Who controls each permanent a **per-opponent** announcement names,
+        by permanent id, as it is named — or None for every other cast.
+
+        "If a permanent changes controller after being targeted but before
+        this spell resolves, you won't gain control of that permanent."
+        (Blatant Thievery's 2004-10-04 ruling.) CR 608.2b asks it again as the
+        spell resolves (``legality_resolution``), against this record rather
+        than against the opponent the role is counted for now: a player
+        leaving in response (CR 800.4a) renumbers every opponent behind them
+        (``target_roles.ANNOUNCED_TARGET_CONTROLLERS``).
+        """
+        from .game_types import target_ids
+        from .oracle import compile_card_oracle
+        from .target_roles import PER_OPPONENT_ROLE
+        from .targeting import derive_cast_spec
+
+        if card.primary_type not in ("instant", "sorcery"):
+            return None
+        spec = derive_cast_spec(card, compile_card_oracle(card), mode_index=mode_index)
+        if not any(PER_OPPONENT_ROLE in role for role in spec_roles(spec)):
+            return None
+        recorded: dict = {}
+        for permanent_id in target_ids(target_permanent_ids):
+            if not isinstance(permanent_id, int):
+                continue
+            permanent = self.permanent_by_id(permanent_id)
+            if permanent is not None:
+                recorded[permanent_id] = self.controller_index_of(permanent)
+        return recorded
+
     def role_object_at(self, candidate: dict):
         """The object a role candidate names — a permanent, or a card in a
         graveyard — or None when the slot no longer holds one.

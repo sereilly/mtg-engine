@@ -26,6 +26,7 @@ from .cast_restrictions import timing_fixed_seat
 from .faces import whole_card
 from .player_statics import seat_has_player_keyword
 from .subject_filters import card_matches_any, subject_matches
+from .target_roles import PER_OPPONENT_ROLE, per_opponent_seat
 from .targeting import (
     CAST_FROM_GRAVEYARD,
     spec_offers_a_player,
@@ -364,6 +365,15 @@ class TargetEnumerationMixin:
             # with no seat offers nothing, for the reason above — this one would
             # otherwise widen to every creature in the game.
             if spec.get("that_player_only") and seat != that_player_seat:
+                continue
+            # "For each opponent, … target permanent **that player** controls"
+            # (Blatant Thievery): a per-opponent role is the permanents of the
+            # one opponent it is for (``target_roles.per_opponent_seat``) —
+            # None, a role void at this table, offers nothing.
+            per_opponent = spec.get(PER_OPPONENT_ROLE)
+            if per_opponent is not None and seat != per_opponent_seat(
+                self, caster_index, int(per_opponent)
+            ):
                 continue
             for idx, perm in enumerate(player.battlefield):
                 if not self._permanent_matches_target_kind(perm, kind, spec, casting_aura):

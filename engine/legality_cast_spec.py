@@ -53,7 +53,7 @@ from .target_requirements import (
 from .targeting import (
     derive_cast_spec,
 )
-from .target_roles import ROLES_TARGET_KIND
+from .target_roles import ROLES_TARGET_KIND, live_roles
 from .cast_targets import cast_announced_entry_trigger
 from .legality import _cast_picker_is_a_target
 from .legality_enumeration import _cast_from_graveyard_slot
@@ -439,6 +439,12 @@ class CastTargetSpecMixin:
         if sized is not None and sized > 1:
             spec["max_targets"] = sized
         if spec["kind"] == ROLES_TARGET_KIND:
+            # "For each opponent, … target permanent that player controls"
+            # (Blatant Thievery): one owed role per opponent at *this* table,
+            # the rest void (``target_roles.live_roles``) — so the walk below,
+            # and every reader of this spec, sees exactly the announcement the
+            # cast gate will hold the caster to.
+            spec = live_roles(self, caster_index, spec)
             # A spell whose targets are of *different kinds*, chosen in
             # dependency order (CR 601.2c). ``valid_targets`` is role 0's list —
             # the shape every caller downstream already reads, so "does this

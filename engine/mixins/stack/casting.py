@@ -56,7 +56,7 @@ from ...models import CardDefinition
 from ...oracle import compile_card_oracle
 from ...oracle_types import _COLOR_WORD_TO_SYMBOL
 from ...targeting import graveyard_target_spec, derive_cast_spec
-from ...target_roles import ROLE_SEATS
+from ...target_roles import ANNOUNCED_TARGET_CONTROLLERS, ROLE_SEATS
 from .cast_additional_costs import (_optional_cost_announcement,
                                     _optional_cost_totals, _taken_offers,
                                     optional_cost_taken)
@@ -1383,6 +1383,15 @@ class SpellCastingMixin:
             )
             if from_zone == "graveyard":
                 self._rebase_graveyard_targets(spell_item, source_seat, hand_index)
+            # "For each opponent, … target permanent that player controls"
+            # (Blatant Thievery): who controlled each named permanent as it was
+            # targeted, for CR 608.2b to ask again (``target_roles.
+            # ANNOUNCED_TARGET_CONTROLLERS``). Absent for every other cast.
+            controllers = self.announced_target_controllers(
+                card, target_permanent_ids, mode_index=mode_index,
+            )
+            if controllers is not None:
+                spell_item.choices[ANNOUNCED_TARGET_CONTROLLERS] = controllers
             self._stack_push(spell_item)
             self.log.append(f"{card.name} added to stack")
             if any(cost.choose_number is not None for cost in cast_costs):

@@ -44,7 +44,7 @@ from ...enchant_targets import (_ENCHANT_LAND_SUBTYPES,
 from ...targeting import (derive_cast_spec, role_is_stack, spec_roles,
                           targets_mana_value_x)
 from ...target_descriptions import ANNOUNCED_SEAT
-from ...target_roles import role_is_seat, roles_may_end_at
+from ...target_roles import live_roles, role_is_seat, roles_may_end_at
 from ...cost_x_definitions import defines_cast_x
 from ...divided_damage import (
     CARD_DIVIDED, EACH, EVENLY, FIXED, card_shares, divided_description,
@@ -774,6 +774,10 @@ class CastTargetValidationMixin:
         # the enumeration behind it from recursing: the per-candidate probe
         # inside ``_enumerate_targets(for_cast=True)`` re-enters this function
         # with one slot, never a list.
+        # …one owed role per opponent at this table for a per-opponent
+        # announcement (Blatant Thievery, ``target_roles.live_roles``): the
+        # spec the picker walked, so the count below is the opponents'.
+        cast_spec = live_roles(self, caster_index, cast_spec) or {}
         roles = spec_roles(cast_spec)
         if roles:
             chosen = self._named_role_targets(

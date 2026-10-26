@@ -42,7 +42,7 @@ from __future__ import annotations
 from ...oracle_types import (CHOSEN_TARGET_PERMANENTS, COUNTERS_REMOVED,
                              DREW_COUNT, OracleInstruction)
 from ...subject_filters import OBJECT_ONLY_FILTER_KEYS, untestable_filter_keys
-from ...target_roles import any_number_of_opponents_roles
+from ...target_roles import any_number_of_opponents_roles, per_opponent_roles
 from .. import ast
 from ..errors import LoweringError
 from ._common import _filter_payload
@@ -74,6 +74,13 @@ def _lower_for_each_player(
         )
     if not inner:
         raise LoweringError("a per-player loop with no effect in it", node=node)
+    # "For each opponent, gain control of **target permanent that player
+    # controls**." (Blatant Thievery.) The body announces a target, and "that
+    # player" is the loop's seat — so CR 601.2c announces one object per
+    # opponent, as the spell is cast, long before any iteration runs.
+    per_opponent = _per_opponent_targets(node, inner)
+    if per_opponent is not None:
+        return per_opponent
     payload: dict[str, object] = {
         "iterator": {"players": node.iterator.kind}, "effect": inner,
     }
@@ -94,6 +101,77 @@ def _lower_for_each_player(
             )
         payload["targets"] = any_number_of_opponents_roles()
     return (OracleInstruction("for_each", "", payload),)
+
+
+def _names_that_players_target(step: OracleInstruction) -> bool:
+    """Whether *step* announces a target described as "… **that player**
+    controls"."""
+    targets = (step.payload or {}).get("targets")
+    return (
+        isinstance(targets, dict)
+        and ((targets.get("filter") or {}).get("controller") == "that_player")
+    )
+
+
+def _per_opponent_targets(
+    node: ast.ForEach, inner: tuple[OracleInstruction, ...],
+) -> "tuple[OracleInstruction, ...] | None":
+    """"**For each opponent,** <effect on> **target** <noun> **that player
+    controls**." (Blatant Thievery.) None where the loop's body announces no
+    such target.
+
+    One printed instance of "target" per opponent (CR 601.2c), each chosen
+    among the permanents of the opponent it is for — the announcement
+    ``target_roles.per_opponent_roles`` describes, one role per opponent — and
+    the body performed once per role: a ``sequence`` of the one step, each
+    copy spending its own role (``target_roles.payload_own_role``), so the
+    resolution scopes every copy to its object and skips one whose object is
+    gone or no longer that player's (CR 608.2b, the card's ruling) while the
+    others still happen. A role void at this table (fewer opponents than the
+    bound) is named by nothing, and its step is skipped the same way.
+
+    Refused rather than read any other way: a body of more than that one step
+    would have to run the rest per *seat* as well, which a role step cannot;
+    and any other seat loop ("for each player") would be announcing a target
+    among the caster's own permanents that this description does not offer.
+    """
+    if not any(_names_that_players_target(step) for step in inner):
+        return None
+    if node.iterator.kind != "each_opponent":
+        raise LoweringError(
+            "only a loop over each opponent announces a target per seat",
+            node=node,
+        )
+    if len(inner) != 1:
+        raise LoweringError(
+            "a per-opponent target is announced for a body of one step",
+            node=node,
+        )
+    (step,) = inner
+    targets = step.payload["targets"]
+    if targets.get("quantifier") != "target" or targets.get("kind") != "object":
+        raise LoweringError(
+            "a per-opponent announcement names one object per opponent",
+            node=node,
+        )
+    described = {
+        key: value for key, value in (targets.get("filter") or {}).items()
+        if key != "controller"
+    }
+    announced = per_opponent_roles(described)
+    rest = {
+        key: value for key, value in step.payload.items()
+        if key not in ("targets", "controller")
+    }
+    return (
+        OracleInstruction("sequence", "", {"steps": tuple(
+            OracleInstruction(
+                step.kind, step.value,
+                {**rest, "targets": {**announced, "role": role["role"]}},
+            )
+            for role in announced["roles"]
+        )}),
+    )
 
 
 #: "**Any number of target opponents** each …" (Wheel and Deal) — the seat

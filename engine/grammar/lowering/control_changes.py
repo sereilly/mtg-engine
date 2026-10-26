@@ -36,7 +36,7 @@ from ._events import (CHOSEN_PERMANENT, CHOSEN_PLAYER, EVENT_SUBJECT_CONTROLLER,
                       _EVENT_SUBJECT_CONTROLLERS,
                       _EVENT_SUBJECT_PLAYERS, _UNTAPPED_PERMANENTS)
 from ._delays import (_BOUND_OBJECT_DELAYED_EVENTS)
-from ._record_keys import UNTAPPED_THIS_WAY_OBJECTS
+from ._record_keys import LOOP_BOUND_PLAYER, UNTAPPED_THIS_WAY_OBJECTS
 
 
 
@@ -676,6 +676,15 @@ def _lower_gain_control(
         # every other event, where the words name nobody and a steal would
         # reach whichever board the picker happened to default to.
         if controller == "that_player" and event in _THAT_PLAYER_FREEZING_EVENTS:
+            pass
+        # "**For each opponent,** gain control of target permanent **that
+        # player** controls." (Blatant Thievery.) The seat is the loop's, and
+        # the loop is what describes it: one target per opponent, each a
+        # permanent of the opponent it is for
+        # (``loops._lower_for_each_player``, ``target_roles.per_opponent_roles``)
+        # — which refuses every loop it cannot turn this into, so the words
+        # never reach a picker unanswered.
+        elif controller == "that_player" and LOOP_BOUND_PLAYER in produced:
             pass
         elif controller is not None and controller not in _PICKER_ENFORCED_CONTROLLERS:
             raise LoweringError(

@@ -303,6 +303,86 @@ def any_number_of_opponents_roles() -> dict:
     return {"kind": ROLES_TARGET_KIND, "roles": roles}
 
 
+#: The role key "a permanent **the n-th opponent** controls", its value n
+#: (0-based): "For each opponent, gain control of target permanent **that
+#: player** controls." (Blatant Thievery.) One printed instance of the word per
+#: opponent (CR 601.2c), so the announcement names one object per opponent —
+#: "You gain control of only one permanent from each player" (the card's
+#: 2004-10-04 ruling). Positional, so the walk offers role *n* only the
+#: permanents of the opponent it is for and no two roles can name one
+#: opponent's: the opponents are counted in turn order from the caster
+#: (CR 101.4) among the players still in the game (CR 800.4a), by
+#: :func:`per_opponent_seat` — the one reader the picker, the gates and the
+#: announcement record share.
+#:
+#: **Not optional, and not all of them owed.** A spec derived from the card
+#: alone has :data:`ANY_NUMBER_OF_SEAT_ROLES` of them, a bound on any table;
+#: the roles past the caster's live opponents are **void** at this table —
+#: dropped by :func:`live_roles`, which is asked wherever a game is in hand
+#: (the cast spec, the cast gate) — and every one that is left is owed: an
+#: opponent with nothing the noun phrase admits is a spell with no legal
+#: announcement (CR 601.2c), which "optional role" could not have said.
+PER_OPPONENT_ROLE = "per_opponent"
+
+#: The ``choices`` key a per-opponent announcement records **who controlled
+#: each permanent it named**, by permanent id — read back as the object
+#: resolves: "If a permanent changes controller after being targeted but
+#: before this spell resolves, you won't gain control of that permanent"
+#: (Blatant Thievery's 2004-10-04 ruling; CR 608.2b — "that player controls"
+#: is no longer true of it). Recorded because nothing else can answer it: the
+#: role's opponent is counted among the players still in the game, and one who
+#: leaves in response (CR 800.4a) renumbers every opponent after them.
+ANNOUNCED_TARGET_CONTROLLERS = "announced_target_controllers"
+
+
+def per_opponent_roles(described: dict, *, kind: str = "object") -> dict:
+    """The ``roles`` description "for each opponent, … target <noun> that
+    player controls" lowers to: :data:`ANY_NUMBER_OF_SEAT_ROLES` roles, the
+    n-th a *described* object the n-th opponent controls
+    (:data:`PER_OPPONENT_ROLE`)."""
+    roles: list[dict] = []
+    for index in range(ANY_NUMBER_OF_SEAT_ROLES):
+        roles.append({
+            "role": f"opponent {index + 1}'s target", "kind": kind,
+            "filter": dict(described), PER_OPPONENT_ROLE: index,
+        })
+    return {"kind": ROLES_TARGET_KIND, "roles": roles}
+
+
+def per_opponent_seat(game, caster_index: int, index: int) -> int | None:
+    """The seat of *caster_index*'s *index*-th opponent (0-based), counted in
+    turn order from the caster (CR 101.4) among the players still in the game
+    (CR 800.4a), or None where there are not that many."""
+    players = list(getattr(game, "players", ()) or ())
+    count = len(players)
+    live = [
+        (caster_index + step) % count for step in range(1, count)
+        if not getattr(players[(caster_index + step) % count], "lost", False)
+    ]
+    return live[index] if 0 <= index < len(live) else None
+
+
+def live_roles(game, caster_index: int, spec: dict | None) -> dict | None:
+    """*spec* with its per-opponent roles past *caster_index*'s live opponents
+    dropped (:data:`PER_OPPONENT_ROLE`), or *spec* itself where it has none.
+
+    They are always trailing — the n-th opponent exists only if the
+    (n-1)-th does — so what is left is an ordinary roles spec of exactly one
+    owed role per opponent, and every pure reader of a roles spec (the walk,
+    the count, ``roles_may_end_at``) is right about it unchanged.
+    """
+    roles = spec_roles(spec)
+    if not any(PER_OPPONENT_ROLE in role for role in roles):
+        return spec
+    kept = [
+        role for role in roles
+        if PER_OPPONENT_ROLE not in role
+        or per_opponent_seat(game, caster_index, int(role[PER_OPPONENT_ROLE]))
+        is not None
+    ]
+    return {**spec, "roles": kept}
+
+
 def role_dependency(role: dict) -> tuple[str | None, str | None]:
     """*role*'s dependency as ``(relation key, earlier role name)``.
 

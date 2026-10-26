@@ -1395,4 +1395,180 @@ def test_w2g1_aphetto_dredging_a_card_gone_in_response_is_skipped(set_pool):
     assert _w2g1_names(alice.hand) == ["Elf B"]
     assert {"Goblin A", "Goblin B", "Goblin C"} <= {c.name for c in alice.graveyard}
 
+
+# --- Blatant Thievery ---------------------------------------------------------
+# "For each opponent, gain control of target permanent that player controls."
+# One target per opponent, each among that opponent's permanents (CR 601.2c;
+# "You gain control of only one permanent from each player", 2004-10-04), and
+# "If a permanent changes controller after being targeted but before this spell
+# resolves, you won't gain control of that permanent" (2004-10-04).
+
+from engine.control import change_control as _w2g1_change_control
+from engine.models import Permanent as _W2G1Permanent
+
+
+def _w2g1_permanent(name, type_line="Creature - Bear"):
+    permanent = _W2G1Permanent(card=_w2g1_mk_card(
+        name=name, mana_cost="{1}{G}", type_line=type_line, colors=("G",),
+    ))
+    permanent.metadata["summoning_sickness_turn"] = -99
+    return permanent
+
+
+def _w2g1_thievery_table(set_pool, boards, *, caster=0):
+    """One seat per entry of *boards* (its permanents' names); the caster
+    holds Blatant Thievery."""
+    ons = set_pool("ONS")
+    players = []
+    for seat, names in enumerate(boards):
+        players.append(_W2G1PlayerState(
+            name="ABCD"[seat],
+            hand=[ons["Blatant Thievery"]] if seat == caster else [],
+            battlefield=[
+                _w2g1_permanent(name, "Artifact" if "Rock" in name else "Creature - Bear")
+                for name in names
+            ],
+            library=[ons["Island"]] * 5,
+        ))
+    game = _W2G1Game(players=players)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.active_player_index = caster
+    game.current_turn_phase = game.current_step = "precombat_main"
+    game._sync_control()
+    return game
+
+
+def _w2g1_named(game, name):
+    (permanent,) = [p for p in game.all_permanents() if p.card.name == name]
+    return permanent
+
+
+def _w2g1_ids(game, *names):
+    return [_w2g1_named(game, name).permanent_id for name in names]
+
+
+def _w2g1_boards(game):
+    return [
+        sorted(p.card.name for p in game.controlled_by(seat))
+        for seat in range(len(game.players))
+    ]
+
+
+def test_w2g1_blatant_thievery_takes_one_permanent_from_each_opponent(set_pool):
+    """Three seats: the picker asks for opponent B's permanent, then opponent
+    C's, and the spell takes both, for good (CR 611.2a)."""
+    game = _w2g1_thievery_table(
+        set_pool, [["A Bear"], ["B Bear", "B Rock"], ["C Bear"]],
+    )
+    spec = game.cast_target_spec(0, game.players[0].hand[0])
+    assert [role["role"] for role in spec["roles"]] == [
+        "opponent 1's target", "opponent 2's target",
+    ]
+    assert [(o["seat"], o["name"]) for o in spec["valid_targets"]] == [
+        (1, "B Bear"), (1, "B Rock"),
+    ]
+    assert all(
+        [(n["seat"], n["name"]) for n in o["next"]] == [(2, "C Bear")]
+        for o in spec["valid_targets"]
+    )
+
+    result = game.queue_from_hand(
+        0, "Blatant Thievery", target_permanent_ids=_w2g1_ids(game, "B Rock", "C Bear"),
+    )
+    assert result.supported, result.details
+    _w2g1_resolve_stack(game)
+    assert _w2g1_boards(game) == [["A Bear", "B Rock", "C Bear"], ["B Bear"], []]
+    game.resolve_cleanup_step(0)
+    assert _w2g1_boards(game) == [["A Bear", "B Rock", "C Bear"], ["B Bear"], []]
+
+
+def test_w2g1_blatant_thievery_owes_a_target_for_every_opponent(set_pool):
+    """CR 601.2c: one target for each opponent, each that opponent's — so a
+    cast naming one, naming two of one opponent's, naming them out of turn
+    order or naming none is refused before anything is paid; and with an
+    opponent who controls nothing there is no legal announcement at all."""
+    game = _w2g1_thievery_table(
+        set_pool, [["A Bear"], ["B Bear", "B Rock"], ["C Bear"]],
+    )
+    for named, refusal in (
+        (("B Rock",), "Blatant Thievery requires 2 targets"),
+        (("B Rock", "B Bear"), "no valid target for Blatant Thievery"),
+        (("C Bear", "B Bear"), "no valid target for Blatant Thievery"),
+        ((), "Blatant Thievery requires 2 targets"),
+    ):
+        refused = game.queue_from_hand(
+            0, "Blatant Thievery", target_permanent_ids=_w2g1_ids(game, *named) or None,
+        )
+        assert not refused.supported and refused.details == refusal, named
+        assert not game.stack and len(game.players[0].hand) == 1
+
+    empty = _w2g1_thievery_table(set_pool, [["A Bear"], ["B Bear"], []])
+    assert empty.cast_target_spec(0, empty.players[0].hand[0])["valid_targets"] == []
+    assert not empty.queue_from_hand(
+        0, "Blatant Thievery", target_permanent_ids=_w2g1_ids(empty, "B Bear"),
+    ).supported
+
+
+def test_w2g1_blatant_thievery_skips_a_permanent_that_changed_controller(set_pool):
+    """The ruling: C's Bear changes controller in response and is not taken;
+    B's Bear still is. When every target has changed controller the spell is
+    countered by the rules (CR 608.2b)."""
+    game = _w2g1_thievery_table(set_pool, [["A Bear"], ["B Bear"], ["C Bear"]])
+    assert game.queue_from_hand(
+        0, "Blatant Thievery", target_permanent_ids=_w2g1_ids(game, "B Bear", "C Bear"),
+    ).supported
+    _w2g1_change_control(_w2g1_named(game, "C Bear"), 1, source=None)
+    game._sync_control()
+    _w2g1_resolve_stack(game)
+    assert _w2g1_boards(game) == [["A Bear", "B Bear"], ["C Bear"], []]
+
+    game = _w2g1_thievery_table(set_pool, [["A Bear"], ["B Bear"], ["C Bear"]])
+    assert game.queue_from_hand(
+        0, "Blatant Thievery", target_permanent_ids=_w2g1_ids(game, "B Bear", "C Bear"),
+    ).supported
+    _w2g1_change_control(_w2g1_named(game, "B Bear"), 2, source=None)
+    _w2g1_change_control(_w2g1_named(game, "C Bear"), 1, source=None)
+    game._sync_control()
+    _w2g1_resolve_stack(game)
+    assert _w2g1_boards(game) == [["A Bear"], ["C Bear"], ["B Bear"]]
+    assert "Blatant Thievery was countered by the rules and moved to graveyard" in game.log
+
+
+def test_w2g1_blatant_thievery_counts_the_opponents_still_in_the_game(set_pool):
+    """Four seats, the third has left the game (CR 800.4a): two opponents,
+    two targets — B's and D's — counted in turn order from the caster."""
+    game = _w2g1_thievery_table(
+        set_pool, [["A Bear"], ["B Bear"], ["C Bear"], ["D Bear"]],
+    )
+    game.players[2].lost = True
+    game.remove_from_battlefield(_w2g1_named(game, "C Bear"))
+    game._sync_control()
+    spec = game.cast_target_spec(0, game.players[0].hand[0])
+    assert len(spec["roles"]) == 2
+    assert [(o["seat"], [n["seat"] for n in o["next"]]) for o in spec["valid_targets"]] == [
+        (1, [3]),
+    ]
+    assert game.queue_from_hand(
+        0, "Blatant Thievery", target_permanent_ids=_w2g1_ids(game, "B Bear", "D Bear"),
+    ).supported
+    _w2g1_resolve_stack(game)
+    assert _w2g1_boards(game)[0] == ["A Bear", "B Bear", "D Bear"]
+
+
+def test_w2g1_blatant_thievery_opponents_are_in_turn_order_from_the_caster(set_pool):
+    """Cast by the second seat of three: its opponents are the third seat, then
+    the first (CR 101.4)."""
+    game = _w2g1_thievery_table(
+        set_pool, [["A Bear"], ["B Bear"], ["C Bear"]], caster=1,
+    )
+    spec = game.cast_target_spec(1, game.players[1].hand[0])
+    assert [(o["seat"], [n["seat"] for n in o["next"]]) for o in spec["valid_targets"]] == [
+        (2, [0]),
+    ]
+    assert game.queue_from_hand(
+        1, "Blatant Thievery", target_permanent_ids=_w2g1_ids(game, "C Bear", "A Bear"),
+    ).supported
+    _w2g1_resolve_stack(game)
+    assert _w2g1_boards(game) == [[], ["A Bear", "B Bear", "C Bear"], []]
 # ==== end W2G1 ======================================================
