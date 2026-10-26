@@ -855,7 +855,14 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
             bucket[symbol] = bucket.get(symbol, 0) + produced
             added.append(f"{{{symbol}}}" * produced)
         suffix = f" (spendable only on {spend_only} spells)" if spend_only else ""
-        game.log.append(f"{card.name} produced {''.join(added)}{suffix}")
+        # "…for each" of nothing (Mana Echoes for a creature nothing you control
+        # shares a type with) adds no mana, and says so the way every other
+        # branch of this handler does rather than "produced " and nothing.
+        produced_text = "".join(added)
+        game.log.append(
+            f"{card.name} produced {produced_text}{suffix}"
+            if produced_text else f"{card.name} produced no mana"
+        )
         return True, "resolved"
 
     # "Add N mana of any one color" (Sanctum of Fruitful Harvest, Traitorous
