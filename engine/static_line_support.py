@@ -25,6 +25,7 @@ import re
 
 from .oracle_types import OracleInstruction
 from .characteristic_defining import dynamic_pt_for
+from .player_statics import PLAYER_KEYWORD_STATIC_KIND
 from .combat_restrictions import combat_restriction_for
 from .target_immunity import immunity_claims_line
 from .lord_buffs import lord_buff_for
@@ -119,6 +120,15 @@ _GRAMMAR_STATIC_CREATURE_KINDS = frozenset(
         # `attack_legality._ignores_defender`; like every kind above,
         # the instruction is the record the consumer reads.
         "attacks_as_though_no_defender",
+        # "You have shroud." (True Believer.) CR 702.18a's word granted to a
+        # **seat** by a static of the permanent — Ivory Mask's sentence, which
+        # the noncreature path has compiled since Mercadian Masques. Like every
+        # kind above the instruction is the record its reader reads:
+        # `player_statics.seat_has_player_keyword` scans every permanent's
+        # compiled program whatever its card type, so the target gates already
+        # honoured a creature printing it, and the card came back "text too
+        # complex" for its only line.
+        PLAYER_KEYWORD_STATIC_KIND,
     }
 )
 

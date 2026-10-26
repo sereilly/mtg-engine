@@ -796,6 +796,91 @@ def test_w1g7_gangrenous_goliath_taps_three_clerics_from_the_graveyard(set_pool)
 
 # ==== W1G8 ==========================================================
 # W1G8's tests go between this line and the "end W1G8" line.
+#
+# Granted abilities and their durations: a player's shroud (True Believer),
+# the Couriers' "for as long as this creature remains tapped", and Tribal
+# Golem's five grants, each "as long as you control a <type>".
+
+from engine import Game as _w1g8_Game, PlayerState as _w1g8_PlayerState
+from engine.models import Permanent as _w1g8_Permanent
+from engine.oracle import compile_card_oracle as _w1g8_compile
+from engine.targeting import derive_cast_spec as _w1g8_derive_cast_spec
+from tests.helpers import _nosick as _w1g8_nosick, resolve_stack as _w1g8_resolve
+
+
+def _w1g8_perm(pool, name):
+    return _w1g8_nosick(_w1g8_Permanent(card=pool[name]))
+
+
+def _w1g8_game(mine=(), theirs=(), *, p1=None, p2=None):
+    one = _w1g8_PlayerState(name="P1", battlefield=list(mine), **(p1 or {}))
+    two = _w1g8_PlayerState(name="P2", battlefield=list(theirs), **(p2 or {}))
+    game = _w1g8_Game(players=[one, two])
+    game.enforce_mana_costs = False
+    game._settle()
+    return game, one, two
+
+
+def _w1g8_offered_seats(game, seat, card):
+    """The players the cast picker offers *seat* for *card*."""
+    spec = _w1g8_derive_cast_spec(card, _w1g8_compile(card))
+    return {
+        found["seat"]
+        for found in game._enumerate_targets(seat, card, spec, for_cast=True)
+        if found["kind"] == "player"
+    }
+
+
+def test_w1g8_true_believer_gives_its_controller_shroud(set_pool):
+    """"You have shroud." CR 702.18a: shroud means "this permanent **or
+    player** can't be the target of spells or abilities" — anyone's, its
+    controller's own included (shroud, not hexproof). Neither seat's picker
+    offers the Believer's controller, a Shock aimed at them from either seat
+    is refused before it is cast, and the Believer itself is a creature with
+    no shroud of its own."""
+    pool = set_pool("ONS")
+    shock = pool["Shock"]
+    believer = _w1g8_perm(pool, "True Believer")
+    game, p1, p2 = _w1g8_game(
+        [believer], p1={"hand": [shock] * 2}, p2={"hand": [shock] * 2},
+    )
+    assert _w1g8_offered_seats(game, 0, shock) == {1}
+    assert _w1g8_offered_seats(game, 1, shock) == {1}
+
+    for seat in (0, 1):
+        refused = game.cast_from_hand(seat, "Shock", target_player_index=0)
+        assert not refused.supported, f"seat {seat} targeted a player with shroud"
+    assert p1.life == 20 and len(p1.hand) == 2 and len(p2.hand) == 2
+    assert not game.stack
+
+    # The creature is not the player: a Shock still kills it.
+    result = game.cast_from_hand(
+        1, "Shock", target_player_index=0,
+        target_permanent_ids=[believer.permanent_id],
+    )
+    assert result.supported, result.details
+    _w1g8_resolve(game)
+    assert not game.is_on_battlefield(believer)
+
+    # The shroud left with the Believer (CR 611.3b): the controller is a
+    # target again, and the Shock lands.
+    assert _w1g8_offered_seats(game, 1, shock) == {0, 1}
+    result = game.cast_from_hand(1, "Shock", target_player_index=0)
+    assert result.supported, result.details
+    _w1g8_resolve(game)
+    assert p1.life == 18
+
+
+def test_w1g8_true_believer_protects_whoever_controls_it(set_pool):
+    """"You" is the Believer's controller (CR 109.5): a stolen Believer
+    shrouds the thief and leaves its owner targetable."""
+    pool = set_pool("ONS")
+    shock = pool["Shock"]
+    believer = _w1g8_perm(pool, "True Believer")
+    game, _p1, _p2 = _w1g8_game([believer], p1={"hand": [shock]})
+    game.take_control(believer, 1, source=believer)
+    game._recompute_continuous_effects()
+    assert _w1g8_offered_seats(game, 0, shock) == {0}
 
 # ==== end W1G8 ======================================================
 
