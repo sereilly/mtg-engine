@@ -772,16 +772,26 @@ def redirect_next_damage_from_source_until_eot(
     if uses is not None:
         # "**The next time** damage would be dealt to this creature this turn,
         # that damage is dealt to any target instead." (Mirrorwood Treefolk.)
-        # CR 615.8's one instance in place of the point pool: the whole of the
-        # next event moves however large it is, and then the record is spent.
-        # No ``amount`` at all, which is what "the whole event" means on a
+        # The whole of the next event moves however large it is — no
+        # ``amount`` at all, which is what "the whole event" means on a
         # ``DamageRedirect`` — and no source, so combat damage, a burn spell
         # and the controller's own sources are all the next time.
+        #
+        # **And the next time is a time, not one chunk**: "Normally this means
+        # damage from one source at one time, but during combat it is possible
+        # for multiple sources to damage the Treefolk at one time, in which
+        # case damage from all of those sources is redirected" (ruling
+        # 2004-10-04). Glarecaster's occasion above, with one recipient: spent
+        # at the first chunk's moment and open for every other chunk of it
+        # (CR 510.2's one dealing), closed by the combat damage step's tail.
+        # ``uses=1`` spent itself on the first blocker's damage and let the
+        # second land on the Treefolk.
         add_redirect(
             protected,
             DamageRedirect(
                 new_recipient=taker,
-                uses=int(uses),
+                occasion=SharedNextTime() if int(uses) == 1 else None,
+                uses=None if int(uses) == 1 else int(uses),
                 source_name=card_name or None,
             ),
         )

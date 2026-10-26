@@ -690,6 +690,14 @@ def _enter_choice(ctx: PromptContext, choices: list) -> dict:
             if data.get("needs_land_type") else []
         ),
         "default_land_type": data.get("default_land_type"),
+        # "…**an opponent** chooses a creature type." (Callous Oppressor.) The
+        # opponent shape above asked of the controller for a different reason:
+        # not "which opponent does this permanent name" (Black Vise) but "which
+        # opponent makes the choice" (CR 601.7a/602.3a/700.2e). Answered the
+        # same way (``opponent_index``); the flag is for the panel's wording.
+        "opponent_chooses_creature_type": bool(
+            data.get("then_opponent_chooses_creature_type")
+        ),
     }
 
 

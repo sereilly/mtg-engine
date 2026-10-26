@@ -102,6 +102,20 @@ class DealDamage:
     # value per resolution, which is exactly the reading that would deal every
     # creature the count taken off the first one.
     per_each: "ObjectFilter | None" = None
+    # "…you may **have it** deal 4 damage to target opponent" (Aether Charge).
+    # The dealer is the object of a causative "have", which a reader consumed
+    # in front of the sentence (``statements``' "you may have",
+    # ``player_verbs``' "<seat> may have", ``effects.damage``'s "have <source>
+    # deal"). It matters for one word: a bare "it" under a trigger whose
+    # condition named another object has been rebound to that object, and
+    # with the "have" gone the sentence reads exactly like Mogg Bombers'
+    # "sacrifice this creature and it deals 3 damage", where the pronoun is
+    # the ability's own source and the rebinding is ignored. Under "have" the
+    # pronoun is the condition's object — there is no nearer antecedent in a
+    # sentence that opens on the offer — so the lowering makes it the dealer
+    # (``lowering.damage._with_foreign_dealer``). Set by
+    # ``phrases.mark_causative``.
+    causative: bool = False
 
 
 @dataclass(frozen=True)

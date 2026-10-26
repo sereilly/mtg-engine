@@ -62,16 +62,24 @@ def _w2g5_instructions(instructions):
                 yield from _w2g5_instructions(value)
 
 
-def _w2g5_is_own_source(source) -> bool:
+def _w2g5_is_own_source(source, causative: bool = False) -> bool:
     """Whether a damage node's subject is the ability's own source.
 
     A bare "it" counts: wherever the pool prints it in a plain damage sentence
     it is the source ("sacrifice this creature and it deals 3 damage …", Mogg
     Bombers), and the dealers that are *not* — the enchanted creature, the
     event's subject — lower to kinds that carry ``biter`` themselves.
+
+    **Except as the object of a causative "have"** (*causative*,
+    ``ast.DealDamage.causative``): "you may have it deal 4 damage" (Aether
+    Charge), where a pronoun the trigger rebound to its condition's object is
+    that object and must reach the program as ``biter`` — the one case this
+    census was blind to (W2G4, Onslaught).
     """
     if source is None or not isinstance(source, ast.TargetSpec):
         return True
+    if causative and source.quantifier == "it" and not source.filter.is_source:
+        return False
     return source.filter.is_source or source.quantifier in ("this", "it") and not (
         source.filter.is_enchanted or source.filter.enchanted_only
     )
@@ -88,7 +96,9 @@ def _w2g5_dropped_dealers(line: str, card_name: str) -> list[str]:
     ]
     dropped = []
     for node in _w2g5_nodes(compiled.node):
-        if not isinstance(node, ast.DealDamage) or _w2g5_is_own_source(node.source):
+        if not isinstance(node, ast.DealDamage) or _w2g5_is_own_source(
+            node.source, node.causative,
+        ):
             continue
         if plain and not any("biter" in instruction.payload for instruction in plain):
             dropped.append(node.source.quantifier)
@@ -121,7 +131,7 @@ def _w2g5_census():
             for node in _w2g5_nodes(compiled.node):
                 if isinstance(node, ast.DealDamage):
                     damage_nodes += 1
-                    foreign += not _w2g5_is_own_source(node.source)
+                    foreign += not _w2g5_is_own_source(node.source, node.causative)
             if _w2g5_dropped_dealers(line, card.name):
                 found.append((name, line))
     return lines, damage_nodes, foreign, found

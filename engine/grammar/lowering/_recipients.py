@@ -193,7 +193,7 @@ def lower_damage_recipient(
         # the clause that may name either, so it keeps the inference: there the
         # permanent index is the choice rather than a leftover.
         if recipient.kind == "controller" and dealer_is_event_subject(
-            node.source, event
+            node.source, event, causative=getattr(node, "causative", False),
         ):
             # "**That creature** deals 4 damage to **its controller**." (Bomb
             # Squad.) The possessive names the dealer, and the dealer is the

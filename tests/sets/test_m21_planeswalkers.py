@@ -566,3 +566,93 @@ def test_the_colored_narrowing_reaches_the_compiled_payload(set_pool):
     sweep = program.activated_abilities[1].instruction
     assert sweep.kind == "exile_all_matching"
     assert sweep.payload.get("colored_only") is True
+
+
+# --- Onslaught W2G4: Ugin's −10 asks which permanent cards -------------------
+#
+# "−10: You gain 7 life, draw seven cards, then put up to seven permanent cards
+# from your hand onto the battlefield." The put lowered to a fused sweep that
+# took the first seven eligible cards and asked nobody; it is now Tempting
+# Wurm's pick and put (``choose_cards_in_hand`` with an ``up_to`` ceiling, then
+# ``put_chosen_hand_cards_onto_battlefield``), so a person chooses, every other
+# seat takes the first seven eligible in hand order, and an Aura among them
+# enters attached (CR 303.4f).
+
+
+def _w2g4_ugin_board(set_pool, *, interactive):
+    """Ugin at 11 (one loyalty left after −10) with Shock, Pacifism and a
+    Plains in hand, eight cards in the library (Pegasi, Plains, a Shock) — so
+    eight permanent cards after the draw, one over the ceiling — and an
+    opposing Grizzly Bears to enchant."""
+    m21, lea, ons = set_pool("M21"), set_pool("LEA"), set_pool("ONS")
+    pegasus, shock, plains = m21["Concordia Pegasus"], m21["Shock"], lea["Plains"]
+    game, walker = _walker_game(
+        set_pool, "Ugin, the Spirit Dragon", loyalty=11,
+        opp_battlefield=[Permanent(card=lea["Grizzly Bears"])],
+        hand=[shock, ons["Pacifism"], plains],
+        library=[pegasus, plains, pegasus, plains, shock, pegasus, plains, pegasus],
+    )
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    return game, walker
+
+
+def test_w2g4_ugin_minus_ten_asks_a_person_which_cards(set_pool):
+    """The seat is offered the permanent cards and only those (Shock is an
+    instant, CR 110.4a), may take fewer than seven, and only what it named
+    enters — the rest stay in hand."""
+    game, walker = _w2g4_ugin_board(set_pool, interactive={0})
+    me = game.players[0]
+    assert game.activate_permanent_ability(0, walker.card.name, ability_index=2).supported
+    (pick,) = game.pending_choices_of("choose_cards_in_hand")
+    offered = game.live_choose_cards_in_hand(pick)
+    assert sorted({me.hand[slot].name for slot in offered}) == [
+        "Concordia Pegasus", "Pacifism", "Plains",
+    ]
+    assert game._how_many_cards_to_choose(pick) == 7
+    assert game._may_choose_fewer_cards_in_hand(pick)
+
+    assert not game.confirm_choose_cards_in_hand(0, offered), "eight is over the ceiling"
+    plains_slot = next(slot for slot in offered if me.hand[slot].name == "Plains")
+    assert game.confirm_choose_cards_in_hand(0, [plains_slot])
+    resolve_stack(game)
+
+    mine = sorted(p.card.name for p in game.controlled_by(0))
+    assert mine == ["Plains", "Ugin, the Spirit Dragon"]
+    assert len(me.hand) == 9 and me.life == 27
+    assert "P1 puts Plains onto the battlefield (Ugin, the Spirit Dragon)" in game.log
+
+
+def test_w2g4_ugin_minus_ten_may_put_nothing(set_pool):
+    """"Up to" seven: none is an answer."""
+    game, walker = _w2g4_ugin_board(set_pool, interactive={0})
+    game.activate_permanent_ability(0, walker.card.name, ability_index=2)
+    assert game.confirm_choose_cards_in_hand(0, [])
+    resolve_stack(game)
+    assert [p.card.name for p in game.controlled_by(0)] == ["Ugin, the Spirit Dragon"]
+    assert len(game.players[0].hand) == 10
+
+
+def test_w2g4_ugin_minus_ten_default_and_its_aura(set_pool):
+    """A seat nobody asks takes the first seven eligible cards in hand order —
+    what the sweep did — and the Pacifism among them now enters attached to
+    the creature it can enchant (CR 303.4f) instead of arriving unattached; the
+    instants stay in hand."""
+    game, walker = _w2g4_ugin_board(set_pool, interactive=())
+    me = game.players[0]
+    assert game.activate_permanent_ability(0, walker.card.name, ability_index=2).supported
+    resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    resolve_stack(game)
+    entered = sorted(p.card.name for p in game.controlled_by(0) if p is not walker)
+    # Hand order after the draw: Shock, Pacifism, Plains, then the seven drawn
+    # (Pegasus, Plains, Pegasus, Plains, Shock, Pegasus, Plains). The first
+    # seven permanent cards are all but the last Plains.
+    assert entered == sorted(
+        ["Pacifism", "Plains"] + ["Concordia Pegasus", "Plains"] * 2
+        + ["Concordia Pegasus"]
+    )
+    assert [card.name for card in me.hand] == ["Shock", "Shock", "Plains"]
+    (pacifism,) = [p for p in game.all_permanents() if p.card.name == "Pacifism"]
+    host = pacifism.metadata.get("attached_to")
+    assert host is not None and host.card.name == "Grizzly Bears"

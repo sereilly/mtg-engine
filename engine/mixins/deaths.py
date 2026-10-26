@@ -385,7 +385,9 @@ class DeathsMixin:
             leave_hook(self, player, permanent)
 
     @staticmethod
-    def default_sacrifice_pick(candidates: list[Permanent]) -> Permanent:
+    def default_sacrifice_pick(
+        candidates: list[Permanent], *, paying_for: Permanent | None = None,
+    ) -> Permanent:
         """Which of *candidates* a seat that did not choose gives up.
 
         Every sacrifice a player owes has an interactive answer and a
@@ -396,13 +398,24 @@ class DeathsMixin:
         take the smallest", which is exactly the kind of near-duplicate that
         drifts into three different answers.
 
+        *paying_for* is the permanent whose own activated ability the
+        sacrifice pays for, and it is **kept for last** among the rest
+        (:meth:`sacrifice_preference_key`).
+
         ``permanent_id`` breaks the tie, so the pick is stable across a run and
         the AI simulation stays seed-reproducible.
         """
-        return min(candidates, key=DeathsMixin.sacrifice_preference_key)
+        return min(
+            candidates,
+            key=lambda permanent: DeathsMixin.sacrifice_preference_key(
+                permanent, paying_for,
+            ),
+        )
 
     @staticmethod
-    def sacrifice_preference_key(permanent: Permanent):
+    def sacrifice_preference_key(
+        permanent: Permanent, paying_for: Permanent | None = None,
+    ):
         """The order a seat gives permanents up in — lowest first.
 
         Split out of :meth:`default_sacrifice_pick` because a caller that has to
@@ -411,9 +424,28 @@ class DeathsMixin:
         matching (`_declaration_sacrifice_plan`). That planner needs the policy
         as an *order* rather than as a winner, and a second ordering written
         beside this one is exactly the drift the method above exists to stop.
+
+        **The source of the ability being paid for comes after everything but
+        a game-losing death** (*paying_for*). "Sacrifice a creature: This
+        creature gets +2/+2" (Nantuko Husk), "…: Regenerate this creature"
+        (Cateran Overlord) and "…: Put a +1/+1 counter on this creature"
+        (Phyrexian Broodlings) may legally be paid with the source itself
+        (CR 602.2b, 601.2h — nothing in "a creature" excludes it), and then the
+        ability does nothing at all; every other "Sacrifice a <noun>:"
+        ability spends its own future activations with it. The old order put
+        the source wherever its power fell, and on a tie the older permanent
+        id — usually the source, which was on the battlefield first — so a
+        seat that named no victim fed the Husk to itself beside an equal
+        creature (45 of 45 such abilities in the pool, census
+        ``tests/regressions/test_sacrifice_cost_keeps_its_source.py``). A
+        seat that wants the source gone names it; the default never assumes
+        so. Death that loses the game still ranks first (Lich beside the
+        Aura whose ability is being paid: the Aura goes). With *paying_for*
+        None the extra element is constant and the order is what it was.
         """
         return (
             "you lose the game" in permanent.effective_card.oracle_text.lower(),
+            paying_for is not None and permanent is paying_for,
             permanent.effective_power,
             permanent.permanent_id,
         )

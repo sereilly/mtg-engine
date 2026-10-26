@@ -403,10 +403,11 @@ class PermanentStateMixin:
         # (Callous Oppressor.) The same record and the same prompt shape as the
         # branch above, armed on an **opponent's** seat — which is what Null
         # Chamber's second name already does with this prompt. Which opponent
-        # is the controller's to decide when there are several (CR 700.2e's
-        # rule for an opponent's choice of mode, the nearest the rules come);
-        # this takes the next living opponent in turn order, the seat that
-        # answers on a two-player table.
+        # is the controller's to decide when there are several (CR 601.7a,
+        # 602.3a and 700.2e for every choice an effect hands "an opponent"),
+        # so a person in the controller's seat is asked first; the next living
+        # opponent in turn order is the default, and the only answer on a
+        # two-player table (``_arm_opponent_creature_type_entry``).
         #
         # The opponent's default is the type that **protects the most of their
         # own creatures** — "target creature that isn't of the chosen type" is
@@ -415,17 +416,7 @@ class PermanentStateMixin:
         # their board, the type their own cards still to be played hold most
         # of, then the catalog's commonest.
         if opponent_chooses_creature_type_on_enter(text):
-            chooser = self._next_opponent_in_turn_order(caster_index)
-            if chooser is not None:
-                default_type = self._protecting_creature_type(chooser)
-                permanent.metadata["chosen_creature_type"] = default_type
-                self.arm_pending_choice(
-                    "enter_choice", chooser,
-                    card_name=permanent.card.name, permanent=permanent,
-                    needs_color=False, opponents=[], default_seat=None,
-                    default_color=None, needs_creature_type=True,
-                    default_creature_type=default_type,
-                )
+            self._arm_opponent_creature_type_entry(permanent, caster_index)
 
         # "As this enchantment enters, choose **a land type**." (Shimmer.) The
         # fourth quality this one sentence names, and a different catalog from

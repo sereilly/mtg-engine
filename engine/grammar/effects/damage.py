@@ -36,7 +36,7 @@ from ..phrases import (
     _accept_mana_alternatives, _accept_per_counter_multiplier,
     _parse_mana_payment, _parse_opponents_choice,
     _parse_per_each_objects, _parse_that_object,
-    accept_trailing_prevention_lock,
+    accept_trailing_prevention_lock, mark_causative,
 )
 from ._recipients import (_accept_damaged_this_game, _parse_divided_recipients,
                           _parse_recipient_list)
@@ -538,7 +538,7 @@ def _parse_have_source_deal_damage(stream: TokenStream) -> "ast.Statement | None
     if not stream.at_word("deal", "deals"):
         stream.reset(mark)
         return None
-    return _parse_damage(stream, biter)
+    return mark_causative(_parse_damage(stream, biter))
 
 
 #: How Runesword's two sentences name the creature its own ability targeted.

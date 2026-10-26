@@ -701,6 +701,21 @@ class ValueChoicesMixin:
         if opponent_index not in choice.data["opponents"]:
             return False
         permanent = choice.data["permanent"]
+        if choice.data.get("then_opponent_chooses_creature_type"):
+            # "…**an opponent** chooses a creature type." (Callous Oppressor.)
+            # The controller has named which opponent (CR 601.7a/602.3a/
+            # 700.2e); that seat is now asked the type. No chosen *player* is
+            # recorded — the card names none, and ``chosen_player_index`` is
+            # what Black Vise's and Jihad's statics read.
+            self.discard_pending_choice(choice)
+            if self.is_on_battlefield(permanent) and not self.players[opponent_index].lost:
+                self.log.append(
+                    f"{choice.data['card_name']}: "
+                    f"{self.players[player_index].name} has "
+                    f"{self.players[opponent_index].name} choose a creature type"
+                )
+                self._ask_opponent_for_creature_type(permanent, opponent_index)
+            return True
         color = None
         if choice.data["needs_color"]:
             try:

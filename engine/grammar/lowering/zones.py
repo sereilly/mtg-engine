@@ -224,6 +224,17 @@ def _lower_put_on_library_top(
     return (OracleInstruction("put_target_on_library_top", "", payload),)
 
 
+#: CR 110.4a: "an artifact, battle, creature, enchantment, land, or
+#: planeswalker card" — what "permanent card" names, for a pick out of a hand
+#: whose phrase printed no type of its own (Ugin's −10). The hand-card matcher
+#: (``handlers._filters._card_matches_filter``) reads a ``type_filter`` list as
+#: a union, the spelling Tempting Wurm's "artifact, creature, enchantment,
+#: and/or land cards" lowers to.
+_PERMANENT_CARD_TYPES = (
+    "artifact", "battle", "creature", "enchantment", "land", "planeswalker",
+)
+
+
 #: What a bottomed graveyard card may be narrowed by: exactly the printed
 #: characteristics ``handlers/_filters.graveyard_card_matches`` reads off a card
 #: in a graveyard (CR 613.1 leaves it nothing else), which is the one predicate
@@ -670,6 +681,53 @@ def _lower_put_onto_battlefield(
         ):
             raise LoweringError(
                 "the from-hand sweep cannot test that card phrase", node=node
+            )
+        if target.quantifier == "up_to":
+            # "…then put **up to seven** permanent cards from your hand onto
+            # the battlefield." (Ugin, the Spirit Dragon's −10.) A pick, then a
+            # put — Tempting Wurm's two steps with one seat and a ceiling: the
+            # hand's owner chooses (``choose_cards_in_hand``, which a person is
+            # asked and every other seat defaults: the first eligible cards up
+            # to the count), and the chosen cards enter together under their
+            # owner, an Aura among them attached as it enters to something
+            # already there (CR 303.4f). The fused sweep this used to lower to
+            # took the first seven eligible cards and asked nobody.
+            if not isinstance(target.count, int) or target.count_from_x:
+                raise LoweringError(
+                    "the chosen put from hand reads a printed ceiling", node=node
+                )
+            if (
+                node.under_your_control
+                or node.under_owners_control
+                or node.gains
+                or node.sacrifice_when_control_lost
+                or node.attached_to_source
+                or node.attached_to_chosen is not None
+                or node.entering_colors
+                or node.entering_subtypes
+                or node.tapped
+                or getattr(node, "actor", None) is not None
+            ):
+                raise LoweringError(
+                    "the chosen put from hand carries no entry rider", node=node
+                )
+            described = {
+                "type_filter": list(filt.card_types or _PERMANENT_CARD_TYPES),
+            }
+            return (
+                OracleInstruction(
+                    "choose_cards_in_hand", "",
+                    {
+                        "card_filter": described,
+                        "count": target.count,
+                        "up_to": True,
+                        "result_key": "chosen_hand_cards",
+                    },
+                ),
+                OracleInstruction(
+                    "put_chosen_hand_cards_onto_battlefield", "",
+                    {"cards_from": "chosen_hand_cards", "card_filter": described},
+                ),
             )
         return (
             OracleInstruction(
