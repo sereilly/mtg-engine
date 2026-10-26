@@ -1111,6 +1111,24 @@ def chosen_number_bounds_flip_run(card: CardDefinition, instruction) -> bool:
     )
 
 
+def secret_number_highest_pays(card: CardDefinition) -> bool:
+    """Whether the numbers *card*'s players name in secret are paid for by
+    **the highest** — "Each player with the highest number loses that much
+    life." (Menacing Ogre.)
+
+    Read off the compiled program: a loop over ``each_revealed_highest``, the
+    seat set only that sentence names. Goblin Game's loss falls on everyone and
+    its extra one on the *fewest*, which is the opposite incentive, so the two
+    are told apart by which set a step loops over and never by a name.
+    """
+    return any(
+        instruction.kind == "for_each"
+        and ((instruction.payload or {}).get("iterator") or {}).get("players")
+        == "each_revealed_highest"
+        for instruction in _walk_program(compile_card_oracle(card))
+    )
+
+
 def chosen_name_own_zone(card: CardDefinition, instruction) -> str | None:
     """The chooser's own zone *instruction*'s "choose a card name" is then
     looked for in — ``"library"``, ``"hand"`` — or None when it is looked for

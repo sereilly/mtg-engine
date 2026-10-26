@@ -44,6 +44,7 @@ from .naming import (
     parse_choose_card_type,
     parse_hides_items,
     parse_reveal_chosen_hand_cards,
+    parse_secretly_chooses_number,
 )
 from .paragraphs import _parse_repeated_graveyard_pick
 from .phrases import (
@@ -169,6 +170,14 @@ def parse_player_subject_verb(
         hidden = parse_hides_items(stream, source_spec)
         if hidden is not None:
             return hidden
+    # "**Each player secretly chooses a number. Then those numbers are
+    # revealed.**" (Menacing Ogre.) The same event in later words, dispatched
+    # on the adverb the sentence opens its predicate with; declines without
+    # consuming.
+    if token.text == "secretly" and isinstance(source_spec, ast.PlayerRef):
+        secret = parse_secretly_chooses_number(stream, source_spec)
+        if secret is not None:
+            return secret
     if token.text in ("discards", "discard") and isinstance(source_spec, ast.PlayerRef):
         # "…**discards it unless they pay 1 life**." (Wand of Ith.) "It" is
         # the card the sentence in front of this one revealed, so nothing is

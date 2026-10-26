@@ -315,6 +315,21 @@ def evaluate_record_condition(
         winner = context.results.get(BIDDING_WINNER)
         return winner is not None and winner == game.players.index(context.caster)
 
+    if kind == "caster_among_seats":
+        # "**If you are one of those players**, put two +1/+1 counters on this
+        # creature." (Menacing Ogre.) CR 109.5's "you" against the set the
+        # sentence in front described — asked of the same pure reader that
+        # set's offer uses, without its log line.
+        from .offers import _revealed_fewest_seats, revealed_highest_seats
+
+        readers = {
+            "each_revealed_highest": revealed_highest_seats,
+            "each_revealed_fewest": _revealed_fewest_seats,
+        }
+        reader = readers.get(str(payload.get("seats")))
+        if reader is None or context.caster not in game.players:
+            return False
+        return game.players.index(context.caster) in reader(game, context)
     if kind == "coin_flip":
         # CR 705.2. The flip recorded its result; asking again would flip a
         # second coin, so a card printing both branches could win *and* lose.

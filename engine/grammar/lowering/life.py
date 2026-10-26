@@ -97,9 +97,13 @@ _PER_SEAT_NUMBER_RECORDS = frozenset({SECRET_NUMBERS_BY_SEAT, MANA_PAID_BY_SEAT}
 
 #: The described seats a life loss may name that are answered by the secret
 #: numbers: the one player whose number is strictly the least, and — with the
-#: card's tie sentence folded in — every player whose number is the least.
-#: ``handlers/offers._offered_seats`` answers both.
-_REVEALED_FEWEST_SEATS = frozenset({"revealed_fewest", "each_revealed_fewest"})
+#: card's tie sentence folded in — every player whose number is the least
+#: (Goblin Game); and every player whose number is the greatest, ties included
+#: ("each player with the highest number", Menacing Ogre).
+#: ``handlers/offers._offered_seats`` answers all three.
+_REVEALED_NUMBER_SEATS = frozenset({
+    "revealed_fewest", "each_revealed_fewest", "each_revealed_highest",
+})
 
 
 def _all_but_life_kept(amount) -> "int | None":
@@ -334,17 +338,48 @@ def _lower_lose_life(
     #
     # With no event: under a trigger "that player" would be re-read as the
     # seat the firing was about, and the seat here is the loop's.
-    if node.player.kind in _REVEALED_FEWEST_SEATS:
+    if node.player.kind in _REVEALED_NUMBER_SEATS:
         if SECRET_NUMBERS_BY_SEAT not in produced:
             raise LoweringError(
-                '"the player who revealed the fewest" with no step of this '
-                "effect that had the players reveal anything",
+                f"{node.player.kind!r} with no step of this effect that had "
+                "the players reveal a number",
                 node=node,
             )
-        inner = _lower_lose_life(
-            dataclasses.replace(node, player=ast.PlayerRef("that_player")),
-            None, produced, None,
-        )
+        amount = node.amount
+        if (
+            isinstance(amount, ast.ThatMuch) and amount.source is None
+            and not amount.bonus
+        ):
+            # "Each player with the highest number loses **that much** life."
+            # (Menacing Ogre.) The number that put the seat in the set — its
+            # own secret number, which is also the highest: the bare
+            # back-reference names the comparison the subject was made by.
+            amount = ast.ThatMuch(SECRET_NUMBERS_BY_SEAT)
+        if (
+            isinstance(amount, ast.ThatMuch)
+            and amount.source == SECRET_NUMBERS_BY_SEAT and not amount.bonus
+        ):
+            # Each looped seat's own entry of the map, on the per-recipient
+            # channel the "each player" loss above reads it by: the loop binds
+            # the seat as the step's target and the channel counts for it.
+            inner: tuple[OracleInstruction, ...] = (
+                OracleInstruction(
+                    "target_loses_life", "",
+                    {
+                        "amount": "x",
+                        X_FROM_COUNT_PER_RECIPIENT: {
+                            "seat_record": SECRET_NUMBERS_BY_SEAT,
+                        },
+                    },
+                ),
+            )
+        else:
+            inner = _lower_lose_life(
+                dataclasses.replace(
+                    node, player=ast.PlayerRef("that_player"), amount=amount,
+                ),
+                None, produced, None,
+            )
         return (
             OracleInstruction(
                 "for_each", "",

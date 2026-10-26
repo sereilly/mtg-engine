@@ -293,6 +293,48 @@ def _attach_tied_for_fewest(stream: TokenStream, steps: list[ast.Statement]) -> 
     return True
 
 
+#: The record-described seat sets a following "those players" may point back
+#: at: the subjects of a loss the secret numbers decided.
+_THOSE_PLAYERS_SETS = frozenset({"each_revealed_highest", "each_revealed_fewest"})
+
+
+def _attach_if_you_are_among_those_players(
+    stream: TokenStream, steps: list[ast.Statement],
+) -> bool:
+    """``Each player with the highest number loses that much life. **If you
+    are one of those players**, put two +1/+1 counters on this creature.``
+    (Menacing Ogre.)
+
+    A condition whose only antecedent is the sentence in front: "those
+    players" are the seats that sentence's subject described, so the
+    condition is built from that subject's kind rather than parsed on its own
+    — where it would name nobody. Guarded on that sentence being a loss by
+    one of :data:`_THOSE_PLAYERS_SETS`; anything else refuses without
+    consuming and the line keeps its own error.
+    """
+    last = steps[-1] if steps else None
+    if not (
+        isinstance(last, ast.LoseLife)
+        and isinstance(last.player, ast.PlayerRef)
+        and last.player.kind in _THOSE_PLAYERS_SETS
+    ):
+        return False
+    mark = stream.mark()
+    if not stream.accept_phrase("if", "you", "are", "one", "of", "those", "players"):
+        stream.reset(mark)
+        return False
+    stream.accept_punct(",")
+    try:
+        branch = parse_statement(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return False
+    steps.append(
+        ast.Conditional(ast.AmongThosePlayers(last.player.kind), branch)
+    )
+    return True
+
+
 def _choice_step_index(steps: list[ast.Statement]) -> int | None:
     """Where the choice a following "If the player does/don't" refers back to is.
 

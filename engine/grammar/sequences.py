@@ -51,6 +51,7 @@ from .activation_instructions import (_parse_activation_restriction,
                                       _parse_x_spend_restriction)
 from .conditional_instead import _parse_conditional_instead_rider
 from .control_flow import (_attach_if_that_card_was_returned, _attach_if_you_cant,
+                          _attach_if_you_are_among_those_players,
                           _attach_if_you_do, _attach_otherwise, _attach_when_you_do,
                           _attach_tied_for_fewest, _attach_to_conditional_choice,
                           _attach_tied_life_draw, _parse_who_cant_rider)
@@ -508,6 +509,12 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             # reason: all three open on "if two or more" and each refuses
             # without consuming whatever the others read.
             if _attach_tied_for_fewest(stream, steps):
+                continue
+            # "If you are one of those players, put two +1/+1 counters on this
+            # creature." (Menacing Ogre.) A condition on the seats the loss in
+            # front was dealt to, beside the tie arm for the same reason: its
+            # only antecedent is that sentence's subject.
+            if _attach_if_you_are_among_those_players(stream, steps):
                 continue
             # "Otherwise, it gets +4/-X until end of turn." (Blood Lust.) The
             # second arm of the conditional sentence before it.

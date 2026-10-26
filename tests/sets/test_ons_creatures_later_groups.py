@@ -1335,6 +1335,80 @@ def test_w1g12_riptide_shapeshifter_naming_a_type_nothing_has_finds_nothing(set_
     _w1g12_resolve_stack(game)
     assert [p.card.name for p in game.all_permanents()] == ["Goblin Taskmaster"]
 
+
+def _w1g12_ogre_numbers(set_pool, numbers, *, seats=2):
+    """Cast Menacing Ogre with every seat interactive and answer each seat's
+    secret number; the Ogre and the table after the trigger resolves."""
+    game = _w1g12_table(
+        set_pool, ["Mountain"] * 5, hands={0: ["Menacing Ogre"]},
+        interactive=set(range(seats)), seats=seats,
+    )
+    assert game.cast_from_hand(0, "Menacing Ogre").supported
+    assert len(game.stack) == 1, "the entry trigger is on the stack (CR 603.3)"
+    assert not game.resolve_top_of_stack()
+    owed = sorted(c.player_index for c in game.pending_choices if c.kind == "secret_number")
+    assert owed == list(range(seats))
+    # Answered last seat first: no number is shown before the last exists.
+    for seat in reversed(range(seats)):
+        assert not any(
+            line.startswith("Menacing Ogre: ") and " revealed " in line
+            for line in game.log
+        ), "a secret number was shown before every seat had one"
+        assert game.confirm_secret_number(seat, numbers[seat])
+    _w1g12_resolve_stack(game)
+    ogre = next(p for p in game.all_permanents() if p.card.name == "Menacing Ogre")
+    return game, ogre
+
+
+def test_w1g12_menacing_ogre_a_tie_for_highest_costs_both_and_feeds_the_ogre(set_pool):
+    """"When this creature enters, each player secretly chooses a number. Then
+    those numbers are revealed. Each player with the highest number loses that
+    much life. If you are one of those players, put two +1/+1 counters on this
+    creature." Alice and Bob both name 3: each loses 3, and Alice — one of
+    those players — gets her two counters. The reveal is one line, every
+    number at once, after the last answer."""
+    game, ogre = _w1g12_ogre_numbers(set_pool, [3, 3])
+    assert [p.life for p in game.players] == [17, 17]
+    assert (ogre.effective_power, ogre.effective_toughness) == (5, 5)
+    assert any("Alice revealed 3, Bob revealed 3" in line for line in game.log)
+
+
+def test_w1g12_menacing_ogre_only_the_highest_pays_and_a_loser_gets_nothing(set_pool):
+    """Bob's 4 beats Alice's 1: Bob alone loses 4, Alice nothing, and the Ogre
+    stays 3/3. At three seats Bob and Cara tie on 6 over Alice's 2: both lose
+    6 and Alice is not one of those players."""
+    game, ogre = _w1g12_ogre_numbers(set_pool, [1, 4])
+    assert [p.life for p in game.players] == [20, 16]
+    assert (ogre.effective_power, ogre.effective_toughness) == (3, 3)
+
+    game, ogre = _w1g12_ogre_numbers(set_pool, [2, 6, 6], seats=3)
+    assert [p.life for p in game.players] == [20, 14, 14]
+    assert (ogre.effective_power, ogre.effective_toughness) == (3, 3)
+
+
+def test_w1g12_menacing_ogre_numbers_are_whole_and_not_negative(set_pool):
+    """The ruling (2004-10-04): "You have to choose zero or a positive number.
+    It must be an integer number." Minus one and a fraction are refused with
+    the prompt kept; zero is an answer. And seats nobody asks name the floor —
+    the highest pays, so any more is life lost for nothing — which ties them
+    at 0 and gives the Ogre its counters for free."""
+    game = _w1g12_table(
+        set_pool, ["Mountain"] * 5, hands={0: ["Menacing Ogre"]}, interactive={0, 1},
+    )
+    assert game.cast_from_hand(0, "Menacing Ogre").supported
+    assert not game.resolve_top_of_stack()
+    assert not game.confirm_secret_number(0, -1)
+    assert not game.confirm_secret_number(0, "1.5")
+    assert game.pending_choice_of("secret_number", 0) is not None
+    assert game.confirm_secret_number(0, 0)
+
+    game = _w1g12_table(set_pool, ["Mountain"] * 5, hands={0: ["Menacing Ogre"]})
+    assert game.cast_from_hand(0, "Menacing Ogre").supported
+    _w1g12_resolve_stack(game)
+    ogre = next(p for p in game.all_permanents() if p.card.name == "Menacing Ogre")
+    assert [p.life for p in game.players] == [20, 20]
+    assert (ogre.effective_power, ogre.effective_toughness) == (5, 5)
+
 # ==== end W1G12 ======================================================
 
 

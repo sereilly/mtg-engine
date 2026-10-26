@@ -201,6 +201,21 @@ def lower_plus_one_placement(
                 },
             ),
         )
+    if (
+        isinstance(node.count, ast.Fixed) and node.count.value > 1
+        and _is_source(node.subject)
+    ):
+        # "If you are one of those players, put **two** +1/+1 counters on this
+        # creature." (Menacing Ogre.) A printed number on the source, which
+        # ``add_counter_to_self`` has always read off ``count`` (Tetravus's
+        # "that many", Necropolis's X) and only this gate refused. The count is
+        # emitted only above one, so every one-counter payload is unchanged.
+        return (
+            OracleInstruction(
+                "add_counter_to_self", "",
+                {"power": 1, "toughness": 1, "count": node.count.value},
+            ),
+        )
     if not isinstance(node.count, ast.Fixed) or node.count.value != 1:
         raise LoweringError("variable counter counts have no handler", node=node)
     if _is_source(node.subject):

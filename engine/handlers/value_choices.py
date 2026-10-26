@@ -221,6 +221,11 @@ def secretly_choose_numbers(game: Game, instruction: OracleInstruction, context:
             "secret_number", seat,
             card_name=card_name, minimum=low, seats=list(seats),
             record=SECRET_NUMBERS_BY_SEAT, _results=context.results,
+            # What the numbers are *for* is the sentences behind this one, so
+            # the default reads the card's program (Menacing Ogre's highest
+            # pays, Goblin Game's fewest does). Private, like every live
+            # reference on a prompt.
+            _card=context.card,
         )
     return True, "resolved"
 
