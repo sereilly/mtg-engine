@@ -4,18 +4,18 @@ Cards the engine resolves through the same code paths, differing only in values 
 
 A card whose class contains a **verified** card needs no separate manual pass: it exercises no engine path that card didn't. This is weaker than checking the card — it inherits its peer's correctness, and cannot catch a card whose data breaks a generic path.
 
-- Cards in the catalog: **5529**
-- Distinct behaviours: **5022**
-- Cards sharing a behaviour with another: **734** in **227** classes
-- Unverified cards covered by a verified peer: **198**
+- Cards in the catalog: **5849**
+- Distinct behaviours: **5320**
+- Cards sharing a behaviour with another: **767** in **238** classes
+- Unverified cards covered by a verified peer: **205**
 
 | Size | Cards |
 | --- | --- |
-| 71 | Balduvian Barbarians, Balduvian Bears, Barbary Apes, Barktooth Warbeard, Blanchwood Treefolk, Coral Merfolk, **Craw Wurm**, Crimson Kobolds, Crookshank Kobolds, Durkwood Boars, Dwarven Trader, Eager Cadet, **Earth Elemental**, Elvish Ranger, Femeref Scouts, **Fire Elemental**, Fresh Volunteers, Garruk's Gorehorn, Giant Cockroach, Giant Octopus, Goblin Hero, Gorilla Warrior, **Gray Ogre**, **Grizzly Bears**, Headless Horseman, **Hill Giant**, Horned Turtle, **Hurloon Minotaur**, **Ironroot Treefolk**, Jasmine Boreal, Jedit Ojanen, Jerrard of the Closed Fist, Kasimir the Lone Wolf, Keepers of the Faith, Knight Errant, Kobolds of Kher Keep, Lady Orca, Lowland Giant, **Merfolk of the Pearl Trident**, **Mons's Goblin Raiders**, Moss Monster, Onakke Ogre, Panther Warriors, **Pearled Unicorn**, Python, Raging Bull, Redwood Treefolk, Regal Unicorn, **Savannah Lions**, Scaled Wurm, Scarwood Goblins, **Scathe Zombies**, Sir Shandlar of Eberyn, Sivitri Scarzam, Spined Wurm, Squire, Staunch Shieldmate, The Lady of the Mountain, Tobias Andrion, Tor Giant, Torsten Von Ursus, Trained Armodon, Trained Orgg, Viashino Warrior, Vizzerdrix, Vodalian Soldiers, Walking Corpse, **Water Elemental**, Wild Jhovall, Wishcoin Crab, Woodland Druid |
+| 73 | Balduvian Barbarians, Balduvian Bears, Barbary Apes, Barktooth Warbeard, Blanchwood Treefolk, Coral Merfolk, **Craw Wurm**, Crimson Kobolds, Crookshank Kobolds, Durkwood Boars, Dwarven Trader, Eager Cadet, **Earth Elemental**, Elvish Ranger, Elvish Warrior, Femeref Scouts, **Fire Elemental**, Fresh Volunteers, Garruk's Gorehorn, Giant Cockroach, Giant Octopus, Glory Seeker, Goblin Hero, Gorilla Warrior, **Gray Ogre**, **Grizzly Bears**, Headless Horseman, **Hill Giant**, Horned Turtle, **Hurloon Minotaur**, **Ironroot Treefolk**, Jasmine Boreal, Jedit Ojanen, Jerrard of the Closed Fist, Kasimir the Lone Wolf, Keepers of the Faith, Knight Errant, Kobolds of Kher Keep, Lady Orca, Lowland Giant, **Merfolk of the Pearl Trident**, **Mons's Goblin Raiders**, Moss Monster, Onakke Ogre, Panther Warriors, **Pearled Unicorn**, Python, Raging Bull, Redwood Treefolk, Regal Unicorn, **Savannah Lions**, Scaled Wurm, Scarwood Goblins, **Scathe Zombies**, Sir Shandlar of Eberyn, Sivitri Scarzam, Spined Wurm, Squire, Staunch Shieldmate, The Lady of the Mountain, Tobias Andrion, Tor Giant, Torsten Von Ursus, Trained Armodon, Trained Orgg, Viashino Warrior, Vizzerdrix, Vodalian Soldiers, Walking Corpse, **Water Elemental**, Wild Jhovall, Wishcoin Crab, Woodland Druid |
 | 18 | Abbey Gargoyles, Aven Smokeweaver, Cerulean Wyvern, Duskrider Falcon, Freewind Falcon, Hazerider Drake, Melesse Spirit, Nightwind Glider, Sea Sprite, Thermal Glider, Treetop Sentinel, Voice of Duty, Voice of Grace, Voice of Law, Voice of Reason, Voice of Truth, Weatherseed Faeries, Windreaper Falcon |
 | 18 | **Air Elemental**, Armored Pegasus, Azure Drake, **Bird Maiden**, Concordia Pegasus, Dusk Imp, Feral Shadow, Fighting Drake, **Flying Men**, Gaea's Skyfolk, Misshapen Fiend, **Phantom Monster**, **Roc of Kher Ridges**, **Scryb Sprites**, Suntail Hawk, Tormented Angel, Willow Faerie, Wind Drake |
+| 12 | Anaconda, Anurid Murkdiver, Bog Raiders, Bog Smugglers, **Bog Wraith**, Lost Soul, Marsh Boa, Marsh Goblins, Moor Fiend, Plague Beetle, Pygmy Allosaurus, Warthog |
 | 12 | Death Speakers, Galina's Knight, Guma, Ihsan's Shade, Karoo Meerkat, Llanowar Knight, Oraxid, **Repentant Blacksmith**, Scalebane's Elite, Shivan Zombie, Vodalian Zombie, Yavimaya Barbarian |
-| 11 | Anaconda, Bog Raiders, Bog Smugglers, **Bog Wraith**, Lost Soul, Marsh Boa, Marsh Goblins, Moor Fiend, Plague Beetle, Pygmy Allosaurus, Warthog |
 | 10 | Argothian Swine, Crash of Rhinos, Giant Warthog, Goliath Beetle, Iron Tusk Elephant, Jhovall Rider, **Moorish Cavalry**, Pygmy Razorback, **War Mammoth**, Wild Elephant |
 | 10 | **Elvish Archers**, Halberdier, Hornet Cobra, Land Leeches, Lightning Hounds, Ramirez DePietro, Sabretooth Tiger, Serra Zealot, **Stone-Throwing Devils**, Youthful Knight |
 | 7 | **Benalish Hero**, Benalish Infantry, Icatian Phalanx, Kjeldoran Escort, Kjeldoran Warrior, Shield Bearer, **Timber Wolves** |
@@ -36,6 +36,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 5 | Angelfire Crusader, Firescreamer, Flame Spirit, Ridgeline Rager, Storm Shaman |
 | 5 | Black Scarab, Blue Scarab, Green Scarab, Red Scarab, White Scarab |
 | 5 | **Black Ward**, **Blue Ward**, **Green Ward**, **Red Ward**, **White Ward** |
+| 5 | Bloated Toad, Darkwatch Elves, Disciple of Grace, Disciple of Law, Disciple of Malice |
 | 5 | Canopy Spider, Giant Mantis, **Giant Spider**, Plated Spider, Rib Cage Spider |
 | 5 | Canyon Wildcat, Dwarven Grunt, Goblin Spelunkers, Mountain Goat, Rock Badger |
 | 5 | **Circle of Protection: Black**, **Circle of Protection: Blue**, **Circle of Protection: Green**, **Circle of Protection: Red**, **Circle of Protection: White** |
@@ -48,31 +49,34 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 5 | Sphere of Duty, Sphere of Grace, Sphere of Law, Sphere of Reason, Sphere of Truth |
 | 4 | Anurid Barkripper, **Krosan Beast**, Metamorphic Wurm, **Springing Tiger** |
 | 4 | Ardent Militia, Border Patrol, Jhovall Queen, Standing Troops |
-| 4 | Bloated Toad, Darkwatch Elves, Disciple of Grace, Disciple of Law |
+| 4 | Bog Imp, Goblin Sky Raider, **Mahamoti Djinn**, Storm Crow |
 | 4 | Breath of Life, **Resurrection**, Rise Again, **Zombify** |
 | 4 | Colossal Dreadmaw, Rootbreaker Wurm, Wildwood Patrol, Yavimaya Wurm |
 | 4 | Crossbow Infantry, D'Avenant Archer, Elite Archers, Heavy Ballista |
 | 4 | **Deathlace**, **Lifelace**, **Purelace**, **Thoughtlace** |
 | 4 | Endoskeleton, Spirit Shield, Tawnos's Weaponry, Zelyon Sword |
 | 4 | Firefly, **Granite Gargoyle**, Hellkite Punisher, **Shivan Dragon** |
+| 4 | Fyndhorn Elves, **Llanowar Elves**, Skyshroud Troopers, Wirewood Elf |
+| 4 | Gluttonous Zombie, Razortooth Rats, Severed Legion, Squirming Mass |
 | 4 | Goblin Chariot, Lightning Elemental, Raging Goblin, Thundering Giant |
 | 4 | Laccolith Grunt, Laccolith Titan, Laccolith Warrior, Laccolith Whelp |
 | 4 | Metallic Sliver, **Obsianus Golem**, Phyrexian Hulk, Phyrexian Walker |
 | 4 | **Prodigal Sorcerer**, Razorfin Hunter, Rootwater Hunter, Zuran Spellcaster |
 | 3 | Aggressive Urge, Defiant Strike, Sudden Strength |
 | 3 | **Army of Allah**, Morale, Trumpet Blast |
-| 3 | Bog Imp, **Mahamoti Djinn**, Storm Crow |
+| 3 | Barkhide Mauler, Sandbar Merfolk, Sandbar Serpent |
 | 3 | Breezekeeper, Teferi's Drake, Tolarian Drake |
 | 3 | Cateran Brute, Cateran Kidnappers, Cateran Persuader |
 | 3 | Cave Tiger, Rabid Wolverines, Viashino Weaponsmith |
 | 3 | Charging Paladin, Hollow Dogs, Vicious Kavu |
+| 3 | Crafty Pathmage, Dwarven Nomad, **Dwarven Warriors** |
+| 3 | Crazed Skirge, Rorix Bladewing, Volcanic Dragon |
 | 3 | Darkness, **Fog**, Holy Day |
 | 3 | Dauthi Marauder, Soltari Foot Soldier, Thalakos Sentry |
 | 3 | Deadly Insect, Elvish Lookout, Pincher Beetles |
 | 3 | **El-Hajjâj**, Horned Cheetah, Zebra Unicorn |
 | 3 | Elvish Berserker, Gang of Elk, Rabid Elephant |
 | 3 | Flowstone Crusher, Flowstone Giant, Flowstone Shambler |
-| 3 | Fyndhorn Elves, **Llanowar Elves**, Skyshroud Troopers |
 | 3 | **Giant Growth**, Might of Oaks, Titanic Growth |
 | 3 | Killer Whale, Manta Riders, Whiptongue Frog |
 | 3 | Lone Wolf, Pride of Lions, Thorn Elemental |
@@ -124,7 +128,6 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | Clay Statue, Diabolic Machine |
 | 2 | Coalition Honor Guard, **Standard Bearer** |
 | 2 | Consume Strength, Steal Strength |
-| 2 | Crazed Skirge, Volcanic Dragon |
 | 2 | Crimson Acolyte, Obsidian Acolyte |
 | 2 | **Dandân**, **Sea Serpent** |
 | 2 | Darba, Hungry Mist |
@@ -137,13 +140,15 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | **Demonic Tutor**, Diabolic Tutor |
 | 2 | **Desert Twister**, Vindicate |
 | 2 | Dirtwater Wraith, Whispering Shade |
+| 2 | Disease Carriers, Festering Goblin |
+| 2 | **Disenchant**, Naturalize |
 | 2 | Dromosaur, Raging Gorilla |
 | 2 | Druid Lyrist, Elvish Lyrist |
 | 2 | Dwarven Miner, Trench Wurm |
-| 2 | Dwarven Nomad, **Dwarven Warriors** |
 | 2 | Eastern Paladin, Western Paladin |
 | 2 | Elven Cache, **Regrowth** |
 | 2 | Elvish Bard, Taunting Elf |
+| 2 | Elvish Scrapper, Scavenger Folk |
 | 2 | Ember Beast, Mogg Flunkies |
 | 2 | Ephemeron, **Skywing Aven** |
 | 2 | Essence Flare, **Unstable Mutation** |
@@ -159,12 +164,16 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | Frenetic Ogre, Pardic Swordsmith |
 | 2 | Fylamarid, Metathran Transport |
 | 2 | Fyndhorn Bow, Iron Lance |
+| 2 | Gaseous Form, Sandskin |
 | 2 | Giant Trap Door Spider, Hunting Kavu |
 | 2 | Glittering Lion, Glittering Lynx |
 | 2 | Goblin Glider, Kyren Glider |
 | 2 | Goblin Mutant, Orgg |
+| 2 | Goblin Sledder, Mogg Raider |
 | 2 | Gorilla Chieftain, Skyshroud Troll |
 | 2 | Grasp of Darkness, Shrink |
+| 2 | Gustcloak Harrier, Gustcloak Skirmisher |
+| 2 | Gustcloak Runner, Gustcloak Sentinel |
 | 2 | Hammerhead Shark, Sea Monster |
 | 2 | Hate Weaver, Spirit Weaver |
 | 2 | Hawkeater Moth, Zephid |
@@ -175,6 +184,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | Heroes' Reunion, Soothing Balm |
 | 2 | Hydroblast, Pyroblast |
 | 2 | Immolation, Twisted Experiment |
+| 2 | Infest, Nausea |
 | 2 | Infiltrate, Trailblazer |
 | 2 | **Island**, Snow-Covered Island |
 | 2 | Jacques le Vert, Kaysa |
@@ -197,10 +207,12 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | Merfolk Traders, Vodalian Merchant |
 | 2 | Mesa Falcon, Pearl Dragon |
 | 2 | **Mesa Pegasus**, Teremko Griffin |
+| 2 | Mistform Dreamer, Mistform Skyreaver |
 | 2 | Mogg Fanatic, Shock Troops |
 | 2 | **Mountain**, Snow-Covered Mountain |
 | 2 | Mtenda Herder, Shadow Rider |
 | 2 | Nantuko Disciple, Thriss, Nantuko Primus |
+| 2 | Nantuko Husk, Phyrexian Ghoul |
 | 2 | Noble Elephant, **War Elephant** |
 | 2 | Nomads en-Kor, Warrior en-Kor |
 | 2 | **Northern Paladin**, Southern Paladin |
@@ -217,14 +229,12 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | Pilgrim of Justice, Pilgrim of Virtue |
 | 2 | **Plains**, Snow-Covered Plains |
 | 2 | Plated Rootwalla, Rootwalla |
-| 2 | Razortooth Rats, Squirming Mass |
 | 2 | Reckless Ogre, Rogue Kavu |
 | 2 | Reef Shaman, Sea Snidd |
 | 2 | Revitalize, Reviving Dose |
 | 2 | Rishadan Cutpurse, Rishadan Footpad |
 | 2 | Rock Basilisk, **Thicket Basilisk** |
 | 2 | Sage Owl, Spire Owl |
-| 2 | Sandbar Merfolk, Sandbar Serpent |
 | 2 | Scoria Cat, Spur Grappler |
 | 2 | **Shatter**, Verdigris |
 | 2 | Silkenfist Fighter, Silkenfist Order |
@@ -235,6 +245,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | Stronghold Taskmaster, Urborg Shambler |
 | 2 | Talruum Minotaur, Wild Colos |
 | 2 | Torment, **Weakness** |
+| 2 | Towering Baloth, Treespring Lorian |
 | 2 | Viashino Sandscout, Viashino Sandstalker |
 | 2 | **Wall of Fire**, Wall of Lava |
 | 2 | Wormfang Newt, Wormfang Turtle |

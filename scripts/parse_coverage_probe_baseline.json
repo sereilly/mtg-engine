@@ -49,10 +49,24 @@
   ]
  },
  {
+  "card": "Aggravated Assault",
+  "clause": "untap all creatures you control. after this main phase, there is an additional combat phase followed by an additional main phase",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Agonizing Demise",
   "clause": "destroy target nonblack creature. it can't be regenerated. if this spell was kicked, agonizing demise deals damage equal to that creature's power to the creature's controller",
   "ignored": [
    "spell"
+  ]
+ },
+ {
+  "card": "Akroma's Vengeance",
+  "clause": "destroy all artifacts, creatures, and enchantments",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -219,6 +233,13 @@
   ]
  },
  {
+  "card": "Aurification",
+  "clause": "remove all gold counters from all creatures",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Avalanche Riders",
   "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {3}{r}",
   "ignored": [
@@ -372,6 +393,13 @@
   "clause": "it deals 2 damage to each creature",
   "ignored": [
    "each"
+  ]
+ },
+ {
+  "card": "Bloodline Shaman",
+  "clause": "choose a creature type. reveal the top card of your library. if that card is a creature card of the chosen type, put it into your hand. otherwise, put it into your graveyard",
+  "ignored": [
+   "card"
   ]
  },
  {
@@ -681,6 +709,13 @@
   ]
  },
  {
+  "card": "Contested Cliffs",
+  "clause": "target beast creature you control fights target creature an opponent controls",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
   "card": "Corrosion",
   "clause": "put a rust counter on each artifact target opponent controls. then destroy each artifact with mana value less than or equal to the number of rust counters on it. artifacts destroyed this way can't be regenerated",
   "ignored": [
@@ -759,10 +794,31 @@
   ]
  },
  {
+  "card": "Daru Encampment",
+  "clause": "target soldier creature gets +1/+1 until end of turn",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
+  "card": "Death Match",
+  "clause": "that creature's controller may have target creature of their choice get -3/-3 until end of turn",
+  "ignored": [
+   "have"
+  ]
+ },
+ {
   "card": "Death Pit Offering",
   "clause": "sacrifice all creatures you control",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Death Pulse",
+  "clause": "you may have target creature get -1/-1 until end of turn",
+  "ignored": [
+   "have"
   ]
  },
  {
@@ -870,6 +926,20 @@
   "clause": "you may put a minotaur permanent card from your hand onto the battlefield",
   "ignored": [
    "permanent"
+  ]
+ },
+ {
+  "card": "Dirge of Dread",
+  "clause": "all creatures gain fear until end of turn",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Dirge of Dread",
+  "clause": "you may have target creature gain fear until end of turn",
+  "ignored": [
+   "have"
   ]
  },
  {
@@ -1085,6 +1155,20 @@
   ]
  },
  {
+  "card": "Elvish Pathcutter",
+  "clause": "target elf creature gains forestwalk until end of turn",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
+  "card": "Endemic Plague",
+  "clause": "destroy all creatures that share a creature type with the sacrificed creature. they can't be regenerated",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Energy Vortex",
   "clause": "this enchantment deals 3 damage to that player unless they pay {1} for each vortex counter on this enchantment",
   "ignored": [
@@ -1160,6 +1244,13 @@
   "ignored": [
    "each",
    "and/or"
+  ]
+ },
+ {
+  "card": "Everglove Courier",
+  "clause": "target elf creature gets +2/+2 and has trample for as long as this creature remains tapped",
+  "ignored": [
+   "creature"
   ]
  },
  {
@@ -1249,6 +1340,13 @@
   ]
  },
  {
+  "card": "Fever Charm",
+  "clause": "fever charm deals 3 damage to target wizard creature",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
   "card": "Fight or Flight",
   "clause": "separate all creatures that player controls into two piles. only creatures in the pile of their choice can attack this turn",
   "ignored": [
@@ -1275,6 +1373,13 @@
   "ignored": [
    "or",
    "target"
+  ]
+ },
+ {
+  "card": "Flamestick Courier",
+  "clause": "target goblin creature gets +2/+2 and has haste for as long as this creature remains tapped",
+  "ignored": [
+   "creature"
   ]
  },
  {
@@ -1318,6 +1423,13 @@
   "clause": "this creature deals damage to any target equal to half the sacrificed creature's power, rounded down",
   "ignored": [
    "down"
+  ]
+ },
+ {
+  "card": "Frightshroud Courier",
+  "clause": "target zombie creature gets +2/+2 and has fear for as long as this creature remains tapped",
+  "ignored": [
+   "creature"
   ]
  },
  {
@@ -1384,6 +1496,13 @@
   ]
  },
  {
+  "card": "Ghosthelm Courier",
+  "clause": "target wizard creature gets +2/+2 and has shroud for as long as this creature remains tapped",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
   "card": "Ghoul's Feast",
   "clause": "target creature gets +x/+0 until end of turn, where x is the number of creature cards in your graveyard",
   "ignored": [
@@ -1419,6 +1538,13 @@
   ]
  },
  {
+  "card": "Goblin Burrows",
+  "clause": "target goblin creature gets +2/+0 until end of turn",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
   "card": "Goblin Flotilla",
   "clause": "unless you pay {r}, whenever this creature blocks or becomes blocked by a creature this combat, that creature gains first strike until end of turn",
   "ignored": [
@@ -1447,10 +1573,31 @@
   ]
  },
  {
+  "card": "Goblin Pyromancer",
+  "clause": "destroy all goblins",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Goblin Pyromancer",
+  "clause": "goblin creatures get +3/+0 until end of turn",
+  "ignored": [
+   "creatures"
+  ]
+ },
+ {
   "card": "Goblin Shrine",
   "clause": "it deals 1 damage to each goblin creature",
   "ignored": [
    "each",
+   "creature"
+  ]
+ },
+ {
+  "card": "Goblin Taskmaster",
+  "clause": "target goblin creature gets +1/+0 until end of turn",
+  "ignored": [
    "creature"
   ]
  },
@@ -1487,6 +1634,13 @@
   "clause": "draw an additional card",
   "ignored": [
    "additional"
+  ]
+ },
+ {
+  "card": "Grassland Crusader",
+  "clause": "target elf or soldier creature gets +2/+2 until end of turn",
+  "ignored": [
+   "creature"
   ]
  },
  {
@@ -1570,6 +1724,13 @@
  {
   "card": "Harmonic Convergence",
   "clause": "put all enchantments on top of their owners' libraries",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Harsh Mercy",
+  "clause": "each player chooses a creature type. destroy all creatures that aren't of a type chosen this way. they can't be regenerated",
   "ignored": [
    "all"
   ]
@@ -1877,6 +2038,13 @@
   ]
  },
  {
+  "card": "Infest",
+  "clause": "all creatures get -2/-2 until end of turn",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Inflame",
   "clause": "inflame deals 2 damage to each creature dealt damage this turn",
   "ignored": [
@@ -1888,6 +2056,13 @@
   "clause": "untap target artifact, creature, or land",
   "ignored": [
    "or"
+  ]
+ },
+ {
+  "card": "Insurrection",
+  "clause": "untap all creatures and gain control of them until end of turn. they gain haste until end of turn",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -2061,6 +2236,13 @@
   "clause": "all damage that would be dealt this turn to target creature you control by a source of your choice is dealt to another target creature instead",
   "ignored": [
    "target"
+  ]
+ },
+ {
+  "card": "Krosan Groundshaker",
+  "clause": "target beast creature gains trample until end of turn",
+  "ignored": [
+   "creature"
   ]
  },
  {
@@ -2581,6 +2763,13 @@
   ]
  },
  {
+  "card": "Nova Cleric",
+  "clause": "destroy all enchantments",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Oath of Druids",
   "clause": "that player chooses target player who controls more creatures than they do and is their opponent. the first player may reveal cards from the top of their library until they reveal a creature card. if the first player does, that player puts that card onto the battlefield and all other cards revealed this way into their graveyard",
   "ignored": [
@@ -2758,10 +2947,31 @@
   ]
  },
  {
+  "card": "Patriarch's Bidding",
+  "clause": "each player chooses a creature type. each player returns all creature cards of a type chosen this way from their graveyard to the battlefield",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Pearlspear Courier",
+  "clause": "target soldier creature gets +2/+2 and has vigilance for as long as this creature remains tapped",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
   "card": "Peat Bog",
   "clause": "add {b}{b}. if there are no depletion counters on this land, sacrifice it",
   "ignored": [
    "land,"
+  ]
+ },
+ {
+  "card": "Peer Pressure",
+  "clause": "choose a creature type. if you control more creatures of that type than each other player, you gain control of all creatures of that type",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -2811,6 +3021,13 @@
   "clause": "create an x/x black phyrexian minion creature token, where x is the life paid as this artifact entered",
   "ignored": [
    "artifact"
+  ]
+ },
+ {
+  "card": "Piety Charm",
+  "clause": "target soldier creature gets +2/+2 until end of turn",
+  "ignored": [
+   "creature"
   ]
  },
  {
@@ -2889,6 +3106,13 @@
   "clause": "tap all lands defending player controls",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Primal Boost",
+  "clause": "you may have target creature get +1/+1 until end of turn",
+  "ignored": [
+   "have"
   ]
  },
  {
@@ -3237,6 +3461,20 @@
   ]
  },
  {
+  "card": "Riptide Chronologist",
+  "clause": "untap all creatures of the creature type of your choice",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Riptide Replicator",
+  "clause": "create an x/x creature token of the chosen color and type, where x is the number of charge counters on this artifact",
+  "ignored": [
+   "artifact"
+  ]
+ },
+ {
   "card": "Rock Slide",
   "clause": "rock slide deals x damage divided as you choose among any number of target attacking or blocking creatures without flying",
   "ignored": [
@@ -3482,6 +3720,13 @@
   ]
  },
  {
+  "card": "Shade's Breath",
+  "clause": "until end of turn, each creature you control becomes a black shade and gains \"{b}: this creature gets +1/+1 until end of turn.\"",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "Shadowstorm",
   "clause": "shadowstorm deals 2 damage to each creature with shadow",
   "ignored": [
@@ -3575,6 +3820,13 @@
   ]
  },
  {
+  "card": "Silklash Spider",
+  "clause": "this creature deals x damage to each creature with flying",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "Silt Crawler",
   "clause": "tap all lands you control",
   "ignored": [
@@ -3638,6 +3890,20 @@
   ]
  },
  {
+  "card": "Slice and Dice",
+  "clause": "slice and dice deals 4 damage to each creature",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
+  "card": "Slice and Dice",
+  "clause": "you may have it deal 1 damage to each creature",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "Slithery Stalker",
   "clause": "exile target green or white creature an opponent controls",
   "ignored": [
@@ -3649,6 +3915,13 @@
   "clause": "that player sacrifices a permanent of their choice for each soot counter on this artifact",
   "ignored": [
    "artifact"
+  ]
+ },
+ {
+  "card": "Snarling Undorak",
+  "clause": "target beast creature gets +1/+1 until end of turn",
+  "ignored": [
+   "creature"
   ]
  },
  {
@@ -3816,6 +4089,20 @@
   ]
  },
  {
+  "card": "Standardize",
+  "clause": "choose a creature type other than wall. each creature becomes that type until end of turn",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
+  "card": "Starstorm",
+  "clause": "starstorm deals x damage to each creature",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "Steel Leaf Paladin",
   "clause": "return a green or white creature you control to its owner's hand",
   "ignored": [
@@ -3965,6 +4252,13 @@
   "clause": "prevent the next x damage that would be dealt to target creature this turn. for each 1 damage prevented this way, put a +1/+1 counter on that creature",
   "ignored": [
    "1"
+  ]
+ },
+ {
+  "card": "Tempting Wurm",
+  "clause": "each opponent may put any number of artifact, creature, enchantment, and/or land cards from their hand onto the battlefield",
+  "ignored": [
+   "and/or"
   ]
  },
  {

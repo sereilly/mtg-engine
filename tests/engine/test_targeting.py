@@ -557,9 +557,20 @@ def test_the_agreement_ratchet_still_examines_the_card_that_broke_it(supported_c
     # in both graveyards and nothing else, an Aura from either arrives under
     # Mythmaker's controller on a creature it controls, and naming a creature
     # card or a land is refused.
+    # Gravespawn Sovereign (ONS) is the eighth, reviewed at Onslaught's
+    # promotion rehearsal, and Coffin Queen's shape again with a cost of
+    # creatures: "Tap five untapped Zombies you control: Put target creature
+    # card from a graveyard onto the battlefield under your control."
+    # `derive_activation_spec` answers it (`graveyard_creature`, no
+    # `own_graveyard_only`, the tap-five-Zombies cost as its `cost_spec`).
+    # Driven: its picker offers the creature cards in both graveyards and
+    # nothing else, a card from either arrives under the Sovereign's
+    # controller with five Zombies tapped, naming a land or an instant card
+    # is refused, and four Zombies cannot pay.
     assert widened == {
         "Hymn of Rebirth", "Necromancy", "Reanimate", "Coffin Queen",
         "Iridescent Drake", "Chainer, Dementia Master", "Nomad Mythmaker",
+        "Gravespawn Sovereign",
     }
 
 

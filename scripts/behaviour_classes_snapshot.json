@@ -14,12 +14,14 @@
     "Eager Cadet",
     "Earth Elemental",
     "Elvish Ranger",
+    "Elvish Warrior",
     "Femeref Scouts",
     "Fire Elemental",
     "Fresh Volunteers",
     "Garruk's Gorehorn",
     "Giant Cockroach",
     "Giant Octopus",
+    "Glory Seeker",
     "Goblin Hero",
     "Gorilla Warrior",
     "Gray Ogre",
@@ -113,6 +115,20 @@
     "Wind Drake"
   ],
   [
+    "Anaconda",
+    "Anurid Murkdiver",
+    "Bog Raiders",
+    "Bog Smugglers",
+    "Bog Wraith",
+    "Lost Soul",
+    "Marsh Boa",
+    "Marsh Goblins",
+    "Moor Fiend",
+    "Plague Beetle",
+    "Pygmy Allosaurus",
+    "Warthog"
+  ],
+  [
     "Death Speakers",
     "Galina's Knight",
     "Guma",
@@ -125,19 +141,6 @@
     "Shivan Zombie",
     "Vodalian Zombie",
     "Yavimaya Barbarian"
-  ],
-  [
-    "Anaconda",
-    "Bog Raiders",
-    "Bog Smugglers",
-    "Bog Wraith",
-    "Lost Soul",
-    "Marsh Boa",
-    "Marsh Goblins",
-    "Moor Fiend",
-    "Plague Beetle",
-    "Pygmy Allosaurus",
-    "Warthog"
   ],
   [
     "Argothian Swine",
@@ -304,6 +307,13 @@
     "White Ward"
   ],
   [
+    "Bloated Toad",
+    "Darkwatch Elves",
+    "Disciple of Grace",
+    "Disciple of Law",
+    "Disciple of Malice"
+  ],
+  [
     "Canopy Spider",
     "Giant Mantis",
     "Giant Spider",
@@ -386,10 +396,10 @@
     "Standing Troops"
   ],
   [
-    "Bloated Toad",
-    "Darkwatch Elves",
-    "Disciple of Grace",
-    "Disciple of Law"
+    "Bog Imp",
+    "Goblin Sky Raider",
+    "Mahamoti Djinn",
+    "Storm Crow"
   ],
   [
     "Breath of Life",
@@ -428,6 +438,18 @@
     "Shivan Dragon"
   ],
   [
+    "Fyndhorn Elves",
+    "Llanowar Elves",
+    "Skyshroud Troopers",
+    "Wirewood Elf"
+  ],
+  [
+    "Gluttonous Zombie",
+    "Razortooth Rats",
+    "Severed Legion",
+    "Squirming Mass"
+  ],
+  [
     "Goblin Chariot",
     "Lightning Elemental",
     "Raging Goblin",
@@ -462,9 +484,9 @@
     "Trumpet Blast"
   ],
   [
-    "Bog Imp",
-    "Mahamoti Djinn",
-    "Storm Crow"
+    "Barkhide Mauler",
+    "Sandbar Merfolk",
+    "Sandbar Serpent"
   ],
   [
     "Breezekeeper",
@@ -485,6 +507,16 @@
     "Charging Paladin",
     "Hollow Dogs",
     "Vicious Kavu"
+  ],
+  [
+    "Crafty Pathmage",
+    "Dwarven Nomad",
+    "Dwarven Warriors"
+  ],
+  [
+    "Crazed Skirge",
+    "Rorix Bladewing",
+    "Volcanic Dragon"
   ],
   [
     "Darkness",
@@ -515,11 +547,6 @@
     "Flowstone Crusher",
     "Flowstone Giant",
     "Flowstone Shambler"
-  ],
-  [
-    "Fyndhorn Elves",
-    "Llanowar Elves",
-    "Skyshroud Troopers"
   ],
   [
     "Giant Growth",
@@ -732,10 +759,6 @@
     "Steal Strength"
   ],
   [
-    "Crazed Skirge",
-    "Volcanic Dragon"
-  ],
-  [
     "Crimson Acolyte",
     "Obsidian Acolyte"
   ],
@@ -784,6 +807,14 @@
     "Whispering Shade"
   ],
   [
+    "Disease Carriers",
+    "Festering Goblin"
+  ],
+  [
+    "Disenchant",
+    "Naturalize"
+  ],
+  [
     "Dromosaur",
     "Raging Gorilla"
   ],
@@ -796,10 +827,6 @@
     "Trench Wurm"
   ],
   [
-    "Dwarven Nomad",
-    "Dwarven Warriors"
-  ],
-  [
     "Eastern Paladin",
     "Western Paladin"
   ],
@@ -810,6 +837,10 @@
   [
     "Elvish Bard",
     "Taunting Elf"
+  ],
+  [
+    "Elvish Scrapper",
+    "Scavenger Folk"
   ],
   [
     "Ember Beast",
@@ -872,6 +903,10 @@
     "Iron Lance"
   ],
   [
+    "Gaseous Form",
+    "Sandskin"
+  ],
+  [
     "Giant Trap Door Spider",
     "Hunting Kavu"
   ],
@@ -888,12 +923,24 @@
     "Orgg"
   ],
   [
+    "Goblin Sledder",
+    "Mogg Raider"
+  ],
+  [
     "Gorilla Chieftain",
     "Skyshroud Troll"
   ],
   [
     "Grasp of Darkness",
     "Shrink"
+  ],
+  [
+    "Gustcloak Harrier",
+    "Gustcloak Skirmisher"
+  ],
+  [
+    "Gustcloak Runner",
+    "Gustcloak Sentinel"
   ],
   [
     "Hammerhead Shark",
@@ -934,6 +981,10 @@
   [
     "Immolation",
     "Twisted Experiment"
+  ],
+  [
+    "Infest",
+    "Nausea"
   ],
   [
     "Infiltrate",
@@ -1024,6 +1075,10 @@
     "Teremko Griffin"
   ],
   [
+    "Mistform Dreamer",
+    "Mistform Skyreaver"
+  ],
+  [
     "Mogg Fanatic",
     "Shock Troops"
   ],
@@ -1038,6 +1093,10 @@
   [
     "Nantuko Disciple",
     "Thriss, Nantuko Primus"
+  ],
+  [
+    "Nantuko Husk",
+    "Phyrexian Ghoul"
   ],
   [
     "Noble Elephant",
@@ -1104,10 +1163,6 @@
     "Rootwalla"
   ],
   [
-    "Razortooth Rats",
-    "Squirming Mass"
-  ],
-  [
     "Reckless Ogre",
     "Rogue Kavu"
   ],
@@ -1130,10 +1185,6 @@
   [
     "Sage Owl",
     "Spire Owl"
-  ],
-  [
-    "Sandbar Merfolk",
-    "Sandbar Serpent"
   ],
   [
     "Scoria Cat",
@@ -1174,6 +1225,10 @@
   [
     "Torment",
     "Weakness"
+  ],
+  [
+    "Towering Baloth",
+    "Treespring Lorian"
   ],
   [
     "Viashino Sandscout",

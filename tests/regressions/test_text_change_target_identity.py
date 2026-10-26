@@ -68,15 +68,19 @@ def _text_changers(pool):
     )
 
 
-#: The seven, pinned so an eighth has to be driven here. Alter Reality (TOR)
+#: The eight, pinned so a ninth has to be driven here. Alter Reality (TOR)
 #: joined at Torment's promotion rehearsal: "Change the text of target spell
 #: or permanent by replacing all instances of one color word with another."
 #: and flashback {1}{U}. Driven by id at the second of two permanents from
 #: hand and by flashback, it rewrites the one it named; its "spell" half is
 #: refused at announcement, ROADMAP's "Text changes aimed at a spell".
+#: Artificial Evolution (ONS) joined at Onslaught's: "…by replacing all
+#: instances of one creature type with another. The new creature type can't
+#: be Wall." Its words are asked as it resolves (CR 608.2d), so the board
+#: carries a creature-type word and a Goblin to answer them by default.
 TEXT_CHANGERS = (
-    "Alter Reality", "Balduvian Shaman", "Crystal Spray", "Magical Hack",
-    "Mind Bend", "Sleight of Mind", "Whim of Volrath",
+    "Alter Reality", "Artificial Evolution", "Balduvian Shaman", "Crystal Spray",
+    "Magical Hack", "Mind Bend", "Sleight of Mind", "Whim of Volrath",
 )
 
 

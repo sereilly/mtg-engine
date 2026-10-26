@@ -1354,6 +1354,11 @@ UNBUILDABLE = {
     # that was gone by cleanup.
     ("Destructive Tampering", 1): "it has nothing to act on on any census board",
     ("Vision Charm", 1): "it has nothing to act on on any census board",
+    # "Look at the top four cards of your library, then put them back in any
+    # order." (Trickery Charm, ONS.) A census library is ten Forests, so the
+    # order put back is the order taken: what the bullet is for is the draws
+    # to come, which no census board holds.
+    ("Trickery Charm", 2): "it has nothing to act on on any census board",
 }
 
 #: Modes with a board on which **nothing is cast**, each with why: the mode's
@@ -1366,7 +1371,7 @@ UNBUILDABLE = {
 #: the fight (``ai_scoring._weighed_through_the_fight``): cast, at
 #: ``SPELL_BASE_SCORE`` and a quarter of whatever it lent, on the first main
 #: phase it was castable in. Named, because a sweep that silently drops what
-#: it does not reach reports a smaller pool as a clean one: these twelve are
+#: it does not reach reports a smaller pool as a clean one: these sixteen are
 #: reached only where there is a fight for them to decide, and the fight
 #: boards are ``tests/ai/test_ai_precombat_tricks.py``'s.
 _NO_FIGHT = "for a turn, on a creature with no fight to decide"
@@ -1391,6 +1396,15 @@ HELD = {
     ("Sapphire Charm", 1): "flying " + _NO_FIGHT,
     ("Seedling Charm", 1): "a regeneration shield with nothing to survive",
     ("Seedling Charm", 2): "trample " + _NO_FIGHT,
+    # Onslaught's, at its promotion rehearsal. Fever Charm's two pumps sit on
+    # a board with the caster's own Wizard beside its creature (the decoy for
+    # its third bullet, "3 damage to target Wizard creature", which wants the
+    # opponent's): each measures nothing lasting there.
+    ("Fever Charm", 0): "haste " + _NO_FIGHT + " and no summoning sickness to lift",
+    ("Fever Charm", 1): "+2/+0 " + _NO_FIGHT,
+    ("Trickery Charm", 1): "a creature type for a turn, on a board where nothing reads one",
+    # The board's creature is a Wall, which cannot attack (defender).
+    ("Vitality Charm", 1): "+1/+1 and trample " + _NO_FIGHT,
 }
 
 #: Modes whose own board leaves a sibling worth casting too, and the sibling
@@ -1431,6 +1445,10 @@ SHADOWED = {
     ("Rith's Charm", 0): ([1], "three Saprolings against one land"),
     ("Rith's Charm", 2): ([1], "three Saprolings against a shield with no damage coming"),
     ("Sapphire Charm", 1): ([0], "a card next upkeep is still coming at the end of the turn; flying with nothing to fly over is not"),
+    # Onslaught's, at its promotion rehearsal.
+    ("Trickery Charm", 1): ([0], "flying gets two damage past the blocker; a creature type nothing reads measures nothing"),
+    ("Vitality Charm", 1): ([0], "a 1/1 Insect lasts; +1/+1 and trample on a Wall measures nothing"),
+    ("Vitality Charm", 2): ([1], "+1/+1 and trample wins the fight a regeneration shield only survives: 10.0 against 9.0"),
 }
 
 #: Boards on which the cast the policy made measures **less** than some
