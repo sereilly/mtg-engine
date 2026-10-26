@@ -45,7 +45,9 @@ enumerated around it.
 other permanent's mana ability whose whole cost is {T} and which the
 activation path would accept now (a Sol Ring, a Mox, a Llanowar Elves that is
 not summoning sick, none of them under a Null Rod or a Cursed Totem):
-:func:`source_tap_yields`.
+:func:`source_tap_yields` — and every mana ability whose whole cost is "Tap N
+untapped <noun phrase> you control" (Birchlore Rangers), once per N the seat
+could tap of the permanents nothing else counts (:func:`is_tap_cost_mana_ability`).
 
 That was "lands only, by decision", and the decision is reversed here on
 purpose. Its reason was that no automatic payment taps a non-land source, so
@@ -398,6 +400,102 @@ def source_tap_yields(
     return yields
 
 
+def is_tap_cost_mana_ability(ability) -> bool:
+    """Whether *ability* is a mana ability (CR 605.1a) whose **whole cost is
+    "Tap N untapped <noun phrase> you control"** — "Tap two untapped Elves you
+    control: Add one mana of any color." (Birchlore Rangers).
+
+    No {T}, no mana, nothing else: compared against a bare cost carrying only
+    the tap, for `ai_mana_sources._sacrifices_only_itself`'s reason (a cost
+    field added later is declined until someone decides otherwise). And
+    nothing a payment cannot honour from inside itself — a printed
+    "Activate only …" or an offer to another player — the exclusions
+    ``is_tap_alone_mana_ability`` makes of a {T} one.
+
+    Summoning sickness is no bar (CR 302.6 binds a {T} cost of the creature's
+    own; Birchlore Rangers' ruling, 2004-10-04: "You may tap any untapped
+    permanents you control with the appropriate creature type (including this
+    creature) to pay the cost of the ability, including creatures that haven't
+    been under your control continuously since the beginning of your most
+    recent turn.").
+    """
+    from dataclasses import replace
+
+    from .activation_restrictions import prints_activation_restriction
+    from .mana_payment import carries_an_offer, is_mana_ability
+
+    instruction = getattr(ability, "instruction", None)
+    if instruction is None or not getattr(ability, "supported", False):
+        return False
+    if not is_mana_ability(ability):
+        return False
+    cost = ability.cost
+    if not cost.tap_filter or int(cost.tap_count or 0) < 1:
+        return False
+    bare = replace(
+        type(cost)(mana={symbol: 0 for symbol in cost.mana}),
+        tap_filter=cost.tap_filter, tap_count=cost.tap_count,
+    )
+    if cost != bare:
+        return False
+    return not (
+        prints_activation_restriction(ability.source_line or "")
+        or carries_an_offer(instruction)
+    )
+
+
+def tap_cost_mana_abilities(game: "Game", seat: int) -> list:
+    """``(permanent, ability index, ability)`` for every :func:`is_tap_cost_
+    mana_ability` *seat* could activate now, in board order: on a permanent it
+    controls, on its own list (``Game.usable_abilities_of``), and under no
+    CR 602.5 prohibition (``activation_prohibition`` — a Null Rod, a Cursed
+    Totem). Whether the cost can be paid is the caller's count of what it
+    may tap (``Game._tap_cost_candidates``)."""
+    from .activation_prohibitions import activation_prohibition
+
+    found: list = []
+    for permanent in game.controlled_by(seat):
+        for index, ability in enumerate(game.usable_abilities_of(permanent)):
+            if not is_tap_cost_mana_ability(ability):
+                continue
+            if activation_prohibition(game, seat, permanent, ability) is not None:
+                continue
+            found.append((permanent, index, ability))
+    return found
+
+
+def _tap_cost_yields(
+    game: "Game", seat: int, counted: list, purpose=None,
+) -> "list[list[TapYield]]":
+    """One entry per activation of a :func:`tap_cost_mana_abilities` ability
+    the board can pay for — what each adds, read as a {T} source's would be —
+    tapping only permanents nothing else in *counted* (the sources already
+    counted, and a payment's own source) is."""
+    spoken = {id(permanent) for permanent in counted}
+    activations: list[list[TapYield]] = []
+    for permanent, _index, ability in tap_cost_mana_abilities(game, seat):
+        if id(permanent) in spoken:
+            continue
+        yields = [
+            item for item in _instruction_yields(
+                game, permanent, ability.instruction, purpose, summary=False,
+            )
+            if item.units
+        ]
+        if not yields:
+            continue
+        pool = [
+            candidate for candidate in game._tap_cost_candidates(ability.cost, seat)
+            if id(candidate) not in spoken
+        ]
+        need = int(ability.cost.tap_count)
+        while len(pool) >= need:
+            spoken.update(id(candidate) for candidate in pool[:need])
+            pool = pool[need:]
+            activations.append(yields)
+    return activations
+
+
 def land_tap_yields(game: "Game", land: "Permanent", purpose=None) -> list[TapYield]:
     """Every way one tap of *land* through the tap seam can come out, toward a
     payment for *purpose*. Empty when the seam makes no mana from it now: a
@@ -613,6 +711,7 @@ def board_can_pay(
         if symbol != "generic" and int(amount or 0) > 0
     )
     found: list[list[TapYield]] = []
+    counted: list = []
     for permanent in game.controlled_by(seat):
         if permanent.tapped:
             continue
@@ -624,6 +723,20 @@ def board_can_pay(
             continue
         if yields:
             found.append(yields)
+            counted.append(permanent)
+    if nonland_sources:
+        # "Tap two untapped Elves you control: Add one mana of any color."
+        # (Birchlore Rangers.) A mana ability the player may activate too
+        # (CR 601.2g), once per pair it can tap — of the permanents no source
+        # above already counts, and never the one a payment is for (its own
+        # {T} may be that payment's cost). The highlight said the card was
+        # dark over a Rangers and two Elves that paid for it.
+        paying_for = getattr(purpose, "source", None)
+        found.extend(_tap_cost_yields(
+            game, seat,
+            counted + ([paying_for] if paying_for is not None else []),
+            purpose,
+        ))
 
     def assignments(free: bool):
         expanded = [_expanded(yields, wanted, free=free) for yields in found]
@@ -665,6 +778,7 @@ def board_can_pay(
 
 
 __all__ = [
-    "TapYield", "board_can_pay", "land_tap_yields", "source_tap_yields",
-    "tap_alone_ability_for", "tap_alone_symbols",
+    "TapYield", "board_can_pay", "is_tap_cost_mana_ability", "land_tap_yields",
+    "source_tap_yields", "tap_alone_ability_for", "tap_alone_symbols",
+    "tap_cost_mana_abilities",
 ]

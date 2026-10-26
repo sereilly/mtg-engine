@@ -332,6 +332,115 @@ def _nonland_mana_source(
 
 
 @dataclass(frozen=True)
+class _TapCostActivation:
+    """One activation of a mana ability whose cost is "Tap N untapped <noun
+    phrase> you control" (Birchlore Rangers), as the payment plan counts it:
+    the ability, what it makes, and **which permanents it taps** — chosen
+    here, once, so the plan and every executor tap the same ones."""
+
+    #: The permanent the ability is printed on, and which of its usable
+    #: abilities it is.
+    source: Permanent
+    ability_index: int
+    #: What the activation adds, in `_nonland_tap_options`' terms.
+    made: _NonlandManaSource
+    #: The permanents its cost taps, in the order they are named.
+    tapped: "tuple[Permanent, ...]"
+
+
+def _spent_on_a_tap_cost_first(game: Game, seat: int):
+    """The order a "Tap N untapped …" mana cost takes the seat's permanents
+    in: **what it costs least to have tapped first** — a creature that could
+    not attack this turn anyway (summoning sick, CR 302.6, which binds the
+    attack and not this cost) before one that could, then the one worth least
+    on the board once the turn is over (``ai_rehearsal.permanent_worth``),
+    then board order. A creature tapped for mana neither attacks nor blocks
+    until it untaps, so the cost is paid with the bodies the seat misses least.
+    """
+    from .ai_rehearsal import permanent_worth
+
+    order = {id(permanent): slot for slot, permanent in enumerate(game.controlled_by(seat))}
+
+    def key(permanent):
+        could_attack = permanent.is_creature and not game._is_summoning_sick(permanent)
+        return (could_attack, permanent_worth(permanent, now=False), order.get(id(permanent), 0))
+
+    return key
+
+
+def tap_cost_mana_activations(
+    game: Game, seat: int, *, paying_for: "Permanent | None" = None,
+) -> "list[_TapCostActivation]":
+    """Every activation of a "Tap N untapped <noun phrase> you control: Add
+    …" mana ability (``board_payment.tap_cost_mana_abilities``) *seat*'s board
+    can pay for now, each with the permanents it would tap — disjoint, so any
+    of them may be made beside any other.
+
+    **The AI never tapped another permanent for mana**: `_nonland_mana_source`
+    counts a {T} ability or a self-sacrifice and nothing else, so Birchlore
+    Rangers was a 1/1 whose mana ability no AI seat ever used (ONS W1G7). The
+    permanents tapped are the ones `_spent_on_a_tap_cost_first` misses least,
+    and never one that is a mana source of its own (a land, a {T} source the
+    plan counts — a Llanowar Elves makes a mana by itself), nor *paying_for*,
+    the permanent whose ability is being paid for (its own {T} may be that
+    ability's cost). A source that is also one of those kinds is left out: one
+    slot of a plan cannot say which of its mana abilities it means.
+
+    Deterministic — the plan (`ai_payment._PaymentPlanner`) and the executor
+    (`ai_payment.tap_planned_lands`) each ask it of the same board and get the
+    same permanents, which is how the executor binds them by id before the
+    first tap.
+    """
+    from .board_payment import tap_cost_mana_abilities
+    from .spell_prohibitions import permanent_activations_forbidden
+
+    def counted_elsewhere(permanent) -> bool:
+        return (
+            permanent.has_type("land")
+            or _nonland_mana_source(game, seat, permanent, may_sacrifice=True) is not None
+            or _priced_mana_source(game, seat, permanent) is not None
+        )
+
+    spoken: set[int] = set() if paying_for is None else {id(paying_for)}
+    order = _spent_on_a_tap_cost_first(game, seat)
+    found: list[_TapCostActivation] = []
+    for permanent, index, ability in tap_cost_mana_abilities(game, seat):
+        if counted_elsewhere(permanent) or permanent is paying_for:
+            continue
+        line = ability.source_line or ""
+        if (
+            permanent_activations_forbidden(game, permanent)
+            or global_activation_ban(game, permanent) is not None
+            or activation_denial(game, seat, permanent, line)
+            or activation_permission_denial(game, seat, permanent, line)
+            or aura_restriction_active(permanent, "all_activated_abilities_shut_off")
+        ):
+            continue
+        produced = planned_mana_yield(ability.instruction)
+        if produced is None or produced.board_narrowed or produced.from_chosen_color:
+            continue
+        if not produced.symbols:
+            continue
+        made = _NonlandManaSource(
+            ability_index=index, symbols=produced.symbols, amount=produced.amount,
+            run=dict(produced.run) if produced.run else None,
+        )
+        pool = sorted(
+            (
+                candidate for candidate in game._tap_cost_candidates(ability.cost, seat)
+                if id(candidate) not in spoken and not counted_elsewhere(candidate)
+            ),
+            key=order,
+        )
+        need = int(ability.cost.tap_count)
+        while len(pool) >= need:
+            tapped, pool = tuple(pool[:need]), pool[need:]
+            spoken.update(id(candidate) for candidate in tapped)
+            found.append(_TapCostActivation(permanent, index, made, tapped))
+    return found
+
+
+@dataclass(frozen=True)
 class _TapOption:
     """One way one tap of a mana source can come out, as the plan counts it.
 
