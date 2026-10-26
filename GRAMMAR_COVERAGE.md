@@ -51,7 +51,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | TOR | 143 | 261 | 86.2% | 86.2% | 68.2% | 138 |
 | JUD | 143 | 241 | 91.3% | 90.9% | 65.6% | 131 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| ONS *(measured)* | 335 | 541 | 81.0% | 80.4% | 60.3% | 278 |
+| ONS *(measured)* | 335 | 541 | 81.3% | 81.1% | 61.0% | 282 |
 | **All (shipped)** | **8027** | **11886** | **90.7%** | **90.1%** | **62.4%** | **6277** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -67,7 +67,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 722 | 373 | expected a subject |  |
 | 176 | 90 | unrecognized effect verb |  |
 | 131 | 69 | unconsumed text |  |
-| 70 | 51 | granted ability in quotes | phase 3 (quoted abilities) |
+| 69 | 50 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 30 | 7 | expected what this creature can't block, or a duration |  |
 | 21 | 15 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -485,6 +485,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature attacks, it doesn't untap during its controller's next untap step.`
 - **Aphetto Alchemist**
   - `{T}: Untap target artifact or creature.`
+- **Aphetto Dredging**
+  - `Return up to three target creature cards of the creature type of your choice from your graveyard to your hand.`
 - **Aphetto Grifter**
   - `Tap two untapped Wizards you control: Tap target permanent.`
 - **Aphetto Vulture**
@@ -1046,6 +1048,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {C}.`
 - **Blaster Mage**
   - `{R}, {T}, Discard a card: Destroy target Wall.`
+- **Blatant Thievery**
+  - `For each opponent, gain control of target permanent that player controls.`
 - **Blaze**
   - `Blaze deals X damage to any target.`
   - `Blaze deals X damage to any target.`
@@ -5648,6 +5652,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `You and target player exchange control of the creature you each control with the greatest mana value. Then exchange control of artifacts the same way. If two or more permanents a player controls are tied for greatest, their controller chooses one of them.`
 - **Juzám Djinn**
   - `At the beginning of your upkeep, this creature deals 1 damage to you.`
+- **Kaboom!**
+  - `Choose any number of target players or planeswalkers. For each of them, reveal cards from the top of your library until you reveal a nonland card, Kaboom! deals damage equal to that card's mana value to that player or planeswalker, then you put the revealed cards on the bottom of your library in any order.`
 - **Kaervek's Hex**
   - `Kaervek's Hex deals 1 damage to each nonblack creature and an additional 1 damage to each green creature.`
 - **Kaervek's Purge**
@@ -9624,6 +9630,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Shackles**
   - `{W}: Return this Aura to its owner's hand.`
   - `{W}: Return this Aura to its owner's hand.`
+- **Shade's Breath**
+  - `Until end of turn, each creature you control becomes a black Shade and gains "{B}: This creature gets +1/+1 until end of turn."`
 - **Shade's Form**
   - `When enchanted creature dies, return that card to the battlefield under your control.`
 - **Shadow Guildmage**
