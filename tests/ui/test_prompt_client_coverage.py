@@ -33,20 +33,13 @@ def _client_reads(js: str, key: str) -> bool:
 #: each with what the client must do. Not a waiver: the test beside each one
 #: fails the moment the client reads the key, so the entry is deleted with the
 #: client change rather than left behind as a blanket.
-#: Empty since Judgment's wave 2: ``outside_game_pick`` (W1G6, the Wishes) was
-#: the one entry, and its client is ``renderOutsideGamePickModal`` in
-#: ``app.js``. Before it, Torment's ``madness_cast`` (W1G1), whose client is
-#: ``applyMadnessCastPrompt``.
-_AWAITING_CLIENT: dict[str, str] = {
-    # Onslaught W1G2 (Aven Soulgazer, Spy Network): "look at target face-down
-    # creature". The client reads ``state.face_down_look`` — ``viewer_seat``,
-    # ``source_name`` and ``permanents`` (each ``{id, controller_seat, card}``,
-    # ``card`` the hidden card's preview) — shows the cards to the looker
-    # beside the face-down permanents they are (by ``id``), and sends
-    # ``{seat, action: "dismiss_face_down_look"}`` when the looker closes it.
-    # A notification like ``hand_reveal``: it blocks nothing.
-    "face_down_look": "dismiss_face_down_look",
-}
+#: Empty since Onslaught's wave 2: ``face_down_look`` (W1G2, Aven Soulgazer
+#: and Spy Network) was the one entry, and its client is
+#: ``renderFaceDownLookModal`` in ``app.js``. Before it, Judgment's
+#: ``outside_game_pick`` (W1G6, the Wishes), whose client is
+#: ``renderOutsideGamePickModal``, and Torment's ``madness_cast`` (W1G1),
+#: whose client is ``applyMadnessCastPrompt``.
+_AWAITING_CLIENT: dict[str, str] = {}
 
 
 def test_every_prompt_has_a_client_renderer():

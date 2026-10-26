@@ -300,9 +300,15 @@ globalThis.__run(INPUT).then(
 '''
 
 
-def run_app_js(functions, body: str, payload=None, *, prelude: str = ""):
+def run_app_js(functions, body: str, payload=None, *, prelude: str = "",
+               scripts: tuple[str, ...] = ("app.js",)):
     """Run *body* in bare node with the named top-level functions of
     ``app.js`` in scope, and return what it returns.
+
+    *scripts* names the ``web/static`` files the functions are lifted from, in
+    page order: the page loads ``battlefield-canvas.js`` before ``app.js``, and
+    a client function can call a helper the canvas file defines (the face-down
+    and library-top readers), so a test of it lifts from both.
 
     ``app.js`` is one DOM-bound script and cannot be loaded whole, so the
     functions under test are lifted out by name — the real source, not a
@@ -320,7 +326,7 @@ def run_app_js(functions, body: str, payload=None, *, prelude: str = ""):
     import subprocess
     import tempfile
 
-    app_js = Path(__file__).resolve().parents[1] / "web" / "static" / "app.js"
+    static = Path(__file__).resolve().parents[1] / "web" / "static"
     driver = (
         _APP_JS_DRIVER
         .replace("__PRELUDE__", prelude)
@@ -330,10 +336,17 @@ def run_app_js(functions, body: str, payload=None, *, prelude: str = ""):
     with tempfile.TemporaryDirectory(prefix="app-js-") as folder:
         driver_path = Path(folder) / "driver.js"
         payload_path = Path(folder) / "input.json"
+        source_path = Path(folder) / "source.js"
         driver_path.write_text(driver, encoding="utf-8")
         payload_path.write_text(json.dumps(payload), encoding="utf-8")
+        # One source the driver greps, the scripts joined in page order; a
+        # newline between them so the last function of one still ends "\n}\n".
+        source_path.write_text(
+            "\n".join((static / name).read_text(encoding="utf-8") for name in scripts) + "\n",
+            encoding="utf-8",
+        )
         done = subprocess.run(
-            ["node", str(driver_path), str(app_js), str(payload_path)],
+            ["node", str(driver_path), str(source_path), str(payload_path)],
             capture_output=True, text=True, encoding="utf-8",
         )
     assert done.returncode == 0, done.stderr

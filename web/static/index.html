@@ -832,6 +832,20 @@
       </div>
     </div>
 
+    <!-- "Look at target face-down creature" (Aven Soulgazer, Spy Network):
+         what the looked-at face-down permanents are, shown to the looker
+         alone (CR 708.5) until they close it. -->
+    <div id="faceDownLookModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="faceDownLookTitle">
+      <div class="modal-box">
+        <h2 id="faceDownLookTitle" class="modal-title">Face-down creatures</h2>
+        <p id="faceDownLookSubtitle" class="modal-subtitle">Only you can see these.</p>
+        <div id="faceDownLookGrid" class="library-card-grid"></div>
+        <div class="modal-footer">
+          <button id="faceDownLookContinueBtn" type="button">Continue</button>
+        </div>
+      </div>
+    </div>
+
     <div id="lampDrawModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="lampDrawTitle">
       <div class="modal-box">
         <h2 id="lampDrawTitle" class="modal-title">Aladdin's Lamp</h2>
@@ -922,14 +936,14 @@
       <button type="button" class="permanent-menu-item" role="menuitem" data-action="mark-test-result">Mark Test Result</button>
     </div>
 
-    <script src="/battlefield-canvas.js?v=20261012-odyw2g6"></script>
+    <script src="/battlefield-canvas.js?v=20261026-onsw2g2"></script>
     <script src="/sfx.js?v=3-reveal"></script>
     <script src="/music.js?v=1-music"></script>
     <script src="/anime.min.js?v=3.2.2"></script>
     <script src="/animations.js?v=20260818-handfly2"></script>
     <script src="/personal-decks.js?v=20260614-desc1"></script>
     <script src="/legality.js?v=20261004-splitcount1"></script>
-    <script src="/app.js?v=20261021-torp5a"></script>
+    <script src="/app.js?v=20261026-onsw2g2"></script>
     <script src="/deck-editor.js?v=20261013-odyp5"></script>
   </body>
 </html>

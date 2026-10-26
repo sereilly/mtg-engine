@@ -25,7 +25,7 @@ from engine.faces import combined_oracle_text, face_cards, is_face, whole_card
 from engine.legality import activation_target_obligation
 from engine.models import Permanent, PlayerState
 from engine.layer_bridge import displayed_type_line
-from engine.library_top import top_is_public
+from engine.library_top import top_is_public, top_is_visible
 from engine.mana_payment import taps_for_payment
 from engine.line_classification import LOYALTY_ANY_TIME_STATIC
 from engine.oracle import compile_card_oracle
@@ -1426,6 +1426,7 @@ def _serialize_player(
             for index, card in enumerate(player.hand)
         ]
 
+    top_public = bool(player.library) and top_is_public(game, seat)
     permanents = list(game.controlled_by(seat))
     battlefield = [_serialize_permanent(perm, game) for perm in permanents]
     # The viewer's own permanents carry the target spec for their activated ability
@@ -1516,7 +1517,19 @@ def _serialize_player(
         # viewer while a source stands, and is absent otherwise.
         "library_top": (
             _serialize_card(player.library[0])
-            if player.library and top_is_public(game, seat)
+            if top_public
+            else None
+        ),
+        # The weaker permission: "You may look at the top card of your library
+        # any time." (Radha, Heart of Keld) — the owner may see it and nobody
+        # else may (CR 400.2: a library is hidden). Its own key rather than
+        # ``library_top`` so that one keeps meaning "revealed to the table",
+        # and sent only to that owner and only while the top is not public
+        # anyway (``engine.library_top.top_is_visible``).
+        "library_top_private": (
+            _serialize_card(player.library[0])
+            if viewer_seat == seat and player.library and not top_public
+            and top_is_visible(game, seat)
             else None
         ),
         # The viewer's own graveyard/exile carry the same target specs a hand

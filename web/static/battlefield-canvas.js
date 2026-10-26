@@ -1055,6 +1055,12 @@ class BattlefieldCanvas {
           const n = (occ.get(`base:${card.name}`) || 0) + 1;
           occ.set(`base:${card.name}`, n);
           id = `base:${card.name}#${n}`;
+        } else if (card.face_down === true) {
+          // Every face-down permanent is a slot of its own (CR 708): they all
+          // share one name, so a name pile would stack a face-down Silent
+          // Specter under a face-down Grinning Demon on its controller's
+          // board, and leave a target pickable only as "the top one" on both.
+          id = `facedown:${Number.isInteger(card.id) ? card.id : key}`;
         } else {
           id = `pile:${card.name}${card.is_token ? "|token" : ""}`;
         }
@@ -1307,7 +1313,9 @@ class BattlefieldCanvas {
   // the caster's hand (spells) or source permanent (abilities) and grow into
   // the stack zone; removed items play a resolve animation.
   _syncStackZone(state, brandNew) {
-    const stackData = Array.isArray(state.stack) ? state.stack : [];
+    // A face-down spell's `face_down` / `hidden_card` ride the item; put them
+    // on its card, where the face drawer and the hover read them (CR 708).
+    const stackData = (Array.isArray(state.stack) ? state.stack : []).map(faceDownStackItem);
 
     // Rightmost battlefield content; only used as a directional fallback for
     // the hand/graveyard anchors (the cascade itself is pinned to the view).
@@ -1445,7 +1453,10 @@ class BattlefieldCanvas {
       const ante = Array.isArray(p.ante) ? p.ante : [];
       const libraryCount = p.library_count ?? 0;
       if (libraryCount > 0) {
-        piles.push({ seat: seatIdx, kind: "library", count: libraryCount, topCard: null, cx: 0, cy: 0, w: 0, h: 0 });
+        piles.push({
+          seat: seatIdx, kind: "library", count: libraryCount,
+          topCard: libraryTopCardShown(p), cx: 0, cy: 0, w: 0, h: 0,
+        });
       }
       if (grave.length > 0) {
         piles.push({ seat: seatIdx, kind: "graveyard", count: grave.length, topCard: grave[grave.length - 1], cx: 0, cy: 0, w: 0, h: 0 });
@@ -1613,7 +1624,12 @@ class BattlefieldCanvas {
         ctx.stroke();
       }
 
-      if (pile.kind === "library") {
+      if (pile.kind === "library" && pile.topCard) {
+        // A top card this viewer may see (Future Sight, Goblin Spy, Field of
+        // Dreams; Radha's private look): its face, on top of the pile.
+        this._drawCardFace(ctx, x, y, pile.w, pile.h, pile.topCard, { hovered: !!hovered });
+        this._drawLibraryTopTag(ctx, x, y, pile.w, pile.h, pile.topCard);
+      } else if (pile.kind === "library") {
         // Face-down: the card back fills a rounded frame.
         const img = this._loadImage(BF_CARD_BACK_URL) || this.imageCache.get(BF_CARD_BACK_URL);
         this._roundRect(ctx, x, y, pile.w, pile.h, 6 / this.zoom);
@@ -1666,7 +1682,7 @@ class BattlefieldCanvas {
       const castableFromPile =
         (pile.kind === "command" &&
           (this.currentState?.players?.[pile.seat]?.playable_command_indices || []).length > 0) ||
-        ((pile.kind === "graveyard" || pile.kind === "exile") &&
+        ((pile.kind === "graveyard" || pile.kind === "exile" || pile.kind === "library") &&
           (this.currentState?.castable_from_zones || []).some(
             (entry) =>
               entry.zone === pile.kind &&
@@ -1705,6 +1721,27 @@ class BattlefieldCanvas {
 
       ctx.restore();
     }
+  }
+
+  // The tag on a library pile showing its top card: "REVEALED" for a card the
+  // whole table sees, "ONLY YOU" for the owner's private look — the two read
+  // alike on the pile and mean different things about what the opponent knows.
+  _drawLibraryTopTag(ctx, x, y, w, h, card) {
+    const text = card?.library_top_view === "private" ? "ONLY YOU" : "REVEALED";
+    ctx.save();
+    ctx.font = `bold ${10 / this.zoom}px sans-serif`;
+    const bw = ctx.measureText(text).width + 8 / this.zoom;
+    const bh = 14 / this.zoom;
+    const bx = x + 2 / this.zoom;
+    const by = y + h - bh - 2 / this.zoom;
+    ctx.fillStyle = card?.library_top_view === "private" ? "rgba(58, 24, 120, 0.9)" : "rgba(120, 70, 0, 0.9)";
+    this._roundRect(ctx, bx, by, bw, bh, 3 / this.zoom);
+    ctx.fill();
+    ctx.fillStyle = "#fff4d6";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, bx + bw / 2, by + bh / 2);
+    ctx.restore();
   }
 
   // World-space point a newly cast stack item flies in from. Hand/graveyard
@@ -2942,12 +2979,67 @@ class BattlefieldCanvas {
     ctx.restore();
   }
 
+  // What makes a face-down object look face down (CR 708), drawn over its
+  // face by `_drawCardFace`. For any seat but its controller ("hidden") the
+  // card is a back: nothing about the card it hides reached this client, and
+  // the P/T, damage and counter badges drawn after this are the 2/2's own. For
+  // its controller ("controller") the real card shows, under a violet veil and
+  // a FACE DOWN ribbon, so it can never be mistaken for a face-up permanent
+  // (what the rest of the table sees is the 2/2 the badges show).
+  _drawFaceDownMark(ctx, x, y, w, h, card, { fullImage = false } = {}) {
+    const R = 5;
+    ctx.save();
+    this._roundRect(ctx, x, y, w, h, R);
+    ctx.clip();
+    if (card.face_down_view === "hidden") {
+      if (!fullImage) {
+        ctx.fillStyle = "#1a1a2e";
+        ctx.fillRect(x, y, w, h);
+        const img = this._loadImage(BF_CARD_BACK_URL);
+        if (img) ctx.drawImage(img, x, y, w, h);
+      }
+    } else {
+      ctx.fillStyle = "rgba(76, 36, 150, 0.22)";
+      ctx.fillRect(x, y, w, h);
+      const bandH = Math.max(11, h * 0.13);
+      const bandY = y + h * (fullImage ? 0.42 : 0.3);
+      ctx.fillStyle = "rgba(58, 24, 120, 0.88)";
+      ctx.fillRect(x, bandY, w, bandH);
+      ctx.strokeStyle = "rgba(196, 168, 255, 0.9)";
+      ctx.lineWidth = 1 / this.zoom;
+      ctx.beginPath();
+      ctx.moveTo(x, bandY);
+      ctx.lineTo(x + w, bandY);
+      ctx.moveTo(x, bandY + bandH);
+      ctx.lineTo(x + w, bandY + bandH);
+      ctx.stroke();
+      ctx.fillStyle = "#f1e9ff";
+      ctx.font = `bold ${Math.max(7, bandH * 0.62)}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(_ellipsizeText(ctx, "FACE DOWN", w - 6), x + w / 2, bandY + bandH / 2 + 0.5);
+    }
+    ctx.restore();
+    // A dashed violet rim on both views: "this is a face-down object".
+    ctx.save();
+    ctx.strokeStyle = "rgba(170, 130, 255, 0.85)";
+    ctx.lineWidth = 1.6 / this.zoom;
+    ctx.setLineDash([5 / this.zoom, 3 / this.zoom]);
+    this._roundRect(ctx, x + 1 / this.zoom, y + 1 / this.zoom, w - 2 / this.zoom, h - 2 / this.zoom, R);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   _drawCardFace(ctx, x, y, w, h, card, flags, creatureCard) {
     const { selected, attacking, hovered, targeting, pileCount, emblem, enchantTargetHover, fullImage, noShadow } = flags || {};
+    // CR 708: a face-down object is drawn as the seat looking at it may see it
+    // (`faceDownDisplayCard`): its controller the real card, anyone else a back.
+    card = faceDownDisplayCard(card);
     // Spells in flight and on the stack render as their original full card image
     // (printed frame/art/text baked in) rather than the Arena battlefield face.
     if (fullImage) {
       this._drawFullCardFace(ctx, x, y, w, h, card, flags);
+      if (card?.face_down_view) this._drawFaceDownMark(ctx, x, y, w, h, card, { fullImage: true });
       return;
     }
     // Arena-style face: the borderless art crop (falling back to the full card
@@ -3056,6 +3148,9 @@ class BattlefieldCanvas {
     this._drawLandMana(ctx, card, x, y, w, h, m);
 
     ctx.restore(); // end face group (unblockable fade)
+
+    // A face-down object's own face, over the one just drawn (CR 708).
+    if (card?.face_down_view) this._drawFaceDownMark(ctx, x, y, w, h, card, { fullImage: false });
 
     // ---- Frame bevel + state glow border ----
     const T = this.theme;
@@ -5512,6 +5607,73 @@ function _wrapCanvasText(ctx, text, centerX, y, maxWidth, lineHeight) {
     }
   }
   if (line) ctx.fillText(line, centerX, y);
+}
+
+// ---- Face-down objects (CR 708) ----
+// The server sends a face-down permanent or spell to every seat as the blank
+// 2/2 it is (`face_down: true`, with no name, text, image or real P/T), and
+// adds `hidden_card` — the card it hides — to its **controller's** payload
+// alone (CR 708.5: "you may look at a face-down spell you control on the
+// stack or a face-down permanent you control … You can't look at … face-down
+// spells or permanents controlled by another player."). So both faces are
+// drawn from what arrived, never re-derived: the controller's copy shows the
+// real card, marked face down; anyone else's shows a card back and the 2/2.
+//
+// What a seat is shown, as the card object the face drawer reads:
+// `face_down_view` is "controller" (the real art and name, marked) or "hidden"
+// (a back), and absent for a face-up card, which is returned as it came. P/T,
+// damage, counters and tapped state stay the permanent's own — those are the
+// face-down object's (CR 708.2a; a lord such as Ixidor's +1/+1 counts).
+function faceDownDisplayCard(card) {
+  if (!card || typeof card !== "object" || card.face_down !== true) return card;
+  if (card.face_down_view) return card;
+  const hidden = card.hidden_card && typeof card.hidden_card === "object" ? card.hidden_card : null;
+  if (hidden) {
+    return {
+      ...card,
+      name: hidden.name || "",
+      image_uri: hidden.image_uri || null,
+      large_image_uri: hidden.large_image_uri || null,
+      art_crop: hidden.art_crop || null,
+      face_down_view: "controller",
+    };
+  }
+  return {
+    ...card,
+    name: "",
+    image_uri: BF_CARD_BACK_URL,
+    large_image_uri: BF_CARD_BACK_URL,
+    art_crop: null,
+    face_down_view: "hidden",
+  };
+}
+
+// A stack object carries `face_down` / `hidden_card` beside its `card` (the
+// state view adds them to the item, not to the card), so the cascade and its
+// hover read them through one copy that puts them on the card the way a
+// permanent's payload has them. The state object itself is never mutated.
+function faceDownStackItem(item) {
+  if (!item || typeof item !== "object" || item.face_down !== true || !item.card) return item;
+  return {
+    ...item,
+    card: { ...item.card, face_down: true, hidden_card: item.hidden_card || null },
+  };
+}
+
+// ---- A library's top card ----
+// The top card of a library a viewer may see, as the server sent it: revealed
+// to everyone (`library_top` — "Play with the top card of your library
+// revealed.", Future Sight, Goblin Spy, Conspicuous Snoop, Field of Dreams,
+// Temporal Aperture; CR 400.2, 701.20a) or looked at by its owner alone
+// (`library_top_private` — "You may look at the top card of your library any
+// time.", Radha). `library_top_view` says which, for the pile's tag. Null when
+// the top is hidden, which is the pile's card back.
+function libraryTopCardShown(player) {
+  const revealed = player?.library_top;
+  if (revealed && typeof revealed === "object") return { ...revealed, library_top_view: "revealed" };
+  const looked = player?.library_top_private;
+  if (looked && typeof looked === "object") return { ...looked, library_top_view: "private" };
+  return null;
 }
 
 // ---- Arena-style card frame palette ----

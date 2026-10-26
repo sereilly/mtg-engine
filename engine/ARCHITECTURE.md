@@ -289,7 +289,12 @@ up" is the `TurnFace` node (`turn_target_face_down`, `turn_target_face_up`,
 picker spec so CR 608.2b re-asks them; "Face-down creatures get +1/+1" is a
 `lord_buffs` qualifier asked as P/T is read; and a look at a face-down
 permanent (CR 708.5's exception) is the `face_down_look` notification prompt,
-owed by the looker alone and never a log line.
+owed by the looker alone and never a log line — and, like `hand_reveal`, its
+dismissal is never refused by a blocking prompt beside it
+(`web/prompts.blocking_prompt`: Spy Network owes two library reorders as it
+shows both). The client draws what each seat was sent and nothing else: the
+controller's `hidden_card` as the real card marked face down, anyone else a
+card back (`faceDownDisplayCard` in `web/static/battlefield-canvas.js`).
 
 A printed keyword is part of an object's copiable values, so it is *seeded*
 by layer 1 rather than granted afterwards; grants and removals are continuous
