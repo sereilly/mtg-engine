@@ -234,14 +234,35 @@ def _attach_repeat_optional_process(stream: TokenStream, steps: list) -> bool:
     if not steps:
         return False
     mark = stream.mark()
-    if not stream.accept_phrase(
-        "you", "may", "repeat", "this", "process", "any", "number", "of", "times"
+    # "**That opponent** may repeat this process as many times as they
+    # choose." (Trade Secrets.) The same unbounded repetition decided by the
+    # player the process *targeted* rather than by its controller — the
+    # decision is the only thing that differs, so it is a field on the one
+    # node. "As many times as they choose" is "any number of times" with the
+    # chooser restated.
+    decider = "you"
+    if stream.accept_phrase("that", "opponent") or stream.accept_phrase(
+        "that", "player"
+    ):
+        decider = "that_player"
+    elif not stream.accept_word("you"):
+        stream.reset(mark)
+        return False
+    if not stream.accept_phrase("may", "repeat", "this", "process"):
+        stream.reset(mark)
+        return False
+    if not (
+        stream.accept_phrase("any", "number", "of", "times")
+        or (
+            decider == "that_player"
+            and stream.accept_phrase("as", "many", "times", "as", "they", "choose")
+        )
     ):
         stream.reset(mark)
         return False
     stream.accept_punct(".")
     round_ = steps[0] if len(steps) == 1 else ast.Sequence(tuple(steps))
-    steps[:] = [ast.RepeatOptionalProcess(round=round_)]
+    steps[:] = [ast.RepeatOptionalProcess(round=round_, decider=decider)]
     return True
 
 

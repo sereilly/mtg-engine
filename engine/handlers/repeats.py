@@ -243,6 +243,20 @@ def repeat_optional_process(game: Game, instruction: OracleInstruction, context:
     """
     steps = _steps(instruction, "steps")
     seat = game.players.index(context.caster)
+    # "Target opponent draws two cards, then you draw up to four cards. **That
+    # opponent** may repeat this process as many times as they choose." (Trade
+    # Secrets.) The player the spell targeted (CR 601.2c) is the one asked
+    # between rounds — so the loop is theirs to stop, and the stated default
+    # (``_default_repeat_process``: stop after one round) is what ends it for
+    # a seat nobody asks.
+    if instruction.payload.get("decider") == "target_player":
+        if context.target not in game.players:
+            game.log.append(
+                f"{getattr(context.card, 'name', 'Effect')}: no targeted player "
+                "to decide"
+            )
+            return True, "resolved"
+        seat = game.players.index(context.target)
 
     def step(item) -> None:
         if item is _ASK_TO_REPEAT:

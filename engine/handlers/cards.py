@@ -728,6 +728,11 @@ def draw_up_to_cards(game: Game, instruction: OracleInstruction, context: Oracle
     """
     record = instruction.payload.get("drawer_seat_record")
     seat = (context.results or {}).get(record) if record else None
+    # "…, then **you** draw up to four cards." (Trade Secrets.) The seat this
+    # resolution is performed for — its controller — which no record has to
+    # name.
+    if instruction.payload.get("drawer") == "you" and context.caster in game.players:
+        seat = game.players.index(context.caster)
     if seat is None:
         # …and the frozen half. A delayed ability's context carries what the
         # creating effect knew (CR 608.2h), merged into the trigger context by

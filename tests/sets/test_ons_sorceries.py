@@ -558,6 +558,63 @@ def test_w1g10_insurrection_takes_every_creature_until_cleanup(set_pool):
     assert game.controller_index_of(untapped) == 2
     assert not game._has_keyword(tapped, "haste")
 
+
+def _w1g10_trade_secrets(set_pool, interactive):
+    game = _w1g10_table(set_pool, seats=2)
+    for player in game.players:
+        player.library = [set_pool("LEA")["Island"]] * 20
+    game.interactive_seats = set(interactive)
+    game.players[0].hand.append(set_pool("ONS")["Trade Secrets"])
+    assert game.queue_from_hand(0, "Trade Secrets", target_player_index=1).supported
+    return game
+
+
+def test_w1g10_trade_secrets_loop_is_the_opponents_to_stop(set_pool):
+    """"Target opponent draws two cards, then you draw up to four cards. That
+    opponent may repeat this process as many times as they choose." The
+    repeat question goes to the **opponent** (seat 1), never the caster; they
+    take one more round and then stop, and the caster chooses how many of the
+    four each round."""
+    game = _w1g10_trade_secrets(set_pool, interactive={0, 1})
+    asked = []
+    for _ in range(60):
+        if not game.stack and not game.pending_choices:
+            break
+        if not game.pending_choices:
+            game.resolve_top_of_stack()
+            continue
+        choice = game.pending_choices[0]
+        asked.append((choice.kind, choice.player_index))
+        if choice.kind == "repeat_process":
+            assert game.confirm_repeat_process(
+                choice.player_index, len([a for a in asked if a[0] == "repeat_process"]) < 2
+            )
+        elif choice.kind == "draw_up_to":
+            assert game.confirm_draw_up_to(choice.player_index, 3)
+        else:
+            raise AssertionError(choice.kind)
+    assert asked == [
+        ("draw_up_to", 0), ("repeat_process", 1),
+        ("draw_up_to", 0), ("repeat_process", 1),
+    ], asked
+    assert len(game.players[1].hand) == 4
+    assert len(game.players[0].hand) == 6
+    assert "P2 declined to repeat (Trade Secrets)" in game.log
+
+
+def test_w1g10_trade_secrets_headless_opponent_stops_after_one_round(set_pool):
+    """The AI's answer terminates: the stated default stops after one round."""
+    game = _w1g10_trade_secrets(set_pool, interactive=())
+    _w1g10_resolve_stack(game)
+    for _ in range(10):
+        if not game.pending_choices:
+            break
+        game.auto_resolve_pending_choices()
+    assert not game.stack and not game.pending_choices
+    assert len(game.players[1].hand) == 2
+    assert len(game.players[0].hand) == 4
+    assert "P2 declined to repeat (Trade Secrets)" in game.log
+
 # ==== end W1G10 ======================================================
 
 
