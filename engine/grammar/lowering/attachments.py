@@ -610,6 +610,22 @@ def _lower_choose_permanent(
         # A *trigger* whose fire site froze the seat writes no such record, so
         # its own "that player" keeps the frozen reading.
         seat = "chosen_player"
+    # "When this creature enters, **an opponent** chooses a permanent you
+    # control …" (Wormfang Crab.) A choice made as the effect is applied, so
+    # CR 608.2d has its controller announce the unnamed seat — which opponent —
+    # the ``choose_opponent`` step Animal Magnetism and Guided Passage put in
+    # front of their own picks, writing the record ``_chooser_seat``'s
+    # "chosen_player" row reads. Asked only where there is more than one
+    # opponent and a person in the controller's seat; anyone else takes the
+    # first opponent, which is the seat ``_chooser_seat("opponent")`` took.
+    # Not for a printed "target" (Echo Chamber): that choice belongs to the
+    # announcement (CR 602.3a), and its activation gate reads the "opponent"
+    # seat directly.
+    announces_opponent = (
+        node.chooser.kind == "opponent" and not scoped.get("announced_target")
+    )
+    if announces_opponent:
+        seat = "chosen_player"
     payload: dict[str, object] = {
         "filter": _filter_payload(described),
         "result_key": _ATTACH_HOST_KEY,
@@ -644,6 +660,17 @@ def _lower_choose_permanent(
                 node=node,
             )
         payload["at_random"] = True
+    if announces_opponent:
+        return (
+            OracleInstruction(
+                "choose_opponent", "",
+                {
+                    "result_key": CHOSEN_PLAYER,
+                    "prompt": "Choose an opponent to choose a permanent.",
+                },
+            ),
+            OracleInstruction("choose_permanent", "", payload),
+        )
     return (OracleInstruction("choose_permanent", "", payload),)
 
 

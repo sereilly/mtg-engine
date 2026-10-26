@@ -1247,3 +1247,60 @@ def test_w1g13_tempting_wurm_an_aura_with_nothing_to_enchant_stays_in_hand(set_p
     assert ons["Pacifism"] in bob.hand
 
 # ==== end W1G13 ======================================================
+
+
+# ==== W2G4 ==========================================================
+# W2G4's tests go between this line and the "end W2G4" line.
+
+# --- W2G4: which opponent chooses --------------------------------------------
+from engine import Game as _w2g4_Game
+from engine.models import Permanent as _w2g4_Permanent
+from engine.models import PlayerState as _w2g4_PlayerState
+
+
+def _w2g4_oppressor_table(set_pool, seats, interactive, *, controller=0):
+    names = ["Alice", "Bob", "Cara"][:seats]
+    game = _w2g4_Game(players=[_w2g4_PlayerState(name=name) for name in names])
+    game.enforce_mana_costs = False
+    game.active_player_index = controller
+    game.interactive_seats = set(interactive)
+    oppressor = _w2g4_Permanent(card=set_pool("ONS")["Callous Oppressor"])
+    game._put_permanent_onto_battlefield(controller, oppressor, None)
+    return game, oppressor
+
+
+def test_w2g4_callous_oppressor_asks_its_controller_which_opponent(set_pool):
+    """"As this creature enters, an opponent chooses a creature type." With two
+    opponents the controller decides which (CR 601.7a, 602.3a, 700.2e): Alice
+    is offered Bob and Cara, names Cara, and Cara — not Bob — names the type.
+    No chosen *player* is recorded (the card names none)."""
+    game, oppressor = _w2g4_oppressor_table(set_pool, 3, {0, 1, 2})
+    (ask,) = game.pending_choices
+    assert (ask.kind, ask.player_index, ask.data["opponents"]) == ("enter_choice", 0, [1, 2])
+    assert game.confirm_enter_choice(0, opponent_index=2)
+    (pick,) = game.pending_choices
+    assert (pick.kind, pick.player_index) == ("enter_choice", 2)
+    assert pick.data["needs_creature_type"]
+    assert not game.confirm_enter_choice(1, creature_type="goblin"), "Bob was not chosen"
+    assert game.confirm_enter_choice(2, creature_type="goblin")
+    assert oppressor.metadata["chosen_creature_type"] == "goblin"
+    assert "chosen_player_index" not in oppressor.metadata
+    assert "Callous Oppressor: Alice has Cara choose a creature type" in game.log
+
+
+def test_w2g4_callous_oppressor_with_one_opponent_or_nobody_to_ask(set_pool):
+    """A duel has one answer, so the opponent is asked at once; a controller
+    nobody asks takes the next opponent in turn order (Cara after Bob's turn
+    seat), which is the stated default."""
+    game, _ = _w2g4_oppressor_table(set_pool, 2, {0, 1})
+    assert [(c.player_index, bool(c.data.get("needs_creature_type")))
+            for c in game.pending_choices] == [(1, True)]
+
+    # Bob controls it and nobody sits in his seat: Cara, the next opponent in
+    # turn order after Bob, is asked the type directly.
+    game, oppressor = _w2g4_oppressor_table(set_pool, 3, {0, 2}, controller=1)
+    assert [(c.player_index, bool(c.data.get("needs_creature_type")))
+            for c in game.pending_choices] == [(2, True)]
+    assert oppressor.metadata["chosen_creature_type"]
+
+# ==== end W2G4 ======================================================

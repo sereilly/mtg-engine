@@ -280,17 +280,73 @@ class EntryChoicesMixin:
     def _next_opponent_in_turn_order(self, seat: int) -> int | None:
         """The first living opponent of *seat* after it in turn order, or None.
 
-        The seat an "an opponent chooses" entry asks (Callous Oppressor). With
-        several opponents the controller decides who (CR 700.2e's rule for an
-        opponent's choice of mode); the next one in turn order is the stated
-        default, and on a two-player table it is the only answer.
+        The seat an "an opponent chooses" entry asks (Callous Oppressor) when
+        nobody decides otherwise. With several opponents the controller decides
+        who (CR 601.7a, 602.3a and 700.2e say so of every choice an effect hands
+        "an opponent", and 800.4g has the controller pick the replacement when
+        that opponent leaves): the controller is asked when a person sits there
+        (:meth:`_arm_opponent_creature_type_entry`), and the next opponent in
+        turn order is the stated default — on a two-player table, the only
+        answer.
         """
+        opponents = self._living_opponents_in_turn_order(seat)
+        return opponents[0] if opponents else None
+
+    def _living_opponents_in_turn_order(self, seat: int) -> list[int]:
+        """*seat*'s living opponents (``opponents_of``), the next in turn order
+        first."""
         total = len(self.players)
-        for step in range(1, total):
-            other = (seat + step) % total
-            if not self.players[other].lost:
-                return other
-        return None
+        rival = set(self.opponents_of(seat))
+        return [
+            other
+            for other in ((seat + step) % total for step in range(1, total))
+            if other in rival and not self.players[other].lost
+        ]
+
+    def _arm_opponent_creature_type_entry(self, permanent, controller: int) -> None:
+        """"As this creature enters, **an opponent chooses** a creature type."
+        (Callous Oppressor.) Who answers, then the answer.
+
+        One opponent: that opponent is asked (or defaults). Several, with a
+        person in the controller's seat: the controller chooses which first —
+        the ``enter_choice`` prompt's opponent shape, Black Vise's, flagged
+        ``then_opponent_chooses_creature_type`` — and the chosen opponent's
+        creature-type prompt is armed by the answer
+        (:meth:`_ask_opponent_for_creature_type`). A controller nobody asks
+        takes the stated default seat. The default type for the default seat is
+        stamped first either way, so nothing waits on a seat that cannot answer.
+        """
+        opponents = self._living_opponents_in_turn_order(controller)
+        if not opponents:
+            return
+        default_seat = opponents[0]
+        if len(opponents) > 1 and controller in self.interactive_seats:
+            permanent.metadata["chosen_creature_type"] = (
+                self._protecting_creature_type(default_seat)
+            )
+            self.arm_pending_choice(
+                "enter_choice", controller,
+                card_name=permanent.card.name, permanent=permanent,
+                needs_color=False, opponents=list(opponents),
+                default_seat=default_seat, default_color=None,
+                then_opponent_chooses_creature_type=True,
+            )
+            return
+        self._ask_opponent_for_creature_type(permanent, default_seat)
+
+    def _ask_opponent_for_creature_type(self, permanent, chooser: int) -> None:
+        """Arm *chooser*'s "choose a creature type" for *permanent*, with the
+        type that protects the most of the chooser's own creatures stamped as
+        its default (:meth:`_protecting_creature_type`)."""
+        default_type = self._protecting_creature_type(chooser)
+        permanent.metadata["chosen_creature_type"] = default_type
+        self.arm_pending_choice(
+            "enter_choice", chooser,
+            card_name=permanent.card.name, permanent=permanent,
+            needs_color=False, opponents=[], default_seat=None,
+            default_color=None, needs_creature_type=True,
+            default_creature_type=default_type,
+        )
 
     def _protecting_creature_type(self, seat: int) -> str:
         """The creature type *seat* names when its choice **spares** its own
