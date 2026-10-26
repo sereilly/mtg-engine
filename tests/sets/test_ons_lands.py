@@ -240,6 +240,37 @@ def test_w1g7_starlit_sanctum_drains_the_sacrificed_clerics_power(set_pool):
 # ==== W1G12 ==========================================================
 # W1G12's tests go between this line and the "end W1G12" line.
 
+# --- W1G12: revealing (drive list) --------------------------------------------
+from engine import Game as _w1g12_Game
+from engine.models import PlayerState as _w1g12_PlayerState
+
+
+def test_w1g12_grand_coliseum_enters_tapped_and_only_its_colour_costs_life(set_pool):
+    """"This land enters tapped. / {T}: Add {C}. / {T}: Add one mana of any
+    color. This land deals 1 damage to you." Played, it is tapped; its {C} is
+    painless; any colour — red here — costs its controller 1 life, dealt by
+    the land (CR 120.3)."""
+    ons = set_pool("ONS")
+    alice = _w1g12_PlayerState(name="Alice", hand=[ons["Grand Coliseum"]])
+    game = _w1g12_Game(players=[alice, _w1g12_PlayerState(name="Bob")])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    assert game.cast_from_hand(0, "Grand Coliseum").supported
+    (land,) = [p for p in game.controlled_by(0) if p.card.name == "Grand Coliseum"]
+    assert land.tapped, "This land enters tapped."
+
+    land.tapped = False
+    assert game.activate_permanent_ability(0, "Grand Coliseum", ability_index=0).supported
+    assert alice.mana_pool["C"] == 1 and alice.life == 20
+    land.tapped = False
+    assert game.activate_permanent_ability(
+        0, "Grand Coliseum", ability_index=1, mana_color="R",
+    ).supported
+    resolve_stack(game)
+    assert alice.mana_pool["R"] == 1
+    assert alice.life == 19
+    assert any("Grand Coliseum dealt 1 damage to Alice" in line for line in game.log)
+
 # ==== end W1G12 ======================================================
 
 

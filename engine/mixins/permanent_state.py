@@ -1051,7 +1051,14 @@ class PermanentStateMixin:
 
             seat = self.controller_index_of(permanent)
             owner = self.players[seat if seat is not None else 0]
-            amount = max(0, evaluate_count(self, owner, spec, source=permanent))
+            # ``exclude`` is what "**other** creatures on the battlefield"
+            # (Stag Beetle) excludes: the entering permanent, which is already
+            # in the list this counts. Without it ``exclude_self`` was dropped
+            # and the Beetle counted itself — one counter too many, and 1/1
+            # where an empty board makes it 0/0.
+            amount = max(0, evaluate_count(
+                self, owner, spec, exclude=permanent, source=permanent,
+            ))
             if amount <= 0:
                 continue
             if kind == "+1/+1":

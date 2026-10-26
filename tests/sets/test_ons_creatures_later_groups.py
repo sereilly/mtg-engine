@@ -1409,6 +1409,53 @@ def test_w1g12_menacing_ogre_numbers_are_whole_and_not_negative(set_pool):
     assert [p.life for p in game.players] == [20, 20]
     assert (ogre.effective_power, ogre.effective_toughness) == (5, 5)
 
+
+def test_w1g12_stag_beetle_counts_the_other_creatures_as_it_enters(set_pool):
+    """"This creature enters with X +1/+1 counters on it, where X is the
+    number of other creatures on the battlefield." Three others (one Alice's,
+    two Bob's) make it 3/3 — never itself, and never the cast's X, which its
+    cost does not have: it was admitted by a prefix row and entered 0/0
+    whatever was there. The ruling (2004-10-04): "The value of X is
+    calculated once, as Stag Beetle is entering" — a fourth creature later
+    changes nothing. Alone it is 0/0 and dies (CR 704.5f)."""
+    from tests.helpers import _mk_creature_card as _w1g12_creature
+
+    game = _w1g12_table(set_pool, ["Forest"] * 5, hands={0: ["Stag Beetle"]})
+    _w1g12_put(game, 0, _w1g12_creature("Alice's Bear", 2, 2))
+    _w1g12_put(game, 1, _w1g12_creature("Bob's Bear", 2, 2))
+    _w1g12_put(game, 1, _w1g12_creature("Bob's Elf", 1, 1))
+    assert game.cast_from_hand(0, "Stag Beetle").supported
+    _w1g12_resolve_stack(game)
+    beetle = next(p for p in game.all_permanents() if p.card.name == "Stag Beetle")
+    assert (beetle.effective_power, beetle.effective_toughness) == (3, 3)
+    _w1g12_put(game, 1, _w1g12_creature("Bob's Giant", 3, 3))
+    assert (beetle.effective_power, beetle.effective_toughness) == (3, 3)
+
+    game = _w1g12_table(set_pool, ["Forest"] * 5, hands={0: ["Stag Beetle"]})
+    assert game.cast_from_hand(0, "Stag Beetle").supported
+    _w1g12_resolve_stack(game)
+    assert list(game.all_permanents()) == []
+    assert _w1g12_names(game.players[0].graveyard) == ["Stag Beetle"]
+
+
+def test_w1g12_silklash_spider_hits_every_flyer_and_nothing_else(set_pool):
+    """"Reach / {X}{G}{G}: This creature deals X damage to each creature with
+    flying." X=2: both sides' flyers take 2 (Alice's 2/2 dies, Bob's 1/3
+    survives damaged); the Bear and the Spider itself — reach is not flying —
+    are untouched."""
+    from tests.helpers import _mk_creature_card as _w1g12_creature
+
+    game = _w1g12_table(set_pool, ["Forest"] * 5)
+    spider = _w1g12_put(game, 0, set_pool("ONS")["Silklash Spider"])
+    bobs_bird = _w1g12_put(game, 1, _w1g12_creature("Bob's Bird", 1, 3, "Flying"))
+    alices_bird = _w1g12_put(game, 0, _w1g12_creature("Alice's Bird", 2, 2, "Flying"))
+    bear = _w1g12_put(game, 1, _w1g12_creature("Bob's Bear", 2, 2))
+    assert game.activate_permanent_ability(0, "Silklash Spider", x_value=2).supported
+    _w1g12_resolve_stack(game)
+    assert bobs_bird.damage_marked == 2 and game.is_on_battlefield(bobs_bird)
+    assert not game.is_on_battlefield(alices_bird)
+    assert bear.damage_marked == 0 and spider.damage_marked == 0
+
 # ==== end W1G12 ======================================================
 
 
