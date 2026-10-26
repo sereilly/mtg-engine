@@ -10,7 +10,7 @@ unclaimed text. Do not edit by hand.
 - Fully claimed: **5527**
 - With acknowledged simplifications: **2**
 - With UNCLAIMED text (must fix or acknowledge): **0**
-- With deletion-probe findings (ignored words): **656**
+- With deletion-probe findings (ignored words): **643**
 
 ## Acknowledged simplifications
 
@@ -89,16 +89,14 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Bomb Squad | `put a fuse counter on each creature with a fuse counter on it` | each |
 | Bone Flute | `all creatures get -1/-0 until end of turn` | all |
 | Bone Shredder | `if this permanent came under your control since the beginning of your ` | permanent |
-| Book Burning | `any player may have book burning deal 6 damage to them. if no one does` | have |
 | Bottomless Vault | `if this land is tapped, put a storage counter on it` | land |
 | Bounty of the Hunt | `distribute three +1/+1 counters among one, two, or three target creatu` | or target |
 | Braids, Cabal Minion | `that player sacrifices an artifact, creature, or land of their choice` | or |
 | Brand | `gain control of all permanents you own` | all |
 | Brawl | `until end of turn, all creatures gain "{t}: this creature deals damage` | all |
-| Breaking Point | `any player may have breaking point deal 6 damage to them. if no one do` | have all |
+| Breaking Point | `any player may have breaking point deal 6 damage to them. if no one do` | all |
 | Breath of Darigaaz | `breath of darigaaz deals 1 damage to each creature without flying and ` | spell |
 | Brine Hag | `change the base power and toughness of all creatures that dealt damage` | all |
-| Browbeat | `any player may have browbeat deal 5 damage to them. if no one does, ta` | have |
 | Call of the Wild | `reveal the top card of your library. if it's a creature card, put it o` | card, |
 | Calming Verse | `destroy all enchantments you don't control. then if you control an unt` | all all |
 | Canopy Surge | `canopy surge deals 1 damage to each creature with flying and each play` | spell |
@@ -175,7 +173,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Dwarven Lieutenant | `target dwarf creature gets +1/+0 until end of turn` | creature |
 | Dwarven Pony | `target dwarf creature gains mountainwalk until end of turn` | creature |
 | Dwarven Scorcher | `this creature deals 1 damage to target creature unless that creature's` | creature |
-| Dwarven Vigilantes | `you may have it deal damage equal to its power to target creature. if ` | have |
 | Dwell on the Past | `target player shuffles up to four target cards from their graveyard in` | target |
 | Dystopia | `that player sacrifices a green or white permanent of their choice` | or |
 | Early Harvest | `target player untaps all basic lands they control` | all |
@@ -206,8 +203,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Falling Timber | `prevent all combat damage target creature would deal this turn. if thi` | spell |
 | False Prophet | `exile all creatures` | all |
 | Famished Ghoul | `exile up to two target cards from a single graveyard` | target |
-| Farrel's Mantle | `its controller may have it deal damage equal to its power plus 2 to an` | have |
-| Farrel's Zealot | `you may have it deal 3 damage to target creature. if you do, this crea` | have |
 | Feint | `tap all creatures blocking target attacking creature. prevent all comb` | all each |
 | Festering Wound | `this aura deals x damage to that player, where x is the number of infe` | aura |
 | Fight or Flight | `separate all creatures that player controls into two piles. only creat` | all |
@@ -234,7 +229,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Giant Trap Door Spider | `exile this creature and target creature without flying that's attackin` | that's |
 | Glyph of Doom | `choose target wall creature. at this turn's next end of combat, destro` | all |
 | Glyph of Reincarnation | `destroy all creatures that were blocked by target wall this turn. they` | all |
-| Goblin Arsonist | `you may have it deal 1 damage to any target` | have |
 | Goblin Flotilla | `unless you pay {r}, whenever this creature blocks or becomes blocked b` | creature |
 | Goblin Lackey | `you may put a goblin permanent card from your hand onto the battlefiel` | permanent |
 | Goblin Marshal | `if this permanent came under your control since the beginning of your ` | permanent |
@@ -327,13 +321,8 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Knight of Valor | `each creature without flanking blocking this creature gets -1/-1 until` | each |
 | Kor Chant | `all damage that would be dealt this turn to target creature you contro` | target |
 | Krosan Reclamation | `target player shuffles up to two target cards from their graveyard int` | target |
-| Kyren Sniper | `you may have this creature deal 1 damage to target player or planeswal` | have creature |
+| Kyren Sniper | `you may have this creature deal 1 damage to target player or planeswal` | creature |
 | Labyrinth Minotaur | `that creature doesn't untap during its controller's next untap step` | controller's |
-| Laccolith Grunt | `you may have it deal damage equal to its power to target creature. if ` | have |
-| Laccolith Rig | `you may have it deal damage equal to its power to target creature. if ` | have |
-| Laccolith Titan | `you may have it deal damage equal to its power to target creature. if ` | have |
-| Laccolith Warrior | `you may have it deal damage equal to its power to target creature. if ` | have |
-| Laccolith Whelp | `you may have it deal damage equal to its power to target creature. if ` | have |
 | Land's Edge | `if the discarded card was a land card, this enchantment deals 2 damage` | card, |
 | Lava Zombie | `return a black or red creature you control to its owner's hand` | or |
 | Lead Golem | `it doesn't untap during its controller's next untap step` | controller's |
@@ -349,7 +338,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Llanowar Druid | `untap all forests` | all |
 | Llawan, Cephalid Empress | `return all blue creatures your opponents control to their owners' hand` | all |
 | Lobotomy | `target player reveals their hand, then you choose a card other than a ` | card |
-| Longhorn Firebeast | `any opponent may have it deal 5 damage to them. if a player does, sacr` | have |
 | Lotus Blossom | `add x mana of any one color, where x is the number of petal counters o` | artifact |
 | Lurking Jackals | `if this permanent is an enchantment, it becomes a 3/2 jackal creature` | permanent |
 | Lurking Skirge | `if this permanent is an enchantment, it becomes a 3/2 phyrexian imp cr` | permanent |
@@ -408,7 +396,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Oath of Druids | `that player chooses target player who controls more creatures than the` | first |
 | Oath of Ghouls | `that player chooses target player whose graveyard has fewer creature c` | cards first |
 | Oath of Lieges | `that player chooses target player who controls more lands than they do` | first |
-| Oath of Mages | `that player chooses target player who has more life than they do and i` | first have enchantment |
+| Oath of Mages | `that player chooses target player who has more life than they do and i` | first enchantment |
 | Oath of Scholars | `that player chooses target player who has more cards in hand than they` | first |
 | Obliterate | `destroy all artifacts, creatures, and lands. they can't be regenerated` | all |
 | Omen of Fire | `return all islands to their owners' hands. each player sacrifices a pl` | all |
@@ -429,7 +417,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Orim's Touch | `prevent the next 2 damage that would be dealt to any target this turn.` | spell |
 | Outbreak | `choose a creature type. all creatures of that type get -1/-1 until end` | all |
 | Overload | `destroy target artifact if its mana value is 2 or less. if this spell ` | spell |
-| Pandemonium | `that creature's controller may have it deal damage equal to its power ` | have |
 | Parallax Inhibitor | `put a fade counter on each permanent with fading you control` | each |
 | Paroxysm | `that player reveals the top card of their library. if that card is a l` | card, |
 | Peat Bog | `add {b}{b}. if there are no depletion counters on this land, sacrifice` | land, |
@@ -520,7 +507,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Savage Offensive | `creatures you control gain first strike until end of turn. if this spe` | spell |
 | Savage Twister | `savage twister deals x damage to each creature` | each |
 | Sawtooth Loon | `return a white or blue creature you control to its owner's hand` | or |
-| Scalding Salamander | `you may have it deal 1 damage to each creature without flying defendin` | have each |
+| Scalding Salamander | `you may have it deal 1 damage to each creature without flying defendin` | each |
 | Scarab of the Unseen | `return all auras attached to target permanent you own to their owners'` | all |
 | Scars of the Veteran | `prevent the next 7 damage that would be dealt to any target this turn.` | 1 |
 | Scorching Lava | `scorching lava deals 2 damage to any target. if this spell was kicked,` | spell |
@@ -565,7 +552,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Sorrow's Path | `it deals 2 damage to you and each creature you control` | each |
 | Soul Echo | `sacrifice this enchantment if there are no echo counters on it. otherw` | enchantment |
 | Soulshriek | `target creature you control gets +x/+0 until end of turn, where x is t` | cards |
-| Spark Mage | `you may have this creature deal 1 damage to target creature that playe` | have creature |
+| Spark Mage | `you may have this creature deal 1 damage to target creature that playe` | creature |
 | Sparkcaster | `return a red or green creature you control to its owner's hand` | or |
 | Spike Cannibal | `move all +1/+1 counters from all creatures onto it` | all |
 | Spiny Starfish | `if this creature regenerated this turn, create a 0/1 blue starfish cre` | creature |
