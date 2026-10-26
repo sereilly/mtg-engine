@@ -234,6 +234,75 @@ def test_w1g7_starlit_sanctum_drains_the_sacrificed_clerics_power(set_pool):
 # ==== W1G11 ==========================================================
 # W1G11's tests go between this line and the "end W1G11" line.
 
+# The five Onslaught fetchlands: "{T}, Pay 1 life, Sacrifice this land: Search
+# your library for an <A> or <B> card, put it onto the battlefield, then
+# shuffle." The search names a **union** of two land types — and it was read
+# as a card carrying both (`search_filters.search_matches` AND'd the
+# subtypes), so every one of them paid the life, sacrificed itself and found
+# nothing. The union is `any_subtypes` now
+# (`lowering/_filters.search_subtype_restriction`).
+
+import pytest as _w1g11_pytest
+
+from engine import Game as _W1G11Game, PlayerState as _W1G11PlayerState
+from engine.models import Permanent as _W1G11Permanent
+from tests.helpers import resolve_stack as _w1g11_resolve_stack
+
+_W1G11_FETCHES = {
+    "Bloodstained Mire": ("Swamp", "Mountain"),
+    "Flooded Strand": ("Plains", "Island"),
+    "Polluted Delta": ("Island", "Swamp"),
+    "Windswept Heath": ("Forest", "Plains"),
+    "Wooded Foothills": ("Mountain", "Forest"),
+}
+_W1G11_BASICS = ("Plains", "Island", "Swamp", "Mountain", "Forest")
+
+
+def _w1g11_fetch_table(set_pool, fetch, library):
+    ons = set_pool("ONS")
+    alice = _W1G11PlayerState(name="Alice", library=[ons[name] for name in library])
+    bob = _W1G11PlayerState(name="Bob", library=[ons["Island"]] * 3)
+    game = _W1G11Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.active_player_index = 0
+    land = _W1G11Permanent(card=ons[fetch])
+    game._put_permanent_onto_battlefield(0, land, None)
+    game._sync_control()
+    return game
+
+
+@_w1g11_pytest.mark.parametrize("fetch", sorted(_W1G11_FETCHES))
+@_w1g11_pytest.mark.parametrize("which", (0, 1))
+def test_w1g11_a_fetchland_finds_either_land_type_it_names(set_pool, fetch, which):
+    """Each of the two printed types is found on its own: the library holds
+    the three other basics and one of the pair, so the find is that one."""
+    wanted = _W1G11_FETCHES[fetch][which]
+    others = [name for name in _W1G11_BASICS if name not in _W1G11_FETCHES[fetch]]
+    game = _w1g11_fetch_table(set_pool, fetch, [*others, wanted])
+    alice = game.players[0]
+
+    result = game.activate_permanent_ability(0, fetch)
+    assert result.supported, result.details
+    assert alice.life == 19, "Pay 1 life is the cost"
+    assert [card.name for card in alice.graveyard] == [fetch], "sacrificed as the cost"
+    _w1g11_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+
+    (found,) = list(game.controlled_by(0))
+    assert found.card.name == wanted and not found.tapped
+    assert sorted(card.name for card in alice.library) == sorted(others)
+
+
+def test_w1g11_a_fetchland_with_neither_type_left_finds_nothing(set_pool):
+    """CR 701.23b: a search may fail to find; the cost is still paid."""
+    game = _w1g11_fetch_table(set_pool, "Polluted Delta", ["Plains", "Mountain", "Forest"])
+    assert game.activate_permanent_ability(0, "Polluted Delta").supported
+    _w1g11_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    assert list(game.controlled_by(0)) == [] and game.players[0].life == 19
+    assert len(game.players[0].library) == 3
+
 # ==== end W1G11 ======================================================
 
 

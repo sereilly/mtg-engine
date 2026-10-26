@@ -202,9 +202,12 @@ def search_matches(card, data: dict, *, game=None, owner=None) -> bool:
     # "a **Shrine** card" (Sanctum of All). Off the printed type line for the
     # same reason a supertype is: a card in a library or a graveyard has no
     # computed characteristics (CR 613.1), so the line is the whole of what
-    # there is to ask. AND'd like the supertypes above — a phrase naming two
-    # subtypes wants a card that is both, and the pool prints no search that
-    # names an either/or.
+    # there is to ask. ``subtypes`` is AND'd like the supertypes above;
+    # ``any_subtypes`` is the printed union, "an **Island or Swamp** card"
+    # (Bad River, Polluted Delta), and one member is enough — the reading
+    # ``any_colors`` gets above. This said "the pool prints no search that
+    # names an either/or" while ten fetchlands did, each AND'd into a card
+    # that is both basic types, and each paid its cost and found nothing.
     #
     # …unless a board-wide static has rewritten it. "The same is true for …
     # creature cards you own that aren't on the battlefield" (Conspiracy) is the
@@ -215,19 +218,24 @@ def search_matches(card, data: dict, *, game=None, owner=None) -> bool:
     # `card_colors` above asks for CR 202.2, so a caller with no seat gets the
     # printed answer it always got.
     wanted_subtypes = restrictions.get("subtypes") or ()
-    if wanted_subtypes:
+    any_subtypes = restrictions.get("any_subtypes") or ()
+    if wanted_subtypes or any_subtypes:
         from .object_creature_types import creature_type_override_for_seat
 
         override = (
             creature_type_override_for_seat(game, owner)
             if "creature" in type_line else None
         )
-        for subtype in wanted_subtypes:
+
+        def carries(subtype: str) -> bool:
             if override is not None:
-                if subtype.lower() != override:
-                    return False
-            elif subtype not in type_line:
-                return False
+                return subtype.lower() == override
+            return subtype in type_line
+
+        if not all(carries(subtype) for subtype in wanted_subtypes):
+            return False
+        if any_subtypes and not any(carries(subtype) for subtype in any_subtypes):
+            return False
     named = restrictions.get("named")
     if named is not None and name_key(card.name) != name_key(named):
         return False

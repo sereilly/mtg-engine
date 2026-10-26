@@ -592,12 +592,31 @@ def search_slot(filt: ast.ObjectFilter, node=None) -> dict[str, object]:
     if filt.supertypes:
         restrictions["supertypes"] = list(filt.supertypes)
     if filt.subtypes:
-        restrictions["subtypes"] = list(filt.subtypes)
+        restrictions.update(search_subtype_restriction(filt))
     if filt.colors:
         restrictions["any_colors"] = list(filt.colors)
     if restrictions:
         slot["restrictions"] = restrictions
     return slot
+
+
+def search_subtype_restriction(filt: ast.ObjectFilter) -> dict:
+    """The search restriction a noun phrase's subtypes mean.
+
+    One subtype is ``subtypes`` ("a **Shrine** card", Sanctum of All). Several
+    are the **union** the noun parser read them as ("an **Island or Swamp**
+    card" — ``ObjectFilter.subtype_match`` "any", the only spelling a search's
+    gate admits: "all" is a field no search honours, so it refuses before
+    reaching here), and a union is ``any_subtypes`` — the search's
+    ``any_colors`` one key over, and ``search_filters.search_matches`` reads it
+    with ``any``. Emitted as ``subtypes`` the union was AND'd: a card that is
+    both an Island and a Swamp, which no basic is, so every "Island or Swamp"
+    fetchland in the pool (Mirage's five, Onslaught's five) paid its cost and
+    found nothing.
+    """
+    if len(filt.subtypes) > 1 and filt.subtype_match == "any":
+        return {"any_subtypes": list(filt.subtypes)}
+    return {"subtypes": list(filt.subtypes)}
 
 
 def chargeable_card_filter(filt: ast.ObjectFilter) -> dict | None:

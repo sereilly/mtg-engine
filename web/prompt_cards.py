@@ -53,6 +53,11 @@ def search_slot_label(slot: dict) -> str:
     if colors:
         words.append(" or ".join(colors))
     words.extend(str(word).capitalize() for word in restrictions.get("subtypes") or ())
+    # "an **Island or Swamp** card" — the printed union (``any_subtypes``),
+    # worded as the colour union above is.
+    union = [str(word).capitalize() for word in restrictions.get("any_subtypes") or ()]
+    if union:
+        words.append(" or ".join(union))
     card_type = slot.get("card_type", "any")
     types = card_type if isinstance(card_type, (list, tuple)) else (card_type,)
     types = [str(name) for name in types if name and name != "any"]
