@@ -87,7 +87,17 @@ def blocking_prompt(game, seat: int, action: str, exempt_actions: frozenset[str]
 
     A kind with no ``blocked_detail`` never refuses anything: it is a
     notification, or a decision the rest of the game can carry on around.
+
+    And its **answer** is never refused either. Taking a notification down
+    plays around nothing — and refusing it is a prompt nobody can close: Spy
+    Network shows a hand (``hand_reveal``) and the face-down creatures
+    (``face_down_look``) beside the library reorders it owes, and "complete
+    library reorder before other actions" refused both Continue buttons while
+    the reorder was open. The registry's two such kinds today are exactly
+    those two notifications.
     """
+    if any(spec.blocked_detail is None and action == spec.action for spec in CHOICE_SPECS.values()):
+        return None
     for spec, choice in game.iter_pending_prompts():
         if spec.blocked_detail is None:
             continue

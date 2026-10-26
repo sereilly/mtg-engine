@@ -176,7 +176,7 @@ def test_a_face_down_permanent_is_drawn_from_what_each_seat_was_sent(set_pool):
         ["faceDownDisplayCard", "faceDownPreviewCard", "faceDownPreviewLines"],
         _DISPLAY,
         {"perms": {"controller": pick(mine), "opponent": pick(theirs)}},
-        prelude='const BF_CARD_BACK_URL = "/images/card_back.webp";',
+        prelude='const BF_CARD_BACK_URL = "/images/card_back.webp"; const faceDownLookMemory = new Map();',
         scripts=PAGE,
     )
     controller, opponent = seen["controller"], seen["opponent"]
@@ -246,15 +246,25 @@ def test_the_look_is_read_by_the_looker_alone_and_dismissed(set_pool):
     resolve_stack(game)
 
     looker, owner = build_state(session, 0), build_state(session, 1)
+    board = next(p for p in looker["players"][1]["battlefield"] if p["id"] == hidden.permanent_id)
     read = run_app_js(
-        ["getFaceDownLookInfo", "faceDownLookCaption"],
+        ["getFaceDownLookInfo", "faceDownLookCaption", "rememberFaceDownLook",
+         "faceDownPreviewCard", "faceDownPreviewLines"],
         "seat = 0; const mine = getFaceDownLookInfo(INPUT.looker);"
         " const caption = faceDownLookCaption(mine.permanents[0], INPUT.looker);"
-        " seat = 1; return { mine, caption, theirs: getFaceDownLookInfo(INPUT.owner) };",
-        {"looker": looker, "owner": owner},
-        prelude="let seat = 0; let currentState = null;",
+        " const before = faceDownPreviewLines(faceDownPreviewCard(INPUT.board));"
+        " rememberFaceDownLook(mine);"
+        " const after = faceDownPreviewLines(faceDownPreviewCard(INPUT.board));"
+        " const other = faceDownPreviewLines(faceDownPreviewCard({ ...INPUT.board, id: -1 }));"
+        " seat = 1; return { mine, caption, before, after, other, theirs: getFaceDownLookInfo(INPUT.owner) };",
+        {"looker": looker, "owner": owner, "board": board},
+        prelude="let seat = 0; let currentState = null; const faceDownLookMemory = new Map();",
         scripts=PAGE,
     )
+    # The board still shows an anonymous 2/2; once looked at, its preview
+    # names the card — that permanent's, by id, and no other face-down one's.
+    assert not any("You looked at it" in line for line in read["before"] + read["other"])
+    assert "You looked at it: Grinning Demon." in read["after"]
     (entry,) = read["mine"]["permanents"]
     assert (entry["id"], entry["card"]["name"]) == (hidden.permanent_id, "Grinning Demon")
     assert read["caption"] == "Bob's face-down creature"
@@ -388,3 +398,45 @@ def test_the_morph_offer_owes_its_three_once(set_pool):
         prelude="const renderSymbolsInline = (text) => text;",
     )
     assert "plus" not in note and "{3} in mana in all" in note
+
+
+# ---------------------------------------------------------------------------
+# 6. A notification closes while a reorder is owed (Spy Network)
+# ---------------------------------------------------------------------------
+
+def test_spy_networks_looks_close_while_its_reorders_are_open(set_pool):
+    """Spy Network arms the hand look, the face-down look and two library
+    reorders. The reorders block; the looks are notifications, and their
+    Continue buttons were refused ("complete library reorder before other
+    actions") for as long as a reorder stood — clicked in the browser, the
+    modal hid on the 400 and came back on the next render. Each closes now,
+    and the reorder is still owed after it."""
+    ons = set_pool("ONS")
+    sid, session, game = _table(seed=708)
+    _lands(game, 0, "Island", 1)
+    hidden = _put(game, 1, ons["Silent Specter"], face_down=True)
+    game.players[1].hand[:] = [CARD_BY_NAME["swamp"]]
+    game.players[0].hand[:] = [ons["Spy Network"]]
+    response = _act(sid, {"seat": 0, "action": "cast", "card_name": "Spy Network",
+                          "target_seat": 1, "auto_tap": True})
+    assert response.status_code == 200, response.text
+    for seat in (0, 1):
+        assert _act(sid, {"seat": seat, "action": "pass_priority"}).status_code == 200
+
+    state = build_state(session, 0)
+    assert state["hand_reveal"] and state["reorder_library"] and state["waiting_on_prompt"]
+    assert _act(sid, {"seat": 0, "action": "dismiss_hand_reveal"}).status_code == 200
+    assert build_state(session, 0)["hand_reveal"] is None
+    assert build_state(session, 0)["reorder_library"], "the reorder is still owed"
+    # Something else is still refused while it is.
+    assert _act(sid, {"seat": 0, "action": "pass_priority"}).status_code == 400
+
+    # Bob's top card, then the look at his face-down creature beside Alice's
+    # own top-four reorder.
+    assert _act(sid, {"seat": 0, "action": "reorder_library_confirm", "card_order": [0]}).status_code == 200
+    state = build_state(session, 0)
+    assert [p["id"] for p in state["face_down_look"]["permanents"]] == [hidden.permanent_id]
+    assert state["reorder_library"]
+    assert _act(sid, {"seat": 0, "action": "dismiss_face_down_look"}).status_code == 200
+    state = build_state(session, 0)
+    assert state["face_down_look"] is None and state["reorder_library"]

@@ -11518,6 +11518,19 @@ function faceDownLookCaption(entry, state = currentState) {
   return `${whose} face-down creature`;
 }
 
+// What this seat's looks showed it, by face-down permanent id: the modal names
+// the cards, and the board shows each as an anonymous 2/2, so the hover
+// preview of a looked-at permanent says which card it was
+// (`faceDownPreviewLines`). This client's memory only — the server keeps no
+// record of a look once it is dismissed, and a reload forgets it.
+const faceDownLookMemory = new Map();
+
+function rememberFaceDownLook(info) {
+  for (const entry of Array.isArray(info?.permanents) ? info.permanents : []) {
+    if (Number.isInteger(entry?.id) && entry?.card?.name) faceDownLookMemory.set(entry.id, entry.card.name);
+  }
+}
+
 function renderFaceDownLookModal(info) {
   const modal = document.getElementById("faceDownLookModal");
   if (!modal) return;
@@ -11525,6 +11538,7 @@ function renderFaceDownLookModal(info) {
     modal.classList.add("hidden");
     return;
   }
+  rememberFaceDownLook(info);
   const entries = Array.isArray(info.permanents) ? info.permanents : [];
   const title = document.getElementById("faceDownLookTitle");
   if (title) title.textContent = info.source_name ? `${info.source_name}: face-down creatures` : "Face-down creatures";
@@ -11532,7 +11546,8 @@ function renderFaceDownLookModal(info) {
   if (subtitle) {
     subtitle.textContent = entries.length === 0
       ? "Nothing you looked at is still face down."
-      : `What ${entries.length === 1 ? "it is" : "they are"} — only you can see this (CR 708.5). Click Continue when done.`;
+      : `What ${entries.length === 1 ? "it is" : "they are"} — only you can see this (CR 708.5). `
+        + "Hovering a face-down creature on the board afterwards still names the one you looked at. Click Continue when done.";
   }
   modal.classList.remove("hidden");
 
@@ -19300,7 +19315,13 @@ function faceDownPreviewLines(card) {
   const pt = typeof card.power === "number" && typeof card.toughness === "number"
     ? `${card.power}/${card.toughness}` : "2/2";
   if (card.face_down_preview === "hidden") {
-    return [`Face down: a ${pt} creature with no name, text, subtypes or mana cost (CR 708.2a).`];
+    const lines = [`Face down: a ${pt} creature with no name, text, subtypes or mana cost (CR 708.2a).`];
+    // What a look (Aven Soulgazer, Spy Network) showed this seat about this
+    // very object — remembered by permanent id, which a new object never
+    // reuses (CR 400.7), so it cannot be pinned on a different face-down 2/2.
+    const looked = Number.isInteger(card.id) ? faceDownLookMemory.get(card.id) : null;
+    if (looked) lines.push(`You looked at it: ${looked}.`);
+    return lines;
   }
   const lines = [
     `Face down — only you can see what it is (CR 708.5). Everyone else sees a ${pt} creature with no name or text.`,

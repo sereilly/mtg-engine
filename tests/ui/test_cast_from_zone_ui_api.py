@@ -238,6 +238,11 @@ def test_w3g4_a_library_grant_is_offered_and_casts_through_the_api():
     # that it is a waiver, and that it could be cast right now.
     ways = offered.pop("ways")
     assert offered.pop("castable_now") is True
+    # …and the card itself, as this seat would cast it: a library is never
+    # serialized card by card, so a client clicking the pile reads the card's
+    # cast spec here (Onslaught W2G2, Future Sight's client).
+    card = offered.pop("card")
+    assert card["name"] == "Test Comet" and "target_spec" in card
     assert offered == {
         "zone": "library", "index": 0, "name": "Test Comet", "free": True,
         "source": "Test Aperture", "owner_seat": 0,
