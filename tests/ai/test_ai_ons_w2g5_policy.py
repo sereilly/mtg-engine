@@ -450,3 +450,28 @@ def test_w2g5_the_simulator_casts_a_wheel_naming_nobody(set_pool):
     assert any("cast Wheel and Deal -> resolved" in line for line in report.log_lines)
     assert report.issues == [] and not report.refused_casts
     assert len(game.players[1].hand) == 2
+
+
+# ==== A pump on a turn the attack ends the game anyway ========================
+#
+# Wirewood Pride was cast for +0/+0 (W1G7: 2 of 5 casts; reproduced at seed 11,
+# black batch, game 6, turn 10, before a lethal attack). Its rehearsal, read
+# through the fight, ended the game on both copies — so no cleanup ran, the
+# pump's "until end of turn" record was still on the table, and the digests
+# differed by it alone: a lasting change worth nothing, which passed. A game
+# over on both copies has no end of the turn to read, so equal standings there
+# are fleeting (`ai_rehearsal._rehearse`).
+
+
+@pytest.mark.parametrize("life", [3, 20])
+def test_w2g5_a_pump_that_changes_nothing_is_held(set_pool, life):
+    """No Elf anywhere, so the Pride is +0/+0. At three life the Foothill
+    Guide and the Bears' attack is lethal with it or without it; at twenty it
+    does nothing for the fight either. Held both times."""
+    from engine.ai_policy import choose_cast_action
+
+    game = _w2g5_board(
+        set_pool, ["Foothill Guide", "Grizzly Bears", "Forest", "Forest"], [],
+        hand=["Wirewood Pride"], life=(20, life),
+    )
+    assert choose_cast_action(game, 0) is None
