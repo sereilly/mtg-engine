@@ -1173,7 +1173,465 @@ def test_w1g7_gangrenous_goliath_taps_three_clerics_from_the_graveyard(set_pool)
 
 # ==== W1G9 ==========================================================
 # W1G9's tests go between this line and the "end W1G9" line.
+from engine import Game as _w1g9_Game, PlayerState as _w1g9_PlayerState
+from engine.models import Permanent as _w1g9_Permanent
+from tests.helpers import resolve_stack as _w1g9_resolve
 
+
+def _w1g9_table(seats=2):
+    """*seats* players, seat 0 active, mana costs off."""
+    w1g9_game = _w1g9_Game(
+        players=[_w1g9_PlayerState(name=f"W1G9-{index}") for index in range(seats)]
+    )
+    w1g9_game.enforce_mana_costs = False
+    w1g9_game.active_player_index = 0
+    return w1g9_game
+
+
+def _w1g9_enter(game, seat, card):
+    """*card* onto *seat*'s battlefield through the entry seam, unsick, with
+    its entry triggers (if any) resolved."""
+    w1g9_entered = _w1g9_Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, w1g9_entered, None)
+    w1g9_entered.metadata["summoning_sickness_turn"] = -99
+    game.check_state_based_actions()
+    _w1g9_resolve(game)
+    return w1g9_entered
+
+
+def _w1g9_attack(game, attackers, *, seat=0, defender=1):
+    game._set_phase_and_step("combat", "declare_attackers")
+    return game.declare_attackers(
+        seat, [game.battlefield_index_of(a) for a in attackers],
+        defending_player_index=defender,
+    )
+
+
+def _w1g9_block(game, blocks, *, seat=1):
+    """``(blocker, [attackers])`` pairs for *seat*; the engine's answer."""
+    game._set_phase_and_step("combat", "declare_blockers")
+    return game.declare_blockers(seat, {
+        game.battlefield_index_of(blocker): [
+            game.battlefield_index_of(a) for a in attackers
+        ]
+        for blocker, attackers in blocks
+    })
+
+
+def _w1g9_settle(game):
+    """Drain the stack, then answer what it left owed with the defaults, and
+    make the state check the priority loop makes after a resolution
+    (CR 704.3)."""
+    _w1g9_resolve(game)
+    game.auto_resolve_pending_choices()
+    _w1g9_resolve(game)
+    game.check_state_based_actions()
+
+
+def test_w1g9_gustcloak_savior_rescues_another_creature_you_control(set_pool):
+    """"Whenever a creature you control becomes blocked, you may untap that
+    creature and remove it from combat." The creature the event was about —
+    not the Savior — is untapped and taken out of combat (CR 506.4), so it
+    deals and takes no combat damage.
+    """
+    ons, lea = set_pool("ONS"), set_pool("LEA")
+    game = _w1g9_table()
+    savior = _w1g9_enter(game, 0, ons["Gustcloak Savior"])
+    seeker = _w1g9_enter(game, 0, ons["Glory Seeker"])
+    bears = _w1g9_enter(game, 1, lea["Grizzly Bears"])
+    assert _w1g9_attack(game, [seeker])[0]
+    assert seeker.tapped and seeker.attacking
+    assert _w1g9_block(game, [(bears, [seeker])])[0]
+    assert [item.card.name for item in game.stack] == ["Gustcloak Savior"]
+    _w1g9_settle(game)
+    assert not seeker.tapped
+    assert not seeker.attacking and not seeker.blocked
+    assert game.battlefield_index_of(seeker) not in game.combat_attackers
+    assert not savior.attacking and not savior.tapped
+    assert "Glory Seeker untapped (Gustcloak Savior)" in game.log
+
+    game._set_phase_and_step("combat", "combat_damage")
+    game.resolve_combat_damage(0)
+    assert seeker.damage_marked == 0 and bears.damage_marked == 0
+    assert game.is_on_battlefield(seeker) and game.is_on_battlefield(bears)
+
+
+def test_w1g9_gustcloak_savior_ignores_an_opponents_blocked_creature(set_pool):
+    """"A creature **you control**": the watcher on the defending side has
+    nothing to do when the attacker it would rescue is not its controller's.
+    """
+    ons, lea = set_pool("ONS"), set_pool("LEA")
+    game = _w1g9_table()
+    _w1g9_enter(game, 1, ons["Gustcloak Savior"])
+    seeker = _w1g9_enter(game, 0, ons["Glory Seeker"])
+    bears = _w1g9_enter(game, 1, lea["Grizzly Bears"])
+    assert _w1g9_attack(game, [seeker])[0]
+    assert _w1g9_block(game, [(bears, [seeker])])[0]
+    assert game.stack == []
+    assert seeker.tapped and seeker.attacking and seeker.blocked
+
+
+def test_w1g9_gustcloak_savior_declined_leaves_the_fight(set_pool):
+    """The offer is optional: declined, the creature stays blocked and tapped
+    and the fight happens."""
+    ons, lea = set_pool("ONS"), set_pool("LEA")
+    game = _w1g9_table()
+    game.interactive_seats = {0}
+    _w1g9_enter(game, 0, ons["Gustcloak Savior"])
+    seeker = _w1g9_enter(game, 0, ons["Glory Seeker"])
+    bears = _w1g9_enter(game, 1, lea["Grizzly Bears"])
+    assert _w1g9_attack(game, [seeker])[0]
+    assert _w1g9_block(game, [(bears, [seeker])])[0]
+    game.resolve_top_of_stack()
+    offers = [c for c in game.pending_choices if c.kind == "optional_pay"]
+    assert len(offers) == 1 and offers[0].player_index == 0
+    game._resolve_optional_pay(offers[0], False, None)
+    _w1g9_resolve(game)
+    assert seeker.tapped and seeker.attacking and seeker.blocked
+
+
+def test_w1g9_the_untap_reads_the_event_and_refuses_without_one():
+    """"Untap that creature" is the event's object only under an event that
+    froze one; elsewhere the words name nobody and the line refuses."""
+    from engine.grammar import compile_line
+
+    bound = compile_line(
+        "Whenever a creature you control becomes blocked, untap that creature.",
+        card_name="Probe",
+    )
+    assert [i.kind for i in bound.instructions] == ["untap_event_subject"]
+    unbound = compile_line(
+        "At the beginning of your upkeep, untap that creature.", card_name="Probe",
+    )
+    assert unbound.lowering_error or unbound.parse_error
+    narrowed = compile_line(
+        "Whenever a creature you control becomes blocked, untap that red creature.",
+        card_name="Probe",
+    )
+    assert not narrowed.instructions
+
+
+def test_w1g9_spitfire_handler_cant_block_a_bigger_creature(set_pool):
+    """"This creature can't block creatures with power greater than this
+    creature's power." Both powers are read now, through the layers: a 1/1
+    can't block a 2/2, and pumped to 2/1 it can — the strict "greater than"
+    admits the tie.
+    """
+    ons = set_pool("ONS")
+    game = _w1g9_table()
+    seeker = _w1g9_enter(game, 0, ons["Glory Seeker"])
+    handler = _w1g9_enter(game, 1, ons["Spitfire Handler"])
+    assert _w1g9_attack(game, [seeker])[0]
+    game._set_phase_and_step("combat", "declare_blockers")
+    refused = game.declare_blockers(1, {
+        game.battlefield_index_of(handler): [game.battlefield_index_of(seeker)]
+    })
+    assert not refused[0]
+    assert handler.blocking_attacker_controller is None
+
+    game.activate_permanent_ability(1, "Spitfire Handler")
+    _w1g9_resolve(game)
+    assert (handler.effective_power, handler.effective_toughness) == (2, 1)
+    assert _w1g9_block(game, [(handler, [seeker])])[0]
+    game._set_phase_and_step("combat", "combat_damage")
+    game.resolve_combat_damage(0)
+    assert not game.is_on_battlefield(handler)
+    assert not game.is_on_battlefield(seeker)
+
+
+def test_w1g9_the_ai_never_proposes_the_block_spitfire_handler_forbids(set_pool):
+    """The restriction is asked by the AI's proposal, not only by the gate:
+    a 1/1 Handler facing a lone 2/2 attacker is never offered as its blocker."""
+    from engine.ai_declarations import choose_combat_blockers
+
+    ons = set_pool("ONS")
+    game = _w1g9_table()
+    seeker = _w1g9_enter(game, 0, ons["Glory Seeker"])
+    handler = _w1g9_enter(game, 1, ons["Spitfire Handler"])
+    assert _w1g9_attack(game, [seeker])[0]
+    game._set_phase_and_step("combat", "declare_blockers")
+    assert not game._can_block_attacker(handler, seeker)
+    assert game.battlefield_index_of(handler) not in choose_combat_blockers(game, 1)
+
+
+def test_w1g9_tephraderm_sends_a_spells_damage_to_its_controller(set_pool):
+    """"Whenever a spell deals damage to this creature, this creature deals
+    that much damage to that spell's controller." A Shock aimed at it costs
+    its caster 2 life; only the spell line fires (Shock is no creature)."""
+    ons = set_pool("ONS")
+    game = _w1g9_table()
+    tephraderm = _w1g9_enter(game, 1, ons["Tephraderm"])
+    game.players[0].hand.append(ons["Shock"])
+    game._set_phase_and_step("precombat_main", "precombat_main")
+    game.cast_from_hand(
+        0, "Shock", target_player_index=1, target_permanent_ids=[tephraderm.permanent_id]
+    )
+    _w1g9_settle(game)
+    assert tephraderm.damage_marked == 2
+    assert game.players[0].life == 18
+    assert "Tephraderm dealt 2 damage to W1G9-0" in game.log
+
+
+def test_w1g9_tephraderm_answers_lethal_spell_damage_from_the_graveyard(set_pool):
+    """Ruling (2004-10-04): "The second ability triggers even if this card is
+    dealt lethal damage." It deals the damage as it last existed (CR 608.2h)."""
+    ons = set_pool("ONS")
+    game = _w1g9_table()
+    tephraderm = _w1g9_enter(game, 1, ons["Tephraderm"])
+    game.players[0].hand.extend([ons["Shock"], ons["Pinpoint Avalanche"]])
+    game._set_phase_and_step("precombat_main", "precombat_main")
+    for name in ("Shock", "Pinpoint Avalanche"):
+        game.cast_from_hand(
+            0, name, target_player_index=1,
+            target_permanent_ids=[tephraderm.permanent_id],
+        )
+        _w1g9_settle(game)
+    assert not game.is_on_battlefield(tephraderm)
+    assert game.players[0].life == 20 - 2 - 4
+
+
+def test_w1g9_tephraderm_hits_back_the_creature_that_hit_it(set_pool):
+    """"Whenever a creature deals damage to this creature, this creature deals
+    that much damage to that creature." Combat damage from a 6/6 it blocks
+    kills Tephraderm and leaves the 6/6 with 4; the trigger deals 6 more. The
+    spell line stays silent: combat damage is a creature's, not a spell's."""
+    ons = set_pool("ONS")
+    game = _w1g9_table()
+    tephraderm = _w1g9_enter(game, 1, ons["Tephraderm"])
+    shaker = _w1g9_enter(game, 0, ons["Krosan Groundshaker"])
+    assert _w1g9_attack(game, [shaker])[0]
+    assert _w1g9_block(game, [(tephraderm, [shaker])])[0]
+    game._set_phase_and_step("combat", "combat_damage")
+    game.resolve_combat_damage(0)
+    assert [item.card.name for item in game.stack] == ["Tephraderm"]
+    assert not game.is_on_battlefield(tephraderm)
+    assert game.is_on_battlefield(shaker) and shaker.damage_marked == 4
+    _w1g9_settle(game)
+    assert not game.is_on_battlefield(shaker)
+    assert game.players[0].life == 20
+
+
+def test_w1g9_tephraderm_tells_a_creatures_ability_from_an_artifacts(set_pool):
+    """A creature's ability is a creature dealing damage (line one); an
+    artifact's ability is neither a creature nor a spell (CR 113.3) and fires
+    nothing."""
+    ons, lea = set_pool("ONS"), set_pool("LEA")
+    game = _w1g9_table()
+    tephraderm = _w1g9_enter(game, 1, ons["Tephraderm"])
+    sorcerer = _w1g9_enter(game, 0, lea["Prodigal Sorcerer"])
+    rod = _w1g9_enter(game, 0, lea["Rod of Ruin"])
+    game._set_phase_and_step("precombat_main", "precombat_main")
+    game.activate_permanent_ability(
+        0, "Rod of Ruin", target_player_index=1,
+        target_permanent_ids=[tephraderm.permanent_id],
+    )
+    _w1g9_settle(game)
+    assert tephraderm.damage_marked == 1
+    assert game.is_on_battlefield(rod) and game.players[0].life == 20
+    game.activate_permanent_ability(
+        0, "Prodigal Sorcerer", target_player_index=1,
+        target_permanent_ids=[tephraderm.permanent_id],
+    )
+    _w1g9_settle(game)
+    assert tephraderm.damage_marked == 2
+    assert not game.is_on_battlefield(sorcerer)
+    assert game.players[0].life == 20
+
+
+def _w1g9_arm_glarecaster(game, *, at_player=None, at_permanent=None):
+    """Glarecaster on seat 0, its ability activated and resolved, aimed at
+    *at_player* (a seat) or *at_permanent*."""
+    game._set_phase_and_step("precombat_main", "precombat_main")
+    if at_permanent is not None:
+        result = game.activate_permanent_ability(
+            0, "Glarecaster", target_player_index=1,
+            target_permanent_ids=[at_permanent.permanent_id],
+        )
+    else:
+        result = game.activate_permanent_ability(
+            0, "Glarecaster", target_player_index=at_player,
+        )
+    assert result.supported
+    _w1g9_settle(game)
+
+
+def test_w1g9_glarecaster_moves_the_next_damage_to_you_once(set_pool):
+    """"{5}{W}: The next time damage would be dealt to this creature and/or you
+    this turn, that damage is dealt to any target instead." A Shock at its
+    controller is dealt to the opponent it named (CR 614.9); the next Shock
+    lands — the next time was spent, for both recipients."""
+    ons = set_pool("ONS")
+    game = _w1g9_table()
+    glarecaster = _w1g9_enter(game, 0, ons["Glarecaster"])
+    game.players[1].hand.extend([ons["Shock"], ons["Shock"]])
+    _w1g9_arm_glarecaster(game, at_player=1)
+    game.active_player_index = 1
+    game.cast_from_hand(1, "Shock", target_player_index=0)
+    _w1g9_settle(game)
+    assert (game.players[0].life, game.players[1].life) == (20, 18)
+    assert "2 damage to W1G9-0 is dealt to W1G9-1 instead (Glarecaster)" in game.log
+    game.cast_from_hand(
+        1, "Shock", target_player_index=0,
+        target_permanent_ids=[glarecaster.permanent_id],
+    )
+    _w1g9_settle(game)
+    assert glarecaster.damage_marked == 2, "spent for the creature too"
+    assert game.players[1].life == 18
+
+
+def test_w1g9_glarecaster_moves_every_chunk_dealt_at_the_same_time(set_pool):
+    """Ruling (2004-10-04): "if either you or this card would be dealt damage
+    from multiple sources at the same time, the redirection will apply to both
+    chunks of damage." Two unblocked attackers' combat damage (CR 510.2) is
+    moved whole onto the creature it named; a Hurricane hitting the
+    Glarecaster and its controller in one resolution is moved whole too."""
+    ons, lea = set_pool("ONS"), set_pool("LEA")
+    game = _w1g9_table()
+    _w1g9_enter(game, 0, ons["Glarecaster"])
+    seeker = _w1g9_enter(game, 1, ons["Glory Seeker"])
+    bears = _w1g9_enter(game, 1, lea["Grizzly Bears"])
+    giant = _w1g9_enter(game, 1, lea["Hill Giant"])
+    _w1g9_arm_glarecaster(game, at_permanent=giant)
+    game.active_player_index = 1
+    assert _w1g9_attack(game, [seeker, bears], seat=1, defender=0)[0]
+    assert _w1g9_block(game, [], seat=0)[0]
+    game._set_phase_and_step("combat", "combat_damage")
+    game.resolve_combat_damage(1)
+    _w1g9_settle(game)
+    assert game.players[0].life == 20
+    assert not game.is_on_battlefield(giant)
+
+    game = _w1g9_table()
+    glarecaster = _w1g9_enter(game, 0, ons["Glarecaster"])
+    game.players[1].hand.append(lea["Hurricane"])
+    _w1g9_arm_glarecaster(game, at_player=1)
+    game.active_player_index = 1
+    game.cast_from_hand(1, "Hurricane", x_value=2)
+    _w1g9_settle(game)
+    assert glarecaster.damage_marked == 0
+    assert (game.players[0].life, game.players[1].life) == (20, 14)
+
+
+def test_w1g9_glarecasters_next_time_ends_with_its_combat_damage_step(set_pool):
+    """A first-strike step and the regular step are two dealings (CR 510.4):
+    the first striker's damage is moved, the other attacker's lands."""
+    ons, lea = set_pool("ONS"), set_pool("LEA")
+    game = _w1g9_table()
+    _w1g9_enter(game, 0, ons["Glarecaster"])
+    striker = _w1g9_enter(game, 1, lea["White Knight"])
+    bears = _w1g9_enter(game, 1, lea["Grizzly Bears"])
+    _w1g9_arm_glarecaster(game, at_player=1)
+    game.active_player_index = 1
+    assert _w1g9_attack(game, [striker, bears], seat=1, defender=0)[0]
+    assert _w1g9_block(game, [], seat=0)[0]
+    game._set_phase_and_step("combat", "combat_damage")
+    game.resolve_combat_damage(1)
+    _w1g9_settle(game)
+    if game.combat_damage_resolved is False:
+        game.resolve_combat_damage(1)
+        _w1g9_settle(game)
+    assert game.players[1].life == 18, "the first striker's 2 moved"
+    assert game.players[0].life == 18, "the regular step is another time"
+
+
+def test_w1g9_a_second_protected_recipient_refuses_elsewhere():
+    """The "and/or" recipient has one reader; a sentence routed to any other
+    redirect lowering refuses rather than dropping it."""
+    from engine.grammar import compile_line
+
+    line = compile_line(
+        "{5}{W}: The next time damage would be dealt to this creature and/or "
+        "target player this turn, that damage is dealt to any target instead.",
+        card_name="Probe",
+    )
+    assert not line.instructions
+
+
+def _w1g9_orgg_fight(set_pool, *, blocked=True):
+    """Butcher Orgg (seat 0) attacks into Wall of Stone, Grizzly Bears and Hill
+    Giant; the Wall blocks it unless *blocked* is False. Returns the game at
+    the combat damage step, damage not yet dealt."""
+    ons, lea = set_pool("ONS"), set_pool("LEA")
+    game = _w1g9_table()
+    orgg = _w1g9_enter(game, 0, ons["Butcher Orgg"])
+    wall = _w1g9_enter(game, 1, lea["Wall of Stone"])
+    bears = _w1g9_enter(game, 1, lea["Grizzly Bears"])
+    giant = _w1g9_enter(game, 1, lea["Hill Giant"])
+    assert _w1g9_attack(game, [orgg])[0]
+    assert _w1g9_block(game, [(wall, [orgg])] if blocked else [])[0]
+    game._set_phase_and_step("combat", "combat_damage")
+    return game, orgg, wall, bears, giant
+
+
+def test_w1g9_butcher_orgg_divides_past_its_blocker(set_pool):
+    """"You may assign this creature's combat damage divided as you choose
+    among defending player and/or any number of creatures they control." Six
+    damage, blocked by a 0/8 Wall: 2 to the Bears and 3 to the Giant (neither
+    blocking) and 1 to the player. Combat damage all of it (CR 510.2)."""
+    from engine.combat_assignment import DIVIDED_AMONG_DEFENDERS_LOG
+
+    game, orgg, wall, bears, giant = _w1g9_orgg_fight(set_pool)
+    ok, _ = game.resolve_combat_damage(0, divided_among_defenders={
+        orgg.permanent_id: {bears.permanent_id: 2, giant.permanent_id: 3, "player": 1},
+    })
+    assert ok
+    _w1g9_settle(game)
+    assert not game.is_on_battlefield(bears) and not game.is_on_battlefield(giant)
+    assert wall.damage_marked == 0
+    assert game.players[1].life == 19
+    assert f"Butcher Orgg {DIVIDED_AMONG_DEFENDERS_LOG}" in game.log
+
+
+def test_w1g9_butcher_orgg_divides_when_unblocked_and_declines_by_saying_nothing(set_pool):
+    """Ruling (2004-10-04): "You can use the ability to divide damage even if
+    it is not blocked." Unblocked, all six onto the Wall; declined (no
+    division announced), a blocked Orgg assigns to its blocker as CR 510.1c
+    says."""
+    game, orgg, wall, _bears, _giant = _w1g9_orgg_fight(set_pool, blocked=False)
+    assert game.resolve_combat_damage(0, divided_among_defenders={
+        orgg.permanent_id: {wall.permanent_id: 6},
+    })[0]
+    assert wall.damage_marked == 6 and game.players[1].life == 20
+
+    game, orgg, wall, _bears, _giant = _w1g9_orgg_fight(set_pool)
+    assert game.resolve_combat_damage(0)[0]
+    assert wall.damage_marked == 6 and game.players[1].life == 20
+
+
+def test_w1g9_butcher_orgg_division_is_held_to_the_rulings(set_pool):
+    """CR 510.1e: an illegal division is refused with nothing dealt — all six
+    must be divided, each recipient takes at least 1 ("minimum 1 point per
+    player or creature"), at least one is chosen, and only the defending
+    player and their creatures may be."""
+    for build in (
+        lambda o, w, b, g: {o.permanent_id: {"player": 5}},
+        lambda o, w, b, g: {o.permanent_id: {"player": 6, b.permanent_id: 0}},
+        lambda o, w, b, g: {o.permanent_id: {o.permanent_id: 6}},
+        lambda o, w, b, g: {o.permanent_id: {}},
+        lambda o, w, b, g: {w.permanent_id: {"player": 6}},
+    ):
+        game, orgg, wall, bears, giant = _w1g9_orgg_fight(set_pool)
+        ok, why = game.resolve_combat_damage(
+            0, divided_among_defenders=build(orgg, wall, bears, giant)
+        )
+        assert not ok, why
+        assert game.players[1].life == 20 and wall.damage_marked == 0
+        assert not game.combat_damage_resolved
+
+
+def test_w1g9_butcher_orgg_with_its_blocker_gone_has_nothing_to_divide(set_pool):
+    """Ruling (2004-10-04): "If it is blocked but then all of its blockers are
+    removed before combat damage is assigned, then it won't be able to deal
+    combat damage and you won't be able to use its ability.\""""
+    game, orgg, wall, bears, _giant = _w1g9_orgg_fight(set_pool)
+    game.remove_from_battlefield(wall)
+    game._set_phase_and_step("combat", "combat_damage")
+    ok, why = game.resolve_combat_damage(0, divided_among_defenders={
+        orgg.permanent_id: {bears.permanent_id: 6},
+    })
+    assert not ok and "nothing left blocking it" in why
+    assert game.resolve_combat_damage(0)[0]
+    assert game.is_on_battlefield(bears) and game.players[1].life == 20
 # ==== end W1G9 ======================================================
 
 

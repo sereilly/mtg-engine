@@ -23,7 +23,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..combat_assignment import MAY_ASSIGN_AS_UNBLOCKED
-from ..destruction_events import mark_delayed_destruction
 from ..models import Permanent
 from ..keywords import grant_keyword, grant_protection_flag, remove_keyword
 from ._amounts import resolve_amount
@@ -987,33 +986,4 @@ def grant_enchanted_keyword_until_eot(game: Game, instruction: OracleInstruction
         f"{' and '.join(_named_keywords(keywords, context))}"
         + DURATION_WORDS.get(lifetime["duration"], "")
     )
-    return True, "resolved"
-
-
-@effect_handler("grant_flying_and_delayed_destruction")
-def grant_flying_and_delayed_destruction(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    caster = context.caster
-    source_permanent = context.source_permanent
-    if source_permanent is None:
-        return False, "ability not implemented"
-
-    def _is_legal(perm) -> bool:
-        return (
-            perm.is_creature
-            and perm.effective_toughness < source_permanent.effective_power
-        )
-
-    # Honor the player-chosen creature (Stone Giant targets "target creature you
-    # control with toughness less than this creature's power"). Fall back to the
-    # first legal creature only for AI/untargeted activations — an explicitly
-    # chosen illegal target fizzles.
-    target_creature = resolve_target_permanent(
-        game, context, player=caster, predicate=_is_legal, fallback_on_invalid_choice=False
-    )
-    if target_creature is not None:
-        grant_keyword(target_creature, "flying", duration="end_of_turn")
-        mark_delayed_destruction(game, target_creature, "destroy_at_next_end_step")
-        game.log.append(f"{target_creature.card.name} gains temporary flying and delayed destruction")
-    else:
-        game.log.append("No valid target for Stone Giant effect")
     return True, "resolved"

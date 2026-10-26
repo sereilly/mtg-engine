@@ -52,6 +52,7 @@ from .replacements import (
     take_replaced,
     was_replaced,
 )
+from .replacements.damage import _source_is_a_spell
 from .turn_replacements import damage_prevention_forbidden
 
 
@@ -566,6 +567,13 @@ def _announce(game, event: dict, dealt: int) -> None:
     subject_id = getattr(source, "permanent_id", None)
     if subject_id is not None:
         payload["event_subject_permanent_id"] = subject_id
+    elif _source_is_a_spell(game, source):
+        # "Whenever **a spell** deals damage to this creature" (Tephraderm).
+        # Whether the damager is a spell rather than an ability (CR 113.3) is a
+        # fact about the *resolving object*, which is gone by the time anything
+        # reads the trigger — so it is frozen here (CR 603.10), asked through
+        # the one reader the replacements and redirects already share.
+        payload["damager_is_spell"] = True
     if isinstance(recipient, PlayerState):
         # The name every handler in this family already reads out of a trigger
         # context — Nafs Asp's draw-step obligation, Hypnotic Specter's discard.

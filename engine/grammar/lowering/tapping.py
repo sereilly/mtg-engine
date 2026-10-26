@@ -34,9 +34,9 @@ from ._common import (
 from ._filters import split_bound_card_type
 from ._record_keys import REMOVED_FROM_COMBAT_PERMANENTS
 from ._events import (EVENT_SUBJECT_CONTROLLER, _EVENT_SUBJECT_CONTROLLERS,
-                      _EVENT_SUBJECT_PLAYERS, _RECORDED_PERMANENTS,
-                      CHOSEN_PERMANENT, EVENT_SUBJECT_PLAYER,
-                      names_attached_permanent)
+                      _EVENT_SUBJECT_OBJECTS, _EVENT_SUBJECT_PLAYERS,
+                      _RECORDED_PERMANENTS, CHOSEN_PERMANENT,
+                      EVENT_SUBJECT_PLAYER, names_attached_permanent)
 
 def _lower_for_each_tapped(
     node: "ast.ForEach",
@@ -364,6 +364,36 @@ def _lower_tap(
             return (OracleInstruction("untap_self", "", {}),)
         if _is_enchanted(spec):
             return (OracleInstruction("untap_enchanted_creature", "", {}),)
+        # "Whenever a creature you control becomes blocked, you may **untap
+        # that creature** and remove it from combat." (Gustcloak Savior.) The
+        # board-wide twin of the four Gustcloaks' "untap it": the object is the
+        # creature the *event* was about, which the fire site froze by id
+        # (`event_subject_permanent_id`) — not the source, and not a target
+        # (CR 115.1: nothing here says "target", so nothing is chosen and no
+        # picker may be raised). Its own kind for `destroy_event_subject`'s
+        # reason: routed through the targeted untap it would untap whatever the
+        # resolution context happened to carry.
+        #
+        # Admitted only under an event that freezes that object
+        # (``_EVENT_SUBJECT_OBJECTS``); everywhere else the words name nobody.
+        # The noun restates the trigger's own subject, so a narrowing beyond
+        # its type would be a second test the event never made — refused
+        # rather than dropped. The rebound "it" ("…you may untap **it**") is
+        # the same referent spelled shorter, and reads the same way.
+        if (
+            spec.quantifier in ("that", "it")
+            and not spec.targeted
+            and not spec.filter.is_source
+            and not spec.filter.is_enchanted
+            and event in _EVENT_SUBJECT_OBJECTS
+        ):
+            if _restrictions_beyond(spec.filter, frozenset({"card_types"})):
+                raise LoweringError(
+                    "the event's object carries no narrowing the untap could "
+                    "honour",
+                    node=node,
+                )
+            return (OracleInstruction("untap_event_subject", "", {}),)
     elif _is_source(spec):
         return (OracleInstruction("tap_self", "", {}),)
     elif _is_enchanted(spec):

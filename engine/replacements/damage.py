@@ -620,7 +620,13 @@ def _source_is_a_spell(game, source) -> bool:
     if not items:
         return False
     top = items[-1]
-    return top.card is source and top.ability_instruction is None
+    # ``getattr``: the damage seam asks this of every non-permanent source as
+    # it announces (``damage_events._announce``), so a stand-in for a cast
+    # that carries no ability field is read as the spell it stands for.
+    return (
+        getattr(top, "card", None) is source
+        and getattr(top, "ability_instruction", None) is None
+    )
 
 
 def _unblocked_attacker(source) -> bool:
@@ -709,10 +715,18 @@ def _prevent_desert_damage(game, payload: dict) -> ReplacementOutcome | None:
 #: opponents' included. A second constant would have been a second card's worth
 #: of one sentence - and, worse, would have kept the narrowing implicit, where
 #: the whole difference between the two cards is that Furnace has none.
+#:
+#: **The source class is payload too.** "If **a creature** you control would
+#: deal damage to a permanent or player, it deals double that damage instead."
+#: (Gratuitous Violence.) The same sentence with the damager narrowed from CR
+#: 109.5's "source" to a creature — a spell or a noncreature permanent's
+#: ability is not one — and with the recipient left implicit at the end, which
+#: English may do because the sentence already named it. One row with an
+#: optional tail, so the third printing is not a second table.
 _DAMAGE_MULTIPLIER_RE = re.compile(
-    r"^if a source(?P<yours> you control)? would deal damage to a permanent or "
-    r"player, it deals (?P<factor>double|triple) that damage to that permanent "
-    r"or player instead$"
+    r"^if a (?P<source_class>source|creature)(?P<yours> you control)? would "
+    r"deal damage to a permanent or player, it deals (?P<factor>double|triple) "
+    r"that damage(?: to that permanent or player)? instead$"
 )
 
 #: The printed multiplier words. A factor this table cannot read leaves the line
@@ -720,17 +734,48 @@ _DAMAGE_MULTIPLIER_RE = re.compile(
 _MULTIPLIER_WORDS = {"double": 2, "triple": 3}
 
 
+def _read_damage_multiplier(line: str) -> tuple[int, bool, str] | None:
+    """``(factor, only sources its controller controls, source class)`` for
+    *line*, or None — the one reading of the sentence, under both callers."""
+    match = _DAMAGE_MULTIPLIER_RE.match(line.strip().lower().rstrip("."))
+    if match is None:
+        return None
+    return (
+        _MULTIPLIER_WORDS[match.group("factor")],
+        match.group("yours") is not None,
+        match.group("source_class"),
+    )
+
+
 def damage_multiplier_line(line: str) -> tuple[int, bool] | None:
     """``(factor, only sources its controller controls)`` for *line*, or None.
 
     One reader for the support gate, the parse claim and the interceptor, so
     what is claimed and what fires cannot drift - the pairing every text-keyed
-    table in this engine keeps.
+    table in this engine keeps. The source class rides the same match
+    (:func:`_read_damage_multiplier`), which the interceptor reads.
     """
-    match = _DAMAGE_MULTIPLIER_RE.match(line.strip().lower().rstrip("."))
-    if match is None:
-        return None
-    return _MULTIPLIER_WORDS[match.group("factor")], match.group("yours") is not None
+    read = _read_damage_multiplier(line)
+    return None if read is None else read[:2]
+
+
+def _multiplier_source_answers(source, source_class: str) -> bool:
+    """Whether a damage *source* is what the multiplier's printed class names.
+
+    "A source" is every source (CR 109.5). "A creature" is a creature
+    **permanent** — read through the layers (CR 613), so an animated land
+    counts while animated — and never a spell or a card in another zone,
+    whose damage source is its printed ``CardDefinition`` (no
+    ``permanent_id``). A creature's ability is the creature dealing damage
+    (CR 113.7a: "This creature deals 1 damage to any target" causes the
+    source to do it), so a Prodigal Sorcerer's ping is doubled; a burn spell
+    is not.
+    """
+    if source_class == "source":
+        return True
+    if getattr(source, "permanent_id", None) is None:
+        return False
+    return bool(getattr(source, "is_creature", False))
 
 
 def _damage_multiplier(game, payload: dict) -> int:
@@ -763,11 +808,13 @@ def _damage_multiplier(game, payload: dict) -> int:
     product = 1
     for source_seat, perm in game.permanents_with_controller():
         for line in (perm.effective_card.oracle_text or "").splitlines():
-            read = damage_multiplier_line(line)
+            read = _read_damage_multiplier(line)
             if read is None:
                 continue
-            factor, only_yours = read
+            factor, only_yours, source_class = read
             if only_yours and (seat is None or source_seat != seat):
+                continue
+            if not _multiplier_source_answers(payload.get("source"), source_class):
                 continue
             product *= factor
     return product

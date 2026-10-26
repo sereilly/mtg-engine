@@ -395,7 +395,8 @@ from .requirements import (_lower_attacks_this_turn_if_able,
                            _lower_blocks_this_turn_if_able,
                            _lower_force_chosen_creature_to_attack)
 from .assignment import (_lower_assigns_combat_damage_as_unblocked,
-                         _lower_assigns_no_combat_damage)
+                         _lower_assigns_no_combat_damage,
+                         _lower_divides_combat_damage_among_defenders)
 from .combat import (
     _lower_combat_restriction,
     lower_block_count_grant,
@@ -736,6 +737,7 @@ __all__ = [
     "_lower_attack_as_though",
     "_lower_assigns_combat_damage_as_unblocked",
     "_lower_assigns_no_combat_damage",
+    "_lower_divides_combat_damage_among_defenders",
     "_lower_attacks_this_turn_if_able",
     "_lower_destroy_chosen_that_didnt_attack",
     "_lower_attacking_doesnt_tap",

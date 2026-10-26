@@ -262,6 +262,7 @@ from .stack import (
 )
 from .combat import (
     AssignsCombatDamageAsUnblocked,
+    DividesCombatDamageAmongDefenders,
     AssignsNoCombatDamage,
     AttacksThisTurnIfAble,
     DestroyChosenThatDidntAttack,
@@ -403,6 +404,7 @@ Effect = Union[
     CantBe, AttackAsThough, CombatRestriction, BlockCountGrant,
     AttackingDoesntTap,
     AssignsCombatDamageAsUnblocked,
+    DividesCombatDamageAmongDefenders,
     AssignsNoCombatDamage,
     AttacksThisTurnIfAble,
     DestroyChosenThatDidntAttack,

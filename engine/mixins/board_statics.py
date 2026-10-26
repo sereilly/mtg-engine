@@ -847,6 +847,20 @@ class BoardStaticsMixin:
                 game.controller_index_of(permanent)
                 == game.controller_index_of(source)
             )
+        if static.applies_to == "creature_with_counter":
+            # "Each creature **with a gold counter on it** …" (Aurification.)
+            # The type through the layer accessor, for the row above's reason;
+            # the counter off the one record every reader of an invented
+            # counter kind asks (CR 122.1). Every controller's creatures — the
+            # sentence names no seat. A static with no counter word is no
+            # scope at all, and reaches nothing.
+            from ..named_counters import counters_on
+
+            return (
+                bool(static.with_counter)
+                and has_type("creature")
+                and counters_on(permanent, static.with_counter) > 0
+            )
         return False
 
     def _refresh_land_animation(

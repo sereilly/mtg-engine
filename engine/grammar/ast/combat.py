@@ -214,6 +214,23 @@ class AttackingDoesntTap:
 
 
 @dataclass(frozen=True)
+class DividesCombatDamageAmongDefenders:
+    """``assign <subject>'s combat damage divided as you choose among defending
+    player and/or any number of creatures they control`` (Butcher Orgg).
+
+    CR 510.1's assignment with its recipients widened: not the creatures
+    blocking it (510.1c) or the player it attacks (510.1b), but any split of
+    the whole of its combat damage among the defending player and the
+    creatures that player controls. Printed behind "you may", which makes it
+    an offer at CR 510.1's turn-based action — the static record the damage
+    step reads, as Lone Wolf's :class:`AssignsCombatDamageAsUnblocked` offer
+    is — and never a resolving instruction.
+    """
+
+    subject: Recipient
+
+
+@dataclass(frozen=True)
 class AssignsCombatDamageAsUnblocked:
     """``<subject> assign their combat damage <duration> as though they weren't
     blocked.`` (Outmaneuver.)

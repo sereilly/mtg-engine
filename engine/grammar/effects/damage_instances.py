@@ -111,6 +111,16 @@ def _accept_unsourced_instance_redirect(
     if recipient is None:
         stream.reset(mark)
         return None
+    # "…to this creature **and/or you** this turn, …" (Glarecaster.) Two
+    # protected recipients under one "next time" — read as a pair rather than
+    # a list, because the pool prints two and the node's second field says
+    # "and/or" exactly: either one, or both at once.
+    also_to = None
+    if stream.accept_phrase("and", "or"):
+        also_to = parse_recipient(stream)
+        if also_to is None:
+            stream.reset(mark)
+            return None
     duration = _parse_duration(stream)
     stream.accept_punct(",")
     tail = _accept_redirect_tail(stream)
@@ -124,6 +134,7 @@ def _accept_unsourced_instance_redirect(
         duration=duration,
         one_shot=True,
         chooser=chooser,
+        also_to=also_to,
     )
 
 

@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..damage_redirects import DamageRedirect, add_redirect
+from ..damage_redirects import DamageRedirect, SharedNextTime, add_redirect
 from ..divided_damage import DIVIDED_TARGETS, divided_entry
 from ._amounts import resolve_amount
 from ._filters import permanent_matches_filter
@@ -742,6 +742,33 @@ def redirect_next_damage_from_source_until_eot(
         return True, "resolved"
     taker_name = getattr(taker, "name", None) or taker.card.name
     uses = instruction.payload.get("uses")
+    if uses is not None and instruction.payload.get("also_protects") == "you":
+        # "{5}{W}: The next time damage would be dealt to this creature
+        # **and/or you** this turn, that damage is dealt to any target
+        # instead." (Glarecaster.) One record on each protected recipient and
+        # **one occasion** between them: the first damage either is dealt
+        # spends it for both, and every chunk dealt in that same moment moves
+        # too (ruling 2004-10-04; ``damage_redirects.SharedNextTime``).
+        controller = context.caster
+        if controller not in game.players or getattr(controller, "lost", False):
+            game.log.append(f"{card_name}: its controller is gone")
+            return True, "resolved"
+        occasion = SharedNextTime()
+        for guarded in (protected, controller):
+            add_redirect(
+                guarded,
+                DamageRedirect(
+                    new_recipient=taker,
+                    source_name=card_name or None,
+                    occasion=occasion,
+                ),
+            )
+        game.log.append(
+            f"{card_name}: the next time damage would be dealt to "
+            f"{protected.card.name} and/or {controller.name} this turn, it is "
+            f"dealt to {taker_name} instead"
+        )
+        return True, "resolved"
     if uses is not None:
         # "**The next time** damage would be dealt to this creature this turn,
         # that damage is dealt to any target instead." (Mirrorwood Treefolk.)

@@ -137,3 +137,20 @@ def _lower_assigns_no_combat_damage(
         )
     payload = {"subject": subject} if subject else {}
     return (OracleInstruction("assign_no_combat_damage_until_eot", "", payload),)
+
+
+def _lower_divides_combat_damage_among_defenders(
+    node: "ast.DividesCombatDamageAmongDefenders",
+) -> tuple[OracleInstruction, ...]:
+    """The bare node, which has no reading: "assign this creature's combat
+    damage divided as you choose among defending player and/or any number of
+    creatures they control" is an **offer** at CR 510.1's turn-based action,
+    and only its "You may" (Butcher Orgg) makes it the static record the
+    combat damage step reads (``lowering/control_flow``'s collapse). Printed
+    without one it would be a resolving instruction with no step to run in.
+    """
+    raise LoweringError(
+        "the divided assignment is a static offer the combat damage step "
+        "reads; only \"you may\" on the creature itself makes it one",
+        node=node,
+    )

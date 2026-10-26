@@ -28,7 +28,10 @@ from __future__ import annotations
 from engine.ai_combat import choose_combat_damage_assignment, declare_ai_attackers
 from engine.ai_scoring import choose_attack_target
 from engine.ai_declarations import legal_attackers
-from engine.combat_assignment import combat_damage_assigned_by
+from engine.combat_assignment import (DEFENDING_PLAYER_SHARE,
+                                      combat_damage_assigned_by,
+                                      divided_among_defenders_refusal,
+                                      may_divide_among_defenders)
 
 from .session_store import Session
 
@@ -333,6 +336,54 @@ def _build_unblocked_assignment_info(session: Session, viewer_seat: int | None) 
             "attacker_id": attacker.permanent_id,
             "damage": combat_damage_assigned_by(attacker),
             "recipient": _unblocked_recipient(game, attacker_idx),
+        })
+    if not attackers:
+        return None
+    return {"attacker_seat": active_index, "attackers": attackers}
+
+
+def _build_divided_assignment_info(session: Session, viewer_seat: int | None) -> dict | None:
+    """State block shown to the active player for each of their attackers that
+    "may assign this creature's combat damage divided as you choose among
+    defending player and/or any number of creatures they control" (Butcher
+    Orgg): its damage, and the recipients a division may name — the defending
+    player and every creature that player controls, by ``id``. The answer is
+    ``divided_among_defenders`` on ``assign_combat_damage``; leaving the
+    attacker out of it is the offer declined.
+
+    Only an attacker the engine's gate would accept a division for right now
+    (``combat_assignment.divided_among_defenders_refusal`` with a share to the
+    player as the probe), so a dialog never offers what the step refuses: one
+    the defending player assigns (CR 702.22j), one blocked with nothing left
+    blocking it (ruling 2004-10-04), one that assigns no damage.
+    """
+    game = session.game
+    if game.current_step != "combat_damage" or game.combat_damage_resolved:
+        return None
+    active_index = game.active_player_index
+    if viewer_seat is not None and viewer_seat != active_index:
+        return None
+    attackers = []
+    for attacker_idx in sorted(game.combat_attackers):
+        attacker = game.permanent_at(active_index, attacker_idx)
+        if attacker is None or not may_divide_among_defenders(attacker):
+            continue
+        damage = combat_damage_assigned_by(attacker)
+        if damage <= 0 or divided_among_defenders_refusal(
+            game, attacker_idx, attacker, {DEFENDING_PLAYER_SHARE: damage}
+        ) is not None:
+            continue
+        defending_index = game.combat_attackers[attacker_idx]
+        attackers.append({
+            "attacker_index": attacker_idx,
+            "attacker_id": attacker.permanent_id,
+            "damage": damage,
+            "defending_seat": defending_index,
+            "creatures": [
+                {"id": creature.permanent_id, "name": creature.card.name}
+                for creature in game.controlled_by(defending_index)
+                if creature.is_creature
+            ],
         })
     if not attackers:
         return None

@@ -432,6 +432,7 @@ from .stack import (
 )
 from .combat import (
     AssignsCombatDamageAsUnblocked,
+    DividesCombatDamageAmongDefenders,
     AssignsNoCombatDamage,
     AttacksThisTurnIfAble,
     DestroyChosenThatDidntAttack,
@@ -898,6 +899,7 @@ __all__ = [
     "ReassignBlockersBetweenAttackers",
     "AttackAsThough",
     "AssignsCombatDamageAsUnblocked",
+    "DividesCombatDamageAmongDefenders",
     "AssignsNoCombatDamage",
     "AttacksThisTurnIfAble",
     "DestroyChosenThatDidntAttack",

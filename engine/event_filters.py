@@ -632,6 +632,12 @@ def _damage_dealt_filter(
         # board — which is why this branch is a marker the table produces rather
         # than the absence of one, and why the `else` beneath still refuses.
         pass
+    elif "damager_spell" in payload:
+        # "Whenever **a spell** deals damage to this creature" (Tephraderm).
+        # CR 113.3: a spell and not an ability, which only the resolving object
+        # can say — frozen by the seam as the event was announced.
+        if not event.payload.get("damager_is_spell"):
+            return False
     elif "damager_filter" in payload:
         # A noun phrase describes *permanents*, and a damage source need not be
         # one: for a spell it is the printed card (CR 109.5), which has no

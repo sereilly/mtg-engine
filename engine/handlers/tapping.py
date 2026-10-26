@@ -58,6 +58,40 @@ def untap_self(game: Game, instruction: OracleInstruction, context: OracleExecut
     return True, "resolved"
 
 
+@effect_handler("untap_event_subject")
+def untap_event_subject(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Whenever a creature you control becomes blocked, you may **untap that
+    creature** and remove it from combat." (Gustcloak Savior.)
+
+    The creature the *trigger's own event* was about, by the id its fire site
+    froze (CR 603.10; by resolution an index is not an identity, CR 400.7) —
+    ``destroy_event_subject``'s twin for the untap. Nothing was chosen (no
+    "target" is printed, CR 115.1), so this never reads the resolution
+    context's target.
+
+    The record is written **before** the tapped check, ``untap_self``'s rule:
+    CR 611.2c fixes the set when the effect begins, so "…and remove it from
+    combat" is about this creature whether or not it was tapped (a vigilance
+    attacker). A creature already gone is untapped by nothing and recorded as
+    nothing, which is CR 608.2b doing as much as it can.
+    """
+    bound = (context.trigger_context or {}).get("event_subject_permanent_id")
+    subject = game.permanent_by_id(bound) if isinstance(bound, int) else None
+    if subject is None or not game.is_on_battlefield(subject):
+        game.log.append(f"{context.card.name}: the creature it named is gone")
+        return True, "resolved"
+    context.results["untapped_permanents"] = (
+        *(context.results.get("untapped_permanents") or ()),
+        subject.permanent_id,
+    )
+    if not subject.tapped:
+        game.log.append(f"{subject.card.name} is already untapped")
+        return True, "resolved"
+    game.become_untapped(subject)
+    game.log.append(f"{subject.card.name} untapped ({context.card.name})")
+    return True, "resolved"
+
+
 @effect_handler("tap_self")
 def tap_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Tap this creature." — the tap twin of ``untap_self``.

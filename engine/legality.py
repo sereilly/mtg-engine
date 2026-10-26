@@ -281,14 +281,16 @@ def targeting_instruction(instruction):
     #
     # An instruction that carries a `targets` description is one that names a
     # target, whatever its kind — a payload *shape*, not a card list. The set
-    # below stays because four kinds narrow without one (Stone Giant's
-    # "toughness less than this creature's power", Old Man of the Sea's power
-    # comparison, Sorceress Queen's "other than this creature", Nettling Imp's
-    # non-Wall): each is a relation to the *source* rather than a description of
-    # the target, so it has a branch of its own below and nothing in `targets`
-    # to find it by. Dwarven Warriors' "power 2 or less" left the list when it
-    # stopped being a relation and became a filter payload — a bound printed on
-    # the card is a description of the target like any other.
+    # below stays because three kinds narrow without one (Old Man of the Sea's
+    # power comparison, Sorceress Queen's "other than this creature", Nettling
+    # Imp's non-Wall): each is a relation to the *source* rather than a
+    # description of the target, so it has a branch of its own below and
+    # nothing in `targets` to find it by. Dwarven Warriors' "power 2 or less"
+    # left the list when it stopped being a relation and became a filter
+    # payload — a bound printed on the card is a description of the target like
+    # any other — and Stone Giant's "toughness less than this creature's power"
+    # left it with its name-keyed hook (ONS W1G9), read now as the
+    # source-relative bound ``characteristic_vs_source`` the matcher answers.
     if instruction.kind in _FILTERABLE_ABILITY_KINDS:
         return instruction
     if isinstance(instruction.payload.get("targets"), dict):
@@ -305,7 +307,6 @@ _FILTERABLE_ABILITY_KINDS = {
     "destroy_target_permanent",
     "grant_regeneration_to_target_creature",
     "mark_non_wall_target_to_attack",
-    "grant_flying_and_delayed_destruction",
     "set_base_pt_target_until_eot",
     "set_source_base_pt_from_target",
     "steal_creature_while_tapped_and_weaker",

@@ -1428,6 +1428,10 @@ TRIGGERED_LABELS_BY_CONDITION: dict[tuple[str, str], str] = {
     # sibling shape), which is `creature_blocks_or_blocked_by` one narrowing
     # over and takes its bucket.
     ("creature_becomes_blocked", "may"): "triggered_combat",
+    # Gustcloak Savior (ONS): "Whenever **a creature you control** becomes
+    # blocked, you may untap that creature and remove it from combat." The
+    # board-wide reading of the row above, and the same moment.
+    ("matching_creature_becomes_blocked", "may"): "triggered_combat",
     # Saber Ants, beside `damage_dealt` above: being dealt damage is a combat
     # moment whatever dealt it.
     ("creature_dealt_damage", "may"): "triggered_combat",

@@ -542,6 +542,37 @@ def _may_assign_as_unblocked_static(
     return (OracleInstruction("may_assign_as_unblocked", "", {}),)
 
 
+def _may_divide_among_defenders_static(
+    node: ast.May,
+) -> tuple[OracleInstruction, ...] | None:
+    """"You may assign this creature's combat damage divided as you choose
+    among defending player and/or any number of creatures they control."
+    (Butcher Orgg.)
+
+    Lone Wolf's collapse one sentence over, and for its reason: an offer made
+    at CR 510.1's turn-based action, by a static ability of the creature, so
+    the instruction is the record the combat damage step reads
+    (``combat_assignment.may_divide_among_defenders``) and no prompt is armed
+    during any resolution. As narrow as that one: a cost, a branch or a
+    reflexive on the offer is a sentence this record cannot carry.
+    """
+    if not isinstance(node.action, ast.DividesCombatDamageAmongDefenders):
+        return None
+    if node.actor.kind != "you":
+        return None
+    if node.cost is not None or node.life_cost is not None:
+        return None
+    if node.then is not None or node.otherwise is not None:
+        return None
+    if node.reflexive is not None or node.life_alternative is not None:
+        return None
+    if node.cost_alternatives or node.option_effects:
+        return None
+    if not _is_source(node.action.subject):
+        return None
+    return (OracleInstruction("may_divide_combat_damage_among_defenders", "", {}),)
+
+
 #: The seats a change of targets can be handed to. Closed, and for a reason
 #: the generic offer does not have: the handler seats the chooser *itself*, at
 #: the moment the change is made, and knows these two — the effect's own
@@ -742,6 +773,7 @@ def _lower_may(
         _each_seat_optional_put_from_hand,
         _each_player_optional_tap,
         _may_assign_as_unblocked_static,
+        _may_divide_among_defenders_static,
     ):
         collapsed = collapse(node)
         if collapsed is not None:

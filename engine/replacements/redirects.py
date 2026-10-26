@@ -24,6 +24,7 @@ from ..damage_redirects import (
     DamageRedirect,
     _is_permanent,
     applicable_redirect,
+    damage_moment,
     drop_spent,
     live_recipient,
 )
@@ -295,7 +296,7 @@ def _apply_recorded_redirect(game, payload: dict) -> ReplacementOutcome | None:
     moved = redirect.moves(amount)
     if moved <= 0:  # pragma: no cover - `spent` already excludes an empty pool
         return None
-    redirect.spend(moved)
+    redirect.spend(moved, moment=damage_moment(game, bool(payload.get("combat"))))
     # Held while the hand-off runs so a pair of records aimed at each other
     # cannot recurse: the new event runs the whole contention set again, and an
     # unspent record with no uses limit would still be applicable.

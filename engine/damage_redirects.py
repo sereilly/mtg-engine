@@ -49,6 +49,67 @@ from typing import Any
 from .shields import END_OF_COMBAT, END_OF_TURN  # noqa: F401  (one duration vocabulary)
 
 
+#: The moment a combat damage step's simultaneous dealing is (CR 510.2): every
+#: chunk of that step's combat damage is dealt at once, so a "next time" spent
+#: on one of them is open for the rest — and closed by the step's tail
+#: (:func:`end_simultaneous_redirects`), so the next step's dealing is another
+#: time.
+COMBAT_DEALING = "combat damage dealing"
+
+
+@dataclass(eq=False)
+class SharedNextTime:
+    """One "**next time**" several records share, and how far it reaches.
+
+    "The next time damage would be dealt to this creature **and/or you** this
+    turn, that damage is dealt to any target instead." (Glarecaster.) Two
+    protected recipients and one occasion: the first damage either is dealt
+    spends it for both. And the occasion is a *time*, not an instance — "If
+    both you and this card would be dealt damage at the same time, or if either
+    you or this card would be dealt damage from multiple sources at the same
+    time, the redirection will apply to both chunks of damage" (ruling
+    2004-10-04) — so the first use opens a **moment** (:func:`damage_moment`)
+    and every chunk dealt in that same moment moves too.
+
+    ``eq=False``: an occasion is the same occasion only if it is the same
+    object, which is the whole point of sharing it.
+    """
+
+    #: The moment the occasion was first used at, or None while unused.
+    moment: Any = None
+    #: Used, and its moment over.
+    closed: bool = False
+
+    def open_at(self, moment) -> bool:
+        """Whether damage dealt at *moment* is still this occasion's. Pure."""
+        if self.closed:
+            return False
+        return self.moment is None or (moment is not None and moment is self.moment)
+
+    def use(self, moment) -> None:
+        """Spend the occasion at *moment*. A moment nothing can name (None) is
+        its own time, so the occasion closes at once."""
+        if moment is None:
+            self.closed = True
+        elif self.moment is None:
+            self.moment = moment
+
+
+def damage_moment(game, combat: bool):
+    """Which simultaneous dealing a damage event belongs to, or None.
+
+    Combat damage is one dealing per step (CR 510.2, :data:`COMBAT_DEALING`).
+    Damage a resolving spell or ability deals is that object's — one stack
+    object per resolution (``Game.resolving_items``), so a Hurricane hitting a
+    creature and its controller is one time. Anything else (no resolution
+    running) is a moment of its own.
+    """
+    if combat:
+        return COMBAT_DEALING
+    items = getattr(game, "resolving_items", None) or ()
+    return items[-1] if items else None
+
+
 @dataclass
 class DamageRedirect:
     """One CR 614.9 redirection sitting on the recipient whose damage it moves.
@@ -138,12 +199,20 @@ class DamageRedirect:
     #: is its printed card (CR 109.5) and has no battlefield state to read.
     #: Answered by :func:`spell_source_matches`. ``None`` is every other record.
     spell_sources: "tuple[tuple[str, ...], str | None] | None" = None
+    #: "The next time damage would be dealt to this creature **and/or you**"
+    #: (Glarecaster): the one occasion this record shares with its twin on the
+    #: other recipient. Spent through the occasion rather than ``uses``, so
+    #: either record's use is both records' (see :class:`SharedNextTime`).
+    #: ``None`` for every other record.
+    occasion: SharedNextTime | None = None
 
     @property
     def spent(self) -> bool:
         """Used up, so it no longer exists to be applied."""
-        return (self.uses is not None and self.uses <= 0) or (
-            self.amount is not None and self.amount <= 0
+        return (
+            (self.uses is not None and self.uses <= 0)
+            or (self.amount is not None and self.amount <= 0)
+            or (self.occasion is not None and self.occasion.closed)
         )
 
     def moves(self, amount: int) -> int:
@@ -158,18 +227,23 @@ class DamageRedirect:
             return max(0, amount)
         return max(0, min(self.amount, amount))
 
-    def spend(self, moved: int = 0) -> None:
+    def spend(self, moved: int = 0, *, moment=None) -> None:
         """Charge one instance, and *moved* points, against the record.
 
         The mutating half. Both counters are charged rather than one or the
         other, because ``uses`` and ``amount`` answer different printed
         sentences — "the next **time**" against "the next **N damage**" — and a
         record that carried both would have to satisfy both to keep applying.
+
+        *moment* is the event's (:func:`damage_moment`), read only by a shared
+        occasion, which is spent at that moment for every record sharing it.
         """
         if self.uses is not None:
             self.uses -= 1
         if self.amount is not None:
             self.amount -= moved
+        if self.occasion is not None:
+            self.occasion.use(moment)
 
 
 # ---------------------------------------------------------------------------
@@ -224,6 +298,18 @@ def drop_spent(recipient) -> None:
     no longer exists."""
     records = redirects_on(recipient)
     records[:] = [r for r in records if not r.spent]
+
+
+def end_simultaneous_redirects(game) -> None:
+    """The combat damage step's tail: its simultaneous dealing is over
+    (CR 510.2), so every shared "next time" it opened is spent — the next
+    step's damage is another time. ``prevention.static.end_simultaneous_damage``'s
+    twin, called beside it."""
+    for holder in (*game.players, *game.all_permanents()):
+        for record in redirects_on(holder):
+            if record.occasion is not None and record.occasion.moment is COMBAT_DEALING:
+                record.occasion.closed = True
+        drop_spent(holder)
 
 
 def clear_redirects(recipient, lifetime: str | None = None) -> None:
@@ -649,6 +735,12 @@ def applicable_redirect(
         + source_keyed_redirects(game)
     ):
         if redirect.spent or redirect.applying:
+            continue
+        # A shared "next time" already used at another moment is over for
+        # this event, though nothing has swept it yet (Glarecaster).
+        if redirect.occasion is not None and not redirect.occasion.open_at(
+            damage_moment(game, combat)
+        ):
             continue
         if redirect.combat_only and not combat:
             continue

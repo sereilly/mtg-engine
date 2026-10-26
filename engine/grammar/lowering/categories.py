@@ -369,6 +369,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # is a separate sentence rather than a boost this instruction could apply.
     "tap_any_number_matching": "tapping",
     "untap_self": "tapping",
+    # "…untap **that creature**" under a trigger whose event froze the
+    # creature (Gustcloak Savior). Same category, so GRAMMAR_CATEGORIES is
+    # unchanged.
+    "untap_event_subject": "tapping",
     "untap_enchanted_creature": "tapping",
     # The enchanted untap's tap twin (Paralyze's enter-tap), and the
     # non-targeted sweep pair over a described set ("Untap all lands you
