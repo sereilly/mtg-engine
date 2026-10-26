@@ -615,6 +615,85 @@ def test_w1g10_read_the_runes_counts_the_cards_really_drawn(set_pool):
     _w1g10_drain(game)
     assert sum("declined Read the Runes" in line for line in game.log) == 2, game.log
 
+
+# --- W1G10 drive: the instant Chains -----------------------------------------
+#
+# "…that permanent's controller may sacrifice a land of their choice" / "…may
+# discard a card": the offered player is the one who sacrifices or discards.
+# Before the fix the offered player said yes and the *caster* did it.
+
+
+def _w1g10_chain_table(set_pool):
+    game = _w1g10_Game(players=[
+        _w1g10_PlayerState(
+            name=f"P{seat + 1}", life=20,
+            library=[set_pool("LEA")["Island"]] * 8,
+        )
+        for seat in range(2)
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0, 1}
+    game.start_turn(0)
+    placed = {}
+    for seat, name in (
+        (0, "Grizzly Bears"), (0, "Forest"), (1, "Hill Giant"), (1, "Mountain"),
+    ):
+        perm = _w1g10_Permanent(card=set_pool("LEA")[name])
+        game._put_permanent_onto_battlefield(seat, perm, None)
+        placed[name] = perm
+    return game, placed
+
+
+def _w1g10_play_out(game, offers):
+    """Answer each optional offer from *offers* (True/False, in order; False
+    once exhausted) and every other prompt with its default."""
+    offers = list(offers)
+    asked = []
+    for _ in range(60):
+        if not game.stack and not game.pending_choices:
+            return asked
+        if not game.pending_choices:
+            game.resolve_top_of_stack()
+            continue
+        choice = game.pending_choices[0]
+        asked.append((choice.kind, choice.player_index))
+        if choice.kind == "optional_pay":
+            assert game._resolve_optional_pay(
+                choice, offers.pop(0) if offers else False, None
+            )
+        else:
+            game.auto_resolve_pending_choices(kinds=(choice.kind,))
+    raise AssertionError(asked)
+
+
+def test_w1g10_chain_of_vapor_the_bounced_permanents_controller_sacrifices(set_pool):
+    game, placed = _w1g10_chain_table(set_pool)
+    game.players[0].hand.append(set_pool("ONS")["Chain of Vapor"])
+    assert game.queue_from_hand(
+        0, "Chain of Vapor", target_permanent_ids=[placed["Hill Giant"].permanent_id]
+    ).supported
+    asked = _w1g10_play_out(game, [True, False])
+    assert ("sacrifice", 1) in asked and ("sacrifice", 0) not in asked, asked
+    assert "Hill Giant" in [c.name for c in game.players[1].hand]
+    assert "Mountain" in [c.name for c in game.players[1].graveyard], game.log
+    assert game.is_on_battlefield(placed["Forest"]), "the caster's land is not theirs to give"
+    assert "P2 sacrificed Mountain (Chain of Vapor)" in game.log
+
+
+def test_w1g10_chain_of_plasma_the_damaged_creatures_controller_discards(set_pool):
+    game, placed = _w1g10_chain_table(set_pool)
+    game.players[0].hand.extend(
+        [set_pool("ONS")["Chain of Plasma"], set_pool("ONS")["Shock"]]
+    )
+    game.players[1].hand.append(set_pool("LEA")["Lightning Bolt"])
+    assert game.queue_from_hand(
+        0, "Chain of Plasma", target_permanent_ids=[placed["Hill Giant"].permanent_id]
+    ).supported
+    _w1g10_play_out(game, [True, False])
+    assert placed["Hill Giant"].damage_marked == 3
+    assert [c.name for c in game.players[1].graveyard] == ["Lightning Bolt"], game.log
+    assert [c.name for c in game.players[0].hand] == ["Shock"], "the caster kept its card"
+
 # ==== end W1G10 ======================================================
 
 

@@ -615,6 +615,74 @@ def test_w1g10_trade_secrets_headless_opponent_stops_after_one_round(set_pool):
     assert len(game.players[0].hand) == 4
     assert "P2 declined to repeat (Trade Secrets)" in game.log
 
+
+# --- W1G10 drive: the sorcery Chains ------------------------------------------
+
+
+def test_w1g10_chain_of_smog_a_headless_target_does_not_copy_it_at_itself(set_pool):
+    """"Target player discards two cards. That player may copy this spell and
+    may choose a new target for that copy." The copy offer is free, and the
+    copy keeps its target unless re-aimed — so a seat nobody asks, taking it,
+    aimed the copy at itself and was offered again by every copy, discarding
+    its own hand without end. It declines that copy now."""
+    game = _w1g10_table(set_pool, seats=2)
+    game.players[0].hand.append(set_pool("ONS")["Chain of Smog"])
+    game.players[1].hand.extend(
+        [set_pool("LEA")[name] for name in ("Lightning Bolt", "Mountain", "Island", "Forest")]
+    )
+    assert game.queue_from_hand(0, "Chain of Smog", target_player_index=1).supported
+    for _ in range(10):
+        _w1g10_resolve_stack(game)
+        if not game.pending_choices:
+            break
+        game.auto_resolve_pending_choices()
+    assert not game.stack and not game.pending_choices
+    assert len(game.players[1].hand) == 2, game.log
+    assert not any("copied Chain of Smog" in line for line in game.log), game.log
+    assert "P2 declined Chain of Smog (the copy would be aimed at them)" in game.log
+
+
+def test_w1g10_chain_of_acid_copied_and_copied_back(set_pool):
+    """Both seats answering both ways: the destroyed permanent's controller
+    copies and re-aims at the caster's enchantment, the caster copies the copy
+    back at a land, and the second copy's controller declines."""
+    game = _w1g10_table(set_pool, seats=2)
+    game.interactive_seats = {0, 1}
+    crusade = _w1g10_put(game, 0, set_pool("LEA")["Crusade"])
+    bad_moon = _w1g10_put(game, 1, set_pool("LEA")["Bad Moon"])
+    mountain = _w1g10_put(game, 1, set_pool("LEA")["Mountain"])
+    game.players[0].hand.append(set_pool("ONS")["Chain of Acid"])
+    assert game.queue_from_hand(
+        0, "Chain of Acid", target_permanent_ids=[bad_moon.permanent_id]
+    ).supported
+    aims = {1: crusade, 0: mountain}
+    offers = [True, True, False]
+    asked = []
+    for _ in range(60):
+        if not game.stack and not game.pending_choices:
+            break
+        if not game.pending_choices:
+            game.resolve_top_of_stack()
+            continue
+        choice = game.pending_choices[0]
+        asked.append((choice.kind, choice.player_index))
+        if choice.kind == "optional_pay":
+            assert game._resolve_optional_pay(choice, offers.pop(0), None)
+        elif choice.kind == "copy_spell_target":
+            assert game.confirm_copy_spell_target(
+                choice.player_index,
+                permanent_id=aims[choice.player_index].permanent_id,
+            )
+        else:
+            raise AssertionError(choice.kind)
+    assert asked == [
+        ("optional_pay", 1), ("copy_spell_target", 1),
+        ("optional_pay", 0), ("copy_spell_target", 0),
+        ("optional_pay", 1),
+    ], asked
+    for perm in (bad_moon, crusade, mountain):
+        assert not game.is_on_battlefield(perm), (perm.card.name, game.log)
+
 # ==== end W1G10 ======================================================
 
 
