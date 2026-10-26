@@ -906,7 +906,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.30** Echo *(16 tests, subrules ab)*
 - [x] **702.32** Fading *(14 tests, subrules a)*
 - [x] **702.36** Fear *(5 tests, subrules ab)*
-- [x] **702.37** Morph *(10 tests, subrules ace)*
+- [x] **702.37** Morph *(11 tests, subrules ace)*
 - [x] **702.108** Prowess *(3 tests, subrules a)*
 - [x] **702.111** Menace *(5 tests, subrules ab)*
 

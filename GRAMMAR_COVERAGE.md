@@ -51,7 +51,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | TOR | 143 | 261 | 86.2% | 86.2% | 68.2% | 138 |
 | JUD | 143 | 241 | 91.3% | 90.9% | 65.6% | 131 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| ONS *(measured)* | 335 | 541 | 71.7% | 69.5% | 49.9% | 229 |
+| ONS *(measured)* | 335 | 541 | 73.4% | 71.2% | 51.4% | 236 |
 | **All (shipped)** | **8027** | **11886** | **90.6%** | **90.1%** | **62.4%** | **6271** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -64,9 +64,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 750 | 396 | expected a subject |  |
+| 744 | 390 | expected a subject |  |
 | 185 | 99 | unrecognized effect verb |  |
-| 134 | 72 | unconsumed text |  |
+| 133 | 71 | unconsumed text |  |
 | 70 | 51 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 31 | 8 | expected what this creature can't block, or a duration |  |
@@ -715,6 +715,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature enters, you gain 2 life for each creature you control with flying.`
 - **Aven Shrine**
   - `Whenever a player casts a spell, that player gains X life, where X is the number of cards in all graveyards with the same name as that spell.`
+- **Aven Soulgazer**
+  - `{2}{W}: Look at target face-down creature.`
 - **Aven Trooper**
   - `{2}{W}, Discard a card: This creature gets +1/+2 until end of turn.`
 - **Aven Warcraft**
@@ -756,6 +758,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever enchanted creature deals damage to you, this Aura deals that much damage to that creature's controller.`
 - **Backlash**
   - `Tap target untapped creature. That creature deals damage equal to its power to its controller.`
+- **Backslide**
+  - `Turn target creature with a morph ability face down.`
 - **Bad Deal**
   - `You draw two cards and each opponent discards two cards. Each player loses 2 life.`
 - **Bad Moon**
@@ -1294,6 +1298,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `As long as this card is in your graveyard and you control a Forest, creatures you control have trample.`
 - **Breach**
   - `Target creature gets +2/+0 and gains fear until end of turn. (It can't be blocked except by artifact creatures and/or black creatures.)`
+- **Break Open**
+  - `Turn target face-down creature an opponent controls face up.`
 - **Breaking Point**
   - `Any player may have Breaking Point deal 6 damage to them. If no one does, destroy all creatures. Creatures destroyed this way can't be regenerated.`
 - **Breaking Wave**
@@ -5437,6 +5443,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{2}{G}, {T}: Reveal any number of green cards in your hand. Target creature gets +X/+X until end of turn, where X is the number of cards revealed this way.`
 - **Ixidor's Will**
   - `Counter target spell unless its controller pays {2} for each Wizard on the battlefield.`
+- **Ixidor, Reality Sculptor**
+  - `Face-down creatures get +1/+1.`
+  - `{2}{U}: Turn target face-down creature face up.`
 - **Jabari's Banner**
   - `{1}, {T}: Target creature gains flanking until end of turn. (Whenever a creature without flanking blocks this creature, the blocking creature gets -1/-1 until end of turn.)`
 - **Jabari's Influence**
@@ -7286,6 +7295,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{W}{W}, {T}: Destroy target black permanent.`
 - **Nostalgic Dreams**
   - `Return X target cards from your graveyard to your hand. Exile Nostalgic Dreams.`
+- **Nosy Goblin**
+  - `{T}, Sacrifice this creature: Destroy target face-down creature.`
 - **Notorious Assassin**
   - `{2}{B}, {T}, Discard a card: Destroy target nonblack creature. It can't be regenerated.`
 - **Nova Cleric**
@@ -9825,6 +9836,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When you cast a creature spell, sacrifice this creature.`
 - **Skittish Kavu**
   - `This creature gets +1/+1 as long as no opponent controls a white or blue creature.`
+- **Skittish Valesk**
+  - `At the beginning of your upkeep, flip a coin. If you lose the flip, turn this creature face down.`
 - **Skizzik**
   - `At the beginning of the end step, if this creature wasn't kicked, sacrifice it.`
 - **Skulking Fugitive**
@@ -10334,6 +10347,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Return two target cards from an opponent's graveyard to their hand. Destroy target attacking creature.`
 - **Spurred Wolverine**
   - `Tap two untapped Beasts you control: Target creature gains first strike until end of turn.`
+- **Spy Network**
+  - `Look at target player's hand, the top card of that player's library, and any face-down creatures they control. Look at the top four cards of your library, then put them back in any order.`
 - **Squall**
   - `Squall deals 2 damage to each creature with flying.`
   - `Squall deals 2 damage to each creature with flying.`
