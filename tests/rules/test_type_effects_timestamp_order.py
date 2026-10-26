@@ -1453,7 +1453,7 @@ _J6_LOOPED_ENTRY_HANDLERS = {
     "create_token": "one",              # one seat's tokens per instruction
     "reanimate_graveyard_position": "one",              # Bone Dancer
     "reanimate_announced_cards": "one",                 # Victimize
-    "put_cards_from_hand_onto_battlefield": "one",      # Manabond, Ugin's −10
+    "put_cards_from_hand_onto_battlefield": "one",      # Manabond
     "reanimate_bound_card": "one",                      # one bound card per event
     "_place_sorted_reveal": "one",
     "put_revealed_card_onto_battlefield": "one",        # Call of the Wild

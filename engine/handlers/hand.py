@@ -47,17 +47,19 @@ _PERMANENT_TYPES = ("artifact", "creature", "enchantment", "land", "planeswalker
 
 @effect_handler("put_cards_from_hand_onto_battlefield")
 def put_cards_from_hand_onto_battlefield(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    """"Put up to seven permanent cards from your hand onto the battlefield."
-    (Ugin, the Spirit Dragon's −10.) Non-interactive seats take every eligible
-    card up to the cap, in hand order — "up to" makes any subset legal, and
-    more battlefield is the default the AI already plays toward.
-
-    "…put **all** land cards from it onto the battlefield." (Manabond.) The
+    """"…put **all** land cards from it onto the battlefield." (Manabond.) The
     sweep spelling, and nothing is chosen at all: every card the phrase names
     goes. ``all`` rather than a very large count, because a count is a number
     the lowering would have to know before the hand is in view — and a ceiling
     read as a sweep, or a sweep read as a ceiling, is the same card playing two
     different ways.
+
+    "Put **up to seven** permanent cards from your hand onto the battlefield"
+    (Ugin, the Spirit Dragon's −10) is a pick and no longer reaches here: it
+    lowers to ``choose_cards_in_hand`` (``up_to``) and
+    ``put_chosen_hand_cards_onto_battlefield``, so a person is asked which. The
+    count branch below took the first *count* eligible cards and asked nobody;
+    it stays only as what a hand-built payload with a count would do.
     """
     caster = context.caster
     count = int(instruction.payload.get("count", 0))

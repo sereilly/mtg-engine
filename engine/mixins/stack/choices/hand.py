@@ -1032,6 +1032,13 @@ class HandChoicesMixin:
         of them would gate a Confirm the engine then refuses.
         """
         live = len(self.live_choose_cards_in_hand(choice))
+        if (choice.data.get("_payload") or {}).get("up_to"):
+            # "…put **up to seven** permanent cards from your hand onto the
+            # battlefield." (Ugin, the Spirit Dragon's −10.) A printed ceiling:
+            # the most is the count or the hand's eligible cards, whichever is
+            # fewer, and :meth:`_may_choose_fewer_cards_in_hand` lets the pick
+            # stop anywhere under it, nought included.
+            return min(int(choice.data.get("count", 1)), live)
         if self._may_choose_fewer_cards_in_hand(choice):
             return live
         # "…chooses one card **of each color** from it" (Noxious Vapors). The
@@ -1081,7 +1088,10 @@ class HandChoicesMixin:
         one to "choose two": the two offers are told apart by the words the card
         prints, not by how many cards happen to be in the hand.
         """
-        return bool((choice.data.get("_payload") or {}).get("any_number"))
+        payload = choice.data.get("_payload") or {}
+        # "Up to N" is the same promise with a ceiling (Ugin's −10): nought is
+        # legal, and the count is how many at most.
+        return bool(payload.get("any_number") or payload.get("up_to"))
 
     def confirm_choose_cards_in_hand(self, player_index: int, hand_indices) -> bool:
         return self.resolve_pending_choice(
