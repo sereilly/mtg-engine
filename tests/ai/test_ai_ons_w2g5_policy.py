@@ -113,3 +113,59 @@ def test_w2g5_shepherd_of_rot_drains_only_from_ahead(set_pool, life, activated):
     )
     action = choose_activation_action(game, 0)
     assert (action is not None and action.permanent_name == "Shepherd of Rot") is activated
+
+
+# ==== Riptide Entrancer: a priced trade, weighed ==============================
+#
+# "Whenever this creature deals combat damage to a player, you may sacrifice it.
+# If you do, gain control of target creature that player controls." The
+# optional-pay default's "make no trades" declined it every time it connected
+# (nine declines in one seeded ONS game, W1G10's report); its two halves are
+# permanents a standing prices (`ai_prompt_readers.offer_trade`'s
+# ``("source", "target_permanent")``, weighed by
+# `ai_prompts.offer_trade_is_worth_taking`).
+
+
+def _w2g5_entrancer_connects(set_pool, theirs):
+    from engine.ai_combat import run_ai_combat_phase
+
+    game = _w2g5_board(set_pool, ["Riptide Entrancer", "Island"], theirs)
+    game.prompt_driver = lambda played: played.auto_resolve_pending_choices()
+    for permanent in game.controlled_by(1):
+        permanent.tapped = True  # nothing to block with
+    run_ai_combat_phase(game, 0)
+    game._resolve_priority_window()
+    game.auto_resolve_pending_choices()
+    return game
+
+
+def test_w2g5_riptide_entrancer_is_sacrificed_for_the_creature_it_targets(set_pool):
+    """A 1/1 that has connected is traded for the Hill Giant across the table:
+    the Entrancer is in its owner's graveyard and the Giant is seat 0's."""
+    game = _w2g5_entrancer_connects(set_pool, ["Hill Giant"])
+    assert any("Riptide Entrancer: targets Hill Giant" in line for line in game.log)
+    assert [p.card.name for p in game.controlled_by(0) if p.is_creature] == ["Hill Giant"]
+    assert [card.name for card in game.players[0].graveyard] == ["Riptide Entrancer"]
+    assert not any(p.is_creature for p in game.controlled_by(1))
+
+
+def test_w2g5_thalakos_deceiver_takes_the_same_trade(set_pool):
+    """Stronghold's "Whenever this creature attacks and isn't blocked, you may
+    sacrifice it. If you do, gain control of target creature." — the one other
+    card the reader names, and the same weighing: unblocked, the Deceiver is
+    traded for the Hill Giant rather than for the seat's own Bears."""
+    from engine.ai_combat import run_ai_combat_phase
+
+    game = _w2g5_board(set_pool, ["Island"], ["Hill Giant"])
+    deceiver = Permanent(card=set_pool("STH")["Thalakos Deceiver"])
+    game.players[0].battlefield.insert(0, deceiver)
+    game._sync_control()
+    deceiver.metadata["summoning_sickness_turn"] = -99
+    game.prompt_driver = lambda played: played.auto_resolve_pending_choices()
+    for permanent in game.controlled_by(1):
+        permanent.tapped = True
+    run_ai_combat_phase(game, 0)
+    game._resolve_priority_window()
+    game.auto_resolve_pending_choices()
+    assert [p.card.name for p in game.controlled_by(0) if p.is_creature] == ["Hill Giant"]
+    assert [card.name for card in game.players[0].graveyard] == ["Thalakos Deceiver"]

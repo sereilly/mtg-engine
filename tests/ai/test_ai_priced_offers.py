@@ -69,6 +69,12 @@ def test_w2g5_which_offers_are_a_price_and_a_purchase(pool):
     assert trades == {
         "Elfhame Sanctuary": OfferTrade(price="draw", purchase="land_card"),
         "Forsaken City": OfferTrade(price="card", purchase="untap_source"),
+        # ONS W2G5: "you may sacrifice it. If you do, gain control of target
+        # creature [that player controls]" — weighed in
+        # `tests/ai/test_ai_ons_w2g5_policy.py`. Stronghold's Deceiver prints the
+        # same trade on "attacks and isn't blocked", and was declined too.
+        "Riptide Entrancer": OfferTrade(price="source", purchase="target_permanent"),
+        "Thalakos Deceiver": OfferTrade(price="source", purchase="target_permanent"),
     }
 
 
