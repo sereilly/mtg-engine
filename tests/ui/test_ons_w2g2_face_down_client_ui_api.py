@@ -208,15 +208,21 @@ def test_a_face_down_spell_on_the_stack_is_drawn_from_what_each_seat_was_sent(se
     mine = build_state(session, 0)["stack"][0]
     theirs = build_state(session, 1)["stack"][0]
     assert "Silent Specter" not in json.dumps(build_state(session, 1))
+    # The cascade draws, and its hover previews, the card the canvas copied
+    # the item's face-down fields onto (`faceDownStackItem`).
     seen = run_app_js(
-        ["faceDownStackItem", "faceDownDisplayCard"],
+        ["faceDownStackItem", "faceDownDisplayCard", "faceDownPreviewCard"],
         "return INPUT.items.map((item) => { const c = faceDownStackItem(item).card;"
-        " const shown = faceDownDisplayCard(c); return [c.face_down, shown.name, shown.face_down_view]; });",
+        " const shown = faceDownDisplayCard(c);"
+        " return [c.face_down, shown.name, shown.face_down_view, faceDownPreviewCard(c).name]; });",
         {"items": [mine, theirs]},
         prelude='const BF_CARD_BACK_URL = "/images/card_back.webp";',
         scripts=PAGE,
     )
-    assert seen == [[True, "Silent Specter", "controller"], [True, "", "hidden"]]
+    assert seen == [
+        [True, "Silent Specter", "controller", "Silent Specter"],
+        [True, "", "hidden", "Face-down creature"],
+    ]
 
     # It resolves into a face-down permanent, and leaving the battlefield
     # reveals it (CR 708.9): the graveyard holds the real card for both seats.
