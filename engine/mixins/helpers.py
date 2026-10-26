@@ -40,6 +40,8 @@ from ..events import emit
 from ..linked_exile import UNTAPPED
 from ..models import Permanent
 from ..phasing_locks import phase_out_forbidden
+from ..source_tapped_effects import (break_pending_durations,
+                                     end_effects_while_tapped)
 from ._constants import _MANA_SYMBOLS, _NO_PRIORITY_STEPS
 
 
@@ -554,6 +556,20 @@ class GameHelpersMixin:
         from ..handlers.tapping import end_untap_lock
 
         end_untap_lock(permanent)
+        # …and the third: "Target creature gets +2/+2 and has vigilance **for
+        # as long as this creature remains tapped**" (the Couriers, Ashnod's
+        # Battle Gear). Ended here for the lock's reason — a record left in
+        # place came back to life the next time the source tapped, so a
+        # Courier that attacked handed its old target the bonus again — and
+        # the layers are recomputed at once, because both halves are rebuilt
+        # from the record and a creature read between now and the next
+        # recompute would still have them.
+        if end_effects_while_tapped(permanent):
+            self._recompute_continuous_effects()
+        # …and the ones that have not begun yet: an ability this permanent
+        # has on the stack resolves into no such effect now, "even if it
+        # becomes tapped again right away" (CR 611.2b).
+        break_pending_durations(self, permanent)
         # "When this artifact leaves the battlefield **or becomes untapped**,
         # return that exiled card…" (Tawnos's Coffin). The second of the two
         # things that end a linked exile, and it is here for the reason the

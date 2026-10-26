@@ -68,6 +68,27 @@ def _holds_a_live_untap_lock(game, permanent) -> bool:
     )
 
 
+def _holds_a_live_effect_while_tapped(game, permanent) -> bool:
+    """Whether *permanent* is holding a continuous effect by staying tapped.
+
+    The Couriers, Ashnod's Battle Gear, Thran Weaponry: "You may choose not to
+    untap this creature during your untap step" above an ability whose effect
+    lasts "for as long as this creature remains tapped"
+    (``engine/source_tapped_effects.py``). :func:`_holds_a_live_untap_lock`'s
+    default for the same reason — untapping ends the effect, which is never
+    what the ability was activated for — so AI and headless play keep the
+    permanent tapped while the effect still reaches something. An entry whose
+    one permanent has left reaches nothing (CR 400.7), and is not worth the
+    tapped creature.
+    """
+    from ..source_tapped_effects import effects_while_tapped
+
+    return any(
+        game.permanent_by_id(entry.get("target_id")) is not None
+        for entry in effects_while_tapped(permanent)
+    )
+
+
 def _skip_next_untap_names_this_step(permanent, seat: int) -> bool:
     """Whether a permanent's ``skip_next_untap`` marker is about *seat*'s step.
 
@@ -658,6 +679,8 @@ class UntapStepMixin:
                 ) and self.permanents_controlled_via(permanent):
                     continue
                 elif _holds_a_live_untap_lock(self, permanent):
+                    continue
+                elif _holds_a_live_effect_while_tapped(self, permanent):
                     continue
 
             # "<noun phrase> don't untap during their controllers' untap

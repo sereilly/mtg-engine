@@ -179,6 +179,18 @@ _EFFECT_KEYWORDS = re.compile(r"^has (?P<keywords>[a-z, ]+)$")
 # channel is one word per grant with nowhere to put it.
 _EFFECT_PROTECTION = re.compile(r"^has protection from (?P<quality>[a-z ]+)$")
 _EFFECT_UNBLOCKABLE = re.compile(r"^can't be blocked$")
+# 'This creature has **"{B}: Regenerate this creature"** as long as you control
+# a Zombie.' (Tribal Golem's fifth clause, once ``line_rewrites`` has written
+# its list out.) A whole printed ability in quotes (CR 113.3) where the rows
+# above read words, carried on the ``ability_lines`` key the grammar's own
+# conditional statics already hand ``_recalculate_lord_buffs`` (Wayward Angel)
+# — so the line is granted on the derived-ability channel while the condition
+# holds and is gone, with nothing to undo, when it stops. Admitted only when
+# the quote compiles on a card that says nothing else
+# (``granted_abilities.granted_ability_supported``), the question every other
+# reader of a granted line asks: an unreadable quote is refused here rather
+# than folded onto a creature it would make unsupported.
+_EFFECT_ABILITY = re.compile(r'^has "(?P<ability>[^"]+)"$')
 # "can attack as though it didn't have defender" (Drowsing Tyrannodon).
 # CR 609.4: an "as though" permission applies to the stated effect ONLY. The
 # creature still HAS defender for every other purpose, so this is a payload the
@@ -389,6 +401,14 @@ def _parse_effect_text(text: str) -> dict[str, object] | None:
         if keywords is None:
             return None
         return {"keywords": keywords}
+    match = _EFFECT_ABILITY.match(text)
+    if match is not None:
+        from .granted_abilities import granted_ability_supported
+
+        ability = match.group("ability").strip()
+        if not granted_ability_supported(ability):
+            return None
+        return {"ability_lines": [ability]}
     if _EFFECT_UNBLOCKABLE.match(text) is not None:
         return {"cant_be_blocked": True}
     if _EFFECT_IGNORES_DEFENDER.match(text) is not None:

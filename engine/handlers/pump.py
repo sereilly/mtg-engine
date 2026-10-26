@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 from ..destruction_events import mark_delayed_destruction
 from ..models import Permanent
 from ..pt import add_pt_modifier
+from ..source_tapped_effects import record_while_tapped
 from ..keywords import grant_keyword
 from ._amounts import resolve_amount, count_from_payload
 from ._common import apply_temp_pt_boost
@@ -273,14 +274,6 @@ def pump_target_creature_until_eot(game: Game, instruction: OracleInstruction, c
     return True, "resolved"
 
 
-#: What a "for as long as this permanent remains tapped" pump records on its
-#: **source**: the pumped permanent's id and the boost. Read by
-#: ``mixins/dynamic_creatures._refresh_linked_tapped_pumps`` on every recompute.
-#: One name, because the handler that writes it and the refresh that reads it
-#: are in different files and a second spelling is how they come apart.
-PUMP_WHILE_TAPPED_KEY = "pump_while_tapped"
-
-
 @effect_handler("pump_target_while_source_tapped")
 def pump_target_while_source_tapped(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Ashnod's Battle Gear: "{2}, {T}: Target creature you control gets +2/-2
@@ -296,7 +289,9 @@ def pump_target_while_source_tapped(game: Game, instruction: OracleInstruction, 
 
     The record is keyed by ``permanent_id``, not by holding the Permanent:
     CR 400.7 makes a returning permanent a new object, and an id that no longer
-    resolves simply contributes nothing.
+    resolves simply contributes nothing. It is written through
+    ``engine/source_tapped_effects.py``, which also ends it — the moment the
+    source untaps, not merely while it is untapped.
     """
     caster = context.caster
     card = context.card
@@ -326,17 +321,24 @@ def pump_target_while_source_tapped(game: Game, instruction: OracleInstruction, 
         game.log.append(f"{card.name}: no valid creature target")
         return True, "resolved"
 
-    source_permanent.metadata[PUMP_WHILE_TAPPED_KEY] = {
+    if not record_while_tapped(game, source_permanent, {
         "target_id": target_perm.permanent_id,
         "power": power_delta,
         "toughness": toughness_delta,
-    }
+    }, choices=context.choices):
+        game.log.append(_NEVER_STARTED.format(name=card.name))
+        return True, "resolved"
     game._refresh_dynamic_creatures()
     game.log.append(
         f"{card.name} gives {target_perm.card.name} "
         f"{power_delta:+d}/{toughness_delta:+d} while it remains tapped"
     )
     return True, "resolved"
+
+
+#: CR 611.2b's first sentence, logged where a "for as long as this … remains
+#: tapped" effect would have begun with its source already untapped (or gone).
+_NEVER_STARTED = "{name} is no longer tapped, so its effect does nothing"
 
 
 @effect_handler("buff_creatures_global_while_source_tapped")
@@ -349,16 +351,18 @@ def buff_creatures_global_while_source_tapped(
     `pump_target_while_source_tapped`'s global twin, and the same record on the
     same source for the same reason: an effect that ends on a **condition** has
     no moment anyone could hook, so nothing is written onto the creatures and
-    nothing schedules a removal. What differs is only the subject — a board scan
-    rather than one chosen permanent — so the record carries a `filter` where
-    that one carries a `target_id`, and `_refresh_linked_tapped_pumps` reads
-    whichever is present.
+    nothing schedules a removal.
 
-    The board is **not** frozen here. CR 611.2c fixes the affected set for a
-    one-shot pump, but this is CR 611.2b's continuous effect with a duration:
-    the set is whatever matches while the condition holds, so a creature that
-    arrives after the activation is buffed too and one that leaves stops being.
-    That is why the scan lives in the recompute rather than in this handler.
+    **The board is frozen here** (CR 611.2c): "If a continuous effect generated
+    by the resolution of a spell or ability modifies the characteristics … of
+    any objects, the set of objects it affects is determined when that
+    continuous effect begins. After that point, the set won't change." A
+    duration does not lift that — CR 611.2b says how long the effect lasts,
+    611.2c which objects it lasts on — so the set is read once, through the
+    sweep's own reader (:func:`global_buff_affected`, every narrowing the
+    payload carries), and recorded as one entry per creature. A creature that
+    arrives afterwards is not buffed; this handler used to keep the noun
+    phrase and re-scan it on every recompute, which buffed it.
     """
     source_permanent = context.source_permanent
     if source_permanent is None:
@@ -368,14 +372,20 @@ def buff_creatures_global_while_source_tapped(
     toughness_delta = resolve_amount(
         instruction.payload.get("toughness", 0), context.x_value
     )
-    source_permanent.metadata[PUMP_WHILE_TAPPED_KEY] = {
-        "filter": dict(instruction.payload.get("filter") or {}),
-        "power": power_delta,
-        "toughness": toughness_delta,
-    }
+    affected = global_buff_affected(game, instruction, context)
+    if affected is None:
+        return True, "resolved"
+    for perm in affected:
+        if not record_while_tapped(game, source_permanent, {
+            "target_id": perm.permanent_id,
+            "power": power_delta,
+            "toughness": toughness_delta,
+        }, choices=context.choices):
+            game.log.append(_NEVER_STARTED.format(name=context.card.name))
+            return True, "resolved"
     game._refresh_dynamic_creatures()
     game.log.append(
-        f"{context.card.name} gives creatures "
+        f"{context.card.name} gives {len(affected)} creature(s) "
         f"{power_delta:+d}/{toughness_delta:+d} while it remains tapped"
     )
     return True, "resolved"
@@ -449,11 +459,7 @@ def pump_targets_until_eot(game: Game, instruction: OracleInstruction, context: 
 # recalculated dynamically (unlike static abilities which use static_buff_*).
 @effect_handler("buff_creatures_global")
 def buff_creatures_global(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    from ..subject_filters import subject_matches
-
-    caster = context.caster
     card = context.card
-    color_sym = instruction.payload.get("color")
     # "…get +1/+1 until end of turn **for each attacking creature other than
     # Márton Stromgald**." The printed P/T sizes one repetition and the count
     # multiplies it — the same `times_x` amount and the same shared evaluator
@@ -472,6 +478,33 @@ def buff_creatures_global(game: Game, instruction: OracleInstruction, context: O
     )
     power_delta = resolve_amount(instruction.payload.get("power", 0), x_value)
     toughness_delta = resolve_amount(instruction.payload.get("toughness", 0), x_value)
+    affected = global_buff_affected(game, instruction, context)
+    if affected is None:
+        return True, "resolved"
+    for perm in affected:
+        apply_temp_pt_boost(perm, power_delta, toughness_delta)
+    game.log.append(f"{card.name} buffed matching creatures")
+    return True, "resolved"
+
+
+def global_buff_affected(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> "list[Permanent] | None":
+    """The creatures a global buff's printed noun phrase reaches **now** — the
+    set CR 611.2c fixes as the effect begins — or None, logged, when the
+    phrase names a word nobody chose (no word means no sweep).
+
+    Split out of :func:`buff_creatures_global` so its twin with a
+    condition-ended duration (:func:`buff_creatures_global_while_source_tapped`)
+    reads every narrowing the same payload carries rather than a second,
+    shorter list of them.
+    """
+    from ..subject_filters import subject_matches
+
+    caster = context.caster
+    card = context.card
+    color_sym = instruction.payload.get("color")
+    affected: list[Permanent] = []
     exclude_colors = set(instruction.payload.get("exclude_colors") or ())
     attacking_only = bool(instruction.payload.get("attacking_only"))
     blocking_only = bool(instruction.payload.get("blocking_only"))
@@ -507,7 +540,7 @@ def buff_creatures_global(game: Game, instruction: OracleInstruction, context: O
         chosen_subtype = context.results.get(str(scratch_key))
         if not chosen_subtype:
             game.log.append(f"{card.name}: no creature type was chosen")
-            return True, "resolved"
+            return None
     # "Creatures **target player** controls get +1/+1 until end of turn." (Day.)
     # The seat the announcement chose (CR 601.2c), asked of ``subject_matches``
     # with that seat in hand — the reader the tap, destroy and animation sweeps
@@ -595,9 +628,8 @@ def buff_creatures_global(game: Game, instruction: OracleInstruction, context: O
                 source=context.source_permanent,
             ):
                 continue
-            apply_temp_pt_boost(perm, power_delta, toughness_delta)
-    game.log.append(f"{card.name} buffed matching creatures")
-    return True, "resolved"
+            affected.append(perm)
+    return affected
 
 
 @effect_handler("pump_block_pair")

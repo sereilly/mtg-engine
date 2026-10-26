@@ -31,6 +31,7 @@ from ..layer_bridge import QUALIFIED_BUFFS
 from ..lord_buffs import LORD_BUFF_KIND, LordBuff, lord_buff_from_payload
 from ..handlers._targets import attached_host
 from ..search_filters import name_key
+from ..source_tapped_effects import effects_while_tapped
 from ..models import Permanent
 from ..oracle import compile_card_oracle
 from ..static_bonuses import (condition_is_per_recipient,
@@ -567,6 +568,31 @@ class LordBuffsMixin:
                     # in that walk.
                     add_derived_grant(
                         target_perm, keyword, timestamp=animator.timestamp
+                    )
+
+        # Step 3c: the keyword half of "…gets +2/+2 **and has vigilance** for
+        # as long as this creature remains tapped" (the Couriers). The entry is
+        # on the *source* (``engine/source_tapped_effects.py``) beside the P/T
+        # half ``_refresh_dynamic_creatures`` reads, and it is written here for
+        # step 3's reason: this pass owns the derived-grant channel's clear and
+        # rebuild, so the word is there exactly while the source holds the
+        # entry and needs no sweep. Stamped with the moment the effect began
+        # (CR 613.7b), which is what orders it against a "loses all abilities".
+        # The target is held by id and never re-asked: the Courier's ruling
+        # (2004-10-04) — "once the effect is placed on the creature, if its
+        # creature type changes the effect still continues."
+        for source_perm in all_perms:
+            for entry in effects_while_tapped(source_perm):
+                keywords = entry.get("keywords") or ()
+                if not keywords:
+                    continue
+                target_perm = self.permanent_by_id(entry.get("target_id"))
+                if target_perm is None:
+                    continue
+                for keyword in keywords:
+                    add_derived_grant(
+                        target_perm, keyword,
+                        timestamp=int(entry.get("timestamp", 0)),
                     )
 
         # Step 4: an ability an **Aura** grants its host in quotes *while the

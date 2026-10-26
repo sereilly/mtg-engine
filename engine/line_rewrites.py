@@ -267,6 +267,10 @@ def expand_ability_lines(
     # second half has none: it is a fact about one cast, stamped on the stack
     # object.
     oracle_text = expand_flashback_lines(oracle_text)
+    # A distributive list of conditional grants written out one sentence per
+    # grant (Tribal Golem). Its own statement for cycling's reason; it reads
+    # only a line no other rewrite produces or consumes.
+    oracle_text = expand_distributed_condition_lines(oracle_text)
     return expand_same_is_true_lines(
         expand_static_then_trigger_lines(expand_conjoined_trigger_lines(
             expand_buyback_lines(
@@ -398,6 +402,81 @@ def expand_same_is_true_lines(oracle_text: str) -> str:
             continue
         out.append(first)
         out.extend(first.replace(quality, other) for other in qualities)
+    return "\n".join(out)
+
+
+#: "**This creature has** trample as long as you control a Beast, haste as long
+#: as you control a Goblin, first strike as long as you control a Soldier,
+#: flying as long as you control a Wizard, and "{B}: Regenerate this creature"
+#: as long as you control a Zombie." (Tribal Golem.) One subject and verb
+#: distributed over a list of ``<grant> as long as <condition>`` pairs: five
+#: conditional static abilities in one sentence, each holding exactly while its
+#: own condition does — which is behaviourally what five sentences, one per
+#: pair, are. :func:`expand_same_is_true_lines`' move, for the same reason:
+#: from here every reader sees ordinary conditional statics it already reads
+#: (``engine/static_bonuses.py``'s "this creature has X as long as you control
+#: a Y"), and none of them learns the list.
+_DISTRIBUTED_CONDITIONS_LINE = re.compile(
+    r"^(?P<subject>this creature) (?P<verb>has) (?P<rest>.+)\.$", re.IGNORECASE
+)
+_AS_LONG_AS = " as long as "
+#: A quoted ability inside the list may carry commas of its own, so the list is
+#: split outside quotation marks only.
+_QUOTED_RUN = re.compile(r'"[^"]*"')
+
+
+def _distributed_pairs(rest: str) -> list[str] | None:
+    """The ``<grant> as long as <condition>`` items of *rest*, or None.
+
+    Split on the commas outside quotes, the Oxford "and" stripped from the
+    last item. **Every** item must print exactly one "as long as" and a grant
+    in front of it, and there must be two or more: a condition whose own noun
+    phrase holds a comma ("…a red, white, or blue creature") splits into an
+    item with no "as long as", which refuses the whole rewrite rather than
+    guessing where the list's commas are.
+    """
+    masked = _QUOTED_RUN.sub(lambda match: "\0" * len(match.group()), rest)
+    items: list[str] = []
+    start = 0
+    for index, char in enumerate(masked):
+        if masked.startswith(", ", index):
+            items.append(rest[start:index])
+            start = index + 2
+    items.append(rest[start:])
+    if len(items) < 2:
+        return None
+    if not items[-1].lower().startswith("and "):
+        return None
+    items[-1] = items[-1][len("and "):]
+    for item in items:
+        if item.lower().startswith("and ") or item.count(_AS_LONG_AS) != 1:
+            return None
+        grant, _sep, condition = item.partition(_AS_LONG_AS)
+        if not grant.strip() or not condition.strip():
+            return None
+    return items
+
+
+def expand_distributed_condition_lines(oracle_text: str) -> str:
+    """*oracle_text* with a distributive list of conditional grants written out
+    as one "<subject> has <grant> as long as <condition>." line per pair.
+
+    Text without that shape is returned unchanged, and so is a line any of
+    whose items is not a whole ``<grant> as long as <condition>`` pair. The
+    safety beyond that is the full-consumption invariant: a written-out
+    sentence no reader claims leaves the card unsupported naming it.
+    """
+    if not oracle_text or oracle_text.lower().count(_AS_LONG_AS) < 2:
+        return oracle_text
+    out: list[str] = []
+    for line in oracle_text.splitlines():
+        match = _DISTRIBUTED_CONDITIONS_LINE.match(line.strip())
+        pairs = _distributed_pairs(match.group("rest")) if match else None
+        if pairs is None:
+            out.append(line)
+            continue
+        head = f"{match.group('subject')} {match.group('verb')}"
+        out.extend(f"{head} {pair}." for pair in pairs)
     return "\n".join(out)
 
 

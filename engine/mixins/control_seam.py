@@ -41,6 +41,7 @@ from ..layer_bridge import computed_controller
 from ..land_types import end_land_type_change, end_land_type_changes_tied_to
 from ..linked_exile import LEAVES
 from ..models import Permanent, PlayerState
+from ..source_tapped_effects import end_effects_while_tapped
 from ..game_types import GraveyardTarget, single_chosen_id
 from ..tokens import CREATED_WITH_PERMANENT_ID
 from ..trigger_utils import make_trigger_event, matching_triggers
@@ -1104,6 +1105,11 @@ class ControlSeamMixin:
             # out, "because they can no longer see it".
             for perm in removed:
                 end_source_tapped_delayed_triggers(self, perm)
+                # The same CR 702.26f sentence about the source's own
+                # continuous effects (``engine/source_tapped_effects.py``): a
+                # Courier that phases out stops pumping its target, and phases
+                # back in holding nothing.
+                end_effects_while_tapped(perm)
             return removed
         # "…until this creature leaves the battlefield" (Kitesail Freebooter).
         # Here because this is the one transition out: a return wired into any

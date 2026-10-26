@@ -1269,6 +1269,450 @@ def test_w1g7_gangrenous_goliath_taps_three_clerics_from_the_graveyard(set_pool)
 
 # ==== W1G8 ==========================================================
 # W1G8's tests go between this line and the "end W1G8" line.
+#
+# Granted abilities and their durations: a player's shroud (True Believer),
+# the Couriers' "for as long as this creature remains tapped", and Tribal
+# Golem's five grants, each "as long as you control a <type>".
+
+import pytest as _w1g8_pytest
+
+from engine import Game as _w1g8_Game, PlayerState as _w1g8_PlayerState
+from engine.models import Permanent as _w1g8_Permanent
+from engine.oracle import compile_card_oracle as _w1g8_compile
+from engine.targeting import derive_cast_spec as _w1g8_derive_cast_spec
+from engine.targeting import usable_activated_abilities as _w1g8_usable
+from engine.type_changes import gain_types as _w1g8_gain_types
+from tests.helpers import _nosick as _w1g8_nosick, resolve_stack as _w1g8_resolve
+
+
+def _w1g8_perm(pool, name):
+    return _w1g8_nosick(_w1g8_Permanent(card=pool[name]))
+
+
+def _w1g8_game(mine=(), theirs=(), *, p1=None, p2=None):
+    one = _w1g8_PlayerState(name="P1", battlefield=list(mine), **(p1 or {}))
+    two = _w1g8_PlayerState(name="P2", battlefield=list(theirs), **(p2 or {}))
+    game = _w1g8_Game(players=[one, two])
+    game.enforce_mana_costs = False
+    game._settle()
+    return game, one, two
+
+
+def _w1g8_offered_seats(game, seat, card):
+    """The players the cast picker offers *seat* for *card*."""
+    spec = _w1g8_derive_cast_spec(card, _w1g8_compile(card))
+    return {
+        found["seat"]
+        for found in game._enumerate_targets(seat, card, spec, for_cast=True)
+        if found["kind"] == "player"
+    }
+
+
+def test_w1g8_true_believer_gives_its_controller_shroud(set_pool):
+    """"You have shroud." CR 702.18a: shroud means "this permanent **or
+    player** can't be the target of spells or abilities" — anyone's, its
+    controller's own included (shroud, not hexproof). Neither seat's picker
+    offers the Believer's controller, a Shock aimed at them from either seat
+    is refused before it is cast, and the Believer itself is a creature with
+    no shroud of its own."""
+    pool = set_pool("ONS")
+    shock = pool["Shock"]
+    believer = _w1g8_perm(pool, "True Believer")
+    game, p1, p2 = _w1g8_game(
+        [believer], p1={"hand": [shock] * 2}, p2={"hand": [shock] * 2},
+    )
+    assert _w1g8_offered_seats(game, 0, shock) == {1}
+    assert _w1g8_offered_seats(game, 1, shock) == {1}
+
+    for seat in (0, 1):
+        refused = game.cast_from_hand(seat, "Shock", target_player_index=0)
+        assert not refused.supported, f"seat {seat} targeted a player with shroud"
+    assert p1.life == 20 and len(p1.hand) == 2 and len(p2.hand) == 2
+    assert not game.stack
+
+    # The creature is not the player: a Shock still kills it.
+    result = game.cast_from_hand(
+        1, "Shock", target_player_index=0,
+        target_permanent_ids=[believer.permanent_id],
+    )
+    assert result.supported, result.details
+    _w1g8_resolve(game)
+    assert not game.is_on_battlefield(believer)
+
+    # The shroud left with the Believer (CR 611.3b): the controller is a
+    # target again, and the Shock lands.
+    assert _w1g8_offered_seats(game, 1, shock) == {0, 1}
+    result = game.cast_from_hand(1, "Shock", target_player_index=0)
+    assert result.supported, result.details
+    _w1g8_resolve(game)
+    assert p1.life == 18
+
+
+def test_w1g8_true_believer_protects_whoever_controls_it(set_pool):
+    """"You" is the Believer's controller (CR 109.5): a stolen Believer
+    shrouds the thief and leaves its owner targetable."""
+    pool = set_pool("ONS")
+    shock = pool["Shock"]
+    believer = _w1g8_perm(pool, "True Believer")
+    game, _p1, _p2 = _w1g8_game([believer], p1={"hand": [shock]})
+    game.take_control(believer, 1, source=believer)
+    game._recompute_continuous_effects()
+    assert _w1g8_offered_seats(game, 0, shock) == {0}
+
+
+# --- The Couriers: "…gets +2/+2 and has <keyword> for as long as this
+# creature remains tapped." Both halves are entries on the Courier
+# (`engine/source_tapped_effects.py`), ended whole when it becomes untapped.
+
+
+def _w1g8_courier(pool, courier, *targets, theirs=(), p1=None, p2=None):
+    """*courier* and *targets* (all able to tap and attack) for seat 0."""
+    mine = [_w1g8_perm(pool, courier)] + [_w1g8_perm(pool, name) for name in targets]
+    game, one, two = _w1g8_game(
+        mine, [_w1g8_perm(pool, name) for name in theirs], p1=p1, p2=p2,
+    )
+    return (game, *mine)
+
+
+def _w1g8_send(game, courier, target):
+    """Activate *courier* at *target* and resolve it."""
+    result = game.activate_permanent_ability(
+        game.controller_index_of(courier), courier.card.name,
+        target_player_index=game.controller_index_of(target),
+        target_permanent_ids=[target.permanent_id],
+    )
+    assert result.supported, result.details
+    _w1g8_resolve(game)
+
+
+def _w1g8_pt(game, perm):
+    game._recompute_continuous_effects()
+    return perm.effective_power, perm.effective_toughness
+
+
+def _w1g8_offered_ids(game, seat, card, spec, *, for_cast):
+    """The permanents (by id) the picker offers *seat* for *spec*."""
+    return {
+        game.players[found["seat"]].battlefield[found["index"]].permanent_id
+        for found in game._enumerate_targets(seat, card, spec, for_cast=for_cast)
+        if found["kind"] == "permanent"
+    }
+
+
+def test_w1g8_pearlspear_courier_lasts_exactly_while_it_stays_tapped(set_pool):
+    """'{2}{W}, {T}: Target Soldier creature gets +2/+2 and has vigilance for
+    as long as this creature remains tapped.' (CR 611.2b.) It survives
+    recomputes and the cleanup step, survives the target ceasing to be a
+    Soldier (the 2004-10-04 ruling: "once the effect is placed on the
+    creature, if its creature type changes the effect still continues"),
+    survives an untap step in which the Courier is kept tapped — and ends
+    the moment the Courier untaps, both halves at once, for good: tapping
+    the Courier again (an attack) gives nothing back."""
+    pool = set_pool("ONS")
+    game, courier, seeker = _w1g8_courier(pool, "Pearlspear Courier", "Glory Seeker")
+    _w1g8_send(game, courier, seeker)
+    assert courier.tapped
+    assert _w1g8_pt(game, seeker) == (4, 4)
+    assert game._has_keyword(seeker, "vigilance")
+
+    for _ in range(3):
+        game._recompute_continuous_effects()
+    assert _w1g8_pt(game, seeker) == (4, 4), "rebuilt, never compounded"
+    game.resolve_cleanup_step(0)
+    assert _w1g8_pt(game, seeker) == (4, 4) and game._has_keyword(seeker, "vigilance")
+
+    _w1g8_gain_types(
+        seeker, subtypes=["goblin"], source="test", duration="until_end_of_turn",
+        replaces_creature_types=True,
+    )
+    assert not seeker.has_type("soldier")
+    assert _w1g8_pt(game, seeker) == (4, 4) and game._has_keyword(seeker, "vigilance")
+
+    # "You may choose not to untap this creature": a human who keeps it
+    # tapped keeps the bonus.
+    courier_slot = game.players[0].battlefield.index(courier)
+    game.resolve_untap_step(0, keep_tapped_indices=[courier_slot])
+    assert courier.tapped
+    assert _w1g8_pt(game, seeker) == (4, 4) and game._has_keyword(seeker, "vigilance")
+
+    assert game.become_untapped(courier)
+    assert (seeker.effective_power, seeker.effective_toughness) == (2, 2), (
+        "the P/T half ends the moment the Courier untaps"
+    )
+    assert not game._has_keyword(seeker, "vigilance"), "and the keyword with it"
+
+    game.become_tapped(courier)
+    assert _w1g8_pt(game, seeker) == (2, 2)
+    assert not game._has_keyword(seeker, "vigilance"), (
+        "a for-as-long-as duration does not start again (CR 611.2b)"
+    )
+
+
+def test_w1g8_pearlspear_courier_second_activation_moves_the_bonus(set_pool):
+    """A second activation needs the Courier untapped, which ends the first
+    effect; the new target has the bonus and the old one does not."""
+    pool = set_pool("ONS")
+    game, courier, first, second = _w1g8_courier(
+        pool, "Pearlspear Courier", "Glory Seeker", "Glory Seeker",
+    )
+    _w1g8_send(game, courier, first)
+    assert _w1g8_pt(game, first) == (4, 4)
+    game.become_untapped(courier)
+    _w1g8_send(game, courier, second)
+    assert _w1g8_pt(game, first) == (2, 2) and not game._has_keyword(first, "vigilance")
+    assert _w1g8_pt(game, second) == (4, 4) and game._has_keyword(second, "vigilance")
+
+
+def test_w1g8_courier_untapped_in_response_does_nothing(set_pool):
+    """CR 611.2b: "If the 'for as long as' duration never starts, the effect
+    does nothing." Untapped in response — and tapped again right away, which
+    Old Man of the Sea's ruling (2009-10-01) says changes nothing — the
+    Courier's ability resolves into no effect at all."""
+    pool = set_pool("ONS")
+    game, courier, seeker = _w1g8_courier(pool, "Pearlspear Courier", "Glory Seeker")
+    result = game.queue_permanent_ability(
+        0, "Pearlspear Courier", target_player_index=0,
+        target_permanent_ids=[seeker.permanent_id],
+    )
+    assert result.supported, result.details
+    assert game.stack and courier.tapped
+    assert game.become_untapped(courier)
+    game.become_tapped(courier)
+    _w1g8_resolve(game)
+    assert _w1g8_pt(game, seeker) == (2, 2)
+    assert not game._has_keyword(seeker, "vigilance")
+    assert any("does nothing" in line for line in game.log)
+
+
+def test_w1g8_pearlspear_courier_names_only_a_soldier(set_pool):
+    """The picker offers Soldiers alone, and a non-Soldier named at
+    activation is refused before the Courier taps."""
+    from engine.targeting import derive_activation_spec
+
+    pool = set_pool("ONS")
+    game, courier, seeker, elf = _w1g8_courier(
+        pool, "Pearlspear Courier", "Glory Seeker", "Wirewood Elf",
+    )
+    (ability,) = _w1g8_compile(courier.card).activated_abilities
+    spec = derive_activation_spec(ability)
+    offered = _w1g8_offered_ids(game, 0, courier.card, spec, for_cast=False)
+    # The Courier is a Human Soldier itself, so it is a legal target too.
+    assert offered == {seeker.permanent_id, courier.permanent_id}
+    refused = game.activate_permanent_ability(
+        0, "Pearlspear Courier", target_player_index=0,
+        target_permanent_ids=[elf.permanent_id],
+    )
+    assert not refused.supported
+    assert not courier.tapped
+
+
+def test_w1g8_headless_untap_step_keeps_a_courier_holding_an_effect(set_pool):
+    """With no human to ask, the untap step keeps a Courier tapped while its
+    effect still reaches a creature (the Old Man of the Sea default), and
+    untaps it once the target has gone."""
+    pool = set_pool("ONS")
+    game, courier, seeker = _w1g8_courier(pool, "Pearlspear Courier", "Glory Seeker")
+    _w1g8_send(game, courier, seeker)
+    game.resolve_untap_step(0)
+    assert courier.tapped and _w1g8_pt(game, seeker) == (4, 4)
+
+    game.remove_from_battlefield(seeker)
+    game.resolve_untap_step(0)
+    assert not courier.tapped
+
+
+def test_w1g8_ghosthelm_courier_shrouds_a_wizard(set_pool):
+    """'…Target Wizard creature gets +2/+2 and has shroud…': while the
+    Courier stays tapped, the opponent's Shock cannot name the Wizard; once it
+    untaps, it can."""
+    pool = set_pool("ONS")
+    game, courier, wizard = _w1g8_courier(
+        pool, "Ghosthelm Courier", "Aphetto Grifter", p2={"hand": [pool["Shock"]]},
+    )
+    _w1g8_send(game, courier, wizard)
+    assert game._has_keyword(wizard, "shroud")
+    shock = pool["Shock"]
+    spec = _w1g8_derive_cast_spec(shock, _w1g8_compile(shock))
+    named = _w1g8_offered_ids(game, 1, shock, spec, for_cast=True)
+    assert wizard.permanent_id not in named and courier.permanent_id in named
+    refused = game.cast_from_hand(
+        1, "Shock", target_player_index=0, target_permanent_ids=[wizard.permanent_id],
+    )
+    assert not refused.supported
+
+    game.become_untapped(courier)
+    assert wizard.permanent_id in _w1g8_offered_ids(game, 1, shock, spec, for_cast=True)
+
+
+def test_w1g8_frightshroud_courier_gives_a_zombie_fear(set_pool):
+    """Fear (CR 702.36b): blocked only by artifact and/or black creatures."""
+    pool = set_pool("ONS")
+    game, courier, zombie = _w1g8_courier(
+        pool, "Frightshroud Courier", "Gangrenous Goliath",
+        theirs=("Glory Seeker", "Frightshroud Courier"),
+    )
+    white, black = game.players[1].battlefield
+    assert game._can_block_attacker(white, zombie)
+    _w1g8_send(game, courier, zombie)
+    assert _w1g8_pt(game, zombie) == (6, 6)
+    assert not game._can_block_attacker(white, zombie)
+    assert game._can_block_attacker(black, zombie)
+
+
+def test_w1g8_flamestick_courier_hastes_a_goblin_that_just_arrived(set_pool):
+    """Haste: a Goblin that came under its controller's control this turn
+    attacks."""
+    pool = set_pool("ONS")
+    game, courier, goblin = _w1g8_courier(pool, "Flamestick Courier", "Skirk Prospector")
+    goblin.metadata["summoning_sickness_turn"] = game.turn
+    assert not game.can_attack(goblin, 1)
+    _w1g8_send(game, courier, goblin)
+    assert game.can_attack(goblin, 1)
+    assert _w1g8_pt(game, goblin) == (3, 3)
+
+
+def test_w1g8_everglove_courier_gives_an_elf_trample(set_pool):
+    pool = set_pool("ONS")
+    game, courier, elf = _w1g8_courier(pool, "Everglove Courier", "Wirewood Elf")
+    assert not game._has_keyword(elf, "trample")
+    _w1g8_send(game, courier, elf)
+    assert game._has_keyword(elf, "trample") and _w1g8_pt(game, elf) == (3, 4)
+    game.become_untapped(courier)
+    assert not game._has_keyword(elf, "trample") and _w1g8_pt(game, elf) == (1, 2)
+
+
+# --- Tribal Golem: five conditional grants in one sentence, written out one
+# per pair by `line_rewrites.expand_distributed_condition_lines`, each held to
+# its own type.
+
+_W1G8_GOLEM_GRANTS = (
+    ("Graxiplon", "trample"),          # a Beast
+    ("Skirk Prospector", "haste"),     # a Goblin
+    ("Glory Seeker", "first strike"),  # a Soldier
+    ("Aphetto Grifter", "flying"),     # a Wizard
+)
+
+
+def _w1g8_golem_words(game, golem):
+    game._recompute_continuous_effects()
+    return {
+        word for _, word in _W1G8_GOLEM_GRANTS if game._has_keyword(golem, word)
+    }
+
+
+def _w1g8_golem_can_regenerate(game, golem):
+    game._recompute_continuous_effects()
+    return any(
+        "regenerate" in ability.source_line.lower()
+        for ability in _w1g8_usable(_w1g8_compile(golem.effective_card))
+    )
+
+
+@_w1g8_pytest.mark.parametrize("ally,word", _W1G8_GOLEM_GRANTS)
+def test_w1g8_tribal_golem_each_grant_follows_its_own_type(set_pool, ally, word):
+    """'This creature has trample as long as you control a Beast, haste as
+    long as you control a Goblin, first strike as long as you control a
+    Soldier, flying as long as you control a Wizard, …' Each word is there
+    exactly while a creature of its type is — that one word and no other —
+    and leaves with the creature (CR 611.3a)."""
+    pool = set_pool("ONS")
+    golem = _w1g8_perm(pool, "Tribal Golem")
+    friend = _w1g8_perm(pool, ally)
+    game, _p1, _p2 = _w1g8_game([golem])
+    assert _w1g8_golem_words(game, golem) == set()
+    game.players[0].battlefield.append(friend)
+    game._settle()
+    assert _w1g8_golem_words(game, golem) == {word}
+    game.remove_from_battlefield(friend)
+    assert _w1g8_golem_words(game, golem) == set()
+
+
+def test_w1g8_tribal_golem_counts_only_what_you_control_through_the_layers(set_pool):
+    """"…as long as **you** control a Zombie": an opponent's Zombie gives
+    nothing; a Glory Seeker made a Zombie (layer 4) does — and stops being
+    one's first strike source at the same moment."""
+    pool = set_pool("ONS")
+    golem = _w1g8_perm(pool, "Tribal Golem")
+    seeker = _w1g8_perm(pool, "Glory Seeker")
+    game, _p1, _p2 = _w1g8_game([golem, seeker], [_w1g8_perm(pool, "Gluttonous Zombie")])
+    assert not _w1g8_golem_can_regenerate(game, golem)
+    assert _w1g8_golem_words(game, golem) == {"first strike"}
+
+    _w1g8_gain_types(
+        seeker, subtypes=["zombie"], source="test", duration="until_end_of_turn",
+        replaces_creature_types=True,
+    )
+    assert _w1g8_golem_can_regenerate(game, golem)
+    assert _w1g8_golem_words(game, golem) == set(), "no longer a Soldier"
+
+
+def test_w1g8_tribal_golem_regenerates_while_you_control_a_zombie(set_pool):
+    """'…and "{B}: Regenerate this creature" as long as you control a Zombie.'
+    The granted line is activatable by the Golem's controller, paid for with
+    {B}, and its shield saves the Golem from a destroy (CR 701.19)."""
+    pool = set_pool("ONS")
+    golem = _w1g8_perm(pool, "Tribal Golem")
+    game, p1, _p2 = _w1g8_game([golem, _w1g8_perm(pool, "Gluttonous Zombie")])
+    assert _w1g8_golem_can_regenerate(game, golem)
+    game.enforce_mana_costs = True
+    p1.mana_pool["B"] = 1
+    result = game.activate_permanent_ability(0, "Tribal Golem")
+    assert result.supported, result.details
+    _w1g8_resolve(game)
+    assert p1.mana_pool["B"] == 0, "the {B} was paid"
+
+    game._destroy_target_permanent(
+        p1, target_permanent_index=p1.battlefield.index(golem)
+    )
+    _w1g8_resolve(game)
+    assert game.is_on_battlefield(golem), "regenerated"
+    assert golem.tapped
+
+
+def test_w1g8_tribal_golem_attacks_the_turn_it_arrives_beside_a_goblin(set_pool):
+    pool = set_pool("ONS")
+    golem = _w1g8_Permanent(card=pool["Tribal Golem"])
+    game, _p1, _p2 = _w1g8_game([golem, _w1g8_perm(pool, "Skirk Prospector")])
+    golem.metadata["summoning_sickness_turn"] = game.turn
+    game._recompute_continuous_effects()
+    assert game.can_attack(golem, 1)
+    game.remove_from_battlefield(game.players[0].battlefield[1])
+    game._recompute_continuous_effects()
+    assert not game.can_attack(golem, 1)
+
+
+def test_w1g8_kamahl_fist_of_krosa_animates_a_land_and_overruns(set_pool):
+    """'{G}: Target land becomes a 1/1 creature until end of turn. It's still
+    a land.' and '{2}{G}{G}{G}: Creatures you control get +3/+3 and gain
+    trample until end of turn.' The animated land is a creature the anthem
+    reaches; an opponent's creature is not; all of it ends at cleanup."""
+    pool = set_pool("ONS")
+    kamahl = _w1g8_perm(pool, "Kamahl, Fist of Krosa")
+    forest = _w1g8_perm(pool, "Forest")
+    seeker = _w1g8_perm(pool, "Glory Seeker")
+    theirs = _w1g8_perm(pool, "Glory Seeker")
+    game, _p1, _p2 = _w1g8_game([kamahl, forest, seeker], [theirs])
+    result = game.activate_permanent_ability(
+        0, "Kamahl, Fist of Krosa", ability_index=0, target_player_index=0,
+        target_permanent_ids=[forest.permanent_id],
+    )
+    assert result.supported, result.details
+    _w1g8_resolve(game)
+    assert forest.is_creature and forest.has_type("land")
+    assert _w1g8_pt(game, forest) == (1, 1)
+
+    assert game.activate_permanent_ability(
+        0, "Kamahl, Fist of Krosa", ability_index=1,
+    ).supported
+    _w1g8_resolve(game)
+    assert _w1g8_pt(game, kamahl) == (7, 6)
+    assert _w1g8_pt(game, forest) == (4, 4) and game._has_keyword(forest, "trample")
+    assert _w1g8_pt(game, seeker) == (5, 5)
+    assert _w1g8_pt(game, theirs) == (2, 2) and not game._has_keyword(theirs, "trample")
+
+    game.resolve_cleanup_step(0)
+    assert not forest.is_creature
+    assert _w1g8_pt(game, kamahl) == (4, 3) and not game._has_keyword(kamahl, "trample")
 
 # ==== end W1G8 ======================================================
 

@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING
 from ..combat_assignment import MAY_ASSIGN_AS_UNBLOCKED
 from ..models import Permanent
 from ..keywords import grant_keyword, grant_protection_flag, remove_keyword
+from ..source_tapped_effects import record_while_tapped
 from ._amounts import resolve_amount
 from ._filters import permanent_matches_filter
 from ._targets import (recorded_permanent_ids, bound_permanent,
@@ -505,6 +506,45 @@ def grant_target_keyword_until_eot(game: Game, instruction: OracleInstruction, c
     game.log.append(
         f"{target_creature.card.name} gains "
         f"{' and '.join(_named_keywords(keywords, context))}{lasting} ({card.name})"
+    )
+    return True, "resolved"
+
+
+@effect_handler("grant_target_keyword_while_source_tapped")
+def grant_target_keyword_while_source_tapped(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Target Soldier creature gets +2/+2 **and has vigilance for as long as
+    this creature remains tapped**." (Pearlspear Courier and its siblings.)
+
+    Nothing is written onto the target. The words are an entry on the
+    *source* (``engine/source_tapped_effects.py``), beside the P/T half the
+    pump step in front of this one wrote, and the layer-6 pass grants them
+    while the source holds the entry — so they end the moment it untaps, and
+    an effect whose source had already untapped never starts (CR 611.2b).
+
+    The target is the announced one, re-asked against the printed noun phrase
+    as this step resolves (CR 608.2b, through :func:`granted_target`); after
+    that it is held by id, and a creature type changed later does not end it
+    (the Couriers' 2004-10-04 ruling).
+    """
+    card = context.card
+    keywords = tuple(instruction.payload.get("keywords") or ())
+    target_creature = granted_target(game, instruction, context)
+    if target_creature is None:
+        game.log.append(f"{card.name}: no valid creature target")
+        return True, "resolved"
+    if not record_while_tapped(game, context.source_permanent, {
+        "target_id": target_creature.permanent_id,
+        "keywords": list(keywords),
+    }, choices=context.choices):
+        game.log.append(f"{card.name} is no longer tapped, so its effect does nothing")
+        return True, "resolved"
+    # Layer 6 is the lord pass's to rebuild, so the whole recompute runs — the
+    # P/T refresh alone would leave the word ungranted until something else
+    # asked.
+    game._recompute_continuous_effects()
+    game.log.append(
+        f"{target_creature.card.name} has {' and '.join(keywords)} while "
+        f"{card.name} remains tapped"
     )
     return True, "resolved"
 

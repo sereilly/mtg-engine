@@ -22,6 +22,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..oracle_types import CONTROL_EXCHANGED_PERMANENTS, LAST_TARGET_CONTROLLER
+from ..source_tapped_effects import SOURCE_UNTAPPED
 from ._filters import permanent_matches_filter
 from ._targets import (recorded_permanent_ids, one_recorded_permanent_id,
                        attached_host, defending_player_seat,
@@ -614,6 +615,16 @@ def steal_creature_while_tapped_and_weaker(game: Game, instruction: OracleInstru
     if source_permanent is None:
         return False, "ability not implemented"
 
+    # CR 611.2b: "for as long as this creature remains tapped" never starts
+    # if the Old Man stopped being tapped before the ability resolved — "even
+    # if it becomes tapped again right away" (2009-10-01). The untap seam
+    # marks the ability (``source_tapped_effects.SOURCE_UNTAPPED``).
+    if not source_permanent.tapped or context.choices.get(SOURCE_UNTAPPED):
+        game.log.append(
+            f"{card.name} did not remain tapped, so the control change never starts"
+        )
+        return True, "resolved"
+
     def _eligible(perm: Permanent) -> bool:
         return perm.is_creature and perm.effective_power <= source_permanent.effective_power
 
@@ -666,9 +677,16 @@ def steal_target_linked_to_source(game: Game, instruction: OracleInstruction, co
             "so the control change never starts"
         )
         return True, "resolved"
-    if "source_remains_tapped" in conditions and not source_permanent.tapped:
+    # …and an untap since activation counts even when the source was tapped
+    # again before the ability resolved (Old Man of the Sea, 2009-10-01: "even
+    # if it becomes tapped again right away"), which is what the untap seam's
+    # mark on the stack object says.
+    if "source_remains_tapped" in conditions and (
+        not source_permanent.tapped or context.choices.get(SOURCE_UNTAPPED)
+    ):
         game.log.append(
-            f"{context.card.name} is untapped, so the control change never starts"
+            f"{context.card.name} did not remain tapped, so the control change "
+            "never starts"
         )
         return True, "resolved"
     if "source_on_battlefield" in conditions and not game.is_on_battlefield(

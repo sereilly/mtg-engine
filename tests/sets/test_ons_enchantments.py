@@ -995,6 +995,248 @@ def test_w1g7_elvish_guidance_counts_toward_the_planned_payment(set_pool):
 
 # ==== W1G8 ==========================================================
 # W1G8's tests go between this line and the "end W1G8" line.
+#
+# Lavamancer's Skill: an Aura's quoted grant, and a second one behind "as long
+# as enchanted creature is a Wizard". Both are derived from the Aura on every
+# read (``aura_grants``), so they leave with it and the second follows the
+# host's type through layer 4.
+
+import pytest as _w1g8_pytest
+
+from engine import Game as _w1g8_Game, PlayerState as _w1g8_PlayerState
+from engine.models import Permanent as _w1g8_Permanent
+from engine.oracle import compile_card_oracle as _w1g8_compile
+from engine.targeting import (
+    usable_activated_abilities as _w1g8_usable_abilities,
+)
+from engine.type_changes import (
+    end_type_changes as _w1g8_end_type_changes, gain_types as _w1g8_gain_types,
+)
+from tests.helpers import _nosick as _w1g8_nosick, resolve_stack as _w1g8_resolve
+
+
+def _w1g8_pinger_lines(game, host):
+    """The host's activated lines that deal damage, as it says them now."""
+    game._recompute_continuous_effects()
+    return [
+        ability.source_line.lower()
+        for ability in _w1g8_usable_abilities(_w1g8_compile(host.effective_card))
+        if "damage" in ability.source_line.lower()
+    ]
+
+
+def _w1g8_ping(game, host, victim, amount):
+    """Activate the host's "deals *amount* damage" line at *victim*."""
+    abilities = _w1g8_usable_abilities(_w1g8_compile(host.effective_card))
+    (index,) = [
+        i for i, ability in enumerate(abilities)
+        if f"deals {amount} damage" in ability.source_line.lower()
+    ]
+    result = game.activate_permanent_ability(
+        game.controller_index_of(host), host.card.name, ability_index=index,
+        target_player_index=game.controller_index_of(victim),
+        target_permanent_ids=[victim.permanent_id],
+    )
+    assert result.supported, result.details
+    _w1g8_resolve(game)
+
+
+def test_w1g8_lavamancers_skill_grants_a_one_damage_pinger(set_pool):
+    """'Enchanted creature has "{T}: This creature deals 1 damage to target
+    creature."' Cast on a creature through the real cast path: its
+    controller can activate the line, the damage is the host's, and the
+    ability leaves with the Aura."""
+    pool = set_pool("ONS")
+    seeker = _w1g8_nosick(_w1g8_Permanent(card=pool["Glory Seeker"]))
+    victim = _w1g8_nosick(_w1g8_Permanent(card=pool["Glory Seeker"]))
+    one = _w1g8_PlayerState(
+        name="P1", battlefield=[seeker], hand=[pool["Lavamancer's Skill"]],
+    )
+    two = _w1g8_PlayerState(name="P2", battlefield=[victim])
+    game = _w1g8_Game(players=[one, two])
+    game.enforce_mana_costs = False
+    game._settle()
+    assert _w1g8_pinger_lines(game, seeker) == []
+
+    result = game.cast_from_hand(
+        0, "Lavamancer's Skill", target_permanent_ids=[seeker.permanent_id],
+    )
+    assert result.supported, result.details
+    _w1g8_resolve(game)
+    (skill,) = [p for p in game.controlled_by(0) if p.card.name == "Lavamancer's Skill"]
+    assert _w1g8_pinger_lines(game, seeker) == [
+        "{t}: this creature deals 1 damage to target creature."
+    ], "a Glory Seeker is no Wizard: one ability, not two"
+
+    _w1g8_ping(game, seeker, victim, 1)
+    assert victim.damage_marked == 1 and seeker.tapped
+    assert any("Glory Seeker" in line and "1 damage" in line for line in game.log)
+
+    game.remove_from_battlefield(skill)
+    game._settle()
+    assert _w1g8_pinger_lines(game, seeker) == []
+
+
+def test_w1g8_lavamancers_skill_is_claimed_by_the_aura_module(set_pool):
+    """Both quoted grants are ``engine/auras.py``'s, each by the reader that
+    folds it onto the host — ``aura_granted_ability_lines`` for the plain one,
+    ``conditional_ability_lines_for`` for the Wizard one — so the Aura is
+    supported by the module that implements it, which is what
+    ``test_no_hollow_support``'s pool-wide guard asks once Onslaught ships
+    (it reads shipped sets only, so it cannot see this card while measured)."""
+    from engine.auras import aura_claim, aura_effect_claim
+    from engine.oracle import expand_ability_lines, normalize_creature_line
+
+    card = set_pool("ONS")["Lavamancer's Skill"]
+    lines = [
+        normalize_creature_line(line)
+        for line in expand_ability_lines(card.oracle_text).splitlines()
+    ]
+    assert aura_claim(lines, card.name) == "auras"
+    plain, conditional = lines[1], lines[2]
+    assert "aura_granted_ability_lines" in (aura_effect_claim(plain, card.name) or "")
+    assert "conditional_ability_lines_for" in (
+        aura_effect_claim(conditional, card.name) or ""
+    )
+
+
+def test_w1g8_lavamancers_skill_on_a_wizard_has_both_abilities(set_pool):
+    """'As long as enchanted creature is a Wizard, it has "{T}: This creature
+    deals 2 damage to target creature."' The ruling (2004-10-04): "If this
+    card enchants a Wizard, the Wizard has both abilities and its controller
+    can use either one." The criterion is read through layer 4, so a creature
+    that *became* a Wizard has the second line — and loses it when the type
+    change ends."""
+    pool = set_pool("ONS")
+    seeker = _w1g8_nosick(_w1g8_Permanent(card=pool["Glory Seeker"]))
+    victim = _w1g8_nosick(_w1g8_Permanent(card=pool["Glory Seeker"]))
+    one = _w1g8_PlayerState(
+        name="P1", battlefield=[seeker], hand=[pool["Lavamancer's Skill"]],
+    )
+    two = _w1g8_PlayerState(name="P2", battlefield=[victim])
+    game = _w1g8_Game(players=[one, two])
+    game.enforce_mana_costs = False
+    game._settle()
+    _w1g8_gain_types(
+        seeker, subtypes=["wizard"], source="test", duration="until_end_of_turn",
+        replaces_creature_types=True,
+    )
+    assert game.cast_from_hand(
+        0, "Lavamancer's Skill", target_permanent_ids=[seeker.permanent_id],
+    ).supported
+    _w1g8_resolve(game)
+    assert sorted(_w1g8_pinger_lines(game, seeker)) == [
+        "{t}: this creature deals 1 damage to target creature.",
+        "{t}: this creature deals 2 damage to target creature.",
+    ]
+
+    _w1g8_ping(game, seeker, victim, 2)
+    assert not game.is_on_battlefield(victim), "2 damage kills the 2/2"
+
+    # The type change ends (the cleanup step's sweep, by its duration): no
+    # longer a Wizard, one line left.
+    _w1g8_end_type_changes(
+        seeker, lambda record: record.get("duration") == "until_end_of_turn"
+    )
+    assert not seeker.has_type("wizard")
+    assert _w1g8_pinger_lines(game, seeker) == [
+        "{t}: this creature deals 1 damage to target creature."
+    ]
+
+
+# --- The family's Auras that compiled on arrival and had never been run.
+
+
+def _w1g8_aura_game(pool, mine=(), theirs=(), *, hand=()):
+    one = _w1g8_PlayerState(
+        name="P1", battlefield=list(mine), hand=[pool[name] for name in hand],
+        library=[pool["Island"]] * 5,
+    )
+    two = _w1g8_PlayerState(
+        name="P2", battlefield=list(theirs), library=[pool["Island"]] * 5,
+    )
+    game = _w1g8_Game(players=[one, two])
+    game.enforce_mana_costs = False
+    game._settle()
+    return game, one, two
+
+
+def _w1g8_enchant(game, name, host):
+    result = game.cast_from_hand(
+        0, name, target_player_index=game.controller_index_of(host),
+        target_permanent_ids=[host.permanent_id],
+    )
+    assert result.supported, result.details
+    _w1g8_resolve(game)
+    game._recompute_continuous_effects()
+
+
+@_w1g8_pytest.mark.parametrize("sacrifice", [True, False])
+def test_w1g8_custody_battle_takes_the_creature_unless_a_land_goes(set_pool, sacrifice):
+    """'Enchanted creature has "At the beginning of your upkeep, target
+    opponent gains control of this creature unless you sacrifice a land."'
+    Cast on the opponent's creature: at *its controller's* upkeep the quoted
+    trigger names the Aura's caster, and that controller either sacrifices a
+    land and keeps it, or does not and loses it."""
+    pool = set_pool("ONS")
+    seeker = _w1g8_nosick(_w1g8_Permanent(card=pool["Glory Seeker"]))
+    island = _w1g8_nosick(_w1g8_Permanent(card=pool["Island"]))
+    game, _one, two = _w1g8_aura_game(
+        pool, theirs=[seeker, island], hand=["Custody Battle"],
+    )
+    _w1g8_enchant(game, "Custody Battle", seeker)
+    assert "target opponent gains control of this creature" in (
+        seeker.effective_card.oracle_text.lower()
+    )
+    game.start_turn(1)
+    _w1g8_resolve(game)
+    assert [choice.kind for choice in game.pending_choices] == ["optional_pay"]
+    assert game.confirm_optional_pay(1, accept=sacrifice)
+    _w1g8_resolve(game)
+    game._recompute_continuous_effects()
+    if sacrifice:
+        assert game.controller_index_of(seeker) == 1
+        assert [card.name for card in two.graveyard] == ["Island"]
+    else:
+        assert game.controller_index_of(seeker) == 0
+        assert game.is_on_battlefield(island)
+
+
+def test_w1g8_mythic_proportions_and_pacifism(set_pool):
+    """'+8/+8 and has trample', then 'can't attack or block' on the same
+    creature — and both leave with their Auras."""
+    pool = set_pool("ONS")
+    seeker = _w1g8_nosick(_w1g8_Permanent(card=pool["Glory Seeker"]))
+    attacker = _w1g8_nosick(_w1g8_Permanent(card=pool["Glory Seeker"]))
+    game, one, _two = _w1g8_aura_game(
+        pool, [seeker], [attacker], hand=["Mythic Proportions", "Pacifism"],
+    )
+    _w1g8_enchant(game, "Mythic Proportions", seeker)
+    assert (seeker.effective_power, seeker.effective_toughness) == (10, 10)
+    assert game._has_keyword(seeker, "trample")
+    assert game.can_attack(seeker, 1)
+    _w1g8_enchant(game, "Pacifism", seeker)
+    assert not game.can_attack(seeker, 1)
+    assert not game._can_block_attacker(seeker, attacker)
+    for aura in [p for p in one.battlefield if p.card.name in ("Pacifism", "Mythic Proportions")]:
+        game.remove_from_battlefield(aura)
+    game._settle()
+    game._recompute_continuous_effects()
+    assert (seeker.effective_power, seeker.effective_toughness) == (2, 2)
+    assert game.can_attack(seeker, 1) and game._can_block_attacker(seeker, attacker)
+
+
+def test_w1g8_seas_claim_makes_a_land_an_island(set_pool):
+    """'Enchanted land is an Island.' CR 305.7: it loses the Mountain's mana
+    ability and taps for {U}."""
+    pool = set_pool("ONS")
+    mountain = _w1g8_nosick(_w1g8_Permanent(card=pool["Mountain"]))
+    game, one, _two = _w1g8_aura_game(pool, [mountain], hand=["Sea's Claim"])
+    _w1g8_enchant(game, "Sea's Claim", mountain)
+    assert mountain.has_type("island") and not mountain.has_type("mountain")
+    # Asked for {R}, which it can no longer make, it makes its default.
+    assert game.tap_land_for_mana(0, "Mountain", chosen_color="R")
+    assert one.mana_pool.get("U") == 1 and one.mana_pool.get("R", 0) == 0
 
 # ==== end W1G8 ======================================================
 

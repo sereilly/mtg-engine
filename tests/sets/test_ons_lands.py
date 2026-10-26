@@ -215,6 +215,137 @@ def test_w1g7_starlit_sanctum_drains_the_sacrificed_clerics_power(set_pool):
 
 # ==== W1G8 ==========================================================
 # W1G8's tests go between this line and the "end W1G8" line.
+#
+# The tribal lands that compiled on arrival and had never been run: each
+# non-mana ability through the real activation path, its picker held to the
+# printed type.
+
+from engine import Game as _w1g8_Game, PlayerState as _w1g8_PlayerState
+from engine.models import Permanent as _w1g8_Permanent
+from engine.oracle import compile_card_oracle as _w1g8_compile
+from engine.targeting import (
+    derive_activation_spec as _w1g8_derive_activation_spec,
+    usable_activated_abilities as _w1g8_usable,
+)
+from tests.helpers import _nosick as _w1g8_nosick, resolve_stack as _w1g8_resolve
+
+
+def _w1g8_board(set_pool, mine, theirs=()):
+    pool = set_pool("ONS")
+    perms = [_w1g8_nosick(_w1g8_Permanent(card=pool[name])) for name in mine]
+    others = [_w1g8_nosick(_w1g8_Permanent(card=pool[name])) for name in theirs]
+    one = _w1g8_PlayerState(name="P1", battlefield=list(perms), library=[pool["Island"]] * 5)
+    two = _w1g8_PlayerState(name="P2", battlefield=list(others), library=[pool["Island"]] * 5)
+    game = _w1g8_Game(players=[one, two])
+    game.enforce_mana_costs = False
+    game._settle()
+    return game, perms, others
+
+
+def _w1g8_land_ability(land):
+    abilities = _w1g8_usable(_w1g8_compile(land.card))
+    (index,) = [
+        i for i, ability in enumerate(abilities)
+        if not ability.source_line.startswith("{T}: Add")
+    ]
+    return index, abilities[index]
+
+
+def _w1g8_offered(game, land):
+    index, ability = _w1g8_land_ability(land)
+    spec = _w1g8_derive_activation_spec(ability)
+    return {
+        game.players[found["seat"]].battlefield[found["index"]].permanent_id
+        for found in game._enumerate_targets(0, land.card, spec, for_cast=False)
+        if found["kind"] == "permanent"
+    }
+
+
+def _w1g8_use(game, land, target=None):
+    index, _ability = _w1g8_land_ability(land)
+    kwargs = {"ability_index": index}
+    if target is not None:
+        kwargs.update(
+            target_player_index=game.controller_index_of(target),
+            target_permanent_ids=[target.permanent_id],
+        )
+    result = game.activate_permanent_ability(0, land.card.name, **kwargs)
+    assert result.supported, result.details
+    _w1g8_resolve(game)
+    game._recompute_continuous_effects()
+    assert land.tapped
+
+
+def test_w1g8_riptide_laboratory_returns_a_wizard_you_control(set_pool):
+    game, (lab, wizard, elf), (theirs,) = _w1g8_board(
+        set_pool, ["Riptide Laboratory", "Aphetto Grifter", "Wirewood Elf"],
+        ["Aphetto Grifter"],
+    )
+    assert _w1g8_offered(game, lab) == {wizard.permanent_id}
+    _w1g8_use(game, lab, wizard)
+    assert [card.name for card in game.players[0].hand] == ["Aphetto Grifter"]
+    assert game.is_on_battlefield(theirs) and game.is_on_battlefield(elf)
+
+
+def test_w1g8_daru_encampment_and_goblin_burrows_pump_their_type(set_pool):
+    game, (camp, burrows, soldier, goblin), _ = _w1g8_board(
+        set_pool, ["Daru Encampment", "Goblin Burrows", "Glory Seeker", "Skirk Prospector"],
+    )
+    assert _w1g8_offered(game, camp) == {soldier.permanent_id}
+    assert _w1g8_offered(game, burrows) == {goblin.permanent_id}
+    _w1g8_use(game, camp, soldier)
+    _w1g8_use(game, burrows, goblin)
+    assert (soldier.effective_power, soldier.effective_toughness) == (3, 3)
+    assert (goblin.effective_power, goblin.effective_toughness) == (3, 1)
+    game.resolve_cleanup_step(0)
+    game._recompute_continuous_effects()
+    assert (soldier.effective_power, goblin.effective_power) == (2, 1)
+
+
+def test_w1g8_wirewood_lodge_untaps_an_elf(set_pool):
+    game, (lodge, elf, seeker), (their_elf,) = _w1g8_board(
+        set_pool, ["Wirewood Lodge", "Wirewood Elf", "Glory Seeker"], ["Wirewood Elf"],
+    )
+    elf.tapped = seeker.tapped = their_elf.tapped = True
+    assert _w1g8_offered(game, lodge) == {elf.permanent_id, their_elf.permanent_id}, (
+        '"target Elf" names no controller'
+    )
+    _w1g8_use(game, lodge, elf)
+    assert not elf.tapped and seeker.tapped and their_elf.tapped
+
+
+def test_w1g8_seaside_haven_sacrifices_a_bird_to_draw(set_pool):
+    game, (haven, bird, seeker), _ = _w1g8_board(
+        set_pool, ["Seaside Haven", "Aven Brigadier", "Glory Seeker"],
+    )
+    _w1g8_use(game, haven)
+    assert len(game.players[0].hand) == 1
+    assert not game.is_on_battlefield(bird) and game.is_on_battlefield(seeker)
+
+    # No Bird left: the cost cannot be paid and nothing happens.
+    haven.tapped = False
+    index, _ability = _w1g8_land_ability(haven)
+    refused = game.activate_permanent_ability(0, "Seaside Haven", ability_index=index)
+    assert not refused.supported
+    assert game.is_on_battlefield(seeker) and len(game.players[0].hand) == 1
+
+
+def test_w1g8_contested_cliffs_makes_your_beast_fight(set_pool):
+    """'Target Beast creature you control fights target creature an opponent
+    controls.' Each deals damage equal to its power to the other (CR 701.14)."""
+    game, (cliffs, beast, _seeker), (elf, _goliath) = _w1g8_board(
+        set_pool, ["Contested Cliffs", "Graxiplon", "Glory Seeker"],
+        ["Wirewood Elf", "Gangrenous Goliath"],
+    )
+    index, _ability = _w1g8_land_ability(cliffs)
+    result = game.activate_permanent_ability(
+        0, "Contested Cliffs", ability_index=index, target_player_index=0,
+        target_permanent_ids=[beast.permanent_id, elf.permanent_id],
+    )
+    assert result.supported, result.details
+    _w1g8_resolve(game)
+    assert not game.is_on_battlefield(elf)
+    assert beast.damage_marked == 1
 
 # ==== end W1G8 ======================================================
 

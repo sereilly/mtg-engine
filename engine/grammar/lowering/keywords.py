@@ -228,6 +228,60 @@ def _chosen_color_prelude(
     return (OracleInstruction("choose_color", "", {"chooser": "you"}),)
 
 
+def _lower_keyword_while_source_tapped(
+    node: ast.GainKeyword,
+) -> tuple[OracleInstruction, ...]:
+    """"{2}{W}, {T}: Target Soldier creature gets +2/+2 **and has vigilance for
+    as long as this creature remains tapped**." (Pearlspear Courier; the other
+    four Couriers print shroud, fear, haste and trample.)
+
+    CR 611.2b's condition-ended duration on a layer-6 grant. No sweep ends it —
+    ``_GRANT_DURATIONS`` rightly refuses the word, since a grant recorded on
+    the target would need someone to remember to take it back when the source
+    untaps — so it is an entry on the **source** instead, the record the P/T
+    half of the same sentence already writes
+    (``engine/source_tapped_effects.py``): the layer-6 pass rebuilds the word
+    from the entry on every recompute and the untap ends it whole.
+
+    Its own kind beside ``pump_target_while_source_tapped`` for that kind's
+    reason, and refused for everything the derived-grant channel cannot carry:
+
+    * **one target**, the subject every printing names — the entry holds one
+      permanent's id, and a class would be Thran Weaponry's board scan, which
+      no keyword grant prints;
+    * **a word layer 6 holds** — protection is a quality on its own channel
+      (``_grant_one_keyword``) and a line-derived keyword (rampage, flanking)
+      is an ability the compiler builds from a printed line, so either would be
+      a grant of nothing here.
+    """
+    from ...keywords import LINE_DERIVED_KEYWORDS, keyword_ability_name
+
+    if not _is_target(node.subject):
+        raise LoweringError(
+            "a keyword held while the source remains tapped is granted to one "
+            "target", node=node,
+        )
+    if not node.keywords:
+        raise LoweringError("a grant while tapped names no keyword", node=node)
+    for keyword in node.keywords:
+        _check_grantable(keyword, node)
+        if (
+            keyword.startswith("protection")
+            or keyword_ability_name(keyword) in LINE_DERIVED_KEYWORDS
+        ):
+            raise LoweringError(
+                f"no derived grant carries {keyword!r} while the source remains "
+                "tapped", node=node,
+            )
+    payload: dict[str, object] = {"keywords": tuple(node.keywords)}
+    _describe_targets(payload, node.subject)
+    return (
+        OracleInstruction(
+            "grant_target_keyword_while_source_tapped", "", payload
+        ),
+    )
+
+
 def _lower_granted_keywords(
     node: ast.GainKeyword,
     event: str | None,
@@ -272,6 +326,8 @@ def _lower_granted_keywords(
         return (
             OracleInstruction("grant_target_keyword_until_eot", "", computed),
         )
+    if node.duration.kind == "while_source_tapped":
+        return _lower_keyword_while_source_tapped(node)
     if node.duration.kind is None:
         # "…and that creature gains flying." (Cocoon's hatch, bound to the
         # enchanted creature by the rider that read it.) A one-shot grant with

@@ -88,6 +88,14 @@ CHOICE_KEYS = (
     # creature type with **each creature tapped this way**" (Cryptic Gateway).
     # Read by ``handlers/_chosen.shared_creature_type_anchors``.
     "tapped_set_for_cost",
+    # Set on an ability still on the stack when its **source becomes
+    # untapped** (``source_tapped_effects.break_pending_durations``): a "for as
+    # long as this creature remains tapped" effect whose source untapped after
+    # activation never starts, "even if it becomes tapped again right away"
+    # (Old Man of the Sea, 2009-10-01; CR 611.2b). Not something the
+    # announcement chose, but the one record that rides the object from the
+    # untap to its resolution.
+    "source_untapped",
     # The cards a printed **discard** cost ate, same channel and same reason:
     # "If the discarded card was a land card" (Land's Edge) is asked when the
     # card is already in a graveyard, which CR 400.7 makes a different object.
