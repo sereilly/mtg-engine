@@ -25,15 +25,10 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**4 unclaimed sentence(s) across 3 supported card(s).**
+**1 unclaimed sentence(s) across 1 supported card(s).**
 
 - **Future Sight**
   - `you may play lands and cast spells from the top of your library`
-- **Risky Move**
-  - `when you gain control of this enchantment from another player, choose a creature you control and an opponent`
-  - `if you lose the flip, that opponent gains control of that creature`
-- **Wheel and Deal**
-  - `any number of target opponents each discard their hands, then draw seven cards`
 
 ## Acknowledged simplifications
 

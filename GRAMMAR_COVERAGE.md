@@ -51,7 +51,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | TOR | 143 | 261 | 86.2% | 86.2% | 68.2% | 138 |
 | JUD | 143 | 241 | 91.3% | 90.9% | 65.6% | 131 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| ONS *(measured)* | 335 | 541 | 77.1% | 75.2% | 55.3% | 254 |
+| ONS *(measured)* | 335 | 541 | 78.2% | 76.7% | 56.7% | 259 |
 | **All (shipped)** | **8027** | **11886** | **90.7%** | **90.1%** | **62.4%** | **6277** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -64,9 +64,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 733 | 384 | expected a subject |  |
-| 180 | 94 | unrecognized effect verb |  |
-| 132 | 70 | unconsumed text |  |
+| 730 | 381 | expected a subject |  |
+| 179 | 93 | unrecognized effect verb |  |
+| 131 | 69 | unconsumed text |  |
 | 70 | 51 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 30 | 7 | expected what this creature can't block, or a duration |  |
@@ -5372,6 +5372,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{0}: Untap enchanted creature. Activate only during your turn and only once each turn.`
 - **Insubordination**
   - `At the beginning of the end step of enchanted creature's controller, this Aura deals 2 damage to that player unless that creature attacked this turn.`
+- **Insurrection**
+  - `Untap all creatures and gain control of them until end of turn. They gain haste until end of turn.`
 - **Interdict**
   - `Counter target activated ability from an artifact, creature, enchantment, or land. That permanent's activated abilities can't be activated this turn. (Mana abilities can't be targeted.)`
   - `Draw a card.`
@@ -8308,6 +8310,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Sacrifice this land: Target attacking creature without flying gets -1/-2 until end of turn.`
 - **Quicksilver Amulet**
   - `{4}, {T}: You may put a creature card from your hand onto the battlefield.`
+- **Quicksilver Dragon**
+  - `{U}: If target spell has only one target and that target is this creature, change that spell's target to another creature.`
 - **Quicksilver Wall**
   - `{4}: Return this creature to its owner's hand. Any player may activate this ability.`
 - **Quiet Speculation**
@@ -8512,6 +8516,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of each player's end step, if that player has 5 or less life, this artifact deals 2 damage to that player.`
 - **Razorfin Hunter**
   - `{T}: This creature deals 1 damage to any target.`
+- **Read the Runes**
+  - `Draw X cards. For each card drawn this way, discard a card unless you sacrifice a permanent.`
 - **Read the Tides**
   - `• Draw three cards.`
   - `• Return up to two target creatures to their owners' hands.`
@@ -8869,6 +8875,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{U}, Sacrifice this creature: Untap all creatures of the creature type of your choice.`
 - **Riptide Crab**
   - `When this creature dies, draw a card.`
+- **Riptide Entrancer**
+  - `Whenever this creature deals combat damage to a player, you may sacrifice it. If you do, gain control of target creature that player controls. (This effect lasts indefinitely.)`
 - **Riptide Laboratory**
   - `{T}: Add {C}.`
   - `{1}{U}, {T}: Return target Wizard you control to its owner's hand.`
@@ -8891,6 +8899,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of each player's upkeep, that player untaps a land they control.`
 - **Risky Move**
   - `At the beginning of each player's upkeep, that player gains control of this enchantment.`
+  - `When you gain control of this enchantment from another player, choose a creature you control and an opponent. Flip a coin. If you lose the flip, that opponent gains control of that creature.`
 - **Rites of Initiation**
   - `Discard any number of cards at random. Creatures you control get +1/+0 until end of turn for each card discarded this way.`
 - **Rites of Refusal**
@@ -9685,6 +9694,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Return target card from an opponent's graveyard to their hand. Prevent all damage that would be dealt to any target this turn by a source of your choice.`
 - **Shieldmage Elder**
   - `Tap two untapped Clerics you control: Prevent all damage target creature would deal this turn.`
+  - `Tap two untapped Wizards you control: Prevent all damage target spell would deal this turn.`
 - **Shifty Doppelganger**
   - `{3}{U}, Exile this creature: You may put a creature card from your hand onto the battlefield. If you do, that creature gains haste until end of turn. At the beginning of the next end step, sacrifice that creature. If you do, return this card to the battlefield.`
 - **Shimian Night Stalker**
@@ -11404,6 +11414,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Trade Routes**
   - `{1}: Return target land you control to its owner's hand.`
   - `{1}, Discard a land card: Draw a card.`
+- **Trade Secrets**
+  - `Target opponent draws two cards, then you draw up to four cards. That opponent may repeat this process as many times as they choose.`
 - **Tradewind Rider**
   - `{T}, Tap two untapped creatures you control: Return target permanent to its owner's hand.`
 - **Tragic Poet**
@@ -12273,6 +12285,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Whalebone Glider**
   - `{2}, {T}: Target creature with power 3 or less gains flying until end of turn.`
 - **Wheel and Deal**
+  - `Any number of target opponents each discard their hands, then draw seven cards.`
   - `Draw a card.`
 - **Wheel of Fortune**
   - `Each player discards their hand, then draws seven cards.`
