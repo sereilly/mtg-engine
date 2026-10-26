@@ -991,7 +991,7 @@ def test_w1g9_tephraderm_sends_a_spells_damage_to_its_controller(set_pool):
     game = _w1g9_table()
     tephraderm = _w1g9_enter(game, 1, ons["Tephraderm"])
     game.players[0].hand.append(ons["Shock"])
-    game._set_phase_and_step("main", "precombat_main")
+    game._set_phase_and_step("precombat_main", "precombat_main")
     game.cast_from_hand(
         0, "Shock", target_player_index=1, target_permanent_ids=[tephraderm.permanent_id]
     )
@@ -1008,7 +1008,7 @@ def test_w1g9_tephraderm_answers_lethal_spell_damage_from_the_graveyard(set_pool
     game = _w1g9_table()
     tephraderm = _w1g9_enter(game, 1, ons["Tephraderm"])
     game.players[0].hand.extend([ons["Shock"], ons["Pinpoint Avalanche"]])
-    game._set_phase_and_step("main", "precombat_main")
+    game._set_phase_and_step("precombat_main", "precombat_main")
     for name in ("Shock", "Pinpoint Avalanche"):
         game.cast_from_hand(
             0, name, target_player_index=1,
@@ -1049,7 +1049,7 @@ def test_w1g9_tephraderm_tells_a_creatures_ability_from_an_artifacts(set_pool):
     tephraderm = _w1g9_enter(game, 1, ons["Tephraderm"])
     sorcerer = _w1g9_enter(game, 0, lea["Prodigal Sorcerer"])
     rod = _w1g9_enter(game, 0, lea["Rod of Ruin"])
-    game._set_phase_and_step("main", "precombat_main")
+    game._set_phase_and_step("precombat_main", "precombat_main")
     game.activate_permanent_ability(
         0, "Rod of Ruin", target_player_index=1,
         target_permanent_ids=[tephraderm.permanent_id],
@@ -1070,7 +1070,7 @@ def test_w1g9_tephraderm_tells_a_creatures_ability_from_an_artifacts(set_pool):
 def _w1g9_arm_glarecaster(game, *, at_player=None, at_permanent=None):
     """Glarecaster on seat 0, its ability activated and resolved, aimed at
     *at_player* (a seat) or *at_permanent*."""
-    game._set_phase_and_step("main", "precombat_main")
+    game._set_phase_and_step("precombat_main", "precombat_main")
     if at_permanent is not None:
         result = game.activate_permanent_ability(
             0, "Glarecaster", target_player_index=1,

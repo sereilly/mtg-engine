@@ -635,7 +635,7 @@ def test_w1g9_aurification_leaving_takes_the_counters_and_the_wall_away(set_pool
     _w1g9_hit_unblocked(game, seeker)
     assert seeker.has_type("wall")
     game.end_combat()
-    game._set_phase_and_step("main", "precombat_main")
+    game._set_phase_and_step("precombat_main", "precombat_main")
     game.remove_from_battlefield(aurification)
     _w1g9_settle(game)
     assert _w1g9_counters_on(seeker, "gold") == 0
@@ -688,7 +688,7 @@ def test_w1g9_gratuitous_violence_doubles_a_creatures_ability_not_a_spell(set_po
     _w1g9_enter(game, 0, lea["Prodigal Sorcerer"])
     _w1g9_enter(game, 0, lea["Rod of Ruin"])
     game.players[0].hand.append(ons["Shock"])
-    game._set_phase_and_step("main", "precombat_main")
+    game._set_phase_and_step("precombat_main", "precombat_main")
     game.cast_from_hand(0, "Shock", target_player_index=1)
     _w1g9_settle(game)
     assert game.players[1].life == 18
@@ -711,7 +711,7 @@ def test_w1g9_doublers_stack_and_keep_their_own_scopes(set_pool):
     _w1g9_enter(game, 1, tmp["Furnace of Rath"])
     _w1g9_enter(game, 0, lea["Prodigal Sorcerer"])
     game.players[0].hand.append(ons["Shock"])
-    game._set_phase_and_step("main", "precombat_main")
+    game._set_phase_and_step("precombat_main", "precombat_main")
     game.activate_permanent_ability(0, "Prodigal Sorcerer", target_player_index=1)
     _w1g9_settle(game)
     assert game.players[1].life == 20 - 8
