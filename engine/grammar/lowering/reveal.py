@@ -51,7 +51,11 @@ anything here, which is what lets the two sit side by side as families.
 
 from __future__ import annotations
 
-from ...oracle_types import (CHOSEN_COLOR_THIS_WAY, CHOSEN_HAND_CARDS_BY_SEAT,
+import dataclasses
+
+from ...oracle_types import (CHOSEN_COLOR_THIS_WAY,
+                             CHOSEN_CREATURE_TYPE_THIS_WAY,
+                             CHOSEN_HAND_CARDS_BY_SEAT,
                              LAST_TARGET_CONTROLLER,
                              OracleInstruction, REVEALED_HAND_CARDS,
                              REVEALED_THIS_WAY, X_FROM_COUNT)
@@ -91,7 +95,31 @@ def _lower_reveal_until(
         raise LoweringError(
             "\"that creature's controller\" with no exile before it", node=node,
         )
-    described = card_only_filter(node.filter.to_payload())
+    # "Choose a creature type. Reveal cards from the top of your library until
+    # you reveal a creature card **of that type**." (Riptide Shapeshifter.)
+    # The word the step in front recorded (CR 608.2d), lifted off the filter
+    # and named by its record — Peer Pressure's arrangement one sentence over
+    # (``conditions``). ``of_bound_type`` has no ``to_payload`` form, so this
+    # lowering used to drop the phrase in silence and stop on the first
+    # creature card of any type; with no step that chose a type the words
+    # name nothing, and the line refuses.
+    filt = node.filter
+    bound_type: dict[str, object] = {}
+    if filt.of_bound_type:
+        if CHOSEN_CREATURE_TYPE_THIS_WAY not in produced:
+            raise LoweringError(
+                "'of that type' names a creature type no step of this effect "
+                "chose", node=node,
+            )
+        filt = dataclasses.replace(filt, of_bound_type=False)
+        bound_type["subtype_filter_from"] = CHOSEN_CREATURE_TYPE_THIS_WAY
+    payload_filter = filt.to_payload()
+    dropped = dropped_narrowings(filt, payload_filter)
+    if dropped:
+        raise LoweringError(
+            f"the reveal does not honour {dropped[0]!r}", node=node,
+        )
+    described = card_only_filter(payload_filter)
     if described is None:
         raise LoweringError(
             "the reveal cannot test this restriction on a card", node=node,
@@ -101,12 +129,36 @@ def _lower_reveal_until(
             "reveal_until_match", "",
             {
                 "whose": node.whose,
-                "filter": described,
+                "filter": {**described, **bound_type},
                 "destination": node.destination,
                 "rest": node.rest,
             },
         ),
     )
+
+
+def _lower_put_revealed_cards_on_bottom(
+    node: ast.PutRevealedCardsOnBottom, produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """"Put the revealed cards on the bottom of your library in any order."
+    (Goblin Machinist, Erratic Explosion.)
+
+    Demands the run that left the pile revealed — a fateless
+    ``reveal_until_match``, which records it under ``revealed_until_cards``
+    (``_records._PRODUCES_FOR_PAYLOAD``). Without it "the revealed cards" name
+    nothing, and a step moving nothing would report supported.
+    """
+    if REVEALED_UNTIL_CARDS not in produced:
+        raise LoweringError(
+            '"the revealed cards" with no reveal in front of them', node=node,
+        )
+    return (OracleInstruction("put_revealed_cards_on_bottom", "", {}),)
+
+
+#: The pile a fateless reveal-until leaves revealed on top of its library —
+#: the scratchpad key ``handlers/reveal.reveal_until_match`` writes, spelled
+#: there as ``REVEALED_UNTIL_CARDS`` too.
+REVEALED_UNTIL_CARDS = "revealed_until_cards"
 
 
 def _lower_reveal_top(node: ast.RevealTopToHandOrBottom) -> tuple[OracleInstruction, ...]:
@@ -353,7 +405,7 @@ def _lower_reveal_top_opponent_chooses(
     otherwise about, so a seat this cannot name would silently become the
     revealer \u2014 which is the card choosing its own discard.
     """
-    if node.chooser.kind != "target_opponent":
+    if node.chooser.kind not in ("target_opponent", "opponent"):
         raise LoweringError(
             f"no flow lets {node.chooser.kind!r} choose from a revealed pile",
             node=node,
@@ -364,8 +416,51 @@ def _lower_reveal_top_opponent_chooses(
             "the revealed pile is a fixed number of cards", node=node
         )
     payload: dict[str, object] = {"count": count, "fate": node.fate}
-    _describe_targets(payload, node.chooser)
-    steps = [OracleInstruction("reveal_top_opponent_chooses", "", payload)]
+    steps: list[OracleInstruction] = []
+    if node.chooser.kind == "opponent":
+        # "**An opponent** chooses a creature card from among them." (Animal
+        # Magnetism.) CR 608.2d's unnamed seat, picked by the controller as the
+        # effect is applied — the ``choose_opponent`` step Guided Passage puts
+        # in front of its own pick, writing the key the pick then reads.
+        steps.append(
+            OracleInstruction(
+                "choose_opponent", "",
+                {
+                    "result_key": CHOSEN_PLAYER,
+                    "prompt": "Choose an opponent to choose from the revealed cards.",
+                },
+            )
+        )
+        payload["chooser_from"] = CHOSEN_PLAYER
+    else:
+        _describe_targets(payload, node.chooser)
+    if node.pick is not None:
+        # "…chooses **a creature card** from among them." What the chooser is
+        # offered, so every printed word has to reach the predicate the prompt
+        # and its resolver both ask — a narrowing dropped here is an opponent
+        # free to hand over a land.
+        described = node.pick.to_payload()
+        dropped = dropped_narrowings(node.pick, described)
+        picked = card_only_filter(described)
+        if dropped or picked is None:
+            raise LoweringError(
+                "the revealed pick cannot test this restriction on a card",
+                node=node,
+            )
+        payload["pick_filter"] = picked
+    if node.rest_fate is not None:
+        if node.rest_fate != "graveyard":
+            raise LoweringError(
+                f"no handler puts the rest of a revealed pile into {node.rest_fate!r}",
+                node=node,
+            )
+        payload["other_fate"] = node.rest_fate
+    if node.fate not in ("graveyard", "battlefield"):
+        raise LoweringError(
+            f"no handler puts the chosen revealed card into {node.fate!r}",
+            node=node,
+        )
+    steps.append(OracleInstruction("reveal_top_opponent_chooses", "", payload))
     if node.then_draw is not None:
         drawn = _amount_payload(node.then_draw)
         if not isinstance(drawn, int) or drawn <= 0:
@@ -846,6 +941,21 @@ def _lower_reveal_hand_and_choose(
         payload["up_to"] = True
     if not node.revealed:
         payload["looked_at"] = True
+    if node.revealer_shows is not None:
+        # "Target player reveals **three cards from their hand** and you choose
+        # one of them." (Blackmail.) The revealer's own pick of what to show,
+        # then the chooser's pick among those. One pick only: the chain of
+        # picks after the first (Mind Warp's X) re-derives its legal set from
+        # the whole hand, which would widen "one of them" to every card.
+        if (
+            node.count != ast.Fixed(1) or node.up_to or not node.revealed
+            or node.revealer_shows < 1
+        ):
+            raise LoweringError(
+                "a pick among the cards a player chose to reveal is one card",
+                node=node,
+            )
+        payload["revealer_shows"] = int(node.revealer_shows)
     if node.player.kind == "that_player" and event in _DAMAGED_PLAYER_EVENTS:
         # "Whenever this creature deals combat damage to a player, look at
         # **that player's** hand and choose a card from it." (Doomsday

@@ -734,6 +734,57 @@ def rebind_permanent_or_player_to_offer_target(
     return _walk_specs(branch, _rewrite)
 
 
+def rebind_permanent_or_player_to_chosen_target(
+    sequence: "ast.Sequence",
+) -> "ast.Statement":
+    """"**Choose any target.** Reveal cards from the top of your library until
+    you reveal a nonland card. Erratic Explosion deals damage equal to that
+    card's mana value to **that permanent or player**. …" (Erratic Explosion.)
+
+    :func:`rebind_permanent_or_player_to_offer_target`'s marker with the other
+    antecedent the pool prints: a sentence whose whole content is CR 601.2c's
+    choice of "any target", several sentences before the damage it is for. The
+    marker in that damage becomes a copy of the chosen spec, and the choosing
+    step is **dropped**: the damage now announces the one target itself (one
+    announcement, CR 601.2c), and a second step describing it would be a
+    second slot for the picker.
+
+    Narrow on both ends: exactly one ``ChooseTarget`` over "any target", and
+    only ``DealDamage`` recipients after it are rewritten. Anything else is
+    returned untouched, and the marker refuses as it always has.
+    """
+    steps = list(sequence.steps)
+    chooses = [
+        index for index, step in enumerate(steps)
+        if isinstance(step, ast.ChooseTarget)
+        and isinstance(step.subject, ast.TargetSpec)
+        and step.subject.quantifier == "any_target"
+        and step.chooser is None
+    ]
+    if len(chooses) != 1:
+        return sequence
+    at = chooses[0]
+    chosen = steps[at].subject
+
+    def _rewrite(spec: ast.TargetSpec) -> "ast.TargetSpec | None":
+        return chosen if spec.quantifier == "permanent_or_player" else None
+
+    rebound = False
+    for index in range(at + 1, len(steps)):
+        step = steps[index]
+        if isinstance(step, ast.DealDamage):
+            rewritten = _walk_specs(step, _rewrite)
+            if rewritten is not step:
+                steps[index] = rewritten
+                rebound = True
+    if not rebound:
+        return sequence
+    del steps[at]
+    if len(steps) == 1:
+        return steps[0]
+    return replace(sequence, steps=tuple(steps))
+
+
 def rebind_token_maker_to_previous_player(node: "ast.Statement") -> "ast.Statement":
     """"…, **that player** mills a card. Then **they** create X 1/1 black
     Minion creature tokens, …" (Infernal Genesis.)

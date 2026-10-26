@@ -161,6 +161,24 @@ ENTERS_WITH_COUNTED_PT_COUNTERS = re.compile(
     r"(?P<phrase>.+)$"
 )
 
+#: The counted form's **where-clause** spelling: "This creature enters with X
+#: +1/+1 counters on it, **where X is the number of other creatures on the
+#: battlefield**." (Stag Beetle.) The same count from the same place — the
+#: board as the permanent enters (CR 614.1c; the 2004-10-04 ruling: "The value
+#: of X is calculated once, as Stag Beetle is entering") — with the noun phrase
+#: printed after "the number of" instead of after "for each", so it is the
+#: same reader with a second pattern rather than a second reader.
+#:
+#: It used to be admitted by a *prefix* row in ``static_line_support`` ("this
+#: creature enters with x +1/+1 counters on it") and placed by the announced-X
+#: reader, which a creature with no {X} in its cost answers with 0: the Beetle
+#: entered 0/0 and died whatever was on the battlefield.
+ENTERS_WITH_WHERE_X_COUNTED_PT_COUNTERS = re.compile(
+    r"^this [a-z]+ enters with x "
+    r"(?P<counter>\+1/\+1|\+1/\+0|\+0/\+1) counters on it, "
+    r"where x is the number of (?P<phrase>.+)$"
+)
+
 
 @lru_cache(maxsize=None)
 def _counted_entry_spec(phrase: str) -> "dict | None":
@@ -201,7 +219,10 @@ def enters_with_counted_pt_counters(
     Read by the entry state and by the support gate, like its two siblings, so
     what is placed and what is claimed cannot drift.
     """
-    match = ENTERS_WITH_COUNTED_PT_COUNTERS.match(_self_normalized(line, card_name))
+    normalized = _self_normalized(line, card_name)
+    match = ENTERS_WITH_COUNTED_PT_COUNTERS.match(
+        normalized
+    ) or ENTERS_WITH_WHERE_X_COUNTED_PT_COUNTERS.match(normalized)
     if match is None:
         return None
     spec = _counted_entry_spec(match.group("phrase"))

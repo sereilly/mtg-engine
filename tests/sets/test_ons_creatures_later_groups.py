@@ -1986,6 +1986,270 @@ def test_w1g10_shieldmage_elder_shield_follows_a_permanent_spell(set_pool):
 # ==== W1G12 ==========================================================
 # W1G12's tests go between this line and the "end W1G12" line.
 
+# --- W1G12: revealing ---------------------------------------------------------
+from engine import Game as _w1g12_Game
+from engine.models import Permanent as _w1g12_Permanent
+from engine.models import PlayerState as _w1g12_PlayerState
+from engine.oracle import compile_card_oracle as _w1g12_compile
+from engine.targeting import derive_activation_spec as _w1g12_activation_spec
+
+from tests.helpers import resolve_stack as _w1g12_resolve_stack
+
+
+def _w1g12_table(set_pool, library, *, hands=None, interactive=(), seats=2):
+    ons = set_pool("ONS")
+    hands = hands or {}
+    names = ["Alice", "Bob", "Cara"][:seats]
+    players = [
+        _w1g12_PlayerState(
+            name=name,
+            hand=[ons[card] if isinstance(card, str) else card for card in hands.get(seat, ())],
+            library=(
+                [ons[c] if isinstance(c, str) else c for c in library]
+                if seat == 0 else [ons["Plains"]] * 5
+            ),
+        )
+        for seat, name in enumerate(names)
+    ]
+    game = _w1g12_Game(players=players)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game.active_player_index = 0
+    return game
+
+
+def _w1g12_put(game, seat, card):
+    permanent = _w1g12_Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    game._sync_control()
+    return permanent
+
+
+def _w1g12_names(cards):
+    return [card.name for card in cards]
+
+
+def test_w1g12_goblin_machinist_pumps_by_the_first_nonland_and_bottoms_the_run(set_pool):
+    """"{2}{R}: Reveal cards from the top of your library until you reveal a
+    nonland card. This creature gets +X/+0 until end of turn, where X is that
+    card's mana value. Put the revealed cards on the bottom of your library in
+    any order." The run stops on Akroma's Vengeance (mana value 6) under two
+    lands; the Machinist is 6/5; the three revealed cards — the find among
+    them — go under the two cards that were never turned over, in the order
+    the interactive owner chose (CR 401.4)."""
+    game = _w1g12_table(
+        set_pool,
+        ["Mountain", "Island", "Akroma's Vengeance", "Forest", "Goblin Taskmaster"],
+        interactive={0},
+    )
+    machinist = _w1g12_put(game, 0, set_pool("ONS")["Goblin Machinist"])
+    assert game.activate_permanent_ability(0, "Goblin Machinist").supported
+    assert not game.resolve_top_of_stack()
+    order = game.pending_choice_of("reorder_library", 0)
+    assert order is not None and order.data["position"] == "bottom"
+    assert order.data["top_count"] == 3
+    # Before the order is answered the pump has already happened (CR 608.2c:
+    # the pump is printed before the bottom).
+    assert (machinist.effective_power, machinist.effective_toughness) == (6, 5)
+    assert game.confirm_reorder_library(0, [2, 1, 0])
+    _w1g12_resolve_stack(game)
+    assert _w1g12_names(game.players[0].library) == [
+        "Forest", "Goblin Taskmaster", "Akroma's Vengeance", "Island", "Mountain",
+    ]
+    assert (machinist.effective_power, machinist.effective_toughness) == (6, 5)
+    assert any("stopped on Akroma's Vengeance" in line for line in game.log)
+
+
+def test_w1g12_goblin_machinist_over_an_all_land_library_is_zero(set_pool):
+    """The ruling (2004-10-04): "If all the cards in your library are lands, X
+    is zero." The whole library is revealed and put back, in the order a
+    headless owner leaves it; the Machinist stays 0/5."""
+    game = _w1g12_table(set_pool, ["Mountain", "Island", "Forest"])
+    machinist = _w1g12_put(game, 0, set_pool("ONS")["Goblin Machinist"])
+    assert game.activate_permanent_ability(0, "Goblin Machinist").supported
+    _w1g12_resolve_stack(game)
+    assert (machinist.effective_power, machinist.effective_toughness) == (0, 5)
+    assert _w1g12_names(game.players[0].library) == ["Mountain", "Island", "Forest"]
+    assert game.pending_choices == []
+
+
+def test_w1g12_riptide_shapeshifter_digs_for_the_type_it_names(set_pool):
+    """"{2}{U}{U}, Sacrifice this creature: Choose a creature type. Reveal
+    cards from the top of your library until you reveal a creature card of
+    that type. Put that card onto the battlefield and shuffle the rest into
+    your library." Named Goblin, the run passes the Elf (a creature card, but
+    not of that type) and stops on the Goblin under it; the Elf and the land
+    are shuffled back, the Goblin under the bottom stays in the library."""
+    game = _w1g12_table(
+        set_pool,
+        ["Forest", "Wellwisher", "Goblin Taskmaster", "Island", "Skirk Commando"],
+        interactive={0},
+    )
+    _w1g12_put(game, 0, set_pool("ONS")["Riptide Shapeshifter"])
+    # It targets nothing: no picker for the client to fill in.
+    assert _w1g12_activation_spec(
+        _w1g12_compile(set_pool("ONS")["Riptide Shapeshifter"]).activated_abilities[0]
+    ) is None
+    assert game.activate_permanent_ability(0, "Riptide Shapeshifter").supported
+    assert _w1g12_names(game.players[0].graveyard) == ["Riptide Shapeshifter"]
+    assert not game.resolve_top_of_stack()
+    assert game.confirm_creature_type_choice(0, "Goblin")
+    _w1g12_resolve_stack(game)
+    assert [p.card.name for p in game.all_permanents()] == ["Goblin Taskmaster"]
+    assert sorted(_w1g12_names(game.players[0].library)) == [
+        "Forest", "Island", "Skirk Commando", "Wellwisher",
+    ]
+
+
+def test_w1g12_riptide_shapeshifter_naming_a_type_nothing_has_finds_nothing(set_pool):
+    """A type no card in the library has: the whole library is revealed,
+    nothing enters, and every card is shuffled back — never the first creature
+    card of some other type. And the default a seat nobody asks takes is its
+    own library's commonest type (two Goblins against one Elf)."""
+    game = _w1g12_table(
+        set_pool, ["Forest", "Wellwisher", "Island"], interactive={0},
+    )
+    _w1g12_put(game, 0, set_pool("ONS")["Riptide Shapeshifter"])
+    assert game.activate_permanent_ability(0, "Riptide Shapeshifter").supported
+    assert not game.resolve_top_of_stack()
+    assert game.confirm_creature_type_choice(0, "Goblin")
+    _w1g12_resolve_stack(game)
+    assert list(game.all_permanents()) == []
+    assert sorted(_w1g12_names(game.players[0].library)) == [
+        "Forest", "Island", "Wellwisher",
+    ]
+
+    game = _w1g12_table(
+        set_pool,
+        ["Forest", "Wellwisher", "Goblin Taskmaster", "Island", "Skirk Commando"],
+    )
+    _w1g12_put(game, 0, set_pool("ONS")["Riptide Shapeshifter"])
+    assert game.activate_permanent_ability(0, "Riptide Shapeshifter").supported
+    _w1g12_resolve_stack(game)
+    assert [p.card.name for p in game.all_permanents()] == ["Goblin Taskmaster"]
+
+
+def _w1g12_ogre_numbers(set_pool, numbers, *, seats=2):
+    """Cast Menacing Ogre with every seat interactive and answer each seat's
+    secret number; the Ogre and the table after the trigger resolves."""
+    game = _w1g12_table(
+        set_pool, ["Mountain"] * 5, hands={0: ["Menacing Ogre"]},
+        interactive=set(range(seats)), seats=seats,
+    )
+    assert game.cast_from_hand(0, "Menacing Ogre").supported
+    assert len(game.stack) == 1, "the entry trigger is on the stack (CR 603.3)"
+    assert not game.resolve_top_of_stack()
+    owed = sorted(c.player_index for c in game.pending_choices if c.kind == "secret_number")
+    assert owed == list(range(seats))
+    # Answered last seat first: no number is shown before the last exists.
+    for seat in reversed(range(seats)):
+        assert not any(
+            line.startswith("Menacing Ogre: ") and " revealed " in line
+            for line in game.log
+        ), "a secret number was shown before every seat had one"
+        assert game.confirm_secret_number(seat, numbers[seat])
+    _w1g12_resolve_stack(game)
+    ogre = next(p for p in game.all_permanents() if p.card.name == "Menacing Ogre")
+    return game, ogre
+
+
+def test_w1g12_menacing_ogre_a_tie_for_highest_costs_both_and_feeds_the_ogre(set_pool):
+    """"When this creature enters, each player secretly chooses a number. Then
+    those numbers are revealed. Each player with the highest number loses that
+    much life. If you are one of those players, put two +1/+1 counters on this
+    creature." Alice and Bob both name 3: each loses 3, and Alice — one of
+    those players — gets her two counters. The reveal is one line, every
+    number at once, after the last answer."""
+    game, ogre = _w1g12_ogre_numbers(set_pool, [3, 3])
+    assert [p.life for p in game.players] == [17, 17]
+    assert (ogre.effective_power, ogre.effective_toughness) == (5, 5)
+    assert any("Alice revealed 3, Bob revealed 3" in line for line in game.log)
+
+
+def test_w1g12_menacing_ogre_only_the_highest_pays_and_a_loser_gets_nothing(set_pool):
+    """Bob's 4 beats Alice's 1: Bob alone loses 4, Alice nothing, and the Ogre
+    stays 3/3. At three seats Bob and Cara tie on 6 over Alice's 2: both lose
+    6 and Alice is not one of those players."""
+    game, ogre = _w1g12_ogre_numbers(set_pool, [1, 4])
+    assert [p.life for p in game.players] == [20, 16]
+    assert (ogre.effective_power, ogre.effective_toughness) == (3, 3)
+
+    game, ogre = _w1g12_ogre_numbers(set_pool, [2, 6, 6], seats=3)
+    assert [p.life for p in game.players] == [20, 14, 14]
+    assert (ogre.effective_power, ogre.effective_toughness) == (3, 3)
+
+
+def test_w1g12_menacing_ogre_numbers_are_whole_and_not_negative(set_pool):
+    """The ruling (2004-10-04): "You have to choose zero or a positive number.
+    It must be an integer number." Minus one and a fraction are refused with
+    the prompt kept; zero is an answer. And seats nobody asks name the floor —
+    the highest pays, so any more is life lost for nothing — which ties them
+    at 0 and gives the Ogre its counters for free."""
+    game = _w1g12_table(
+        set_pool, ["Mountain"] * 5, hands={0: ["Menacing Ogre"]}, interactive={0, 1},
+    )
+    assert game.cast_from_hand(0, "Menacing Ogre").supported
+    assert not game.resolve_top_of_stack()
+    assert not game.confirm_secret_number(0, -1)
+    assert not game.confirm_secret_number(0, "1.5")
+    assert game.pending_choice_of("secret_number", 0) is not None
+    assert game.confirm_secret_number(0, 0)
+
+    game = _w1g12_table(set_pool, ["Mountain"] * 5, hands={0: ["Menacing Ogre"]})
+    assert game.cast_from_hand(0, "Menacing Ogre").supported
+    _w1g12_resolve_stack(game)
+    ogre = next(p for p in game.all_permanents() if p.card.name == "Menacing Ogre")
+    assert [p.life for p in game.players] == [20, 20]
+    assert (ogre.effective_power, ogre.effective_toughness) == (5, 5)
+
+
+def test_w1g12_stag_beetle_counts_the_other_creatures_as_it_enters(set_pool):
+    """"This creature enters with X +1/+1 counters on it, where X is the
+    number of other creatures on the battlefield." Three others (one Alice's,
+    two Bob's) make it 3/3 — never itself, and never the cast's X, which its
+    cost does not have: it was admitted by a prefix row and entered 0/0
+    whatever was there. The ruling (2004-10-04): "The value of X is
+    calculated once, as Stag Beetle is entering" — a fourth creature later
+    changes nothing. Alone it is 0/0 and dies (CR 704.5f)."""
+    from tests.helpers import _mk_creature_card as _w1g12_creature
+
+    game = _w1g12_table(set_pool, ["Forest"] * 5, hands={0: ["Stag Beetle"]})
+    _w1g12_put(game, 0, _w1g12_creature("Alice's Bear", 2, 2))
+    _w1g12_put(game, 1, _w1g12_creature("Bob's Bear", 2, 2))
+    _w1g12_put(game, 1, _w1g12_creature("Bob's Elf", 1, 1))
+    assert game.cast_from_hand(0, "Stag Beetle").supported
+    _w1g12_resolve_stack(game)
+    beetle = next(p for p in game.all_permanents() if p.card.name == "Stag Beetle")
+    assert (beetle.effective_power, beetle.effective_toughness) == (3, 3)
+    _w1g12_put(game, 1, _w1g12_creature("Bob's Giant", 3, 3))
+    assert (beetle.effective_power, beetle.effective_toughness) == (3, 3)
+
+    game = _w1g12_table(set_pool, ["Forest"] * 5, hands={0: ["Stag Beetle"]})
+    assert game.cast_from_hand(0, "Stag Beetle").supported
+    _w1g12_resolve_stack(game)
+    assert list(game.all_permanents()) == []
+    assert _w1g12_names(game.players[0].graveyard) == ["Stag Beetle"]
+
+
+def test_w1g12_silklash_spider_hits_every_flyer_and_nothing_else(set_pool):
+    """"Reach / {X}{G}{G}: This creature deals X damage to each creature with
+    flying." X=2: both sides' flyers take 2 (Alice's 2/2 dies, Bob's 1/3
+    survives damaged); the Bear and the Spider itself — reach is not flying —
+    are untouched."""
+    from tests.helpers import _mk_creature_card as _w1g12_creature
+
+    game = _w1g12_table(set_pool, ["Forest"] * 5)
+    spider = _w1g12_put(game, 0, set_pool("ONS")["Silklash Spider"])
+    bobs_bird = _w1g12_put(game, 1, _w1g12_creature("Bob's Bird", 1, 3, "Flying"))
+    alices_bird = _w1g12_put(game, 0, _w1g12_creature("Alice's Bird", 2, 2, "Flying"))
+    bear = _w1g12_put(game, 1, _w1g12_creature("Bob's Bear", 2, 2))
+    assert game.activate_permanent_ability(0, "Silklash Spider", x_value=2).supported
+    _w1g12_resolve_stack(game)
+    assert bobs_bird.damage_marked == 2 and game.is_on_battlefield(bobs_bird)
+    assert not game.is_on_battlefield(alices_bird)
+    assert bear.damage_marked == 0 and spider.damage_marked == 0
+
 # ==== end W1G12 ======================================================
 
 

@@ -30,6 +30,7 @@ from ..oracle_types import REVEALED_HAND_CARDS, REVEALED_TOP_CARDS_BY_SEAT
 # the handlers here *build* instructions for an optional payment's branches.
 from ..oracle_types import OracleInstruction as _OracleInstruction
 from ..revealed_hands import reveal_hand_while_present
+from ..resumption import run_resumable
 from ..search_filters import search_matches
 from ._amounts import resolve_amount
 from ._chosen import _resolve_chosen_subtype
@@ -96,7 +97,19 @@ def reveal_top_opponent_chooses(game: Game, instruction: OracleInstruction, cont
     """
     caster = context.caster
     caster_index = game.players.index(caster)
-    opponent = context.target
+    chooser_from = instruction.payload.get("chooser_from")
+    if chooser_from is not None:
+        # "**An opponent** chooses a creature card from among them." (Animal
+        # Magnetism.) The seat ``choose_opponent`` wrote one step up (CR
+        # 608.2d); none recorded is nobody to choose, and nothing is asked.
+        recorded = context.results.get(str(chooser_from))
+        opponent = (
+            game.players[recorded]
+            if isinstance(recorded, int) and 0 <= recorded < len(game.players)
+            else None
+        )
+    else:
+        opponent = context.target
     if opponent not in game.players:
         game.log.append(f"{context.card.name}: no opponent to choose")
         return True, "resolved"
@@ -149,11 +162,36 @@ def reveal_top_opponent_chooses(game: Game, instruction: OracleInstruction, cont
             f"{caster.name} revealed {', '.join(card.name for card in revealed)} "
             f"from the top of their library"
         )
+    # "An opponent chooses **a creature card** from among them." (Animal
+    # Magnetism.) The printed narrowing, as the list of revealed slots the
+    # chooser may name — offered by the prompt and re-checked by its
+    # resolver, so the two cannot disagree. Absent is "one of those cards":
+    # every slot.
+    pick_filter = instruction.payload.get("pick_filter")
+    legal = [
+        index for index, card in enumerate(revealed)
+        if pick_filter is None
+        or _card_matches_filter(card, dict(pick_filter), game=game, owner=caster)
+    ]
+    other_fate = instruction.payload.get("other_fate")
+    if not legal:
+        # Nothing the sentence lets the opponent name: no choice is made
+        # (CR 608.2: as much as possible), and the rest — every revealed
+        # card — still goes where the card sends it.
+        game.log.append(
+            f"{context.card.name}: no revealed card can be chosen"
+        )
+        if other_fate:
+            for card in revealed:
+                if game._move_picked_pile_card(caster, card, from_zone, str(other_fate)):
+                    game.log.append(f"{card.name} goes to the {other_fate}")
+        return True, "resolved"
     game.arm_pending_choice(
         "opponent_picks_revealed", opponent_index,
         card_name=context.card.name if context.card is not None else "",
         revealer_index=caster_index,
         cards=[card.name for card in revealed],
+        legal_indices=legal,
         fate=str(instruction.payload.get("fate", "graveyard")),
         from_zone=from_zone,
         # "…and put **the other one** into your hand." What the pick did *not*
@@ -529,12 +567,35 @@ def reveal_until_match(game: Game, instruction: OracleInstruction, context: Orac
         return True, "resolved"
     player = game.players[seat]
     described = dict(payload.get("filter") or {})
+    # "Choose a creature type. Reveal cards … until you reveal a creature card
+    # **of that type**." (Riptide Shapeshifter.) The word the choosing step in
+    # front wrote (CR 608.2d), turned into the ``subtype_filter`` the card
+    # matcher reads. **No word means no match** — read as no narrowing, the
+    # run would stop on the first creature card of any type — so the run turns
+    # over the whole library and finds nothing, which is what a reveal for a
+    # type nobody named does.
+    chosen_from = described.pop("subtype_filter_from", None)
+    chosen_word = None
+    if chosen_from is not None:
+        chosen_word = context.results.get(str(chosen_from))
+        if chosen_word:
+            described["subtype_filter"] = str(chosen_word)
+        else:
+            game.log.append(f"{context.card.name}: no creature type was chosen")
+
+    def matches(card) -> bool:
+        if chosen_from is not None and not chosen_word:
+            return False
+        return _card_matches_filter(card, described, game=game, owner=player)
+
+    if payload.get("destination") == "revealed":
+        return _reveal_until_match_in_place(game, seat, matches, context)
 
     revealed: list = []
     found = None
     while player.library:
         card = player.library.pop(0)
-        if _card_matches_filter(card, described, game=game, owner=player):
+        if matches(card):
             found = card
             break
         revealed.append(card)
@@ -575,6 +636,98 @@ def reveal_until_match(game: Game, instruction: OracleInstruction, context: Orac
     else:
         for card in revealed:
             game.put_card_into_graveyard(player, card, from_zone="library")
+    return True, "resolved"
+
+
+#: The pile a fateless reveal-until left revealed on top of its library, in
+#: the order it was turned over — the find last. Spelled once more in
+#: ``grammar/lowering/reveal.REVEALED_UNTIL_CARDS``, which the record
+#: declaration reads.
+REVEALED_UNTIL_CARDS = "revealed_until_cards"
+
+
+def _reveal_until_match_in_place(
+    game: Game, seat: int, matches, context: OracleExecutionContext,
+) -> tuple[bool, str]:
+    """"Reveal cards from the top of your library until you reveal a nonland
+    card." with **no fate of its own** (Goblin Machinist, Erratic Explosion).
+
+    CR 701.20b: revealing moves nothing. So nothing is popped — the run reads
+    down the library from the top, stops on the first card *matches* accepts,
+    and leaves every card it turned over where it lay, revealed (CR 701.20a:
+    "for as long as necessary to complete the parts of the effect that card is
+    relevant to"). Two records for the sentences behind: the pile itself,
+    under :data:`REVEALED_UNTIL_CARDS`, for "put the revealed cards on the
+    bottom", and the find's mana value under ``its_mana_value`` for "that
+    card's mana value".
+
+    **A library with no match is the whole library, and X is zero** — the
+    rulings for both cards (2004-10-04): "If all the cards in your library are
+    lands, X is zero" / "no damage is dealt". CR 107.2 gives the number of a
+    card that does not exist as 0, and the pile is every card turned over.
+    """
+    player = game.players[seat]
+    pile: list = []
+    found = None
+    for card in player.library:
+        pile.append(card)
+        if matches(card):
+            found = card
+            break
+    context.results[REVEALED_UNTIL_CARDS] = pile
+    context.results["its_mana_value"] = int(found.cmc or 0) if found is not None else 0
+    if pile:
+        game.record_reveal(seat, [card.name for card in pile])
+    if found is not None:
+        game.log.append(
+            f"{player.name} revealed {len(pile)} card(s) and stopped on "
+            f"{found.name} (mana value {int(found.cmc or 0)})"
+        )
+    else:
+        game.log.append(
+            f"{player.name} revealed their library ({len(pile)} card(s)) and "
+            "found nothing"
+        )
+    return True, "resolved"
+
+
+@effect_handler("put_revealed_cards_on_bottom")
+def put_revealed_cards_on_bottom(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Put the revealed cards on the bottom of your library in any order."
+    (Goblin Machinist, Erratic Explosion.)
+
+    The pile the run in front of this step left revealed on top of the
+    library (:func:`_reveal_until_match_in_place`), moved to the other end of
+    the same library. Not a zone change — CR 701.20b left the cards in the
+    library, and the bottom of that library is still that library — so it is
+    laid down directly, as ``_place_sorted_reveal`` lays Goblin Ringleader's
+    rest, rather than through ``put_card_into_library``.
+
+    Each card is taken out **by identity**, top first: two copies of a card in
+    a deck are the same ``CardDefinition``, and the pile is the top of the
+    library, so the first occurrence from the top is the card the run turned
+    over. A card that has left since is left alone (CR 608.2). Then CR 401.4:
+    the owner orders cards put in one position at one time, asked once through
+    ``offer_library_bottom_order`` — the seam every "in any order" bottom
+    reaches.
+    """
+    pile = list(context.results.get(REVEALED_UNTIL_CARDS) or ())
+    player = context.caster
+    moved: list = []
+    for card in pile:
+        for index, held in enumerate(player.library):
+            if held is card:
+                moved.append(player.library.pop(index))
+                break
+    if not moved:
+        game.log.append(f"{context.card.name}: no revealed card to put back")
+        return True, "resolved"
+    player.library.extend(moved)
+    game.log.append(
+        f"{player.name} put {len(moved)} revealed card(s) on the bottom of "
+        "their library"
+    )
+    game.offer_library_bottom_order(player, len(moved))
     return True, "resolved"
 
 
@@ -739,6 +892,12 @@ def reveal_hand_and_choose(game: Game, instruction: OracleInstruction, context: 
             return True, "resolved"
         any_colors = [str(chosen_color)]
         narrowing["restrictions"] = {"any_colors": any_colors}
+    shows = instruction.payload.get("revealer_shows")
+    if shows:
+        return _reveal_shown_cards_and_choose(
+            game, instruction, context, victim_index, caster_index,
+            narrowing, int(shows),
+        )
     legal = [
         index
         for index, held in enumerate(victim.hand)
@@ -821,6 +980,106 @@ def reveal_hand_and_choose(game: Game, instruction: OracleInstruction, context: 
             context.source_permanent.permanent_id
             if context.source_permanent is not None else None
         ),
+    )
+    return True, "resolved"
+
+
+#: The cards a revealer chose to show out of their hand (Blackmail), for the
+#: pick among them that follows.
+SHOWN_HAND_CARDS = "shown_hand_cards"
+
+
+def _reveal_shown_cards_and_choose(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext,
+    victim_index: int, caster_index: int, narrowing: dict, shows: int,
+) -> tuple[bool, str]:
+    """"Target player reveals three cards from their hand and you choose one
+    of them. That player discards that card." (Blackmail.)
+
+    Two decisions by two players, in the printed order. **The revealer picks
+    what to show** — the subject of "reveals" performs it (CR 608.2c) — through
+    the ordinary hand pick (``choose_cards_in_hand``, its ``reveal`` making the
+    cards public as they are chosen, CR 701.20a); "if the player has less than
+    3 cards, all of them are revealed" (the 2004-10-04 ruling) is CR 608.2's
+    as-much-as-possible, so a hand of three or fewer is shown whole with
+    nobody asked. **Then the chooser picks among exactly those cards**,
+    through Duress's ``revealed_hand_pick``, its legal slots the shown ones —
+    and ``shown_indices`` beside them, so the prompt renders the cards nobody
+    revealed face down rather than publishing them.
+
+    The two halves are one loop over the one revealing seat with the pick as
+    its last step (``resumption.run_resumable``), so a revealer who has to be
+    asked suspends the resolution and the answer brings the pick back.
+    """
+    card = context.card
+    victim = game.players[victim_index]
+    fate = str(instruction.payload.get("fate", "discard"))
+
+    def pick() -> None:
+        shown = list(context.results.get(SHOWN_HAND_CARDS) or ())
+        # Hand slots by identity, one per shown card: two copies of a card in
+        # a hand are one ``CardDefinition``, so a pair shown is two slots.
+        slots: list[int] = []
+        for held_card in shown:
+            for index, held in enumerate(victim.hand):
+                if held is held_card and index not in slots:
+                    slots.append(index)
+                    break
+        legal = [
+            index for index in slots
+            if search_matches(victim.hand[index], narrowing, game=game, owner=victim)
+        ]
+        if not legal:
+            game.log.append(f"{card.name}: no revealed card can be chosen")
+            return
+        game.arm_pending_choice(
+            "revealed_hand_pick", caster_index,
+            card_name=card.name,
+            victim_index=victim_index,
+            legal_indices=legal,
+            shown_indices=slots,
+            remaining=1,
+            fate=fate,
+            exclude_types=list(narrowing.get("exclude_types") or ()),
+            exclude_basic_lands=bool(narrowing.get("exclude_basic_lands")),
+            record=context.results,
+            # CR 109.5: the spell's controller causes the discard, whichever
+            # path armed the pick — straight through, or resumed by the
+            # revealer's answer when nothing is resolving to stamp it.
+            _cause_seat=caster_index,
+            source_id=(
+                context.source_permanent.permanent_id
+                if context.source_permanent is not None else None
+            ),
+        )
+
+    if len(victim.hand) <= shows:
+        everything = list(victim.hand)
+        context.results[SHOWN_HAND_CARDS] = everything
+        names = [held.name for held in everything]
+        if names:
+            game.record_reveal(victim_index, names)
+        game.log.append(
+            f"{victim.name} reveals {', '.join(names) or 'no cards'} "
+            f"({card.name})"
+        )
+        pick()
+        return True, "resolved"
+
+    shown_payload = {
+        "card_filter": {},
+        "count": shows,
+        "reveal": True,
+        "result_key": SHOWN_HAND_CARDS,
+        # Read by ``ai_prompts.order_hand_pick``: the cards shown are the ones
+        # an opponent then chooses among, so a seat nobody asks shows its
+        # least costly.
+        "shown_to_opponent": True,
+    }
+    run_resumable(
+        game, [victim_index],
+        lambda seat: game.arm_choose_cards_in_hand(seat, shown_payload, context),
+        then=pick,
     )
     return True, "resolved"
 

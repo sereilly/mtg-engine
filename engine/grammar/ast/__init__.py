@@ -159,6 +159,7 @@ from .records import (
     AdditionalCostWasPaid,
     WasKicked,
     AttackedOrBlockedThisCombat,
+    AmongThosePlayers,
     CoinFlipResult,
     CostObjectWas, SharesCardTypeWithCostCard,
     CouldNot,
@@ -336,6 +337,7 @@ from .mana import (
 )
 from .library import (
     PutExiledPileOnLibrary,
+    PutRevealedCardsOnBottom,
     RevealUntil,
     LookAtHand,
     LookAtFaceDown,
@@ -601,6 +603,7 @@ __all__ = [
     "ExileGraveyardPositionCost",
     "RemoveCounterCost",
     "Cost",
+    "AmongThosePlayers",
     "CoinFlipResult",
     "AttackersAimedAtYou",
     "CastFrom",
@@ -877,6 +880,7 @@ __all__ = [
     "NameAndStrip",
     "NameThenRevealTop",
     "RevealUntil",
+    "PutRevealedCardsOnBottom",
     "RevealTopToHandOrBottom",
     # stack
     "BidLifeContest",

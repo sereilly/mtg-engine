@@ -178,8 +178,9 @@ def resolution_creature_type_preference(
     * a sweep that spares the types named (Harsh Mercy) — the chooser's own;
     * every creature card of the type returned from each graveyard (Patriarch's
       Bidding) — the chooser's own, counted in the graveyards;
-    * a revealed card tested for the type (Bloodline Shaman) — the chooser's
-      own library;
+    * a revealed card tested for the type (Bloodline Shaman), and a run of
+      reveals stopping on one (Riptide Shapeshifter) — the chooser's own
+      library;
     * a gain of control of the type behind "more … than each other player"
       (Peer Pressure) — ``"majority"``;
     * the type **set** on the ability's own source or on its Aura's host ("{1}:
@@ -230,6 +231,13 @@ def resolution_creature_type_preference(
             found.add(("majority", "battlefield"))
         elif instruction.kind == "return_all_cards_from_graveyard":
             found.add(("you", "graveyard"))
+        elif instruction.kind == "reveal_until_match":
+            # "Choose a creature type. Reveal cards from the top of your
+            # library until you reveal a creature card of that type. Put that
+            # card onto the battlefield …" (Riptide Shapeshifter.) The run
+            # digs the chooser's own library, so the word is its commonest
+            # type there — Bloodline Shaman's reveal above, over a run.
+            found.add(("you", "library"))
     for instruction in _walk_program(compile_card_oracle(card)):
         # A type *set* reads the word through ``subtype_from`` rather than as a
         # filter, so it is asked after the loop above and only of the two
@@ -1100,6 +1108,24 @@ def chosen_number_bounds_flip_run(card: CardDefinition, instruction) -> bool:
             *(ability.instruction for ability in program.triggered_abilities),
         )
         if root is not None
+    )
+
+
+def secret_number_highest_pays(card: CardDefinition) -> bool:
+    """Whether the numbers *card*'s players name in secret are paid for by
+    **the highest** — "Each player with the highest number loses that much
+    life." (Menacing Ogre.)
+
+    Read off the compiled program: a loop over ``each_revealed_highest``, the
+    seat set only that sentence names. Goblin Game's loss falls on everyone and
+    its extra one on the *fewest*, which is the opposite incentive, so the two
+    are told apart by which set a step loops over and never by a name.
+    """
+    return any(
+        instruction.kind == "for_each"
+        and ((instruction.payload or {}).get("iterator") or {}).get("players")
+        == "each_revealed_highest"
+        for instruction in _walk_program(compile_card_oracle(card))
     )
 
 

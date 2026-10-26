@@ -34,6 +34,16 @@ def parse_player_ref(stream: TokenStream) -> ast.PlayerRef | None:
     if stream.accept_word("you"):
         return ast.PlayerRef("you")
 
+    # "**Each player with the highest number** loses that much life." (Menacing
+    # Ogre.) The seats a record describes — the numbers each player named in
+    # secret one sentence up — and every one of them, ties included ("each
+    # player with"), where Goblin Game's "the player who revealed the fewest"
+    # is strict. The whole phrase is required: "number" is the noun the
+    # choosing sentence named, and a shorter prefix would describe seats by a
+    # comparison nothing recorded. Read before the bare "each player", which
+    # would otherwise take the head and leave the comparison as unconsumed text.
+    if stream.accept_phrase("each", "player", "with", "the", "highest", "number"):
+        return ast.PlayerRef("each_revealed_highest")
     if stream.accept_phrase("each", "player"):
         return ast.PlayerRef("each_player")
     if stream.accept_phrase("each", "opponent"):

@@ -384,6 +384,11 @@ class RevealHandAndChoose:
     #: an :class:`Amount` and an amount has no room for "or fewer" — the same
     #: split ``TargetSpec`` makes between its ``count`` and its quantifier.
     up_to: bool = False
+    #: "Target player reveals **three cards from their hand** and you choose
+    #: one of them." (Blackmail.) How many cards the *revealer* shows, chosen
+    #: by that player; None is the whole hand (Duress). The pick is then among
+    #: those cards only.
+    revealer_shows: "int | None" = None
 
 
 @dataclass(frozen=True)

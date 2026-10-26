@@ -309,11 +309,23 @@ def choose_reorder_library_order(
     return [index for index, _ in scored]
 
 
-def choose_secret_number(game: Game, player_index: int, minimum: int = 1) -> int:
+def choose_secret_number(
+    game: Game, player_index: int, minimum: int = 1, card=None,
+) -> int:
     """The number a seat names in secret (Goblin Game): "Each player hides at
     least one item … Each player loses life equal to the number of items they
     revealed. The player who revealed the fewest items then loses half their
     life, rounded up."
+
+    **Where the highest number is what pays** (Menacing Ogre: "Each player
+    with the highest number loses that much life. If you are one of those
+    players, put two +1/+1 counters on this creature.") the seat names the
+    floor. Any number above it is lost life the moment it is the highest, and
+    nothing the sentences offer a seat buys it back except the Ogre's
+    counters — which its controller also gets by naming the floor whenever
+    every other seat does. So the floor is the answer that never loses life it
+    did not have to; read off the compiled program
+    (``ai_prompt_readers.secret_number_highest_pays``), never off a name.
 
     Every point named is a point of life, and the least pays half of what it
     has left. So there are two lines and the policy picks between them from
@@ -336,6 +348,11 @@ def choose_secret_number(game: Game, player_index: int, minimum: int = 1) -> int
     Deterministic, and a function of public state alone.
     """
     floor = max(0, int(minimum))
+    if card is not None:
+        from .ai_prompt_readers import secret_number_highest_pays
+
+        if secret_number_highest_pays(card):
+            return floor
     life = int(game.players[player_index].life)
     rivals = [
         int(player.life)
@@ -976,6 +993,14 @@ def order_hand_pick(
     from .handlers._filters import _card_matches_filter
 
     order = list(candidates)
+    if (payload or {}).get("shown_to_opponent"):
+        # "Target player reveals three cards from their hand and you choose
+        # one of them. That player discards that card." (Blackmail.) The cards
+        # shown are the ones an opponent then picks among for a discard, so a
+        # seat nobody asks shows its least costly — mana value, the ranking
+        # that opponent's own default pick reads (the costliest legal card).
+        hand = game.players[player_index].hand
+        return sorted(order, key=lambda slot: (int(hand[slot].cmc or 0), slot))
     key = str((payload or {}).get("result_key") or "chosen_hand_cards")
     consumer = hand_pick_entry_consumer(source_card, key) if source_card else None
     if consumer is None:

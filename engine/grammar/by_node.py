@@ -165,6 +165,7 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_keep_chosen_discar
                        _lower_sacrifice_unless_pay,
                        _lower_chosen_source_next_damage, _lower_add_mana,
                        _lower_bin_revealed_card,
+                       _lower_put_revealed_cards_on_bottom,
                        _lower_put_milled_card_onto_battlefield,
                        _lower_discard_revealed_unless_pay_life,
                        _lower_discard_revealed_matching_unless_pay_life,
@@ -700,6 +701,9 @@ _BY_NODE_TYPE_WITH_PRODUCED: dict[type, object] = {
     # lowering needs ``produced`` where the event-bearing table passes
     # ``event``.
     ast.BinRevealedCard: _lower_bin_revealed_card,
+    # "the revealed cards" are the pile a reveal-until in front of it left
+    # revealed, so the lowering demands that step's record.
+    ast.PutRevealedCardsOnBottom: _lower_put_revealed_cards_on_bottom,
     # "one of **them**" names a set an earlier step of this same effect
     # recorded, so the node cannot answer on its own.
     ast.PutMilledCardOntoBattlefield: _lower_put_milled_card_onto_battlefield,

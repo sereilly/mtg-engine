@@ -565,6 +565,20 @@ class ReturnedToHandThisTurn:
     A history, like :class:`DiedThisTurn`: no read of the board can answer it,
     so the game keeps a per-seat counter the bounce paths feed."""
 @dataclass(frozen=True)
+class AmongThosePlayers:
+    """"**If you are one of those players**, put two +1/+1 counters on this
+    creature." (Menacing Ogre.)
+
+    Whether the ability's controller (CR 109.5's "you") is in the set of seats
+    the sentence in front of it described by a record — "each player with the
+    highest number" one sentence up. *seats* is that subject's kind, so the
+    condition asks the same set the loss was dealt to and cannot drift from
+    it: "those players" has no other antecedent.
+    """
+    seats: str
+
+
+@dataclass(frozen=True)
 class CoinFlipResult:
     """"you win the flip" / "you lose the flip" (CR 705.2).
 

@@ -48,6 +48,13 @@ class PileChoicesMixin:
         cards = list(choice.data.get("_cards") or ())
         if not isinstance(index, int) or not (0 <= index < len(cards)):
             return False
+        # "An opponent chooses **a creature card** from among them." (Animal
+        # Magnetism.) The slots the printed narrowing admits, armed with the
+        # prompt; an answer outside them is refused rather than trusted from
+        # the wire. Absent is every slot (Thran Tome).
+        legal = choice.data.get("legal_indices")
+        if legal is not None and index not in legal:
+            return False
         card = cards[index]
         revealer = self.players[int(choice.data.get("revealer_index", 0))]
         from_zone = str(choice.data.get("from_zone", "library"))
@@ -131,6 +138,14 @@ class PileChoicesMixin:
             self.put_card_into_hand(owner, card)
         elif to_zone == "exile":
             owner.exile.append(card)
+        elif to_zone == "battlefield":
+            # "Put that card onto the battlefield …" (Animal Magnetism.) Under
+            # its owner's control — the revealer, whose library it was and who
+            # performs the sentence (CR 110.2).
+            self._put_permanent_onto_battlefield(
+                self.players.index(owner), Permanent(card=card), None,
+                from_zone="library" if from_zone == "held" else from_zone,
+            )
         elif pile is not None:
             # A destination nobody implements: put it back rather than losing
             # the card. The lowering's closed list is what stops this being
@@ -145,18 +160,30 @@ class PileChoicesMixin:
         return True
 
     def _default_opponent_picks_revealed(self, choice: PendingChoice) -> None:
-        """A non-interactive chooser takes the **costliest** revealed card.
+        """A non-interactive chooser names the card that serves the revealer
+        **least**: the costliest where the chosen card is lost, the cheapest
+        where the revealer gets it.
 
         The same stated policy as ``_default_revealed_hand_pick``, and for the
-        same reason: this seat is an opponent, the card it names is the one the
-        revealer loses, and mana value is the one ranking every card in the pool
-        answers.
+        same reason: this seat is an opponent, and mana value is the one
+        ranking every card in the pool answers. Which end of it depends on the
+        chosen card's fate — Thran Tome bins the pick and Phyrexian Grimoire
+        exiles it, so the opponent names the best card; Animal Magnetism puts
+        the pick onto the revealer's battlefield and Intuition into the
+        revealer's hand, so the opponent names the worst. Read as "costliest"
+        everywhere, the opponent handed Intuition's caster the best card of
+        the three. Only among the slots the printed narrowing admits.
         """
         cards = list(choice.data.get("_cards") or ())
-        if not cards:
+        legal = choice.data.get("legal_indices")
+        slots = [i for i in range(len(cards)) if legal is None or i in legal]
+        if not slots:
             self.discard_pending_choice(choice)
             return
-        best = max(range(len(cards)), key=lambda i: (cards[i].cmc, -i))
+        if str(choice.data.get("fate", "graveyard")) in ("hand", "battlefield"):
+            best = min(slots, key=lambda i: (cards[i].cmc, i))
+        else:
+            best = max(slots, key=lambda i: (cards[i].cmc, -i))
         if not self._resolve_opponent_picks_revealed(choice, best):
             self.discard_pending_choice(choice)
 

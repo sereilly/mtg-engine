@@ -515,6 +515,42 @@ def parse_hides_items(
     return ast.SecretlyChooseNumbers(chooser, floor.value)  # parse_hides_items
 
 
+def parse_secretly_chooses_number(
+    stream: TokenStream, chooser: "ast.PlayerRef"
+) -> "ast.SecretlyChooseNumbers | None":
+    """``<each player> secretly chooses a number. Then those numbers are
+    revealed.`` The subject has been read, so this starts at the adverb.
+    (Menacing Ogre.)
+
+    :func:`parse_hides_items`' event in the words a later printing chose for
+    it: one number per seat, secret until every seat has one, then shown at
+    once. Both sentences, for that function's reason — "those numbers" names
+    the set only the first one makes, and the reveal is what the secrecy
+    ends in — so the second is consumed here rather than left to read as a
+    statement of its own.
+
+    No floor is printed, and CR 107.1b gives one ("You can't choose a negative
+    number"), which the ruling (2004-10-04) restates: "You
+    have to choose zero or a positive number. It must be an integer number."
+    Every word is required, "secretly" first of all — without it the numbers
+    are named in turn, each in sight of the last (CR 101.4b), which is
+    ``choose_number`` and a different card. Refuses without consuming.
+    """
+    mark = stream.mark()
+    if not (
+        chooser.kind == "each_player"
+        and stream.accept_word("secretly")
+        and stream.accept_word("chooses", "choose")
+        and stream.accept_phrase("a", "number")
+        and stream.accept_punct(".")
+        and stream.accept_phrase("then", "those", "numbers", "are", "revealed")
+        and (stream.exhausted or stream.at_punct(".", ";"))
+    ):
+        stream.reset(mark)
+        return None
+    return ast.SecretlyChooseNumbers(chooser, 0)
+
+
 def parse_choose_card_name(stream: TokenStream) -> "ast.Statement | None":
     """``Choose a card name.`` (Foreshadow.)
 

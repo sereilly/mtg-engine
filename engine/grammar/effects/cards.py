@@ -695,8 +695,11 @@ def _parse_reveal_hand_and_choose(stream: TokenStream) -> ast.Statement | None:
         stream.reset(mark)
         return None
     if not stream.accept_phrase("reveals", "their", "hand"):
-        stream.reset(mark)
-        return None
+        shown = _accept_reveals_cards_from_hand(stream)
+        if shown is None:
+            stream.reset(mark)
+            return None
+        return _reveal_shown_and_choose(stream, mark, player, shown)
     # "…reveals their hand**, then** you choose a card…" (Lobotomy) is the same
     # two sentences with the weaker join. English writes one clause either way
     # and the referent is identical — "it" is the hand this sentence revealed —
@@ -791,6 +794,59 @@ def _parse_reveal_hand_and_choose(stream: TokenStream) -> ast.Statement | None:
     # and Mind Warp opens on "look at".
     stream.reset(tail)
     return ast.RevealHandAndChoose(player, chosen.filter, fate="name")
+
+
+def _accept_reveals_cards_from_hand(stream: TokenStream) -> "int | None":
+    """``reveals <N> cards from their hand`` at the cursor — the printed number,
+    or None with the cursor where it was. (Blackmail.)
+
+    The hand reveal of a *part* of the hand, the revealer choosing which part:
+    the subject performs the reveal, so it is that player who picks the N
+    cards (CR 608.2c), and "if the player has less than 3 cards, all of them
+    are revealed" (the 2004-10-04 ruling) is CR 608.2's as-much-as-possible.
+    A printed number only; "any number of" is a different offer.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("reveals"):
+        return None
+    try:
+        count = parse_amount(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not (
+        isinstance(count, ast.Fixed) and count.value >= 1
+        and stream.accept_word("cards", "card")
+        and stream.accept_phrase("from", "their", "hand")
+    ):
+        stream.reset(mark)
+        return None
+    return count.value
+
+
+def _reveal_shown_and_choose(
+    stream: TokenStream, mark, player: ast.PlayerRef, shown: int,
+) -> "ast.RevealHandAndChoose | None":
+    """``…reveals three cards from their hand and you choose one of them. That
+    player discards that card.`` after the reveal has been read. (Blackmail.)
+
+    The rest of Duress's template over the cards the revealer showed rather
+    than the whole hand: "one of **them**" is a pick among exactly those
+    cards, and the ending is the one Duress prints. Every word required, so a
+    sentence that did something else with the pick refuses here.
+    """
+    stream.accept_word("and")
+    if not stream.accept_phrase("you", "choose", "one", "of", "them"):
+        stream.reset(mark)
+        return None
+    stream.accept_punct(".")
+    if not stream.accept_phrase("that", "player", "discards", "that", "card"):
+        stream.reset(mark)
+        return None
+    return ast.RevealHandAndChoose(
+        player, ast.ObjectFilter(is_card=True), fate="discard",
+        revealer_shows=shown,
+    )
 
 
 def parse_put_milled_card_onto_battlefield(

@@ -84,6 +84,35 @@ def _revealed_fewest_seats(game: Game, context: OracleExecutionContext) -> list[
     ]
 
 
+def revealed_highest_seats(game: Game, context: OracleExecutionContext) -> list[int]:
+    """Every seat whose secret number is the greatest, in turn order — ties
+    included. ("Each player with the highest number", Menacing Ogre.)
+
+    :func:`_revealed_fewest_seats` at the other extreme, read off the same
+    per-seat record and with its field: only a seat that named a number is
+    compared, and one still in the game is all that is asked of it. "Each
+    player with" names every seat at the extreme, so a tie is all of them —
+    which is the reading the Ogre's last sentence needs too ("**if you are one
+    of those players**"). Public for that sentence's condition, which asks the
+    same set without the offer's log line.
+    """
+    recorded = context.results.get(SECRET_NUMBERS_BY_SEAT) or {}
+    named = {
+        seat: int(number)
+        for seat, number in recorded.items()
+        if isinstance(seat, int)
+        and 0 <= seat < len(game.players)
+        and not game.players[seat].lost
+    }
+    if not named:
+        return []
+    greatest = max(named.values())
+    return [
+        seat for seat in _offered_seats(game, "each_player", context)
+        if named.get(seat) == greatest
+    ]
+
+
 def _revealed_mana_value_leader(
     game: Game, context: OracleExecutionContext
 ) -> "int | None":
@@ -923,6 +952,19 @@ def _offered_seats(
                 f"{card_name}: "
                 + ", ".join(game.players[seat].name for seat in holders)
                 + " revealed the fewest"
+            )
+        return holders
+    if actor == "each_revealed_highest":
+        # "**Each player with the highest number** loses that much life."
+        # (Menacing Ogre.) Every seat at the greatest secret number, ties and
+        # all — see :func:`revealed_highest_seats`.
+        holders = revealed_highest_seats(game, context)
+        if holders:
+            card_name = context.card.name if context.card is not None else "Effect"
+            game.log.append(
+                f"{card_name}: "
+                + ", ".join(game.players[seat].name for seat in holders)
+                + " named the highest number"
             )
         return holders
     if actor == "damaged_player":

@@ -57,7 +57,7 @@ from ...oracle_types import (CHOSEN_COLOR_THIS_WAY, CHOSEN_CREATURE_TYPE_THIS_WA
                              CHOSEN_NUMBER_THIS_WAY,
                              DISCARDED_THIS_WAY,
                              MILLED_THIS_WAY, PUT_INTO_HAND_THIS_WAY,
-                             REVEALED_HAND_CARDS)
+                             REVEALED_HAND_CARDS, SECRET_NUMBERS_BY_SEAT)
 from ...subject_filters import card_only_filter, untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
@@ -126,6 +126,19 @@ def lower_record_condition(
     Reached as that function’s tail call, so a condition neither half knows
     refuses here with the message it always carried.
     """
+    if isinstance(condition, ast.AmongThosePlayers):
+        # "If you are one of those players, …" (Menacing Ogre.) The seats the
+        # loss in front described by the secret numbers, asked again of the
+        # same record — so it demands that record's producer, for the reason
+        # every back-reference here does: without the choosing step the set is
+        # empty and the branch would silently never run.
+        if SECRET_NUMBERS_BY_SEAT not in produced:
+            raise LoweringError(
+                '"those players" with no step of this effect that had the '
+                "players reveal a number",
+                node=condition,
+            )
+        return {"kind": "caster_among_seats", "seats": condition.seats}
     if isinstance(condition, ast.CoinFlipResult):
         # A back-reference names its producer or refuses (round 33). Without a
         # flip earlier in the same effect there is nothing to read, and

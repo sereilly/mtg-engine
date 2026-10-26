@@ -359,7 +359,8 @@ class NumberChoicesMixin:
         return self._resolve_secret_number(
             choice,
             choose_secret_number(
-                self, choice.player_index, int(choice.data.get("minimum", 0))
+                self, choice.player_index, int(choice.data.get("minimum", 0)),
+                card=choice.data.get("_card"),
             ),
         )
 

@@ -124,9 +124,95 @@ def _accept_reveal_until_from_top(
     if not filt.is_card:
         stream.reset(mark)
         return None
+    at_stop = stream.mark()
     if not stream.accept_punct("."):
         stream.reset(mark)
         return None
+    found = _accept_found_card_fates(stream, possessive)
+    if found is not None:
+        destination, rest = found
+        return ast.RevealUntil("you", filt, destination=destination, rest=rest)
+    # "Reveal cards from the top of your library until you reveal a nonland
+    # card. This creature gets +X/+0 until end of turn, where X is that card's
+    # mana value. **Put the revealed cards on the bottom of your library in any
+    # order.**" (Goblin Machinist, Erratic Explosion.) The run with **no fate
+    # of its own**: CR 701.20b moves nothing, so the found card and everything
+    # turned over before it stay revealed on top of the library while the
+    # sentences behind read the found card — and a later sentence places the
+    # whole pile. The run's own sentence ends here, at its full stop, and the
+    # sentence loop reads the rest as the ordinary statements they are.
+    #
+    # Only where that later sentence is printed: a pile nothing places is a
+    # sentence nobody prints, and a tail this production did not recognise
+    # (a fate it has no row for) must keep refusing rather than lowering as a
+    # reveal that leaves every card where it was.
+    stream.reset(at_stop)
+    if possessive == "your" and names_the_revealed_cards_placed(stream):
+        return ast.RevealUntil(
+            "you", filt, destination="revealed", rest="revealed",
+        )
+    stream.reset(mark)
+    return None
+
+
+def names_the_revealed_cards_placed(stream: TokenStream) -> bool:
+    """Whether the rest of the line says "put the revealed cards" anywhere.
+
+    A token scan, for ``choices._names_that_player``'s reason: the sentence
+    that places the pile is not the next one but the one after the sentences
+    that read the found card (Goblin Machinist's pump, Erratic Explosion's
+    damage), and what binds is a definite noun phrase rather than a
+    production. The sentence itself is ``parse_put_revealed_cards_on_bottom``'s.
+    """
+    words = [str(token.text).lower() for token in stream.tokens[stream.pos:]]
+    return any(
+        window == ("put", "the", "revealed", "cards")
+        for window in zip(words, words[1:], words[2:], words[3:])
+    )
+
+
+def parse_put_revealed_cards_on_bottom(
+    stream: TokenStream,
+) -> "ast.PutRevealedCardsOnBottom | None":
+    """``[then you] put the revealed cards on the bottom of your library in any
+    order`` at the cursor, or None with the cursor where it was. (Goblin
+    Machinist, Erratic Explosion; Kaboom! prints "then you put".)
+
+    The pile a fateless run left revealed on top of the library
+    (:func:`_accept_reveal_until_from_top`'s bare form), going to the other
+    end of it. Every word required, "in any order" included: CR 401.4 gives
+    that order to the owner, and a printing stating one ("in a random order")
+    is a different instruction the handler does not perform. The lowering
+    demands the run that recorded the pile.
+    """
+    mark = stream.mark()
+    stream.accept_word("then")
+    stream.accept_word("you")
+    if not stream.accept_phrase(
+        "put", "the", "revealed", "cards", "on", "the", "bottom", "of", "your",
+        "library", "in", "any", "order",
+    ):
+        stream.reset(mark)
+        return None
+    if not (stream.exhausted or stream.at_punct(".", ";")):
+        stream.reset(mark)
+        return None
+    return ast.PutRevealedCardsOnBottom()
+
+
+def _accept_found_card_fates(
+    stream: TokenStream, possessive: str,
+) -> "tuple[str, str] | None":
+    """``Put that card <destination> and <the rest's fate>`` — where the run's
+    find and the cards before it go, read after the run's full stop — or None
+    with the cursor where it was.
+
+    The sentence that gives the run its fates, split out of
+    :func:`_accept_reveal_until_from_top` so that function can tell "the next
+    sentence says where everything goes" from "a later sentence does" (the
+    bare run above) with one call.
+    """
+    mark = stream.mark()
     # "**If you do,** put that card onto the battlefield…" (Avenging Druid);
     # "**If the first player does,** that player puts…" (Oath of Druids). The
     # offer above this production is what the clause points back at — the run
@@ -166,7 +252,7 @@ def _accept_reveal_until_from_top(
     if rest is None:
         stream.reset(mark)
         return None
-    return ast.RevealUntil("you", filt, destination=destination, rest=rest)
+    return destination, rest
 
 
 def _accept_did_clause(stream: TokenStream) -> bool:
@@ -219,9 +305,15 @@ def _accept_reveal_until_rest(
     # word required, the possessive agreeing with the sentence's subject as it
     # does at every other position.
     if stream.accept_word("shuffle"):
+        # "…and shuffle **the rest** into your library." (Riptide
+        # Shapeshifter.) Foster's spelling of the pile, below, behind this
+        # verb: "the rest" is exactly what the run turned over before it
+        # stopped, so it is the same pile and the same fate.
         if stream.accept_phrase(
             "all", "other", "cards", "revealed", "this", "way", "into",
             possessive, "library",
+        ) or stream.accept_phrase(
+            "the", "rest", "into", possessive, "library",
         ):
             return "shuffle_into_library"
         stream.reset(mark)

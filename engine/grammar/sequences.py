@@ -51,6 +51,7 @@ from .activation_instructions import (_parse_activation_restriction,
                                       _parse_x_spend_restriction)
 from .conditional_instead import _parse_conditional_instead_rider
 from .control_flow import (_attach_if_that_card_was_returned, _attach_if_you_cant,
+                          _attach_if_you_are_among_those_players,
                           _attach_if_you_do, _attach_otherwise, _attach_when_you_do,
                           _attach_tied_for_fewest, _attach_to_conditional_choice,
                           _attach_tied_life_draw, _parse_who_cant_rider)
@@ -81,6 +82,7 @@ from .sentence_rebinding import (
     rebind_alternative_pronoun_to_choice_target,
     rebind_delayed_pronoun_to_sentence_target,
     rebind_keyword_loss_pronoun_to_clause_target,
+    rebind_permanent_or_player_to_chosen_target,
     rebind_pump_pronoun_to_sentence_target,
     rebind_they_to_previous_set,
     rebind_token_maker_to_previous_player,
@@ -509,6 +511,12 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             # without consuming whatever the others read.
             if _attach_tied_for_fewest(stream, steps):
                 continue
+            # "If you are one of those players, put two +1/+1 counters on this
+            # creature." (Menacing Ogre.) A condition on the seats the loss in
+            # front was dealt to, beside the tie arm for the same reason: its
+            # only antecedent is that sentence's subject.
+            if _attach_if_you_are_among_those_players(stream, steps):
+                continue
             # "Otherwise, it gets +4/-X until end of turn." (Blood Lust.) The
             # second arm of the conditional sentence before it.
             if _attach_otherwise(stream, steps):
@@ -845,6 +853,11 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
     sequence = rebind_keyword_loss_pronoun_to_clause_target(
         rebind_pump_pronoun_to_sentence_target(ast.Sequence(tuple(steps)))
     )
+    # "Choose any target. … deals damage … to **that permanent or player**."
+    # (Erratic Explosion.) The choosing sentence hands its spec to the damage
+    # it was printed for, two sentences on.
+    if isinstance(sequence, ast.Sequence):
+        sequence = rebind_permanent_or_player_to_chosen_target(sequence)
     # The other cross-sentence pronoun, and the same argument: "remove all
     # -1/-1 counters from **the creature**" (Giant Oyster) names the creature
     # the sentence in front of it chose, and read as the bare source pronoun it

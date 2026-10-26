@@ -227,6 +227,7 @@ from .reveal import (
     accept_subject_reveals_top_of_library,
     parse_bin_revealed_card,
     parse_graveyard_top_opponent_chooses,
+    parse_put_revealed_cards_on_bottom,
 )
 from .zones import (
     _parse_shuffle_graveyard_into_library,
@@ -394,6 +395,7 @@ __all__ = [
     "_parse_shuffle_hand_into_library",
     "_parse_shuffle_library",
     "parse_bin_revealed_card",
+    "parse_put_revealed_cards_on_bottom",
     "parse_graveyard_top_opponent_chooses",
     "parse_graveyard_top_to_library",
     "_parse_discard",

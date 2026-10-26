@@ -125,6 +125,23 @@ def _names_that_permanents_colors(stream: TokenStream) -> bool:
     )
 
 
+def _names_that_permanent_or_player(stream: TokenStream) -> bool:
+    """Whether the rest of the line says "that permanent or player" anywhere.
+
+    :func:`_names_that_player`'s twin for CR 115.4's "any target", and a token
+    scan for its reason: the binder is two sentences away. "Choose any target.
+    Reveal cards from the top of your library until you reveal a nonland card.
+    Erratic Explosion deals damage equal to that card's mana value to **that
+    permanent or player**." (Erratic Explosion.) The reveal in between is not
+    about the target at all, so no probe over the next sentence can answer.
+    """
+    words = [str(token.text).lower() for token in stream.tokens[stream.pos:]]
+    return any(
+        window == ("that", "permanent", "or", "player")
+        for window in zip(words, words[1:], words[2:], words[3:])
+    )
+
+
 def _parse_choose_untargeted_permanent(stream: TokenStream) -> "ast.ChoosePermanent | None":
     """``Choose a permanent you control.`` — a pick made as the effect resolves
     (CR 608.2d), with **no** printed "target".
@@ -326,6 +343,12 @@ def _parse_choose_target(stream: TokenStream, parse_statement) -> "ast.ChooseTar
         # what consumes the words, and its lowering is what refuses them where
         # no step in front recorded a permanent.
         binds = _names_that_permanents_colors(stream)
+    if not binds and chosen.quantifier == "any_target":
+        # …or "**that permanent or player**", the only back-reference that
+        # can name what "any target" chose whichever kind it was (Erratic
+        # Explosion). The sequence hands the spec to that damage
+        # (``sentence_rebinding.rebind_permanent_or_player_to_chosen_target``).
+        binds = _names_that_permanent_or_player(stream)
     if not binds:
         # …or a loop over the set this sentence just named — "**For each of
         # those creatures,** its controller may pay …" (Winter's Chill). The

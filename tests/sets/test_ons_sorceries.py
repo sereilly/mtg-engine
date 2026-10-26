@@ -824,6 +824,256 @@ def test_w1g10_chain_of_acid_copied_and_copied_back(set_pool):
 # ==== W1G12 ==========================================================
 # W1G12's tests go between this line and the "end W1G12" line.
 
+# --- W1G12: revealing ---------------------------------------------------------
+from engine import Game as _w1g12_Game
+from engine.models import Permanent as _w1g12_Permanent
+from engine.models import PlayerState as _w1g12_PlayerState
+from engine.oracle import compile_card_oracle as _w1g12_compile
+from engine.targeting import derive_cast_spec as _w1g12_cast_spec
+
+from tests.helpers import _mk_creature_card as _w1g12_creature
+from tests.helpers import resolve_stack as _w1g12_resolve_stack
+
+
+def _w1g12_table(set_pool, library, *, hands=None, interactive=(), seats=2,
+                 libraries=None):
+    ons = set_pool("ONS")
+    hands = hands or {}
+    libraries = libraries or {}
+    names = ["Alice", "Bob", "Cara"][:seats]
+    players = [
+        _w1g12_PlayerState(
+            name=name,
+            hand=[ons[card] if isinstance(card, str) else card for card in hands.get(seat, ())],
+            library=[
+                ons[c] if isinstance(c, str) else c
+                for c in (library if seat == 0 else libraries.get(seat, ["Plains"] * 5))
+            ],
+        )
+        for seat, name in enumerate(names)
+    ]
+    game = _w1g12_Game(players=players)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game.active_player_index = 0
+    return game
+
+
+def _w1g12_put(game, seat, card):
+    permanent = _w1g12_Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    game._sync_control()
+    return permanent
+
+
+def _w1g12_names(cards):
+    return [card.name for card in cards]
+
+
+def test_w1g12_erratic_explosion_hits_the_chosen_creature_for_the_mana_value(set_pool):
+    """"Choose any target. Reveal cards from the top of your library until you
+    reveal a nonland card. Erratic Explosion deals damage equal to that card's
+    mana value to that permanent or player. Put the revealed cards on the
+    bottom of your library in any order." The picker offers any target (the
+    choosing sentence is the announcement, CR 601.2c); the run stops on
+    Akroma's Vengeance under a land, the giant takes 6, and the two revealed
+    cards go under the one never turned over."""
+    explosion = set_pool("ONS")["Erratic Explosion"]
+    spec = _w1g12_cast_spec(explosion, _w1g12_compile(explosion))
+    assert spec is not None and spec.get("kind") == "any"
+    game = _w1g12_table(
+        set_pool, ["Mountain", "Akroma's Vengeance", "Forest"],
+        hands={0: ["Erratic Explosion"]},
+    )
+    giant = _w1g12_put(game, 1, _w1g12_creature("Bob's Giant", 5, 7))
+    assert game.cast_from_hand(
+        0, "Erratic Explosion", target_permanent_ids=[giant.permanent_id],
+    ).supported
+    _w1g12_resolve_stack(game)
+    assert giant.damage_marked == 6
+    assert game.players[1].life == 20
+    assert _w1g12_names(game.players[0].library) == [
+        "Forest", "Mountain", "Akroma's Vengeance",
+    ]
+    assert _w1g12_names(game.players[0].graveyard) == ["Erratic Explosion"]
+
+
+def test_w1g12_erratic_explosion_at_a_player_and_over_an_all_land_library(set_pool):
+    """At a player: Shock on top deals 1. And the ruling (2004-10-04): "If all
+    your cards are lands, no damage is dealt" — the whole library is turned
+    over and put back, and the player is untouched."""
+    game = _w1g12_table(
+        set_pool, ["Shock", "Forest"], hands={0: ["Erratic Explosion"]},
+    )
+    assert game.cast_from_hand(0, "Erratic Explosion", target_player_index=1).supported
+    _w1g12_resolve_stack(game)
+    assert game.players[1].life == 19
+    assert _w1g12_names(game.players[0].library) == ["Forest", "Shock"]
+
+    game = _w1g12_table(
+        set_pool, ["Mountain", "Forest"], hands={0: ["Erratic Explosion"]},
+    )
+    assert game.cast_from_hand(0, "Erratic Explosion", target_player_index=1).supported
+    _w1g12_resolve_stack(game)
+    assert game.players[1].life == 20
+    assert _w1g12_names(game.players[0].library) == ["Mountain", "Forest"]
+
+
+def test_w1g12_erratic_explosion_whose_target_left_does_not_reveal(set_pool):
+    """CR 608.2b: the one target is illegal as the spell resolves, so the
+    spell does nothing at all — no card is revealed and the library is as it
+    was."""
+    game = _w1g12_table(
+        set_pool, ["Mountain", "Shock", "Forest"], hands={0: ["Erratic Explosion"]},
+    )
+    giant = _w1g12_put(game, 1, _w1g12_creature("Bob's Giant", 5, 7))
+    assert game.queue_from_hand(
+        0, "Erratic Explosion", target_player_index=1,
+        target_permanent_ids=[giant.permanent_id],
+    ).supported
+    assert len(game.stack) == 1
+    game.remove_from_battlefield(giant)
+    _w1g12_resolve_stack(game)
+    assert _w1g12_names(game.players[0].library) == ["Mountain", "Shock", "Forest"]
+    assert not any("stopped on" in line for line in game.log)
+    assert _w1g12_names(game.players[0].graveyard) == ["Erratic Explosion"]
+
+
+_W1G12_MAGNETISM_LIBRARY = [
+    "Forest", "Wellwisher", "Island", "Krosan Colossus", "Mountain", "Swamp",
+]
+
+
+def test_w1g12_animal_magnetism_the_opponent_picks_the_creature_you_get(set_pool):
+    """"Reveal the top five cards of your library. An opponent chooses a
+    creature card from among them. Put that card onto the battlefield and the
+    rest into your graveyard." At three seats the caster names which opponent
+    chooses (CR 608.2d); Cara is offered only the two creature cards, a land is
+    refused, and her pick enters under Alice while the other four revealed
+    cards are binned — the sixth card, never revealed, stays."""
+    game = _w1g12_table(
+        set_pool, _W1G12_MAGNETISM_LIBRARY, hands={0: ["Animal Magnetism"]},
+        interactive={0, 1, 2}, seats=3,
+    )
+    assert game.cast_from_hand(0, "Animal Magnetism").supported
+    who = game.pending_choice_of("player_choice", 0)
+    assert who is not None and sorted(who.data["seats"]) == [1, 2]
+    assert game.resolve_pending_choice("player_choice", 0, seat=2)
+    pick = game.pending_choice_of("opponent_picks_revealed", 2)
+    assert pick is not None and pick.data["cards"] == _W1G12_MAGNETISM_LIBRARY[:5]
+    assert pick.data["legal_indices"] == [1, 3]
+    assert not game.confirm_opponent_picks_revealed(2, 0), "a land is not a creature card"
+    assert game.confirm_opponent_picks_revealed(2, 3)
+    _w1g12_resolve_stack(game)
+    entered = list(game.all_permanents())
+    assert [p.card.name for p in entered] == ["Krosan Colossus"]
+    assert game.controller_index_of(entered[0]) == 0
+    assert sorted(_w1g12_names(game.players[0].graveyard)) == [
+        "Animal Magnetism", "Forest", "Island", "Mountain", "Wellwisher",
+    ]
+    assert _w1g12_names(game.players[0].library) == ["Swamp"]
+
+
+def test_w1g12_animal_magnetism_an_ai_opponent_hands_over_the_weakest(set_pool):
+    """A seat nobody asks names the creature that serves the revealer least —
+    the cheapest, since the card it names is the one Alice gets (Thran Tome's
+    costliest-first is the policy for a pick that is *lost*). And with no
+    creature card among the five, nobody chooses anything and all five are
+    binned."""
+    game = _w1g12_table(
+        set_pool, _W1G12_MAGNETISM_LIBRARY, hands={0: ["Animal Magnetism"]},
+    )
+    assert game.cast_from_hand(0, "Animal Magnetism").supported
+    _w1g12_resolve_stack(game)
+    assert [p.card.name for p in game.all_permanents()] == ["Wellwisher"]
+    assert "Krosan Colossus" in _w1g12_names(game.players[0].graveyard)
+
+    lands = ["Forest", "Island", "Mountain", "Swamp", "Plains", "Forest"]
+    game = _w1g12_table(set_pool, lands, hands={0: ["Animal Magnetism"]})
+    assert game.cast_from_hand(0, "Animal Magnetism").supported
+    _w1g12_resolve_stack(game)
+    assert list(game.all_permanents()) == []
+    assert game.pending_choices == []
+    assert sorted(_w1g12_names(game.players[0].graveyard)) == sorted(
+        lands[:5] + ["Animal Magnetism"]
+    )
+    assert _w1g12_names(game.players[0].library) == ["Forest"]
+
+
+_W1G12_BOB_HAND = ["Akroma's Vengeance", "Plains", "Shock", "Krosan Colossus", "Island"]
+
+
+def test_w1g12_blackmail_the_target_shows_three_and_the_caster_takes_one(set_pool):
+    """"Target player reveals three cards from their hand and you choose one
+    of them. That player discards that card." Bob — the revealer — picks the
+    three he shows (CR 608.2c); Alice is offered only those, the two he kept
+    back go out face down (no name on the wire), Shock (unrevealed) is
+    refused, and the card she takes is discarded."""
+    from web.prompt_cards import _revealed_hand_pick as _w1g12_render
+    from web.prompt_registry import PromptContext as _w1g12_Ctx
+
+    game = _w1g12_table(
+        set_pool, ["Swamp"] * 5, hands={0: ["Blackmail"], 1: _W1G12_BOB_HAND},
+        interactive={0, 1},
+    )
+    assert game.cast_from_hand(0, "Blackmail", target_player_index=1).supported
+    shown = game.pending_choice_of("choose_cards_in_hand", 1)
+    assert shown is not None and shown.data["count"] == 3
+    assert game.pending_choice_of("revealed_hand_pick", 0) is None
+    assert game.confirm_choose_cards_in_hand(1, [0, 1, 4])
+    pick = game.pending_choice_of("revealed_hand_pick", 0)
+    assert pick is not None and pick.data["legal_indices"] == [0, 1, 4]
+    rendered = _w1g12_render(
+        _w1g12_Ctx(game=game, viewer_seat=0, serialize_card=lambda card: {"name": card.name},
+                   seat_type=lambda seat: "human"),
+        [pick],
+    )
+    assert [c["name"] for c in rendered["cards"]] == [
+        "Akroma's Vengeance", "Plains", "Face-down card", "Face-down card", "Island",
+    ]
+    assert not game.confirm_revealed_hand_pick(0, 2), "Shock was never revealed"
+    assert game.confirm_revealed_hand_pick(0, 0)
+    _w1g12_resolve_stack(game)
+    assert _w1g12_names(game.players[1].graveyard) == ["Akroma's Vengeance"]
+    assert _w1g12_names(game.players[1].hand) == [
+        "Plains", "Shock", "Krosan Colossus", "Island",
+    ]
+    assert _w1g12_names(game.players[0].graveyard) == ["Blackmail"]
+
+
+def test_w1g12_blackmail_against_a_two_card_hand_reveals_both(set_pool):
+    """The ruling (2004-10-04): "If the player has less than 3 cards, all of
+    them are revealed." Nobody asks Bob anything — both cards are shown and
+    Alice picks between them at once."""
+    game = _w1g12_table(
+        set_pool, ["Swamp"] * 5, hands={0: ["Blackmail"], 1: ["Shock", "Plains"]},
+        interactive={0, 1},
+    )
+    assert game.cast_from_hand(0, "Blackmail", target_player_index=1).supported
+    assert game.pending_choice_of("choose_cards_in_hand", 1) is None
+    pick = game.pending_choice_of("revealed_hand_pick", 0)
+    assert pick is not None and pick.data["legal_indices"] == [0, 1]
+    assert game.confirm_revealed_hand_pick(0, 1)
+    _w1g12_resolve_stack(game)
+    assert _w1g12_names(game.players[1].graveyard) == ["Plains"]
+    assert _w1g12_names(game.players[1].hand) == ["Shock"]
+
+
+def test_w1g12_blackmail_between_two_seats_nobody_asks(set_pool):
+    """A revealer nobody asks shows its three least costly cards (the lands
+    and the Shock), and a caster nobody asks takes the costliest of what was
+    shown — never Akroma's Vengeance, which Bob kept back."""
+    game = _w1g12_table(
+        set_pool, ["Swamp"] * 5, hands={0: ["Blackmail"], 1: _W1G12_BOB_HAND},
+    )
+    assert game.cast_from_hand(0, "Blackmail", target_player_index=1).supported
+    _w1g12_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    assert game.pending_choices == []
+    assert _w1g12_names(game.players[1].graveyard) == ["Shock"]
+    assert any("Bob revealed Plains, Island, Shock" in line for line in game.log)
+
 # ==== end W1G12 ======================================================
 
 
