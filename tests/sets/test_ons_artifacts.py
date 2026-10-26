@@ -204,6 +204,142 @@ def test_w1g4_riptide_replicator_makes_a_token_of_the_chosen_color_and_type(set_
 # ==== W1G6 ==========================================================
 # W1G6's tests go between this line and the "end W1G6" line.
 
+# "Share a creature type" (CR 205.3m) — Cryptic Gateway: "Tap two untapped
+# creatures you control: You may put a creature card from your hand that shares
+# a creature type with each creature tapped this way onto the battlefield."
+
+from engine import Game as _W1G6Game, PlayerState as _W1G6PlayerState
+from engine.models import Permanent as _W1G6Permanent
+from engine.targeting import derive_activation_spec as _w1g6_activation_spec
+from engine.oracle import compile_card_oracle as _w1g6_compile
+from tests.helpers import resolve_stack as _w1g6_resolve_stack
+
+
+def _w1g6_card(set_pool, name):
+    for code in ("ONS", "LEA", "LEG", "UDS"):
+        pool = set_pool(code)
+        if name in pool:
+            return pool[name]
+    raise KeyError(name)
+
+
+#: The ruling's own example (2022-12-08): an Elf Wizard and a Human Warrior
+#: tapped, and an Elf Warrior put onto the battlefield.
+_W1G6_TAPPED = ("Ivy Seer", "Barktooth Warbeard")
+#: The hand: the Elf Warrior shares Elf with one and Warrior with the other;
+#: the Elf Druid shares only Elf, the Human Soldier only Human, the Bear nothing.
+_W1G6_HAND = ("Wirewood Elf", "Glory Seeker", "Elvish Warrior", "Grizzly Bears")
+
+
+def _w1g6_gateway_table(set_pool, *, hand=_W1G6_HAND, interactive=(0,), sick=False):
+    me = _W1G6PlayerState(
+        name="Me", hand=[_w1g6_card(set_pool, n) for n in hand],
+        library=[_w1g6_card(set_pool, "Forest")] * 6,
+    )
+    opp = _W1G6PlayerState(name="Opp", library=[_w1g6_card(set_pool, "Island")] * 6)
+    game = _W1G6Game(players=[me, opp])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    gateway = _W1G6Permanent(card=_w1g6_card(set_pool, "Cryptic Gateway"))
+    game._put_permanent_onto_battlefield(0, gateway, None)
+    tapped = []
+    for name in _W1G6_TAPPED:
+        perm = _W1G6Permanent(card=_w1g6_card(set_pool, name))
+        game._put_permanent_onto_battlefield(0, perm, None)
+        if not sick:
+            perm.metadata["summoning_sickness_turn"] = -99
+        tapped.append(perm)
+    game.stack.clear()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    return game, gateway, tapped
+
+
+def _w1g6_activate(game, tapped):
+    result = game.queue_permanent_ability(
+        0, "Cryptic Gateway", cost_permanent_ids=[p.permanent_id for p in tapped],
+    )
+    assert result.supported, result
+    assert all(perm.tapped for perm in tapped), "the cost tapped both"
+    game.resolve_top_of_stack(pause_for_choices=True)
+    assert game.confirm_optional_pay(0, accept=True)
+
+
+def _w1g6_offered(game):
+    (choice,) = game.pending_choices_of("put_from_hand_choice", 0)
+    hand = game.players[0].hand
+    return [hand[index].name for index in game.live_put_from_hand_choices(choice)]
+
+
+def test_w1g6_cryptic_gateway_offers_only_a_card_sharing_a_type_with_each_tapped_creature(set_pool):
+    """Cryptic Gateway (2022-12-08): "The two creatures you tap … don't
+    necessarily have to share a creature type, but the creature card you put
+    onto the battlefield must share a creature type with each of them. For
+    example, you could tap an Elf Wizard and a Human Warrior to put an Elf
+    Warrior card onto the battlefield." The Elf Druid shares only with the
+    Wizard and the Human Soldier only with the Warrior, so the Elf Warrior is
+    the one card offered — and it is put onto the battlefield."""
+    game, _gateway, tapped = _w1g6_gateway_table(set_pool)
+    _w1g6_activate(game, tapped)
+
+    assert _w1g6_offered(game) == ["Elvish Warrior"], game.log
+    hand = game.players[0].hand
+    assert not game.confirm_put_from_hand_choice(0, [c.name for c in hand].index("Wirewood Elf"))
+    assert game.confirm_put_from_hand_choice(0, [c.name for c in hand].index("Elvish Warrior"))
+    _w1g6_resolve_stack(game)
+
+    assert any(
+        perm.card.name == "Elvish Warrior" for perm in game.controlled_by(0)
+    ), game.log
+    assert [card.name for card in game.players[0].hand] == [
+        "Wirewood Elf", "Glory Seeker", "Grizzly Bears",
+    ]
+
+
+def test_w1g6_cryptic_gateway_with_no_card_that_shares_with_both_offers_nothing(set_pool):
+    """No card in hand shares a type with **each** tapped creature — the Elf
+    Druid and the Human Soldier each share with one of them — so nothing is
+    put onto the battlefield and the hand is unchanged."""
+    game, _gateway, tapped = _w1g6_gateway_table(
+        set_pool, hand=("Wirewood Elf", "Glory Seeker"),
+    )
+    result = game.queue_permanent_ability(
+        0, "Cryptic Gateway", cost_permanent_ids=[p.permanent_id for p in tapped],
+    )
+    assert result.supported
+    game.auto_resolve_pending_choices()
+    _w1g6_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+
+    assert [card.name for card in game.players[0].hand] == ["Wirewood Elf", "Glory Seeker"]
+    assert not game.pending_choices_of("put_from_hand_choice", 0)
+    assert len(list(game.controlled_by(0))) == 3
+
+
+def test_w1g6_cryptic_gateway_may_tap_creatures_that_just_arrived(set_pool):
+    """Cryptic Gateway (2022-12-08): "You can tap any untapped creatures you
+    control to activate Cryptic Gateway's ability, even ones you haven't
+    controlled continuously since the beginning of your most recent turn."
+    CR 302.6 restricts a creature's *own* {T} abilities, and this is the
+    artifact's ability: two creatures that arrived this turn pay it."""
+    game, _gateway, tapped = _w1g6_gateway_table(set_pool, sick=True)
+    assert all(not game._controlled_since_turn_start(p) for p in tapped)
+    _w1g6_activate(game, tapped)
+
+    assert _w1g6_offered(game) == ["Elvish Warrior"]
+
+
+def test_w1g6_cryptic_gateway_names_no_target(set_pool):
+    """The picker: the ability targets nothing (the creature card is chosen as
+    it resolves, CR 608.2d), so no target spec is derived for the client to
+    answer, and the cost's two creatures are what the activation names."""
+    gateway = _w1g6_card(set_pool, "Cryptic Gateway")
+    (ability,) = _w1g6_compile(gateway).activated_abilities
+    assert ability.supported
+    assert ability.cost.tap_count == 2
+    spec = _w1g6_activation_spec(ability)
+    assert spec is None or not spec.get("requires_target"), spec
+
 # ==== end W1G6 ======================================================
 
 

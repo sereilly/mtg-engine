@@ -27,6 +27,8 @@ instruction kind.
 
 from __future__ import annotations
 
+import dataclasses
+
 from ...oracle_types import OracleInstruction, REVEALED_TOP_CARDS_BY_SEAT
 from ...subject_filters import SOURCE_RESOLVED_CARD_KEYS, card_only_filter
 from .. import ast
@@ -34,6 +36,7 @@ from ..errors import LoweringError
 from ...damage_deaths import DAMAGED_BY_SOURCE_DIED
 from ._deaths import BOUND_CARD_EVENTS
 from ._described_returns import _graveyard_to_hand_payload
+from ._cost_records import shared_creature_type_referent
 from ._events import binds_block_pair
 from ._piles import _chosen_graveyard_cards, one_card_pile_pick
 from ._common import (
@@ -574,6 +577,20 @@ def _lower_put_onto_battlefield(
         # "their hand" is the hand of whoever the offer was made to, which is
         # why the owner spelling is admitted at all; "your hand" is the caster's.
         if target.quantifier in ("a", "an") and filt.is_card:
+            # "…a creature card from your hand **that shares a creature type
+            # with each creature tapped this way**" (Cryptic Gateway). A
+            # relation to what this ability's own cost tapped, which no card in
+            # a hand can answer: lifted off here under the referent the one
+            # reading of the phrase gives it (``shared_creature_type_referent``
+            # — which refuses it where no cost tapped anything) and put back
+            # for the handler to resolve before any card is matched.
+            related: str | None = None
+            if filt.shares_creature_type_with is not None:
+                related = shared_creature_type_referent(
+                    filt.shares_creature_type_with, event=event,
+                    produced=produced, node=node,
+                )
+                filt = dataclasses.replace(filt, shares_creature_type_with=None)
             # The zone and its owner are read on the two lines above, so they
             # are honoured in the sense this check means; anything *else* the
             # phrase printed has to survive into the payload, because a
@@ -601,6 +618,8 @@ def _lower_put_onto_battlefield(
                 raise LoweringError(
                     "the from-hand pick cannot test that card phrase", node=node
                 )
+            if related is not None:
+                described = {**described, "shares_creature_type_with": related}
             pick_payload: dict[str, object] = {
                 "card_filter": described,
                 # An empty type list with is_card means "permanent
