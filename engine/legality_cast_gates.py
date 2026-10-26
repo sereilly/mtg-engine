@@ -23,6 +23,7 @@ response is illegal at resolution exactly as it would have been here. A target
 from __future__ import annotations
 
 from .models import CardDefinition
+from .announced_creature_type import with_announced_creature_type
 from .divided_damage import divided_entry
 from .oracle import compile_card_oracle
 from .oracle_types import cost_target_count
@@ -266,6 +267,7 @@ class CastTargetGatesMixin:
         mode_index: int | None = None,
         divided_targets=None, target_stack_item=None,
         x_value: int | None = None,
+        chosen_creature_type: str | None = None,
     ) -> str | None:
         """CR 601.2c: a **named** target — a battlefield permanent, a slot in a
         graveyard, or a **player** — must be a legal one, checked before any
@@ -381,6 +383,12 @@ class CastTargetGatesMixin:
             optional_cost_payments=optional_cost_payments,
             mode_index=mode_index,
         )
+        # …and under CR 601.2b's type, for a spell whose targets are "of the
+        # creature type of your choice" (Aphetto Dredging): the slots named are
+        # judged against the list that word admits — the picker's own list for
+        # the same word (``Game.cast_target_spec(chosen_creature_type=)``).
+        if spec is not None:
+            spec = with_announced_creature_type(spec, chosen_creature_type)
         # **A seat announced beside the spec's own slots** first
         # (``target_descriptions.ANNOUNCED_SEAT``): the owner of a pile
         # ("…target cards from target player's graveyard", Drafna's

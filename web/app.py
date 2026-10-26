@@ -554,13 +554,17 @@ def get_card_target_spec(
     from_zone: str = Query("hand"),
     hand_index: int | None = Query(None, ge=0),
     optional_cost_payments: str | None = Query(None),
+    chosen_creature_type: str | None = Query(None),
 ):
     """The cast target spec (kind + enumerated legal targets) for a card cast by
     ``seat`` in this session. Hand cards already carry this in the serialized
     state; this lets the debug "cast for free" flow — whose card comes from a
     session-less catalog search — drive the same backend-authoritative targeting,
     and lets any cast re-ask mid-announcement once CR 601.2b's optional prices
-    have been part-answered (``optional_cost_payments``, JSON)."""
+    have been part-answered (``optional_cost_payments``, JSON) — or its
+    creature type chosen (``chosen_creature_type``): a spell whose targets are
+    "of the creature type of your choice" (Aphetto Dredging) lists the targets
+    that word admits."""
     session = _require_session(session_id)
     if seat >= len(session.game.players):
         raise HTTPException(status_code=400, detail="seat out of range for this session")
@@ -573,6 +577,7 @@ def get_card_target_spec(
     return build_card_target_spec(
         session, card, seat, from_zone=from_zone, hand_index=hand_index,
         optional_cost_payments=optional_cost_payments,
+        chosen_creature_type=chosen_creature_type,
     )
 
 

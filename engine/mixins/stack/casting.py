@@ -684,8 +684,15 @@ class SpellCastingMixin:
         # (idiom 9): a picker's list is only true if the engine declines what is
         # not on it, and a silently-corrected answer would make the spell's own
         # P/T disagree with what the player chose.
+        #
+        # The same announcement with no price behind it, for a spell whose
+        # *targets* are of the type chosen (Aphetto Dredging: "the creature
+        # type before the targets", its ruling). Made here, before the target
+        # gates below judge what was named under it.
         chosen_type_word: str | None = None
-        if any(cost.choose_creature_type for cost in cast_costs):
+        if any(
+            cost.choose_creature_type for cost in cast_costs
+        ) or self._cast_type_narrows_graveyard_targets(card):
             from ...grammar.vocabulary import CREATURE_TYPES
 
             if chosen_creature_type is not None:
@@ -926,6 +933,9 @@ class SpellCastingMixin:
             target_permanent_index=target_permanent_index,
             target_player_index=target_player_index,
             target_stack_item=target_stack_item, x_value=x_value,
+            # CR 601.2b's type, under which CR 601.2c's targets were chosen
+            # (Aphetto Dredging); None for every cast that announces none.
+            chosen_creature_type=chosen_type_word,
         )
         if mode_refusal is not None:
             return mode_refusal

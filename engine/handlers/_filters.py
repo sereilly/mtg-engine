@@ -28,6 +28,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable
 
+from ..announced_creature_type import narrows_by_announced_type
 from ..layer_bridge import printed_shape, printed_supertypes
 from ..oracle_types import DISCARDED_CARDS_BY_SEAT, SACRIFICED_CARDS_BY_SEAT
 from ..models import Permanent
@@ -410,6 +411,12 @@ def graveyard_card_matches(spec: dict, card, *, game=None, owner=None) -> bool:
     *and* a creature card. The bare case keeps ``primary_type``, which is what
     the reanimation handlers ask of the card they put onto the battlefield.
     """
+    # "…creature cards **of the creature type of your choice**" (Aphetto
+    # Dredging) still carrying its flag: the reader was handed no announced
+    # word to substitute (``announced_creature_type``), so no card is of it —
+    # never "any creature card", which is the phrase dropped.
+    if narrows_by_announced_type(spec):
+        return False
     card_types = tuple(spec.get("card_types") or ())
     # Through ``card_has_type``, not ``primary_type``: a card has **every** type
     # its line names (CR 205.2, idiom 15), so an Artifact Creature answers "an

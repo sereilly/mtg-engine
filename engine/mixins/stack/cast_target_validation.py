@@ -26,6 +26,7 @@ from __future__ import annotations
 import dataclasses
 import re
 
+from ...announced_creature_type import with_announced_creature_type
 from ...auras import aura_enchant_clause
 from ...handlers._filters import graveyard_card_matches
 from ...models import CardDefinition, Permanent
@@ -529,6 +530,7 @@ class CastTargetValidationMixin:
         target_permanent_ids: list[int | None] | None = None,
         optional_cost_payments: dict | None = None,
         target_role_seats: "list | None" = None,
+        chosen_creature_type: str | None = None,
     ) -> tuple[bool, str]:
         """Return (True, 'valid') if all required targets exist, else (False, reason).
 
@@ -552,6 +554,12 @@ class CastTargetValidationMixin:
         named more than one player (``target_roles.ROLE_SEATS``); the roles gate
         below fills each player slot from it, and every seat in it is held to
         the same name-protection question the scalar is.
+
+        *chosen_creature_type* is CR 601.2b's type, for a spell whose graveyard
+        targets are "of the creature type of your choice" (Aphetto Dredging):
+        each named card is judged under that word
+        (``announced_creature_type.with_announced_creature_type``), and a cast
+        that announced none names no card of it.
         """
         # Protection from this spell's *name* (Runed Halo, CR 702.16i): the
         # player can't be chosen as a target, which under CR 601.2c makes the
@@ -1088,6 +1096,14 @@ class CastTargetValidationMixin:
             # offers for the derived spec — the picker's list and the re-check
             # are one answer (idiom #9).
             caster = self.players[caster_index]
+            # "…creature cards of the creature type of your choice" (Aphetto
+            # Dredging): every card below is judged under the word the cast
+            # announced, through the same matcher the picker asked.
+            primary = dataclasses.replace(
+                primary, payload=with_announced_creature_type(
+                    primary.payload, chosen_creature_type,
+                ),
+            )
             any_graveyard = bool(primary.payload.get("any_graveyard"))
             sources = list(self.players) if any_graveyard else [caster]
             # The pile the caller pointed at: the named seat's when the phrase

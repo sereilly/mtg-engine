@@ -20,6 +20,8 @@ read the one enumeration, which is what keeps them agreeing.
 from __future__ import annotations
 
 from .models import CardDefinition, Permanent
+from .announced_creature_type import (narrows_by_announced_type,
+                                      with_announced_creature_type)
 from .cast_costs import (
     buyback_cost,
     cast_announces_x,
@@ -173,6 +175,7 @@ class CastTargetSpecMixin:
         optional_cost_payments: dict[str, int] | None = None,
         mode_index: int | None = None,
         requirements: bool = True,
+        chosen_creature_type: str | None = None,
     ) -> dict:
         """Target spec for casting ``card`` from ``caster_index``'s *from_zone*:
         the target kind plus every legal target, enumerated and gated through the
@@ -212,7 +215,13 @@ class CastTargetSpecMixin:
         several slots keeps its list and carries ``required_targets``.
         ``requirements=False`` is the same spec without that — every *legal*
         target — which is what the announcement gate measures "if able"
-        against (:meth:`cast_target_requirement_refusal`)."""
+        against (:meth:`cast_target_requirement_refusal`).
+
+        ``chosen_creature_type`` is CR 601.2b's choice-shaped answer so far,
+        for the one shape whose targets it narrows ("…creature cards of the
+        creature type of your choice", Aphetto Dredging): the targets listed
+        are the ones that word admits, the default's where none is given
+        (``engine/announced_creature_type.py``)."""
         # CR 709.3: a split card is not a spell until a half is chosen, and each
         # half has its own spec — asked of the half (`faces.face_cards`), which
         # is the card the cast path and the serializer both hand this method.
@@ -318,7 +327,19 @@ class CastTargetSpecMixin:
         # Without this the picker asks nothing, the cast takes the default, and
         # a human seat silently gets the engine's guess at the one choice the
         # card is entirely about.
-        if any(cost.choose_creature_type for cost in costs_charged_from(card, from_zone)):
+        #
+        # "Return up to three target creature cards **of the creature type of
+        # your choice** …" (Aphetto Dredging) makes the same announcement with
+        # no cost behind it, and its targets are chosen **under** it (the
+        # card's ruling: the type before the targets). So the list below is
+        # enumerated for one word — *chosen_creature_type*, the answer so far,
+        # or the default the cast itself would take — and the spec says which
+        # (``chosen_creature_type``), so a client that asked the type re-asks
+        # this spec with it, the way ``optional_cost_payments`` is re-asked.
+        announced_targets = narrows_by_announced_type(spec)
+        if announced_targets or any(
+            cost.choose_creature_type for cost in costs_charged_from(card, from_zone)
+        ):
             from .grammar.vocabulary import CREATURE_TYPES
 
             spec["announces_creature_type"] = True
@@ -326,6 +347,14 @@ class CastTargetSpecMixin:
             spec["default_creature_type"] = self._default_cast_creature_type(
                 caster_index, card
             )
+            if announced_targets:
+                asked = str(chosen_creature_type or "").strip().lower()
+                word = (
+                    asked if asked in CREATURE_TYPES
+                    else spec["default_creature_type"]
+                )
+                spec = with_announced_creature_type(spec, word)
+                spec["chosen_creature_type"] = word
         if cast_announces_x(
             card, from_zone=from_zone, taken=optional_cost_payments
         ):

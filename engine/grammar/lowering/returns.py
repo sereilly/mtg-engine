@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import dataclasses
 
+from ...announced_creature_type import GRAVEYARD_ANNOUNCED_CREATURE_TYPE
 from ...oracle_types import DISCARDED_INTO_GRAVEYARD, OracleInstruction
 from .. import ast
 from ..errors import LoweringError
@@ -543,12 +544,34 @@ def _lower_return_to_zone(
         and node.to.owner.kind == "you"
         and subject.filter.is_card
     ):
-        if _reads_no_return_restriction(subject.filter):
+        # "Return up to three target creature cards **of the creature type of
+        # your choice** from your graveyard to your hand." (Aphetto Dredging.)
+        # The word is chosen *before* the targets (the card's 2004-10-04
+        # ruling) — CR 601.2b's announcement, under which CR 601.2c's targets
+        # are then chosen — so it is carried as the flag every reader of the
+        # targets substitutes the announced word into
+        # (``engine/announced_creature_type.py``), and lifted off the filter
+        # only here: the refusal just below still names it for every other
+        # return, none of which is asked the word.
+        returned = subject.filter
+        announced = returned.creature_type_of_your_choice
+        if announced:
+            returned = dataclasses.replace(
+                returned, creature_type_of_your_choice=False
+            )
+            if tuple(returned.card_types) != ("creature",):
+                raise LoweringError(
+                    "a creature type announced at cast narrows creature cards",
+                    node=node,
+                )
+        if _reads_no_return_restriction(returned):
             # Raised here rather than left to the generic refusal below, so the
             # named clause says which half is missing: the arity is fine and the
             # adjective is not.
             raise LoweringError("no return handler honours this restriction", node=node)
-        several_cards = _graveyard_to_hand_payload(subject.filter)
+        several_cards = _graveyard_to_hand_payload(returned)
+        if announced:
+            several_cards[GRAVEYARD_ANNOUNCED_CREATURE_TYPE] = True
         _describe_several_card_targets(several_cards, subject)
         return (
             OracleInstruction(

@@ -451,17 +451,9 @@ def test_w1g4_each_player_choosing_compiles_to_one_step_per_record(set_pool):
 
 
 # --- Aphetto Dredging ------------------------------------------------------------
-
-
-def test_w1g4_aphetto_dredging_refuses_rather_than_dropping_its_narrowing(set_pool):
-    """"Return up to three target creature cards **of the creature type of your
-    choice** from your graveyard to your hand." The type is announced before
-    the targets (2004-10-04 ruling), which nothing here performs yet — and at
-    ingest the phrase was dropped, so the spell returned any three creature
-    cards while reporting supported. Refused, with the reason naming the
-    narrowing, until the announcement exists."""
-    program = _w1g4_compile(set_pool("ONS")["Aphetto Dredging"])
-    assert not program.supported
+# Refused here until the cast-time announcement existed; it does now (W2G1),
+# and the card's tests are in W2G1's section below, which drives the type
+# before the targets through the picker, the cast gates and the resolution.
 
 # ==== end W1G4 ======================================================
 
@@ -1273,3 +1265,134 @@ def test_w1g13_kamahls_summons_a_seat_nobody_asks_reveals_every_creature(set_poo
     assert [len(_w1g13_tokens(game, seat)) for seat in range(3)] == [0, 2, 0]
 
 # ==== end W1G13 ======================================================
+
+
+# ==== W2G1 ==========================================================
+# W2G1's tests go between this line and the "end W2G1" line.
+
+from engine import Game as _W2G1Game, PlayerState as _W2G1PlayerState
+from tests.helpers import _mk_card as _w2g1_mk_card
+from tests.helpers import resolve_stack as _w2g1_resolve_stack
+
+# --- Aphetto Dredging ---------------------------------------------------------
+# "Return up to three target creature cards of the creature type of your choice
+# from your graveyard to your hand." The type is announced before the targets
+# (the card's 2004-10-04 ruling), and every reader of the targets — the picker,
+# the cast gates and the handler — judges them under that word.
+
+
+def _w2g1_yard_card(name, subtype):
+    return _w2g1_mk_card(
+        name=name, mana_cost="{1}{B}", type_line=f"Creature - {subtype}",
+        colors=("B",),
+    )
+
+
+def _w2g1_dredging_table(set_pool):
+    ons = set_pool("ONS")
+    yard = [
+        _w2g1_yard_card("Goblin A", "Goblin"),
+        _w2g1_yard_card("Elf A", "Elf Warrior"),
+        _w2g1_yard_card("Goblin B", "Goblin"),
+        _w2g1_yard_card("Goblin C", "Goblin Rogue"),
+        _w2g1_yard_card("Elf B", "Elf"),
+        ons["Swamp"],
+    ]
+    game = _W2G1Game(players=[
+        _W2G1PlayerState(name="A", hand=[ons["Aphetto Dredging"]],
+                         graveyard=yard, library=[ons["Swamp"]] * 5),
+        _W2G1PlayerState(name="B", library=[ons["Swamp"]] * 5),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.active_player_index = 0
+    game.current_turn_phase = game.current_step = "precombat_main"
+    return game
+
+
+def _w2g1_names(cards):
+    return sorted(card.name for card in cards)
+
+
+def test_w2g1_aphetto_dredging_offers_only_cards_of_the_announced_type(set_pool):
+    """The picker asks the type first and lists what that type admits: the
+    default is the type most of the caster's graveyard shares (three Goblins
+    against two Elves), and re-asked with "elf" the list is the two Elves."""
+    game = _w2g1_dredging_table(set_pool)
+    card = game.players[0].hand[0]
+
+    spec = game.cast_target_spec(0, card)
+    assert spec["announces_creature_type"] is True
+    assert spec["default_creature_type"] == spec["chosen_creature_type"] == "goblin"
+    assert [t["name"] for t in spec["valid_targets"]] == [
+        "Goblin A", "Goblin B", "Goblin C",
+    ]
+
+    elves = game.cast_target_spec(0, card, chosen_creature_type="elf")
+    assert elves["chosen_creature_type"] == "elf"
+    assert [t["name"] for t in elves["valid_targets"]] == ["Elf A", "Elf B"]
+    assert elves["max_targets"] == 3
+
+
+def test_w2g1_aphetto_dredging_returns_the_named_cards_of_that_type(set_pool):
+    game = _w2g1_dredging_table(set_pool)
+    alice = game.players[0]
+
+    result = game.cast_from_hand(
+        0, "Aphetto Dredging", chosen_creature_type="elf",
+        target_player_index=0, target_permanent_index=[1, 4],
+    )
+    assert result.supported, result.details
+    _w2g1_resolve_stack(game)
+
+    assert _w2g1_names(alice.hand) == ["Elf A", "Elf B"]
+    assert _w2g1_names(alice.graveyard) == [
+        "Aphetto Dredging", "Goblin A", "Goblin B", "Goblin C", "Swamp",
+    ]
+    assert "A chose elf to cast Aphetto Dredging" in game.log
+
+
+def test_w2g1_aphetto_dredging_refuses_a_card_of_another_type(set_pool):
+    """A Goblin named under "elf" is not a legal target (CR 601.2c): the cast
+    is refused before anything moves, and the card stays in hand."""
+    game = _w2g1_dredging_table(set_pool)
+    alice = game.players[0]
+
+    refused = game.cast_from_hand(
+        0, "Aphetto Dredging", chosen_creature_type="elf",
+        target_player_index=0, target_permanent_index=[1, 0],
+    )
+    assert not refused.supported
+    assert refused.details == "no valid target for Aphetto Dredging"
+    assert _w2g1_names(alice.hand) == ["Aphetto Dredging"]
+    assert not game.stack
+
+    not_a_type = game.cast_from_hand(
+        0, "Aphetto Dredging", chosen_creature_type="swamp",
+        target_player_index=0, target_permanent_index=[1],
+    )
+    assert not not_a_type.supported
+    assert "is not a creature type" in not_a_type.details
+
+
+def test_w2g1_aphetto_dredging_a_card_gone_in_response_is_skipped(set_pool):
+    """CR 608.2b: one of the two named Elves leaves the graveyard before the
+    spell resolves; the other still returns, and nothing of another type is
+    taken in its place."""
+    game = _w2g1_dredging_table(set_pool)
+    alice = game.players[0]
+
+    assert game.queue_from_hand(
+        0, "Aphetto Dredging", chosen_creature_type="elf",
+        target_player_index=0, target_permanent_index=[1, 4],
+    ).supported
+    assert [item.card.name for item in game.stack] == ["Aphetto Dredging"]
+    (elf_a,) = [card for card in alice.graveyard if card.name == "Elf A"]
+    alice.graveyard.remove(elf_a)
+    alice.exile.append(elf_a)
+    _w2g1_resolve_stack(game)
+
+    assert _w2g1_names(alice.hand) == ["Elf B"]
+    assert {"Goblin A", "Goblin B", "Goblin C"} <= {c.name for c in alice.graveyard}
+
+# ==== end W2G1 ======================================================
