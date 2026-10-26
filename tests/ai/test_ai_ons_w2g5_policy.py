@@ -252,3 +252,100 @@ def test_w2g5_the_rangers_never_tap_the_creature_an_ability_is_paid_for(set_pool
         for activation in tap_cost_mana_activations(game, 0)
     ] == [["Elvish Warrior", "Birchlore Rangers"]]
     assert tap_cost_mana_activations(game, 0, paying_for=warrior) == []
+
+
+# ==== Cycling: what a cycle sets off is weighed ===============================
+#
+# "Cycling {2}{R}. When you cycle this card, you may have it deal 1 damage to
+# each creature." (Slice and Dice.) `choose_hand_activation_action` scored the
+# draw and nothing the cycle triggered, so the seat cycled it for the card
+# whatever the sweep did to its own board (ONS W1G3). Each hand activation is
+# now carried out on a copy (`ai_abilities._rehearse_hand_activation`).
+
+
+@pytest.mark.parametrize(("mine", "theirs", "hand", "cycled"), [
+    # The sweep kills two of the seat's own 1-toughness creatures and one of
+    # the opponent's: not cycled.
+    (["Goblin Balloon Brigade", "Mons's Goblin Raiders"], ["Scryb Sprites"],
+     ["Slice and Dice"], None),
+    # ...and with a plain cycler beside it, that is the card cycled instead.
+    (["Goblin Balloon Brigade", "Mons's Goblin Raiders"], ["Scryb Sprites"],
+     ["Lonely Sandbar", "Slice and Dice"], "Lonely Sandbar"),
+    # The sweep kills two of the opponent's and none of the seat's: the
+    # cycle that does it outranks the plain one held before it in hand.
+    (["Hill Giant"], ["Scryb Sprites", "Mons's Goblin Raiders"],
+     ["Lonely Sandbar", "Slice and Dice"], "Slice and Dice"),
+])
+def test_w2g5_a_cycle_is_weighed_by_what_it_sets_off(set_pool, mine, theirs, hand, cycled):
+    from engine.ai_abilities import choose_hand_activation_action
+
+    game = _w2g5_board(
+        set_pool, ["Mountain", "Mountain", "Mountain", "Island", *mine], theirs, hand=hand,
+    )
+    action = choose_hand_activation_action(game, 0)
+    assert (None if action is None else action.card_name) == cycled
+
+
+def test_w2g5_the_weighed_cycle_is_carried_out(set_pool):
+    """The proposal executed the simulator's way: the Sprites and the Raiders
+    die, the Giant lives, the seat draws its card."""
+    from engine.ai_abilities import choose_hand_activation_action
+    from engine.ai_payment import tap_planned_lands
+
+    game = _w2g5_board(
+        set_pool, ["Mountain", "Mountain", "Mountain", "Hill Giant"],
+        ["Scryb Sprites", "Mons's Goblin Raiders"], hand=["Slice and Dice"],
+    )
+    game.prompt_driver = lambda played: played.auto_resolve_pending_choices()
+    action = tap_planned_lands(game, 0, choose_hand_activation_action(game, 0))
+    assert game.activate_from_hand(
+        0, action.card_name, ability_index=action.ability_index, hand_index=action.hand_index,
+    ).supported
+    resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    assert not any(p.is_creature for p in game.controlled_by(1))
+    assert [p.card.name for p in game.controlled_by(0) if p.is_creature] == ["Hill Giant"]
+    assert [card.name for card in game.players[0].hand] == ["Island"]
+
+
+# ==== An {X} in an activation cost, sized by rehearsal ========================
+#
+# "{X}{G}{G}: This creature deals X damage to each creature with flying."
+# (Silklash Spider.) The activation chooser declined every ability with {X} in
+# its cost — it announced no X, and the engine read none as zero — so no AI
+# seat ever activated the Spider (ONS W1G12). An X that sizes only the effect
+# is now announced: each X the board can pay is rehearsed and the best taken
+# (`ai_abilities._sized_x_activation`).
+
+
+@pytest.mark.parametrize(("mine", "theirs", "x_value"), [
+    # Six Forests: X=4 kills the Air Elemental as well as the Sprites.
+    (["Forest"] * 6, ["Scryb Sprites", "Air Elemental"], 4),
+    # Three Forests: X=1 is all there is, and it kills the Sprites.
+    (["Forest"] * 3, ["Scryb Sprites"], 1),
+    # A Sprite on each side: every X kills one of each, which is nothing.
+    (["Forest"] * 6 + ["Scryb Sprites"], ["Scryb Sprites"], None),
+    # No flier anywhere: nothing to deal damage to.
+    (["Forest"] * 6, ["Grizzly Bears"], None),
+])
+def test_w2g5_silklash_spider_pays_the_x_that_clears_the_sky(set_pool, mine, theirs, x_value):
+    game = _w2g5_board(set_pool, ["Silklash Spider", *mine], theirs)
+    action = choose_activation_action(game, 0)
+    assert (None if action is None else action.x_value) == x_value
+
+
+def test_w2g5_the_sized_activation_is_carried_out(set_pool):
+    """The simulator's executor, with the announced X: both fliers die, and
+    the six Forests are the X=4 and the {G}{G}."""
+    from engine import ai_simulator
+
+    game = _w2g5_board(
+        set_pool, ["Silklash Spider", *["Forest"] * 6], ["Scryb Sprites", "Air Elemental"],
+    )
+    report = ai_simulator.SimulationReport(
+        games_requested=1, games_completed=0, interaction_count=0,
+    )
+    ai_simulator._play_activations(game, 0, report, 1, 1)
+    assert not report.refused_activations
+    assert not any(p.is_creature for p in game.controlled_by(1))
+    assert all(p.tapped for p in game.controlled_by(0) if p.has_type("land"))

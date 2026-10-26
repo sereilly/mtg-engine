@@ -871,6 +871,7 @@ def _execute_foreign_activation(
         chosen_keyword=action.chosen_keyword,
         ability_index=action.ability_index,
         source_controller_index=action.source_controller_index,
+        x_value=action.x_value,
     )
     _resolve_pending_choices(game)
     report.interaction_count += 1
@@ -1150,6 +1151,8 @@ def _play_activations(
             # (its first is the mana ability the engine would otherwise take);
             # None, the engine's first, for everything else.
             ability_index=activation_action.ability_index,
+            # The X an "{X}…:" cost announces, when the policy sized one.
+            x_value=activation_action.x_value,
         )
         _resolve_pending_choices(game)
         report.interaction_count += 1

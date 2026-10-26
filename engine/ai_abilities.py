@@ -60,6 +60,7 @@ from .ai_rehearsal import Rehearsal, deliberating, rehearse
 from .ai_weighed_cast import _effect_steps
 from .ai_actions import ActivationAction, HandActivationAction
 from .ai_scoring import (
+    SWING_CAP,
     choose_attack_target,
     _permanent_value,
     _score_activation,
@@ -437,7 +438,24 @@ def _activation_candidate(
     # (CR 107.3a), this policy announces none, and the engine reads that as
     # zero — a tap and a turn spent dealing nothing. It reached the score
     # below only to crash there on the payload's "x".
-    if "{x}" in (ability.source_line or "").lower().split(":", 1)[0]:
+    #
+    # **An X that sizes nothing but the effect is announced now** (ONS
+    # W2G5): "{X}{G}{G}: This creature deals X damage to each creature with
+    # flying" (Silklash Spider) was a Spider no AI seat ever activated. Each X
+    # the board can pay is rehearsed and the best is the one proposed
+    # (`_sized_x_activation`). What stays declined is the X this cannot size by
+    # rehearsing the effect: one that sizes the **target list** (the spec's
+    # ``x_targets`` — Candelabra's "X target lands" is announced before the
+    # targets it counts, CR 601.2c) and one the card **defines** ("X is the
+    # number of pin counters", Voodoo Doll — the engine computes it, and
+    # refuses where it cannot).
+    from .cost_x_definitions import cost_x_is_defined
+
+    x_symbols = (ability.source_line or "").lower().split(":", 1)[0].count("{x}")
+    if x_symbols and (
+        (spec or {}).get("x_targets")
+        or cost_x_is_defined(ability.source_line or "")
+    ):
         return None
     # An ability naming several targets of *different* kinds, chosen in
     # dependency order (CR 602.2b reaches CR 601.2c). Asked before the
@@ -730,7 +748,7 @@ def _activation_candidate(
     land_taps: tuple[int, ...] = ()
     tap_colors: tuple[str, ...] = ()
     required = dict(ability.cost.mana)
-    if game.enforce_mana_costs and any(required.values()):
+    if game.enforce_mana_costs and any(required.values()) and not x_symbols:
         plan = _plan_land_taps(game, player, required, paying_for=permanent)
         if plan is None:
             return None
@@ -752,6 +770,10 @@ def _activation_candidate(
         ability_index=ability_index,
         chosen_keyword=chosen_keyword,
     )
+    if x_symbols:
+        return _sized_x_activation(
+            game, player_index, permanent, ability, candidate, x_symbols,
+        )
     # A land's ability, an ability whose whole effect is what its own source
     # is until end of turn (a Mistform's "becomes the creature type of your
     # choice"), and an ability whose whole effect is a replacement armed for a
@@ -853,6 +875,8 @@ def _rehearse_activation(
             action.land_tap_indices, action.land_tap_colors,
         ) + (
             ("keyword", action.chosen_keyword) if action.chosen_keyword else ()
+        ) + (
+            ("x", action.x_value) if action.x_value is not None else ()
         ) + (("through_combat",) if through_combat else ()),
         without=paid_for if taps else None,
         without_key=(
@@ -877,6 +901,7 @@ def _queue_activation(table: Game, seat: int, action: ActivationAction):
         ability_index=planned.ability_index,
         cost_hand_index=planned.cost_hand_index,
         chosen_keyword=planned.chosen_keyword,
+        x_value=planned.x_value,
     )
 
 
@@ -914,6 +939,61 @@ def _land_ability_worth(
     if not _worth_proposing(rehearsal) or rehearsal.lasting <= 0.0:
         return None
     return rehearsal.lasting
+
+
+#: The largest X `_sized_x_activation` rehearses. Each size is a copy of the
+#: game run out to the end of the turn, and past eight the effects in the pool
+#: ("X damage to each creature with flying") have long since done everything
+#: they will do on a limited board.
+X_ACTIVATION_SIZES = 8
+
+
+def _sized_x_activation(
+    game: Game, seat: int, permanent, ability, candidate: ActivationAction,
+    x_symbols: int,
+) -> ActivationAction | None:
+    """*candidate* with the X its "{X}…:" cost announces (CR 107.3a), or None
+    when no X is worth activating for.
+
+    Every X from 1 up to what the board can pay (and :data:`X_ACTIVATION_SIZES`)
+    is planned — each {X} symbol charged as generic mana, or as the one colour
+    "Spend only red mana on X" names, the way the activation path charges it
+    — and rehearsed through the gate a land's ability takes
+    (`_land_ability_worth`: what lasts once the turn is over, the fight
+    fought where the good is fleeting). The X proposed is the one that leaves
+    the seat furthest ahead; between two that do it equally, the smaller,
+    which leaves the mana. So Silklash Spider pays exactly enough to kill the
+    opponent's fliers and none of its own — and nothing at all on a board
+    where X damage to each flier kills more of the seat's than of theirs.
+    """
+    from dataclasses import replace
+
+    from .oracle_types import x_spend_colors_from_text
+
+    player = game.players[seat]
+    colors = x_spend_colors_from_text(ability.source_line or "")
+    x_symbol = colors[0] if len(colors) == 1 else "generic"
+    best: ActivationAction | None = None
+    best_worth = 0.0
+    for x_value in range(1, X_ACTIVATION_SIZES + 1):
+        taps: tuple[int, ...] = ()
+        tap_colors: tuple[str, ...] = ()
+        if game.enforce_mana_costs:
+            required = {
+                symbol: int(amount or 0) for symbol, amount in ability.cost.mana.items()
+            }
+            required[x_symbol] = required.get(x_symbol, 0) + x_value * x_symbols
+            plan = _plan_land_taps(game, player, required, paying_for=permanent)
+            if plan is None:
+                break
+            taps, tap_colors = plan
+        sized = replace(
+            candidate, x_value=x_value, land_tap_indices=taps, land_tap_colors=tap_colors,
+        )
+        worth = _land_ability_worth(game, seat, sized)
+        if worth is not None and worth > best_worth + 1e-9:
+            best, best_worth = sized, worth
+    return best
 
 
 #: Permanents `choose_activation_action` passes over, by ``permanent_id``:
@@ -1417,7 +1497,30 @@ def choose_hand_activation_action(
     One action per call, like :func:`choose_activation_action`, and the tie-break
     is hand order — the seat cycles once a priority pass rather than emptying
     its hand in a loop, and a seeded run reproduces exactly.
+
+    **What the activation sets off is weighed** (:func:`_rehearse_hand_
+    activation`). The score read the ability's own instruction — a cycling
+    ability's draw — and nothing a cycle triggers: "When you cycle this card,
+    you may have it deal 1 damage to each creature" (Slice and Dice),
+    "Whenever a player cycles a card, …" (Lightning Rift), a discard trigger
+    (Megrim). So the seat cycled Slice and Dice for the card whatever the
+    sweep did to its own creatures (ONS W1G3). Each candidate is carried out
+    on a copy against the same copy with nothing activated: one whose swing is
+    harm is not proposed, and the swing is added to the score, so the cycle
+    that sweeps the opponent's board ranks above a plain one. A plain cycle —
+    a card discarded and a card drawn, nothing triggered — measures nothing
+    and keeps the score it had.
     """
+    with deliberating():
+        return _choose_hand_activation_action(game, player_index)
+
+
+def _choose_hand_activation_action(
+    game: Game, player_index: int,
+) -> HandActivationAction | None:
+    """:func:`choose_hand_activation_action` inside its deliberation."""
+    from dataclasses import replace
+
     player = game.players[player_index]
     best: HandActivationAction | None = None
     for hand_index, card in enumerate(player.hand):
@@ -1476,9 +1579,61 @@ def choose_hand_activation_action(
             score=score,
             land_tap_colors=tap_colors,
         )
+        rehearsal = _rehearse_hand_activation(game, player_index, candidate)
+        if rehearsal is not None:
+            if not _worth_proposing(rehearsal):
+                continue
+            candidate = replace(
+                candidate,
+                score=score + max(-SWING_CAP, min(SWING_CAP, rehearsal.swing)),
+            )
         if best is None or candidate.score > best.score:
             best = candidate
     return best
+
+
+def _rehearse_hand_activation(
+    game: Game, seat: int, action: HandActivationAction,
+) -> Rehearsal | None:
+    """What activating *action* from the hand would do, carried out on a
+    scratch copy (``ai_rehearsal.rehearse``) as the simulator's executor
+    carries it out — the planned lands tapped, ``activate_from_hand``, the
+    stack resolved on defaults — against the same copy with those lands
+    tapped and nothing activated.
+
+    The card leaving the hand is the activation's own cost, not a cast's trip,
+    so it is **read as a change** (``leaves_hand=False``): a plain cycle is a
+    card out and a card in, a swing of nothing, and what is left over is what
+    the cycle set off."""
+
+    def perform(table):
+        planned = tap_planned_lands(table, seat, action)
+        return table.activate_from_hand(
+            seat, planned.card_name,
+            ability_index=planned.ability_index, hand_index=planned.hand_index,
+        )
+
+    def paid_for(table, _carried) -> None:
+        pool = table.players[seat].mana_pool
+        floating = dict(pool)
+        tap_planned_lands(table, seat, action)
+        pool.clear()
+        pool.update(floating)
+
+    taps = bool(action.land_tap_indices)
+    return rehearse(
+        game, seat, perform, spell_name=None, leaves_hand=False,
+        label=f"{action.card_name}'s ability from hand",
+        key=(
+            "hand_activation", seat, action.card_name, action.hand_index,
+            action.ability_index, action.land_tap_indices, action.land_tap_colors,
+        ),
+        without=paid_for if taps else None,
+        without_key=(
+            ("paid", action.land_tap_indices, action.land_tap_colors)
+            if taps else None
+        ),
+    )
 
 
 def _hand_entry_has_a_card(

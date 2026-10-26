@@ -39,7 +39,8 @@ copy — the other twenty are ``pays_in_its_own_counters`` — and four hosts
 using what an Aura gave them. The fifteen refusals it pinned were there
 before, on the printed card, and were the same fifteen on a copy; eleven of
 them were a cost the board could not pay and went with the activation cost
-gate (Torment's W2G3), so ``REFUSED`` holds the four that stand.
+gate (Torment's W2G3), and the last four went with the rehearsal of an
+activation that gives up its source (ONS W2G5), so ``REFUSED`` is empty.
 
 The suite sweeps a fixed share (``SAMPLE_EVERY``) and the named cards; run it
 as a module for all of it
@@ -83,13 +84,17 @@ SAMPLE_EVERY = 8
 #: card on the tree before this sweep existed, and a copy of the card is
 #: refused for the same reason and no other.
 #:
-#: Four are "up to X target …, where X is the number of verse counters", with
-#: no counter yet: the chooser names one target and X is zero.
-_VERSE = "names a target for 'up to X', and X is the verse counters it has: none"
-REFUSED: dict = {
-    "Recantation": _VERSE, "Rumbling Crescendo": _VERSE,
-    "Serra's Liturgy": _VERSE, "Vile Requiem": _VERSE,
-}
+#: The four that stood here until ONS W2G5 were the verse enchantments ("…,
+#: Sacrifice this enchantment: Return up to X target permanents …, where X is
+#: the number of verse counters", with no counter yet: the chooser named one
+#: target and X was zero). Their cost gives up the source, so they are now
+#: rehearsed before they are proposed (`ai_abilities._gives_up_its_source`)
+#: — and the rehearsal is the engine's refusal, so they are not proposed.
+#: Swept always, beside the eleven below.
+REFUSED: dict = {}
+_VERSE_REHEARSED = frozenset({
+    "Recantation", "Rumbling Crescendo", "Serra's Liturgy", "Vile Requiem",
+})
 #: Eleven more stood here until Torment's W2G3: a cost this board cannot pay
 #: — tapping other permanents, returning them, exiling several cards from a
 #: graveyard, a card out of an empty hand. The chooser asked about the costs
@@ -108,7 +113,7 @@ ALWAYS = frozenset({
     "Prodigal Sorcerer", "Rod of Ruin", "Hermetic Study", "Fire Whip",
     "Sisay's Ingenuity", "Barbed Field", "Short Sword", "Clot Sliver",
     "Triskelion",
-}) | frozenset(REFUSED) | NO_LONGER_REFUSED
+}) | frozenset(REFUSED) | NO_LONGER_REFUSED | _VERSE_REHEARSED
 assert ALWAYS <= set(POOL), sorted(ALWAYS - set(POOL))
 
 
@@ -292,7 +297,9 @@ def test_a_copy_is_activated_where_its_original_is(rows):
     that can pay."""
     assert copies_left_idle(rows) == []
     counts = tally(rows)
-    assert counts[("copied", "by subject")] >= 100, dict(counts)
+    # 100 until ONS W2G5: four of them were the verse enchantments' proposals,
+    # which the engine refused and the rehearsal of a self-sacrifice now holds.
+    assert counts[("copied", "by subject")] >= 95, dict(counts)
     by_key = {tag(row): row for row in rows}
     # ...and the ones that cannot are held, not proposed and refused.
     assert by_key[("Triskelion", "printed")]["by_subject"]
