@@ -731,9 +731,7 @@ def _assert_expected(
     expectation for a card ``_build_deck`` no longer plays stops firing with
     nothing failing. ``tests/ai/test_ai_simulator.py`` holds the two in step.
 
-    A cast that names **no seat at all** has nothing here to check: every card
-    above names one, and "any number of target opponents" announced as none
-    (Wheel and Deal, `ai_targets._weighed_seat_prefix`) is not one of them.
+    A cast naming no seat (Wheel and Deal announced as none) has nothing here.
     """
     if target_index is None:
         return None
@@ -1157,8 +1155,7 @@ def _play_activations(
             # (its first is the mana ability the engine would otherwise take);
             # None, the engine's first, for everything else.
             ability_index=activation_action.ability_index,
-            # The X an "{X}…:" cost announces, when the policy sized one.
-            x_value=activation_action.x_value,
+            x_value=activation_action.x_value,  # an "{X}…:" cost's, if sized
         )
         _resolve_pending_choices(game)
         report.interaction_count += 1
