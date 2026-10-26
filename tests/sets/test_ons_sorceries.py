@@ -499,6 +499,65 @@ def test_w1g4_aphetto_dredging_refuses_rather_than_dropping_its_narrowing(set_po
 # ==== W1G10 ==========================================================
 # W1G10's tests go between this line and the "end W1G10" line.
 
+# --- W1G10: control and the stack, on sorceries ------------------------------
+from engine import Game as _w1g10_Game
+from engine.models import Permanent as _w1g10_Permanent
+from engine.models import PlayerState as _w1g10_PlayerState
+from tests.helpers import resolve_stack as _w1g10_resolve_stack
+
+
+def _w1g10_table(set_pool, seats: int = 3):
+    game = _w1g10_Game(players=[
+        _w1g10_PlayerState(
+            name=f"P{seat + 1}", life=20,
+            library=[set_pool("LEA")["Island"]] * 8,
+        )
+        for seat in range(seats)
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    return game
+
+
+def _w1g10_put(game, seat: int, card):
+    perm = _w1g10_Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, perm, None)
+    return perm
+
+
+def test_w1g10_insurrection_takes_every_creature_until_cleanup(set_pool):
+    """"Untap all creatures and gain control of them until end of turn. They
+    gain haste until end of turn." At three seats: every creature — the
+    caster's own and an untapped one included (the 2004-10-04 ruling: "You
+    untap all creatures, control all creatures, and give all creatures
+    haste") — is untapped, the caster's, and hasty enough to attack the turn
+    it arrived; the cleanup step hands each back."""
+    game = _w1g10_table(set_pool)
+    mine = _w1g10_put(game, 0, set_pool("LEA")["Grizzly Bears"])
+    tapped = _w1g10_put(game, 1, set_pool("LEA")["Hill Giant"])
+    untapped = _w1g10_put(game, 2, set_pool("LEA")["Craw Wurm"])
+    tapped.tapped = True
+    game.players[0].hand.append(set_pool("ONS")["Insurrection"])
+    assert game.queue_from_hand(0, "Insurrection").supported
+    _w1g10_resolve_stack(game)
+
+    for perm in (mine, tapped, untapped):
+        assert game.controller_index_of(perm) == 0, game.log
+        assert not perm.tapped
+        assert game._has_keyword(perm, "haste"), perm.card.name
+
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    slots = list(range(len(game.players[0].battlefield)))
+    assert game.declare_attackers(0, slots, defending_player_index=1)[0]
+
+    game.resolve_cleanup_step(0)
+    assert game.controller_index_of(mine) == 0
+    assert game.controller_index_of(tapped) == 1
+    assert game.controller_index_of(untapped) == 2
+    assert not game._has_keyword(tapped, "haste")
+
 # ==== end W1G10 ======================================================
 
 

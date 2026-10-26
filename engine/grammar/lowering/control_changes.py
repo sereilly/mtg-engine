@@ -36,6 +36,7 @@ from ._events import (CHOSEN_PERMANENT, CHOSEN_PLAYER, EVENT_SUBJECT_CONTROLLER,
                       _EVENT_SUBJECT_CONTROLLERS,
                       _EVENT_SUBJECT_PLAYERS, _UNTAPPED_PERMANENTS)
 from ._delays import (_BOUND_OBJECT_DELAYED_EVENTS)
+from ._record_keys import UNTAPPED_THIS_WAY_OBJECTS
 
 
 
@@ -665,6 +666,27 @@ def _lower_gain_control(
         _describe_targets(described, subject, announced_x_bound=True)
         return (OracleInstruction("gain_control_of_target", "", described),)
     if node.duration == "until_end_of_turn":
+        # "Untap all creatures and gain control of **them** until end of turn."
+        # (Insurrection.) The plural of the bound object below — the set the
+        # untap sweep recorded, every member taken — and gated the same way:
+        # with no producer the word names nothing and the line refuses.
+        if subject.quantifier == "those":
+            if _restrictions_beyond(subject.filter, frozenset({"card_types"})):
+                raise LoweringError(
+                    "a bound set carries no narrowing the record could honour",
+                    node=node,
+                )
+            if UNTAPPED_THIS_WAY_OBJECTS not in produced or node.tap_when_lost:
+                raise LoweringError(
+                    "\"them\" names a set no untap of this effect recorded",
+                    node=node,
+                )
+            return (
+                OracleInstruction(
+                    "gain_control_until_eot", "",
+                    {"permanents_from": UNTAPPED_THIS_WAY_OBJECTS},
+                ),
+            )
         if subject.quantifier in ("that", "it"):
             # "Gain control of **that creature** until end of turn."
             # (Disharmony.) "Untap target creature an opponent controls and gain

@@ -34,7 +34,7 @@ from ..keywords import (PROTECTION_FROM_CHOSEN_COLOR,
                         PROTECTION_FROM_THE_CHOSEN_COLOR)
 from ..vocabulary import IMPLEMENTED_KEYWORDS
 from ._events import _RECORDED_PERMANENTS, binds_block_pair
-from ._record_keys import CREATED_TOKEN
+from ._record_keys import _SWEPT_SETS, CREATED_TOKEN
 from ._common import (_GRANT_DURATIONS, _check_grantable,
                       _describe_several_targets,
                       _describe_targets, _filter_payload,
@@ -96,8 +96,26 @@ def _binds_a_recorded_permanent(subject, produced: frozenset[str]) -> bool:
         isinstance(subject, ast.TargetSpec)
         and not _is_created_token(subject)
         and subject.quantifier in ("that", "those")
-        and bool(produced & _RECORDED_PERMANENTS)
+        and bool(_bound_records(subject, produced))
     )
+
+
+def _bound_records(subject, produced: frozenset[str]) -> frozenset[str]:
+    """The records a bound "that creature" / "those creatures" may read.
+
+    The chosen and affected objects (:data:`_RECORDED_PERMANENTS`) first; only
+    when no step recorded one, and only for the plural, the set a **sweep**'s
+    noun phrase named (``_record_keys._SWEPT_SETS``) — "Untap all creatures
+    and gain control of them … **They** gain haste" (Insurrection). Asked by
+    both the gate above and the arm that lowers the grant, so the two cannot
+    disagree about which record a pronoun reads.
+    """
+    recorded = produced & _RECORDED_PERMANENTS
+    if recorded:
+        return recorded
+    if isinstance(subject, ast.TargetSpec) and subject.quantifier == "those":
+        return produced & _SWEPT_SETS
+    return frozenset()
 
 
 def _targets_description(payload: dict[str, object]) -> dict[str, object]:
@@ -620,7 +638,7 @@ def _lower_granted_keywords(
     if (
         isinstance(node.subject, ast.TargetSpec)
         and node.subject.quantifier in ("that", "those")
-        and (produced & _RECORDED_PERMANENTS)
+        and _bound_records(node.subject, produced)
     ):
         # A bound object carries no narrowing to honour: the noun restates
         # what the step in front of it already found ("that **Dragon**" after
@@ -634,7 +652,7 @@ def _lower_granted_keywords(
                 "a bound keyword grant reads the permanent an earlier step "
                 "recorded and nothing narrower", node=node,
             )
-        recorded = tuple(sorted(produced & _RECORDED_PERMANENTS))
+        recorded = tuple(sorted(_bound_records(node.subject, produced)))
         if len(recorded) != 1:
             raise LoweringError(
                 "\"that creature\" is ambiguous: several earlier steps "

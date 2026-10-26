@@ -138,6 +138,19 @@ SWEPT_CONTROLLER_SEATS = PER_OBJECT_SEAT_RECORDS["controller"]
 # an empty record.
 _UNTAPPED_PERMANENTS = "untapped_permanents"
 
+#: Every permanent an **untap sweep**'s noun phrase named — "Untap all
+#: creatures **and gain control of them** … **They** gain haste" (Insurrection)
+#: — the untap twin of ``oracle_types.TAPPED_THIS_WAY_OBJECTS`` (Joven's
+#: Ferrets' "They don't untap"). Its own key rather than
+#: ``_UNTAPPED_PERMANENTS``, which a targeted untap writes and which is a
+#: member of :data:`_RECORDED_PERMANENTS`: a sweep's set is the weakest
+#: antecedent a back-reference can have, and filed beside the chosen and
+#: affected objects it made Reins of Power's "Those creatures" (the creatures
+#: its *exchange* moved, behind two untap sweeps) ambiguous. Read through
+#: :data:`_SWEPT_SETS`. ``handlers/tapping`` writes the literal — the handler
+#: layer does not import from here.
+UNTAPPED_THIS_WAY_OBJECTS = "untapped_this_way_objects"
+
 # What a one-way bite recorded it damaged, so the sentence after it can name the
 # same creature: "This creature deals damage equal to its power to target
 # creature. **That creature** deals damage equal to its power to this creature."
@@ -414,6 +427,13 @@ _RECORDED_PERMANENTS: frozenset[str] = frozenset({
     # set as objects.
     CHOSEN_THIS_WAY_OBJECTS,
 })
+
+#: The sets a **sweep**'s noun phrase named, kept out of
+#: :data:`_RECORDED_PERMANENTS` on purpose (``UNTAPPED_THIS_WAY_OBJECTS``'
+#: reason): a plural back-reference reads one of these only when no step of
+#: the effect recorded a chosen or affected object — the weakest antecedent,
+#: asked last.
+_SWEPT_SETS: frozenset[str] = frozenset({UNTAPPED_THIS_WAY_OBJECTS})
 
 #: The subset of :data:`_RECORDED_PERMANENTS` whose producer *made* the
 #: permanent — it was a card in a graveyard (Necromancy), a hand (Flash) or a

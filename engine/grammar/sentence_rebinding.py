@@ -769,6 +769,73 @@ def rebind_token_maker_to_previous_player(node: "ast.Statement") -> "ast.Stateme
     return replace(node, steps=tuple(steps)) if changed else node
 
 
+def _names_a_seat(node) -> bool:
+    """Whether any part of *node* names a player other than "you" — the
+    antecedent a sentence-initial "they" would otherwise have."""
+    if isinstance(node, ast.PlayerRef):
+        return node.kind != "you"
+    if dataclasses.is_dataclass(node) and not isinstance(node, type):
+        return any(
+            _names_a_seat(getattr(node, field.name))
+            for field in dataclasses.fields(node)
+        )
+    if isinstance(node, (tuple, list)):
+        return any(_names_a_seat(item) for item in node)
+    return False
+
+
+def _last_action(node):
+    """The clause *node* ends on: the last step of a sequence, the last
+    effect of an "and" conjunction, recursively."""
+    while True:
+        if isinstance(node, ast.Sequence) and node.steps:
+            node = node.steps[-1]
+        elif isinstance(node, ast.Conjunction) and node.effects:
+            node = node.effects[-1]
+        else:
+            return node
+
+
+def rebind_they_to_previous_set(node: "ast.Statement") -> "ast.Statement":
+    """"Untap all creatures and gain control of them until end of turn.
+    **They** gain haste until end of turn." (Insurrection.)
+
+    The seat reader reads a sentence-initial "they" as ``that_player``
+    (``seats.py``: "no plural set of *cards* is ever a sentence subject in
+    this pool" — the card that made it false). When the sentence directly in
+    front names **no player but "you"** and **ends on a set of permanents**
+    ("all creatures", "them"), the pronoun has exactly one antecedent and it is
+    that set — the ``those`` back-reference "Those creatures gain haste" spells
+    out (Reins of Power), which the keyword grant reads off the record the
+    step in front wrote. Only a keyword grant, and only the adjacent pair:
+    every other "they" keeps the seat reading, and a grant with no recording
+    step in front still refuses by name.
+    """
+    if not isinstance(node, ast.Sequence):
+        return node
+    steps = list(node.steps)
+    changed = False
+    for index in range(1, len(steps)):
+        step, previous = steps[index], steps[index - 1]
+        if not (
+            isinstance(step, ast.GainKeyword)
+            and step.subject == ast.PlayerRef("that_player")
+        ):
+            continue
+        last = _last_action(previous)
+        subject = getattr(last, "subject", None)
+        if (
+            isinstance(subject, ast.TargetSpec)
+            and subject.quantifier in ("all", "those")
+            and not _names_a_seat(previous)
+        ):
+            steps[index] = replace(
+                step, subject=ast.TargetSpec("those", ast.ObjectFilter())
+            )
+            changed = True
+    return replace(node, steps=tuple(steps)) if changed else node
+
+
 #: The bare noun an ordinal back-reference may restate. "The first **creature**"
 #: and nothing narrower: a restated adjective would be a narrowing the bound
 #: object cannot honour, and the walk below leaves such a spec alone so its
