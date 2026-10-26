@@ -559,6 +559,15 @@ def _lower_pump(
                 # ``tap_creatures_blocking_target``'s sibling above already
                 # reads, here on a sweep instead of a target.
                 "blocking_source",
+                # "Enchanted creature and **other** creatures **that share a
+                # creature type with it** get +1/+1 until end of turn." (Crown
+                # of Vigor.) Both read against the enchanted creature once
+                # ``subject_verb`` has bound them there, and both reach the
+                # handler as the description ``subject_matches`` answers from
+                # the source — the "it" of any other position is refused below
+                # as untestable rather than read against nothing.
+                "other_than_attached_host",
+                "shares_creature_type_with",
             }),
         )
         if leftover:

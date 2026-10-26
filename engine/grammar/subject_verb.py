@@ -81,6 +81,46 @@ from .effects import (
 
 
 
+def _relative_to_enchanted_creature(first, further):
+    """*further* with its "other" and its "it" read against **enchanted
+    creature**, when that is the subject in front of it.
+
+    "Sacrifice this Aura: **Enchanted creature and other creatures that share a
+    creature type with it** gain flying until end of turn." (Crown of
+    Ascension.) Both words point back at the first member of the union, not at
+    the Aura printing the line: "other" excludes the enchanted creature (an
+    Aura is not a creature, so read as the source it would exclude nothing and
+    the host would be named twice — pumped twice), and "it" is that creature.
+    So they are rebound here, where the union is assembled and both members
+    are in hand, onto the two fields that already mean them —
+    ``other_than_attached_host`` and the relation's ``"attached_host"`` far end,
+    both answered by ``subject_matches`` from the ability's source.
+
+    Any other first member leaves *further* as it was: what "other" and "it"
+    name after "this creature and …" is the source, which is what they already
+    say.
+    """
+    if not (
+        isinstance(first, ast.TargetSpec)
+        and first.quantifier == "this"
+        and first.filter.is_enchanted
+        and isinstance(further, ast.TargetSpec)
+    ):
+        return further
+    described = further.filter
+    changes = {}
+    if described.other_than_source:
+        changes["other_than_source"] = False
+        changes["other_than_attached_host"] = True
+    if described.shares_creature_type_with == "it":
+        changes["shares_creature_type_with"] = "attached_host"
+    if not changes:
+        return further
+    return dataclasses.replace(
+        further, filter=dataclasses.replace(described, **changes)
+    )
+
+
 #: The seats a sentence describes by what an earlier sentence of the same
 #: effect *recorded* about each player, rather than by a board or a choice.
 #: ``seats.parse_player_ref`` reads the phrase; this names the kinds for the
@@ -202,6 +242,10 @@ def parse_subject_verb(
             shared = _parse_further_subjects(
                 stream, source_spec, before_verb=True
             )
+            shared = [
+                _relative_to_enchanted_creature(source_spec, subject)
+                for subject in shared
+            ]
             if shared:
                 verb_at = stream.mark()
                 parts = []

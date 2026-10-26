@@ -484,6 +484,207 @@ def test_w1g4_shared_triumph_pumps_every_creature_of_the_chosen_type(set_pool):
 # ==== W1G6 ==========================================================
 # W1G6's tests go between this line and the "end W1G6" line.
 
+# "Share a creature type" (CR 205.3m) — the Crowns' sacrifice ability.
+# "Sacrifice this Aura: Enchanted creature and other creatures that share a
+# creature type with it …": the enchanted creature as it was when the cost took
+# the Aura (CR 608.2h), and "other" measured from it, not from the Aura.
+
+from engine import Game as _W1G6Game, PlayerState as _W1G6PlayerState
+from engine.face_down import is_face_down as _w1g6_is_face_down
+from engine.models import Permanent as _W1G6Permanent
+from tests.helpers import resolve_stack as _w1g6_resolve_stack
+
+
+def _w1g6_card(set_pool, name):
+    for code in ("ONS", "LEA"):
+        pool = set_pool(code)
+        if name in pool:
+            return pool[name]
+    raise KeyError(name)
+
+
+def _w1g6_table(set_pool, *, hand=()):
+    me = _W1G6PlayerState(
+        name="Me", hand=[_w1g6_card(set_pool, n) for n in hand],
+        library=[_w1g6_card(set_pool, "Plains")] * 6,
+    )
+    opp = _W1G6PlayerState(name="Opp", library=[_w1g6_card(set_pool, "Forest")] * 6)
+    game = _W1G6Game(players=[me, opp])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    return game
+
+
+def _w1g6_put(game, set_pool, seat, name):
+    perm = _W1G6Permanent(card=_w1g6_card(set_pool, name))
+    game._put_permanent_onto_battlefield(seat, perm, None)
+    perm.metadata["summoning_sickness_turn"] = -99
+    return perm
+
+
+def _w1g6_enchant(game, crown, host):
+    """Cast *crown* from seat 0's hand onto *host* and resolve it."""
+    game._recompute_continuous_effects()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    assert game.queue_from_hand(0, crown, target_permanent_ids=[host.permanent_id]).supported
+    _w1g6_resolve_stack(game)
+    aura = next(p for p in game.all_permanents() if p.card.name == crown)
+    assert aura.metadata.get("attached_to") is host
+    return aura
+
+
+def _w1g6_sacrifice(game, crown, aura):
+    assert game.activate_permanent_ability(0, crown).supported
+    _w1g6_resolve_stack(game)
+    assert not game.is_on_battlefield(aura), game.log
+    assert crown in [card.name for card in game.players[0].graveyard]
+
+
+def _w1g6_tribal_board(game, set_pool):
+    """An Elf Warrior to enchant; an Elf Druid (shares Elf) and a Human Soldier
+    (shares nothing) beside it; a Goblin Warrior (shares Warrior) and a Bear
+    (shares nothing) across the table."""
+    return {
+        "host": _w1g6_put(game, set_pool, 0, "Elvish Warrior"),
+        "elf": _w1g6_put(game, set_pool, 0, "Wirewood Elf"),
+        "human": _w1g6_put(game, set_pool, 0, "Glory Seeker"),
+        "goblin": _w1g6_put(game, set_pool, 1, "Goblin Sky Raider"),
+        "bear": _w1g6_put(game, set_pool, 1, "Grizzly Bears"),
+    }
+
+
+def _w1g6_pt(perm):
+    return perm.effective_power, perm.effective_toughness
+
+
+def test_w1g6_crown_of_vigor_pumps_the_host_once_and_every_creature_sharing_a_type(set_pool):
+    """Crown of Vigor's sacrifice: the Elf Warrior gets +1/+1 **once** — the
+    "other" is other than it, so it is not counted again among the creatures
+    sharing its types — and so do the Elf Druid (Elf) and the opponent's
+    Goblin Warrior (Warrior). The Human Soldier and the Bear share nothing."""
+    game = _w1g6_table(set_pool, hand=["Crown of Vigor"])
+    board = _w1g6_tribal_board(game, set_pool)
+    before = {key: _w1g6_pt(perm) for key, perm in board.items()}
+    aura = _w1g6_enchant(game, "Crown of Vigor", board["host"])
+    assert _w1g6_pt(board["host"]) == (before["host"][0] + 1, before["host"][1] + 1)
+
+    _w1g6_sacrifice(game, "Crown of Vigor", aura)
+
+    for key in ("host", "elf", "goblin"):
+        power, toughness = before[key]
+        assert _w1g6_pt(board[key]) == (power + 1, toughness + 1), (key, game.log)
+    for key in ("human", "bear"):
+        assert _w1g6_pt(board[key]) == before[key], (key, game.log)
+
+    game.resolve_cleanup_step(0)
+    assert {key: _w1g6_pt(perm) for key, perm in board.items()} == before
+
+
+def test_w1g6_crown_of_ascension_gives_flying_to_the_host_and_its_kin(set_pool):
+    """"…gain flying until end of turn." The host (no longer flying by the
+    Aura's static, which left with it) and the Elf Druid gain it; the Human
+    Soldier and the Bear do not."""
+    game = _w1g6_table(set_pool, hand=["Crown of Ascension"])
+    board = _w1g6_tribal_board(game, set_pool)
+    aura = _w1g6_enchant(game, "Crown of Ascension", board["host"])
+    assert game._has_keyword(board["host"], "flying")
+    assert not game._has_keyword(board["elf"], "flying")
+
+    _w1g6_sacrifice(game, "Crown of Ascension", aura)
+
+    for key in ("host", "elf"):
+        assert game._has_keyword(board[key], "flying"), (key, game.log)
+    for key in ("human", "bear"):
+        assert not game._has_keyword(board[key], "flying"), (key, game.log)
+
+    game.resolve_cleanup_step(0)
+    assert not game._has_keyword(board["host"], "flying")
+    assert not game._has_keyword(board["elf"], "flying")
+
+
+def test_w1g6_crown_of_awe_gives_both_protections_to_the_host_and_its_kin(set_pool):
+    """"…gain protection from black and from red until end of turn." Two
+    qualities, on the host, the Elf Druid and the Goblin Warrior alike."""
+    game = _w1g6_table(set_pool, hand=["Crown of Awe"])
+    board = _w1g6_tribal_board(game, set_pool)
+    aura = _w1g6_enchant(game, "Crown of Awe", board["host"])
+
+    _w1g6_sacrifice(game, "Crown of Awe", aura)
+
+    expected = {("color", "B"), ("color", "R")}
+    for key in ("host", "elf", "goblin"):
+        assert expected <= set(game._protection_qualities(board[key])), (key, game.log)
+    for key in ("human", "bear"):
+        assert not set(game._protection_qualities(board[key])) & expected, key
+
+
+def test_w1g6_crown_of_fury_pumps_and_grants_first_strike_to_one_set(set_pool):
+    """"…get +1/+0 and gain first strike until end of turn." Both halves of
+    the sentence reach the same set: each sharer is +1/+0 **and** has first
+    strike, and nobody else has either."""
+    game = _w1g6_table(set_pool, hand=["Crown of Fury"])
+    board = _w1g6_tribal_board(game, set_pool)
+    before = {key: _w1g6_pt(perm) for key, perm in board.items()}
+    aura = _w1g6_enchant(game, "Crown of Fury", board["host"])
+
+    _w1g6_sacrifice(game, "Crown of Fury", aura)
+
+    for key in ("host", "elf", "goblin"):
+        power, toughness = before[key]
+        assert _w1g6_pt(board[key]) == (power + 1, toughness), (key, game.log)
+        assert game._has_keyword(board[key], "first strike"), key
+    for key in ("human", "bear"):
+        assert _w1g6_pt(board[key]) == before[key], key
+        assert not game._has_keyword(board[key], "first strike"), key
+
+
+def test_w1g6_crown_of_suspicion_on_an_opponents_goblin_kills_its_one_toughness_kin(set_pool):
+    """Crown of Suspicion on the opponent's Goblin Warrior: its +2/-1 reaches
+    every creature sharing Goblin or Warrior, whoever controls it. The Skirk
+    Prospector (a 1/1 Goblin) is put into its owner's graveyard by the
+    state-based check; the caster's own Elf Warrior shares Warrior and becomes
+    a 4/2; the Human Soldier is untouched."""
+    game = _w1g6_table(set_pool, hand=["Crown of Suspicion"])
+    host = _w1g6_put(game, set_pool, 1, "Goblin Sky Raider")
+    prospector = _w1g6_put(game, set_pool, 1, "Skirk Prospector")
+    warrior = _w1g6_put(game, set_pool, 0, "Elvish Warrior")
+    human = _w1g6_put(game, set_pool, 0, "Glory Seeker")
+    aura = _w1g6_enchant(game, "Crown of Suspicion", host)
+    assert _w1g6_pt(host) == (3, 1)
+
+    _w1g6_sacrifice(game, "Crown of Suspicion", aura)
+    game._settle()
+
+    assert _w1g6_pt(host) == (3, 1), game.log
+    assert not game.is_on_battlefield(prospector), game.log
+    assert "Skirk Prospector" in [card.name for card in game.players[1].graveyard]
+    assert _w1g6_pt(warrior) == (4, 2)
+    assert _w1g6_pt(human) == (2, 2)
+
+
+def test_w1g6_a_crown_on_a_face_down_creature_reaches_only_that_creature(set_pool):
+    """A face-down creature has no creature types (CR 708.2), so it shares one
+    with nothing — not with the creatures on the board and not with another
+    face-down creature. The sacrifice pumps the host alone."""
+    game = _w1g6_table(set_pool, hand=["Crown of Vigor", "Krosan Colossus", "Krosan Colossus"])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    for _ in range(2):
+        assert game.queue_from_hand(0, "Krosan Colossus", alternative_cost=True).supported
+        _w1g6_resolve_stack(game)
+    face_down = [perm for perm in game.all_permanents() if _w1g6_is_face_down(perm)]
+    assert len(face_down) == 2
+    host, other = face_down
+    elf = _w1g6_put(game, set_pool, 0, "Wirewood Elf")
+    aura = _w1g6_enchant(game, "Crown of Vigor", host)
+
+    _w1g6_sacrifice(game, "Crown of Vigor", aura)
+
+    assert _w1g6_pt(host) == (3, 3), game.log
+    assert _w1g6_pt(other) == (2, 2), game.log
+    assert _w1g6_pt(elf) == (1, 2), game.log
+
 # ==== end W1G6 ======================================================
 
 

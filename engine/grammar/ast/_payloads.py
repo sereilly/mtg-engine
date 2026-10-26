@@ -216,7 +216,14 @@ def object_filter_payload(self: "ObjectFilter") -> dict[str, object]:
         # so the phrase refuses unless a lowering lifts it out and names the
         # cost record the colours are read from.
         payload["colors_of_sacrificed_for_cost"] = True
-    if self.shares_creature_type_with:
+    if self.shares_creature_type_with == "attached_host":
+        # "Enchanted creature and other creatures that share a creature type
+        # with **it**" (the Crowns), once ``subject_verb`` has bound the pronoun
+        # to the enchanted creature: a relation to the ability's source's host,
+        # which ``subject_matches`` answers from the source it is handed — so
+        # this spelling is a testable key, like ``blocking_attached_host``.
+        payload["shares_creature_type_with_attached_host"] = True
+    elif self.shares_creature_type_with:
         # Emitted for the two reasons above: the key is outside every testable
         # set, so the phrase refuses unless a lowering lifts it out and names
         # the object "it" or "the sacrificed creature" is.
