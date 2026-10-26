@@ -214,6 +214,27 @@ class CountOfDiscardsThisWay:
 
 
 @dataclass(frozen=True)
+class EachLifeGained:
+    """"…that player loses 2 life **for each 1 life they gained**." (False
+    Cure.)
+
+    ``loops.EachLifeLost`` with the other event behind it: the count is the
+    life a *gain* delivered, which the one life-gain seam (``Game._gain_life``)
+    freezes as it announces the gain — after CR 614 has had the amount, so it
+    is the life that actually arrived. Its own node rather than a direction on
+    that one, because the two are answered by two events and a lowering that
+    held one to the other's event would read a number nothing recorded. The
+    unit is carried for that node's reason.
+
+    Here among the counts rather than beside ``EachLifeLost`` in ``loops``:
+    that one is also a ``ForEach`` iterator ("**For each 1 life you lost**,
+    sacrifice a permanent", Oath of Lim-Dûl), and this is only ever a trailing
+    count — :class:`CountOfDiscardsThisWay`'s position, not a loop.
+    """
+    per: int = 1
+
+
+@dataclass(frozen=True)
 class CountOfTapsThisWay:
     """"the number of Islands **tapped this way**" (Monsoon) — how many
     permanents the *preceding step of this same effect* turned.

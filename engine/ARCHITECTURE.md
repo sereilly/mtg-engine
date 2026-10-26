@@ -477,6 +477,19 @@ rule unimplementable — counting the contenders would mean running one, which i
 exactly what 616.1 forbids before the choice is made. The predicate must not
 consume a charge, because an effect that is asked about may then not be chosen.
 
+A registration is one candidate — **unless it stands for several effects**.
+"The next time you would draw a card this turn, … instead" is one registration
+(`replacements/draws.py`'s armed one-shot) and one effect per activation: two
+Words of Worship and a Words of War are three effects, and the drawing player
+chooses which each draw spends (the Words' ruling, CR 616.1e). Such a
+registration passes `instances=` to `@replacement_effect` — a pure reader of
+`(instance key, option label)` pairs, equal effects collapsed to one — and
+`replacement_candidates(kind, game, event)` makes a candidate of each, keyed
+`<registration>:<instance>`, whose `apply` receives the instance. The keys need
+only be stable while the event waits on the `effect_order` answer; nothing is
+armed or spent in between. Without the event (a caller contending damage) the
+registration is the one candidate it always was.
+
 ### Asking the choice (616.1e)
 
 The choice belongs to the affected player, and `apply_in_order` puts it to them
@@ -510,8 +523,10 @@ earlier answers, 101.4b) is the same loop over `game.apnap_seats()`:
 step, so the next seat is asked only once the one before has answered, and runs
 `then` once after the last answer — each player choosing a creature type
 (`handlers/value_choices.each_player_chooses_creature_type`), the each-seat
-discards (`handlers/discards`), and the each-seat hand picks and reveals
-(`handlers/hand._ask_each_seat_to_pick_from_hand`).
+discards (`handlers/discards`), the each-seat hand picks and reveals
+(`handlers/hand._ask_each_seat_to_pick_from_hand`), and each player choosing
+permanents ("each player returns a permanent they control", Curfew and Words
+of Wind — `handlers/permanent_choices.choose_permanents`).
 
 **Every damage call in `engine/handlers` and the combat damage step satisfy
 both and ask** (held by `tests/engine/test_kg_damage_handler_asks.py`); a

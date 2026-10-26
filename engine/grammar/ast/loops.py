@@ -138,22 +138,6 @@ class EachLifeLost:
 
 
 @dataclass(frozen=True)
-class EachLifeGained:
-    """"…that player loses 2 life **for each 1 life they gained**." (False
-    Cure.)
-
-    :class:`EachLifeLost` with the other event behind it: the count is the
-    life a *gain* delivered, which the one life-gain seam (``Game._gain_life``)
-    freezes as it announces the gain — after CR 614 has had the amount, so it
-    is the life that actually arrived. Its own node rather than a direction on
-    that one, because the two are answered by two events and a lowering that
-    held one to the other's event would read a number nothing recorded. The
-    unit is carried for that node's reason.
-    """
-    per: int = 1
-
-
-@dataclass(frozen=True)
 class EachShortOfThisWay:
     """"**For each card less than two a player draws this way**, that player
     gains 2 life." (Truce.)
