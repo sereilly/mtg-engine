@@ -232,6 +232,10 @@ _CALLERS = {
     # it adds no door of its own.
     ("engine/aura_attachment.py", "returning_aura_hosts"),
     ("engine/handlers/reanimation.py", "_return_planned_cards"),
+    # Tempting Wurm (Onslaught): the host each opponent chose for an Aura they
+    # put onto the battlefield from hand, asked once more as the Aura enters
+    # (CR 303.4f/g) — Replenish's re-check, for a put from a hand
+    ("engine/handlers/hand.py", "_put_entrants"),
 }
 
 
