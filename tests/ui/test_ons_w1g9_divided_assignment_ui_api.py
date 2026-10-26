@@ -6,11 +6,9 @@ The rule is held in ``tests/sets/test_ons_creatures_later_groups.py`` (W1G9's
 section). This file is the server half of the human seat: the state block that
 says which attackers may divide and among whom (``divided_assignment``), and
 the field that announces a division (``divided_among_defenders`` on
-``assign_combat_damage``), driven the way a client drives them. The client's
-dialog is a wave-2 job; the step does not wait for it (a single-blocked or
-unblocked Orgg resolves as it always did), so the route is exercised here at
-the one moment the server already stops for the active player — a
-double block, where the division is theirs to announce.
+``assign_combat_damage``), driven the way a client drives them, at a double
+block. The step now waits for an unblocked or single-blocked Orgg too, and
+the client's dialog asks (wave 2, W2G3): ``test_ons_w2g3_divided_wait_ui_api.py``.
 """
 
 from __future__ import annotations

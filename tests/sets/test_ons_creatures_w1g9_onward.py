@@ -1247,3 +1247,129 @@ def test_w1g13_tempting_wurm_an_aura_with_nothing_to_enchant_stays_in_hand(set_p
     assert ons["Pacifism"] in bob.hand
 
 # ==== end W1G13 ======================================================
+
+
+# ==== W2G3 ==========================================================
+# W2G3's tests go between this line and the "end W2G3" line.
+from engine import Game as _w2g3_Game, PlayerState as _w2g3_PlayerState
+from engine.combat_assignment import (
+    DIVIDED_AMONG_DEFENDERS_LOG as _W2G3_DIVIDED_LOG,
+)
+from engine.models import Permanent as _w2g3_Permanent
+
+
+def _w2g3_orgg_at_damage(set_pool, *, interactive, block=False, first_striker=False):
+    """Butcher Orgg (seat 0) attacks seat 1, who controls a Wall of Stone and
+    Grizzly Bears; the Wall blocks it when *block*. With *first_striker* a
+    White Knight attacks beside it, so the combat has two damage steps. The
+    turn is driven through the engine's own rail (``advance_combat_phase``)
+    into the combat damage step, which is where the wait is decided."""
+    ons, lea = set_pool("ONS"), set_pool("LEA")
+    game = _w2g3_Game(players=[_w2g3_PlayerState(name="Orgg"), _w2g3_PlayerState(name="Wall")])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+
+    def put(seat, card):
+        perm = _w2g3_Permanent(card=card)
+        game._put_permanent_onto_battlefield(seat, perm, None)
+        perm.metadata["summoning_sickness_turn"] = -99
+        return perm
+
+    orgg = put(0, ons["Butcher Orgg"])
+    attackers = [orgg] + ([put(0, lea["White Knight"])] if first_striker else [])
+    wall = put(1, lea["Wall of Stone"])
+    bears = put(1, lea["Grizzly Bears"])
+    game.active_player_index = 0
+    for _ in range(4):
+        game.advance_combat_phase()
+        if game.current_step == "declare_attackers":
+            break
+    assert game.declare_attackers(
+        0, [game.battlefield_index_of(a) for a in attackers], defending_player_index=1,
+    )[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(
+        1, {game.battlefield_index_of(wall): [game.battlefield_index_of(orgg)]} if block else {},
+    )[0]
+    game.advance_combat_phase()
+    return game, orgg, wall, bears
+
+
+def _w2g3_waiting(game) -> bool:
+    return game.current_step == "combat_damage" and not game.combat_damage_resolved
+
+
+def test_w2g3_an_unblocked_orgg_waits_for_the_person_who_controls_it(set_pool):
+    """"You can use the ability to divide damage even if it is not blocked"
+    (ruling 2004-10-04). The step used to deal an unblocked Orgg's damage as
+    it was entered — the offer declined over the head of the one player
+    allowed to take it. Now it stops, advancing again does not run past the
+    question, and the answer is the assignment: here 2 to the Bears, 4 to the
+    player."""
+    game, orgg, wall, bears = _w2g3_orgg_at_damage(set_pool, interactive=(0,))
+    assert _w2g3_waiting(game), "the step resolved without asking"
+    assert game.divided_assignments_to_ask() == [game.battlefield_index_of(orgg)]
+    assert game.divided_assignments_to_ask(1) == [], "the offer is the attacker's"
+    game.advance_combat_phase()
+    assert _w2g3_waiting(game) and game.players[1].life == 20
+
+    assert game.resolve_combat_damage(0, divided_among_defenders={
+        orgg.permanent_id: {bears.permanent_id: 2, "player": 4},
+    })[0]
+    game.check_state_based_actions()
+    assert game.players[1].life == 16
+    assert not game.is_on_battlefield(bears) and wall.damage_marked == 0
+    assert f"Butcher Orgg {_W2G3_DIVIDED_LOG}" in game.log
+    assert game.divided_assignments_to_ask() == [], "answered"
+
+
+def test_w2g3_a_single_blocked_orgg_waits_and_declining_assigns_to_its_blocker(set_pool):
+    """One blocker used to resolve at once too (CR 510.1c leaves no division to
+    ask for). The offer is still open, so the step stops; saying nothing about
+    the Orgg is the offer declined, and all six go to the Wall."""
+    game, orgg, wall, bears = _w2g3_orgg_at_damage(set_pool, interactive=(0,), block=True)
+    assert _w2g3_waiting(game)
+    assert game._manual_assignment_has_declared_multiblock(), (
+        "the web layer is told a dialog can surface it, so it does not auto-resolve"
+    )
+    assert game.resolve_combat_damage(0)[0]
+    assert wall.damage_marked == 6 and game.players[1].life == 20
+    assert game.is_on_battlefield(bears)
+    assert not any(_W2G3_DIVIDED_LOG in line for line in game.log)
+
+
+def test_w2g3_a_seat_nobody_sits_in_is_not_stopped(set_pool):
+    """The default for a seat nobody asks is the offer declined (the AI never
+    takes it), so an AI or headless combat resolves as the step is entered —
+    nothing waits on a prompt nobody would answer."""
+    game, _orgg, _wall, _bears = _w2g3_orgg_at_damage(set_pool, interactive=())
+    assert game.combat_damage_resolved
+    assert game.players[1].life == 14
+    assert game.divided_assignments_to_ask() == []
+
+    game, _orgg, wall, _bears = _w2g3_orgg_at_damage(set_pool, interactive=(1,), block=True)
+    assert game.combat_damage_resolved, "a person defending is not the one asked"
+    assert wall.damage_marked == 6
+
+
+def test_w2g3_a_first_strike_combat_asks_again_for_the_second_step(set_pool):
+    """CR 510.4: with a first striker beside it there are two combat damage
+    steps, and each is its own announcement. The Orgg deals its damage in the
+    second; the step waits there too, and a division announced for it lands."""
+    game, orgg, _wall, bears = _w2g3_orgg_at_damage(
+        set_pool, interactive=(0,), first_striker=True,
+    )
+    assert _w2g3_waiting(game) and not game.combat_first_strike_done
+    assert game.resolve_combat_damage(0)[0]
+    assert game.combat_first_strike_done and not game.combat_damage_resolved
+    assert game.players[1].life == 18, "the White Knight's first strike"
+    game.advance_combat_phase()
+    assert _w2g3_waiting(game), "the second step ran past the question"
+    assert game.divided_assignments_to_ask() == [game.battlefield_index_of(orgg)]
+    assert game.resolve_combat_damage(0, divided_among_defenders={
+        orgg.permanent_id: {bears.permanent_id: 3, "player": 3},
+    })[0]
+    game.check_state_based_actions()
+    assert game.combat_damage_resolved
+    assert game.players[1].life == 15 and not game.is_on_battlefield(bears)
+# ==== end W2G3 ======================================================

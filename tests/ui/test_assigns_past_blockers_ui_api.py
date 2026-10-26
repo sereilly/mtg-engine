@@ -159,6 +159,8 @@ def test_an_unmarked_double_block_still_stops():
 _GROUPS = [
     "getCombatState", "getUnblockedAssignmentOffers", "getBlockedAttackerGroups",
     "defenderAssignsAttackerDamage", "cardHasKeyword", "getAttackerAssignGroups",
+    # Butcher Orgg's offers, folded into the same groups (W2G3).
+    "getDividedAssignmentOffers", "withDividedAssignmentGroups",
 ]
 
 

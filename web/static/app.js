@@ -5029,6 +5029,30 @@ function applyUpkeepPreventionPrompt(info) {
 // Disrupting Scepter: the discarding player picks which card to discard. With
 // Library of Leng a destination toggle lets them send it to the top of their
 // library instead of the graveyard.
+// What a discard prompt says before its instruction: which spell or ability
+// made this seat discard (`card_name`), and — "Each player discards a card"
+// (Strongarm Tactics), asked one seat at a time in turn order — where this
+// seat stands in the round and what the seats before it discarded
+// (`each_player`, public the moment it happened).
+function discardSelectContext(info) {
+  const parts = [];
+  if (info?.card_name) parts.push(`${info.card_name}:`);
+  const round = Array.isArray(info?.each_player) ? info.each_player : null;
+  if (round && round.length > 1) {
+    const at = round.findIndex((entry) => entry.seat === seat);
+    const before = round.slice(0, Math.max(0, at)).map((entry) => entry.discarded.length
+      ? `${entry.name} discarded ${entry.discarded.join(", ")}`
+      : `${entry.name} discarded nothing`);
+    const after = round.slice(at + 1).map((entry) => entry.name);
+    parts.push(
+      `each player discards in turn order — you are ${at + 1} of ${round.length}.`
+      + (before.length ? ` ${before.join("; ")}.` : "")
+      + (after.length ? ` ${after.join(", ")} ${after.length === 1 ? "is" : "are"} next.` : ""),
+    );
+  }
+  return parts.join(" ");
+}
+
 function applyDiscardSelectPrompt(info) {
   const panel = q("activationPanel");
   const title = q("promptTitle");
@@ -5078,6 +5102,8 @@ function applyDiscardSelectPrompt(info) {
     title.textContent = target === 1 ? "Discard a Card" : `Discard ${target} Cards`;
     body.textContent = `Select ${target} card(s) from your hand to discard to ${destLabel}.`;
   }
+  const context = discardSelectContext(info);
+  if (context) body.textContent = `${context} ${body.textContent}`;
 
   const toggleRow = allowTop
     ? `<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn" id="discardDestToggle">` +
@@ -6875,6 +6901,42 @@ function renderAbilityWordPrompt(card, options, then) {
   });
 }
 
+// What a `creature_type_choice` prompt says, from what the server sent with it.
+// The body used to be Extinction's own sentence ("every creature of the type
+// you name is destroyed") for every card that asks — Artificial Evolution's two
+// questions read the same as each other and as a sweep, and the second and
+// later seats of an each-player round (Harsh Mercy, Patriarch's Bidding) could
+// not see what the seats before them had named, which CR 101.4b says they know.
+//
+//   - `word_role`: "replaced" (the word taken out of the text) or
+//     "replacement" (the word written in its place), for a text change that
+//     asks twice;
+//   - `chosen_so_far`: the words the earlier seats of an each-player round
+//     named, in turn order (present, possibly empty, only in such a round).
+function creatureTypeChoiceWording(info) {
+  const cardName = info.card_name || "An effect";
+  const cap = (word) => word.charAt(0).toUpperCase() + word.slice(1);
+  let title = "Choose a creature type";
+  let body = `${cardName}: choose a creature type.`;
+  if (info.word_role === "replaced") {
+    title = "Choose the creature type to replace";
+    body = `${cardName}: first, the creature type whose every instance in the text is replaced.`;
+  } else if (info.word_role === "replacement") {
+    title = "Choose the replacement creature type";
+    body = `${cardName}: now the creature type written in its place.`;
+  }
+  if (Array.isArray(info.excluded) && info.excluded.length) {
+    body += ` It can't be ${info.excluded.map(cap).join(" or ")}.`;
+  }
+  if (Array.isArray(info.chosen_so_far)) {
+    // An each-player round, asked one seat at a time in turn order.
+    body += info.chosen_so_far.length
+      ? ` Each player chooses; chosen so far: ${info.chosen_so_far.map(cap).join(", ")}.`
+      : " Each player chooses, in turn order — you are first.";
+  }
+  return { title, body };
+}
+
 function applyCreatureTypeChoicePrompt(info) {
   const panel = q("activationPanel");
   const title = q("promptTitle");
@@ -6892,9 +6954,9 @@ function applyCreatureTypeChoicePrompt(info) {
   cancelBtn.disabled = true;
   customOkBtn.disabled = true;
 
-  const cardName = info.card_name || "an effect";
-  title.textContent = "Choose a creature type";
-  body.textContent = `${cardName}: every creature of the type you name is destroyed.`;
+  const wording = creatureTypeChoiceWording(info);
+  title.textContent = wording.title;
+  body.textContent = wording.body;
   // A select rather than the button column the card-type prompt uses: that one
   // offers the four the card printed, this one offers CR 205.3m's whole
   // catalog.
@@ -7427,6 +7489,16 @@ function enterChoiceSelectHtml(field, options, selected) {
   );
 }
 
+// "As this creature enters, an opponent chooses a creature type." (Callous
+// Oppressor.) The server names the permanent's controller (`controller_seat`,
+// `controller_name`) only when the seat asked is someone else, and the prompt
+// says whose creature it is and that the choice is the viewer's to make for it.
+function enterChoiceForAnotherText(info, phrase) {
+  if (!Number.isInteger(info?.controller_seat) || info.controller_seat === seat) return "";
+  const owner = info.controller_name || "An opponent";
+  return `${owner}'s ${info.card_name || "permanent"} is entering the battlefield, and an opponent chooses for it: you choose ${phrase}.`;
+}
+
 function applyEnterChoicePrompt(info) {
   const panel = q("activationPanel");
   const title = q("promptTitle");
@@ -7465,7 +7537,7 @@ function applyEnterChoicePrompt(info) {
       ? `${asked.slice(0, -1).join(", ")} and ${asked[asked.length - 1]}`
       : asked[0] || "";
   title.textContent = `Choose ${phrase}`;
-  body.textContent = `${cardName}: as it enters, choose ${phrase}.`;
+  body.textContent = enterChoiceForAnotherText(info, phrase) || `${cardName}: as it enters, choose ${phrase}.`;
 
   // The fields are built once per prompt and left alone after that: this
   // function runs on every poll, and replacing an <input> a player is typing
@@ -7852,6 +7924,17 @@ function applyOrderTriggersPrompt(info) {
   };
 }
 
+// A trigger another player controls whose target this seat chooses ("that
+// creature's controller may have target creature of their choice get -3/-3",
+// Death Match): the server names the controller (`controller_seat`,
+// `controller_name`) and the ability's words only then.
+function triggerTargetForAnotherText(info) {
+  if (!Number.isInteger(info?.controller_seat) || info.controller_seat === seat) return "";
+  const words = info.ability_text ? ` — “${info.ability_text}”` : ".";
+  return `${info.controller_name || "An opponent"}'s ${info.card_name || "ability"} triggered${words} `
+    + `You choose its target${info.up_to ? " (you may choose none)" : ""}.`;
+}
+
 function applyTriggerTargetPrompt(info) {
   const panel = q("activationPanel");
   panel.classList.remove("hidden");
@@ -7888,7 +7971,7 @@ function applyTriggerTargetPrompt(info) {
   if (kinds.has("permanent")) where.push("a highlighted permanent on the battlefield");
   if (kinds.has("player")) where.push("a highlighted player's life pill");
   q("promptTitle").textContent = "Choose a target";
-  q("promptBody").textContent =
+  q("promptBody").textContent = triggerTargetForAnotherText(info) ||
     `${info.card_name || "The ability"}: its triggered ability ` +
     (info.up_to ? "may name a target." : "needs a target.");
   const rows = [];
@@ -8810,8 +8893,18 @@ function applyChooseCardsInHandPrompt(info) {
   const anyNumber = Boolean(info.any_number);
   const verb = info.verb === "reveal" ? "reveal" : "choose";
 
-  title.textContent = `${info.card_name} — ${verb} cards in your hand`;
-  body.textContent = anyNumber
+  // "…may **put** any number of … cards from their hand **onto the
+  // battlefield**" (Tempting Wurm): the pick is the put, and the panel says
+  // where the cards go (`destination`) — it said "choose" and nothing more.
+  const putting = info.destination === "battlefield";
+  title.textContent = putting
+    ? `${info.card_name} — put cards from your hand onto the battlefield`
+    : `${info.card_name} — ${verb} cards in your hand`;
+  body.textContent = putting
+    ? (anyNumber
+      ? `You may put any number of these cards from your hand onto the battlefield (up to ${wanted}); putting none is legal.`
+      : `Put ${wanted} card${wanted === 1 ? "" : "s"} from your hand onto the battlefield.`)
+    : anyNumber
     ? `${verb === "reveal" ? "Reveal" : "Choose"} any number of the cards in your hand (up to ${wanted}).`
     : `${verb === "reveal" ? "Reveal" : "Choose"} ${wanted} card${wanted === 1 ? "" : "s"} in your hand.`;
   // Noxious Vapors: the pick is one card per printed slot, so the count is not
@@ -9345,6 +9438,33 @@ function applyPileChoicePrompt(info) {
   });
 }
 
+// What the opponent-picks prompt says: who revealed the cards and from where,
+// where the chosen one goes (`fate`), where the rest go (`other_fate`, when
+// the sentence moves them — Animal Magnetism's graveyard), and how many of
+// them may be chosen at all (`legal_indices`).
+function opponentPicksRevealedText(info) {
+  // In the words the prompt uses for the revealer's cards (the chooser is
+  // someone else: "their").
+  const destinations = {
+    graveyard: "into their graveyard",
+    hand: "into their hand",
+    exile: "into exile",
+    battlefield: "onto the battlefield under their control",
+  };
+  const revealer = info.revealer_seat === seat ? "You" : (info.revealer_name || "They");
+  const from = info.from_zone === "graveyard"
+    ? "from their graveyard"
+    : info.from_zone === "held" ? "" : "from the top of their library";
+  const goes = (zone) => destinations[zone] || `to the ${zone}`;
+  const total = (info.cards || []).length;
+  const legal = Array.isArray(info.legal_indices) ? info.legal_indices.length : total;
+  let text = `${revealer} revealed ${total === 1 ? "this" : "these"}${from ? ` ${from}` : ""}. `
+    + `The one you choose goes ${goes(info.fate || "graveyard")}.`;
+  if (info.other_fate) text += ` The rest go ${goes(info.other_fate)}.`;
+  if (legal < total) text += ` Only ${legal} of them can be chosen.`;
+  return text;
+}
+
 function applyOpponentPicksRevealedPrompt(info) {
   const panel = q("activationPanel");
   const title = q("promptTitle");
@@ -9361,22 +9481,26 @@ function applyOpponentPicksRevealedPrompt(info) {
   cancelBtn.disabled = true;
   customOkBtn.disabled = true;
 
-  const fate = info.fate === "graveyard" ? "graveyard" : info.fate;
   title.textContent = `${info.card_name} \u2014 choose a revealed card`;
-  body.textContent =
-    `${info.revealer_name} revealed these from the top of their library. ` +
-    `The one you choose goes into their ${fate}.`;
+  body.textContent = opponentPicksRevealedText(info);
+  // "An opponent chooses **a creature card** from among them" (Animal
+  // Magnetism): only `legal_indices` may be named \u2014 the list the resolver
+  // re-checks an answer against \u2014 so the rest are shown (they were revealed,
+  // CR 701.20) but disabled. A click on a land used to be a 400.
+  const legal = new Set((info.legal_indices || info.cards.map((_, i) => i)).map(Number));
   steps.innerHTML =
     '<div class="prompt-choice-column">' +
     info.cards
       .map(
         (name, index) =>
-          `<button type="button" class="prompt-choice-btn" data-revealed-pick="${index}">` +
-          `${escapeHtml(name)}</button>`
+          `<button type="button" class="prompt-choice-btn" data-revealed-pick="${index}"` +
+          (legal.has(index) ? "" : ` disabled title="Can't be chosen"`) +
+          `>${escapeHtml(name)}${legal.has(index) ? "" : " (can't be chosen)"}</button>`
       )
       .join("") +
     "</div>";
   steps.querySelectorAll("[data-revealed-pick]").forEach((btn) => {
+    if (btn.disabled) return;
     btn.addEventListener("click", async () => {
       await sendAction({
         seat,
@@ -10649,6 +10773,36 @@ function renderLookTopPickModal(info) {
   }
 }
 
+// What the revealed-hand pick says above the cards. "Revealed their hand" is
+// Duress's sentence; Blackmail ("Target player reveals three cards from their
+// hand and you choose one of them") reveals only part of it, and the server
+// says which slots (`shown_indices`) — the rest are cards the chooser never
+// saw, and the subtitle says how many were revealed out of how many held.
+function revealedHandPickSubtitle(info) {
+  const victim = info.victim_name || "The opponent";
+  const total = (info.cards || []).length;
+  const shown = Array.isArray(info.shown_indices) ? info.shown_indices.length : null;
+  const what = shown === null || shown >= total
+    ? `${victim} revealed their hand.`
+    : `${victim} revealed ${shown} of the ${total} cards in their hand; the face-down ones stay hidden.`;
+  return `${info.card_name || "Choose"}: ${what} Click a highlighted card; the dimmed ones can't be chosen.`;
+}
+
+// One card of the revealed-hand pick: its face, or — a slot the player kept
+// back (`hidden`, Blackmail) — a card back, never its name.
+function revealedHandPickTile(card, idx, legal) {
+  const hidden = !!card?.hidden;
+  const inner = hidden
+    ? `<img src="/images/card_back.webp" alt="Face-down card" loading="lazy" />`
+    : card.image_uri
+      ? `<img src="${escapeHtml(card.image_uri)}" alt="${escapeHtml(card.name)}" loading="lazy" />`
+      : `<div class="library-card-text-placeholder">${escapeHtml(card.name)}</div>`;
+  const cls = legal.has(idx) ? "library-card-choice" : "library-card-choice illegal";
+  const label = hidden ? "Not revealed" : card.name;
+  return `<div class="${cls}${hidden ? " face-down" : ""}" data-idx="${idx}">${inner}`
+    + `<div class="library-card-choice-name">${escapeHtml(label)}</div></div>`;
+}
+
 // Duress / Kitesail Freebooter: the whole revealed hand, with only the legal
 // picks clickable — the card revealed the hand (CR 701.20), so the rest are
 // shown but marked illegal rather than hidden.
@@ -10662,20 +10816,11 @@ function renderRevealedHandPickModal(info) {
   modal.classList.remove("hidden");
   const legal = new Set((info.legal_indices || []).map(Number));
   const subtitle = document.getElementById("revealedHandPickSubtitle");
-  if (subtitle) {
-    subtitle.textContent =
-      `${info.card_name || "Choose"}: ${info.victim_name || "the opponent"} revealed their hand. Click a highlighted card; the dimmed ones can't be chosen.`;
-  }
+  if (subtitle) subtitle.textContent = revealedHandPickSubtitle(info);
   const grid = document.getElementById("revealedHandPickGrid");
   if (grid) {
     grid.innerHTML = (info.cards || [])
-      .map((card, idx) => {
-        const inner = card.image_uri
-          ? `<img src="${escapeHtml(card.image_uri)}" alt="${escapeHtml(card.name)}" loading="lazy" />`
-          : `<div class="library-card-text-placeholder">${escapeHtml(card.name)}</div>`;
-        const cls = legal.has(idx) ? "library-card-choice" : "library-card-choice illegal";
-        return `<div class="${cls}" data-idx="${idx}">${inner}<div class="library-card-choice-name">${escapeHtml(card.name)}</div></div>`;
-      })
+      .map((card, idx) => revealedHandPickTile(card, idx, legal))
       .join("") || `<div class="modal-empty-note">Their hand is empty.</div>`;
     grid.querySelectorAll(".library-card-choice").forEach((el) => {
       el.addEventListener("click", async () => {
@@ -12803,7 +12948,7 @@ function renderActivationPrompt() {
         : `Exile ${pending.count === 1 ? (/^[aeiou]/i.test(pending.noun) ? "an" : "a") : pending.count} ${pending.noun}${pending.count === 1 ? "" : "s"} from ${pileOwner} graveyard to ${purpose}. Choose which.`)
       : pending.announcesX
       ? `${verb} X ${pending.noun}(s) to ${purpose}. Choose which; X is how many you choose.`
-      : `${verb} ${pending.count} ${pending.noun}${pending.count === 1 ? "" : "s"} to ${purpose}. Choose which.`;
+      : `${verb} ${pending.count} ${pending.count === 1 ? pending.noun : costNounPlural(pending.noun)} to ${purpose}. Choose which.`;
     // Two permanents with one name are told apart by their position, so the
     // player can see that a click picked the second Forest and not the first.
     const seen = {};
@@ -12870,7 +13015,11 @@ function renderActivationPrompt() {
     cancelBtn.disabled = false;
     customOkBtn.disabled = true;
     title.textContent = `Cast ${pending.cardName}`;
-    body.textContent = "As an additional cost, choose a creature type.";
+    // A type the targets are chosen by (Aphetto Dredging) is announced before
+    // them, not paid: the cost sentence is Caller of the Hunt's alone.
+    body.textContent = castTargetsFollowChosenType(pending.card, null)
+      ? "Choose a creature type first: the targets you choose next must be of that type."
+      : "As an additional cost, choose a creature type.";
     const options = pending.types
       .map((type) => {
         const label = escapeHtml(type.charAt(0).toUpperCase() + type.slice(1));
@@ -13286,7 +13435,7 @@ function renderActivationPrompt() {
         ...targetRequirementRowsHtml(pendingCastTarget.card, rolePermanentPicks(pendingCastTarget)),
         ...(mayStop
           ? [`<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn" id="roleSkipBtn">`
-            + `No ${escapeHtml(roleTargetNoun(currentRole(pendingCastTarget)))} — this target is optional</button></div>`]
+            + `${escapeHtml(roleSkipLabel(pendingCastTarget))}</button></div>`]
           : []),
       ].join("");
       const skipBtn = document.getElementById("roleSkipBtn");
@@ -15352,6 +15501,23 @@ function permanentCostVerbLabel(pending) {
   }
 }
 
+// The plural a cost picker's count puts on its noun: "Tap 2 Elves", not
+// "Elfs" (Birchlore Rangers) — the "-ves" plurals the engine's own singularizer
+// knows (`vocabulary.singular`: Elves, Dwarves, Wolves), "-y" and the sibilants;
+// every other noun takes an "s".
+function costNounPlural(noun) {
+  const word = String(noun || "");
+  const ves = { elf: "elves", dwarf: "dwarves", wolf: "wolves", werewolf: "werewolves", half: "halves" };
+  const lower = word.toLowerCase();
+  if (ves[lower]) {
+    const plural = ves[lower];
+    return word[0] === word[0].toUpperCase() ? plural[0].toUpperCase() + plural.slice(1) : plural;
+  }
+  if (/[^aeiou]y$/i.test(word)) return `${word.slice(0, -1)}ies`;
+  if (/(s|x|z|ch|sh)$/i.test(word)) return `${word}es`;
+  return `${word}s`;
+}
+
 // One picker of the chain, as the set picker holds it. By id, never by slot:
 // the set is chosen before anything taps or leaves, and the charger reads
 // `cost_permanent_ids`. A permanent an earlier step of the same chain already
@@ -15526,8 +15692,12 @@ function confirmPermanentCost() {
   renderActivationPrompt();
   if (pending.graveyardAbility) {
     // An ability that also names a target asks for it next, the cost riding
-    // along: both are announced together (CR 602.2b), in one body.
-    const costFields = { cost_permanent_id: picked[0] };
+    // along: both are announced together (CR 602.2b), in one body. A set
+    // ("Tap three untapped Clerics", Gangrenous Goliath) rides the list field
+    // the graveyard door reads; a single sacrifice its own.
+    const costFields = pending.verb === "tap"
+      ? { cost_permanent_ids: picked }
+      : { cost_permanent_id: picked[0] };
     if (pending.graveyardAbility.targets) {
       startGraveyardAbilityTargetPrompt(pending.graveyardAbility, costFields);
       return;
@@ -16438,8 +16608,55 @@ function confirmCastCreatureType(word) {
   // Back through the cost stage, not straight into the targets: a card may
   // print this choice *and* a price the caster picks a permanent for, and the
   // answer just recorded is what stops this re-opening the same prompt.
-  if (startCastCostPrompt(card, castAction)) return;
-  continueCastAfterCost(card, castAction);
+  const proceed = () => {
+    if (startCastCostPrompt(card, castAction)) return;
+    continueCastAfterCost(card, castAction);
+  };
+  // "Return up to three target creature cards **of the creature type of your
+  // choice**" (Aphetto Dredging): the targets depend on the word, so the
+  // picker must offer the list for *this* word, not the one the hand card was
+  // sent with (the default type's).
+  if (castTargetsFollowChosenType(card, word)) {
+    refetchCastSpecForChosenType(card, word).then(proceed);
+    return;
+  }
+  proceed();
+}
+
+// Whether the hand card's target list was built for a different creature type
+// than the one just chosen: the spec announces a type *and* targets by it
+// (`chosen_creature_type` beside `valid_targets`, W2G1's wire), and the word
+// it was built for is not this one. A type that is only a cost (Caller of the
+// Hunt) carries no such list.
+function castTargetsFollowChosenType(card, word) {
+  const spec = targetSpecOf(card);
+  if (!spec?.announces_creature_type || !("chosen_creature_type" in spec)) return false;
+  if (!spec.kind || spec.kind === "none") return false;
+  return spec.chosen_creature_type !== word;
+}
+
+// Ask the server for the card's announcement with the word chosen
+// (`card_target_spec … chosen_creature_type=`), and put that spec on the card
+// the cascade is about to read. A failed fetch leaves the old list, which the
+// engine still refuses a wrong-type pick from (a 400), never accepts.
+async function refetchCastSpecForChosenType(card, word) {
+  if (!sessionId || seat === null) return;
+  try {
+    const params = new URLSearchParams({
+      card_name: normalizeCardName(card),
+      seat: String(seat),
+      chosen_creature_type: word,
+    });
+    if (pendingCastFromZone) params.set("from_zone", pendingCastFromZone);
+    const handIndex = pendingCastHandCard?.handIndex;
+    if (Number.isInteger(handIndex)) params.set("hand_index", String(handIndex));
+    const resp = await fetch(`/api/sessions/${sessionId}/card_target_spec?${params}`);
+    if (!resp.ok) return;
+    const payload = await resp.json();
+    if (payload?.target_spec) card.target_spec = payload.target_spec;
+  } catch {
+    /* keep the hand card's spec; the server holds the announcement to the word */
+  }
 }
 
 function startCastCostPrompt(card, castAction = "cast") {
@@ -16972,16 +17189,65 @@ function finishRoleWalkEarly() {
   confirmRoleTargets();
 }
 
+/** How many more roles the options tree can still answer from here: one per
+ * level of `next` (the server builds the tree per table, so "any number of
+ * target opponents" at a three-seat table is two levels deep, not seven). */
+function roleTreeDepth(options) {
+  if (!Array.isArray(options) || !options.length) return 0;
+  return 1 + Math.max(...options.map((o) => roleTreeDepth(o?.next)));
+}
+
+/** "2 of 2" for an owed walk; "1 of up to 2 — opponent 1" for a chain of
+ * optional roles, whose printed count (seven for Wheel and Deal, twelve for
+ * Kaboom!) is the most any table could fill and says nothing about this one. */
+function roleWalkStepLabel(p) {
+  const at = p.roleChosen.length;
+  const role = p.roles[at];
+  const label = role?.role && roleChoosesAPlayer(role) ? ` — ${String(role.role).replace(/_/g, " ")}` : "";
+  if (!rolesMayEndAt(p.roles, at)) return `${at + 1} of ${p.roles.length}`;
+  const reach = at + roleTreeDepth(p.roleOptions);
+  return `${at + 1} of up to ${Math.max(reach, at + 1)}${label}; you may stop`;
+}
+
+/** What the "stop here" button of an optional role says. A chain of optional
+ * seat roles (Wheel and Deal, Kaboom!) is "any number of" players — the
+ * button names how many are chosen, zero included; a single optional role
+ * (Primal Might's "up to one") keeps its "this target is optional". */
+function roleSkipLabel(p) {
+  const role = currentRole(p);
+  const noun = roleTargetNoun(role);
+  const chosen = p.roleChosen.length;
+  if (p.roles.length - chosen > 1 && roleChoosesAPlayer(role)) {
+    return chosen === 0
+      ? `No ${costNounPlural(noun)} — cast it naming none`
+      : `Stop here — ${chosen} ${chosen === 1 ? noun : costNounPlural(noun)} chosen`;
+  }
+  return `No ${noun} — this target is optional`;
+}
+
 function roleTargetsHint() {
   const p = pendingCastTarget;
   if (!p || p.targetKind !== "roles") return "";
   const role = p.roles[p.roleChosen.length];
   if (!role) return `${p.cardName}: every target chosen.`;
-  const step = `${p.roleChosen.length + 1} of ${p.roles.length}`;
-  const noun = roleTargetNoun(role);
+  const step = roleWalkStepLabel(p);
+  const perOpponent = perOpponentRoleNoun(p, role);
+  const noun = perOpponent || roleTargetNoun(role);
   // "Choose any target", not "Choose the any target".
-  const article = /^any\b/.test(noun) ? "" : "the ";
+  const article = perOpponent || /^any\b/.test(noun) ? "" : "the ";
   return `Choose ${article}${noun} for ${p.cardName} (${step}).${roleGraveyardOrderNote(p)}`;
+}
+
+/** "For each opponent, … target permanent that player controls" (Blatant
+ * Thievery): role n is the n-th opponent's (`per_opponent`), and every option
+ * at this level is on that opponent's battlefield, so the hint names them —
+ * "a permanent Bob controls" — rather than the role's "opponent 1's target". */
+function perOpponentRoleNoun(p, role) {
+  if (!Number.isInteger(role?.per_opponent)) return "";
+  const seats = [...new Set((p.roleOptions || []).map((o) => o?.seat).filter(Number.isInteger))];
+  if (seats.length !== 1) return "";
+  const name = currentState?.players?.[seats[0]]?.name || "that opponent";
+  return `a permanent ${name} controls`;
 }
 
 // "Return two target cards from an opponent's graveyard" (the Advocates) is a
@@ -17171,7 +17437,11 @@ function confirmRoleTargets() {
   // that has left. Same shape, third alternative.
   // …nor can a slot answered by a **spell on the stack**, which has no
   // permanent id at all: the fourth alternative, by its top-first stack index.
-  const needsRoleRefs = roleChosen.some(
+  // …and a **cast** that names no role at all — every role optional ("any
+  // number of target opponents", Wheel and Deal; Kaboom!), the walk ended at
+  // its first — is said as an empty role list, which the server reads as "no
+  // target" rather than a bare cast it would aim at a default seat.
+  const needsRoleRefs = (!activating && roleChosen.length === 0) || roleChosen.some(
     (t) => t.zone === "graveyard" || t.zone === "player" || t.zone === "stack",
   );
   const roleRefs = roleChosen.map((t) => {
@@ -21062,8 +21332,11 @@ function renderCombatControls(state) {
     const prompt = document.createElement("div");
     prompt.className = "combat-summary";
     const offered = groups.filter((g) => g.offer);
-    const divided = groups.some((g) => !g.offer);
-    if (offered.length === 0) {
+    const divided = groups.some((g) => !g.offer && !g.divide);
+    const dividing = groups.filter((g) => g.divide);
+    if (dividing.length > 0) {
+      prompt.textContent = dividedAssignmentPanelText(dividing, divided || offered.length > 0);
+    } else if (offered.length === 0) {
       prompt.textContent = "An attacker is blocked by multiple creatures. Open the dialog to split its damage.";
     } else {
       const names = offered.map((g) => g.attackerCard?.name || "A creature").join(", ");
@@ -21210,6 +21483,14 @@ function autoAssignCombatDamage(groups) {
 // them", Thorn Elemental ruling, 2018-04-27), so there is no third state where
 // some goes each way, and the engine refuses one if it is sent.
 function validateCombatDamageGroup(group, mode = combatDamageDialogMode) {
+  // Butcher Orgg's offer: its own question and check (`validateDividedGroup`);
+  // declined, the ordinary assignment below — a division only with two or
+  // more blockers, and with fewer nothing to decide (CR 510.1b/c).
+  if (group.divide) {
+    const divided = validateDividedGroup(group);
+    if (divided) return divided;
+    if (group.blockers.length < 2) return { total: group.power, violation: null, valid: true };
+  }
   if (group.offer) {
     const answer = combatDamageOfferDraft[group.attackerIdx];
     if (answer === "unblocked") {
@@ -21596,12 +21877,335 @@ function getAttackerAssignGroups(state = currentState) {
   const pastBlockers = new Set(
     (getCombatState(state)?.assigns_past_blockers || []).map((idx) => Number(idx)),
   );
-  return getBlockedAttackerGroups(state, (attackerIdx) => (offers.has(attackerIdx) ? 1 : 2))
+  return withDividedAssignmentGroups(state, getBlockedAttackerGroups(state, (attackerIdx) => (offers.has(attackerIdx) ? 1 : 2))
     .filter((g) => !pastBlockers.has(g.attackerIdx))
     .filter(
       (g) => offers.has(g.attackerIdx) || !defenderAssignsAttackerDamage(state, g.attackerIdx),
     )
-    .map((g) => (offers.has(g.attackerIdx) ? { ...g, offer: offers.get(g.attackerIdx) } : g));
+    .map((g) => (offers.has(g.attackerIdx) ? { ...g, offer: offers.get(g.attackerIdx) } : g)));
+}
+
+// ---- Butcher Orgg: "You may assign this creature's combat damage divided as
+// you choose among defending player and/or any number of creatures they
+// control." ----
+//
+// The attackers the server says THIS seat may divide that way right now
+// (`state.divided_assignment`, the engine's `divided_assignments_to_ask` — the
+// same list that holds the combat damage step until this seat answers), by
+// attacker index: { attackerId, damage, defendingSeat, creatures: [{id, name}] }.
+function getDividedAssignmentOffers(state = currentState) {
+  const offers = new Map();
+  const info = state?.divided_assignment;
+  if (!info || seat === null || seat !== info.attacker_seat) return offers;
+  for (const entry of info.attackers || []) {
+    offers.set(Number(entry.attacker_index), {
+      attackerId: Number(entry.attacker_id),
+      damage: Math.max(0, Number(entry.damage) || 0),
+      defendingSeat: Number(entry.defending_seat),
+      creatures: (entry.creatures || []).map((c) => ({ id: Number(c.id), name: c.name || "" })),
+    });
+  }
+  return offers;
+}
+
+// The damage dialog's groups with every divided-assignment offer folded in:
+// an offered attacker the dialog already shows (a multi-block) carries
+// `divide`; one it does not — unblocked, or blocked by one creature, where
+// there was nothing to ask before this card — joins as a group of its own.
+// The offer is a "may", so each such group asks the question first and
+// "assign it normally" is the other answer (the default every seat that is
+// not asked gets: the AI never takes it).
+function withDividedAssignmentGroups(state, groups) {
+  const offers = getDividedAssignmentOffers(state);
+  if (offers.size === 0) return groups;
+  const byIdx = new Map(groups.map((g) => [g.attackerIdx, g]));
+  const blockedByIdx = new Map(
+    getBlockedAttackerGroups(state, () => 1).map((g) => [g.attackerIdx, g]),
+  );
+  const attackerBf = state.players?.[state.current_turn]?.battlefield || [];
+  for (const [attackerIdx, offer] of offers) {
+    const attackerCard = attackerBf[attackerIdx];
+    if (!attackerCard) continue;
+    const base = byIdx.get(attackerIdx) || blockedByIdx.get(attackerIdx) || {
+      attackerIdx,
+      attackerCard,
+      power: offer.damage,
+      deathtouch: cardHasKeyword(attackerCard, "deathtouch"),
+      trample: cardHasKeyword(attackerCard, "trample"),
+      blockers: [],
+    };
+    byIdx.set(attackerIdx, { ...base, power: offer.damage, divide: offer });
+  }
+  return [...byIdx.values()].sort((a, b) => a.attackerIdx - b.attackerIdx);
+}
+
+// Per combat damage step (CR 510.4: a second step is assigned afresh), the
+// answer and the shares for each offered attacker: { answer: "divide" |
+// "normal" | undefined, shares: { player: n, <creature id>: n } }. Absent
+// until the player picks — the dialog asks, it does not pre-answer.
+let combatDividedDraft = { key: "", byAttacker: {} };
+
+function dividedDraftFor(group) {
+  const key = getCombatDamagePassKey(currentState);
+  if (combatDividedDraft.key !== key) combatDividedDraft = { key, byAttacker: {} };
+  if (!combatDividedDraft.byAttacker[group.attackerIdx]) {
+    combatDividedDraft.byAttacker[group.attackerIdx] = { answer: undefined, shares: {} };
+  }
+  return combatDividedDraft.byAttacker[group.attackerIdx];
+}
+
+// The recipients a division may name: the defending player, then every
+// creature they control (the server's list, by id), each with the card the
+// board shows for it.
+function dividedRecipients(state, group) {
+  const offer = group.divide;
+  const defender = state.players?.[offer.defendingSeat];
+  const bf = defender?.battlefield || [];
+  const blocking = new Set(
+    group.blockers.map((b) => Number(b.card?.id)).filter((id) => Number.isInteger(id)),
+  );
+  const recipients = [{
+    key: "player",
+    label: seat === offer.defendingSeat ? "You" : (defender?.name || "Defending player"),
+    life: Number(defender?.life),
+    card: null,
+    lethal: null,
+    blocking: false,
+  }];
+  for (const creature of offer.creatures) {
+    const card = bf.find((c) => Number(c.id) === creature.id) || { name: creature.name };
+    let lethal = Math.max(0, (Number(card.toughness) || 0) - (Number(card.damage_marked) || 0));
+    if (group.deathtouch && lethal > 0) lethal = 1;
+    recipients.push({
+      key: String(creature.id),
+      label: creature.name || card.name || "",
+      card,
+      lethal,
+      blocking: blocking.has(creature.id),
+    });
+  }
+  return recipients;
+}
+
+// CR 510.1e over the card's rulings (2004-10-04), before anything is sent:
+// all of the damage, every named recipient at least 1 (an amount of 0 is a
+// recipient not named), and so never more recipients than damage. The server
+// holds the same rule (`combat_assignment.divided_among_defenders_refusal`).
+// Returns null for "normal", whose check is the ordinary one.
+function validateDividedGroup(group) {
+  const draft = dividedDraftFor(group);
+  const name = group.attackerCard?.name || "This creature";
+  if (draft.answer === "normal") return null;
+  if (draft.answer !== "divide") {
+    return {
+      total: 0,
+      violation: `Choose whether ${name} divides its combat damage.`,
+      valid: false,
+      unanswered: true,
+    };
+  }
+  let total = 0;
+  let named = 0;
+  for (const value of Object.values(draft.shares)) {
+    const amount = Math.max(0, Number(value) || 0);
+    total += amount;
+    if (amount > 0) named += 1;
+  }
+  let violation = null;
+  if (named === 0) violation = "Name at least one recipient.";
+  else if (total !== group.power) violation = `Divide all ${group.power} damage.`;
+  return { total, violation, valid: !violation, divided: true };
+}
+
+// The division announced for each offered attacker answered "divide":
+// `divided_among_defenders` on `assign_combat_damage`, keyed by the attacker's
+// id, each share by "player" or a creature's id (amounts of 0 left out).
+function collectDividedAmongDefenders(groups) {
+  const divided = {};
+  for (const g of groups) {
+    if (!g.divide || dividedDraftFor(g).answer !== "divide") continue;
+    const shares = {};
+    for (const [key, value] of Object.entries(dividedDraftFor(g).shares)) {
+      const amount = Math.max(0, Math.floor(Number(value) || 0));
+      if (amount > 0) shares[key] = amount;
+    }
+    divided[String(g.divide.attackerId)] = shares;
+  }
+  return divided;
+}
+
+// The combat panel's line while an offered attacker's question is open.
+function dividedAssignmentPanelText(dividing, othersToo) {
+  const names = dividing.map((g) => g.attackerCard?.name || "A creature").join(", ");
+  return `${names} may divide ${dividing.length === 1 ? "its" : "their"} combat damage among the defending player and their creatures. `
+    + "Open the dialog to choose" + (othersToo ? ", and to assign your other attackers' damage." : ".");
+}
+
+// Whether a group's attacker goes into `attacker_damage` at all: an offered
+// attacker that divides is announced in `divided_among_defenders` instead, and
+// one assigned normally with fewer than two blockers has nothing to divide
+// (CR 510.1b/c) — leaving it out is the engine's default for it.
+function dividedGroupSkipsAttackerDamage(group) {
+  if (!group.divide) return false;
+  return dividedDraftFor(group).answer === "divide" || group.blockers.length < 2;
+}
+
+// One offered attacker's section of the damage dialog: the question (two
+// buttons, neither selected), then the recipients' amounts when it divides or
+// its ordinary assignment when it does not.
+function renderDividedAssignmentSection(group, groups, mode, result, cardThumb) {
+  const draft = dividedDraftFor(group);
+  const section = document.createElement("div");
+  section.className = "cda-attacker cda-divided";
+  section.dataset.attackerIndex = String(group.attackerIdx);
+
+  const attackerSide = document.createElement("div");
+  attackerSide.className = "cda-attacker-side";
+  attackerSide.appendChild(cardThumb(group.attackerCard, group.blockers.length ? "blocked" : "unblocked"));
+  const dealing = document.createElement("div");
+  dealing.className = "cda-dealing";
+  dealing.textContent = `${group.power} damage to assign`;
+  attackerSide.appendChild(dealing);
+  section.appendChild(attackerSide);
+
+  const arrow = document.createElement("div");
+  arrow.className = "cda-arrow";
+  arrow.textContent = "→";
+  section.appendChild(arrow);
+
+  const targets = document.createElement("div");
+  targets.className = "cda-blockers";
+  const defenderName = seat === group.divide.defendingSeat
+    ? "you"
+    : (currentState?.players?.[group.divide.defendingSeat]?.name || "the defending player");
+  if (draft.answer === "divide") {
+    for (const r of dividedRecipients(currentState, group)) {
+      const col = document.createElement("div");
+      col.className = "cda-blocker cda-recipient" + ((Number(draft.shares[r.key]) || 0) > 0 ? " selected" : "");
+      col.dataset.recipient = r.key;
+      if (r.card) {
+        col.appendChild(cardThumb(r.card, `lethal: ${r.lethal}${r.blocking ? " · blocking" : ""}`));
+      } else {
+        const tile = document.createElement("div");
+        tile.className = "cda-card";
+        tile.innerHTML =
+          `<div class="cda-card-placeholder">${escapeHtml(r.label)}</div>` +
+          `<div class="cda-card-name">${escapeHtml(r.label)}</div>` +
+          (Number.isFinite(r.life) ? `<div class="cda-card-pt">life ${r.life}</div>` : "") +
+          `<div class="cda-card-sub">defending player</div>`;
+        col.appendChild(tile);
+      }
+      const input = document.createElement("input");
+      input.type = "number";
+      input.min = "0";
+      input.max = String(group.power);
+      input.className = "cda-input";
+      input.dataset.recipient = r.key;
+      input.value = String(Math.max(0, Number(draft.shares[r.key]) || 0));
+      input.addEventListener("input", () => {
+        draft.shares[r.key] = Math.max(0, Math.floor(Number(input.value) || 0));
+        renderCombatDamageDialogBody(groups, mode);
+      });
+      col.appendChild(input);
+      targets.appendChild(col);
+    }
+  } else if (group.blockers.length >= 2 && draft.answer === "normal") {
+    // Assigned normally among two or more blockers: the ordinary division.
+    for (const { blockerIdx, card, lethal } of group.blockers) {
+      const col = document.createElement("div");
+      col.className = "cda-blocker";
+      col.appendChild(cardThumb(card, `lethal: ${lethal}`));
+      const input = document.createElement("input");
+      input.type = "number";
+      input.min = "0";
+      input.max = String(group.power);
+      input.className = "cda-input";
+      input.value = String(Math.max(0, Number(combatDamageDraft?.[group.attackerIdx]?.[blockerIdx]) || 0));
+      input.addEventListener("input", () => {
+        if (!combatDamageDraft[group.attackerIdx]) combatDamageDraft[group.attackerIdx] = {};
+        combatDamageDraft[group.attackerIdx][blockerIdx] = Math.max(0, Math.floor(Number(input.value) || 0));
+        renderCombatDamageDialogBody(groups, mode);
+      });
+      col.appendChild(input);
+      targets.appendChild(col);
+    }
+  } else {
+    // Nothing to type: one blocker takes it all (CR 510.1c), or nobody blocks
+    // and the player it attacks does (CR 510.1b) — or the question is open.
+    const col = document.createElement("div");
+    col.className = "cda-blocker";
+    if (group.blockers.length === 1) {
+      col.appendChild(cardThumb(group.blockers[0].card, "blocking"));
+    } else {
+      const tile = document.createElement("div");
+      tile.className = "cda-card";
+      tile.innerHTML = `<div class="cda-card-placeholder">${escapeHtml(defenderName)}</div>` +
+        `<div class="cda-card-sub">defending player</div>`;
+      col.appendChild(tile);
+    }
+    targets.appendChild(col);
+  }
+  section.appendChild(targets);
+
+  const offerRow = document.createElement("div");
+  offerRow.className = "cda-offer";
+  const question = document.createElement("div");
+  question.className = "cda-offer-question";
+  question.textContent =
+    `${group.attackerCard?.name || "This creature"} may assign its combat damage divided as you choose ` +
+    `among ${defenderName === "you" ? "you" : defenderName} and/or any number of creatures ` +
+    `${defenderName === "you" ? "you control" : "they control"} (at least 1 to each one you name).`;
+  offerRow.appendChild(question);
+  const choices = document.createElement("div");
+  choices.className = "cda-offer-choices";
+  const normalLabel = group.blockers.length >= 2
+    ? "Assign it normally: divide it among the creatures blocking it"
+    : group.blockers.length === 1
+      ? `Assign it normally: all ${group.power} to ${group.blockers[0].card?.name || "its blocker"}`
+      : `Assign it normally: all ${group.power} to ${defenderName}`;
+  const choice = (value, label) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "cda-offer-btn secondary-btn" + (draft.answer === value ? " selected" : "");
+    btn.dataset.divide = value;
+    btn.dataset.attackerIndex = String(group.attackerIdx);
+    btn.setAttribute("aria-pressed", draft.answer === value ? "true" : "false");
+    btn.textContent = label;
+    btn.addEventListener("click", () => {
+      draft.answer = value;
+      // Dividing starts from the plainest legal division — all of it to the
+      // defending player — so there is something to adjust rather than a
+      // row of zeroes.
+      if (value === "divide" && Object.values(draft.shares).every((v) => !(Number(v) > 0))) {
+        draft.shares = { player: group.power };
+      }
+      renderCombatDamageDialogBody(groups, mode);
+    });
+    return btn;
+  };
+  choices.appendChild(choice("divide", `Divide its ${group.power} damage among ${defenderName} and creatures`));
+  choices.appendChild(choice("normal", normalLabel));
+  offerRow.appendChild(choices);
+  section.appendChild(offerRow);
+
+  const footer = document.createElement("div");
+  footer.className = "cda-attacker-footer";
+  const totalEl = document.createElement("span");
+  totalEl.className = "cda-total" + (result.valid ? "" : " cda-total-over");
+  totalEl.textContent = result.divided || (draft.answer === "normal" && group.blockers.length >= 2)
+    ? `Assigned ${result.total} / ${group.power}`
+    : draft.answer === "normal"
+      ? `Assigned ${group.power} / ${group.power}`
+      : `Assigned 0 / ${group.power}`;
+  footer.appendChild(totalEl);
+  if (result.violation) {
+    const warn = document.createElement("span");
+    warn.className = "cda-warning";
+    warn.textContent = result.violation;
+    footer.appendChild(warn);
+  }
+  section.appendChild(footer);
+  return section;
 }
 
 // The attackers the *defending player* assigns the combat damage of and still
@@ -21677,6 +22281,8 @@ function openDamageDialog(state = currentState, mode = "attacker") {
       // on the creatures blocking it.
       for (const g of groups) {
         if (g.offer) combatDamageOfferDraft[g.attackerIdx] = mode === "banding" ? "blockers" : "unblocked";
+        // Butcher Orgg's unasked answer is the offer declined.
+        if (g.divide) dividedDraftFor(g).answer = "normal";
       }
       renderCombatDamageDialogBody(groups, mode);
     };
@@ -21690,7 +22296,9 @@ function openDamageDialog(state = currentState, mode = "attacker") {
       // division for it: an entry in attacker_damage is the other answer, and
       // the engine refuses an attacker that is given both.
       const asThoughUnblockedIds = [];
+      const dividedAmongDefenders = collectDividedAmongDefenders(groups);
       for (const g of groups) {
+        if (dividedGroupSkipsAttackerDamage(g)) continue;
         if (g.offer && combatDamageOfferDraft[g.attackerIdx] === "unblocked") {
           asThoughUnblockedIds.push(g.offer.attackerId);
           continue;
@@ -21727,12 +22335,17 @@ function openDamageDialog(state = currentState, mode = "attacker") {
           });
           updateActionHint("Attackers' combat damage assigned.");
         } else {
-          await sendAction({
+          const announcement = {
             seat,
             action: "assign_combat_damage",
             attacker_damage: assignment,
             as_though_unblocked_ids: asThoughUnblockedIds,
-          });
+          };
+          // Butcher Orgg's offer taken, by attacker id; left out, declined.
+          if (Object.keys(dividedAmongDefenders).length) {
+            announcement.divided_among_defenders = dividedAmongDefenders;
+          }
+          await sendAction(announcement);
           updateActionHint("Combat damage resolved.");
         }
         combatDamageOfferDraft = {};
@@ -21796,16 +22409,21 @@ function renderCombatDamageDialogBody(groups, mode = combatDamageDialogMode) {
     titleEl.textContent = mode === "banding" ? "Assign Attackers' Damage (You Are Defending)" : "Assign Combat Damage";
   }
   const anyOffer = groups.some((g) => g.offer);
-  const offerNote = anyOffer
+  const offerNote = (anyOffer
     ? " A creature that may assign its combat damage as though it weren't blocked deals all of it one way or the other — choose for each."
-    : "";
+    : "")
+    + (groups.some((g) => g.divide)
+      ? " A creature that may divide its combat damage among the defending player and their creatures does so only if you choose to — blocked or not."
+      : "");
   if (subtitleEl) {
     subtitleEl.textContent =
       mode === "banding"
         ? "You (the defending player) assign this combat damage rather than the attacker — a creature with banding is blocking, or an effect you control says so (CR 702.22j). Choose how each attacker's damage is split among the creatures blocking it."
           + offerNote
-        : "Distribute each attacker's power among the creatures blocking it. The total assigned to a blocker's row cannot exceed the attacker's damage."
-          + offerNote;
+        : groups.every((g) => g.divide)
+          ? offerNote.trim()
+          : "Distribute each attacker's power among the creatures blocking it. The total assigned to a blocker's row cannot exceed the attacker's damage."
+            + offerNote;
   }
 
   const cardThumb = (card, sub) => {
@@ -21827,6 +22445,10 @@ function renderCombatDamageDialogBody(groups, mode = combatDamageDialogMode) {
   for (const group of groups) {
     const result = validateCombatDamageGroup(group, mode);
     if (!result.valid) allValid = false;
+    if (group.divide) {
+      body.appendChild(renderDividedAssignmentSection(group, groups, mode, result, cardThumb));
+      continue;
+    }
 
     const section = document.createElement("div");
     section.className = "cda-attacker";
@@ -24723,6 +25345,36 @@ function sendGraveyardAbility(entry, fields = {}) {
   });
 }
 
+// "Tap three untapped Clerics you control: Return this card from your
+// graveyard to your hand." (Gangrenous Goliath.) Which ones tap is the
+// payer's (CR 601.2h): the server lists the charger's own candidates
+// (`tap_choices`) and how many (`tap_count`), and the set picker every other
+// cost uses asks; its Confirm sends the ids on `cost_permanent_ids`. The button
+// used to send a bare activation, and the engine tapped the first three it met.
+// Returns true when it opened (or refused for too few candidates).
+function openGraveyardTapCostPicker(entry) {
+  if (!Array.isArray(entry?.tap_choices)) return false;
+  const count = Math.max(1, Number(entry.tap_count || 1));
+  const options = entry.tap_choices.map((c) => ({ id: c.permanent_id, name: c.name }));
+  if (options.length < count) {
+    // CR 601.2h: a cost the board cannot cover is not paid with less.
+    SFX.onError();
+    updateActionHint(`${entry.name} has too few untapped permanents to tap for its cost.`, true);
+    return true;
+  }
+  pendingPermanentCost = {
+    card: null, cardName: entry.name, verb: "tap", noun: "permanent",
+    // The printed cost is the prompt's sentence ("Tap three untapped Clerics
+    // you control. Choose 3.").
+    costSentence: entry.cost_text || null,
+    count, anyNumber: false, announcesX: false, picked: [], remaining: [], chosen: [],
+    options, purpose: "activate", graveyardAbility: entry,
+  };
+  renderActivationPrompt();
+  updateActionHint(`Choose what ${entry.name} will tap to pay its cost.`);
+  return true;
+}
+
 function renderGraveyardAbilities(state, hasPriority) {
   const host = q("graveyardAbilities");
   if (!host) return;
@@ -24757,6 +25409,7 @@ function renderGraveyardAbilities(state, hasPriority) {
         updateActionHint(`Choose what ${entry.name} will sacrifice to pay its cost.`);
         return;
       }
+      if (openGraveyardTapCostPicker(entry)) return;
       if (entry.targets) {
         startGraveyardAbilityTargetPrompt(entry);
         return;

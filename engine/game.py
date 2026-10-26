@@ -86,6 +86,7 @@ from .phases import (
     BlockRequirementsMixin,
     BlockTriggersMixin,
     CombatDamageStepMixin,
+    DividedDamageWaitMixin,
     EndOfCombatStepMixin,
     PostcombatMainPhaseMixin,
     EndingPhaseMixin,
@@ -114,6 +115,8 @@ class Game(
     BlockRequirementsMixin,
     BlockTriggersMixin,
     CombatDamageStepMixin,
+    # Butcher Orgg's division: which attackers a person is asked about.
+    DividedDamageWaitMixin,
     EndOfCombatStepMixin,
     PostcombatMainPhaseMixin,
     EndingPhaseMixin,

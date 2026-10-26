@@ -22,6 +22,7 @@ from engine.divided_damage import DIVIDED_TARGETS, divided_entry
 from engine.entry_choices import chosen_as_entered
 from engine.face_down import face_up_morph_cost, hidden_card_of, is_face_down
 from engine.faces import combined_oracle_text, face_cards, is_face, whole_card
+from engine.game_types import target_ids
 from engine.legality import activation_target_obligation
 from engine.models import Permanent, PlayerState
 from engine.layer_bridge import displayed_type_line
@@ -1143,6 +1144,26 @@ def _stack_item_targets(item, game: Game) -> list[dict]:
             index = game.graveyard_index_of(stamp)
             if index is not None:
                 targets.append({"kind": "graveyard", "seat": stamp.seat, "index": index})
+        return targets
+
+    # **Permanents on more than one battlefield** ("For each opponent, gain
+    # control of target permanent that player controls", Blatant Thievery). The
+    # slots below are positional on one seat — the first target's — so every
+    # target drew its arrow onto that board: Bob's Glory Seeker twice where the
+    # spell was aimed at it and at Cara's Wellwisher. The ids say which board
+    # each slot is on; read only when they span two or more, so every
+    # one-board spell's payload is what it was.
+    by_id = [
+        game.permanent_by_id(pid)
+        for pid in target_ids(item.target_permanent_id) if isinstance(pid, int)
+    ]
+    boards = {game.controller_index_of(perm) for perm in by_id if perm is not None}
+    if len(boards) > 1:
+        for perm in by_id:
+            owner = game.controller_index_of(perm) if perm is not None else None
+            index = game.battlefield_index_of(perm) if perm is not None else None
+            if isinstance(owner, int) and isinstance(index, int):
+                targets.append({"kind": "permanent", "seat": owner, "index": index})
         return targets
 
     raw = item.target_permanent_index

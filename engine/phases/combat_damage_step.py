@@ -744,7 +744,7 @@ class CombatDamageStepMixin:
         other four are owed by the rules to whoever the seat is; this one has a
         default every non-interactive seat takes, so only a person stops it.
         """
-        if self.unblocked_assignments_to_ask():
+        if self.unblocked_assignments_to_ask() or self.divided_assignments_to_ask():
             return True
         if self.combat_band_blocks:
             return True
@@ -786,7 +786,7 @@ class CombatDamageStepMixin:
         Where no dialog can surface it, the default stands and the web layer's
         auto-resolve is what this returning False permits.
         """
-        if self.unblocked_assignments_to_ask():
+        if self.unblocked_assignments_to_ask() or self.divided_assignments_to_ask():
             return True
         for attacker_idx in self.combat_attackers:
             if len(self._combat_blockers_for_attacker(attacker_idx)) < 2:
