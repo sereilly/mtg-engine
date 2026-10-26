@@ -485,12 +485,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
                 },
             ),
     },
-    'Stone Giant': {
-        "{t}: target creature you control with toughness less than this creature's "
-        "power gains flying until end of turn. destroy that creature at the "
-        "beginning of the next end step":
-            _line("grant_flying_and_delayed_destruction", "activated_keyword"),
-    },
     'Word of Command': {
         "look at target opponent's hand and choose a card from it. you control "
         'that player until word of command finishes resolving. the player plays '

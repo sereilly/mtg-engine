@@ -729,8 +729,6 @@ HANDLER_CLAIMS: dict[str, tuple[str, ...]] = {
     "left_right_combat_division": (
         'then, for each attacking creature you control, choose "left" or "right." that creature can\'t be blocked this combat except by creatures with flying and creatures in a pile with the chosen label',
     ),
-    # handlers/keywords grant_flying_and_delayed_destruction arms destroy_at_next_end_step.
-    "grant_flying_and_delayed_destruction": ("destroy that creature at the beginning of the next end step",),
     # handlers/pump add_variable_power_counters_to_self enforces the seven cap.
     "add_variable_power_counters_to_self": (
         "this ability can't cause the total number of +1/+0 counters on this creature to be greater than seven",

@@ -565,15 +565,6 @@ class TargetEnumerationMixin:
             from .handlers.combat_declarations import forced_attacker_is_legal
 
             return forced_attacker_is_legal(self, perm)
-        if instruction.kind == "grant_flying_and_delayed_destruction":
-            # Stone Giant: "Target creature you control with toughness less than
-            # this creature's power." Only the activating player's creatures with
-            # toughness below the source's power are legal.
-            if candidate_seat is not None and controller_index is not None and candidate_seat != controller_index:
-                return False
-            if source_permanent is not None and perm.effective_toughness >= source_permanent.effective_power:
-                return False
-            return perm.is_creature
         if instruction.kind == "set_base_pt_target_until_eot" and instruction.payload.get("exclude_self"):
             # Sorceress Queen: "Target creature other than this creature."
             return source_permanent is None or perm is not source_permanent
