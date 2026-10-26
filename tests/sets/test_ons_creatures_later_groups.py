@@ -809,6 +809,106 @@ def test_w1g7_gangrenous_goliath_taps_three_clerics_from_the_graveyard(set_pool)
 # ==== W1G10 ==========================================================
 # W1G10's tests go between this line and the "end W1G10" line.
 
+# --- W1G10: control and the stack, on creatures -----------------------------
+#
+# Quicksilver Dragon is Meddle's sentence with Silver Wyvern's identity in the
+# condition ("…and that target is **this creature**"); each card is put on the
+# battlefield face up through the engine's own entry point (W1G1 owns the
+# face-down half of the morphs).
+from engine import Game as _w1g10_Game
+from engine.models import Permanent as _w1g10_Permanent
+from engine.models import PlayerState as _w1g10_PlayerState
+from engine.oracle import compile_card_oracle as _w1g10_compile
+from engine.targeting import derive_activation_spec as _w1g10_activation_spec
+from tests.helpers import resolve_stack as _w1g10_resolve_stack
+
+
+def _w1g10_game(seats: int = 2):
+    game = _w1g10_Game(players=[
+        _w1g10_PlayerState(name=f"P{seat + 1}", life=20) for seat in range(seats)
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    return game
+
+
+def _w1g10_put(game, seat: int, card):
+    perm = _w1g10_Permanent(card=card)
+    perm.metadata["summoning_sickness_turn"] = -99
+    game._put_permanent_onto_battlefield(seat, perm, None)
+    return perm
+
+
+def _w1g10_dragon_board(set_pool, set_cards):
+    game = _w1g10_game()
+    dragon = _w1g10_put(game, 0, set_pool("ONS")["Quicksilver Dragon"])
+    bystander = _w1g10_put(game, 0, set_pool("LEA")["Grizzly Bears"])
+    giant = _w1g10_put(game, 1, set_pool("LEA")["Hill Giant"])
+    return game, dragon, bystander, giant
+
+
+def _w1g10_dragon_offered(game, set_pool, dragon):
+    card = set_pool("ONS")["Quicksilver Dragon"]
+    spec = _w1g10_activation_spec(_w1g10_compile(card).activated_abilities[0])
+    return [
+        entry["name"] for entry in game._enumerate_targets(
+            0, card, spec, for_cast=True,
+            source_permanent=dragon, ability_source=dragon,
+        )
+    ]
+
+
+def test_w1g10_quicksilver_dragon_redirects_a_spell_aimed_at_it(set_pool, set_cards):
+    """A Shock aimed at the Dragon is offered to the {U} ability, and resolves
+    at another creature instead (CR 115.7a)."""
+    game, dragon, bystander, giant = _w1g10_dragon_board(set_pool, set_cards)
+    game.players[1].hand.append(set_pool("ONS")["Shock"])
+    assert game.queue_from_hand(
+        1, "Shock", target_permanent_ids=[dragon.permanent_id]
+    ).supported
+    assert _w1g10_dragon_offered(game, set_pool, dragon) == ["Shock"]
+    assert game.queue_permanent_ability(
+        0, "Quicksilver Dragon", target_stack_index=0, ability_index=0,
+    ).supported
+    _w1g10_resolve_stack(game)
+
+    assert dragon.damage_marked == 0, game.log
+    # "another creature": never the Dragon itself, and the headless default is
+    # the first other creature the picker lists.
+    assert bystander.damage_marked + giant.damage_marked == 2, game.log
+    assert any("Shock now targets" in line for line in game.log), game.log
+
+
+def test_w1g10_quicksilver_dragon_ignores_a_spell_aimed_elsewhere(set_pool, set_cards):
+    """"…and that target is **this creature**": a Shock at the creature beside
+    it is not offered, and an activation naming it is refused before {U} is
+    spent — the clause read and dropped would re-aim every spell."""
+    game, dragon, bystander, _giant = _w1g10_dragon_board(set_pool, set_cards)
+    game.players[1].hand.append(set_pool("ONS")["Shock"])
+    game.queue_from_hand(1, "Shock", target_permanent_ids=[bystander.permanent_id])
+    assert _w1g10_dragon_offered(game, set_pool, dragon) == []
+    assert not game.queue_permanent_ability(
+        0, "Quicksilver Dragon", target_stack_index=0, ability_index=0,
+    ).supported
+    _w1g10_resolve_stack(game)
+    assert bystander.damage_marked == 2, game.log
+    assert dragon.damage_marked == 0
+
+
+def test_w1g10_quicksilver_dragon_leaves_a_two_target_spell_alone(set_pool, set_cards):
+    """"…has only one target" (CR 115.9a): a spell naming the Dragon and a
+    second object is not the Dragon's to re-aim."""
+    game, dragon, bystander, _giant = _w1g10_dragon_board(set_pool, set_cards)
+    game.players[1].hand.append(set_pool("USG")["Arc Lightning"])
+    # Dragon and bystander are seat 0's slots 0 and 1.
+    assert game.queue_from_hand(
+        1, "Arc Lightning", divided_targets=[(0, 0, 1), (0, 1, 2)],
+    ).supported
+    assert _w1g10_dragon_offered(game, set_pool, dragon) == []
+    _w1g10_resolve_stack(game)
+    assert dragon.damage_marked == 1, game.log
+
 # ==== end W1G10 ======================================================
 
 
