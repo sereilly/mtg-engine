@@ -391,3 +391,45 @@ def test_w2g5_wheel_and_deal_names_the_opponents_worth_naming(
     resolve_stack(game)
     assert len(game.players[1].hand) == (their_hand if names is None else min(7, their_library))
     assert [card.name for card in game.players[0].hand] == ["Island", "Island"]
+
+
+# ==== Butcher Orgg: the division among defenders, taken =======================
+#
+# "You may assign this creature's combat damage divided as you choose among
+# defending player and/or any number of creatures they control." Legal since
+# W1G9, and no seat nobody asks ever took it: the default is the offer
+# declined. `ai_combat.choose_divided_assignments` takes it where killing a
+# creature is worth more than the same damage to the player's face, and the
+# three places a default is supplied announce it
+# (`ai_combat.choose_combat_damage_announcement`).
+
+
+def _w2g5_orgg_attacks(set_pool, *, life=20, can_block=False):
+    from engine.ai_combat import run_ai_combat_phase
+
+    game = _w2g5_board(set_pool, ["Butcher Orgg"], ["Grizzly Bears", "Hill Giant"],
+                       life=(20, life))
+    game.prompt_driver = lambda played: played.auto_resolve_pending_choices()
+    for permanent in game.controlled_by(1):
+        permanent.tapped = not can_block
+    run_ai_combat_phase(game, 0)
+    return game
+
+
+@pytest.mark.parametrize("can_block", [False, True])
+def test_w2g5_butcher_orgg_kills_what_its_six_damage_can(set_pool, can_block):
+    """Unblocked or blocked, the Orgg's six is the Hill Giant's three, the
+    Bears' two and one to the player: both creatures die and the player
+    takes one."""
+    game = _w2g5_orgg_attacks(set_pool, can_block=can_block)
+    assert any("Butcher Orgg divides its combat damage" in line for line in game.log)
+    assert not any(p.is_creature for p in game.controlled_by(1))
+    assert game.players[1].life == 19
+
+
+def test_w2g5_butcher_orgg_sends_the_lethal_six_to_the_player(set_pool):
+    """At six life the six goes where the game ends, and an unblocked Orgg
+    announces nothing to send it there."""
+    game = _w2g5_orgg_attacks(set_pool, life=6)
+    assert game.players[1].life <= 0
+    assert not any("Butcher Orgg divides" in line for line in game.log)

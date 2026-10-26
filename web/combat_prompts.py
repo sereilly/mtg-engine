@@ -25,7 +25,7 @@ step that nothing on either side could resolve.
 
 from __future__ import annotations
 
-from engine.ai_combat import choose_combat_damage_assignment, declare_ai_attackers
+from engine.ai_combat import choose_combat_damage_announcement, declare_ai_attackers
 from engine.ai_scoring import choose_attack_target
 from engine.ai_declarations import legal_attackers
 from engine.combat_assignment import (DEFENDING_PLAYER_SHARE,
@@ -600,10 +600,11 @@ def _ai_assign_combat_damage(session: Session) -> None:
         # stopped to ask which effect applies first, CR 616.1e), with nothing
         # recorded behind it to say so: dealing again would deal it twice.
         return
-    # The division, and which "as though it weren't blocked" offers are taken
-    # — the one chooser the simulator's driver and the engine's own
-    # auto-resolve ask (`engine.ai_combat.choose_combat_damage_assignment`).
-    auto, past_blockers = choose_combat_damage_assignment(game)
+    # The division, which "as though it weren't blocked" offers are taken and
+    # Butcher Orgg's division among defending player and their creatures — the
+    # one chooser the simulator's driver and the engine's own auto-resolve ask
+    # (`engine.ai_combat.choose_combat_damage_announcement`).
+    announced = choose_combat_damage_announcement(game)
     first_of_two = (
         stepwise
         and not game.combat_first_strike_done
@@ -611,10 +612,7 @@ def _ai_assign_combat_damage(session: Session) -> None:
     )
     if first_of_two:
         # The first-strike step alone (CR 510.4)…
-        ok, _why = game.resolve_combat_damage(
-            game.active_player_index, attacker_damage=auto,
-            as_though_unblocked=past_blockers,
-        )
+        ok, _why = game.resolve_combat_damage(game.active_player_index, **announced)
         if (
             not ok
             or game.combat_damage_resolved
@@ -629,12 +627,9 @@ def _ai_assign_combat_damage(session: Session) -> None:
         # dealt now, as both always were.
         if _banding_assignment_pending(session) or _multiblock_split_pending(session):
             return
-        auto, past_blockers = choose_combat_damage_assignment(game)
+        announced = choose_combat_damage_announcement(game)
     # Every pass still owed (CR 510.4). One call rather than two, so a
     # first-strike pass that stops to ask a human defender something
     # (CR 616.1e) records the second pass behind it instead of having it
     # re-run the first.
-    game.resolve_all_combat_damage(
-        game.active_player_index, attacker_damage=auto,
-        as_though_unblocked=past_blockers,
-    )
+    game.resolve_all_combat_damage(game.active_player_index, **announced)
