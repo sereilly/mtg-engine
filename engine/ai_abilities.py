@@ -439,16 +439,11 @@ def _activation_candidate(
     # zero — a tap and a turn spent dealing nothing. It reached the score
     # below only to crash there on the payload's "x".
     #
-    # **An X that sizes nothing but the effect is announced now** (ONS
-    # W2G5): "{X}{G}{G}: This creature deals X damage to each creature with
-    # flying" (Silklash Spider) was a Spider no AI seat ever activated. Each X
-    # the board can pay is rehearsed and the best is the one proposed
-    # (`_sized_x_activation`). What stays declined is the X this cannot size by
-    # rehearsing the effect: one that sizes the **target list** (the spec's
-    # ``x_targets`` — Candelabra's "X target lands" is announced before the
-    # targets it counts, CR 601.2c) and one the card **defines** ("X is the
-    # number of pin counters", Voodoo Doll — the engine computes it, and
-    # refuses where it cannot).
+    # **An X that sizes only the effect is announced now** (ONS W2G5: Silklash
+    # Spider was never activated), sized by rehearsal (`_sized_x_activation`).
+    # Still declined: an X that sizes the target list (the spec's
+    # ``x_targets``, Candelabra, CR 601.2c) and one the card defines (Voodoo
+    # Doll — the engine computes it, and refuses where it cannot).
     from .cost_x_definitions import cost_x_is_defined
 
     x_symbols = (ability.source_line or "").lower().split(":", 1)[0].count("{x}")
@@ -785,16 +780,12 @@ def _activation_candidate(
     # asks about, and armed every Word in every main phase after its own draw —
     # mana spent on a replacement no draw that turn would meet.
     #
-    # **Two more shapes the flat score cannot price, rehearsed the same way.**
-    # A cost that gives up the source itself (`_gives_up_its_source`: "Sacrifice
-    # this Aura: … get +1/+1 until end of turn", Crown of Vigor) — the score
-    # reads the effect and never the permanent spent, so the Crowns were cast
-    # and sacrificed in the same main phase, a lasting +1/+1 traded for a
-    # fleeting one with nothing able to attack (ONS W1G6, W1G7: every Crown of
-    # Vigor cast in a seeded run). And an effect that comes back at its own
-    # activator (`ai_valuation.reaches_both_sides`: "Each player loses 1 life
-    # for each Zombie on the battlefield", Shepherd of Rot) — a race the seat
-    # behind loses, which the score rated 2.5 from any position.
+    # **Two more shapes the flat score cannot price** (ONS W2G5): a cost that
+    # gives up the source (`_gives_up_its_source` — Crown of Vigor was cast and
+    # sacrificed in one main phase with nothing able to attack), unless the
+    # source exists to be given up (`_exists_to_be_given_up`); and an effect
+    # that comes back at its activator (`ai_valuation.reaches_both_sides` —
+    # Shepherd of Rot drained both players from any position).
     if (
         ability_index is not None
         or _sets_only_what_its_source_is(ability.instruction)
@@ -839,13 +830,10 @@ def _exists_to_be_given_up(permanent) -> bool:
     it up (`_gives_up_its_source`) — Mossfire Egg, Chromatic Sphere, Urza's
     Bauble, Aeolipile, Bottle of Suleiman.
 
-    Such a permanent is worth nothing on the battlefield but the ability, and
-    the standing (``ai_rehearsal.permanent_worth``) prices every permanent at
-    least the card it is: rehearsed, the Egg's {R}{G} and card were worth less
-    than the Egg, and it was never cracked (sim_fingerprint ODY, ICE). Its
-    ability keeps the score it always had. A creature's body, an Aura's host
-    (Crown of Vigor, Crackling Club, Carapace) and any other line are what the
-    rehearsal weighs the sacrifice against."""
+    It is worth nothing but the ability, and the standing prices every
+    permanent at least a card (``ai_rehearsal.permanent_worth``): rehearsed,
+    the Egg's {R}{G} and card were worth less than the Egg, and it was never
+    cracked (sim_fingerprint ODY, ICE). Its ability keeps its flat score."""
     if permanent.is_creature or permanent.has_type("aura"):
         return False
     program = compile_card_oracle(permanent.effective_card)
@@ -984,16 +972,12 @@ def _sized_x_activation(
     """*candidate* with the X its "{X}…:" cost announces (CR 107.3a), or None
     when no X is worth activating for.
 
-    Every X from 1 up to what the board can pay (and :data:`X_ACTIVATION_SIZES`)
-    is planned — each {X} symbol charged as generic mana, or as the one colour
-    "Spend only red mana on X" names, the way the activation path charges it
-    — and rehearsed through the gate a land's ability takes
-    (`_land_ability_worth`: what lasts once the turn is over, the fight
-    fought where the good is fleeting). The X proposed is the one that leaves
-    the seat furthest ahead; between two that do it equally, the smaller,
-    which leaves the mana. So Silklash Spider pays exactly enough to kill the
-    opponent's fliers and none of its own — and nothing at all on a board
-    where X damage to each flier kills more of the seat's than of theirs.
+    Every X from 1 up to what the board pays (and :data:`X_ACTIVATION_SIZES`)
+    is planned — {X} charged as generic, or as the colour "Spend only red mana
+    on X" names, as the activation path charges it — and rehearsed through
+    `_land_ability_worth`; the X leaving the seat furthest ahead is proposed,
+    the smaller of two equals. So Silklash Spider pays enough to kill the
+    opponent's fliers, and nothing where it would kill more of its own.
     """
     from dataclasses import replace
 
@@ -1528,17 +1512,11 @@ def choose_hand_activation_action(
     its hand in a loop, and a seeded run reproduces exactly.
 
     **What the activation sets off is weighed** (:func:`_rehearse_hand_
-    activation`). The score read the ability's own instruction — a cycling
-    ability's draw — and nothing a cycle triggers: "When you cycle this card,
-    you may have it deal 1 damage to each creature" (Slice and Dice),
-    "Whenever a player cycles a card, …" (Lightning Rift), a discard trigger
-    (Megrim). So the seat cycled Slice and Dice for the card whatever the
-    sweep did to its own creatures (ONS W1G3). Each candidate is carried out
-    on a copy against the same copy with nothing activated: one whose swing is
-    harm is not proposed, and the swing is added to the score, so the cycle
-    that sweeps the opponent's board ranks above a plain one. A plain cycle —
-    a card discarded and a card drawn, nothing triggered — measures nothing
-    and keeps the score it had.
+    activation`): the score read a cycle's draw and nothing it triggers, so
+    Slice and Dice's "When you cycle this card, you may have it deal 1 damage
+    to each creature" was cycled whatever it did to the seat's own board (ONS
+    W1G3). A harmful candidate is not proposed and the swing is added to the
+    score; a plain cycle measures nothing and keeps its score.
     """
     with deliberating():
         return _choose_hand_activation_action(game, player_index)
