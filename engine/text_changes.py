@@ -198,6 +198,15 @@ def _record(
         # that print no duration.
         record["duration"] = duration
     effects.append(record)
+    # "This permanent's text was changed", written by the writer and only when
+    # a change is recorded. ``mark_text_modified`` wrote it as soon as it found
+    # its target, whatever the change then recorded, and the AI's rehearsal
+    # reads a permanent's fields (``ai_rehearsal.position_digest``): a text
+    # change that rewrote nothing read as a change, so an AI seat cast Magical
+    # Hack, Sleight of Mind, Mind Bend, Crystal Spray, Whim of Volrath and
+    # Alter Reality at its own Island with no words named — a card spent for
+    # nothing, every game it drew one.
+    perm.metadata["text_modified"] = True
 
 
 def change_color_word(

@@ -321,29 +321,44 @@ def test_word_of_command_forces_play_from_hand(all_cards):
 
 
 def test_magical_hack_marks_target_text_modified(all_cards):
+    """The mark is written with the record (``text_changes._record``): a
+    Swamp word rewritten marks the Bear, and a Hack that rewrites nothing —
+    no word named, or one the Bear does not carry — leaves it unmarked."""
     hack = _get(all_cards, "Magical Hack")
-    bear = _mk_card("Bear", "Creature — Bear")
-    p1 = PlayerState(name="P1", hand=[hack])
+    bear = _mk_card("Bear", "Creature — Bear", "Swampwalk")
+    p1 = PlayerState(name="P1", hand=[hack, hack])
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
     game = Game(players=[p1, p2])
 
     result = game.cast_from_hand(0, "Magical Hack", target_player_index=1)
+    assert result.supported
+    assert not p2.battlefield[0].metadata.get("text_modified")
+
+    result = game.cast_from_hand(
+        0, "Magical Hack", target_player_index=1, old_color="B", new_color="U",
+    )
 
     assert result.supported
     assert p2.battlefield[0].metadata.get("text_modified") is True
+    assert p2.battlefield[0].effective_card.oracle_text == "Islandwalk"
 
 
 def test_sleight_of_mind_marks_target_text_modified(all_cards):
+    """The same mark one vocabulary over: white rewritten black marks the
+    Bear."""
     sleight = _get(all_cards, "Sleight of Mind")
-    bear = _mk_card("Bear", "Creature — Bear")
+    bear = _mk_card("Bear", "Creature — Bear", "Protection from white")
     p1 = PlayerState(name="P1", hand=[sleight])
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=bear)])
     game = Game(players=[p1, p2])
 
-    result = game.cast_from_hand(0, "Sleight of Mind", target_player_index=1)
+    result = game.cast_from_hand(
+        0, "Sleight of Mind", target_player_index=1, old_color="W", new_color="B",
+    )
 
     assert result.supported
     assert p2.battlefield[0].metadata.get("text_modified") is True
+    assert p2.battlefield[0].effective_card.oracle_text == "Protection from black"
 
 
 def test_sleight_of_mind_retargets_lifeforce_counter_to_red(all_cards):
