@@ -265,7 +265,7 @@ class ValueChoicesMixin:
     def arm_creature_type_choice(
         self, player_index: int, *, card_name: str, result_key: str, context,
         default: str | None, excluded: tuple[str, ...] = (),
-        slot: int | None = None,
+        slot: int | None = None, word_role: str | None = None,
     ):
         """Queue "choose a creature type" for the resolving spell's controller.
 
@@ -288,6 +288,11 @@ class ValueChoicesMixin:
         choices made before theirs), carried for the renderer.
         """
         each: dict = {}
+        if word_role is not None:
+            # Which word of a creature-type text change this asks — "replaced"
+            # or "replacement" (Artificial Evolution asks both, one after the
+            # other, on this one prompt). Absent for every other card.
+            each["word_role"] = word_role
         if slot is not None:
             earlier = list((context.results.get(result_key) or [])[:slot])
             each = {"slot": slot, "chosen_so_far": earlier}

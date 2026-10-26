@@ -662,6 +662,10 @@ def choose_creature_type(game: Game, instruction: OracleInstruction, context: Or
     game.arm_creature_type_choice(
         seat, card_name=card_name, result_key=key, context=context,
         default=default, excluded=excluded,
+        word_role=(
+            "replaced" if instruction.payload.get("written_on_target")
+            else "replacement" if excluded_from else None
+        ),
     )
     game.log.append(
         f"{card_name}: {game.players[seat].name} chooses a creature type"

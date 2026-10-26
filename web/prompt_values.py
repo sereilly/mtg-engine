@@ -754,6 +754,12 @@ def _creature_type_choice(ctx: PromptContext, choices: list) -> dict:
         "creature_types": sorted(ctx.game.creature_type_choice_options(choices[0])),
         "default_creature_type": data.get("default_creature_type"),
     }
+    if data.get("word_role"):
+        # "…replacing all instances of one creature type with another"
+        # (Artificial Evolution) asks twice: "replaced" is the word taken out
+        # of the text, "replacement" the word written in its place. Absent for
+        # every other card, whose payload is unchanged.
+        rendered["word_role"] = data["word_role"]
     if data.get("slot") is not None:
         # "**Each player** chooses a creature type." (Harsh Mercy.) CR 101.4b:
         # a player knows the choices made before theirs, so the earlier seats'

@@ -293,8 +293,10 @@ or `perm.basic_land_types`; nothing else may read the storage, which
 `tests/engine/test_layer_reads.py` enforces.
 
 **Layers 3 and 4 record contributions, not values.** `engine/text_changes.py`
-holds each text change (a colour word, a basic land type, and every written
-form of it) with a timestamp; `engine/land_types.py` holds each land-type
+holds each text change (a colour word, a basic land type, a creature type —
+Artificial Evolution — and every written form of it, a creature type's plural
+included, never inside a card name, CR 612.2) with a timestamp;
+`engine/land_types.py` holds each land-type
 change with a timestamp *and a source*. Removal is dropping one contribution,
 so an effect ending restores what the others still say rather than the printed
 characteristic — a Gaea's Liege Forest ending on an Evil Presence Swamp leaves

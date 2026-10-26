@@ -621,6 +621,9 @@ def test_w1g5_artificial_evolution_refuses_wall_and_the_same_word(
         0, "Artificial Evolution", target_permanent_ids=[champion.permanent_id],
     ).supported
     game.resolve_top_of_stack(pause_for_choices=True)
+    (first,) = game.pending_choices
+    assert first.data["word_role"] == "replaced"
+    assert first.data["default_creature_type"] == "elf", "written on the target"
     assert game.confirm_creature_type_choice(0, "elf")
     assert game.confirm_creature_type_choice(0, "wall") is False
     assert game.confirm_creature_type_choice(0, "elf") is False
@@ -631,6 +634,8 @@ def test_w1g5_artificial_evolution_refuses_wall_and_the_same_word(
     ))["creature_type_choice"]
     assert "wall" not in offered["creature_types"]
     assert "elf" not in offered["creature_types"]
+    # The second of the two questions says it is the replacement.
+    assert offered["word_role"] == "replacement"
     assert _w1g5_types(champion) == {"elf"}
     assert game.confirm_creature_type_choice(0, "zombie")
     _w1g5_resolve_stack(game)
