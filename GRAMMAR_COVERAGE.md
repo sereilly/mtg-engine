@@ -51,7 +51,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | TOR | 143 | 261 | 86.2% | 86.2% | 68.2% | 138 |
 | JUD | 143 | 241 | 91.3% | 90.9% | 65.6% | 131 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| ONS *(measured)* | 335 | 541 | 75.6% | 73.8% | 53.8% | 246 |
+| ONS *(measured)* | 335 | 541 | 77.1% | 75.2% | 55.3% | 254 |
 | **All (shipped)** | **8027** | **11886** | **90.7%** | **90.1%** | **62.4%** | **6277** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -64,9 +64,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 735 | 386 | expected a subject |  |
-| 185 | 99 | unrecognized effect verb |  |
-| 133 | 71 | unconsumed text |  |
+| 733 | 384 | expected a subject |  |
+| 180 | 94 | unrecognized effect verb |  |
+| 132 | 70 | unconsumed text |  |
 | 70 | 51 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 30 | 7 | expected what this creature can't block, or a duration |  |
@@ -2269,11 +2269,21 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Crowd Favorites**
   - `{3}{W}: Tap target creature.`
   - `{3}{W}: This creature gets +0/+5 until end of turn.`
+- **Crown of Ascension**
+  - `Sacrifice this Aura: Enchanted creature and other creatures that share a creature type with it gain flying until end of turn.`
+- **Crown of Awe**
+  - `Sacrifice this Aura: Enchanted creature and other creatures that share a creature type with it gain protection from black and from red until end of turn.`
 - **Crown of Flames**
   - `{R}: Enchanted creature gets +1/+0 until end of turn.`
   - `{R}: Return this Aura to its owner's hand.`
   - `{R}: Enchanted creature gets +1/+0 until end of turn.`
   - `{R}: Return this Aura to its owner's hand.`
+- **Crown of Fury**
+  - `Sacrifice this Aura: Enchanted creature and other creatures that share a creature type with it get +1/+0 and gain first strike until end of turn.`
+- **Crown of Suspicion**
+  - `Sacrifice this Aura: Enchanted creature and other creatures that share a creature type with it get +2/-1 until end of turn.`
+- **Crown of Vigor**
+  - `Sacrifice this Aura: Enchanted creature and other creatures that share a creature type with it get +1/+1 until end of turn.`
 - **Crown of the Ages**
   - `{4}, {T}: Attach target Aura attached to a creature to another creature.`
   - `{4}, {T}: Attach target Aura attached to a creature to another creature.`
@@ -2307,6 +2317,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Crypt Rats**
   - `{X}: This creature deals X damage to each creature and each player. Spend only black mana on X.`
   - `{X}: This creature deals X damage to each creature and each player. Spend only black mana on X.`
+- **Cryptic Gateway**
+  - `Tap two untapped creatures you control: You may put a creature card from your hand that shares a creature type with each creature tapped this way onto the battlefield.`
 - **Crystal Chimes**
   - `{3}, {T}, Sacrifice this artifact: Return all enchantment cards from your graveyard to your hand.`
 - **Crystal Golem**
@@ -3350,6 +3362,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When you control a creature with toughness 2 or less, sacrifice this creature.`
 - **Endbringer's Revel**
   - `{4}: Return target creature card from a graveyard to its owner's hand. Any player may activate this ability but only as a sorcery.`
+- **Endemic Plague**
+  - `Destroy all creatures that share a creature type with the sacrificed creature. They can't be regenerated.`
 - **Endless Wurm**
   - `At the beginning of your upkeep, sacrifice this creature unless you sacrifice an enchantment.`
 - **Endoskeleton**
@@ -6433,6 +6447,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}, {T}: Add one mana of any color.`
 - **Mana Drain**
   - `Counter target spell. At the beginning of your next main phase, add an amount of {C} equal to that spell's mana value.`
+- **Mana Echoes**
+  - `Whenever a creature enters, you may add an amount of {C} equal to the number of creatures you control that share a creature type with it.`
 - **Mana Flare**
   - `Whenever a player taps a land for mana, that player adds one mana of any type that land produced.`
   - `Whenever a player taps a land for mana, that player adds one mana of any type that land produced.`
