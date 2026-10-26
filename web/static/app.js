@@ -20340,12 +20340,15 @@ function libraryTopCastEntry(state = currentState) {
 // serialized card by card). Any other pile showing a card (a revealed top, or
 // the owner's private look) previews it; a face-down pile does nothing.
 function libraryPileClicked(info) {
+  // The click names the pile ({seat, kind}); the card on it is the one the
+  // canvas drew, read off the same payload (`libraryTopCardShown`).
+  const shown = libraryTopCardShown(currentState?.players?.[info.seat]);
   const entry = info.seat === seat ? libraryTopCastEntry() : null;
   if (!entry) {
-    if (info.topCard) {
-      showCardPreview(info.topCard);
+    if (shown) {
+      showCardPreview(shown);
       if (info.seat === seat) {
-        updateActionHint(`${info.topCard.name} can't be cast or played from the top of your library.`);
+        updateActionHint(`${shown.name} can't be cast or played from the top of your library right now.`);
       }
     }
     return;
@@ -20354,7 +20357,7 @@ function libraryPileClicked(info) {
     updateActionHint("Finish the current cast before starting another.", true);
     return;
   }
-  const card = entry.card || info.topCard;
+  const card = entry.card || shown;
   if (!card) return;
   beginZoneCast(card, "library", entry);
 }

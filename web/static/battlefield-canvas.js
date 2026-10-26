@@ -1055,6 +1055,12 @@ class BattlefieldCanvas {
           const n = (occ.get(`base:${card.name}`) || 0) + 1;
           occ.set(`base:${card.name}`, n);
           id = `base:${card.name}#${n}`;
+        } else if (card.face_down === true) {
+          // Every face-down permanent is a slot of its own (CR 708): they all
+          // share one name, so a name pile would stack a face-down Silent
+          // Specter under a face-down Grinning Demon on its controller's
+          // board, and leave a target pickable only as "the top one" on both.
+          id = `facedown:${Number.isInteger(card.id) ? card.id : key}`;
         } else {
           id = `pile:${card.name}${card.is_token ? "|token" : ""}`;
         }
