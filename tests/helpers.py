@@ -186,13 +186,11 @@ def resolve_stack(game, *, limit: int = 200) -> int:
 
 
 #: Set to anything but ``""`` or ``"0"`` and every census that samples through
-#: :func:`stable_sample` examines its whole population instead — the
-#: full-stride run the promotion gate makes (SET_PLAYBOOK Phase 4). An
-#: environment variable rather than a ``slow`` mark because CI runs the
-#: ``tests/regressions`` and ``tests/rules`` shard *with* its slow tests, and
-#: a full-pool census there is minutes on every build; the sample is what the
-#: suite is for, and the whole pool is what a promotion is for.
-FULL_CENSUS_ENV = "MTG_FULL_CENSUS"
+#: :func:`stable_sample` examines its whole population instead — what the full
+#: pass (``pytest --full``, the promotion gate's run) sets. An environment
+#: variable rather than a ``full`` mark because the census still runs in the
+#: quick pass, on its sample; the whole pool is what a promotion is for.
+from tests.passes import FULL_CENSUS_ENV  # noqa: E402
 
 
 def full_census() -> bool:

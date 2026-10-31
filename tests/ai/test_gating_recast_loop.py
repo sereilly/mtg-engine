@@ -57,7 +57,7 @@ _PINNED = ("Natural Emergence", "Doomsday Specter", "Sawtooth Loon")
 _CAST_FLOOR = 3
 
 
-@pytest.mark.slow
+@pytest.mark.full
 def test_w2g5_no_simulated_seat_casts_a_gater_to_return_itself():
     """Six seeded Planeshift games with the three pinned into every deck: no
     pinned permanent returns itself, and no seat casts one of them more than

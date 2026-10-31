@@ -509,7 +509,7 @@ def test_w2g5_a_one_shot_permanent_is_still_cracked(set_pool):
 # ==== The seeded games the pile was measured in ===============================
 
 
-@pytest.mark.slow
+@pytest.mark.full
 @pytest.mark.parametrize(("pinned", "exercised"), [
     (
         ["Birchlore Rangers", "Wirewood Pride", "Crown of Vigor", "Silklash Spider",

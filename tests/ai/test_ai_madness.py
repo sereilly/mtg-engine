@@ -73,7 +73,7 @@ def test_the_ai_declines_a_madness_sweep_that_kills_only_its_own_creatures():
     ) == 2
 
 
-@pytest.mark.slow
+@pytest.mark.full
 def test_a_seeded_torment_game_casts_a_card_for_its_madness_cost():
     """A whole game reaches the offer and takes it: the madness cards and an
     outlet pinned into every deck, the run completes, and the log holds at

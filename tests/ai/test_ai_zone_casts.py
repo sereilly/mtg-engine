@@ -584,7 +584,7 @@ def test_every_cast_question_the_policy_asks_names_the_zone():
 _PINNED = ["Firebolt", "Chatter of the Squirrel", "Call of the Herd", "Volcanic Spray"]
 
 
-@pytest.mark.slow
+@pytest.mark.full
 def test_a_simulated_odyssey_game_casts_a_spell_from_a_graveyard():
     """The Phase 5 instrument reaches the mechanic: with flashback cards
     pinned, a seeded run casts at least one from a graveyard — **a floor of

@@ -240,6 +240,7 @@ def _announcements():
             yield f"{name} ({index})", lambda how, card=card, index=index: _ability(card, index, how)
 
 
+@pytest.mark.full
 @pytest.mark.cr("601.2c", "602.2b", "400.7")
 def test_a_single_target_announcement_resolves_the_same_by_slot_and_by_id():
     """The census: the same choice, spelled two ways, is the same game."""

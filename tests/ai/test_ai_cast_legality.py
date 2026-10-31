@@ -113,6 +113,7 @@ def test_it_declines_a_card_a_lockout_bans(catalog_by_name):
 from engine.card_loader import manifest_set_codes
 
 
+@pytest.mark.full
 @pytest.mark.parametrize("code", manifest_set_codes())
 def test_a_batch_over_every_set_proposes_no_refused_cast(code, set_cards):
     """The end-to-end statement, and the one that would catch a fifth shape.

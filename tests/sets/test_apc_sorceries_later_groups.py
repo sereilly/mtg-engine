@@ -808,7 +808,7 @@ def test_w1g8_last_caress_drains_one_and_draws(set_pool):
     assert _w1g8_names(game.players[0].hand) == ["Swamp"]
 
 
-@_w1g8_pytest.mark.slow
+@_w1g8_pytest.mark.full
 def test_w1g8_the_ai_plays_the_hand_spells_through_whole_games():
     """The three sorceries, Dodecapod and Haunted Angel pinned into both decks
     of six simulated games: each is cast and resolves, none is refused, and no

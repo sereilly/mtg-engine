@@ -200,7 +200,7 @@ def test_w1g2_bloodfire_infusion_falls_off_a_creature_its_controller_lost(set_po
     assert game.controller_index_of(host) == 1
 
 
-@_w1g2_pytest.mark.slow
+@_w1g2_pytest.mark.full
 def test_w1g2_the_ai_plays_bloodfire_infusion_and_its_neighbours_through_whole_games():
     """Bloodfire Infusion and four of this group's spells pinned into both
     decks of three simulated games. They are cast and resolve, none is refused

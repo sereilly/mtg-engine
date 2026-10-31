@@ -334,6 +334,7 @@ def _empty_sweep(catalog, by_name, only=None):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.full
 def test_the_gate_and_the_picker_are_one_list_for_every_ability(_catalog, _by_name):
     (
         abilities, announcements, driven,

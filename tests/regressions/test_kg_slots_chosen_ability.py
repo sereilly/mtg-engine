@@ -237,7 +237,7 @@ def test_the_ai_names_the_word_the_opposing_board_has():
     assert game._has_keyword(mine, "trample") and not game._has_keyword(theirs, "trample")
 
 
-@pytest.mark.slow
+@pytest.mark.full
 def test_a_seeded_run_activates_phyrexian_splicer():
     """Phyrexian Splicer pinned into both decks of a seeded Tempest run: a
     seat activates it at least once and nothing it proposed was refused."""

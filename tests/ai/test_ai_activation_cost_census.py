@@ -135,9 +135,6 @@ def population() -> list:
     return found
 
 
-POPULATION = population()
-
-
 def board(card, rich: bool) -> "tuple[Game, Permanent]":
     game = Game(players=[
         PlayerState(name="AI", hand=[FOREST] * (3 if rich else 0), library=[FOREST] * 10),
@@ -178,9 +175,12 @@ def run(card, rich: bool) -> dict:
 
 @pytest.fixture(scope="module")
 def rows() -> dict:
+    # The population is found here, not at import: finding it compiles the
+    # whole pool, ~19 s that every collection paid — each xdist worker and
+    # each IDE discovery — whether or not it ran this module.
     return {
         card.name: {"poor": run(card, False), "rich": run(card, True)}
-        for card in POPULATION
+        for card in population()
     }
 
 

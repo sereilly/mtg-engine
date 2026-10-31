@@ -316,6 +316,7 @@ def rows() -> list:
     return census()
 
 
+@pytest.mark.full
 def test_the_sweep_examined_the_pool(rows):
     """The floor: a sweep that reaches nothing passes everything."""
     assert len(rows) >= 1200
@@ -325,10 +326,12 @@ def test_the_sweep_examined_the_pool(rows):
             "bounce_target_creature"} <= kinds
 
 
+@pytest.mark.full
 def test_no_proposal_crashed(rows):
     assert [row for row in rows if row["error"]] == []
 
 
+@pytest.mark.full
 def test_a_one_target_spell_with_a_target_on_its_side_is_cast(rows):
     declined = sorted({row["card"] for row in rows if not row["proposed"]})
     assert declined == sorted(DECLINED), (
@@ -337,6 +340,7 @@ def test_a_one_target_spell_with_a_target_on_its_side_is_cast(rows):
     )
 
 
+@pytest.mark.full
 def test_the_spells_the_old_arms_never_cast_are_cast_at_everything_legal(rows):
     """The named ones, so the two defects stay readable in the sweep."""
     by_card: dict = {}
@@ -356,6 +360,7 @@ def test_the_spells_the_old_arms_never_cast_are_cast_at_everything_legal(rows):
         assert at_golem and all(row["proposed"] for row in at_golem), name
 
 
+@pytest.mark.full
 def test_a_guarded_effect_is_swept_only_where_it_does_something(rows):
     """"Destroy target permanent if it's blue": the one blue census permanent
     is a pair, the fourteen others are not — a seat that cast it at those

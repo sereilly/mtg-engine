@@ -259,6 +259,7 @@ def _unbacked_static_lines() -> list[tuple[str, str]]:
     return unbacked
 
 
+@pytest.mark.full
 def test_every_admitted_static_line_is_backed_by_code():
     unbacked = _unbacked_static_lines()
     assert not unbacked, (

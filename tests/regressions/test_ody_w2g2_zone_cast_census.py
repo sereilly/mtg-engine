@@ -542,6 +542,7 @@ def twin_rows() -> list:
     return twin_census()
 
 
+@pytest.mark.full
 def test_the_flashback_sweep_examined_every_flashback_card(flashback_rows):
     """The floor: Odyssey prints 28, and a sweep that reaches none passes."""
     cards = {row["card"] for row in flashback_rows}
@@ -559,6 +560,7 @@ def test_the_flashback_sweep_examined_every_flashback_card(flashback_rows):
     assert sum(1 for row in flashback_rows if row["from_hand"]) >= 23 * len(FLASHBACK_BOARDS)
 
 
+@pytest.mark.full
 def test_a_flashback_card_in_the_graveyard_is_cast_from_it(flashback_rows):
     """Proposed from the graveyard wherever it is proposed from hand, accepted,
     paid for exactly — at the printed flashback cost, under Catalyst Stone on
@@ -575,6 +577,7 @@ def test_a_flashback_card_in_the_graveyard_is_cast_from_it(flashback_rows):
     assert len(proposed) >= 23
 
 
+@pytest.mark.full
 def test_the_twin_sweep_examined_the_pool(twin_rows):
     """The floor, per kind: each is a different road through the cast path.
 
@@ -591,6 +594,7 @@ def test_the_twin_sweep_examined_the_pool(twin_rows):
         assert proposed[kind] >= 100, (kind, proposed)
 
 
+@pytest.mark.full
 def test_what_a_seat_casts_from_its_hand_it_casts_from_an_opened_zone(twin_rows):
     named = sorted(
         f"{row['card']} [{row['kind']}]: {row['finding']}"

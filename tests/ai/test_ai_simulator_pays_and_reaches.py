@@ -47,7 +47,7 @@ _SEEDS = {
 }
 
 
-@pytest.mark.slow
+@pytest.mark.full
 @pytest.mark.parametrize("code, pinned, games, tokens", _RUNS, ids=[run[1] for run in _RUNS])
 def test_a_seeded_game_reaches_it(code, pinned, games, tokens):
     report = run_ai_simulation(

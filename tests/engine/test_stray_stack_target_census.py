@@ -206,6 +206,7 @@ def _activation_sweep(catalog, *, only=None):
     return examined, accepted
 
 
+@pytest.mark.full
 def test_no_cast_may_name_a_stack_object_its_spell_has_no_target_for(_catalog):
     examined, accepted = _cast_sweep(_catalog)
 
@@ -216,6 +217,7 @@ def test_no_cast_may_name_a_stack_object_its_spell_has_no_target_for(_catalog):
     )
 
 
+@pytest.mark.full
 def test_no_activation_may_name_a_stack_object_its_ability_has_no_target_for(_catalog):
     examined, accepted = _activation_sweep(_catalog)
 

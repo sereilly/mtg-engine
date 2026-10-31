@@ -487,7 +487,7 @@ def test_w1g6_a_disciple_refuses_a_target_its_sentence_does_not_name(
 # The simulator ------------------------------------------------------------------
 
 
-@_w1g6_pytest.mark.slow
+@_w1g6_pytest.mark.full
 def test_w1g6_the_ai_plays_the_groups_cards_through_whole_games():
     """Six of the group's cards pinned into both decks of six simulated games.
     They are cast, their upkeep triggers go on the stack and resolve, nothing

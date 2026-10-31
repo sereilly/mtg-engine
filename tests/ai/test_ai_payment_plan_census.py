@@ -165,6 +165,7 @@ def _census(boards_and_costs):
 _SLICES = 4
 
 
+@pytest.mark.full
 @pytest.mark.parametrize("part", range(_SLICES))
 def test_the_plan_and_the_highlight_agree_and_the_plan_pays(part):
     """Every supported land, alone and in a pair, against every cost the
@@ -199,6 +200,7 @@ def _mixed_boards():
         yield list(reversed(trio)), costs
 
 
+@pytest.mark.full
 def test_a_pip_one_land_took_is_given_back_when_another_needs_it():
     """Three overlapping lands in both board orders, every two- and three-pip
     cost over their colours. Before: the greedy pass declined payable boards

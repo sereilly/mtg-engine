@@ -135,7 +135,7 @@ def test_a_land_ability_is_something_to_activate_at_instant_speed(set_pool):
     assert holds_an_ability_it_could_activate(game, ME)
 
 
-@pytest.mark.slow
+@pytest.mark.full
 def test_a_seeded_run_activates_krosan_verge():
     """Krosan Verge pinned into both decks of a seeded Judgment run: a seat
     searches with it at least once (a floor of one — the path was reached),

@@ -68,14 +68,29 @@ All Python runs through the workspace venv (Windows / PowerShell):
 
 ```powershell
 # Tests (pytest.ini sets testpaths=tests, addopts=-q)
-python -m pytest                                  # full suite, serial
-python -m pytest -n 8                             # full suite in parallel; -n 4 while agents are running
-python -m pytest -n 4 --dist worksteal -m slow tests/ai   # one CI shard as ci.yml runs it (shards: tests/ai -m slow | tests/ai -m "not slow" | tests/engine | the rest)
-python -m pytest -m "not slow"                    # skip the AI-simulation batch tests
-python -m pytest tests/ui/test_web_api.py -q      # one file
+python -m pytest                                  # the quick pass, serial
+python -m pytest -n 8 --dist worksteal            # the quick pass in parallel; -n 4 while agents are running
+python -m pytest -n 8 --dist worksteal --full     # the full pass: the promotion gate's run, and only that
+python -m pytest -n 4 --dist worksteal -m "not full" tests/ai   # one CI shard as ci.yml runs it (shards: tests/ai -m full [full pass only] | tests/ai -m "not full" | tests/engine | the rest)
+python -m pytest tests/ui/test_web_api.py -q      # one file (a file named runs whole, `full` tests too)
 python -m pytest tests/sets/test_lea_creatures.py::test_name -q   # one test
 python -m pytest tests/regressions -q             # in-game bug regressions
 ```
+
+**Two passes** (`tests/passes.py`). `pytest` is the quick pass; `pytest
+--full` is the full pass, run by the promotion gate (SET_PLAYBOOK Phase 4,
+`gate.sh <tree> <tag> <workers> full`) and nowhere else. A test marked
+`@pytest.mark.full` runs only in the full pass — the seeded AI-game batches
+and whole-pool censuses that take 10 s or more, 163 functions holding 88% of
+the full pass's test-seconds on 2026-10-31 (at `-n 12`: 1,412 s against the
+quick pass's ~175) — and the full pass runs every
+sampled census whole (`MTG_FULL_CENSUS`, read by `tests.helpers.stable_sample`).
+A file or test named on the command line runs whole. The quick pass ends by
+naming any unmarked test that took 20 s or more: make it faster or mark it
+`full`. A large run compiles the pool before its first test, so every test's
+time is its own; a test that clears the compile caches calls
+`tests.passes.rewarm_compile_cache()` (`tests/engine/test_passes.py`). Prefer
+`--dist worksteal`: a few long tests decide the wall time.
 
 **The runner holds itself to the machine's memory** (`tests/memory_guard.py`,
 hooked in by `tests/conftest.py`): `-n N` and `-n auto` run as at most what

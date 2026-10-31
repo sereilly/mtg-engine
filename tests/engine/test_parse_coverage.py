@@ -50,6 +50,7 @@ def pool_coverages(pc):
     return pc.analyze_pool()
 
 
+@pytest.mark.full
 def test_every_supported_card_text_is_claimed_or_acknowledged(pc, pool_coverages):
     unclaimed, stale_ack, new_probe, stale_probe = pc.collect_findings(pool_coverages)
 
@@ -183,6 +184,7 @@ def test_grammar_refuses_the_rider_shape_instead_of_swallowing_it():
     assert resolvable.instructions[0].payload["actor"] == "controller"
 
 
+@pytest.mark.full
 def test_the_gate_is_the_shipped_pool_and_measured_sets_are_reported(pc, pool_coverages):
     """The instrument reads every supported card; only the shipped half gates.
 

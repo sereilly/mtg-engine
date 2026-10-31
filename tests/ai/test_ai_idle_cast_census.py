@@ -347,6 +347,7 @@ def rows() -> list:
     return census(sample=True)
 
 
+@pytest.mark.full
 def test_the_sweep_examined_the_pool(rows):
     """The floor: a sweep that reaches nothing passes everything."""
     assert len(rows) >= 540
@@ -359,10 +360,12 @@ def test_the_sweep_examined_the_pool(rows):
     assert {row["layout"] for row in proposed} == set(LAYOUTS)
 
 
+@pytest.mark.full
 def test_no_proposal_crashed_or_was_refused(rows):
     assert findings(rows)["error"] == {}
 
 
+@pytest.mark.full
 def test_every_cast_weighed_was_rehearsed(rows):
     """The floor under the three tests below: the policy measured what it
     proposed, here, on these boards. A rehearsal that cannot be run answers
@@ -372,11 +375,13 @@ def test_every_cast_weighed_was_rehearsed(rows):
     assert REHEARSALS["not run"] == 0, dict(REHEARSALS)
 
 
+@pytest.mark.full
 def test_no_cast_is_proposed_that_moves_nothing(rows):
     found = findings(rows)["idle"]
     assert set(found) == set(IDLE), sorted(set(found) ^ set(IDLE))
 
 
+@pytest.mark.full
 def test_no_cast_is_proposed_that_only_costs_its_caster(rows):
     found = findings(rows)["loss"]
     assert set(found) == set(LOSSES), {
@@ -384,6 +389,7 @@ def test_no_cast_is_proposed_that_only_costs_its_caster(rows):
     }
 
 
+@pytest.mark.full
 def test_no_cast_names_its_own_permanent_with_a_better_twin_opposite(rows):
     found = findings(rows)["own goal"]
     assert set(found) == set(OWN_GOALS), {
@@ -391,6 +397,7 @@ def test_no_cast_names_its_own_permanent_with_a_better_twin_opposite(rows):
     }
 
 
+@pytest.mark.full
 def test_the_named_casts_are_held_or_aimed_across_the_table(rows):
     """The ones this round was briefed with, so each stays readable in the
     sweep: a discard at an empty hand, Donate, Kor Chant with no source, the

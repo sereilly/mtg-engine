@@ -1291,7 +1291,7 @@ def test_w1g9_pernicious_deed_is_not_sacrificed_for_an_x_nobody_can_pay(set_pool
     assert len(_w1g9_names(game, 1)) == 5
 
 
-@_w1g9_pytest.mark.slow
+@_w1g9_pytest.mark.full
 def test_w1g9_the_groups_cards_through_whole_simulated_games():
     """Six AI games with the group's cards pinned into both decks. The pool is
     a measured set, so other cards' unsupported casts are in the report; only

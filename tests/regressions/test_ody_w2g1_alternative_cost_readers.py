@@ -253,6 +253,7 @@ def test_the_highlight_glows_exactly_when_the_cast_can_be_made(session, castable
     assert len(examined) >= 40, [u.name for u in examined]
 
 
+@pytest.mark.full
 def test_the_ai_proposes_an_alternative_cost_only_where_it_can_pay_the_tax(
     session, castable,
 ):

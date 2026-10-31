@@ -98,7 +98,7 @@ def test_a_mistform_joins_a_lords_tribe_before_it_attacks(set_pool, catalog_by_n
     assert (dreamer.effective_power, dreamer.effective_toughness) == (3, 2)
 
 
-@pytest.mark.slow
+@pytest.mark.full
 def test_seeded_onslaught_games_use_the_type_changes():
     """Every W1G5 card pinned into every deck: the runs complete, nothing
     rehearsed raises, at least one Mistform changes its own type and one

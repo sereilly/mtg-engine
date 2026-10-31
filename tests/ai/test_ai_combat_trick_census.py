@@ -619,6 +619,7 @@ def _population() -> list:
 PINS = {"held": HELD, "idle": IDLE, "loss": LOSSES, "smaller": SMALLER, "priced": PRICED}
 
 
+@pytest.mark.full
 def test_the_population_is_the_pool_s_combat_tricks():
     """The floor under every board below: a sweep that reaches nothing passes
     everything."""
@@ -644,6 +645,7 @@ FLOORS = {
 }
 
 
+@pytest.mark.full
 @pytest.mark.parametrize("name", sorted(BOARDS))
 def test_each_trick_is_cast_for_the_fight_it_changes_and_only_then(name):
     """Every finding on board *name* is a pinned one, by leg — and the board

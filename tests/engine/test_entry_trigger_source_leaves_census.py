@@ -40,6 +40,7 @@ from engine.control import base_controller
 from tests.helpers import resolve_stack
 
 from .test_entry_trigger_stack_census import _enter, _entry_trigger_cards
+import pytest
 
 #: A floor, because a sweep that reaches nothing passes. 511 on the day.
 _MIN_PAIRS = 480
@@ -88,6 +89,7 @@ def _drain(game) -> None:
             return
 
 
+@pytest.mark.full
 def test_no_entry_trigger_strands_anything_when_its_source_is_destroyed_in_response():
     examined = 0
     findings: list[str] = []

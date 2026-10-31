@@ -457,6 +457,7 @@ def _census(by_name, names=SETTERS, self_names=SELF_SETTERS):
     return setters, counts, wrong
 
 
+@pytest.mark.full
 @pytest.mark.cr("613.4a", "613.4b", "613.7a", "613.7b", "613.7e")
 def test_every_pair_of_size_setting_effects_ends_at_the_newer_one(_by_name):
     setters, counts, wrong = _census(_by_name)

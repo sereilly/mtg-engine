@@ -233,6 +233,7 @@ def _announcements_on_the_activators_own_side():
             yield card, ability_index, game, chosen
 
 
+@pytest.mark.full
 def test_every_shipped_activation_keeps_the_battlefield_its_id_named():
     """Announced by id and by nothing else, on the activator's own side.
 

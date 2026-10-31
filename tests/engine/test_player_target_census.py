@@ -46,6 +46,7 @@ from engine.faces import compilation_units
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
 from engine.targeting import derive_cast_spec
+import pytest
 
 _PLAYER_KINDS = frozenset({"player", "any", "player_or_planeswalker", "divided"})
 SCENARIOS = ("plain", "opponent_shroud", "caster_shroud", "three_seats_one_lost")
@@ -198,6 +199,7 @@ def offered_seats(spec: dict) -> set:
     }
 
 
+@pytest.mark.full
 def test_h1_no_cast_accepts_a_seat_its_picker_does_not_offer():
     """CR 601.2c for a named **player**: on every table, a cast naming a seat
     is accepted exactly when the picker offers that seat."""
@@ -253,6 +255,7 @@ def _is_a_target_refusal(reason: str) -> bool:
     return reason.startswith("no valid target") or "has to name its target" in reason
 
 
+@pytest.mark.full
 def test_h1_no_divided_cast_accepts_an_entry_its_picker_does_not_offer():
     """CR 601.2d through CR 601.2c: each entry of a division is a target, and
     is accepted exactly when the picker offers it — a face or a permanent."""
@@ -310,6 +313,7 @@ def test_h1_no_divided_cast_accepts_an_entry_its_picker_does_not_offer():
         ), (name, sorted(reasons))
 
 
+@pytest.mark.full
 def test_h1_no_activation_accepts_a_seat_its_picker_does_not_offer():
     """CR 602.2b through CR 601.2c: the same statement for an activated
     ability whose target may be a player. Closed a round before this file

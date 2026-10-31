@@ -723,7 +723,7 @@ def _planeshift_games(games: int):
     )
 
 
-@pytest.mark.slow
+@pytest.mark.full
 def test_whole_games_with_planeshifts_modal_spells_pinned():
     """The seeded Planeshift run deals two-colour decks, so its three-colour
     Charms are almost never cast and the run cannot show a mode. Pinned into
@@ -748,7 +748,7 @@ def test_whole_games_with_planeshifts_modal_spells_pinned():
     assert any("[mode 2: " in line for line in named), named
 
 
-@pytest.mark.slow
+@pytest.mark.full
 def test_a_seed_still_reproduces_a_run_in_which_modes_are_chosen():
     """Determinism: equal modes keep printed order and nothing in the choice
     iterates an unordered collection, so a seed is still a run."""

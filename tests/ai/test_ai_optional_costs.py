@@ -311,6 +311,7 @@ def _w2g6_offer_cards(pool):
     ]
 
 
+@pytest.mark.full
 def test_w2g6_no_announcement_the_ai_makes_is_refused(catalog, catalog_by_name, set_cards):
     """What the AI proposes is this group's; what the engine refuses is
     another's. So: every card that makes an offer, on a board rich enough to
@@ -349,7 +350,7 @@ def test_w2g6_no_announcement_the_ai_makes_is_refused(catalog, catalog_by_name, 
     assert not refused, refused
 
 
-@pytest.mark.slow
+@pytest.mark.full
 def test_w2g6_a_simulated_seat_buys_a_spell_back():
     """The Rock Hydra test. Tempest is the set buyback was printed in; before
     this, ten games of it bought back nothing, because nothing could. Counted

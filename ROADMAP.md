@@ -56,8 +56,11 @@ Anything that weakens these is a regression regardless of what it enables:
 2. **The suite stays fast.** **30,836 tests**, run by CI as **four parallel
    shards** (2026-10-20), each `pytest -n 4 --dist worksteal` over whole
    tests/ folders with its own budget (`ci.yml`'s test matrix). tests/ai is
-   two of them, split by the `slow` marker (`-m slow` / `-m "not slow"`).
-   Each shard's BASELINE is its slower reading so far: **ai-sims 928s**
+   two of them, split by the `full` marker (`-m full` / `-m "not full"`).
+   Since 2026-10-31 a push runs the **quick pass** (the `ai-full` shard
+   skips itself) and the full pass (`pytest --full`, `tests/passes.py`) is
+   the promotion's; the readings below are full-pass readings. Each shard's
+   BASELINE is its slower reading so far: **ai-full 928s**
    (22 tests), **ai 711s** (664), **engine 862s** (14,188), **rest 940s**
    (15,962: sets, rules, regressions, ui). **The runner is drawn per job,
    not per run**, and a fast one reads roughly half a slow one's number
@@ -80,7 +83,7 @@ Anything that weakens these is a regression regardless of what it enables:
 
    **`tests/ai` was the long pole and is now two shards.** Under 3% of the
    tests had taken as long as the other two shards together. The `slow`
-   marker already cut it almost in half (locally 1,271s in its 22 items
+   marker (now `full`) already cut it almost in half (locally 1,271s in its 22 items
    against 1,098s in the other 664), so it became the partition. That took
    the job's wall time on the slower runners from ~1,660s to ~950s, and
    no single shard is the long pole now.
@@ -130,8 +133,10 @@ Anything that weakens these is a regression regardless of what it enables:
      round 4's close, locally at `-n 8`, the slowest items were all of that
      kind: the ULG simulation above, the batch over every set's casts (418s
      across its parameters), and the player-target census (312s across its
-     file). The `slow` marker
-     exists, and today it marks only some of them.
+     file). Since 2026-10-31 every test of that kind taking 10 s or more is
+     marked `full` (the `slow` marker's successor) and runs only in the full
+     pass, the promotion's; the quick pass names any newcomer that crosses
+     the line.
 3. **Determinism.** A given seed reproduces a run exactly. Parsing and lowering
    are pure functions of card text.
 4. **Ratchets only tighten.** Coverage floors, probe baselines, and accepted-diff

@@ -30,6 +30,7 @@ import engine.front_ends as front_ends
 import engine.oracle as oracle
 from engine.card_loader import load_catalog
 from engine.oracle_types import clear_compilation_caches
+from tests.passes import rewarm_compile_cache
 
 
 # Cards where a grammar production deliberately replaces a card hook's kind with
@@ -105,6 +106,7 @@ def with_and_without_grammar():
     finally:
         front_ends._grammar_instruction = original
         clear_compilation_caches()
+        rewarm_compile_cache()
     return live, hooks_only
 
 
@@ -223,6 +225,7 @@ def test_the_registered_caches_are_all_still_compiler_caches():
     assert not stale, f"registered but no longer compiler-derived: {stale}"
 
 
+@pytest.mark.full
 def test_no_card_silently_loses_an_instruction_to_the_grammar(with_and_without_grammar):
     """A card that compiles to fewer effects with the grammar on has lost one.
     It still reports supported, so only this catches it."""
@@ -244,6 +247,7 @@ def test_no_card_silently_loses_an_instruction_to_the_grammar(with_and_without_g
     )
 
 
+@pytest.mark.full
 def test_accepted_replacements_are_all_still_happening(with_and_without_grammar):
     """A stale entry hides a card that has quietly stopped being improved."""
     live, hooks_only = with_and_without_grammar
@@ -255,6 +259,7 @@ def test_accepted_replacements_are_all_still_happening(with_and_without_grammar)
     assert not stale, f"ACCEPTED_REPLACEMENTS entries that no longer occur: {stale}"
 
 
+@pytest.mark.full
 def test_the_grammar_is_what_reads_most_of_the_pool(with_and_without_grammar):
     """Without this the guard above could pass by the grammar doing nothing.
 
@@ -294,6 +299,7 @@ def _compile_pool(cards):
     clear_compilation_caches()
     programs = {card.name: oracle.compile_card_oracle(card) for card in cards}
     clear_compilation_caches()
+    rewarm_compile_cache()
     return programs
 
 

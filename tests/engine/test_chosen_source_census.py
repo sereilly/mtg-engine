@@ -331,6 +331,7 @@ def gate_census() -> dict:
     }
 
 
+@pytest.mark.full
 def test_no_activation_accepts_a_source_its_picker_does_not_offer():
     """Statement 2. Each sampled source is named in turn: accepted exactly
     when the picker offers it, and when it is refused nothing has been paid
@@ -403,6 +404,7 @@ def binding_census() -> dict:
     return {"bound": bound, "unbound": unbound, "findings": findings}
 
 
+@pytest.mark.full
 def test_a_shield_answers_the_source_that_was_chosen_and_no_other():
     """Statement 3 (CR 615.8). Seat 0 names one of seat 1's golems; a second
     golem of the same colour then deals 2 to seat 0 and all of it lands, and

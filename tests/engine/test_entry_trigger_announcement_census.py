@@ -65,6 +65,7 @@ from engine.targeting import derive_cast_spec
 from engine.cast_targets import cast_announced_entry_trigger
 
 from .test_entry_trigger_stack_census import _pool
+import pytest
 
 # 60 permanents announce an entry trigger's target as they are cast; the
 # trigger makes its own choice on the stack for 44 of them (October 2026).
@@ -313,6 +314,7 @@ def test_h1_the_cast_picker_is_the_entry_triggers_own_list():
     assert not differs, differs
 
 
+@pytest.mark.full
 def test_h1_no_entry_trigger_carries_a_target_it_could_not_choose():
     namings = set_aside = departures = masked = 0
     findings: list[str] = []

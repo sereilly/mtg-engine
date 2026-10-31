@@ -67,6 +67,7 @@ from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.targeting import usable_activated_abilities
 from tests.helpers import _mk_card, resolve_stack
+import pytest
 
 #: One land per kind of mana ability the roads have to agree about.
 SUITE_LANDS = (
@@ -423,6 +424,7 @@ def census(pool, lands):
     return tally, differing, watch
 
 
+@pytest.mark.full
 def test_every_road_that_taps_a_land_for_mana_is_the_same_event():
     pool = _pool()
     tally, differing, watch = census(pool, [pool[name] for name in SUITE_LANDS])

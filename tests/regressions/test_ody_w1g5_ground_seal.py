@@ -283,6 +283,7 @@ def test_no_cast_may_name_a_card_in_a_graveyard_under_the_seal(pool, by_name):
     assert examined >= _CAST_FLOOR, examined
 
 
+@pytest.mark.full
 def test_no_activation_may_name_a_card_in_a_graveyard_under_the_seal(pool, by_name):
     examined, failures = _sweep_activations(pool, by_name)
     assert not failures, failures
@@ -295,6 +296,7 @@ def test_no_entry_trigger_targets_a_card_in_a_graveyard_under_the_seal(pool, by_
     assert examined >= _TRIGGER_FLOOR, examined
 
 
+@pytest.mark.full
 def test_the_census_names_every_case_without_the_seal(pool, by_name, monkeypatch):
     """The backwards validation. With the Seal's one reader answering "no
     such permanent" — the engine as it was before the sentence was implemented

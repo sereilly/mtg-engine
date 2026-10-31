@@ -426,6 +426,7 @@ def _sweep_activations(pool, by_name, only=None) -> _Census:
     return census
 
 
+@pytest.mark.full
 def test_every_cast_is_held_to_a_flagbearer_on_the_other_side(pool, by_name):
     """CR 601.2c under Standard Bearer's sentence, over every instant, sorcery
     and Aura in the pool, mode by mode — and every permanent spell's entry
@@ -450,6 +451,7 @@ def test_every_cast_is_held_to_a_flagbearer_on_the_other_side(pool, by_name):
     assert counts["entry trigger: never bound"] > 40, dict(counts)
 
 
+@pytest.mark.full
 def test_every_activation_is_held_to_a_flagbearer_on_the_other_side(pool, by_name):
     """CR 602.2b, the same sweep over every activated ability with a picker."""
     census = _sweep_activations(pool, by_name)

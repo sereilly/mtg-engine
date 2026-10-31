@@ -28,8 +28,22 @@ from engine import load_cards
 from engine.card_loader import manifest_set_codes, manifest_set_path, manifest_set_paths
 
 # The runner's memory limits — one collection at a time per checkout, xdist
-# workers capped to what free memory holds. Importing the hooks registers them.
-from tests.memory_guard import pytest_cmdline_main, pytest_configure, pytest_unconfigure  # noqa: F401
+# workers capped to what free memory holds — and the quick and full passes.
+# Importing the hooks registers them.
+from tests import memory_guard, passes
+from tests.memory_guard import pytest_cmdline_main, pytest_unconfigure  # noqa: F401
+from tests.passes import (  # noqa: F401
+    pytest_addoption,
+    pytest_collection_finish,
+    pytest_collection_modifyitems,
+    pytest_runtest_logreport,
+    pytest_terminal_summary,
+)
+
+
+def pytest_configure(config):
+    memory_guard.pytest_configure(config)
+    passes.pytest_configure(config)
 
 
 # ---------------------------------------------------------------------------

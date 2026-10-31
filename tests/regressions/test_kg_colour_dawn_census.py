@@ -283,6 +283,7 @@ def census(pool):
     return results, asked, Counter(SPY.defects)
 
 
+@pytest.mark.full
 def test_no_rule_reads_the_printed_colour_of_a_card_the_dawn_recoloured(census):
     _results, _asked, defects = census
     assert not defects, (
@@ -292,6 +293,7 @@ def test_no_rule_reads_the_printed_colour_of_a_card_the_dawn_recoloured(census):
     )
 
 
+@pytest.mark.full
 def test_a_dawn_recolouring_is_indistinguishable_from_printed_white(census):
     results, _asked, _defects = census
     moved = []
@@ -308,6 +310,7 @@ def test_a_dawn_recolouring_is_indistinguishable_from_printed_white(census):
     assert not moved, "\n".join(moved)
 
 
+@pytest.mark.full
 def test_the_census_examined_what_it_claims(pool, census):
     """The floor: every card in the population exists, and its drive asked at
     least one colour question of a card the Dawn had recoloured — a drive that

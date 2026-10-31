@@ -263,6 +263,7 @@ def rows() -> list:
     return census(sample=True)
 
 
+@pytest.mark.full
 def test_the_sweep_examined_the_pool(rows):
     """The floor: a sweep that reaches nothing passes everything."""
     counts = tally(rows)
@@ -275,10 +276,12 @@ def test_the_sweep_examined_the_pool(rows):
     assert ALWAYS <= {row["card"] for row in rows}
 
 
+@pytest.mark.full
 def test_no_proposal_crashed(rows):
     assert {tag(row): row["error"] for row in rows if row["error"]} == {}
 
 
+@pytest.mark.full
 def test_what_is_refused_is_the_pinned_set_and_the_same_for_a_copy(rows):
     """`refused_activations`, over the pool: a seat that proposes what the
     engine declines does nothing with that permanent, every turn. The ones
@@ -291,6 +294,7 @@ def test_what_is_refused_is_the_pinned_set_and_the_same_for_a_copy(rows):
     assert refused == pinned, sorted(refused ^ pinned)
 
 
+@pytest.mark.full
 def test_a_copy_is_activated_where_its_original_is(rows):
     """Whole pool, before: 0 of the copies whose original is activated were
     proposed — the blank card under them prints nothing. After: every one
@@ -306,6 +310,7 @@ def test_a_copy_is_activated_where_its_original_is(rows):
     assert not by_key[("Triskelion", "copied")]["proposed"]
 
 
+@pytest.mark.full
 def test_a_sliver_uses_what_its_own_static_gives_it(rows):
     """'All Slivers have "{2}: Regenerate this permanent."' (Clot Sliver):
     the card prints a static ability and *has* an activated one. Seven
@@ -314,6 +319,7 @@ def test_a_sliver_uses_what_its_own_static_gives_it(rows):
     assert row["by_subject"] and not row["refused"], row
 
 
+@pytest.mark.full
 def test_a_granted_ability_is_activated(rows):
     """'Enchanted creature has "{T}: This creature deals 1 damage to any
     target."' (Hermetic Study, Fire Whip), '…has "{2}{U}: Target creature
@@ -326,6 +332,7 @@ def test_a_granted_ability_is_activated(rows):
         assert row["by_subject"] and not row["refused"], row
 
 
+@pytest.mark.full
 def test_a_land_given_an_ability_is_weighed(rows):
     """'Enchanted land has "{T}: This land deals 1 damage to any target."'
     (Barbed Field). This was pinned as left alone — the chooser passed over

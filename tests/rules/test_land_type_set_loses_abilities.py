@@ -1166,6 +1166,7 @@ def _report(problems: dict) -> str:
 _CROSS_CHUNKS = 6
 
 
+@pytest.mark.full
 @pytest.mark.cr("305.7", "305.6")
 @pytest.mark.parametrize("chunk", range(_CROSS_CHUNKS))
 def test_305_7_every_setter_against_every_nonbasic_land(
@@ -1256,6 +1257,7 @@ _TWINS = (
 _TWIN_CHUNKS = 3
 
 
+@pytest.mark.full
 @pytest.mark.cr("305.7", "614.12", "603.6a")
 @pytest.mark.parametrize("chunk", range(_TWIN_CHUNKS))
 @pytest.mark.parametrize("setter_name,timing", _TWINS)

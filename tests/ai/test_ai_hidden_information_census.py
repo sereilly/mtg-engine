@@ -200,6 +200,7 @@ def rows() -> list:
     return census(sample=True)
 
 
+@pytest.mark.full
 def test_the_sweep_examined_the_pool(rows):
     """The floor: a sweep that reaches nothing passes everything."""
     assert len(rows) >= 85
@@ -213,10 +214,12 @@ def test_the_sweep_examined_the_pool(rows):
     assert len(proposed) >= 45, len(proposed)
 
 
+@pytest.mark.full
 def test_no_proposal_crashed(rows):
     assert {tag(row): row["error"] for row in rows if row["error"]} == {}
 
 
+@pytest.mark.full
 def test_a_proposal_is_the_same_whatever_the_hidden_cards_are(rows):
     assert differing(rows) == {}
 

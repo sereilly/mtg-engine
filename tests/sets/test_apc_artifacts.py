@@ -235,6 +235,7 @@ def test_w1g1_the_golems_x_box_is_capped_by_the_colors_the_board_can_make(set_po
     assert spec["max_x"] == 1
 
 
+@_w1g1_pytest.mark.full
 def test_w1g1_the_ai_kicks_emblazoned_golem_for_the_colors_it_has():
     """Pinned into both decks of six simulated games: it is cast, it is kicked
     for an X the seat's lands can colour, and it is never refused. (The floors

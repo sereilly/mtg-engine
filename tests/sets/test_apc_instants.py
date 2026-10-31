@@ -1691,6 +1691,7 @@ def test_the_ai_names_both_of_suffocating_blasts_targets_or_does_not_cast_it(
     assert p0.life == 20 and named.damage_marked == 3
 
 
+@_w2g1_pytest.mark.full
 def test_the_ai_never_proposes_suffocating_blast_or_illusion_to_be_refused():
     """Both pinned into both decks of six simulated games. Illusion is cast
     (a floor of one); Suffocating Blast needs a spell to answer and the
@@ -2177,6 +2178,7 @@ def test_w2g4_captains_maneuver_is_not_proposed_with_nobody_to_send_the_damage_t
     assert choose_divided_targets(game, 0, maneuver, x_value=2) == []
 
 
+@_w2g1_pytest.mark.full
 def test_w2g4_captains_maneuver_in_a_simulated_game_protects_its_caster():
     """Whole games with the card pinned into both decks: every Maneuver that
     resolves moves damage off the seat that cast it."""

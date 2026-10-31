@@ -117,7 +117,7 @@ def test_a_wish_is_cast_for_a_card_outside_the_game_and_not_into_nothing():
     assert chosen is not None and chosen.card_name == "Burning Wish"
 
 
-@pytest.mark.slow
+@pytest.mark.full
 def test_a_seeded_run_brings_a_card_in_with_a_wish():
     """Every Wish pinned into both decks of a seeded Judgment run, each seat
     with its pool's leftovers outside the game: a Wish is cast and brings a

@@ -8,7 +8,17 @@ on:
   push:
     branches: [main]
   pull_request:
+  # A push or a pull request runs the quick pass. The full pass (`pytest
+  # --full`: every test marked `full` and every sampled census whole,
+  # tests/passes.py) is the promotion gate's run; ask for it here with
+  # `gh workflow run CI --ref <branch> -f pass=full`.
   workflow_dispatch:
+    inputs:
+      pass:
+        description: quick (every test not marked full) or full (the promotion gate's pytest --full)
+        type: choice
+        options: [quick, full]
+        default: quick
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -20,7 +30,12 @@ jobs:
   # and, optionally, a marker expression; tests/engine/test_ci_shards.py fails
   # unless every folder is covered exactly once: by one shard with no markers,
   # or by two whose markers are an expression and its negation (tests/ai is
-  # `slow` and `not slow`, so marking a test slow moves it between them).
+  # `full` and `not full`, so marking a test full moves it between them). A
+  # `full_only` shard has nothing to run in the quick pass and skips itself.
+  #
+  # The budgets and baselines were read when every shard ran every test
+  # (before the quick pass, 2026-10-31): they are the full pass's numbers, and
+  # a quick-pass reading sits far under them until re-read on a runner.
   test:
     name: test (${{ matrix.shard }})
     runs-on: ubuntu-latest
@@ -28,24 +43,28 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - shard: ai-sims
+          - shard: ai-full
             paths: tests/ai
-            markers: slow
+            markers: full
+            full_only: true
             budget: 1860
             baseline: 928
           - shard: ai
             paths: tests/ai
-            markers: not slow
+            markers: not full
+            full_only: false
             budget: 1420
             baseline: 711
           - shard: engine
             paths: tests/engine
             markers: ''
+            full_only: false
             budget: 1720
             baseline: 862
           - shard: rest
             paths: tests/sets tests/rules tests/regressions tests/ui
             markers: ''
+            full_only: false
             budget: 1880
             baseline: 940
     steps:
@@ -88,19 +107,27 @@ jobs:
           SHARD: ${{ matrix.shard }}
           SHARD_PATHS: ${{ matrix.paths }}
           SHARD_MARKERS: ${{ matrix.markers }}
+          FULL_ONLY: ${{ matrix.full_only }}
+          PASS: ${{ inputs.pass || 'quick' }}
           BUDGET: ${{ matrix.budget }}
           BASELINE: ${{ matrix.baseline }}
         run: |
+          if [ "$PASS" != full ] && [ "$FULL_ONLY" = true ]; then
+            echo "shard ${SHARD} holds only tests marked full; the quick pass skips it"
+            exit 0
+          fi
+          FULL_FLAG=""
+          if [ "$PASS" = full ]; then FULL_FLAG="--full"; fi
           START=$(date +%s)
           STATUS=0
           # SHARD_PATHS is unquoted on purpose: one argument per folder. The
           # marker expression is one argument, and absent when it is empty.
-          python -m pytest -n 4 --dist worksteal --durations=15 ${SHARD_MARKERS:+-m "$SHARD_MARKERS"} $SHARD_PATHS || STATUS=$?
+          python -m pytest -n 4 --dist worksteal --durations=15 $FULL_FLAG ${SHARD_MARKERS:+-m "$SHARD_MARKERS"} $SHARD_PATHS || STATUS=$?
           ELAPSED=$(( $(date +%s) - START ))
           # Which machine the job drew, for comparing readings; never fatal.
           CPU=$(grep -m1 "model name" /proc/cpuinfo 2>/dev/null | cut -d: -f2 | sed "s/^ *//") || true
           CPU=${CPU:-an unnamed CPU}
-          echo "suite wall time [${SHARD}]: ${ELAPSED}s (baseline ${BASELINE}s, budget ${BUDGET}s — $(( ELAPSED * 100 / BUDGET ))% of budget) on ${CPU}"
+          echo "suite wall time [${SHARD}, ${PASS} pass]: ${ELAPSED}s (baseline ${BASELINE}s, budget ${BUDGET}s — $(( ELAPSED * 100 / BUDGET ))% of budget) on ${CPU}"
           if [ "$STATUS" -ne 0 ]; then
             exit "$STATUS"
           fi

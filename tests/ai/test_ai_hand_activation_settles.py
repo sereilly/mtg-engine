@@ -70,7 +70,7 @@ def test_a_cycled_card_has_resolved_before_the_pass_that_cycled_it_returns(catal
     }
 
 
-@pytest.mark.slow
+@pytest.mark.full
 @pytest.mark.parametrize("code", ["USG", "ULG", "UDS"])
 def test_no_urzas_block_simulation_leaves_a_cycle_on_the_stack(code):
     """The run the script makes, on the three sets that exited 1 — ten games at

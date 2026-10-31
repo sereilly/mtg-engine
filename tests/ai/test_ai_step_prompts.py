@@ -70,6 +70,7 @@ def _w2g6_armed_and_spent(report) -> tuple[int, int]:
     return armed, spent
 
 
+@pytest.mark.full
 def test_w2g6_an_upkeep_triggers_answer_is_taken_before_the_draw_step():
     """CR 503.1 / CR 608.2: the upkeep trigger resolves — the whole of it,
     the "you may" included — before the draw step begins. Every skip the
@@ -94,6 +95,7 @@ def test_w2g6_an_upkeep_triggers_answer_is_taken_before_the_draw_step():
     assert not other, other
 
 
+@pytest.mark.full
 def test_w2g6_the_owing_count_names_the_defect_on_a_tree_that_has_it(monkeypatch):
     """The instrument, validated backwards. With the engine's seam taken out
     the simulator is the loop it was — it drains the queue only where its own
@@ -108,7 +110,7 @@ def test_w2g6_the_owing_count_names_the_defect_on_a_tree_that_has_it(monkeypatch
     assert report.steps_left_owing["draw -> precombat_main: optional_pay (Elfhame Sanctuary)"] == armed
 
 
-@pytest.mark.slow
+@pytest.mark.full
 @pytest.mark.parametrize("code", ["LEA", "TMP", "M21", "INV"])
 def test_w2g6_no_simulated_step_ends_owing_anything(code):
     """Zero, over a counted number of step changes, in a base set, the set whose
@@ -128,6 +130,7 @@ def test_w2g6_no_simulated_step_ends_owing_anything(code):
     assert report.steps_left_owing == Counter(), dict(report.steps_left_owing)
 
 
+@pytest.mark.full
 def test_w2g6_the_simulator_answers_a_prompt_kind_it_does_not_name():
     """``_SIMULATED_CHOICES`` fixes the *order* of the kinds whose defaults
     consume randomness; it was also the whole of what the simulator answered.
@@ -297,6 +300,7 @@ def _w2g6_turn_takers(report) -> list[tuple[str, str]]:
     return takers
 
 
+@pytest.mark.full
 def test_w2g6_a_simulated_seat_takes_the_extra_turn_it_cast():
     """CR 500.7. The seventh omission of the class, found by counting rather
     than by a failure: the loop read ``for active in (0, 1)``, so Time Walk
@@ -318,6 +322,7 @@ def test_w2g6_a_simulated_seat_takes_the_extra_turn_it_cast():
     assert not report.issues, [issue.message for issue in report.issues]
 
 
+@pytest.mark.full
 def test_w2g6_a_simulated_seat_skips_the_turn_a_card_takes_from_it():
     """CR 500.11's other direction, through the same call: Meditate's "You
     skip your next turn" is a record `_compute_next_active_player` spends, and
@@ -335,6 +340,7 @@ def test_w2g6_a_simulated_seat_skips_the_turn_a_card_takes_from_it():
     assert 1 <= twice_running <= resolved
 
 
+@pytest.mark.full
 def test_w2g6_an_ordinary_game_still_alternates_its_two_seats():
     """…and nothing else moved: with no card that adds or skips a turn, the
     engine's rotation is the alternation the loop used to spell out, seat A

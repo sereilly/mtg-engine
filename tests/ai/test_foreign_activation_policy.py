@@ -214,6 +214,7 @@ def test_the_own_chooser_does_not_propose_what_the_engine_refuses(
 # --- in a real game ----------------------------------------------------------
 
 
+@pytest.mark.full
 def test_a_simulated_seat_destroys_its_opponents_dungeon():
     """The Rock Hydra test: whole games through `run_ai_simulation`, the
     Dungeon pinned into both decks. Three seeds rather than one, because what

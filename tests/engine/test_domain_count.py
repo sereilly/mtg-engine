@@ -307,6 +307,7 @@ def test_every_supported_card_printing_domain_counts_types():
     )
 
 
+@pytest.mark.full
 def test_the_census_names_the_defect_on_a_tree_that_has_it(monkeypatch):
     """Validated backwards. With the lift in ``count_spec`` disabled — the one
     line that turns the parsed phrase into the aggregate — every domain card
@@ -316,6 +317,7 @@ def test_the_census_names_the_defect_on_a_tree_that_has_it(monkeypatch):
 
     from engine.grammar.lowering import _amounts
     from engine.oracle_types import clear_compilation_caches
+    from tests.passes import rewarm_compile_cache
 
     cards = _cards_printing_domain()
     real = _amounts.count_spec
@@ -338,6 +340,7 @@ def test_the_census_names_the_defect_on_a_tree_that_has_it(monkeypatch):
     finally:
         monkeypatch.undo()
         clear_compilation_caches()
+        rewarm_compile_cache()
     assert len(examined) >= 10, "the defect leaves every card *supported*"
     assert len(offenders) >= 10, (examined, offenders)
     # …and the swap is put back: the same census is clean again.

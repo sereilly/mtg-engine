@@ -222,6 +222,7 @@ def _sweep(catalog, by_name, only=None):
     return examined, substituted, honoured, ignored
 
 
+@pytest.mark.full
 def test_no_named_cost_permanent_is_replaced_by_the_default_pick(_catalog, _by_name):
     examined, substituted, honoured, ignored = _sweep(_catalog, _by_name)
 

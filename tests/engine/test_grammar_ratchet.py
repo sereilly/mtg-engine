@@ -49,11 +49,13 @@ def test_ratchet_baseline_exists():
     )
 
 
+@pytest.mark.full
 def test_coverage_has_not_regressed(measures):
     failures = grammar_coverage.check(measures)
     assert not failures, "grammar coverage regressed:\n  " + "\n  ".join(failures)
 
 
+@pytest.mark.full
 def test_measures_are_properly_nested(measures):
     """executed <= lowered <= parsed, by construction. A violation means the
     coverage script is miscounting, which would make the ratchet meaningless."""
@@ -63,6 +65,7 @@ def test_measures_are_properly_nested(measures):
         )
 
 
+@pytest.mark.full
 def test_every_ratcheted_scope_is_in_the_baseline(measures):
     """Renamed off "measured": that word now names the *unshipped* sets in
     `cards/manifest.json`, which this must not require — they are reported and
@@ -75,6 +78,7 @@ def test_every_ratcheted_scope_is_in_the_baseline(measures):
     )
 
 
+@pytest.mark.full
 def test_grammar_executes_something(measures):
     """A zero floor everywhere would make the ratchet vacuous."""
     assert measures[grammar_coverage.POOL_SCOPE]["executed_pct"] > 0

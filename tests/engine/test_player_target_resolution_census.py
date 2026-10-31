@@ -30,6 +30,7 @@ from tests.helpers import resolve_stack
 from .test_player_target_census import (
     cast_keywords, offered_seats, player_spell_rows, pool, table,
 )
+import pytest
 
 # 119 spells reach each sweep's control arm (October 2026).
 _MIN_EXAMINED = 105
@@ -73,6 +74,7 @@ def _face_state(game, seat: int) -> tuple:
     return life, hand, library, exile
 
 
+@pytest.mark.full
 def test_h1_a_cast_naming_nobody_never_resolves_on_a_seat_its_picker_does_not_offer():
     examined = 0
     resolved_on_the_mask: list[str] = []
@@ -157,6 +159,7 @@ def test_h1_a_spell_whose_only_target_gained_shroud_in_response_does_not_resolve
 _MIN_UNDISTURBED = 500
 
 
+@pytest.mark.full
 def test_h1_a_spell_whose_announced_target_is_undisturbed_is_never_countered():
     """The control arm of CR 608.2b as a whole: a target that was legal as the
     spell was announced, on a table nobody touches, is legal as it resolves.

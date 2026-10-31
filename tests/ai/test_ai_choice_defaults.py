@@ -170,6 +170,7 @@ def test_w2g6_an_activated_shield_is_not_raised_against_its_own_controller(_w2g6
 # --- a permanent's entry trigger -----------------------------------------------
 
 
+@pytest.mark.full
 def test_w2g6_an_entry_triggers_target_is_on_the_side_the_effect_wants(_w2g6_pool):
     """Every permanent spell whose enters-the-battlefield trigger names an
     object target, on a board where both seats hold everything it could name:

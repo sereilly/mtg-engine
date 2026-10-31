@@ -57,6 +57,7 @@ from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
+import pytest
 
 _ENTRY_CONDITIONS = frozenset({"enters_battlefield", "enters_or_dies"})
 _ROADS = ("cast", "cast_bare", "put")
@@ -264,6 +265,7 @@ def _chooses_a_target(game, trigger) -> bool:
     ))
 
 
+@pytest.mark.full
 def test_w2g6_no_entry_trigger_is_carried_out_inside_the_entry():
     """CR 603.3 over the pool: on every road onto the battlefield, an entry
     trigger's instruction is not run by the entry, and the trigger is a stack

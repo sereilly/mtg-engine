@@ -1463,6 +1463,7 @@ def result() -> dict:
     return census()
 
 
+@pytest.mark.full
 def test_the_census_examined_the_pool(result):
     """The floor: a sweep that reaches nothing passes everything."""
     counted = counts(result)
@@ -1480,6 +1481,7 @@ def test_the_census_examined_the_pool(result):
     assert measured >= 135, measured
 
 
+@pytest.mark.full
 def test_the_modes_with_no_board_are_the_named_ones(result):
     unbuildable = {
         (row["card"], row["mode"]): row["unbuildable"]
@@ -1488,6 +1490,7 @@ def test_the_modes_with_no_board_are_the_named_ones(result):
     assert unbuildable == UNBUILDABLE
 
 
+@pytest.mark.full
 def test_a_mode_that_is_the_only_one_worth_casting_is_the_one_cast(result):
     """The natural leg. Before the chooser: 16 of these 41 (the first
     bullets), and for the other 25 either mode 0 aimed at whatever the board
@@ -1509,6 +1512,7 @@ def test_a_mode_that_is_the_only_one_worth_casting_is_the_one_cast(result):
     assert counted["natural_exclusive_proposed_as_mode"] >= 36
 
 
+@pytest.mark.full
 def test_every_mode_is_within_reach(result):
     """The forced leg: offered alone, every mode with a board is proposed,
     announced as itself through the simulator's own executor, accepted by the
@@ -1527,6 +1531,7 @@ def test_every_mode_is_within_reach(result):
     assert counted["nonzero_modes_reached"] >= 40
 
 
+@pytest.mark.full
 def test_the_modes_held_on_their_board_are_the_named_ones(result):
     """A mode offered alone and not proposed is in ``HELD`` — and is there
     because its own cast, made by hand with the turn's fight fought, leaves
@@ -1540,6 +1545,7 @@ def test_the_modes_held_on_their_board_are_the_named_ones(result):
     assert all(HELD.values()), "a pin is a reason"
 
 
+@pytest.mark.full
 def test_where_a_sibling_wins_it_is_the_pinned_one(result):
     """The valuation, as a ratchet both ways: a new entry is a mode that
     stopped being chosen on its own board, a missing one is a pin gone
@@ -1555,6 +1561,7 @@ def test_where_a_sibling_wins_it_is_the_pinned_one(result):
     assert all(why for _named, why in SHADOWED.values()), "a pin is a reason"
 
 
+@pytest.mark.full
 def test_the_cast_made_is_never_the_smaller_one(result):
     """**Which bullet, and at which target.** On every board the census
     builds, every bullet worth casting is cast by hand at every target the

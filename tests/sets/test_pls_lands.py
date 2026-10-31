@@ -571,7 +571,7 @@ def test_w1g5_terminal_moraine_fetches_a_basic_land_tapped(set_pool):
     assert not game.stack and not game.pending_choices
 
 
-@_w1g5_pytest.mark.slow
+@_w1g5_pytest.mark.full
 def test_w1g5_the_lairs_and_the_crater_in_simulated_games(set_pool):
     """Whole games with a Lair and a Meteor Crater pinned into both decks:
     the land is played as a land drop, its trigger is answered in the step

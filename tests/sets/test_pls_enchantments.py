@@ -589,7 +589,7 @@ def test_w1g5_multanis_harmony_gives_its_creature_a_mana_ability(set_pool):
     assert granted() == []
 
 
-@_w1g5_pytest.mark.slow
+@_w1g5_pytest.mark.full
 def test_w1g5_emergence_blessing_and_compass_in_simulated_games(set_pool):
     """Whole games with this group's three spells pinned into both decks —
     Natural Emergence, Skyshroud Blessing (an instant) and Star Compass (an

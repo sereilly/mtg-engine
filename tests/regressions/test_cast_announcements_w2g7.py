@@ -39,6 +39,7 @@ from engine.oracle import compile_card_oracle
 from engine.targeting import derive_cast_spec, spec_roles
 from engine.cost_pickers import spec_is_a_cost
 from tests.helpers import _mk_card, _nosick, resolve_stack
+import pytest
 
 
 def _w2g7_pool() -> dict:
@@ -359,6 +360,7 @@ def test_w2g7_mana_value_x_is_asked_of_a_target_named_by_id(catalog_by_name):
     assert game.players[1].life == 20
 
 
+@pytest.mark.full
 def test_w2g7_every_spell_aimed_by_id_at_its_casters_side_is_the_cast_by_slot():
     """The spell half of the Aura sweep below: every non-modal instant and
     sorcery that can name a permanent on its caster's own battlefield, aimed
@@ -543,6 +545,7 @@ def _w2g7_mirror(card) -> Game:
     return game
 
 
+@pytest.mark.full
 def test_w2g7_every_shipped_aura_announced_by_id_alone_is_the_announcement_by_slot():
     """Every Aura in both manifest roles, one legal host per battlefield.
 

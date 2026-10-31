@@ -10,7 +10,7 @@ twice, budgeted twice) and is as much a sign the list was edited by hand
 without looking.
 
 A folder may be split between two shards by a marker, and then only by an
-expression and its negation (``slow`` / ``not slow``), which partition its
+expression and its negation (``full`` / ``not full``), which partition its
 tests by construction. Any other pair could leave a test in neither shard or
 in both, and which would depend on how each test is marked.
 
@@ -110,14 +110,14 @@ def test_the_coverage_rule_refuses_what_it_should():
     assert _coverage_refusal(whole) is None
     folder = whole[0][1][0]
     others = whole[0][1][1:]
-    split = [("a", [folder], "slow"), ("b", [folder], "not slow"), ("r", others, "")]
+    split = [("a", [folder], "full"), ("b", [folder], "not full"), ("r", others, "")]
     assert _coverage_refusal(split) is None
     for broken in (
         [("r", others, "")],                                      # dropped
         [("a", [folder], ""), ("b", [folder], ""), ("r", others, "")],  # twice
-        [("a", [folder], "slow"), ("r", others, "")],            # half only
-        [("a", [folder], "slow"), ("b", [folder], "not fast"), ("r", others, "")],
-        [("a", [folder], "slow"), ("b", [folder], ""), ("r", others, "")],
+        [("a", [folder], "full"), ("r", others, "")],            # half only
+        [("a", [folder], "full"), ("b", [folder], "not fast"), ("r", others, "")],
+        [("a", [folder], "full"), ("b", [folder], ""), ("r", others, "")],
         [("r", whole[0][1] + ["tests/nowhere"], "")],            # stale
     ):
         assert _coverage_refusal(broken) is not None, broken
@@ -144,3 +144,28 @@ def test_the_timed_step_runs_the_shards_paths_and_markers():
         r'python -m pytest .*\$\{SHARD_MARKERS:\+-m "\$SHARD_MARKERS"\} \$SHARD_PATHS',
         workflow,
     ), "the timed step no longer passes the shard's markers and paths to pytest"
+
+
+def test_the_timed_step_runs_the_pass_it_was_asked_for():
+    """A push runs the quick pass and `-f pass=full` the full one
+    (tests/passes.py); without the flag on the command line a full run is a
+    quick run under another name."""
+    workflow = CI_YML.read_text(encoding="utf-8")
+    assert "PASS: ${{ inputs.pass || 'quick' }}" in workflow
+    assert re.search(r'if \[ "\$PASS" = full \]; then FULL_FLAG="--full"; fi', workflow)
+    assert re.search(r"python -m pytest .*\$FULL_FLAG .*\$SHARD_PATHS", workflow), (
+        "the timed step no longer passes --full to pytest in the full pass"
+    )
+
+
+def test_a_shard_the_quick_pass_skips_holds_only_full_tests():
+    """A `full_only` shard skips itself in the quick pass, which is right only
+    while it selects `-m full`: any other expression would skip tests the quick
+    pass is for, and every shard would still read green."""
+    workflow = CI_YML.read_text(encoding="utf-8")
+    flags = re.findall(r"^\s+full_only: (\S+)$", workflow, re.M)
+    shards = _shards(workflow)
+    assert len(flags) == len(shards), "every shard says full_only: true or false"
+    for (name, _paths, markers), flag in zip(shards, flags):
+        if flag == "true":
+            assert markers == "full", f"shard {name!r} skips the quick pass but selects {markers!r}"

@@ -525,6 +525,7 @@ def _change_every_object(objects, fed: list | None = None) -> tuple[int, int, Co
     return changed, nowhere_to_go, refused, wrong
 
 
+@pytest.mark.full
 def test_every_cast_reads_back_what_it_announced_and_triggers_once(pool, by_name):
     """CR 601.2c. Every non-modal spell in the pool, announced with the first
     target its own picker offers: the reader names that target, and the
@@ -551,6 +552,7 @@ def test_every_cast_reads_back_what_it_announced_and_triggers_once(pool, by_name
     assert sum(refused.values()) < _CAST_REFUSED_CEILING, dict(refused)
 
 
+@pytest.mark.full
 def test_every_activation_reads_back_what_it_announced_and_triggers_once(pool, by_name):
     """CR 602.2b, the same sweep over every activated ability that becomes a
     stack object, and CR 115.7a over what it drove."""
@@ -799,6 +801,7 @@ _UNANNOUNCED_TRIGGER_TARGETS = frozenset({
 })
 
 
+@pytest.mark.full
 def test_a_triggered_ability_that_prints_a_target_has_one_on_the_stack(pool, by_name):
     """CR 603.3d. Every supported triggered ability whose line prints a target
     is enqueued from its source on the mirrored board. It must then be on the

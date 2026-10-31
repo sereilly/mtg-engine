@@ -240,6 +240,7 @@ def census():
     return found
 
 
+@pytest.mark.full
 def test_every_castable_card_is_paid_by_the_dialogs_own_plan(census):
     """The state says castable; the preview says payable; the ``auto_tap``
     cast is a 200. 102 of 194 were not, on ten of these boards."""
@@ -247,12 +248,14 @@ def test_every_castable_card_is_paid_by_the_dialogs_own_plan(census):
     assert census["paid"] == census["castable"]
 
 
+@pytest.mark.full
 def test_the_action_taps_exactly_what_the_preview_showed(census):
     """The dialog lists what will be tapped. Nothing else is, and nothing on
     the list is spared."""
     assert census["taps_differ"] == []
 
 
+@pytest.mark.full
 def test_no_dark_card_has_a_paying_plan(census):
     """The other direction: a card the state calls uncastable for want of mana
     is one the dialog cannot pay for either — so the button is disabled
@@ -261,11 +264,13 @@ def test_no_dark_card_has_a_paying_plan(census):
     assert census["dark_payable"] == []
 
 
+@pytest.mark.full
 def test_the_census_examined_enough(census):
     assert census["castable"] >= 200, census["castable"]
     assert census["dark_previewed"] >= 250, census["dark_previewed"]
 
 
+@pytest.mark.full
 def test_the_census_names_the_planner_it_replaced(census):
     """Run backwards: the lands-only planner is short on these boards — every
     one that pays with a Sol Ring, an Elf, a Birds or a Mana Flare's second

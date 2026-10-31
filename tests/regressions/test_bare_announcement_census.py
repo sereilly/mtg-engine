@@ -423,6 +423,7 @@ def _sweep(catalog, by_name, only=None) -> dict:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.full
 def test_a_bare_announcement_is_the_announcement_of_its_pickers_first_target(
     _catalog, _by_name
 ):

@@ -1368,7 +1368,7 @@ def test_w1g2_the_ai_returns_two_opposing_creatures_not_its_own(set_pool):
     assert named == ["Hill Giant", "Serra Angel"]
 
 
-@_w1g2_pytest.mark.slow
+@_w1g2_pytest.mark.full
 def test_w1g2_the_ai_plays_battlemages_through_whole_games():
     """All five pinned into both decks of six simulated games: they are cast,
     several are kicked, and none is ever refused or left owing a prompt as its
@@ -1778,7 +1778,7 @@ def test_w1g2_a_gater_that_stays_is_the_printed_body(set_pool, name, keyword, bo
     assert [c.name for c in game.players[0].hand] == [_W1G2_OF_COLOR[colours[0]]]
 
 
-@_w1g2_pytest.mark.slow
+@_w1g2_pytest.mark.full
 def test_w1g2_the_ai_plays_gaters_without_bouncing_them_back(set_pool):
     """All ten pinned into both decks of six simulated games. Before this
     round 112 of 127 gating triggers returned the creature that had just been

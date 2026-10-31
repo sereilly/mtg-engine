@@ -137,6 +137,7 @@ def census():
     return rows
 
 
+@pytest.mark.full
 def test_every_picker_the_wire_calls_unowed_is_one_the_engine_takes_bare(census):
     marked = [row for row in census if row["marked"]]
 
@@ -150,6 +151,7 @@ def test_every_picker_the_wire_calls_unowed_is_one_the_engine_takes_bare(census)
         assert "needs a target" not in str(row["detail"] or ""), row
 
 
+@pytest.mark.full
 def test_the_circles_and_runes_are_all_there(census):
     """The cards the defect was reported on, by what makes them this shape: a
     chosen source, flagged ``source_of_choice`` or offered the stack beside
@@ -249,6 +251,7 @@ const EMPTY_TARGET_SPEC = { kind: "none", requires_target: false, valid_targets:
 '''
 
 
+@pytest.mark.full
 @needs_node
 def test_the_client_asks_instead_of_refusing(census):
     """The client's own reading of every marked payload: with nothing to pick

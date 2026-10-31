@@ -23,7 +23,7 @@ _PINNED = [
 ]
 
 
-@pytest.mark.slow
+@pytest.mark.full
 def test_a_simulated_onslaught_game_casts_a_morph_face_down_and_turns_one_up():
     path = manifest_set_path("ONS", include_measured=True)
 

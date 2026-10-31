@@ -400,6 +400,7 @@ def _scanned_files() -> list[Path]:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.full
 def test_no_pool_loop_reads_a_split_card_whole():
     found: dict[tuple[str, str], list[str]] = {}
     for path in _scanned_files():

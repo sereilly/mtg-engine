@@ -496,6 +496,7 @@ def test_w1g8_a_prohibition_an_ability_arms_is_read_by_all_three_readers(session
     assert game.cast_from_hand(0, "Grizzly Bears").supported
 
 
+@pytest.mark.full
 def test_w2g3_no_reader_says_yes_to_a_cast_a_permanent_forbids(session):
     """Every prohibiting permanent in the pool × both seats × four situations ×
     a hand of every type: where the engine refuses because of the permanent,

@@ -375,6 +375,7 @@ def test_w1g1_a_kicked_volver_under_humility_keeps_its_counters_and_cannot_regen
     assert game.players[0].life == 20
 
 
+@_w1g1_pytest.mark.full
 def test_w1g1_the_ai_casts_and_kicks_volvers_without_a_refusal():
     """All five pinned into both decks of six simulated games: they are cast,
     some kicked, never refused and never left owing a prompt. (Apocalypse is a
@@ -1300,7 +1301,7 @@ def test_w1g3_the_recruiters_keep_their_other_printed_lines(set_pool):
     assert game._has_keyword(courier, "flying") and me.mana_pool["U"] == 0
 
 
-@_w1g3_pytest.mark.slow
+@_w1g3_pytest.mark.full
 def test_w1g3_the_ai_plays_recruiters_through_whole_games():
     """Three recruiters pinned into both decks of four simulated games: they
     are cast, each reveal is followed by its sort, and the sort accounts for
@@ -2457,6 +2458,7 @@ def test_w2g4_mournful_zombie_gives_its_life_to_the_seat_that_paid_for_it(
     assert "Keeper gained 1 life from Mournful Zombie (20 -> 21)" in game.log
 
 
+@_w1g3_pytest.mark.full
 def test_w2g4_mournful_zombie_in_a_simulated_game_never_heals_the_other_seat():
     """The same through whole games, where it was first seen: every "gained 1
     life from Mournful Zombie" line names the seat whose activation it follows.

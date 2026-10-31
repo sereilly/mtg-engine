@@ -38,6 +38,7 @@ from engine.card_loader import load_cards, load_catalog, manifest_set_paths
 from engine.handlers import EFFECT_HANDLERS
 from engine.models import CardDefinition
 from engine.oracle import compile_card_oracle
+from tests.passes import rewarm_compile_cache
 
 
 def _whole_pool():
@@ -139,6 +140,7 @@ def test_every_aura_in_the_pool_is_claimed_by_the_module_that_implements_it():
     )
 
 
+@pytest.mark.full
 def test_the_aura_claim_is_what_holds_those_cards_up():
     """The claim must be load-bearing, not decorative.
 
@@ -170,6 +172,7 @@ def test_the_aura_claim_is_what_holds_those_cards_up():
     finally:
         derived_static_claims.aura_claim = original
         oracle._compile_card_oracle.cache_clear()
+        rewarm_compile_cache()
 
     assert sorted(fell_over) == sorted(sample), (
         "withdrawing the Aura claim left these still supported, so something "

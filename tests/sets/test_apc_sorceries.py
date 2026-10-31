@@ -1566,7 +1566,7 @@ def test_w1g4_urborg_uprising_follows_its_targets_and_fizzles_without_them(set_p
 # -- Whole games -------------------------------------------------------------
 
 
-@_w1g4s_pytest.mark.slow
+@_w1g4s_pytest.mark.full
 def test_w1g4_the_ai_plays_this_groups_spells_through_whole_games():
     """Six simulated games with this group's cards pinned into both decks,
     because a card can compile and do nothing in a turn structure. Each of the

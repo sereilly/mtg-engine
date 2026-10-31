@@ -23,7 +23,7 @@ export ROUND=ons
 | `chain_stage.sh <group> <base-ref>` | each merge | stage the merge in its own link worktree; union per-set test blocks |
 | `meeting.sh <tree> <tag>` | **each merge** | the meeting-point run — the gate between merges |
 | `chain_commit.sh <group> <msg-file>` | each merge | commit the link, regenerate trackers |
-| `gate.sh <tree> <tag>` + `gate_report.sh <tag>` | **wave close, promotion** | the full gate: oracle_diff, scans, whole suite, check_all, support |
+| `gate.sh <tree> <tag> [workers] [quick\|full]` + `gate_report.sh <tag>` | **wave close, promotion** | the full gate: oracle_diff, scans, whole suite (the quick pass; `full` on the promotion commit), check_all, support |
 | `regen.sh <label>` | after any merge | regenerate every tracker (never `--accept`) and commit |
 | `dups.py <files>` | each merge | a name defined twice in one scope (merge shadowing) |
 | `dup_ideas.py <base>` | after a wave | a new name defined in two modules (one idea, two homes) |
@@ -45,6 +45,8 @@ file a full gate has surprised you with (`surprises.txt`, which only grows)
 and the structural guards. In Torment it predicted every full gate. The full
 gate (`gate.sh`) runs at each wave's close and on the promotion commit, and
 whatever it finds that the meeting run did not goes into `surprises.txt`.
+Its suite is the quick pass, except on the promotion commit, where it is the
+full pass (`gate.sh <tree> <tag> <workers> full`: `pytest --full`).
 
 Gates write to `$GATE` (`.worktrees/scratch/$ROUND/gate/`) and never pipe
 pytest through `tail`: the exit code is the command's own. Use `-n 4` (the

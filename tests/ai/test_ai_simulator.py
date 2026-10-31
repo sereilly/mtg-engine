@@ -107,7 +107,7 @@ def test_the_simulator_drains_every_prompt_that_suspends_a_resolution():
     )
 
 
-@pytest.mark.slow
+@pytest.mark.full
 def test_ai_simulator_runs_without_issues_for_two_games():
     report = run_ai_simulation(
         cards_path=LEA_PATH,
@@ -155,7 +155,7 @@ def test_prodigal_sorcerer_summoning_sickness_clears_after_turn(all_cards):
     assert p2.life == 19
 
 
-@pytest.mark.slow
+@pytest.mark.full
 def test_prodigal_sorcerer_deals_damage_in_simulation():
     """Regression: Prodigal Sorcerer must deal damage once summoning sickness clears.
 
@@ -182,7 +182,7 @@ def test_prodigal_sorcerer_deals_damage_in_simulation():
     )
 
 
-@pytest.mark.slow
+@pytest.mark.full
 def test_simulation_stops_when_player_loses_via_empty_library():
     """Regression: game loop must exit when player.lost is set, not only on life loss.
 
@@ -218,7 +218,7 @@ def test_simulation_stops_when_player_loses_via_empty_library():
             )
 
 
-@pytest.mark.slow
+@pytest.mark.full
 def test_ancestral_recall_never_self_causes_library_loss():
     """Regression: AI must not self-cast Ancestral Recall when library has < 3 cards.
 
@@ -308,6 +308,7 @@ def test_the_simulator_advances_the_per_seat_turn_ordinal():
     )
 
 
+@pytest.mark.full
 def test_the_simulator_actually_plays_a_combat_phase():
     """The simulated turn has a combat phase, and creatures use it.
 
@@ -501,6 +502,7 @@ def test_the_simulators_oracle_is_not_fooled_by_a_cast_trigger_gaining_life(
     assert _assert_expected(cards["Lightning Bolt"], before, short, 0, 1) is not None
 
 
+@pytest.mark.full
 def test_combat_damage_in_the_simulator_actually_moves_a_life_total():
     """Attacking is not the assertion; connecting is.
 
@@ -566,6 +568,7 @@ def _w3g4_paid_run():
     return report, seen
 
 
+@pytest.mark.full
 def test_no_simulated_spell_resolves_without_its_cost_paid(_w3g4_paid_run):
     """CR 601.2f-h: every nonland spell a simulated seat casts is paid for out
     of its pool, and the pool was filled by tapping its lands. Validated
@@ -585,6 +588,7 @@ def test_no_simulated_spell_resolves_without_its_cost_paid(_w3g4_paid_run):
     assert not report.refused_casts, dict(report.refused_casts)
 
 
+@pytest.mark.full
 def test_the_land_drop_is_its_own_pass_and_the_turn_still_casts(_w3g4_paid_run):
     """CR 305.1/305.2: the land drop is a special action beside the turn's
     casts, not the turn's one cast. Every land played was one the engine's own

@@ -260,7 +260,7 @@ def test_the_ai_aims_the_fight_at_the_other_side():
     assert len(ids) == 2 and ids[1] == theirs.permanent_id
 
 
-@pytest.mark.slow
+@pytest.mark.full
 def test_a_seeded_run_casts_primal_might():
     """Primal Might pinned into both decks of a seeded M21 run: a seat casts
     it at least once, nothing it proposed was refused, and no game raised."""

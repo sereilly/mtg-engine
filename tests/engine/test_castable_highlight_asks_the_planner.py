@@ -178,6 +178,7 @@ def _w2g3_payable(session, names, cards) -> set[str]:
 _SLICES = 4
 
 
+@pytest.mark.full
 @pytest.mark.parametrize("part", range(_SLICES))
 def test_w2g3_the_highlight_glows_exactly_what_the_lands_can_pay(session, part):
     names = _w2g3_lands()[part::_SLICES]

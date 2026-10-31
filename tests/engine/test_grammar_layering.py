@@ -3268,6 +3268,7 @@ def test_every_family_module_is_listed_or_shared(package, families):
     )
 
 
+@pytest.mark.full
 def test_no_module_defines_the_same_name_twice():
     """A module may not bind one top-level name twice.
 

@@ -157,7 +157,7 @@ def test_w1g2_battery_creates_a_three_three_green_elephant(set_pool):
     assert p0.graveyard == [split] and p0.mana_pool["G"] == 0
 
 
-@_w1g2_pytest.mark.slow
+@_w1g2_pytest.mark.full
 def test_w1g2_the_ai_casts_split_cards_as_halves_without_a_refusal():
     """The simulator deals whole split cards and its policy scores each half as
     the spell it is (`ai_actions.hand_spells`), pays for the one it picks and

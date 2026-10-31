@@ -21,7 +21,7 @@ from engine.card_loader import manifest_set_path
 SEED = 11
 
 
-@pytest.mark.slow
+@pytest.mark.full
 def test_a_seeded_run_plays_balance_by_rounds_and_soul_net_sees_an_animated_forest_die():
     report = run_ai_simulation(
         [manifest_set_path("LEA"), manifest_set_path("ATQ")],

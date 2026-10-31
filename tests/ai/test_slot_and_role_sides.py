@@ -206,6 +206,7 @@ def _w2g5_named_seats(game, action) -> list:
     return []
 
 
+@pytest.mark.full
 def test_w2g5_every_slot_and_role_is_aimed_at_the_side_its_step_wants(pool):
     """The census. For every supported instant or sorcery whose cast names
     several object targets, under every answer to CR 601.2b it could give: the

@@ -60,7 +60,7 @@ def test_a_keyword_lord_and_a_sacrifice_cost_name_the_controllers_type(set_pool,
     assert chosen_creature_type_side(set_pool("ONS")[name]) == "you"
 
 
-@pytest.mark.slow
+@pytest.mark.full
 def test_a_seeded_onslaught_game_asks_every_seat_for_a_creature_type():
     """Harsh Mercy and Patriarch's Bidding pinned into every deck: the runs
     complete, nothing rehearsed raises, and at least one "each player chooses"

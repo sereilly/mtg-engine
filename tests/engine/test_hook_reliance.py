@@ -60,6 +60,7 @@ def test_ratchet_baseline_exists():
     )
 
 
+@pytest.mark.full
 def test_hook_reliance_has_not_risen(measures):
     failures = hook_reliance.check(measures)
     assert not failures, (
@@ -72,6 +73,7 @@ def test_hook_reliance_has_not_risen(measures):
     )
 
 
+@pytest.mark.full
 def test_every_ratcheted_scope_is_in_the_baseline(measures):
     """Renamed off "measured": that word now names the *unshipped* sets in
     `cards/manifest.json`, which are precisely the scopes this must NOT
@@ -84,6 +86,7 @@ def test_every_ratcheted_scope_is_in_the_baseline(measures):
     )
 
 
+@pytest.mark.full
 def test_measured_sets_are_reported_but_never_ratcheted(analysis):
     """A measured set is ingested and unimplemented by definition. Ratcheting it
     would fail on the day it arrived and stay failing until the work was done,
@@ -120,6 +123,7 @@ def _reprint_overlap(per_set, measured_codes) -> int:
     return shipped_sum - len(load_catalog())
 
 
+@pytest.mark.full
 def test_the_measure_is_not_vacuous(analysis):
     """A ceiling that measures nothing passes forever. Assert it still measures.
 
@@ -143,6 +147,7 @@ def test_the_measure_is_not_vacuous(analysis):
     assert overall.cards > 0 and overall.lines > 0
 
 
+@pytest.mark.full
 def test_trigger_hooks_is_not_counted_as_name_keyed(analysis):
     """``TRIGGER_HOOKS`` is keyed by trigger condition, not by card name.
 
@@ -155,6 +160,7 @@ def test_trigger_hooks_is_not_counted_as_name_keyed(analysis):
     assert "TRIGGER_HOOKS" not in {registry.name for registry in registries}
 
 
+@pytest.mark.full
 def test_no_registry_key_names_a_card_outside_the_pool(analysis):
     """A hook keyed on a misspelling can never fire, and nothing else notices.
 
@@ -173,6 +179,7 @@ def test_no_registry_key_names_a_card_outside_the_pool(analysis):
     )
 
 
+@pytest.mark.full
 def test_measures_are_internally_consistent(analysis):
     """Hooked counts are subsets, so a percentage over 100 means a miscount."""
     per_set, overall, _registries, *_ = analysis

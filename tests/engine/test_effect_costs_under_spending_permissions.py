@@ -159,6 +159,7 @@ def run_census(pool, by_name) -> dict:
     return result
 
 
+@pytest.mark.full
 def test_an_effect_cost_is_payable_with_what_the_seat_may_spend(pool, by_name):
     """Under every spending permission, the effect-cost planner and the exact
     one agree on every board and cost asked.

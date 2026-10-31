@@ -578,6 +578,7 @@ def census(pool, by_name):
     return run
 
 
+@pytest.mark.full
 @pytest.mark.parametrize("interactive", [False, True], ids=["headless", "interactive"])
 def test_every_destruction_in_the_pool_is_announced_with_its_cause(census, interactive):
     """The census, over both manifest roles and both ways a table is driven.

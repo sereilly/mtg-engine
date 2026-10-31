@@ -446,6 +446,7 @@ _MIN_TRIGGER_ADMITTED = 38
 _MIN_TRIGGER_NOT_ADMITTED = 4
 
 
+@pytest.mark.full
 def test_a_target_that_changed_controller_is_found_or_refused_by_its_description(
     _catalog, _by_name,
 ):

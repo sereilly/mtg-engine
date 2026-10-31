@@ -151,7 +151,7 @@ def test_the_offer_is_not_weighed_with_no_combat_ahead(set_pool):
     assert len(game.players[0].graveyard) == 4
 
 
-@pytest.mark.slow
+@pytest.mark.full
 @pytest.mark.parametrize("code, aura, seed", [
     # Seed 12 until ONS W2G5: its first game diverges at G1 T2, where Hapless
     # Researcher is no longer sacrificed to loot (the self-sacrifice rehearsal

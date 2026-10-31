@@ -130,7 +130,7 @@ def test_the_policy_will_not_deck_the_seat_it_is_playing():
     assert choose_hand_activation_action(game, 0) is None
 
 
-@pytest.mark.slow
+@pytest.mark.full
 def test_an_ai_seat_actually_cycles_a_card_in_a_real_game():
     """The Rock Hydra test for the policy: a whole game, over the set that
     prints the keyword, with a cycling card pinned into both decks."""

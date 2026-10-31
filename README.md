@@ -50,8 +50,8 @@ It installs Python (the version CI runs, per-user through `winget`) if it is mis
 With the workspace virtual environment activated:
 
 ```powershell
-pytest                    # full suite
-pytest -m "not slow"      # skip the AI-simulation batch tests
+pytest                    # the quick pass
+pytest --full             # the full pass (the promotion gate's run): adds the tests marked `full`
 ```
 
 ## Start the Server

@@ -269,7 +269,7 @@ def test_without_the_fallback_none_of_them_is_planned(rows, monkeypatch):
 
 # --- a seeded game ---------------------------------------------------------------
 
-@pytest.mark.slow
+@pytest.mark.full
 def test_a_simulated_odyssey_game_activates_a_filter_land():
     """With the five pinned, a seeded run activates one — a floor of one —
     and no cast is refused for the mana it was counted for."""

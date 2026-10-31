@@ -194,7 +194,8 @@ And when writing one:
   branches both touched and every ratchet either side lowered — an instrument is
   code that meets other code at a merge.
 - **The full gate** (`gate.sh <tree> <tag>`, read with `gate_report.sh`:
-  `oracle_diff`, the duplicate and missing-name scans, the whole suite,
+  `oracle_diff`, the duplicate and missing-name scans, the whole suite as
+  the quick pass — `full` as a fourth argument only on the promotion commit,
   `check_all`, the support report) **runs at each wave's close and on the
   promotion commit — and after the first merge that changes a shared seam**
   (a new `PlayerState`/`Game` field, the static recompute, the rehearsal).
@@ -719,11 +720,11 @@ green, the trackers agreeing the set ships.
    `promote.py <CODE>` — a textual move, because a json round-trip re-escapes
    the role descriptions' em dashes and trips
    `test_registration_preserves_everything_else_byte_for_byte` — and run the
-   tests before the work is done: the first rehearsal a full suite (on the day
-   of the ingest for a reprint-shaped set, otherwise while the last wave runs),
-   later ones `-m "not slow"` over the whole tree as often as the tree changes
-   shape (an inventory written as an equality can live in `tests/ai` or
-   `tests/ui`). Promotion widens every `load_catalog()` guard and shows the set
+   tests before the work is done: the quick pass over the whole tree, first
+   on the day of the ingest for a reprint-shaped set (otherwise while the
+   last wave runs), then as often as the tree changes shape (an inventory
+   written as an equality can live in `tests/ai` or `tests/ui`). The full
+   pass waits for the promotion commit (step 9). Promotion widens every `load_catalog()` guard and shows the set
    to `parse_coverage` for the first time, so findings surface here by
    construction; rehearsing early hands them to somebody still in the code. A
    wave-2 group can take the rehearsal's inventories — driving each card,
@@ -772,11 +773,13 @@ green, the trackers agreeing the set ships.
    trackers' aggregates to move on membership alone (the All row is
    printing-weighted): ask what changed in the membership before crediting the
    parser.
-8. **Run the sampled censuses whole once**: `MTG_FULL_CENSUS=1` with the
-   files that call `tests.helpers.stable_sample` (a sample's floor is a
-   statement about the cards it happened to draw).
-9. **Gate the promotion commit with the full gate, and move `main` only after
-   it.** A targeted rehearsal re-runs what was red; a later merge can turn a
+8. **The sampled censuses run whole once**, in step 9's full pass, which sets
+   `MTG_FULL_CENSUS` for every file that calls `tests.helpers.stable_sample`
+   (a sample's floor is a statement about the cards it happened to draw).
+9. **Gate the promotion commit with the full gate as the full pass —
+   `gate.sh <tree> <tag> <workers> full` — and move `main` only after it.**
+   It is the one run of the tests marked `full` (the seeded AI-game batches,
+   the heavy censuses: `tests/passes.py`), so their findings arrive here. A targeted rehearsal re-runs what was red; a later merge can turn a
    different file red that only the promoted tree shows.
 
 The checklist, each line naming its guard:

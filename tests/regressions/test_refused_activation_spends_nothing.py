@@ -258,6 +258,7 @@ def _w2g3_sweep_run(card, ability_index, ability, scenario):
     return result.details or "", before != _w2g3_sweep_state(game)
 
 
+@pytest.mark.full
 def test_no_shipped_activation_refused_at_its_cost_has_paid_part_of_it():
     reached = {"sick": 0, "tapped": 0, "broke": 0}
     spent: list[str] = []

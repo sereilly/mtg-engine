@@ -22,7 +22,7 @@ from engine.card_loader import manifest_set_path
 _REFUSAL = "must be chosen as a target if able"
 
 
-@pytest.mark.slow
+@pytest.mark.full
 def test_no_cast_is_refused_for_ignoring_a_flagbearer_in_simulation():
     """Alpha's burn, removal, pump and Auras against decks that each carry
     Standard Bearer and Coalition Honor Guard. ``required_cards`` pins the two
