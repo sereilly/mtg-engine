@@ -3,5 +3,19 @@
         "tests"
     ],
     "python.testing.unittestEnabled": false,
-    "python.testing.pytestEnabled": true
+    "python.testing.pytestEnabled": true,
+    // The Python extension re-runs test discovery whenever a pytest.ini or
+    // settings.json changes anywhere in the workspace, without cancelling the
+    // discovery already running. Every `git worktree add/remove` under
+    // .worktrees/ creates or deletes a pytest.ini, so pruning eighteen
+    // worktrees started nineteen concurrent discoveries (~4 GB each then) and
+    // took the machine out of memory (2026-10-31). Worktrees are not this
+    // workspace's tests: keep the watcher out of them.
+    "files.watcherExclude": {
+        "**/.worktrees/**": true,
+        "**/.oracle_diff/**": true,
+        "**/.sim_fingerprint/**": true
+    },
+    // Re-discover on saving a test file, not on saving any .py file.
+    "python.testing.autoTestDiscoverOnSavePattern": "**/tests/**/test_*.py"
 }
