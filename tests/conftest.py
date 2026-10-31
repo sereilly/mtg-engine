@@ -27,6 +27,10 @@ import pytest
 from engine import load_cards
 from engine.card_loader import manifest_set_codes, manifest_set_path, manifest_set_paths
 
+# The runner's memory limits — one collection at a time per checkout, xdist
+# workers capped to what free memory holds. Importing the hooks registers them.
+from tests.memory_guard import pytest_cmdline_main, pytest_configure, pytest_unconfigure  # noqa: F401
+
 
 # ---------------------------------------------------------------------------
 # The factory

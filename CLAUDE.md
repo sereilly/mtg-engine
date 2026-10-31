@@ -77,10 +77,16 @@ python -m pytest tests/sets/test_lea_creatures.py::test_name -q   # one test
 python -m pytest tests/regressions -q             # in-game bug regressions
 ```
 
-`-n auto` is killed for memory on this machine; an exit code 3 or 137 with no
-`FAILED` line is a worker that died, not a red tree — re-run with fewer
-workers. Never pipe pytest through `tail`/`head`: the pipe replaces its exit
-code.
+**The runner holds itself to the machine's memory** (`tests/memory_guard.py`,
+hooked in by `tests/conftest.py`): `-n N` and `-n auto` run as at most what
+free memory holds — a worker peaks near 2.5 GB, and 4 GB is kept free
+(`MTG_PYTEST_NO_MEMORY_CAP=1` overrides) — and a `--collect-only` session, which
+is what an IDE's test discovery is, waits for the one before it in the same
+checkout. `load_cards` is cached per file version, so the test modules that load
+the pool at import share one copy (each held its own, 5 GB a process, until
+2026-10-31). An exit code 3 or 137 with no `FAILED` line is a worker that died,
+not a red tree — re-run with fewer workers. Never pipe pytest through
+`tail`/`head`: the pipe replaces its exit code.
 
 Tests are organized by subject — put new tests in the matching subfolder:
 `tests/ai/` (AI policy/simulator), `tests/ui/` (web API + frontend/end-to-end),

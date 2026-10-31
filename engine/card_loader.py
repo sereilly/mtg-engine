@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import replace
+from functools import lru_cache
 from pathlib import Path
 from typing import Sequence, Union
 
@@ -48,8 +49,16 @@ def _load_faces(entry: dict) -> tuple[CardFace, ...]:
     )
 
 
-def _load_one(path: str | Path) -> list[CardDefinition]:
-    raw = json.loads(Path(path).read_text(encoding="utf-8"))
+def _file_state(path: str | Path) -> tuple[str, int, int]:
+    """What a load of *path* depends on: the file, and the version of it on disk."""
+    resolved = Path(path).resolve()
+    stat = resolved.stat()
+    return (str(resolved), stat.st_mtime_ns, stat.st_size)
+
+
+@lru_cache(maxsize=None)
+def _load_one(state: tuple[str, int, int]) -> tuple[CardDefinition, ...]:
+    raw = json.loads(Path(state[0]).read_text(encoding="utf-8"))
     cards: list[CardDefinition] = []
     for entry in raw:
         for field in REQUIRED_FIELDS:
@@ -80,7 +89,7 @@ def _load_one(path: str | Path) -> list[CardDefinition]:
                 printings=(set_code,) if set_code else (),
             )
         )
-    return cards
+    return tuple(cards)
 
 
 def load_cards(path: Union[str, Path, Sequence[Union[str, Path]]]) -> list[CardDefinition]:
@@ -93,14 +102,27 @@ def load_cards(path: Union[str, Path, Sequence[Union[str, Path]]]) -> list[CardD
     keeps that answer stable when a reprint set is added to the pool.
 
     Dedupe is by ``oracle_id`` when the data has it, falling back to name.
+
+    Loads are cached per file version (path, mtime, size), and every caller
+    gets a new list over the same immutable cards. Without the cache each call
+    built a private copy of the pool, each card holding its whole JSON entry
+    in ``raw``: the ~130 test modules that load the pool at import held 5 GB in
+    every pytest process before a test ran, in each xdist worker and in each
+    IDE test discovery alike. A file rewritten in-process (an ingest) is a new
+    version and reloads.
     """
     paths = [path] if isinstance(path, (str, Path)) else list(path)
+    return list(_load_cards(tuple(_file_state(one_path) for one_path in paths)))
+
+
+@lru_cache(maxsize=None)
+def _load_cards(states: tuple[tuple[str, int, int], ...]) -> tuple[CardDefinition, ...]:
     cards: list[CardDefinition] = []
     index_by_key: dict[str, int] = {}
     printings: list[list[str]] = []
 
-    for one_path in paths:
-        for card in _load_one(one_path):
+    for state in states:
+        for card in _load_one(state):
             key = card.oracle_id or card.name
             existing = index_by_key.get(key)
             if existing is not None:
@@ -111,10 +133,10 @@ def load_cards(path: Union[str, Path, Sequence[Union[str, Path]]]) -> list[CardD
             cards.append(card)
             printings.append([card.set_code] if card.set_code else [])
 
-    return [
+    return tuple(
         replace(card, printings=tuple(codes))
         for card, codes in zip(cards, printings)
-    ]
+    )
 
 
 def set_code_for_expansion_name(
