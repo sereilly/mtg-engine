@@ -908,7 +908,17 @@ class DeathsMixin:
             # creature, not the other way round. Both spellings of "attached"
             # are asked because both exist — the list an Aura joins, and the
             # single slot an Equipment sets.
-            if observer in auras_attached_to(dead_permanent) or (
+            #
+            # **By identity**, never ``in``: a Permanent compares by value (its
+            # id is excluded), and an Aura's ``attached_to`` and its host's
+            # ``attached_auras`` name each other, so another copy of the Aura
+            # on a host whose metadata matches the dead one's compares round
+            # that loop until the interpreter gives up. In play the dead host's
+            # ``last_controller_index`` ends the comparison a level down, by
+            # accident; the target-id arity census's board has no such key, and
+            # Mogg Assassin destroying one of its mirrored Bait pairs raised
+            # RecursionError.
+            if any(aura is observer for aura in auras_attached_to(dead_permanent)) or (
                 observer.metadata.get("attached_to") is dead_permanent
             ):
                 for trig in matching_triggers(

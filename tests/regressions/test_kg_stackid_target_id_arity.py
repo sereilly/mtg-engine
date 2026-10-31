@@ -49,8 +49,11 @@ from tests.helpers import stable_sample
 #: One announcement in every STRIDE, by a digest of the card's name.
 STRIDE = 4
 
-#: Always in the sample: the card the base tree's census named.
-_KNOWN = ("Turn to Slag",)
+#: Always in the sample: the card the base tree's census named, and the one
+#: the whole census (``MTG_FULL_CENSUS=1``) raised on at Onslaught's promotion
+#: — Mogg Assassin's death scan compared two mirrored Bait Equipment by value,
+#: round the attachment loop (``mixins/deaths``).
+_KNOWN = ("Turn to Slag", "Mogg Assassin")
 
 _POOL: dict = {}
 for _card in faces.compilation_units(load_cards(manifest_set_paths(include_measured=True))):

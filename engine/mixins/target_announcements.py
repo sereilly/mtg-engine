@@ -617,7 +617,7 @@ class TargetAnnouncementsMixin:
         card.
         """
         from ..events import emit
-        from ..targeting import (_PLAYER_TARGET_SPEC_KINDS,
+        from ..targeting import (_PLAYER_TARGET_SPEC_KINDS, announces_a_target,
                                  stack_object_target_spec)
         from ..target_roles import ROLES_TARGET_KIND
 
@@ -650,6 +650,17 @@ class TargetAnnouncementsMixin:
                     targeted_by_card=item.card,
                     event_subject_player=item.caster_index,
                 )
+            return
+        # **A trigger's seat is a target only if its line printed one.** A fire
+        # site may stamp a seat it already knows — the unblocked-attack site
+        # stamps its controller's — and the kind table answers "player" for a
+        # sentence that names its seat without targeting it: "…defending player
+        # discards three cards" (Mindstab Thrull) announced its own controller
+        # as targeted. ``announces_a_target`` is the record the trigger picker
+        # asks before choosing (CR 603.3d), so the two agree.
+        if item.ability_kind == "triggered" and not announces_a_target(
+            item.ability_instruction
+        ):
             return
         seat = getattr(item, "target_player_index", None)
         if not isinstance(seat, int) or not (0 <= seat < len(self.players)):

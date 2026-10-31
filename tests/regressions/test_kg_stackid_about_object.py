@@ -46,6 +46,11 @@ from tests.helpers import _nosick, resolve_stack, stable_sample
 #: One card in every STRIDE, by a digest of its name (``stable_sample``).
 STRIDE = 3
 
+#: Always in the sample: what the whole census (``MTG_FULL_CENSUS=1``) named at
+#: Onslaught's promotion — the unblocked-attack site stamps its controller's
+#: seat, and "…defending player discards three cards" announced it targeted.
+_KNOWN = ("Mindstab Thrull", "Dauthi Mindripper")
+
 COMBAT_KINDS = frozenset({
     "creature_attacks", "creature_attacks_or_blocks", "creature_blocks",
     "creature_blocks_or_blocked_by", "creature_becomes_blocked",
@@ -202,7 +207,7 @@ def test_a_combat_trigger_that_names_no_target_announces_none(catalog):
     examined = acted_on = 0
     wrong: list[str] = []
     for card in _combat_cards(catalog):
-        if not stable_sample(card.name, STRIDE):
+        if card.name not in _KNOWN and not stable_sample(card.name, STRIDE):
             continue
         for road in ROADS:
             _game, announced = _combat(card, road)
