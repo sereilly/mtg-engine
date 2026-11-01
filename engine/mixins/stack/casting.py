@@ -230,7 +230,9 @@ class SpellCastingMixin:
         log_mark = len(self.log)
         with self.deferring_triggers():
             result = self._cast_onto_stack(*args, **kwargs)
-        take_back_refused_attempt(self, log_mark, result)
+            # Inside the window: what it flushes on the way out is not the
+            # attempt's to take back.
+            take_back_refused_attempt(self, log_mark, result)
         if result.supported:
             # CR 704.3, the cast side of the sweep ``queue_permanent_ability``
             # runs for the same reason: CR 117.3c gives the caster priority

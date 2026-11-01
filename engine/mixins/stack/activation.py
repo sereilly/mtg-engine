@@ -238,7 +238,7 @@ class AbilityActivationMixin:
             result = self._activate_onto_stack(
                 *args, reversal_ledger=ledger, **kwargs
             )
-        take_back_refused_attempt(self, log_mark, result)
+            take_back_refused_attempt(self, log_mark, result)
         if not result.supported:
             for permanent, had_record, prior in reversed(ledger):
                 if had_record:

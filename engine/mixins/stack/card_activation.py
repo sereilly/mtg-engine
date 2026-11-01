@@ -166,7 +166,7 @@ class CardActivationMixin:
         log_mark = len(self.log)
         with self.deferring_triggers():
             result = self._activate_from_hand(*args, **kwargs)
-        take_back_refused_attempt(self, log_mark, result)
+            take_back_refused_attempt(self, log_mark, result)
         if result.supported:
             self.check_state_based_actions()
         return result
@@ -182,7 +182,7 @@ class CardActivationMixin:
         log_mark = len(self.log)
         with self.deferring_triggers():
             result = self._activate_from_graveyard(*args, **kwargs)
-        take_back_refused_attempt(self, log_mark, result)
+            take_back_refused_attempt(self, log_mark, result)
         if result.supported:
             self.check_state_based_actions()
         return result
