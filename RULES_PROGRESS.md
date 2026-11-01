@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**429 / 640 tracked rules covered (67%)** — 3247 tests, 0 unannotated.
+**429 / 640 tracked rules covered (67%)** — 3251 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -141,7 +141,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 104. Ending the Game
 
-- [x] **104.1** A game ends immediately when a player wins, when the game is a draw, or when the game is restarted. *(6 tests)*
+- [x] **104.1** A game ends immediately when a player wins, when the game is a draw, or when the game is restarted. *(8 tests)*
 - [x] **104.2** There are several ways to win the game. *(13 tests, subrules ab)*
 - [x] **104.3** There are several ways to lose the game. *(25 tests, subrules abcdefj)*
 - [x] **104.4** There are several ways for the game to be a draw. *(9 tests, subrules ac)*
@@ -643,7 +643,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **510.1** First, the active player announces how each attacking creature assigns its combat damage, then th... *(86 tests, subrules abcde)*
 - [x] **510.2** Second, all combat damage that’s been assigned is dealt simultaneously. This turn-based action do... *(7 tests)*
 - [x] **510.3** Third, the active player gets priority. (See rule 117, “Timing and Priority.”) *(4 tests, subrules a)*
-- [x] **510.4** If at least one attacking or blocking creature has first strike (see rule 702.7) or double strike... *(12 tests)*
+- [x] **510.4** If at least one attacking or blocking creature has first strike (see rule 702.7) or double strike... *(14 tests)*
 
 ### 511. End of Combat Step
 
@@ -925,7 +925,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **704.2** State-based actions are checked throughout the game and are not controlled by any player. *(1 tests)*
 - [x] **704.3** Whenever a player would get priority (see rule 117, “Timing and Priority”), the game checks for a... *(11 tests)*
 - [x] **704.4** Unlike triggered abilities, state-based actions pay no attention to what happens during the resol... *(1 tests)*
-- [x] **704.5** The state-based actions are as follows: *(98 tests, subrules abcdefghijkmnpqrsz)*
+- [x] **704.5** The state-based actions are as follows: *(99 tests, subrules abcdefghijkmnpqrsz)*
 - [x] **704.6** Some variant games include additional state-based actions that aren’t normally applicable: *(3 tests, subrules cd)*
 - [x] **704.7** If multiple state-based actions would have the same result at the same time, a single replacement... *(1 tests)*
 - [x] **704.8** If a state-based action results in a permanent leaving the battlefield at the same time other sta... *(1 tests)*
@@ -990,7 +990,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **800.1** A multiplayer game is a game that begins with more than two players. This section contains additi...
 - [ ] **800.2** These rules consist of a series of options that can be added to a multiplayer game and a number o...
 - [ ] **800.3** Many multiplayer Magic tournaments have additional rules not included here, including rules for d...
-- [x] **800.4** Unlike two-player games, multiplayer games can continue after one or more players have left the g... *(12 tests, subrules amn)*
+- [x] **800.4** Unlike two-player games, multiplayer games can continue after one or more players have left the g... *(13 tests, subrules amn)*
 - [ ] **800.5** Unless a chosen variant or option prescribes otherwise, seating order is determined by any mutual...
 - [x] **800.6** In a multiplayer game, the first mulligan a player takes doesn’t count toward the number of cards... *(3 tests)*
 - [ ] **800.7** In a multiplayer game other than a Two-Headed Giant game, the starting player doesn’t skip the dr...
