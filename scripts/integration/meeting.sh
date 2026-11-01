@@ -38,7 +38,7 @@ for f in $FILES; do [ -f "$f" ] || { echo "NO SUCH FILE: $f"; missing=1; }; done
 [ "$missing" -eq 1 ] && exit 3
 echo "$FILES" > "$GATE/meeting_files_$tag.txt"
 echo "meeting-point files: $(echo "$FILES" | wc -l)"
-"$PY" -m pytest -n "$workers" -q -p no:cacheprovider $FILES > "$GATE/meeting_$tag.log" 2>&1
+"$PY" -m pytest -n "$workers" --dist worksteal -q -p no:cacheprovider $FILES > "$GATE/meeting_$tag.log" 2>&1
 code=$?
 echo "exit=$code" >> "$GATE/meeting_$tag.log"
 echo "exit=$code  FAILED=$(grep -c '^FAILED' "$GATE/meeting_$tag.log")"

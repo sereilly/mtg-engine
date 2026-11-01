@@ -26,7 +26,7 @@ echo "od_exit=$?" >> "$GATE/od_$tag.log"
 changed=$( (git diff --cached --name-only --diff-filter=AM; git diff --name-only --diff-filter=AM) | sort -u | grep '\.py$')
 "$PY" "$TOOLS/dups.py" $changed > "$GATE/scans_$tag.log" 2>&1
 "$PY" "$TOOLS/missing_names.py" $(echo "$changed" | grep -E '^(engine|web|scripts)/') >> "$GATE/scans_$tag.log" 2>&1
-"$PY" -m pytest -n "$workers" -q -p no:cacheprovider $full_flag > "$GATE/full_$tag.log" 2>&1
+"$PY" -m pytest -n "$workers" --dist worksteal -q -p no:cacheprovider $full_flag > "$GATE/full_$tag.log" 2>&1
 echo "exit=$?" >> "$GATE/full_$tag.log"
 "$PY" scripts/check_all.py > "$GATE/checkall_$tag.log" 2>&1
 echo "exit=$?" >> "$GATE/checkall_$tag.log"
