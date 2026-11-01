@@ -253,7 +253,12 @@ And when writing one:
   the order in ten lines (fill the memo, clear the cache, call the test). When
   nobody can, ask the process: a scratch `pytest_runtest_teardown` plugin
   replaying the failing scenario after every test names the polluter in one
-  suite (it found the `id()`-keyed memos).
+  suite (it found the `id()`-keyed memos). When the polluter may be the
+  module-level RNG — an AI seat or a shuffle reached through the web, which
+  is not seeded per session — run the test in one process under
+  `random.seed(0..N)`: Onslaught's Phase 5 flake (Tangle Wire's trigger
+  order over the wire) failed 3 of 120 that way, and the cause was an AI
+  hand the fixture had left full.
 - **Resolve a conflict with a script that asserts what it read**
   (`resolve_both.py`, `merge_blocks.py`): bytes in and out, line endings kept,
   every conflict region asserted to be the one that was read. A replayable
@@ -1146,28 +1151,7 @@ one adds it. Re-check an entry against the code before briefing it.
   game. *Clears:* the next client group; part: a who-owes field read off the
   pending-choice queue beside `waiting_on_prompt`.
 
-- **A refused cast or activation is written to the shared log, naming the
-  card — a hidden-information leak.** Each of the 47 refusal sites in
-  `engine/mixins/stack/` appends its `details` to `Game.log` before it
-  returns, so the opponent's payload reads "insufficient mana for Exalted
-  Angel" about a card in the actor's hand. The client sends a cast first and
-  offers Auto-Tap on that refusal, so every drag-cast from an empty pool
-  writes one; a person who confirms the printed cost, is refused, and then
-  casts the card face down has named the face-down card (Onslaught's Phase
-  5, in both smoke games). A face-down cast's own refusals are masked
-  already. *Clears:* the next engine round, first; part: one refusal seam the
-  47 sites call, answering the actor and writing nothing public that names a
-  hidden card, with a census that every refusal reaches it
-  (`scratch/ons/p5/repro/refusal_log_leak.py`).
 
-- **The payment planner spends generic mana blind to the colours left to
-  pay for.** `ai_payment._PaymentPlanner`, which the web's auto-tap asks
-  too, pays generic in board order: a face-down {3} on four Plains and three
-  Mountains taps three Plains and strands Exalted Angel's {2}{W}{W}; Astral
-  Slide's {2}{W} on Plains, Mountain, Plains strands Solar Blast's {1}{R}{R}
-  cycling (`scratch/ons/p5/repro/autotap_colour_blind.py`, Onslaught's Phase
-  5). *Clears:* an AI-payment round; a fix moves seeded games
-  (`sim_fingerprint`).
 
 - **Face-down leftovers on the wire.** A land played from the library logs
   "cast from"; prompt lists show two face-down permanents to their controller
@@ -1215,10 +1199,32 @@ one adds it. Re-check an entry against the code before briefing it.
   wave-close rehearsal tree (~1,300 s at `-n 6` on 2026-10-31), or the
   `full`-marked files that read `load_catalog()` named in the rehearsal.
 
-- **The AI never mulligans.** Every AI seat keeps its opening hand, in the
-  simulator (`ai_simulator` calls `keep_hand` for each seat) and at the web
-  table (`web/pregame.py`), so a one-land seven is played out: Onslaught's
-  second smoke game ended on turn 16 with the AI still on one land.
-  *Clears:* an AI round; part: a keep decision over the dealt hand (lands
-  against the curve), asked at both call sites, with a seeded census of what
-  the simulator's decks would mulligan.
+- **The cast path's pool spend pays generic in a fixed order** (C, W, U, B,
+  R, G — `pool_payment._pay_mana_cost_directly`, and the spending-permission
+  path beside it), blind to the payer's wants: floating W and R, a {1} cost
+  and a {W} still wanted strands the W. Over 1,344 floating-pool shapes it
+  strands 470. Reached only when a seat floats more mana than it spends (a
+  person tapping by hand); the AI and the auto-tap plan exactly and spend
+  the float first. And no planner prices a source's own drawback (a depletion
+  counter, a painland's damage, "doesn't untap"): kg2's preference kept an
+  Island by tapping Timberline Ridge. *Clears:* a payment follow-up round;
+  part: that generic loop asks `mana_payment._sparing_choice` over the pool's
+  units with `mana_wants(game, seat)`. Repro:
+  `scratch/kg2/payment/pool_order.py`.
+
+- **The web's sequential mulligan table is not CR 103.5's rounds.** Each seat
+  mulligans until it keeps before the next declares; CR 103.5 has every
+  player declare each round, then every mulligan of the round happen
+  together (the simulator's `ai_mulligan.take_opening_mulligans` does). And
+  in the simulator the coin flip's winner sets the deal and declaration
+  order, but seat 0 always takes turn one. *Clears:* the next pregame round;
+  parts: `web/pregame._pregame_advance_mulligan_offer` advancing by round,
+  and the simulator's first turn read from the flip.
+
+- **A refused cast's "insufficient mana" no longer says what taxed it.** The
+  tax line ("Memory Lapse is taxed by Kaervek's Torch") was an announcement
+  the refused attempt wrote, and kg2 takes it back with the attempt (CR
+  733.1), so the actor's reason reads only the shortfall; the web's
+  payment-plan preview still shows the whole price. *Clears:* any round that
+  opens `pool_payment`; part: fold the taxing sources into the refusal's own
+  reason.

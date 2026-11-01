@@ -253,7 +253,8 @@ count** in `SimulationReport` (`interaction_count`, `lands_played`,
 `casts_in_response`, `casts_in_combat`, `casts_on_opponents_turn`,
 `activations_at_instant_speed`, `refused_casts`, `refused_attacks`,
 `rehearsals_raised`, `special_actions_taken`, `refused_special_actions`,
-`cards_from_outside_game`, `face_down_casts`, the combat counts). A run that
+`cards_from_outside_game`, `face_down_casts`, `mulligans_taken`, the combat
+counts). A run that
 cast nothing exits 1. A new piece of the turn arrives with its count. CR 116
 special actions are weighed in `engine/ai_special_actions.py`, before the
 first combat.
@@ -269,8 +270,18 @@ first combat.
   `ai_mana_sources.tap_cost_mana_activations`: the summoning-sick and least
   valuable first, never the permanent being paid for), then a
   self-sacrificing source only when the lands cannot pay and the spell is
-  worth more. `tap_planned_lands` binds every slot to its permanent before
+  worth more. Of the sources that could pay, the matching spends those the
+  seat's other wants need least (`mana_payment._sparing_choice` over
+  `mana_wants.mana_wants`: wants paid together first, a held card's price
+  before an ability that can wait) — the one preference every planner
+  shares. `tap_planned_lands` binds every slot to its permanent before
   the first tap (a sacrifice renumbers).
+- **Mulligans**: `engine/ai_mulligan.py` is the one keep decision and London
+  bottom choice (CR 103.5: lands against the curve on the hand left after
+  the bottom choice), asked by the simulator (`take_opening_mulligans`, CR
+  103.5's rounds), the web pregame (`web/pregame.py`) and the no-pregame
+  deal (`session_store._begin_pregame`); the cards owed are
+  `Game.mulligan_effective_count` (CR 103.5c's free first mulligan).
 - **Priority**: `Game.offer_priority` gives it in CR 117.3b–d order, before each
   resolution and at a step's end on an empty stack; inert without a driver, at
   a table with an interactive seat, and in the untap step. The simulator
@@ -538,8 +549,12 @@ entries, not editing dispatch**.
   gives no priority window, so it taps lands **for mana**, one at a time,
   through `Game._pay_planned_cost`. `plan_payment` is an exact matching over
   `Game.payment_lands`, told who is paying (`payer=`, so a CR 106.6 spending
-  permission is planned; an AST guard fails a call with none). A cost is a
-  symbol dict everywhere (`generic_cost(n)`).
+  permission is planned; an AST guard fails a call with none). Which sources
+  pay is `_sparing_choice`'s, against the payer's wants
+  (`engine/mana_wants.py`, read only from what that seat can see);
+  `Game._pay_planned_cost` names them for the length of a payment
+  (`payment_wants_in_force`). A cost is a symbol dict everywhere
+  (`generic_cost(n)`).
 - **What a mana ability is** is one predicate, `is_mana_ability` (CR 605.1a's
   four criteria, including "doesn't move a card to or from a library"), asked
   **fail-closed**: a zone-moving step beside an add-mana step is presumed to
@@ -596,6 +611,14 @@ entries, not editing dispatch**.
   trigger (`keyword_lines.keyword_line_triggers`), the static half is a discard
   destination (`replacements/registry.DISCARD_INTO_EXILE`), and the trigger casts the
   card during its own resolution (CR 608.2g, `madness_cast`).
+- `engine/refusals.py` — **a refused cast or activation is the actor's
+  alone** (CR 733.1): `refuse(card_name, effect_kind, details)` is the only
+  constructor of a refused result (a `Refusal`) and writes nothing; the four
+  attempt wrappers take back what a refused attempt wrote
+  (`take_back_refused_attempt`), safe because nothing is refused below the
+  mana payment; a land's tap answers the same way
+  (`tap_land_for_mana_or_refusal`). `game.log` is served whole to every
+  seat. Held by `tests/engine/test_kg2_refusal_seam.py`.
 - `engine/cast_prohibitions.py` — **may this card be cast at all** (CR 601.3):
   one ordered table behind `cast_prohibition(game, seat, card)`, asked by the
   cast path, the AI and the castable highlight. Each row says what it binds

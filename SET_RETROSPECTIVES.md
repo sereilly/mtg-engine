@@ -1380,3 +1380,25 @@ from Phase 5 the refused-cast log leak, the colour-blind payment planner, an
 AI that never mulligans, and a quick rehearsal leaving the `full`-marked
 inventories to the promotion commit. Nothing drained (one clause: `cost_taps`
 reached the auto-tap dialog).
+
+
+### KG2 — 2026-11-01 (a round, not a set)
+
+*Three Known gaps Onslaught's Phase 5 left, one group each, and the Phase 5
+flake read by the integrator.* All three drained, and each group found the
+larger defect beside its entry: the refusal leak was 96 sites, not 47, plus
+announcements a refused attempt wrote before refusing and the reverse leak (an
+AI's refused cast named its hand card), closed by one `refuse()` seam and a
+CR 733.1 take-back; the colour-blind planner's worse half was the effect payer
+the entry never named (1,168 strands to the AI planner's 680, both 0 after,
+one preference at `plan_payment`); and the mulligan entry missed the keep site
+every ai_vs_ai game uses, and the web charged a card for CR 103.5c's free
+first mulligan. The flake was the module RNG through an AI hand the fixture
+left full (3 of 120 seeds). Four links, no conflicts, `oracle_diff` 0 on
+every merge; two branches moved seeded games, and the mulligan branch's seven
+reseeds held on the merged tree because the meeting run names a changed file
+whole. *Edits in place:* the flake rule gains the seeded-RNG reproduction;
+CLAUDE.md carries the refusal seam, the sparing choice and the mulligan
+decision. *Known gaps:* three drained; three added (the pool spend's fixed
+order and unpriced drawbacks, the web's sequential mulligan rounds, a refusal
+reason that lost its tax).
